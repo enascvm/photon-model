@@ -209,11 +209,6 @@ public class AzureInstanceService extends StatelessService {
         static AzureCallContext newBatchCallContext(int numberOfCalls) {
             return new AzureCallContext(numberOfCalls);
         }
-
-        AzureCallContext withFailOnError(boolean failOnError) {
-            this.failOnError = failOnError;
-            return this;
-        }
     }
 
     @Override
@@ -379,7 +374,10 @@ public class AzureInstanceService extends StatelessService {
                 createSecurityGroupsIfNotExist(ctx, AzureInstanceStage.CREATE_NICS);
                 break;
             case CREATE_NICS:
-                createNICs(ctx, AzureInstanceStage.CREATE);
+                createNICs(ctx, AzureInstanceStage.GENERATE_VM_ID);
+                break;
+            case GENERATE_VM_ID:
+                generateVmId(ctx, AzureInstanceStage.CREATE);
                 break;
             case CREATE:
                 // Finally provision the VM
@@ -962,9 +960,9 @@ public class AzureInstanceService extends StatelessService {
 
         List<DeferredResult<NetworkSecurityGroup>> createSGDR = ctx.nics.stream()
                 .filter(nicCtx -> (
-                // Security Group is requested but no existing security group is mapped.
-                nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
-                        && nicCtx.securityGroup == null))
+                        // Security Group is requested but no existing security group is mapped.
+                        nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
+                                && nicCtx.securityGroup == null))
                 .map(nicCtx -> {
                     SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
                     NetworkSecurityGroup nsg = newAzureSecurityGroup(ctx, sgState);
@@ -1121,6 +1119,29 @@ public class AzureInstanceService extends StatelessService {
         }
     }
 
+    private void generateVmId(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+        ComputeState cs = new ComputeState();
+        // Set id to the compute state so any new triggered enumeration can patch it instead of
+        // creating a new ComputeState, effectively duplicating the ComputeStates related to the
+        // same VM resource.
+        cs.id = AzureUtils.getVirtualMachineId(
+                ctx.parentAuth.userLink,
+                ctx.resourceGroup.getName(),
+                ctx.vmName);
+
+        sendWithDeferredResult(
+                Operation.createPatch(ctx.computeRequest.resourceReference)
+                        .setBody(cs)
+                        .setReferer(getHost().getUri()))
+                .whenComplete((operation, exc) -> {
+                    if (exc != null) {
+                        handleError(ctx, exc);
+                        return;
+                    }
+                    handleAllocation(ctx, nextStage);
+                });
+    }
+
     /**
      * Converts Photon model constructs to underlying Azure NetworkInterface model.
      */
@@ -1209,7 +1230,7 @@ public class AzureInstanceService extends StatelessService {
             // custom boot disk size is set then use that value. If value more than maximum
             // allowed then proceed with default size.
             int diskSizeInGB = (int) ctx.bootDisk.capacityMBytes / 1024; // Converting MBs to GBs
-                                                                         // and
+            // and
             // casting as int
             osDisk.setDiskSizeGB(diskSizeInGB);
         } else {
@@ -1337,7 +1358,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching compute state with VM"
-                                                + " Public IP address [%s]: SUCCESS",
+                                                        + " Public IP address [%s]: SUCCESS",
                                                 computeState.address));
                                     }
                                 });
@@ -1358,7 +1379,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching primary NIC state"
-                                                + " with VM Public IP address [%s] : SUCCESS",
+                                                        + " with VM Public IP address [%s] : SUCCESS",
                                                 primaryNicState.address));
                                     }
                                 });

@@ -62,6 +62,9 @@ public class AzureUtils {
     private static final Pattern VIRTUAL_NETWORK_GATEWAY_PATTERN = Pattern
             .compile("/subscriptions/.*/virtualNetworkGateways/([^/]*)", Pattern.CASE_INSENSITIVE);
 
+    private static final String VIRTUAL_MACHINE_ID_FORMAT =
+            "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s";
+
     /**
      * Strategy to control period between retry attempts.
      */
@@ -122,7 +125,7 @@ public class AzureUtils {
 
         /**
          * The max delay. Defaults to 10 seconds.
-         *
+         * <p>
          * <p>
          * Once we exceed this value no more exponential delays are calculated.
          */
@@ -177,8 +180,7 @@ public class AzureUtils {
      * <p>
      * The returned name of the resource group is TestRG.
      *
-     * @param azureResourceId
-     *            Azure resource id.
+     * @param azureResourceId Azure resource id.
      * @return the resource group name (in lower case) where the resource belong to.
      */
     public static String getResourceGroupName(String azureResourceId) {
@@ -198,8 +200,7 @@ public class AzureUtils {
      * The id of the resource group that will be returned is:
      * "/subscriptions/[Id]/resourceGroups/TestRG"
      *
-     * @param azureResourceId
-     *            Azure resource id.
+     * @param azureResourceId Azure resource id.
      * @return the resource group id where the resource belong to.
      */
     public static String getResourceGroupId(String azureResourceId) {
@@ -229,8 +230,7 @@ public class AzureUtils {
      * "/subscriptions/[Id]/resourceGroups/[id]/providers/Microsoft
      * .Network/virtualNetworkGateways/vNetGateway"
      *
-     * @param azureVirtualNetwork
-     *            Azure virtual network.
+     * @param azureVirtualNetwork Azure virtual network.
      * @return the id of the gateway the virtual network is attached to.
      */
     public static String getVirtualNetworkGatewayId(VirtualNetwork azureVirtualNetwork) {
@@ -244,6 +244,17 @@ public class AzureUtils {
                 .findFirst();
 
         return matcher.isPresent() ? matcher.get().group(0) : null;
+    }
+
+    /**
+     * @return Generate a virtual machine id based on subscription id, resource group name and
+     * vm name.
+     */
+    public static String getVirtualMachineId(String subscriptionId, String resourceGroupName,
+            String vmName) {
+        String vmId = String.format(VIRTUAL_MACHINE_ID_FORMAT,
+                subscriptionId, resourceGroupName, vmName);
+        return vmId.toLowerCase();
     }
 
     public static StorageDescription constructStorageDescription(ServiceHost host,
@@ -308,13 +319,15 @@ public class AzureUtils {
         storageDescription.computeHostLink = parentCompute.documentSelfLink;
         storageDescription.customProperties = new HashMap<>();
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
-        storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, storageAccount.properties.primaryEndpoints.blob);
+        storageDescription.customProperties
+                .put(AZURE_STORAGE_ACCOUNT_URI, storageAccount.properties.primaryEndpoints.blob);
         storageDescription.tenantLinks = parentCompute.tenantLinks;
         storageDescription.regionId = storageAccount.location;
         return storageDescription;
     }
 
-    private static StorageDescription constructStorageDescription(StorageAccount sa, ServiceHost host,
+    private static StorageDescription constructStorageDescription(StorageAccount sa,
+            ServiceHost host,
             String serviceSelfLink, String endpointLink, List<String> tenantLinks,
             String resourcePoolLink, String parentComputeSelfLink,
             String saId, String saName, String saLocation, String saUri,

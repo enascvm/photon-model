@@ -95,6 +95,11 @@ public enum AzureInstanceStage {
     CREATE_NICS,
 
     /**
+     * Generate and set ComputeState ip.
+     */
+    GENERATE_VM_ID,
+
+    /**
      * Stage to initialize Azure client.
      */
     CLIENT,
