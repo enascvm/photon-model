@@ -238,6 +238,7 @@ public class EndpointAdapterUtils {
 
                 EndpointState es = new EndpointState();
                 es.endpointProperties = new HashMap<>();
+                es.regionId = r.get(EndpointConfigRequest.REGION_KEY).orElse(null);
                 endpointEnhancer.accept(es, r);
 
                 Stream<Operation> operations = Stream.of(
