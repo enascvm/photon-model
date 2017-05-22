@@ -30,6 +30,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlSeeAlso({
     HostParallelScsiTargetTransport.class,
     HostBlockAdapterTargetTransport.class,
+    HostSerialAttachedTargetTransport.class,
     HostInternetScsiTargetTransport.class,
     HostFibreChannelTargetTransport.class
 })

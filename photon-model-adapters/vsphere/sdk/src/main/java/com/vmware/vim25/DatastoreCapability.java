@@ -23,6 +23,9 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="nativeSnapshotSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="topLevelDirectoryCreateSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="seSparseSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vmfsSparseSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vsanSparseSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="upitSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -39,7 +42,10 @@ import javax.xml.bind.annotation.XmlType;
     "storageIORMSupported",
     "nativeSnapshotSupported",
     "topLevelDirectoryCreateSupported",
-    "seSparseSupported"
+    "seSparseSupported",
+    "vmfsSparseSupported",
+    "vsanSparseSupported",
+    "upitSupported"
 })
 public class DatastoreCapability
     extends DynamicData
@@ -52,6 +58,9 @@ public class DatastoreCapability
     protected Boolean nativeSnapshotSupported;
     protected Boolean topLevelDirectoryCreateSupported;
     protected Boolean seSparseSupported;
+    protected Boolean vmfsSparseSupported;
+    protected Boolean vsanSparseSupported;
+    protected Boolean upitSupported;
 
     /**
      * Gets the value of the directoryHierarchySupported property.
@@ -195,6 +204,78 @@ public class DatastoreCapability
      */
     public void setSeSparseSupported(Boolean value) {
         this.seSparseSupported = value;
+    }
+
+    /**
+     * Gets the value of the vmfsSparseSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isVmfsSparseSupported() {
+        return vmfsSparseSupported;
+    }
+
+    /**
+     * Sets the value of the vmfsSparseSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setVmfsSparseSupported(Boolean value) {
+        this.vmfsSparseSupported = value;
+    }
+
+    /**
+     * Gets the value of the vsanSparseSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isVsanSparseSupported() {
+        return vsanSparseSupported;
+    }
+
+    /**
+     * Sets the value of the vsanSparseSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setVsanSparseSupported(Boolean value) {
+        this.vsanSparseSupported = value;
+    }
+
+    /**
+     * Gets the value of the upitSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isUpitSupported() {
+        return upitSupported;
+    }
+
+    /**
+     * Sets the value of the upitSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setUpitSupported(Boolean value) {
+        this.upitSupported = value;
     }
 
 }

@@ -45,6 +45,7 @@ import javax.xml.bind.annotation.XmlType;
 })
 @XmlSeeAlso({
     HostParallelScsiHba.class,
+    HostSerialAttachedHba.class,
     HostBlockHba.class,
     HostInternetScsiHba.class,
     HostFibreChannelHba.class

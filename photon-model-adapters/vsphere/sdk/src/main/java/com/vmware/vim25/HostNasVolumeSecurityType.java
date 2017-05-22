@@ -16,6 +16,7 @@ import javax.xml.bind.annotation.XmlType;
  *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
  *     &lt;enumeration value="AUTH_SYS"/&gt;
  *     &lt;enumeration value="SEC_KRB5"/&gt;
+ *     &lt;enumeration value="SEC_KRB5I"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -27,7 +28,9 @@ public enum HostNasVolumeSecurityType {
 
     AUTH_SYS("AUTH_SYS"),
     @XmlEnumValue("SEC_KRB5")
-    SEC_KRB_5("SEC_KRB5");
+    SEC_KRB_5("SEC_KRB5"),
+    @XmlEnumValue("SEC_KRB5I")
+    SEC_KRB_5_I("SEC_KRB5I");
     private final String value;
 
     HostNasVolumeSecurityType(String v) {

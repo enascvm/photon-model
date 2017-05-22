@@ -21,6 +21,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
  *     &lt;extension base="{urn:vim25}DynamicData"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="path" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="friendlyName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="fileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
  *         &lt;element name="modification" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
  *         &lt;element name="owner" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
@@ -35,6 +36,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "FileInfo", propOrder = {
     "path",
+    "friendlyName",
     "fileSize",
     "modification",
     "owner"
@@ -55,6 +57,7 @@ public class FileInfo
 
     @XmlElement(required = true)
     protected String path;
+    protected String friendlyName;
     protected Long fileSize;
     @XmlSchemaType(name = "dateTime")
     protected XMLGregorianCalendar modification;
@@ -82,6 +85,30 @@ public class FileInfo
      */
     public void setPath(String value) {
         this.path = value;
+    }
+
+    /**
+     * Gets the value of the friendlyName property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getFriendlyName() {
+        return friendlyName;
+    }
+
+    /**
+     * Sets the value of the friendlyName property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setFriendlyName(String value) {
+        this.friendlyName = value;
     }
 
     /**

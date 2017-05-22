@@ -25,6 +25,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
  *         &lt;element name="powerState" type="{urn:vim25}HostSystemPowerState"/&gt;
  *         &lt;element name="standbyMode" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="inMaintenanceMode" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="inQuarantineMode" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="bootTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
  *         &lt;element name="healthSystemRuntime" type="{urn:vim25}HealthSystemRuntime" minOccurs="0"/&gt;
  *         &lt;element name="dasHostState" type="{urn:vim25}ClusterDasFdmHostState" minOccurs="0"/&gt;
@@ -33,6 +34,8 @@ import javax.xml.datatype.XMLGregorianCalendar;
  *         &lt;element name="networkRuntimeInfo" type="{urn:vim25}HostRuntimeInfoNetworkRuntimeInfo" minOccurs="0"/&gt;
  *         &lt;element name="vFlashResourceRuntimeInfo" type="{urn:vim25}HostVFlashManagerVFlashResourceRunTimeInfo" minOccurs="0"/&gt;
  *         &lt;element name="hostMaxVirtualDiskCapacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="cryptoState" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="cryptoKeyId" type="{urn:vim25}CryptoKeyId" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -47,6 +50,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
     "powerState",
     "standbyMode",
     "inMaintenanceMode",
+    "inQuarantineMode",
     "bootTime",
     "healthSystemRuntime",
     "dasHostState",
@@ -54,7 +58,9 @@ import javax.xml.datatype.XMLGregorianCalendar;
     "vsanRuntimeInfo",
     "networkRuntimeInfo",
     "vFlashResourceRuntimeInfo",
-    "hostMaxVirtualDiskCapacity"
+    "hostMaxVirtualDiskCapacity",
+    "cryptoState",
+    "cryptoKeyId"
 })
 public class HostRuntimeInfo
     extends DynamicData
@@ -68,6 +74,7 @@ public class HostRuntimeInfo
     protected HostSystemPowerState powerState;
     protected String standbyMode;
     protected boolean inMaintenanceMode;
+    protected Boolean inQuarantineMode;
     @XmlSchemaType(name = "dateTime")
     protected XMLGregorianCalendar bootTime;
     protected HealthSystemRuntime healthSystemRuntime;
@@ -77,6 +84,8 @@ public class HostRuntimeInfo
     protected HostRuntimeInfoNetworkRuntimeInfo networkRuntimeInfo;
     protected HostVFlashManagerVFlashResourceRunTimeInfo vFlashResourceRuntimeInfo;
     protected Long hostMaxVirtualDiskCapacity;
+    protected String cryptoState;
+    protected CryptoKeyId cryptoKeyId;
 
     /**
      * Gets the value of the connectionState property.
@@ -164,6 +173,30 @@ public class HostRuntimeInfo
      */
     public void setInMaintenanceMode(boolean value) {
         this.inMaintenanceMode = value;
+    }
+
+    /**
+     * Gets the value of the inQuarantineMode property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isInQuarantineMode() {
+        return inQuarantineMode;
+    }
+
+    /**
+     * Sets the value of the inQuarantineMode property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setInQuarantineMode(Boolean value) {
+        this.inQuarantineMode = value;
     }
 
     /**
@@ -361,6 +394,54 @@ public class HostRuntimeInfo
      */
     public void setHostMaxVirtualDiskCapacity(Long value) {
         this.hostMaxVirtualDiskCapacity = value;
+    }
+
+    /**
+     * Gets the value of the cryptoState property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getCryptoState() {
+        return cryptoState;
+    }
+
+    /**
+     * Sets the value of the cryptoState property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setCryptoState(String value) {
+        this.cryptoState = value;
+    }
+
+    /**
+     * Gets the value of the cryptoKeyId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link CryptoKeyId }
+     *     
+     */
+    public CryptoKeyId getCryptoKeyId() {
+        return cryptoKeyId;
+    }
+
+    /**
+     * Sets the value of the cryptoKeyId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link CryptoKeyId }
+     *     
+     */
+    public void setCryptoKeyId(CryptoKeyId value) {
+        this.cryptoKeyId = value;
     }
 
 }

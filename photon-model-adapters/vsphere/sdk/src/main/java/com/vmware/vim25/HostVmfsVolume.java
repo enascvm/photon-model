@@ -20,6 +20,9 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}HostFileSystemVolume"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="blockSizeMb" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="blockSize" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="unmapGranularity" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="unmapPriority" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="maxBlocks" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
  *         &lt;element name="majorVersion" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
  *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
@@ -29,6 +32,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="forceMountedInfo" type="{urn:vim25}HostForceMountedInfo" minOccurs="0"/&gt;
  *         &lt;element name="ssd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="local" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="scsiDiskType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -40,6 +44,9 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "HostVmfsVolume", propOrder = {
     "blockSizeMb",
+    "blockSize",
+    "unmapGranularity",
+    "unmapPriority",
     "maxBlocks",
     "majorVersion",
     "version",
@@ -48,13 +55,17 @@ import javax.xml.bind.annotation.XmlType;
     "vmfsUpgradable",
     "forceMountedInfo",
     "ssd",
-    "local"
+    "local",
+    "scsiDiskType"
 })
 public class HostVmfsVolume
     extends HostFileSystemVolume
 {
 
     protected int blockSizeMb;
+    protected Integer blockSize;
+    protected Integer unmapGranularity;
+    protected String unmapPriority;
     protected int maxBlocks;
     protected int majorVersion;
     @XmlElement(required = true)
@@ -67,6 +78,7 @@ public class HostVmfsVolume
     protected HostForceMountedInfo forceMountedInfo;
     protected Boolean ssd;
     protected Boolean local;
+    protected String scsiDiskType;
 
     /**
      * Gets the value of the blockSizeMb property.
@@ -82,6 +94,78 @@ public class HostVmfsVolume
      */
     public void setBlockSizeMb(int value) {
         this.blockSizeMb = value;
+    }
+
+    /**
+     * Gets the value of the blockSize property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getBlockSize() {
+        return blockSize;
+    }
+
+    /**
+     * Sets the value of the blockSize property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setBlockSize(Integer value) {
+        this.blockSize = value;
+    }
+
+    /**
+     * Gets the value of the unmapGranularity property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getUnmapGranularity() {
+        return unmapGranularity;
+    }
+
+    /**
+     * Sets the value of the unmapGranularity property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setUnmapGranularity(Integer value) {
+        this.unmapGranularity = value;
+    }
+
+    /**
+     * Gets the value of the unmapPriority property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getUnmapPriority() {
+        return unmapPriority;
+    }
+
+    /**
+     * Sets the value of the unmapPriority property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setUnmapPriority(String value) {
+        this.unmapPriority = value;
     }
 
     /**
@@ -279,6 +363,30 @@ public class HostVmfsVolume
      */
     public void setLocal(Boolean value) {
         this.local = value;
+    }
+
+    /**
+     * Gets the value of the scsiDiskType property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getScsiDiskType() {
+        return scsiDiskType;
+    }
+
+    /**
+     * Sets the value of the scsiDiskType property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setScsiDiskType(String value) {
+        this.scsiDiskType = value;
     }
 
 }

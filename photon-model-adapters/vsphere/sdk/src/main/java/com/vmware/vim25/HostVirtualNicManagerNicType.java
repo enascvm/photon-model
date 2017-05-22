@@ -21,6 +21,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="management"/&gt;
  *     &lt;enumeration value="vsan"/&gt;
  *     &lt;enumeration value="vSphereProvisioning"/&gt;
+ *     &lt;enumeration value="vsanWitness"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -43,7 +44,9 @@ public enum HostVirtualNicManagerNicType {
     @XmlEnumValue("vsan")
     VSAN("vsan"),
     @XmlEnumValue("vSphereProvisioning")
-    V_SPHERE_PROVISIONING("vSphereProvisioning");
+    V_SPHERE_PROVISIONING("vSphereProvisioning"),
+    @XmlEnumValue("vsanWitness")
+    VSAN_WITNESS("vsanWitness");
     private final String value;
 
     HostVirtualNicManagerNicType(String v) {

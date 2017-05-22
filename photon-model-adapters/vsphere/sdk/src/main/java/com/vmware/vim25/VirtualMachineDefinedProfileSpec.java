@@ -18,6 +18,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}VirtualMachineProfileSpec"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="profileId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="replicationSpec" type="{urn:vim25}ReplicationSpec" minOccurs="0"/&gt;
  *         &lt;element name="profileData" type="{urn:vim25}VirtualMachineProfileRawData" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
@@ -30,6 +31,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VirtualMachineDefinedProfileSpec", propOrder = {
     "profileId",
+    "replicationSpec",
     "profileData"
 })
 public class VirtualMachineDefinedProfileSpec
@@ -38,6 +40,7 @@ public class VirtualMachineDefinedProfileSpec
 
     @XmlElement(required = true)
     protected String profileId;
+    protected ReplicationSpec replicationSpec;
     protected VirtualMachineProfileRawData profileData;
 
     /**
@@ -62,6 +65,30 @@ public class VirtualMachineDefinedProfileSpec
      */
     public void setProfileId(String value) {
         this.profileId = value;
+    }
+
+    /**
+     * Gets the value of the replicationSpec property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ReplicationSpec }
+     *     
+     */
+    public ReplicationSpec getReplicationSpec() {
+        return replicationSpec;
+    }
+
+    /**
+     * Sets the value of the replicationSpec property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ReplicationSpec }
+     *     
+     */
+    public void setReplicationSpec(ReplicationSpec value) {
+        this.replicationSpec = value;
     }
 
     /**

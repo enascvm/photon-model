@@ -36,4 +36,8 @@ public class TagCache {
     public TagState get(String id, Function<String, TagState> valueProvider) {
         return this.cache.computeIfAbsent(id, valueProvider);
     }
+
+    public TagState get(String id) {
+        return this.cache.get(id);
+    }
 }

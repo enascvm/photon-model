@@ -30,6 +30,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="snapshotPowerOffBehavior" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="recordReplayEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="faultToleranceType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="cbrcCacheEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -53,7 +54,8 @@ import javax.xml.bind.annotation.XmlType;
     "virtualExecUsage",
     "snapshotPowerOffBehavior",
     "recordReplayEnabled",
-    "faultToleranceType"
+    "faultToleranceType",
+    "cbrcCacheEnabled"
 })
 public class VirtualMachineFlagInfo
     extends DynamicData
@@ -73,6 +75,7 @@ public class VirtualMachineFlagInfo
     protected String snapshotPowerOffBehavior;
     protected Boolean recordReplayEnabled;
     protected String faultToleranceType;
+    protected Boolean cbrcCacheEnabled;
 
     /**
      * Gets the value of the disableAcceleration property.
@@ -408,6 +411,30 @@ public class VirtualMachineFlagInfo
      */
     public void setFaultToleranceType(String value) {
         this.faultToleranceType = value;
+    }
+
+    /**
+     * Gets the value of the cbrcCacheEnabled property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isCbrcCacheEnabled() {
+        return cbrcCacheEnabled;
+    }
+
+    /**
+     * Sets the value of the cbrcCacheEnabled property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setCbrcCacheEnabled(Boolean value) {
+        this.cbrcCacheEnabled = value;
     }
 
 }

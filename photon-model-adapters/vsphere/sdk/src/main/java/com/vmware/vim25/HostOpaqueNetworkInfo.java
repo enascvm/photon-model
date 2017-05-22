@@ -23,6 +23,8 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="opaqueNetworkName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="opaqueNetworkType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="pnicZone" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="capability" type="{urn:vim25}OpaqueNetworkCapability" minOccurs="0"/&gt;
+ *         &lt;element name="extraConfig" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -36,7 +38,9 @@ import javax.xml.bind.annotation.XmlType;
     "opaqueNetworkId",
     "opaqueNetworkName",
     "opaqueNetworkType",
-    "pnicZone"
+    "pnicZone",
+    "capability",
+    "extraConfig"
 })
 public class HostOpaqueNetworkInfo
     extends DynamicData
@@ -49,6 +53,8 @@ public class HostOpaqueNetworkInfo
     @XmlElement(required = true)
     protected String opaqueNetworkType;
     protected List<String> pnicZone;
+    protected OpaqueNetworkCapability capability;
+    protected List<OptionValue> extraConfig;
 
     /**
      * Gets the value of the opaqueNetworkId property.
@@ -149,6 +155,59 @@ public class HostOpaqueNetworkInfo
             pnicZone = new ArrayList<String>();
         }
         return this.pnicZone;
+    }
+
+    /**
+     * Gets the value of the capability property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link OpaqueNetworkCapability }
+     *     
+     */
+    public OpaqueNetworkCapability getCapability() {
+        return capability;
+    }
+
+    /**
+     * Sets the value of the capability property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link OpaqueNetworkCapability }
+     *     
+     */
+    public void setCapability(OpaqueNetworkCapability value) {
+        this.capability = value;
+    }
+
+    /**
+     * Gets the value of the extraConfig property.
+     * 
+     * <p>
+     * This accessor method returns a reference to the live list,
+     * not a snapshot. Therefore any modification you make to the
+     * returned list will be present inside the JAXB object.
+     * This is why there is not a <CODE>set</CODE> method for the extraConfig property.
+     * 
+     * <p>
+     * For example, to add a new item, do as follows:
+     * <pre>
+     *    getExtraConfig().add(newItem);
+     * </pre>
+     * 
+     * 
+     * <p>
+     * Objects of the following type(s) are allowed in the list
+     * {@link OptionValue }
+     * 
+     * 
+     */
+    public List<OptionValue> getExtraConfig() {
+        if (extraConfig == null) {
+            extraConfig = new ArrayList<OptionValue>();
+        }
+        return this.extraConfig;
     }
 
 }

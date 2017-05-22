@@ -20,11 +20,16 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}DynamicData"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="peType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="hostKey" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="storageArray" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="nfsServer" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="nfsDir" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="nfsServerScope" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="nfsServerMajor" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="nfsServerAuthType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="nfsServerUser" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="deviceId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
@@ -37,11 +42,16 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "HostProtocolEndpoint", propOrder = {
     "peType",
+    "type",
     "uuid",
     "hostKey",
     "storageArray",
     "nfsServer",
     "nfsDir",
+    "nfsServerScope",
+    "nfsServerMajor",
+    "nfsServerAuthType",
+    "nfsServerUser",
     "deviceId"
 })
 public class HostProtocolEndpoint
@@ -50,12 +60,17 @@ public class HostProtocolEndpoint
 
     @XmlElement(required = true)
     protected String peType;
+    protected String type;
     @XmlElement(required = true)
     protected String uuid;
     protected List<ManagedObjectReference> hostKey;
     protected String storageArray;
     protected String nfsServer;
     protected String nfsDir;
+    protected String nfsServerScope;
+    protected String nfsServerMajor;
+    protected String nfsServerAuthType;
+    protected String nfsServerUser;
     protected String deviceId;
 
     /**
@@ -80,6 +95,30 @@ public class HostProtocolEndpoint
      */
     public void setPeType(String value) {
         this.peType = value;
+    }
+
+    /**
+     * Gets the value of the type property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getType() {
+        return type;
+    }
+
+    /**
+     * Sets the value of the type property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setType(String value) {
+        this.type = value;
     }
 
     /**
@@ -205,6 +244,102 @@ public class HostProtocolEndpoint
      */
     public void setNfsDir(String value) {
         this.nfsDir = value;
+    }
+
+    /**
+     * Gets the value of the nfsServerScope property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getNfsServerScope() {
+        return nfsServerScope;
+    }
+
+    /**
+     * Sets the value of the nfsServerScope property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setNfsServerScope(String value) {
+        this.nfsServerScope = value;
+    }
+
+    /**
+     * Gets the value of the nfsServerMajor property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getNfsServerMajor() {
+        return nfsServerMajor;
+    }
+
+    /**
+     * Sets the value of the nfsServerMajor property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setNfsServerMajor(String value) {
+        this.nfsServerMajor = value;
+    }
+
+    /**
+     * Gets the value of the nfsServerAuthType property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getNfsServerAuthType() {
+        return nfsServerAuthType;
+    }
+
+    /**
+     * Sets the value of the nfsServerAuthType property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setNfsServerAuthType(String value) {
+        this.nfsServerAuthType = value;
+    }
+
+    /**
+     * Gets the value of the nfsServerUser property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getNfsServerUser() {
+        return nfsServerUser;
+    }
+
+    /**
+     * Sets the value of the nfsServerUser property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setNfsServerUser(String value) {
+        this.nfsServerUser = value;
     }
 
     /**

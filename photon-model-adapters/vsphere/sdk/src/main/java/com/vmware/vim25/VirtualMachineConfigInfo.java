@@ -82,6 +82,9 @@ import javax.xml.datatype.XMLGregorianCalendar;
  *         &lt;element name="messageBusTunnelEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="vmStorageObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="swapStorageObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="keyId" type="{urn:vim25}CryptoKeyId" minOccurs="0"/&gt;
+ *         &lt;element name="guestIntegrityInfo" type="{urn:vim25}VirtualMachineGuestIntegrityInfo" minOccurs="0"/&gt;
+ *         &lt;element name="migrateEncryption" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -152,7 +155,10 @@ import javax.xml.datatype.XMLGregorianCalendar;
     "vmxConfigChecksum",
     "messageBusTunnelEnabled",
     "vmStorageObjectId",
-    "swapStorageObjectId"
+    "swapStorageObjectId",
+    "keyId",
+    "guestIntegrityInfo",
+    "migrateEncryption"
 })
 public class VirtualMachineConfigInfo
     extends DynamicData
@@ -235,6 +241,9 @@ public class VirtualMachineConfigInfo
     protected Boolean messageBusTunnelEnabled;
     protected String vmStorageObjectId;
     protected String swapStorageObjectId;
+    protected CryptoKeyId keyId;
+    protected VirtualMachineGuestIntegrityInfo guestIntegrityInfo;
+    protected String migrateEncryption;
 
     /**
      * Gets the value of the changeVersion property.
@@ -1713,6 +1722,78 @@ public class VirtualMachineConfigInfo
      */
     public void setSwapStorageObjectId(String value) {
         this.swapStorageObjectId = value;
+    }
+
+    /**
+     * Gets the value of the keyId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link CryptoKeyId }
+     *     
+     */
+    public CryptoKeyId getKeyId() {
+        return keyId;
+    }
+
+    /**
+     * Sets the value of the keyId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link CryptoKeyId }
+     *     
+     */
+    public void setKeyId(CryptoKeyId value) {
+        this.keyId = value;
+    }
+
+    /**
+     * Gets the value of the guestIntegrityInfo property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link VirtualMachineGuestIntegrityInfo }
+     *     
+     */
+    public VirtualMachineGuestIntegrityInfo getGuestIntegrityInfo() {
+        return guestIntegrityInfo;
+    }
+
+    /**
+     * Sets the value of the guestIntegrityInfo property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link VirtualMachineGuestIntegrityInfo }
+     *     
+     */
+    public void setGuestIntegrityInfo(VirtualMachineGuestIntegrityInfo value) {
+        this.guestIntegrityInfo = value;
+    }
+
+    /**
+     * Gets the value of the migrateEncryption property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getMigrateEncryption() {
+        return migrateEncryption;
+    }
+
+    /**
+     * Sets the value of the migrateEncryption property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setMigrateEncryption(String value) {
+        this.migrateEncryption = value;
     }
 
 }

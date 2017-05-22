@@ -18,6 +18,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}DvsEvent"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="configSpec" type="{urn:vim25}DVSConfigSpec"/&gt;
+ *         &lt;element name="configChanges" type="{urn:vim25}ChangesInfoEventArgument" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -28,7 +29,8 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "DvsReconfiguredEvent", propOrder = {
-    "configSpec"
+    "configSpec",
+    "configChanges"
 })
 public class DvsReconfiguredEvent
     extends DvsEvent
@@ -36,6 +38,7 @@ public class DvsReconfiguredEvent
 
     @XmlElement(required = true)
     protected DVSConfigSpec configSpec;
+    protected ChangesInfoEventArgument configChanges;
 
     /**
      * Gets the value of the configSpec property.
@@ -59,6 +62,30 @@ public class DvsReconfiguredEvent
      */
     public void setConfigSpec(DVSConfigSpec value) {
         this.configSpec = value;
+    }
+
+    /**
+     * Gets the value of the configChanges property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ChangesInfoEventArgument }
+     *     
+     */
+    public ChangesInfoEventArgument getConfigChanges() {
+        return configChanges;
+    }
+
+    /**
+     * Sets the value of the configChanges property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ChangesInfoEventArgument }
+     *     
+     */
+    public void setConfigChanges(ChangesInfoEventArgument value) {
+        this.configChanges = value;
     }
 
 }

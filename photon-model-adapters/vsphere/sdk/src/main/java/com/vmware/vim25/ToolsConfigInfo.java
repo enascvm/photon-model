@@ -17,6 +17,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}DynamicData"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="toolsVersion" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="toolsInstallType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="afterPowerOn" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="afterResume" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="beforeGuestStandby" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
@@ -24,6 +25,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="beforeGuestReboot" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="toolsUpgradePolicy" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="pendingCustomization" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="customizationKeyId" type="{urn:vim25}CryptoKeyId" minOccurs="0"/&gt;
  *         &lt;element name="syncTimeWithHost" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="lastInstallInfo" type="{urn:vim25}ToolsConfigInfoToolsLastInstallInfo" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
@@ -37,6 +39,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "ToolsConfigInfo", propOrder = {
     "toolsVersion",
+    "toolsInstallType",
     "afterPowerOn",
     "afterResume",
     "beforeGuestStandby",
@@ -44,6 +47,7 @@ import javax.xml.bind.annotation.XmlType;
     "beforeGuestReboot",
     "toolsUpgradePolicy",
     "pendingCustomization",
+    "customizationKeyId",
     "syncTimeWithHost",
     "lastInstallInfo"
 })
@@ -52,6 +56,7 @@ public class ToolsConfigInfo
 {
 
     protected Integer toolsVersion;
+    protected String toolsInstallType;
     protected Boolean afterPowerOn;
     protected Boolean afterResume;
     protected Boolean beforeGuestStandby;
@@ -59,6 +64,7 @@ public class ToolsConfigInfo
     protected Boolean beforeGuestReboot;
     protected String toolsUpgradePolicy;
     protected String pendingCustomization;
+    protected CryptoKeyId customizationKeyId;
     protected Boolean syncTimeWithHost;
     protected ToolsConfigInfoToolsLastInstallInfo lastInstallInfo;
 
@@ -84,6 +90,30 @@ public class ToolsConfigInfo
      */
     public void setToolsVersion(Integer value) {
         this.toolsVersion = value;
+    }
+
+    /**
+     * Gets the value of the toolsInstallType property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getToolsInstallType() {
+        return toolsInstallType;
+    }
+
+    /**
+     * Sets the value of the toolsInstallType property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setToolsInstallType(String value) {
+        this.toolsInstallType = value;
     }
 
     /**
@@ -252,6 +282,30 @@ public class ToolsConfigInfo
      */
     public void setPendingCustomization(String value) {
         this.pendingCustomization = value;
+    }
+
+    /**
+     * Gets the value of the customizationKeyId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link CryptoKeyId }
+     *     
+     */
+    public CryptoKeyId getCustomizationKeyId() {
+        return customizationKeyId;
+    }
+
+    /**
+     * Sets the value of the customizationKeyId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link CryptoKeyId }
+     *     
+     */
+    public void setCustomizationKeyId(CryptoKeyId value) {
+        this.customizationKeyId = value;
     }
 
     /**

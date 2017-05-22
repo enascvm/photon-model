@@ -17,6 +17,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="basic"/&gt;
  *     &lt;enumeration value="shared"/&gt;
  *     &lt;enumeration value="direct"/&gt;
+ *     &lt;enumeration value="sharedDirect"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -31,7 +32,9 @@ public enum HostGraphicsInfoGraphicsType {
     @XmlEnumValue("shared")
     SHARED("shared"),
     @XmlEnumValue("direct")
-    DIRECT("direct");
+    DIRECT("direct"),
+    @XmlEnumValue("sharedDirect")
+    SHARED_DIRECT("sharedDirect");
     private final String value;
 
     HostGraphicsInfoGraphicsType(String v) {

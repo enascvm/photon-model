@@ -29,6 +29,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="tag" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="eventTypeId" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="maxCount" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -49,7 +50,8 @@ import javax.xml.bind.annotation.XmlType;
     "category",
     "type",
     "tag",
-    "eventTypeId"
+    "eventTypeId",
+    "maxCount"
 })
 public class EventFilterSpec
     extends DynamicData
@@ -66,6 +68,7 @@ public class EventFilterSpec
     protected List<String> type;
     protected List<String> tag;
     protected List<String> eventTypeId;
+    protected Integer maxCount;
 
     /**
      * Gets the value of the entity property.
@@ -349,6 +352,30 @@ public class EventFilterSpec
             eventTypeId = new ArrayList<String>();
         }
         return this.eventTypeId;
+    }
+
+    /**
+     * Gets the value of the maxCount property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getMaxCount() {
+        return maxCount;
+    }
+
+    /**
+     * Sets the value of the maxCount property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setMaxCount(Integer value) {
+        this.maxCount = value;
     }
 
 }

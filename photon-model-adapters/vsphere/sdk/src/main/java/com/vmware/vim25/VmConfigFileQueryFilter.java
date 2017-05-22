@@ -20,6 +20,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}DynamicData"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="matchConfigVersion" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="encrypted" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -30,7 +31,8 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VmConfigFileQueryFilter", propOrder = {
-    "matchConfigVersion"
+    "matchConfigVersion",
+    "encrypted"
 })
 public class VmConfigFileQueryFilter
     extends DynamicData
@@ -38,6 +40,7 @@ public class VmConfigFileQueryFilter
 
     @XmlElement(type = Integer.class)
     protected List<Integer> matchConfigVersion;
+    protected Boolean encrypted;
 
     /**
      * Gets the value of the matchConfigVersion property.
@@ -66,6 +69,30 @@ public class VmConfigFileQueryFilter
             matchConfigVersion = new ArrayList<Integer>();
         }
         return this.matchConfigVersion;
+    }
+
+    /**
+     * Gets the value of the encrypted property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncrypted() {
+        return encrypted;
+    }
+
+    /**
+     * Sets the value of the encrypted property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncrypted(Boolean value) {
+        this.encrypted = value;
     }
 
 }

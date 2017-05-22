@@ -23,6 +23,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="matchHardwareVersion" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="controllerType" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="thin" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encrypted" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -36,7 +37,8 @@ import javax.xml.bind.annotation.XmlType;
     "diskType",
     "matchHardwareVersion",
     "controllerType",
-    "thin"
+    "thin",
+    "encrypted"
 })
 public class VmDiskFileQueryFilter
     extends DynamicData
@@ -47,6 +49,7 @@ public class VmDiskFileQueryFilter
     protected List<Integer> matchHardwareVersion;
     protected List<String> controllerType;
     protected Boolean thin;
+    protected Boolean encrypted;
 
     /**
      * Gets the value of the diskType property.
@@ -157,6 +160,30 @@ public class VmDiskFileQueryFilter
      */
     public void setThin(Boolean value) {
         this.thin = value;
+    }
+
+    /**
+     * Gets the value of the encrypted property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncrypted() {
+        return encrypted;
+    }
+
+    /**
+     * Sets the value of the encrypted property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncrypted(Boolean value) {
+        this.encrypted = value;
     }
 
 }

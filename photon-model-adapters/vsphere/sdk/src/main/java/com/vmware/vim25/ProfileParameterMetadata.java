@@ -21,6 +21,9 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="optional" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
  *         &lt;element name="defaultValue" type="{http://www.w3.org/2001/XMLSchema}anyType" minOccurs="0"/&gt;
+ *         &lt;element name="hidden" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="securitySensitive" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="readOnly" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -34,7 +37,10 @@ import javax.xml.bind.annotation.XmlType;
     "id",
     "type",
     "optional",
-    "defaultValue"
+    "defaultValue",
+    "hidden",
+    "securitySensitive",
+    "readOnly"
 })
 public class ProfileParameterMetadata
     extends DynamicData
@@ -46,6 +52,9 @@ public class ProfileParameterMetadata
     protected String type;
     protected boolean optional;
     protected Object defaultValue;
+    protected Boolean hidden;
+    protected Boolean securitySensitive;
+    protected Boolean readOnly;
 
     /**
      * Gets the value of the id property.
@@ -133,6 +142,78 @@ public class ProfileParameterMetadata
      */
     public void setDefaultValue(Object value) {
         this.defaultValue = value;
+    }
+
+    /**
+     * Gets the value of the hidden property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isHidden() {
+        return hidden;
+    }
+
+    /**
+     * Sets the value of the hidden property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setHidden(Boolean value) {
+        this.hidden = value;
+    }
+
+    /**
+     * Gets the value of the securitySensitive property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isSecuritySensitive() {
+        return securitySensitive;
+    }
+
+    /**
+     * Sets the value of the securitySensitive property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setSecuritySensitive(Boolean value) {
+        this.securitySensitive = value;
+    }
+
+    /**
+     * Gets the value of the readOnly property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isReadOnly() {
+        return readOnly;
+    }
+
+    /**
+     * Sets the value of the readOnly property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setReadOnly(Boolean value) {
+        this.readOnly = value;
     }
 
 }

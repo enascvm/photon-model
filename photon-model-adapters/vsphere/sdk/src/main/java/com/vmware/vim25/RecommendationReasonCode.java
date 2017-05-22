@@ -40,6 +40,10 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="iolbDisabledInternal"/&gt;
  *     &lt;enumeration value="xvmotionPlacement"/&gt;
  *     &lt;enumeration value="networkBandwidthReservation"/&gt;
+ *     &lt;enumeration value="hostInDegradation"/&gt;
+ *     &lt;enumeration value="hostExitDegradation"/&gt;
+ *     &lt;enumeration value="maxVmsConstraint"/&gt;
+ *     &lt;enumeration value="ftConstraints"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -100,7 +104,15 @@ public enum RecommendationReasonCode {
     @XmlEnumValue("xvmotionPlacement")
     XVMOTION_PLACEMENT("xvmotionPlacement"),
     @XmlEnumValue("networkBandwidthReservation")
-    NETWORK_BANDWIDTH_RESERVATION("networkBandwidthReservation");
+    NETWORK_BANDWIDTH_RESERVATION("networkBandwidthReservation"),
+    @XmlEnumValue("hostInDegradation")
+    HOST_IN_DEGRADATION("hostInDegradation"),
+    @XmlEnumValue("hostExitDegradation")
+    HOST_EXIT_DEGRADATION("hostExitDegradation"),
+    @XmlEnumValue("maxVmsConstraint")
+    MAX_VMS_CONSTRAINT("maxVmsConstraint"),
+    @XmlEnumValue("ftConstraints")
+    FT_CONSTRAINTS("ftConstraints");
     private final String value;
 
     RecommendationReasonCode(String v) {

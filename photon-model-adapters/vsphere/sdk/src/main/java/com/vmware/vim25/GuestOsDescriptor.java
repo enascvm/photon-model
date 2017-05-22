@@ -62,6 +62,8 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="supportsPvscsiControllerForBoot" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="diskUuidEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="supportsHotPlugPCI" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportsSecureBoot" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="defaultSecureBoot" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -114,7 +116,9 @@ import javax.xml.bind.annotation.XmlType;
     "wakeOnLanEthernetCard",
     "supportsPvscsiControllerForBoot",
     "diskUuidEnabled",
-    "supportsHotPlugPCI"
+    "supportsHotPlugPCI",
+    "supportsSecureBoot",
+    "defaultSecureBoot"
 })
 public class GuestOsDescriptor
     extends DynamicData
@@ -171,6 +175,8 @@ public class GuestOsDescriptor
     protected Boolean supportsPvscsiControllerForBoot;
     protected Boolean diskUuidEnabled;
     protected Boolean supportsHotPlugPCI;
+    protected Boolean supportsSecureBoot;
+    protected Boolean defaultSecureBoot;
 
     /**
      * Gets the value of the id property.
@@ -1168,6 +1174,54 @@ public class GuestOsDescriptor
      */
     public void setSupportsHotPlugPCI(Boolean value) {
         this.supportsHotPlugPCI = value;
+    }
+
+    /**
+     * Gets the value of the supportsSecureBoot property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isSupportsSecureBoot() {
+        return supportsSecureBoot;
+    }
+
+    /**
+     * Sets the value of the supportsSecureBoot property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setSupportsSecureBoot(Boolean value) {
+        this.supportsSecureBoot = value;
+    }
+
+    /**
+     * Gets the value of the defaultSecureBoot property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isDefaultSecureBoot() {
+        return defaultSecureBoot;
+    }
+
+    /**
+     * Sets the value of the defaultSecureBoot property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setDefaultSecureBoot(Boolean value) {
+        this.defaultSecureBoot = value;
     }
 
 }

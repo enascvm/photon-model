@@ -28,6 +28,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="invalidPriorConfiguration"/&gt;
  *     &lt;enumeration value="replicationNotEnabled"/&gt;
  *     &lt;enumeration value="replicationConfigurationFailed"/&gt;
+ *     &lt;enumeration value="encryptedVm"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -64,7 +65,9 @@ public enum ReplicationVmConfigFaultReasonForFault {
     @XmlEnumValue("replicationNotEnabled")
     REPLICATION_NOT_ENABLED("replicationNotEnabled"),
     @XmlEnumValue("replicationConfigurationFailed")
-    REPLICATION_CONFIGURATION_FAILED("replicationConfigurationFailed");
+    REPLICATION_CONFIGURATION_FAILED("replicationConfigurationFailed"),
+    @XmlEnumValue("encryptedVm")
+    ENCRYPTED_VM("encryptedVm");
     private final String value;
 
     ReplicationVmConfigFaultReasonForFault(String v) {

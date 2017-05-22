@@ -20,6 +20,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.vmware.pbm.InvalidArgumentFaultMsg;
+import com.vmware.pbm.PbmFaultFaultMsg;
+import com.vmware.pbm.PbmPlacementHub;
+import com.vmware.pbm.PbmProfile;
+import com.vmware.pbm.PbmProfileId;
+import com.vmware.pbm.PbmProfileResourceType;
+import com.vmware.pbm.PbmProfileResourceTypeEnum;
 import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
@@ -372,6 +379,45 @@ public class EnumerationClient extends BaseHelper {
         ManagedObjectReference pc = createPropertyCollector();
 
         return () -> new ObjectContentIterator(pc, spec);
+    }
+
+    /**
+     * Retrieve the list of storage profiles from the server.
+     */
+    public List<PbmProfile> retrieveStoragePolicies()
+            throws com.vmware.pbm.RuntimeFaultFaultMsg, InvalidArgumentFaultMsg {
+        // 1 Get PBM Profile Manager
+        ManagedObjectReference profileMgr = this.connection.getPbmServiceInstanceContent()
+                .getProfileManager();
+
+        // 2 Retrieve the list of profile identifiers.
+        PbmProfileResourceType pbmProfileResourceType = new PbmProfileResourceType();
+        pbmProfileResourceType.setResourceType(PbmProfileResourceTypeEnum.STORAGE.value());
+        List<PbmProfileId> profileIds = this.connection.getPbmPort()
+                .pbmQueryProfile(profileMgr, pbmProfileResourceType, null);
+
+        // 3 Retrieve the list of storage profiles.
+        if (profileIds != null && !profileIds.isEmpty()) {
+            return this.connection.getPbmPort().pbmRetrieveContent(profileMgr, profileIds);
+        }
+
+        return new ArrayList<>();
+    }
+
+    /**
+     * Retrieves list of datastore names that are compatible with the storage policy.
+     */
+    public List<String> getDataStores(PbmProfileId pbmProfileId)
+            throws com.vmware.pbm.RuntimeFaultFaultMsg, PbmFaultFaultMsg {
+        List<PbmPlacementHub> hubs = this.connection.getPbmPort().pbmQueryMatchingHub(
+                this.connection.getPbmServiceInstanceContent().getPlacementSolver(), null,
+                pbmProfileId);
+        List<String> dataStoreNames = new ArrayList<>();
+        if (hubs != null && !hubs.isEmpty()) {
+            hubs.stream().filter(hub -> hub.getHubType().equals(VimNames.TYPE_DATASTORE))
+                    .forEach(hub -> dataStoreNames.add(hub.getHubId()));
+        }
+        return dataStoreNames;
     }
 
     private void destroyCollectorQuietly(ManagedObjectReference pc) {

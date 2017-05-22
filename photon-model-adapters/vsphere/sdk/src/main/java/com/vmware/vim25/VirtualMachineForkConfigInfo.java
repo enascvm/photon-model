@@ -18,6 +18,7 @@ import javax.xml.bind.annotation.XmlType;
  *       &lt;sequence&gt;
  *         &lt;element name="parentEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="childForkGroupId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="parentForkGroupId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="childType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
@@ -31,6 +32,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "VirtualMachineForkConfigInfo", propOrder = {
     "parentEnabled",
     "childForkGroupId",
+    "parentForkGroupId",
     "childType"
 })
 public class VirtualMachineForkConfigInfo
@@ -39,6 +41,7 @@ public class VirtualMachineForkConfigInfo
 
     protected Boolean parentEnabled;
     protected String childForkGroupId;
+    protected String parentForkGroupId;
     protected String childType;
 
     /**
@@ -87,6 +90,30 @@ public class VirtualMachineForkConfigInfo
      */
     public void setChildForkGroupId(String value) {
         this.childForkGroupId = value;
+    }
+
+    /**
+     * Gets the value of the parentForkGroupId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getParentForkGroupId() {
+        return parentForkGroupId;
+    }
+
+    /**
+     * Sets the value of the parentForkGroupId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setParentForkGroupId(String value) {
+        this.parentForkGroupId = value;
     }
 
     /**

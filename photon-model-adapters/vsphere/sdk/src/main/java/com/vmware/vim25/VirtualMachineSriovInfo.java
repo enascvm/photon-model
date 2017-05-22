@@ -18,6 +18,7 @@ import javax.xml.bind.annotation.XmlType;
  *       &lt;sequence&gt;
  *         &lt;element name="virtualFunction" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
  *         &lt;element name="pnic" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="devicePool" type="{urn:vim25}VirtualMachineSriovDevicePoolInfo" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -29,7 +30,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VirtualMachineSriovInfo", propOrder = {
     "virtualFunction",
-    "pnic"
+    "pnic",
+    "devicePool"
 })
 public class VirtualMachineSriovInfo
     extends VirtualMachinePciPassthroughInfo
@@ -37,6 +39,7 @@ public class VirtualMachineSriovInfo
 
     protected boolean virtualFunction;
     protected String pnic;
+    protected VirtualMachineSriovDevicePoolInfo devicePool;
 
     /**
      * Gets the value of the virtualFunction property.
@@ -76,6 +79,30 @@ public class VirtualMachineSriovInfo
      */
     public void setPnic(String value) {
         this.pnic = value;
+    }
+
+    /**
+     * Gets the value of the devicePool property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link VirtualMachineSriovDevicePoolInfo }
+     *     
+     */
+    public VirtualMachineSriovDevicePoolInfo getDevicePool() {
+        return devicePool;
+    }
+
+    /**
+     * Sets the value of the devicePool property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link VirtualMachineSriovDevicePoolInfo }
+     *     
+     */
+    public void setDevicePool(VirtualMachineSriovDevicePoolInfo value) {
+        this.devicePool = value;
     }
 
 }

@@ -15,9 +15,11 @@ import javax.xml.bind.annotation.XmlType;
  * &lt;simpleType name="ClusterDasVmSettingsRestartPriority"&gt;
  *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
  *     &lt;enumeration value="disabled"/&gt;
+ *     &lt;enumeration value="lowest"/&gt;
  *     &lt;enumeration value="low"/&gt;
  *     &lt;enumeration value="medium"/&gt;
  *     &lt;enumeration value="high"/&gt;
+ *     &lt;enumeration value="highest"/&gt;
  *     &lt;enumeration value="clusterRestartPriority"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
@@ -30,12 +32,16 @@ public enum ClusterDasVmSettingsRestartPriority {
 
     @XmlEnumValue("disabled")
     DISABLED("disabled"),
+    @XmlEnumValue("lowest")
+    LOWEST("lowest"),
     @XmlEnumValue("low")
     LOW("low"),
     @XmlEnumValue("medium")
     MEDIUM("medium"),
     @XmlEnumValue("high")
     HIGH("high"),
+    @XmlEnumValue("highest")
+    HIGHEST("highest"),
     @XmlEnumValue("clusterRestartPriority")
     CLUSTER_RESTART_PRIORITY("clusterRestartPriority");
     private final String value;

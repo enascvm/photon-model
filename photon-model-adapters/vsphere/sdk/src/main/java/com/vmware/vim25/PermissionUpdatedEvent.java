@@ -19,6 +19,8 @@ import javax.xml.bind.annotation.XmlType;
  *       &lt;sequence&gt;
  *         &lt;element name="role" type="{urn:vim25}RoleEventArgument"/&gt;
  *         &lt;element name="propagate" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="prevRole" type="{urn:vim25}RoleEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="prevPropagate" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -30,7 +32,9 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "PermissionUpdatedEvent", propOrder = {
     "role",
-    "propagate"
+    "propagate",
+    "prevRole",
+    "prevPropagate"
 })
 public class PermissionUpdatedEvent
     extends PermissionEvent
@@ -39,6 +43,8 @@ public class PermissionUpdatedEvent
     @XmlElement(required = true)
     protected RoleEventArgument role;
     protected boolean propagate;
+    protected RoleEventArgument prevRole;
+    protected Boolean prevPropagate;
 
     /**
      * Gets the value of the role property.
@@ -78,6 +84,54 @@ public class PermissionUpdatedEvent
      */
     public void setPropagate(boolean value) {
         this.propagate = value;
+    }
+
+    /**
+     * Gets the value of the prevRole property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link RoleEventArgument }
+     *     
+     */
+    public RoleEventArgument getPrevRole() {
+        return prevRole;
+    }
+
+    /**
+     * Sets the value of the prevRole property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link RoleEventArgument }
+     *     
+     */
+    public void setPrevRole(RoleEventArgument value) {
+        this.prevRole = value;
+    }
+
+    /**
+     * Gets the value of the prevPropagate property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isPrevPropagate() {
+        return prevPropagate;
+    }
+
+    /**
+     * Sets the value of the prevPropagate property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setPrevPropagate(Boolean value) {
+        this.prevPropagate = value;
     }
 
 }

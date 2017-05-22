@@ -25,6 +25,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="diskObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="vFlashCacheConfigInfo" type="{urn:vim25}VirtualDiskVFlashCacheConfigInfo" minOccurs="0"/&gt;
  *         &lt;element name="iofilter" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vDiskId" type="{urn:vim25}ID" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -41,7 +42,8 @@ import javax.xml.bind.annotation.XmlType;
     "storageIOAllocation",
     "diskObjectId",
     "vFlashCacheConfigInfo",
-    "iofilter"
+    "iofilter",
+    "vDiskId"
 })
 public class VirtualDisk
     extends VirtualDevice
@@ -54,6 +56,7 @@ public class VirtualDisk
     protected String diskObjectId;
     protected VirtualDiskVFlashCacheConfigInfo vFlashCacheConfigInfo;
     protected List<String> iofilter;
+    protected ID vDiskId;
 
     /**
      * Gets the value of the capacityInKB property.
@@ -218,6 +221,30 @@ public class VirtualDisk
             iofilter = new ArrayList<String>();
         }
         return this.iofilter;
+    }
+
+    /**
+     * Gets the value of the vDiskId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ID }
+     *     
+     */
+    public ID getVDiskId() {
+        return vDiskId;
+    }
+
+    /**
+     * Sets the value of the vDiskId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ID }
+     *     
+     */
+    public void setVDiskId(ID value) {
+        this.vDiskId = value;
     }
 
 }

@@ -21,6 +21,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="StorageMigrationV1"/&gt;
  *     &lt;enumeration value="StoragePlacementV1"/&gt;
  *     &lt;enumeration value="PlacementV1"/&gt;
+ *     &lt;enumeration value="HostInfraUpdateHaV1"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -43,7 +44,9 @@ public enum ActionType {
     @XmlEnumValue("StoragePlacementV1")
     STORAGE_PLACEMENT_V_1("StoragePlacementV1"),
     @XmlEnumValue("PlacementV1")
-    PLACEMENT_V_1("PlacementV1");
+    PLACEMENT_V_1("PlacementV1"),
+    @XmlEnumValue("HostInfraUpdateHaV1")
+    HOST_INFRA_UPDATE_HA_V_1("HostInfraUpdateHaV1");
     private final String value;
 
     ActionType(String v) {

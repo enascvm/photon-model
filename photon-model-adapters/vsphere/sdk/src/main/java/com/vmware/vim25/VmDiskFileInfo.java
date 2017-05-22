@@ -24,6 +24,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="controllerType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="diskExtents" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="thin" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryption" type="{urn:vim25}VmDiskFileEncryptionInfo" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -39,7 +40,8 @@ import javax.xml.bind.annotation.XmlType;
     "hardwareVersion",
     "controllerType",
     "diskExtents",
-    "thin"
+    "thin",
+    "encryption"
 })
 public class VmDiskFileInfo
     extends FileInfo
@@ -51,6 +53,7 @@ public class VmDiskFileInfo
     protected String controllerType;
     protected List<String> diskExtents;
     protected Boolean thin;
+    protected VmDiskFileEncryptionInfo encryption;
 
     /**
      * Gets the value of the diskType property.
@@ -199,6 +202,30 @@ public class VmDiskFileInfo
      */
     public void setThin(Boolean value) {
         this.thin = value;
+    }
+
+    /**
+     * Gets the value of the encryption property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link VmDiskFileEncryptionInfo }
+     *     
+     */
+    public VmDiskFileEncryptionInfo getEncryption() {
+        return encryption;
+    }
+
+    /**
+     * Sets the value of the encryption property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link VmDiskFileEncryptionInfo }
+     *     
+     */
+    public void setEncryption(VmDiskFileEncryptionInfo value) {
+        this.encryption = value;
     }
 
 }

@@ -32,6 +32,7 @@ import javax.xml.bind.annotation.XmlType;
     InvalidDatastoreState.class,
     InvalidHostState.class,
     InvalidPowerState.class,
+    InvalidVmState.class,
     MksConnectionLimitReached.class,
     NoActiveHostInCluster.class,
     OvfConsumerPowerOnFault.class,

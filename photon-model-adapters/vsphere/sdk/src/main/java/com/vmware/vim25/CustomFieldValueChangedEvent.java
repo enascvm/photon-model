@@ -21,6 +21,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="fieldKey" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
  *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="value" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="prevState" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -34,7 +35,8 @@ import javax.xml.bind.annotation.XmlType;
     "entity",
     "fieldKey",
     "name",
-    "value"
+    "value",
+    "prevState"
 })
 public class CustomFieldValueChangedEvent
     extends CustomFieldEvent
@@ -47,6 +49,7 @@ public class CustomFieldValueChangedEvent
     protected String name;
     @XmlElement(required = true)
     protected String value;
+    protected String prevState;
 
     /**
      * Gets the value of the entity property.
@@ -134,6 +137,30 @@ public class CustomFieldValueChangedEvent
      */
     public void setValue(String value) {
         this.value = value;
+    }
+
+    /**
+     * Gets the value of the prevState property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getPrevState() {
+        return prevState;
+    }
+
+    /**
+     * Sets the value of the prevState property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setPrevState(String value) {
+        this.prevState = value;
     }
 
 }

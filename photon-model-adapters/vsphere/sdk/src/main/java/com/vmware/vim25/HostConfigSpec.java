@@ -35,6 +35,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="memory" type="{urn:vim25}HostMemorySpec" minOccurs="0"/&gt;
  *         &lt;element name="activeDirectory" type="{urn:vim25}HostActiveDirectory" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="genericConfig" type="{urn:vim25}KeyAnyValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="graphicsConfig" type="{urn:vim25}HostGraphicsConfig" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -61,7 +62,8 @@ import javax.xml.bind.annotation.XmlType;
     "usergroupAccount",
     "memory",
     "activeDirectory",
-    "genericConfig"
+    "genericConfig",
+    "graphicsConfig"
 })
 public class HostConfigSpec
     extends DynamicData
@@ -84,6 +86,7 @@ public class HostConfigSpec
     protected HostMemorySpec memory;
     protected List<HostActiveDirectory> activeDirectory;
     protected List<KeyAnyValue> genericConfig;
+    protected HostGraphicsConfig graphicsConfig;
 
     /**
      * Gets the value of the nasDatastore property.
@@ -531,6 +534,30 @@ public class HostConfigSpec
             genericConfig = new ArrayList<KeyAnyValue>();
         }
         return this.genericConfig;
+    }
+
+    /**
+     * Gets the value of the graphicsConfig property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link HostGraphicsConfig }
+     *     
+     */
+    public HostGraphicsConfig getGraphicsConfig() {
+        return graphicsConfig;
+    }
+
+    /**
+     * Sets the value of the graphicsConfig property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link HostGraphicsConfig }
+     *     
+     */
+    public void setGraphicsConfig(HostGraphicsConfig value) {
+        this.graphicsConfig = value;
     }
 
 }

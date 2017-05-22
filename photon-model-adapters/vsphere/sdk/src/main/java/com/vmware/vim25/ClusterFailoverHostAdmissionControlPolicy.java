@@ -19,6 +19,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}ClusterDasAdmissionControlPolicy"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="failoverHosts" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="failoverLevel" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -29,13 +30,15 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "ClusterFailoverHostAdmissionControlPolicy", propOrder = {
-    "failoverHosts"
+    "failoverHosts",
+    "failoverLevel"
 })
 public class ClusterFailoverHostAdmissionControlPolicy
     extends ClusterDasAdmissionControlPolicy
 {
 
     protected List<ManagedObjectReference> failoverHosts;
+    protected Integer failoverLevel;
 
     /**
      * Gets the value of the failoverHosts property.
@@ -64,6 +67,30 @@ public class ClusterFailoverHostAdmissionControlPolicy
             failoverHosts = new ArrayList<ManagedObjectReference>();
         }
         return this.failoverHosts;
+    }
+
+    /**
+     * Gets the value of the failoverLevel property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getFailoverLevel() {
+        return failoverLevel;
+    }
+
+    /**
+     * Sets the value of the failoverLevel property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setFailoverLevel(Integer value) {
+        this.failoverLevel = value;
     }
 
 }

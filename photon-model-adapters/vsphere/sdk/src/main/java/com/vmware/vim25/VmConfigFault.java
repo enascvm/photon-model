@@ -42,6 +42,7 @@ import javax.xml.bind.annotation.XmlType;
     NoCompatibleSoftAffinityHost.class,
     NumVirtualCpusIncompatible.class,
     OvfConsumerValidationFault.class,
+    QuarantineModeFault.class,
     RDMNotSupportedOnDatastore.class,
     RuleViolation.class,
     SoftRuleVioCorrectionDisallowed.class,

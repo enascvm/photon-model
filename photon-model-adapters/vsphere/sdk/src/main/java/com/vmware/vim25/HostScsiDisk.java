@@ -26,6 +26,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="physicalLocation" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="emulatedDIXDIFEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="vsanDiskInfo" type="{urn:vim25}VsanHostVsanDiskInfo" minOccurs="0"/&gt;
+ *         &lt;element name="scsiDiskType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -42,7 +43,8 @@ import javax.xml.bind.annotation.XmlType;
     "localDisk",
     "physicalLocation",
     "emulatedDIXDIFEnabled",
-    "vsanDiskInfo"
+    "vsanDiskInfo",
+    "scsiDiskType"
 })
 public class HostScsiDisk
     extends ScsiLun
@@ -57,6 +59,7 @@ public class HostScsiDisk
     protected List<String> physicalLocation;
     protected Boolean emulatedDIXDIFEnabled;
     protected VsanHostVsanDiskInfo vsanDiskInfo;
+    protected String scsiDiskType;
 
     /**
      * Gets the value of the capacity property.
@@ -229,6 +232,30 @@ public class HostScsiDisk
      */
     public void setVsanDiskInfo(VsanHostVsanDiskInfo value) {
         this.vsanDiskInfo = value;
+    }
+
+    /**
+     * Gets the value of the scsiDiskType property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getScsiDiskType() {
+        return scsiDiskType;
+    }
+
+    /**
+     * Sets the value of the scsiDiskType property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setScsiDiskType(String value) {
+        this.scsiDiskType = value;
     }
 
 }

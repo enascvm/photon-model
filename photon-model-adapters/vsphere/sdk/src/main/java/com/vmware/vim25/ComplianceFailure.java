@@ -1,6 +1,8 @@
 
 package com.vmware.vim25;
 
+import java.util.ArrayList;
+import java.util.List;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
@@ -20,6 +22,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="failureType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="message" type="{urn:vim25}LocalizableMessage"/&gt;
  *         &lt;element name="expressionName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="failureValues" type="{urn:vim25}ComplianceFailureComplianceFailureValues" maxOccurs="unbounded" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -32,7 +35,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "ComplianceFailure", propOrder = {
     "failureType",
     "message",
-    "expressionName"
+    "expressionName",
+    "failureValues"
 })
 public class ComplianceFailure
     extends DynamicData
@@ -43,6 +47,7 @@ public class ComplianceFailure
     @XmlElement(required = true)
     protected LocalizableMessage message;
     protected String expressionName;
+    protected List<ComplianceFailureComplianceFailureValues> failureValues;
 
     /**
      * Gets the value of the failureType property.
@@ -114,6 +119,35 @@ public class ComplianceFailure
      */
     public void setExpressionName(String value) {
         this.expressionName = value;
+    }
+
+    /**
+     * Gets the value of the failureValues property.
+     * 
+     * <p>
+     * This accessor method returns a reference to the live list,
+     * not a snapshot. Therefore any modification you make to the
+     * returned list will be present inside the JAXB object.
+     * This is why there is not a <CODE>set</CODE> method for the failureValues property.
+     * 
+     * <p>
+     * For example, to add a new item, do as follows:
+     * <pre>
+     *    getFailureValues().add(newItem);
+     * </pre>
+     * 
+     * 
+     * <p>
+     * Objects of the following type(s) are allowed in the list
+     * {@link ComplianceFailureComplianceFailureValues }
+     * 
+     * 
+     */
+    public List<ComplianceFailureComplianceFailureValues> getFailureValues() {
+        if (failureValues == null) {
+            failureValues = new ArrayList<ComplianceFailureComplianceFailureValues>();
+        }
+        return this.failureValues;
     }
 
 }

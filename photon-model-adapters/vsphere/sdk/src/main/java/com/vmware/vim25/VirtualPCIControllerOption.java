@@ -28,6 +28,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="numVmxnet3EthernetCards" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
  *         &lt;element name="numParaVirtualSCSIControllers" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
  *         &lt;element name="numSATAControllers" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numNVMEControllers" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -48,7 +49,8 @@ import javax.xml.bind.annotation.XmlType;
     "numSasSCSIControllers",
     "numVmxnet3EthernetCards",
     "numParaVirtualSCSIControllers",
-    "numSATAControllers"
+    "numSATAControllers",
+    "numNVMEControllers"
 })
 public class VirtualPCIControllerOption
     extends VirtualControllerOption
@@ -70,6 +72,7 @@ public class VirtualPCIControllerOption
     protected IntOption numVmxnet3EthernetCards;
     protected IntOption numParaVirtualSCSIControllers;
     protected IntOption numSATAControllers;
+    protected IntOption numNVMEControllers;
 
     /**
      * Gets the value of the numSCSIControllers property.
@@ -333,6 +336,30 @@ public class VirtualPCIControllerOption
      */
     public void setNumSATAControllers(IntOption value) {
         this.numSATAControllers = value;
+    }
+
+    /**
+     * Gets the value of the numNVMEControllers property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link IntOption }
+     *     
+     */
+    public IntOption getNumNVMEControllers() {
+        return numNVMEControllers;
+    }
+
+    /**
+     * Sets the value of the numNVMEControllers property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link IntOption }
+     *     
+     */
+    public void setNumNVMEControllers(IntOption value) {
+        this.numNVMEControllers = value;
     }
 
 }

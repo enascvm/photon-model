@@ -57,6 +57,12 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="overheadMemoryManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *         &lt;element name="certificateManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *         &lt;element name="ioFilterManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="vStorageObjectManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="hostSpecManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="cryptoManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="healthUpdateManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="failoverClusterConfigurator" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="failoverClusterManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -106,7 +112,13 @@ import javax.xml.bind.annotation.XmlType;
     "guestOperationsManager",
     "overheadMemoryManager",
     "certificateManager",
-    "ioFilterManager"
+    "ioFilterManager",
+    "vStorageObjectManager",
+    "hostSpecManager",
+    "cryptoManager",
+    "healthUpdateManager",
+    "failoverClusterConfigurator",
+    "failoverClusterManager"
 })
 public class ServiceContent
     extends DynamicData
@@ -155,6 +167,12 @@ public class ServiceContent
     protected ManagedObjectReference overheadMemoryManager;
     protected ManagedObjectReference certificateManager;
     protected ManagedObjectReference ioFilterManager;
+    protected ManagedObjectReference vStorageObjectManager;
+    protected ManagedObjectReference hostSpecManager;
+    protected ManagedObjectReference cryptoManager;
+    protected ManagedObjectReference healthUpdateManager;
+    protected ManagedObjectReference failoverClusterConfigurator;
+    protected ManagedObjectReference failoverClusterManager;
 
     /**
      * Gets the value of the rootFolder property.
@@ -1114,6 +1132,150 @@ public class ServiceContent
      */
     public void setIoFilterManager(ManagedObjectReference value) {
         this.ioFilterManager = value;
+    }
+
+    /**
+     * Gets the value of the vStorageObjectManager property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public ManagedObjectReference getVStorageObjectManager() {
+        return vStorageObjectManager;
+    }
+
+    /**
+     * Sets the value of the vStorageObjectManager property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public void setVStorageObjectManager(ManagedObjectReference value) {
+        this.vStorageObjectManager = value;
+    }
+
+    /**
+     * Gets the value of the hostSpecManager property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public ManagedObjectReference getHostSpecManager() {
+        return hostSpecManager;
+    }
+
+    /**
+     * Sets the value of the hostSpecManager property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public void setHostSpecManager(ManagedObjectReference value) {
+        this.hostSpecManager = value;
+    }
+
+    /**
+     * Gets the value of the cryptoManager property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public ManagedObjectReference getCryptoManager() {
+        return cryptoManager;
+    }
+
+    /**
+     * Sets the value of the cryptoManager property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public void setCryptoManager(ManagedObjectReference value) {
+        this.cryptoManager = value;
+    }
+
+    /**
+     * Gets the value of the healthUpdateManager property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public ManagedObjectReference getHealthUpdateManager() {
+        return healthUpdateManager;
+    }
+
+    /**
+     * Sets the value of the healthUpdateManager property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public void setHealthUpdateManager(ManagedObjectReference value) {
+        this.healthUpdateManager = value;
+    }
+
+    /**
+     * Gets the value of the failoverClusterConfigurator property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public ManagedObjectReference getFailoverClusterConfigurator() {
+        return failoverClusterConfigurator;
+    }
+
+    /**
+     * Sets the value of the failoverClusterConfigurator property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public void setFailoverClusterConfigurator(ManagedObjectReference value) {
+        this.failoverClusterConfigurator = value;
+    }
+
+    /**
+     * Gets the value of the failoverClusterManager property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public ManagedObjectReference getFailoverClusterManager() {
+        return failoverClusterManager;
+    }
+
+    /**
+     * Sets the value of the failoverClusterManager property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public void setFailoverClusterManager(ManagedObjectReference value) {
+        this.failoverClusterManager = value;
     }
 
 }

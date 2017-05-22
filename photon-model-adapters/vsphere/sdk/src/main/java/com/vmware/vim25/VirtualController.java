@@ -37,6 +37,7 @@ import javax.xml.bind.annotation.XmlType;
 })
 @XmlSeeAlso({
     VirtualIDEController.class,
+    VirtualNVMEController.class,
     VirtualPCIController.class,
     VirtualPS2Controller.class,
     VirtualSATAController.class,

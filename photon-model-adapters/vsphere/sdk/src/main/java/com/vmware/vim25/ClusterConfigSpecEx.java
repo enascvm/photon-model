@@ -23,11 +23,15 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="drsConfig" type="{urn:vim25}ClusterDrsConfigInfo" minOccurs="0"/&gt;
  *         &lt;element name="drsVmConfigSpec" type="{urn:vim25}ClusterDrsVmConfigSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="rulesSpec" type="{urn:vim25}ClusterRuleSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="orchestration" type="{urn:vim25}ClusterOrchestrationInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vmOrchestrationSpec" type="{urn:vim25}ClusterVmOrchestrationSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="dpmConfig" type="{urn:vim25}ClusterDpmConfigInfo" minOccurs="0"/&gt;
  *         &lt;element name="dpmHostConfigSpec" type="{urn:vim25}ClusterDpmHostConfigSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="vsanConfig" type="{urn:vim25}VsanClusterConfigInfo" minOccurs="0"/&gt;
  *         &lt;element name="vsanHostConfigSpec" type="{urn:vim25}VsanHostConfigInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="groupSpec" type="{urn:vim25}ClusterGroupSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="infraUpdateHaConfig" type="{urn:vim25}ClusterInfraUpdateHaConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="proactiveDrsConfig" type="{urn:vim25}ClusterProactiveDrsConfigInfo" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -43,11 +47,15 @@ import javax.xml.bind.annotation.XmlType;
     "drsConfig",
     "drsVmConfigSpec",
     "rulesSpec",
+    "orchestration",
+    "vmOrchestrationSpec",
     "dpmConfig",
     "dpmHostConfigSpec",
     "vsanConfig",
     "vsanHostConfigSpec",
-    "groupSpec"
+    "groupSpec",
+    "infraUpdateHaConfig",
+    "proactiveDrsConfig"
 })
 public class ClusterConfigSpecEx
     extends ComputeResourceConfigSpec
@@ -58,11 +66,15 @@ public class ClusterConfigSpecEx
     protected ClusterDrsConfigInfo drsConfig;
     protected List<ClusterDrsVmConfigSpec> drsVmConfigSpec;
     protected List<ClusterRuleSpec> rulesSpec;
+    protected ClusterOrchestrationInfo orchestration;
+    protected List<ClusterVmOrchestrationSpec> vmOrchestrationSpec;
     protected ClusterDpmConfigInfo dpmConfig;
     protected List<ClusterDpmHostConfigSpec> dpmHostConfigSpec;
     protected VsanClusterConfigInfo vsanConfig;
     protected List<VsanHostConfigInfo> vsanHostConfigSpec;
     protected List<ClusterGroupSpec> groupSpec;
+    protected ClusterInfraUpdateHaConfigInfo infraUpdateHaConfig;
+    protected ClusterProactiveDrsConfigInfo proactiveDrsConfig;
 
     /**
      * Gets the value of the dasConfig property.
@@ -200,6 +212,59 @@ public class ClusterConfigSpecEx
     }
 
     /**
+     * Gets the value of the orchestration property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ClusterOrchestrationInfo }
+     *     
+     */
+    public ClusterOrchestrationInfo getOrchestration() {
+        return orchestration;
+    }
+
+    /**
+     * Sets the value of the orchestration property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ClusterOrchestrationInfo }
+     *     
+     */
+    public void setOrchestration(ClusterOrchestrationInfo value) {
+        this.orchestration = value;
+    }
+
+    /**
+     * Gets the value of the vmOrchestrationSpec property.
+     * 
+     * <p>
+     * This accessor method returns a reference to the live list,
+     * not a snapshot. Therefore any modification you make to the
+     * returned list will be present inside the JAXB object.
+     * This is why there is not a <CODE>set</CODE> method for the vmOrchestrationSpec property.
+     * 
+     * <p>
+     * For example, to add a new item, do as follows:
+     * <pre>
+     *    getVmOrchestrationSpec().add(newItem);
+     * </pre>
+     * 
+     * 
+     * <p>
+     * Objects of the following type(s) are allowed in the list
+     * {@link ClusterVmOrchestrationSpec }
+     * 
+     * 
+     */
+    public List<ClusterVmOrchestrationSpec> getVmOrchestrationSpec() {
+        if (vmOrchestrationSpec == null) {
+            vmOrchestrationSpec = new ArrayList<ClusterVmOrchestrationSpec>();
+        }
+        return this.vmOrchestrationSpec;
+    }
+
+    /**
      * Gets the value of the dpmConfig property.
      * 
      * @return
@@ -332,6 +397,54 @@ public class ClusterConfigSpecEx
             groupSpec = new ArrayList<ClusterGroupSpec>();
         }
         return this.groupSpec;
+    }
+
+    /**
+     * Gets the value of the infraUpdateHaConfig property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ClusterInfraUpdateHaConfigInfo }
+     *     
+     */
+    public ClusterInfraUpdateHaConfigInfo getInfraUpdateHaConfig() {
+        return infraUpdateHaConfig;
+    }
+
+    /**
+     * Sets the value of the infraUpdateHaConfig property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ClusterInfraUpdateHaConfigInfo }
+     *     
+     */
+    public void setInfraUpdateHaConfig(ClusterInfraUpdateHaConfigInfo value) {
+        this.infraUpdateHaConfig = value;
+    }
+
+    /**
+     * Gets the value of the proactiveDrsConfig property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ClusterProactiveDrsConfigInfo }
+     *     
+     */
+    public ClusterProactiveDrsConfigInfo getProactiveDrsConfig() {
+        return proactiveDrsConfig;
+    }
+
+    /**
+     * Sets the value of the proactiveDrsConfig property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ClusterProactiveDrsConfigInfo }
+     *     
+     */
+    public void setProactiveDrsConfig(ClusterProactiveDrsConfigInfo value) {
+        this.proactiveDrsConfig = value;
     }
 
 }

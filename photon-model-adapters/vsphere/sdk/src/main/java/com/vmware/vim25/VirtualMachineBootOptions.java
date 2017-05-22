@@ -20,6 +20,7 @@ import javax.xml.bind.annotation.XmlType;
  *       &lt;sequence&gt;
  *         &lt;element name="bootDelay" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
  *         &lt;element name="enterBIOSSetup" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="efiSecureBootEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="bootRetryEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="bootRetryDelay" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
  *         &lt;element name="bootOrder" type="{urn:vim25}VirtualMachineBootOptionsBootableDevice" maxOccurs="unbounded" minOccurs="0"/&gt;
@@ -36,6 +37,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "VirtualMachineBootOptions", propOrder = {
     "bootDelay",
     "enterBIOSSetup",
+    "efiSecureBootEnabled",
     "bootRetryEnabled",
     "bootRetryDelay",
     "bootOrder",
@@ -47,6 +49,7 @@ public class VirtualMachineBootOptions
 
     protected Long bootDelay;
     protected Boolean enterBIOSSetup;
+    protected Boolean efiSecureBootEnabled;
     protected Boolean bootRetryEnabled;
     protected Long bootRetryDelay;
     protected List<VirtualMachineBootOptionsBootableDevice> bootOrder;
@@ -98,6 +101,30 @@ public class VirtualMachineBootOptions
      */
     public void setEnterBIOSSetup(Boolean value) {
         this.enterBIOSSetup = value;
+    }
+
+    /**
+     * Gets the value of the efiSecureBootEnabled property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEfiSecureBootEnabled() {
+        return efiSecureBootEnabled;
+    }
+
+    /**
+     * Sets the value of the efiSecureBootEnabled property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEfiSecureBootEnabled(Boolean value) {
+        this.efiSecureBootEnabled = value;
     }
 
     /**

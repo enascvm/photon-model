@@ -21,6 +21,7 @@ import javax.xml.bind.annotation.XmlType;
  *       &lt;sequence&gt;
  *         &lt;element name="capacityKb" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
  *         &lt;element name="profile" type="{urn:vim25}VirtualMachineProfileSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="crypto" type="{urn:vim25}CryptoSpec" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -32,7 +33,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "FileBackedVirtualDiskSpec", propOrder = {
     "capacityKb",
-    "profile"
+    "profile",
+    "crypto"
 })
 @XmlSeeAlso({
     SeSparseVirtualDiskSpec.class
@@ -43,6 +45,7 @@ public class FileBackedVirtualDiskSpec
 
     protected long capacityKb;
     protected List<VirtualMachineProfileSpec> profile;
+    protected CryptoSpec crypto;
 
     /**
      * Gets the value of the capacityKb property.
@@ -87,6 +90,30 @@ public class FileBackedVirtualDiskSpec
             profile = new ArrayList<VirtualMachineProfileSpec>();
         }
         return this.profile;
+    }
+
+    /**
+     * Gets the value of the crypto property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link CryptoSpec }
+     *     
+     */
+    public CryptoSpec getCrypto() {
+        return crypto;
+    }
+
+    /**
+     * Sets the value of the crypto property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link CryptoSpec }
+     *     
+     */
+    public void setCrypto(CryptoSpec value) {
+        this.crypto = value;
     }
 
 }

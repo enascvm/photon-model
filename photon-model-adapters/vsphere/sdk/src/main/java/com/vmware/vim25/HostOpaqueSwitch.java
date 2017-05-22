@@ -25,6 +25,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="pnicZone" type="{urn:vim25}HostOpaqueSwitchPhysicalNicZone" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="status" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="vtep" type="{urn:vim25}HostVirtualNic" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="extraConfig" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -40,7 +41,8 @@ import javax.xml.bind.annotation.XmlType;
     "pnic",
     "pnicZone",
     "status",
-    "vtep"
+    "vtep",
+    "extraConfig"
 })
 public class HostOpaqueSwitch
     extends DynamicData
@@ -53,6 +55,7 @@ public class HostOpaqueSwitch
     protected List<HostOpaqueSwitchPhysicalNicZone> pnicZone;
     protected String status;
     protected List<HostVirtualNic> vtep;
+    protected List<OptionValue> extraConfig;
 
     /**
      * Gets the value of the key property.
@@ -211,6 +214,35 @@ public class HostOpaqueSwitch
             vtep = new ArrayList<HostVirtualNic>();
         }
         return this.vtep;
+    }
+
+    /**
+     * Gets the value of the extraConfig property.
+     * 
+     * <p>
+     * This accessor method returns a reference to the live list,
+     * not a snapshot. Therefore any modification you make to the
+     * returned list will be present inside the JAXB object.
+     * This is why there is not a <CODE>set</CODE> method for the extraConfig property.
+     * 
+     * <p>
+     * For example, to add a new item, do as follows:
+     * <pre>
+     *    getExtraConfig().add(newItem);
+     * </pre>
+     * 
+     * 
+     * <p>
+     * Objects of the following type(s) are allowed in the list
+     * {@link OptionValue }
+     * 
+     * 
+     */
+    public List<OptionValue> getExtraConfig() {
+        if (extraConfig == null) {
+            extraConfig = new ArrayList<OptionValue>();
+        }
+        return this.extraConfig;
     }
 
 }

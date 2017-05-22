@@ -36,11 +36,11 @@ import javax.xml.bind.annotation.XmlType;
     "capacity"
 })
 @XmlSeeAlso({
-    HostVmfsVolume.class,
-    HostVffsVolume.class,
     HostNasVolume.class,
     HostLocalFileSystemVolume.class,
     HostVfatVolume.class,
+    HostVffsVolume.class,
+    HostVmfsVolume.class,
     HostVvolVolume.class
 })
 public class HostFileSystemVolume

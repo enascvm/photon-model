@@ -24,6 +24,8 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="baseUnits" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="rateUnits" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="sensorType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="timeStamp" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -40,7 +42,9 @@ import javax.xml.bind.annotation.XmlType;
     "unitModifier",
     "baseUnits",
     "rateUnits",
-    "sensorType"
+    "sensorType",
+    "id",
+    "timeStamp"
 })
 public class HostNumericSensorInfo
     extends DynamicData
@@ -56,6 +60,8 @@ public class HostNumericSensorInfo
     protected String rateUnits;
     @XmlElement(required = true)
     protected String sensorType;
+    protected String id;
+    protected String timeStamp;
 
     /**
      * Gets the value of the name property.
@@ -207,6 +213,54 @@ public class HostNumericSensorInfo
      */
     public void setSensorType(String value) {
         this.sensorType = value;
+    }
+
+    /**
+     * Gets the value of the id property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getId() {
+        return id;
+    }
+
+    /**
+     * Sets the value of the id property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setId(String value) {
+        this.id = value;
+    }
+
+    /**
+     * Gets the value of the timeStamp property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getTimeStamp() {
+        return timeStamp;
+    }
+
+    /**
+     * Sets the value of the timeStamp property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setTimeStamp(String value) {
+        this.timeStamp = value;
     }
 
 }

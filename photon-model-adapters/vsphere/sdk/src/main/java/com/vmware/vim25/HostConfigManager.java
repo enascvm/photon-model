@@ -52,6 +52,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="graphicsManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *         &lt;element name="vsanInternalSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *         &lt;element name="certificateManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="cryptoManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -97,7 +98,8 @@ import javax.xml.bind.annotation.XmlType;
     "hostAccessManager",
     "graphicsManager",
     "vsanInternalSystem",
-    "certificateManager"
+    "certificateManager",
+    "cryptoManager"
 })
 public class HostConfigManager
     extends DynamicData
@@ -139,6 +141,7 @@ public class HostConfigManager
     protected ManagedObjectReference graphicsManager;
     protected ManagedObjectReference vsanInternalSystem;
     protected ManagedObjectReference certificateManager;
+    protected ManagedObjectReference cryptoManager;
 
     /**
      * Gets the value of the cpuScheduler property.
@@ -1002,6 +1005,30 @@ public class HostConfigManager
      */
     public void setCertificateManager(ManagedObjectReference value) {
         this.certificateManager = value;
+    }
+
+    /**
+     * Gets the value of the cryptoManager property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public ManagedObjectReference getCryptoManager() {
+        return cryptoManager;
+    }
+
+    /**
+     * Sets the value of the cryptoManager property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ManagedObjectReference }
+     *     
+     */
+    public void setCryptoManager(ManagedObjectReference value) {
+        this.cryptoManager = value;
     }
 
 }

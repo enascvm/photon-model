@@ -25,6 +25,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="fileOperation" type="{urn:vim25}VirtualDeviceConfigSpecFileOperation" minOccurs="0"/&gt;
  *         &lt;element name="device" type="{urn:vim25}VirtualDevice"/&gt;
  *         &lt;element name="profile" type="{urn:vim25}VirtualMachineProfileSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="backing" type="{urn:vim25}VirtualDeviceConfigSpecBackingSpec" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -38,7 +39,8 @@ import javax.xml.bind.annotation.XmlType;
     "operation",
     "fileOperation",
     "device",
-    "profile"
+    "profile",
+    "backing"
 })
 @XmlSeeAlso({
     VirtualDiskConfigSpec.class
@@ -54,6 +56,7 @@ public class VirtualDeviceConfigSpec
     @XmlElement(required = true)
     protected VirtualDevice device;
     protected List<VirtualMachineProfileSpec> profile;
+    protected VirtualDeviceConfigSpecBackingSpec backing;
 
     /**
      * Gets the value of the operation property.
@@ -154,6 +157,30 @@ public class VirtualDeviceConfigSpec
             profile = new ArrayList<VirtualMachineProfileSpec>();
         }
         return this.profile;
+    }
+
+    /**
+     * Gets the value of the backing property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link VirtualDeviceConfigSpecBackingSpec }
+     *     
+     */
+    public VirtualDeviceConfigSpecBackingSpec getBacking() {
+        return backing;
+    }
+
+    /**
+     * Sets the value of the backing property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link VirtualDeviceConfigSpecBackingSpec }
+     *     
+     */
+    public void setBacking(VirtualDeviceConfigSpecBackingSpec value) {
+        this.backing = value;
     }
 
 }

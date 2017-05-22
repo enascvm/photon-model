@@ -36,6 +36,7 @@ public class EnumerationContext {
     private ResourceTracker hostSystemTracker;
     private ResourceTracker computeResourceTracker;
     private ResourceTracker resourcePoolTracker;
+    private ResourceTracker storagePolicyTracker;
 
     private final MoRefKeyedMap<AbstractOverlay> overlays;
 
@@ -78,6 +79,14 @@ public class EnumerationContext {
 
     public ResourceTracker getNetworkTracker() {
         return this.networkTracker;
+    }
+
+    public void expectStoragePolicyCount(int count) {
+        this.storagePolicyTracker = new ResourceTracker(count);
+    }
+
+    public ResourceTracker getStoragePolicyTracker() {
+        return this.storagePolicyTracker;
     }
 
     public void expectDatastoreCount(int count) {

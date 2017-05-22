@@ -33,6 +33,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="configVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="autoExpand" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="vmVnicNetworkResourcePoolKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="uplink" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -56,7 +57,8 @@ import javax.xml.bind.annotation.XmlType;
     "vendorSpecificConfig",
     "configVersion",
     "autoExpand",
-    "vmVnicNetworkResourcePoolKey"
+    "vmVnicNetworkResourcePoolKey",
+    "uplink"
 })
 public class DVPortgroupConfigInfo
     extends DynamicData
@@ -80,6 +82,7 @@ public class DVPortgroupConfigInfo
     protected String configVersion;
     protected Boolean autoExpand;
     protected String vmVnicNetworkResourcePoolKey;
+    protected Boolean uplink;
 
     /**
      * Gets the value of the key property.
@@ -417,6 +420,30 @@ public class DVPortgroupConfigInfo
      */
     public void setVmVnicNetworkResourcePoolKey(String value) {
         this.vmVnicNetworkResourcePoolKey = value;
+    }
+
+    /**
+     * Gets the value of the uplink property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isUplink() {
+        return uplink;
+    }
+
+    /**
+     * Sets the value of the uplink property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setUplink(Boolean value) {
+        this.uplink = value;
     }
 
 }

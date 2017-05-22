@@ -14,8 +14,6 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -28,7 +26,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -341,23 +338,15 @@ public class DiskService extends StatefulService {
         DiskStateExpanded diskStateExpanded = new DiskStateExpanded();
         currentState.copyTo(diskStateExpanded);
 
-        List<Operation> getOps = new ArrayList<>(1);
         if (currentState.storageDescriptionLink != null) {
-            getOps.add(Operation.createGet(this, currentState.storageDescriptionLink)
+            Operation.createGet(this, currentState.storageDescriptionLink)
                     .setReferer(this.getUri())
                     .setCompletion((o, e) -> {
-                        if (e == null) {
-                            diskStateExpanded.storageDescription = o.getBody(StorageDescription.class);
-                        }
-                    }));
-        }
-
-        if (!getOps.isEmpty()) {
-            OperationJoin.create(getOps)
-                    .setCompletion((ops, exs) -> {
-                        if (exs != null) {
-                            get.fail(exs.values().iterator().next());
+                        if (e != null) {
+                            get.fail(e);
                         } else {
+                            diskStateExpanded.storageDescription = o
+                                    .getBody(StorageDescription.class);
                             get.setBody(diskStateExpanded).complete();
                         }
                     }).sendWith(this);

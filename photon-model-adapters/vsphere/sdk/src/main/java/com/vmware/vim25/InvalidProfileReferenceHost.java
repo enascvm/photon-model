@@ -19,6 +19,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="reason" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *         &lt;element name="profile" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="profileName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -31,7 +32,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "InvalidProfileReferenceHost", propOrder = {
     "reason",
     "host",
-    "profile"
+    "profile",
+    "profileName"
 })
 public class InvalidProfileReferenceHost
     extends RuntimeFault
@@ -40,6 +42,7 @@ public class InvalidProfileReferenceHost
     protected String reason;
     protected ManagedObjectReference host;
     protected ManagedObjectReference profile;
+    protected String profileName;
 
     /**
      * Gets the value of the reason property.
@@ -111,6 +114,30 @@ public class InvalidProfileReferenceHost
      */
     public void setProfile(ManagedObjectReference value) {
         this.profile = value;
+    }
+
+    /**
+     * Gets the value of the profileName property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getProfileName() {
+        return profileName;
+    }
+
+    /**
+     * Sets the value of the profileName property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setProfileName(String value) {
+        this.profileName = value;
     }
 
 }

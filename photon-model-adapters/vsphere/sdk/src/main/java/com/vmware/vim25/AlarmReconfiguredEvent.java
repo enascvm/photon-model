@@ -18,6 +18,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}AlarmEvent"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="entity" type="{urn:vim25}ManagedEntityEventArgument"/&gt;
+ *         &lt;element name="configChanges" type="{urn:vim25}ChangesInfoEventArgument" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -28,7 +29,8 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "AlarmReconfiguredEvent", propOrder = {
-    "entity"
+    "entity",
+    "configChanges"
 })
 public class AlarmReconfiguredEvent
     extends AlarmEvent
@@ -36,6 +38,7 @@ public class AlarmReconfiguredEvent
 
     @XmlElement(required = true)
     protected ManagedEntityEventArgument entity;
+    protected ChangesInfoEventArgument configChanges;
 
     /**
      * Gets the value of the entity property.
@@ -59,6 +62,30 @@ public class AlarmReconfiguredEvent
      */
     public void setEntity(ManagedEntityEventArgument value) {
         this.entity = value;
+    }
+
+    /**
+     * Gets the value of the configChanges property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ChangesInfoEventArgument }
+     *     
+     */
+    public ChangesInfoEventArgument getConfigChanges() {
+        return configChanges;
+    }
+
+    /**
+     * Sets the value of the configChanges property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ChangesInfoEventArgument }
+     *     
+     */
+    public void setConfigChanges(ChangesInfoEventArgument value) {
+        this.configChanges = value;
     }
 
 }

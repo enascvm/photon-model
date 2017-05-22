@@ -54,6 +54,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="seSparseDiskSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="nestedHVSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="vPMCSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="secureBootSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -100,7 +101,8 @@ import javax.xml.bind.annotation.XmlType;
     "poweredOnMonitorTypeChangeSupported",
     "seSparseDiskSupported",
     "nestedHVSupported",
-    "vpmcSupported"
+    "vpmcSupported",
+    "secureBootSupported"
 })
 public class VirtualMachineCapability
     extends DynamicData
@@ -144,6 +146,7 @@ public class VirtualMachineCapability
     protected Boolean nestedHVSupported;
     @XmlElement(name = "vPMCSupported")
     protected Boolean vpmcSupported;
+    protected Boolean secureBootSupported;
 
     /**
      * Gets the value of the snapshotOperationsSupported property.
@@ -855,6 +858,30 @@ public class VirtualMachineCapability
      */
     public void setVPMCSupported(Boolean value) {
         this.vpmcSupported = value;
+    }
+
+    /**
+     * Gets the value of the secureBootSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isSecureBootSupported() {
+        return secureBootSupported;
+    }
+
+    /**
+     * Sets the value of the secureBootSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setSecureBootSupported(Boolean value) {
+        this.secureBootSupported = value;
     }
 
 }

@@ -18,6 +18,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}FileInfo"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="configVersion" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="encryption" type="{urn:vim25}VmConfigFileEncryptionInfo" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -28,7 +29,8 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VmConfigFileInfo", propOrder = {
-    "configVersion"
+    "configVersion",
+    "encryption"
 })
 @XmlSeeAlso({
     TemplateConfigFileInfo.class
@@ -38,6 +40,7 @@ public class VmConfigFileInfo
 {
 
     protected Integer configVersion;
+    protected VmConfigFileEncryptionInfo encryption;
 
     /**
      * Gets the value of the configVersion property.
@@ -61,6 +64,30 @@ public class VmConfigFileInfo
      */
     public void setConfigVersion(Integer value) {
         this.configVersion = value;
+    }
+
+    /**
+     * Gets the value of the encryption property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link VmConfigFileEncryptionInfo }
+     *     
+     */
+    public VmConfigFileEncryptionInfo getEncryption() {
+        return encryption;
+    }
+
+    /**
+     * Sets the value of the encryption property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link VmConfigFileEncryptionInfo }
+     *     
+     */
+    public void setEncryption(VmConfigFileEncryptionInfo value) {
+        this.encryption = value;
     }
 
 }

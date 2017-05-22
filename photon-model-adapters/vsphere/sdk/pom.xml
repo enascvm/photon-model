@@ -41,7 +41,8 @@
                   <sourceRoot>src/main/java</sourceRoot>
                   <wsdlOptions>
                     <wsdlOption>
-                      <wsdl>src/main/resources/com/vmware/vim25/vimService.wsdl</wsdl>
+                      <wsdl>src/main/resources/com/vmware/wsdl/vimService.wsdl</wsdl>
+                      <wsdlLocation>classpath:com/vmware/wsdl/vimService.wsdl</wsdlLocation>
                       <extraargs>
                         <extraarg>-verbose</extraarg>
                         <extraarg>-p</extraarg>
@@ -50,8 +51,23 @@
                         <extraarg>urn:vim25Service=com.vmware.vim25</extraarg>
                         <extraarg>-faultSerialVersionUID</extraarg>
                         <extraarg>1</extraarg>
-                        <extraarg>-wsdlLocation</extraarg>
-                        <extraarg>vimService.wsdl</extraarg>
+                      </extraargs>
+                    </wsdlOption>
+                    <wsdlOption>
+                      <wsdl>src/main/resources/com/vmware/wsdl/pbmService.wsdl</wsdl>
+                      <wsdlLocation>classpath:com/vmware/wsdl/pbmService.wsdl</wsdlLocation>
+                      <extraargs>
+                        <extraarg>-verbose</extraarg>
+                        <extraarg>-p</extraarg>
+                        <extraarg>urn:pbm=com.vmware.pbm</extraarg>
+                        <extraarg>-p</extraarg>
+                        <extraarg>urn:pbmService=com.vmware.pbm</extraarg>
+                        <extraarg>-p</extraarg>
+                        <extraarg>urn:vim25=com.vmware.vim25</extraarg>
+                        <extraarg>-p</extraarg>
+                        <extraarg>urn:vim25Service=com.vmware.vim25</extraarg>
+                        <extraarg>-faultSerialVersionUID</extraarg>
+                        <extraarg>1</extraarg>
                       </extraargs>
                     </wsdlOption>
                   </wsdlOptions>

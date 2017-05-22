@@ -45,6 +45,7 @@ import java.util.stream.Stream;
 
 import org.codehaus.jackson.node.ObjectNode;
 
+import com.vmware.pbm.PbmProfile;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
@@ -80,6 +81,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.vim25.ManagedObjectReference;
@@ -368,6 +370,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         List<DatastoreOverlay> datastores = new ArrayList<>();
         List<ComputeResourceOverlay> clusters = new ArrayList<>();
         List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
+        List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
 
         // put results in different buckets by type
         PropertyFilterSpec spec = client.createResourcesFilterSpec(ctx.getDatacenterPath());
@@ -411,6 +414,22 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
+        try {
+            List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
+            if (!pbmProfiles.isEmpty()) {
+                for (PbmProfile profile : pbmProfiles) {
+                    List<String> dataStores = client.getDataStores(profile.getProfileId());
+                    StoragePolicyOverlay spOverlay = new StoragePolicyOverlay(profile, dataStores);
+                    storagePolicies.add(spOverlay);
+                }
+            }
+        } catch (Exception e) {
+            String msg = "Error processing Storage policy";
+            logWarning(() -> msg + ": " + e.toString());
+            mgr.patchTaskToFailure(msg, e);
+            return;
+        }
+
         // process results in topological order
         ctx.expectNetworkCount(networks.size());
         for (NetworkOverlay net : networks.values()) {
@@ -426,6 +445,21 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         try {
             ctx.getDatastoreTracker().await();
             ctx.getNetworkTracker().await();
+        } catch (InterruptedException e) {
+            threadInterrupted(mgr, e);
+            return;
+        }
+
+        // Process found storage policy, it is related to datastore. Hence process it after
+        // datastore processing is complete.
+        ctx.expectStoragePolicyCount(storagePolicies.size());
+        for (StoragePolicyOverlay sp : storagePolicies) {
+            processFoundStoragePolicy(ctx, sp);
+        }
+
+        // checkpoint for storage policy
+        try {
+            ctx.getStoragePolicyTracker().await();
         } catch (InterruptedException e) {
             threadInterrupted(mgr, e);
             return;
@@ -796,6 +830,18 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         };
     }
 
+    private CompletionHandler trackStoragePolicy(EnumerationContext enumerationContext,
+            StoragePolicyOverlay sp) {
+        return (o, e) -> {
+            if (e != null) {
+                logFine(() -> String
+                        .format("Error in syncing resource group for Storage Policy %s",
+                                sp.getName()));
+            }
+            enumerationContext.getStoragePolicyTracker().track();
+        };
+    }
+
     private CompletionHandler trackVm(EnumerationContext enumerationContext) {
         return (o, e) -> {
             enumerationContext.getVmTracker().arrive();
@@ -898,8 +944,183 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .build();
     }
 
+    /**
+     * Process the found storage policy by creating a new resource group if not found already. If
+     * it already present, then update its properties. Process the updates on its compatible
+     * datastores.
+     */
+    private void processFoundStoragePolicy(EnumerationContext enumerationContext,
+            StoragePolicyOverlay sp) {
+        QueryTask task = queryForStoragePolicy(enumerationContext, sp.getProfileId(), sp.getName());
+
+        withTaskResults(task, result -> {
+            if (result.documentLinks.isEmpty()) {
+                createNewStoragePolicy(enumerationContext, sp);
+            } else {
+                ResourceGroupState oldDocument = convertOnlyResultToDocument(result,
+                        ResourceGroupState.class);
+                updateStoragePolicy(oldDocument, enumerationContext, sp);
+            }
+        });
+    }
+
+    private QueryTask queryForStoragePolicy(EnumerationContext ctx, String id, String name) {
+        Builder builder = Query.Builder.create()
+                .addFieldClause(ResourceState.FIELD_NAME_ID, id)
+                .addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.getRegionId())
+                .addCaseInsensitiveFieldClause(ResourceState.FIELD_NAME_NAME, name,
+                        MatchType.TERM, Occurance.MUST_OCCUR);
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+    }
+
+    private void createNewStoragePolicy(EnumerationContext enumerationContext,
+            StoragePolicyOverlay sp) {
+        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+        String regionId = enumerationContext.getRegionId();
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, regionId);
+        rgState.tenantLinks = enumerationContext.getTenantLinks();
+        logFine(() -> String.format("Found new Storage Policy %s", sp.getName()));
+        rgState.tagLinks = createStoragePolicyTags(sp.getTags(), rgState.tenantLinks);
+
+        Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
+                .setBody(rgState)
+                .setCompletion((o, e) -> {
+                    trackStoragePolicy(enumerationContext, sp).handle(o, e);
+                    // Update all compatible datastores group link with the self link of this
+                    // storage policy
+                    updateDataStoreWithStoragePolicyGroup(enumerationContext, sp,
+                            o.getBody(ResourceGroupState.class).documentSelfLink);
+                })
+                .sendWith(this);
+    }
+
+    private void updateStoragePolicy(ResourceGroupState oldDocument,
+            EnumerationContext enumerationContext, StoragePolicyOverlay sp) {
+        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+        String regionId = enumerationContext.getRegionId();
+
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, regionId);
+        rgState.documentSelfLink = oldDocument.documentSelfLink;
+
+        if (oldDocument.tenantLinks == null) {
+            rgState.tenantLinks = enumerationContext.getTenantLinks();
+        }
+
+        logFine(() -> String.format("Syncing Storage %s", sp.getName()));
+        Operation.createPatch(UriUtils.buildUri(getHost(), rgState.documentSelfLink))
+                .setBody(rgState)
+                .setCompletion((o, e) -> {
+                    trackStoragePolicy(enumerationContext, sp).handle(o, e);
+                    if (e == null) {
+                        TagsUtil.updateLocalTagStates(this, o.getBody(ResourceState.class), sp.getTags());
+                        // Update all compatible datastores group link with the self link of this
+                        // storage policy
+                        updateDataStoreWithStoragePolicyGroup(enumerationContext, sp,
+                                o.getBody(ResourceGroupState.class).documentSelfLink);
+                    }
+                }).sendWith(this);
+    }
+
+    private ResourceGroupState makeStoragePolicyFromResults(ComputeEnumerateResourceRequest request,
+            StoragePolicyOverlay sp, String regionId) {
+        ResourceGroupState res = new ResourceGroupState();
+        res.id = sp.getProfileId();
+        res.name = sp.getName();
+        res.desc = sp.getDescription();
+        res.regionId = regionId;
+        res.customProperties = sp.getCapabilities();
+        CustomProperties.of(res)
+                .put(CustomProperties.TYPE, sp.getType())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink());
+
+        return res;
+    }
+
+    private void updateDataStoreWithStoragePolicyGroup(EnumerationContext ctx,
+            StoragePolicyOverlay sp, String selfLink) {
+        List<Operation> getOps = new ArrayList<>();
+        sp.getDataStoreNames().stream().forEach(name -> {
+            String dataStoreLink = ctx.getDatastoreTracker()
+                    .getSelfLink(name, VimNames.TYPE_DATASTORE);
+            if (dataStoreLink != null && !ResourceTracker.ERROR.equals(dataStoreLink)) {
+                getOps.add(Operation.createGet(UriUtils.buildUri(getHost(), dataStoreLink)));
+            }
+        });
+
+        if (!getOps.isEmpty()) {
+            OperationJoin.create(getOps)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            logFine(() -> String.format("Syncing Storage policy failed %s",
+                                    Utils.toString(exs)));
+                        } else {
+                            QueryTask task = queryForStorage(ctx, null, selfLink);
+                            withTaskResults(task, result -> {
+                                // Call patch on all to update the group links
+                                updateStorageDescription(ops.values().stream(), selfLink, result);
+                            });
+
+                        }
+                    }).sendWith(this);
+        }
+    }
+
+    private void updateStorageDescription(Stream<Operation> opStream, String spSelfLink,
+            ServiceDocumentQueryResult result) {
+        List<Operation> patchOps = new ArrayList<>();
+        List<String> originalLinks = new ArrayList<>();
+        if (result.documentLinks != null) {
+            originalLinks.addAll(result.documentLinks);
+        }
+
+        opStream.forEach(op -> {
+            StorageDescription storageDescription = op.getBody
+                    (StorageDescription.class);
+            if (result.documentLinks != null && result.documentLinks
+                    .contains(storageDescription.documentSelfLink)) {
+                originalLinks.remove(storageDescription.documentSelfLink);
+            } else {
+                if (storageDescription.groupLinks == null) {
+                    storageDescription.groupLinks = new HashSet<>();
+                }
+                storageDescription.groupLinks.add(spSelfLink);
+                patchOps.add(Operation.createPatch(UriUtils.buildUri(getHost(),
+                        storageDescription.documentSelfLink))
+                        .setBody(storageDescription));
+            }
+        });
+
+        // In this case, we need to update the datastore by removing the policy group link
+        if (!originalLinks.isEmpty()) {
+            originalLinks.stream().forEach(link -> {
+                StorageDescription storageDescription = Utils
+                        .fromJson(result.documents.get(link), StorageDescription.class);
+                if (storageDescription.groupLinks != null) {
+                    storageDescription.groupLinks.remove(spSelfLink);
+                }
+                patchOps.add(Operation.createPatch(UriUtils.buildUri(getHost(),
+                        storageDescription.documentSelfLink))
+                        .setBody(storageDescription));
+            });
+        }
+
+        if (!patchOps.isEmpty()) {
+            OperationJoin.create(patchOps)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            logFine(() -> String.format("Syncing Storage policy failed %s",
+                                    Utils.toString(exs)));
+                        }
+                    }).sendWith(this);
+        }
+    }
+
     private void processFoundDatastore(EnumerationContext enumerationContext, DatastoreOverlay ds) {
-        QueryTask task = queryForStorage(enumerationContext, ds.getName());
+        QueryTask task = queryForStorage(enumerationContext, ds.getName(), null);
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
@@ -1006,13 +1227,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return res;
     }
 
-    private QueryTask queryForStorage(EnumerationContext ctx, String name) {
+    private QueryTask queryForStorage(EnumerationContext ctx, String name, String groupLink) {
         Builder builder = Query.Builder.create()
                 .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
                         ctx.getRequest().adapterManagementReference.toString())
-                .addFieldClause(StorageDescription.FIELD_NAME_REGION_ID, ctx.getRegionId())
-                .addCaseInsensitiveFieldClause(StorageDescription.FIELD_NAME_NAME, name,
-                        MatchType.TERM, Occurance.MUST_OCCUR);
+                .addFieldClause(StorageDescription.FIELD_NAME_REGION_ID, ctx.getRegionId());
+
+        if (name != null) {
+            builder.addCaseInsensitiveFieldClause(StorageDescription.FIELD_NAME_NAME, name,
+                    MatchType.TERM, Occurance.MUST_OCCUR);
+        }
+        if (groupLink != null) {
+            builder.addCollectionItemClause(ResourceState.FIELD_NAME_GROUP_LINKS, groupLink);
+        }
         QueryUtils.addEndpointLink(builder, StorageDescription.class,
                 ctx.getRequest().endpointLink);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
@@ -1160,6 +1387,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         }
 
+        return createTagsAsync(tags);
+    }
+
+    private Set<String> createTagsAsync(List<TagState> tags) {
         if (tags == null || tags.isEmpty()) {
             return new HashSet<>();
         }
@@ -1175,6 +1406,34 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return tags.stream()
                 .map(s -> s.documentSelfLink)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * Create storage policy tags
+     */
+    private Set<String> createStoragePolicyTags(Map<String, String> tags, List<String>
+            tenantLinks) {
+        List<TagState> tagStates = new ArrayList<>();
+        tags.entrySet().stream().forEach(t -> {
+            TagState cached = this.tagCache.get(t.getKey());
+            if (cached == null) {
+                TagState tag = newTagBuilder(t.getKey(), t.getValue(), tenantLinks);
+                tagStates.add(tag);
+            }
+        });
+
+        return createTagsAsync(tagStates);
+    }
+
+    private TagState newTagBuilder(String key, String value, List<String> tenantLinks) {
+        final TagState tagState = new TagState();
+
+        tagState.key = key;
+        tagState.value = value;
+        tagState.tenantLinks = tenantLinks;
+        tagState.documentSelfLink = TagFactoryService.generateSelfLink(tagState);
+
+        return tagState;
     }
 
     /**

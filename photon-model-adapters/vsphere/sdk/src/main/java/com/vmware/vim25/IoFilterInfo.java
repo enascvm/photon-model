@@ -22,6 +22,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="summary" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="releaseDate" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
@@ -38,12 +39,13 @@ import javax.xml.bind.annotation.XmlType;
     "name",
     "vendor",
     "version",
+    "type",
     "summary",
     "releaseDate"
 })
 @XmlSeeAlso({
-    ClusterIoFilterInfo.class,
-    HostIoFilterInfo.class
+    HostIoFilterInfo.class,
+    ClusterIoFilterInfo.class
 })
 public class IoFilterInfo
     extends DynamicData
@@ -57,6 +59,7 @@ public class IoFilterInfo
     protected String vendor;
     @XmlElement(required = true)
     protected String version;
+    protected String type;
     protected String summary;
     protected String releaseDate;
 
@@ -154,6 +157,30 @@ public class IoFilterInfo
      */
     public void setVersion(String value) {
         this.version = value;
+    }
+
+    /**
+     * Gets the value of the type property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getType() {
+        return type;
+    }
+
+    /**
+     * Sets the value of the type property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setType(String value) {
+        this.type = value;
     }
 
     /**

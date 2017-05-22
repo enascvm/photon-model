@@ -17,6 +17,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}DynamicData"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="restartPriority" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="restartPriorityTimeout" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
  *         &lt;element name="isolationResponse" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="vmToolsMonitoringSettings" type="{urn:vim25}ClusterVmToolsMonitoringSettings" minOccurs="0"/&gt;
  *         &lt;element name="vmComponentProtectionSettings" type="{urn:vim25}ClusterVmComponentProtectionSettings" minOccurs="0"/&gt;
@@ -31,6 +32,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "ClusterDasVmSettings", propOrder = {
     "restartPriority",
+    "restartPriorityTimeout",
     "isolationResponse",
     "vmToolsMonitoringSettings",
     "vmComponentProtectionSettings"
@@ -40,6 +42,7 @@ public class ClusterDasVmSettings
 {
 
     protected String restartPriority;
+    protected Integer restartPriorityTimeout;
     protected String isolationResponse;
     protected ClusterVmToolsMonitoringSettings vmToolsMonitoringSettings;
     protected ClusterVmComponentProtectionSettings vmComponentProtectionSettings;
@@ -66,6 +69,30 @@ public class ClusterDasVmSettings
      */
     public void setRestartPriority(String value) {
         this.restartPriority = value;
+    }
+
+    /**
+     * Gets the value of the restartPriorityTimeout property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getRestartPriorityTimeout() {
+        return restartPriorityTimeout;
+    }
+
+    /**
+     * Sets the value of the restartPriorityTimeout property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setRestartPriorityTimeout(Integer value) {
+        this.restartPriorityTimeout = value;
     }
 
     /**

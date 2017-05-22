@@ -39,6 +39,7 @@ import javax.xml.bind.annotation.XmlType;
     ClusterDrsVmConfigSpec.class,
     ClusterDpmHostConfigSpec.class,
     ClusterGroupSpec.class,
+    ClusterVmOrchestrationSpec.class,
     ClusterRuleSpec.class,
     StorageDrsVmConfigSpec.class,
     StorageDrsOptionSpec.class,

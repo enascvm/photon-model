@@ -36,6 +36,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagService;
@@ -49,9 +50,6 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
-/**
- *
- */
 public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
     private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(2);
@@ -106,7 +104,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     }
 
     @Test
-    public void testDatastoreTagCollection() throws Throwable {
+    public void testStorageEnumeration() throws Throwable {
         this.resourcePool = createResourcePool();
 
         this.auth = createAuth();
@@ -118,7 +116,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         if (!isMock()) {
             // Query for storage description
-            withTaskResults(queryForStorage(), result -> {
+            withTaskResults(queryForDatastore(), result -> {
                 if (result.documentLinks.isEmpty()) {
                     assertTrue(!result.documentLinks.isEmpty());
                 } else {
@@ -126,6 +124,18 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                             .fromJson(result.documents.get(result.documentLinks.get(0)),
                                     StorageDescriptionService.StorageDescription.class);
                     assertNotNull(sd.tagLinks);
+                }
+            });
+
+            // Query for storage policy resource group
+            withTaskResults(queryForStoragePolicy(), result -> {
+                if (result.documentLinks.isEmpty()) {
+                    assertTrue(!result.documentLinks.isEmpty());
+                } else {
+                    ResourceGroupService.ResourceGroupState rg = Utils
+                            .fromJson(result.documents.get(result.documentLinks.get(0)),
+                                    ResourceGroupService.ResourceGroupState.class);
+                    assertNotNull(rg.name);
                 }
             });
         }
@@ -188,7 +198,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         enumerateComputes(this.computeHost);
     }
 
-    private QueryTask queryForStorage() {
+    private QueryTask queryForDatastore() {
         Query.Builder builder = Query.Builder.create()
                 .addFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
                         getAdapterManagementReference())
@@ -198,6 +208,20 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                         QueryTask.QueryTerm.MatchType.TERM, Query.Occurance.MUST_OCCUR);
         QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
                 this.computeHost.endpointLink);
+        QueryUtils.addTenantLinks(builder, this.computeHost.tenantLinks);
+
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+    }
+
+    private QueryTask queryForStoragePolicy() {
+        Query.Builder builder = Query.Builder.create()
+                .addFieldClause(ResourceState.FIELD_NAME_REGION_ID, this.datacenterId)
+                .addKindFieldClause(ResourceGroupService.ResourceGroupState.class);
+
+//               .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+//                       CustomProperties.TYPE, "Storage");
         QueryUtils.addTenantLinks(builder, this.computeHost.tenantLinks);
 
         return QueryTask.Builder.createDirectTask()

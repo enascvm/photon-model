@@ -97,11 +97,27 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="hostAccessManagerSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="provisioningNicSelectionSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="nfs41Supported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="nfs41Krb5iSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="turnDiskLocatorLedSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="virtualVolumeDatastoreSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="markAsSsdSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="markAsLocalSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="smartCardAuthenticationSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="cryptoSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="oneKVolumeAPIsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="gatewayOnNicSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="upitSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="cpuHwMmuSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptedVMotionSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionChangeOnAddRemoveSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionHotOperationSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionWithSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionFaultToleranceSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionMemorySaveSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionRDMSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionVFlashSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionCBRCSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="encryptionHBRSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -190,11 +206,27 @@ import javax.xml.bind.annotation.XmlType;
     "hostAccessManagerSupported",
     "provisioningNicSelectionSupported",
     "nfs41Supported",
+    "nfs41Krb5ISupported",
     "turnDiskLocatorLedSupported",
     "virtualVolumeDatastoreSupported",
     "markAsSsdSupported",
     "markAsLocalSupported",
-    "smartCardAuthenticationSupported"
+    "smartCardAuthenticationSupported",
+    "cryptoSupported",
+    "oneKVolumeAPIsSupported",
+    "gatewayOnNicSupported",
+    "upitSupported",
+    "cpuHwMmuSupported",
+    "encryptedVMotionSupported",
+    "encryptionChangeOnAddRemoveSupported",
+    "encryptionHotOperationSupported",
+    "encryptionWithSnapshotsSupported",
+    "encryptionFaultToleranceSupported",
+    "encryptionMemorySaveSupported",
+    "encryptionRDMSupported",
+    "encryptionVFlashSupported",
+    "encryptionCBRCSupported",
+    "encryptionHBRSupported"
 })
 public class HostCapability
     extends DynamicData
@@ -281,11 +313,28 @@ public class HostCapability
     protected Boolean hostAccessManagerSupported;
     protected Boolean provisioningNicSelectionSupported;
     protected Boolean nfs41Supported;
+    @XmlElement(name = "nfs41Krb5iSupported")
+    protected Boolean nfs41Krb5ISupported;
     protected Boolean turnDiskLocatorLedSupported;
     protected Boolean virtualVolumeDatastoreSupported;
     protected Boolean markAsSsdSupported;
     protected Boolean markAsLocalSupported;
     protected Boolean smartCardAuthenticationSupported;
+    protected Boolean cryptoSupported;
+    protected Boolean oneKVolumeAPIsSupported;
+    protected Boolean gatewayOnNicSupported;
+    protected Boolean upitSupported;
+    protected Boolean cpuHwMmuSupported;
+    protected Boolean encryptedVMotionSupported;
+    protected Boolean encryptionChangeOnAddRemoveSupported;
+    protected Boolean encryptionHotOperationSupported;
+    protected Boolean encryptionWithSnapshotsSupported;
+    protected Boolean encryptionFaultToleranceSupported;
+    protected Boolean encryptionMemorySaveSupported;
+    protected Boolean encryptionRDMSupported;
+    protected Boolean encryptionVFlashSupported;
+    protected Boolean encryptionCBRCSupported;
+    protected Boolean encryptionHBRSupported;
 
     /**
      * Gets the value of the recursiveResourcePoolsSupported property.
@@ -2006,6 +2055,30 @@ public class HostCapability
     }
 
     /**
+     * Gets the value of the nfs41Krb5ISupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isNfs41Krb5ISupported() {
+        return nfs41Krb5ISupported;
+    }
+
+    /**
+     * Sets the value of the nfs41Krb5ISupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setNfs41Krb5ISupported(Boolean value) {
+        this.nfs41Krb5ISupported = value;
+    }
+
+    /**
      * Gets the value of the turnDiskLocatorLedSupported property.
      * 
      * @return
@@ -2123,6 +2196,366 @@ public class HostCapability
      */
     public void setSmartCardAuthenticationSupported(Boolean value) {
         this.smartCardAuthenticationSupported = value;
+    }
+
+    /**
+     * Gets the value of the cryptoSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isCryptoSupported() {
+        return cryptoSupported;
+    }
+
+    /**
+     * Sets the value of the cryptoSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setCryptoSupported(Boolean value) {
+        this.cryptoSupported = value;
+    }
+
+    /**
+     * Gets the value of the oneKVolumeAPIsSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isOneKVolumeAPIsSupported() {
+        return oneKVolumeAPIsSupported;
+    }
+
+    /**
+     * Sets the value of the oneKVolumeAPIsSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setOneKVolumeAPIsSupported(Boolean value) {
+        this.oneKVolumeAPIsSupported = value;
+    }
+
+    /**
+     * Gets the value of the gatewayOnNicSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isGatewayOnNicSupported() {
+        return gatewayOnNicSupported;
+    }
+
+    /**
+     * Sets the value of the gatewayOnNicSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setGatewayOnNicSupported(Boolean value) {
+        this.gatewayOnNicSupported = value;
+    }
+
+    /**
+     * Gets the value of the upitSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isUpitSupported() {
+        return upitSupported;
+    }
+
+    /**
+     * Sets the value of the upitSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setUpitSupported(Boolean value) {
+        this.upitSupported = value;
+    }
+
+    /**
+     * Gets the value of the cpuHwMmuSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isCpuHwMmuSupported() {
+        return cpuHwMmuSupported;
+    }
+
+    /**
+     * Sets the value of the cpuHwMmuSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setCpuHwMmuSupported(Boolean value) {
+        this.cpuHwMmuSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptedVMotionSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptedVMotionSupported() {
+        return encryptedVMotionSupported;
+    }
+
+    /**
+     * Sets the value of the encryptedVMotionSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptedVMotionSupported(Boolean value) {
+        this.encryptedVMotionSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionChangeOnAddRemoveSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionChangeOnAddRemoveSupported() {
+        return encryptionChangeOnAddRemoveSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionChangeOnAddRemoveSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionChangeOnAddRemoveSupported(Boolean value) {
+        this.encryptionChangeOnAddRemoveSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionHotOperationSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionHotOperationSupported() {
+        return encryptionHotOperationSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionHotOperationSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionHotOperationSupported(Boolean value) {
+        this.encryptionHotOperationSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionWithSnapshotsSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionWithSnapshotsSupported() {
+        return encryptionWithSnapshotsSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionWithSnapshotsSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionWithSnapshotsSupported(Boolean value) {
+        this.encryptionWithSnapshotsSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionFaultToleranceSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionFaultToleranceSupported() {
+        return encryptionFaultToleranceSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionFaultToleranceSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionFaultToleranceSupported(Boolean value) {
+        this.encryptionFaultToleranceSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionMemorySaveSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionMemorySaveSupported() {
+        return encryptionMemorySaveSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionMemorySaveSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionMemorySaveSupported(Boolean value) {
+        this.encryptionMemorySaveSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionRDMSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionRDMSupported() {
+        return encryptionRDMSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionRDMSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionRDMSupported(Boolean value) {
+        this.encryptionRDMSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionVFlashSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionVFlashSupported() {
+        return encryptionVFlashSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionVFlashSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionVFlashSupported(Boolean value) {
+        this.encryptionVFlashSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionCBRCSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionCBRCSupported() {
+        return encryptionCBRCSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionCBRCSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionCBRCSupported(Boolean value) {
+        this.encryptionCBRCSupported = value;
+    }
+
+    /**
+     * Gets the value of the encryptionHBRSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isEncryptionHBRSupported() {
+        return encryptionHBRSupported;
+    }
+
+    /**
+     * Sets the value of the encryptionHBRSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setEncryptionHBRSupported(Boolean value) {
+        this.encryptionHBRSupported = value;
     }
 
 }

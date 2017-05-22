@@ -14,10 +14,14 @@
 package com.vmware.photon.controller.model.adapters.vsphere.util.connection;
 
 import java.net.URI;
+import java.net.URL;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.vmware.pbm.PbmPortType;
+import com.vmware.pbm.PbmService;
+import com.vmware.pbm.PbmServiceInstanceContent;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ServiceContent;
 import com.vmware.vim25.UserSession;
@@ -74,4 +78,15 @@ public interface Connection {
      * @return
      */
     Connection createUnmanagedCopy();
+
+    // Storage Profile based management related
+    PbmService getPbmService();
+
+    PbmPortType getPbmPort();
+
+    PbmServiceInstanceContent getPbmServiceInstanceContent();
+
+    ManagedObjectReference getPbmServiceInstanceReference();
+
+    URL getSpbmURL();
 }

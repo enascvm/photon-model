@@ -23,6 +23,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="defaultComplyLocator" type="{urn:vim25}ComplianceLocator" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="customComplyProfile" type="{urn:vim25}ComplianceProfile" minOccurs="0"/&gt;
  *         &lt;element name="disabledExpressionList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="description" type="{urn:vim25}ProfileDescription" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -37,7 +38,8 @@ import javax.xml.bind.annotation.XmlType;
     "defaultComplyProfile",
     "defaultComplyLocator",
     "customComplyProfile",
-    "disabledExpressionList"
+    "disabledExpressionList",
+    "description"
 })
 public class HostProfileConfigInfo
     extends ProfileConfigInfo
@@ -48,6 +50,7 @@ public class HostProfileConfigInfo
     protected List<ComplianceLocator> defaultComplyLocator;
     protected ComplianceProfile customComplyProfile;
     protected List<String> disabledExpressionList;
+    protected ProfileDescription description;
 
     /**
      * Gets the value of the applyProfile property.
@@ -177,6 +180,30 @@ public class HostProfileConfigInfo
             disabledExpressionList = new ArrayList<String>();
         }
         return this.disabledExpressionList;
+    }
+
+    /**
+     * Gets the value of the description property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link ProfileDescription }
+     *     
+     */
+    public ProfileDescription getDescription() {
+        return description;
+    }
+
+    /**
+     * Sets the value of the description property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link ProfileDescription }
+     *     
+     */
+    public void setDescription(ProfileDescription value) {
+        this.description = value;
     }
 
 }

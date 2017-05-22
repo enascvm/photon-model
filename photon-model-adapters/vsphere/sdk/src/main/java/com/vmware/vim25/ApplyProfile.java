@@ -24,6 +24,11 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="profileTypeName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="profileVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="property" type="{urn:vim25}ProfileApplyProfileProperty" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="favorite" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="toBeMerged" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="toReplaceWith" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="toBeDeleted" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="copyEnableStatus" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -38,7 +43,12 @@ import javax.xml.bind.annotation.XmlType;
     "policy",
     "profileTypeName",
     "profileVersion",
-    "property"
+    "property",
+    "favorite",
+    "toBeMerged",
+    "toReplaceWith",
+    "toBeDeleted",
+    "copyEnableStatus"
 })
 @XmlSeeAlso({
     ProfileApplyProfileElement.class,
@@ -84,6 +94,11 @@ public class ApplyProfile
     protected String profileTypeName;
     protected String profileVersion;
     protected List<ProfileApplyProfileProperty> property;
+    protected Boolean favorite;
+    protected Boolean toBeMerged;
+    protected Boolean toReplaceWith;
+    protected Boolean toBeDeleted;
+    protected Boolean copyEnableStatus;
 
     /**
      * Gets the value of the enabled property.
@@ -205,6 +220,126 @@ public class ApplyProfile
             property = new ArrayList<ProfileApplyProfileProperty>();
         }
         return this.property;
+    }
+
+    /**
+     * Gets the value of the favorite property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isFavorite() {
+        return favorite;
+    }
+
+    /**
+     * Sets the value of the favorite property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setFavorite(Boolean value) {
+        this.favorite = value;
+    }
+
+    /**
+     * Gets the value of the toBeMerged property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isToBeMerged() {
+        return toBeMerged;
+    }
+
+    /**
+     * Sets the value of the toBeMerged property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setToBeMerged(Boolean value) {
+        this.toBeMerged = value;
+    }
+
+    /**
+     * Gets the value of the toReplaceWith property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isToReplaceWith() {
+        return toReplaceWith;
+    }
+
+    /**
+     * Sets the value of the toReplaceWith property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setToReplaceWith(Boolean value) {
+        this.toReplaceWith = value;
+    }
+
+    /**
+     * Gets the value of the toBeDeleted property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isToBeDeleted() {
+        return toBeDeleted;
+    }
+
+    /**
+     * Sets the value of the toBeDeleted property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setToBeDeleted(Boolean value) {
+        this.toBeDeleted = value;
+    }
+
+    /**
+     * Gets the value of the copyEnableStatus property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isCopyEnableStatus() {
+        return copyEnableStatus;
+    }
+
+    /**
+     * Sets the value of the copyEnableStatus property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setCopyEnableStatus(Boolean value) {
+        this.copyEnableStatus = value;
     }
 
 }

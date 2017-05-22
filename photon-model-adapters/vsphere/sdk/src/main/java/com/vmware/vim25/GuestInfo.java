@@ -25,6 +25,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="toolsVersionStatus2" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="toolsRunningStatus" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="toolsVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="toolsInstallType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="guestId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="guestFamily" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="guestFullName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
@@ -57,6 +58,7 @@ import javax.xml.bind.annotation.XmlType;
     "toolsVersionStatus2",
     "toolsRunningStatus",
     "toolsVersion",
+    "toolsInstallType",
     "guestId",
     "guestFamily",
     "guestFullName",
@@ -85,6 +87,7 @@ public class GuestInfo
     protected String toolsVersionStatus2;
     protected String toolsRunningStatus;
     protected String toolsVersion;
+    protected String toolsInstallType;
     protected String guestId;
     protected String guestFamily;
     protected String guestFullName;
@@ -222,6 +225,30 @@ public class GuestInfo
      */
     public void setToolsVersion(String value) {
         this.toolsVersion = value;
+    }
+
+    /**
+     * Gets the value of the toolsInstallType property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getToolsInstallType() {
+        return toolsInstallType;
+    }
+
+    /**
+     * Sets the value of the toolsInstallType property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setToolsInstallType(String value) {
+        this.toolsInstallType = value;
     }
 
     /**

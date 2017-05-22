@@ -24,6 +24,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="disabledExpressionList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="validatorHost" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
  *         &lt;element name="validating" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="hostConfig" type="{urn:vim25}HostProfileConfigInfo" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -39,7 +40,8 @@ import javax.xml.bind.annotation.XmlType;
     "disabledExpressionListChanged",
     "disabledExpressionList",
     "validatorHost",
-    "validating"
+    "validating",
+    "hostConfig"
 })
 public class HostProfileCompleteConfigSpec
     extends HostProfileConfigSpec
@@ -51,6 +53,7 @@ public class HostProfileCompleteConfigSpec
     protected List<String> disabledExpressionList;
     protected ManagedObjectReference validatorHost;
     protected Boolean validating;
+    protected HostProfileConfigInfo hostConfig;
 
     /**
      * Gets the value of the applyProfile property.
@@ -191,6 +194,30 @@ public class HostProfileCompleteConfigSpec
      */
     public void setValidating(Boolean value) {
         this.validating = value;
+    }
+
+    /**
+     * Gets the value of the hostConfig property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link HostProfileConfigInfo }
+     *     
+     */
+    public HostProfileConfigInfo getHostConfig() {
+        return hostConfig;
+    }
+
+    /**
+     * Sets the value of the hostConfig property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link HostProfileConfigInfo }
+     *     
+     */
+    public void setHostConfig(HostProfileConfigInfo value) {
+        this.hostConfig = value;
     }
 
 }

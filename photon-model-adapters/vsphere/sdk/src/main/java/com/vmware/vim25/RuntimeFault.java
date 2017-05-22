@@ -28,6 +28,13 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "RuntimeFault")
 @XmlSeeAlso({
+    HostCommunication.class,
+    ManagedObjectNotFound.class,
+    InvalidRequest.class,
+    NotImplemented.class,
+    RequestCanceled.class,
+    SystemError.class,
+    UnexpectedFault.class,
     CannotDisableDrsOnClusterManagedByVDC.class,
     CannotDisableDrsOnClustersWithVApps.class,
     ConflictingDatastoreFound.class,
@@ -35,25 +42,18 @@ import javax.xml.bind.annotation.XmlType;
     DisallowedChangeByService.class,
     DisallowedOperationOnFailoverHost.class,
     FailToLockFaultToleranceVMs.class,
+    NotSupported.class,
+    InvalidArgument.class,
     InvalidProfileReferenceHost.class,
     LicenseAssignmentFailed.class,
     MethodAlreadyDisabledFault.class,
     MethodDisabled.class,
     OperationDisallowedOnHost.class,
     RestrictedByAdministrator.class,
+    SecurityError.class,
     ThirdPartyLicenseAssignmentFailed.class,
     VAppOperationInProgress.class,
-    HostCommunication.class,
-    InvalidArgument.class,
-    ManagedObjectNotFound.class,
-    InvalidRequest.class,
-    NotEnoughLicenses.class,
-    NotImplemented.class,
-    NotSupported.class,
-    RequestCanceled.class,
-    SecurityError.class,
-    SystemError.class,
-    UnexpectedFault.class
+    NotEnoughLicenses.class
 })
 public class RuntimeFault
     extends MethodFault

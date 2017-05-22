@@ -32,6 +32,8 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="packetsOutDropped" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
  *         &lt;element name="packetsInException" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
  *         &lt;element name="packetsOutException" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="bytesInFromPnic" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="bytesOutToPnic" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -57,7 +59,9 @@ import javax.xml.bind.annotation.XmlType;
     "packetsInDropped",
     "packetsOutDropped",
     "packetsInException",
-    "packetsOutException"
+    "packetsOutException",
+    "bytesInFromPnic",
+    "bytesOutToPnic"
 })
 public class DistributedVirtualSwitchPortStatistics
     extends DynamicData
@@ -79,6 +83,8 @@ public class DistributedVirtualSwitchPortStatistics
     protected long packetsOutDropped;
     protected long packetsInException;
     protected long packetsOutException;
+    protected Long bytesInFromPnic;
+    protected Long bytesOutToPnic;
 
     /**
      * Gets the value of the packetsInMulticast property.
@@ -334,6 +340,54 @@ public class DistributedVirtualSwitchPortStatistics
      */
     public void setPacketsOutException(long value) {
         this.packetsOutException = value;
+    }
+
+    /**
+     * Gets the value of the bytesInFromPnic property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Long }
+     *     
+     */
+    public Long getBytesInFromPnic() {
+        return bytesInFromPnic;
+    }
+
+    /**
+     * Sets the value of the bytesInFromPnic property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Long }
+     *     
+     */
+    public void setBytesInFromPnic(Long value) {
+        this.bytesInFromPnic = value;
+    }
+
+    /**
+     * Gets the value of the bytesOutToPnic property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Long }
+     *     
+     */
+    public Long getBytesOutToPnic() {
+        return bytesOutToPnic;
+    }
+
+    /**
+     * Sets the value of the bytesOutToPnic property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Long }
+     *     
+     */
+    public void setBytesOutToPnic(Long value) {
+        this.bytesOutToPnic = value;
     }
 
 }

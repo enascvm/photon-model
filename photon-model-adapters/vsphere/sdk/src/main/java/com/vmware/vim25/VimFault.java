@@ -49,6 +49,7 @@ import javax.xml.bind.annotation.XmlType;
     EVCConfigFault.class,
     HostHasComponentFailure.class,
     HostIncompatibleForRecordReplay.class,
+    HostSpecificationOperationFailed.class,
     IORMNotSupportedHostOnDatastore.class,
     InaccessibleVFlashSource.class,
     InsufficientStorageIops.class,

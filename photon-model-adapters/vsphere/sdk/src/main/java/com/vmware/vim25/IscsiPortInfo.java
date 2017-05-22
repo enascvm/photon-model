@@ -25,6 +25,10 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="portgroupName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="portgroupKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="portKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="opaqueNetworkId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="opaqueNetworkType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="opaqueNetworkName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="externalId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="complianceStatus" type="{urn:vim25}IscsiStatus" minOccurs="0"/&gt;
  *         &lt;element name="pathStatus" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
@@ -46,6 +50,10 @@ import javax.xml.bind.annotation.XmlType;
     "portgroupName",
     "portgroupKey",
     "portKey",
+    "opaqueNetworkId",
+    "opaqueNetworkType",
+    "opaqueNetworkName",
+    "externalId",
     "complianceStatus",
     "pathStatus"
 })
@@ -62,6 +70,10 @@ public class IscsiPortInfo
     protected String portgroupName;
     protected String portgroupKey;
     protected String portKey;
+    protected String opaqueNetworkId;
+    protected String opaqueNetworkType;
+    protected String opaqueNetworkName;
+    protected String externalId;
     protected IscsiStatus complianceStatus;
     protected String pathStatus;
 
@@ -279,6 +291,102 @@ public class IscsiPortInfo
      */
     public void setPortKey(String value) {
         this.portKey = value;
+    }
+
+    /**
+     * Gets the value of the opaqueNetworkId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getOpaqueNetworkId() {
+        return opaqueNetworkId;
+    }
+
+    /**
+     * Sets the value of the opaqueNetworkId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setOpaqueNetworkId(String value) {
+        this.opaqueNetworkId = value;
+    }
+
+    /**
+     * Gets the value of the opaqueNetworkType property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getOpaqueNetworkType() {
+        return opaqueNetworkType;
+    }
+
+    /**
+     * Sets the value of the opaqueNetworkType property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setOpaqueNetworkType(String value) {
+        this.opaqueNetworkType = value;
+    }
+
+    /**
+     * Gets the value of the opaqueNetworkName property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getOpaqueNetworkName() {
+        return opaqueNetworkName;
+    }
+
+    /**
+     * Sets the value of the opaqueNetworkName property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setOpaqueNetworkName(String value) {
+        this.opaqueNetworkName = value;
+    }
+
+    /**
+     * Gets the value of the externalId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getExternalId() {
+        return externalId;
+    }
+
+    /**
+     * Sets the value of the externalId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setExternalId(String value) {
+        this.externalId = value;
     }
 
     /**

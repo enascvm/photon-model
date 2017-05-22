@@ -48,6 +48,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlSeeAlso({
     ClusterAffinityRuleSpec.class,
     ClusterAntiAffinityRuleSpec.class,
+    ClusterDependencyRuleInfo.class,
     ClusterVmHostRuleInfo.class,
     VirtualDiskAntiAffinityRuleSpec.class
 })

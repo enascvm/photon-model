@@ -13,7 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.util.connection;
 
+import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URL;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +25,11 @@ import javax.net.ssl.TrustManager;
 import javax.xml.ws.BindingProvider;
 import javax.xml.ws.handler.MessageContext;
 
+import io.netty.handler.codec.http.HttpHeaderNames;
+
+import com.vmware.pbm.PbmPortType;
+import com.vmware.pbm.PbmService;
+import com.vmware.pbm.PbmServiceInstanceContent;
 import com.vmware.vim25.InvalidLocaleFaultMsg;
 import com.vmware.vim25.InvalidLoginFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
@@ -45,15 +53,21 @@ import com.vmware.vim25.VimService;
  */
 public class BasicConnection implements Connection {
     public static final String SERVICE_INSTANCE = "ServiceInstance";
+    private static final String PBM_SERVICE_INSTANCE_TYPE = "PbmServiceInstance";
     private static final String REQUEST_TIMEOUT = "com.sun.xml.internal.ws.request.timeout";
     private VimService vimService;
     private VimPortType vimPort;
+    private PbmService pbmService;
+    private PbmPortType pbmPort;
     private ServiceContent serviceContent;
+    private PbmServiceInstanceContent pbmServiceContent;
     private UserSession userSession;
     private ManagedObjectReference svcInstRef;
+    private ManagedObjectReference pbmSvcInstRef;
 
     private boolean ignoreSslErrors;
 
+    private URL spbmurl;
     private URI uri;
     private String username;
     private String password = ""; // default password is empty since on rare occasion passwords are not set
@@ -94,6 +108,32 @@ public class BasicConnection implements Connection {
     }
 
     @Override
+    public PbmService getPbmService() {
+        return this.pbmService;
+    }
+
+    @Override
+    public PbmPortType getPbmPort() {
+        return this.pbmPort;
+    }
+
+    @Override
+    public PbmServiceInstanceContent getPbmServiceInstanceContent() {
+        return this.pbmServiceContent;
+    }
+
+    @Override
+    public ManagedObjectReference getPbmServiceInstanceReference() {
+        if (this.pbmSvcInstRef == null) {
+            ManagedObjectReference ref = new ManagedObjectReference();
+            ref.setType(PBM_SERVICE_INSTANCE_TYPE);
+            ref.setValue(this.getServiceInstanceName());
+            this.pbmSvcInstRef = ref;
+        }
+        return this.pbmSvcInstRef;
+    }
+
+    @Override
     public ServiceContent getServiceContent() {
         return this.serviceContent;
     }
@@ -124,6 +164,20 @@ public class BasicConnection implements Connection {
         return this.svcInstRef;
     }
 
+    @Override
+    public URL getSpbmURL() {
+        if (this.spbmurl == null) {
+            try {
+                this.spbmurl =
+                        new URL(getURI().toString().replace("/sdk", "/pbm"));
+            } catch (MalformedURLException e) {
+                throw new BasicConnectionException(
+                        "malformed URL argument: '" + this.spbmurl + "'", e);
+            }
+        }
+        return this.spbmurl;
+    }
+
     public void connect() {
         try {
             _connect();
@@ -136,24 +190,12 @@ public class BasicConnection implements Connection {
 
     @SuppressWarnings("unchecked")
     private void _connect()
-            throws RuntimeFaultFaultMsg, InvalidLocaleFaultMsg, InvalidLoginFaultMsg {
+            throws RuntimeFaultFaultMsg, InvalidLocaleFaultMsg, InvalidLoginFaultMsg,
+            com.vmware.pbm.RuntimeFaultFaultMsg {
         this.vimService = new VimService();
         this.vimPort = this.vimService.getVimPort();
         BindingProvider bindingProvider = getBindingsProvider();
-        Map<String, Object> requestContext = bindingProvider.getRequestContext();
-
-        requestContext.put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, this.uri.toString());
-        requestContext.put(BindingProvider.SESSION_MAINTAIN_PROPERTY, true);
-
-        updateRequestTimeout();
-
-        if (this.ignoreSslErrors) {
-            IgnoreSslErrors.ignoreErrors(bindingProvider);
-        }
-
-        if (this.trustManager != null) {
-            IgnoreSslErrors.useTrustManager(bindingProvider, this.trustManager);
-        }
+        updateBindingProvider(bindingProvider, this.uri.toString());
 
         this.serviceContent = this.vimPort
                 .retrieveServiceContent(this.getServiceInstanceReference());
@@ -166,6 +208,32 @@ public class BasicConnection implements Connection {
 
         this.headers = (Map<String, List<String>>) bindingProvider
                 .getResponseContext().get(MessageContext.HTTP_RESPONSE_HEADERS);
+
+        // Need to extract only the cookie value
+        List<String> cookieHeaders = this.headers
+                .getOrDefault(HttpHeaderNames.SET_COOKIE.toString(), Collections.EMPTY_LIST);
+        if (cookieHeaders.isEmpty()) {
+            throw new RuntimeFaultFaultMsg("Failure in connecting to server, no session cookie found");
+        }
+        String cookieVal = cookieHeaders.get(0);
+        String[] tokens = cookieVal.split(";");
+        tokens = tokens[0].split("=");
+        String extractedCookie = tokens[1];
+
+        // PbmPortType
+        this.pbmService = new PbmService();
+        // Setting the header resolver for adding the VC session cookie to the
+        // requests for authentication
+        HeaderHandlerResolver headerResolver = new HeaderHandlerResolver();
+        headerResolver.addHandler(new VcSessionHandler(extractedCookie));
+        this.pbmService.setHandlerResolver(headerResolver);
+
+        this.pbmPort = this.pbmService.getPbmPort();
+        updateBindingProvider((BindingProvider) this.pbmPort,
+                this.getSpbmURL().toString());
+
+        this.pbmServiceContent = this.pbmPort
+                .pbmRetrieveServiceContent(this.getPbmServiceInstanceReference());
     }
 
     private void updateRequestTimeout() {
@@ -177,6 +245,23 @@ public class BasicConnection implements Connection {
 
     private BindingProvider getBindingsProvider() {
         return (BindingProvider) this.vimPort;
+    }
+
+    private void updateBindingProvider(BindingProvider bindingProvider, String uri) {
+        Map<String, Object> requestContext = bindingProvider.getRequestContext();
+
+        requestContext.put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, uri);
+        requestContext.put(BindingProvider.SESSION_MAINTAIN_PROPERTY, true);
+
+        updateRequestTimeout();
+
+        if (this.ignoreSslErrors) {
+            IgnoreSslErrors.ignoreErrors(bindingProvider);
+        }
+
+        if (this.trustManager != null) {
+            IgnoreSslErrors.useTrustManager(bindingProvider, this.trustManager);
+        }
     }
 
     @Override
@@ -198,6 +283,8 @@ public class BasicConnection implements Connection {
             this.serviceContent = null;
             this.vimPort = null;
             this.vimService = null;
+            this.pbmPort = null;
+            this.pbmService = null;
         }
     }
 

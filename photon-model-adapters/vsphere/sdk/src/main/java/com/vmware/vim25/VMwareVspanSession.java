@@ -29,6 +29,10 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="normalTrafficAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
  *         &lt;element name="sessionType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="samplingRate" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="encapType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="erspanId" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="erspanCOS" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="erspanGraNanosec" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -51,7 +55,11 @@ import javax.xml.bind.annotation.XmlType;
     "mirroredPacketLength",
     "normalTrafficAllowed",
     "sessionType",
-    "samplingRate"
+    "samplingRate",
+    "encapType",
+    "erspanId",
+    "erspanCOS",
+    "erspanGraNanosec"
 })
 public class VMwareVspanSession
     extends DynamicData
@@ -70,6 +78,10 @@ public class VMwareVspanSession
     protected boolean normalTrafficAllowed;
     protected String sessionType;
     protected Integer samplingRate;
+    protected String encapType;
+    protected Integer erspanId;
+    protected Integer erspanCOS;
+    protected Boolean erspanGraNanosec;
 
     /**
      * Gets the value of the key property.
@@ -357,6 +369,102 @@ public class VMwareVspanSession
      */
     public void setSamplingRate(Integer value) {
         this.samplingRate = value;
+    }
+
+    /**
+     * Gets the value of the encapType property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getEncapType() {
+        return encapType;
+    }
+
+    /**
+     * Sets the value of the encapType property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setEncapType(String value) {
+        this.encapType = value;
+    }
+
+    /**
+     * Gets the value of the erspanId property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getErspanId() {
+        return erspanId;
+    }
+
+    /**
+     * Sets the value of the erspanId property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setErspanId(Integer value) {
+        this.erspanId = value;
+    }
+
+    /**
+     * Gets the value of the erspanCOS property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getErspanCOS() {
+        return erspanCOS;
+    }
+
+    /**
+     * Sets the value of the erspanCOS property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setErspanCOS(Integer value) {
+        this.erspanCOS = value;
+    }
+
+    /**
+     * Gets the value of the erspanGraNanosec property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isErspanGraNanosec() {
+        return erspanGraNanosec;
+    }
+
+    /**
+     * Sets the value of the erspanGraNanosec property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setErspanGraNanosec(Boolean value) {
+        this.erspanGraNanosec = value;
     }
 
 }

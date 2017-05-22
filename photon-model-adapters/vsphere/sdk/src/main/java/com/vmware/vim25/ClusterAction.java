@@ -34,6 +34,7 @@ import javax.xml.bind.annotation.XmlType;
     "target"
 })
 @XmlSeeAlso({
+    ClusterHostInfraUpdateHaModeAction.class,
     ClusterHostPowerAction.class,
     ClusterInitialPlacementAction.class,
     ClusterMigrationAction.class,

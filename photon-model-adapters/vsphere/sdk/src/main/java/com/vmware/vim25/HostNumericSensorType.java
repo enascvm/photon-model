@@ -19,6 +19,14 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="temperature"/&gt;
  *     &lt;enumeration value="voltage"/&gt;
  *     &lt;enumeration value="other"/&gt;
+ *     &lt;enumeration value="processor"/&gt;
+ *     &lt;enumeration value="memory"/&gt;
+ *     &lt;enumeration value="storage"/&gt;
+ *     &lt;enumeration value="systemBoard"/&gt;
+ *     &lt;enumeration value="battery"/&gt;
+ *     &lt;enumeration value="bios"/&gt;
+ *     &lt;enumeration value="cable"/&gt;
+ *     &lt;enumeration value="watchdog"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -37,7 +45,23 @@ public enum HostNumericSensorType {
     @XmlEnumValue("voltage")
     VOLTAGE("voltage"),
     @XmlEnumValue("other")
-    OTHER("other");
+    OTHER("other"),
+    @XmlEnumValue("processor")
+    PROCESSOR("processor"),
+    @XmlEnumValue("memory")
+    MEMORY("memory"),
+    @XmlEnumValue("storage")
+    STORAGE("storage"),
+    @XmlEnumValue("systemBoard")
+    SYSTEM_BOARD("systemBoard"),
+    @XmlEnumValue("battery")
+    BATTERY("battery"),
+    @XmlEnumValue("bios")
+    BIOS("bios"),
+    @XmlEnumValue("cable")
+    CABLE("cable"),
+    @XmlEnumValue("watchdog")
+    WATCHDOG("watchdog");
     private final String value;
 
     HostNumericSensorType(String v) {

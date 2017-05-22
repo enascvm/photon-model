@@ -18,6 +18,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;extension base="{urn:vim25}ClusterEvent"&gt;
  *       &lt;sequence&gt;
  *         &lt;element name="state" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="prevState" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -28,7 +29,8 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VmHealthMonitoringStateChangedEvent", propOrder = {
-    "state"
+    "state",
+    "prevState"
 })
 public class VmHealthMonitoringStateChangedEvent
     extends ClusterEvent
@@ -36,6 +38,7 @@ public class VmHealthMonitoringStateChangedEvent
 
     @XmlElement(required = true)
     protected String state;
+    protected String prevState;
 
     /**
      * Gets the value of the state property.
@@ -59,6 +62,30 @@ public class VmHealthMonitoringStateChangedEvent
      */
     public void setState(String value) {
         this.state = value;
+    }
+
+    /**
+     * Gets the value of the prevState property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getPrevState() {
+        return prevState;
+    }
+
+    /**
+     * Sets the value of the prevState property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setPrevState(String value) {
+        this.prevState = value;
     }
 
 }

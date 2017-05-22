@@ -21,6 +21,7 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="offlineReplicating"/&gt;
  *     &lt;enumeration value="invalidState"/&gt;
  *     &lt;enumeration value="invalidInstanceId"/&gt;
+ *     &lt;enumeration value="closeDiskError"/&gt;
  *   &lt;/restriction&gt;
  * &lt;/simpleType&gt;
  * </pre>
@@ -43,7 +44,9 @@ public enum ReplicationVmFaultReasonForFault {
     @XmlEnumValue("invalidState")
     INVALID_STATE("invalidState"),
     @XmlEnumValue("invalidInstanceId")
-    INVALID_INSTANCE_ID("invalidInstanceId");
+    INVALID_INSTANCE_ID("invalidInstanceId"),
+    @XmlEnumValue("closeDiskError")
+    CLOSE_DISK_ERROR("closeDiskError");
     private final String value;
 
     ReplicationVmFaultReasonForFault(String v) {

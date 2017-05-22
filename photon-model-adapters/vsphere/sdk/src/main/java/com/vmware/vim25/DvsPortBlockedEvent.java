@@ -20,6 +20,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="portKey" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
  *         &lt;element name="statusDetail" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="runtimeInfo" type="{urn:vim25}DVPortStatus" minOccurs="0"/&gt;
+ *         &lt;element name="prevBlockState" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -32,7 +33,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "DvsPortBlockedEvent", propOrder = {
     "portKey",
     "statusDetail",
-    "runtimeInfo"
+    "runtimeInfo",
+    "prevBlockState"
 })
 public class DvsPortBlockedEvent
     extends DvsEvent
@@ -42,6 +44,7 @@ public class DvsPortBlockedEvent
     protected String portKey;
     protected String statusDetail;
     protected DVPortStatus runtimeInfo;
+    protected String prevBlockState;
 
     /**
      * Gets the value of the portKey property.
@@ -113,6 +116,30 @@ public class DvsPortBlockedEvent
      */
     public void setRuntimeInfo(DVPortStatus value) {
         this.runtimeInfo = value;
+    }
+
+    /**
+     * Gets the value of the prevBlockState property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getPrevBlockState() {
+        return prevBlockState;
+    }
+
+    /**
+     * Sets the value of the prevBlockState property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setPrevBlockState(String value) {
+        this.prevBlockState = value;
     }
 
 }

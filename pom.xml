@@ -355,7 +355,7 @@
           <failsOnError>true</failsOnError>
           <includeTestSourceDirectory>true</includeTestSourceDirectory>
           <linkXRef>false</linkXRef>
-          <excludes>com/vmware/vim25/**</excludes>
+          <excludes>com/vmware/vim25/**,com/vmware/pbm/**</excludes>
         </configuration>
         <executions>
           <execution>

@@ -21,6 +21,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="remoteSourceSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
  *         &lt;element name="remoteDestSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
  *         &lt;element name="encapRemoteSourceSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="erspanProtocolSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -35,7 +36,8 @@ import javax.xml.bind.annotation.XmlType;
     "dvportSupported",
     "remoteSourceSupported",
     "remoteDestSupported",
-    "encapRemoteSourceSupported"
+    "encapRemoteSourceSupported",
+    "erspanProtocolSupported"
 })
 public class VMwareDVSVspanCapability
     extends DynamicData
@@ -46,6 +48,7 @@ public class VMwareDVSVspanCapability
     protected boolean remoteSourceSupported;
     protected boolean remoteDestSupported;
     protected boolean encapRemoteSourceSupported;
+    protected Boolean erspanProtocolSupported;
 
     /**
      * Gets the value of the mixedDestSupported property.
@@ -125,6 +128,30 @@ public class VMwareDVSVspanCapability
      */
     public void setEncapRemoteSourceSupported(boolean value) {
         this.encapRemoteSourceSupported = value;
+    }
+
+    /**
+     * Gets the value of the erspanProtocolSupported property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Boolean }
+     *     
+     */
+    public Boolean isErspanProtocolSupported() {
+        return erspanProtocolSupported;
+    }
+
+    /**
+     * Sets the value of the erspanProtocolSupported property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Boolean }
+     *     
+     */
+    public void setErspanProtocolSupported(Boolean value) {
+        this.erspanProtocolSupported = value;
     }
 
 }

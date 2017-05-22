@@ -21,6 +21,9 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="blockSizeMb" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
  *         &lt;element name="majorVersion" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
  *         &lt;element name="volumeName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="blockSize" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="unmapGranularity" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="unmapPriority" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -34,7 +37,10 @@ import javax.xml.bind.annotation.XmlType;
     "extent",
     "blockSizeMb",
     "majorVersion",
-    "volumeName"
+    "volumeName",
+    "blockSize",
+    "unmapGranularity",
+    "unmapPriority"
 })
 public class HostVmfsSpec
     extends DynamicData
@@ -46,6 +52,9 @@ public class HostVmfsSpec
     protected int majorVersion;
     @XmlElement(required = true)
     protected String volumeName;
+    protected Integer blockSize;
+    protected Integer unmapGranularity;
+    protected String unmapPriority;
 
     /**
      * Gets the value of the extent property.
@@ -133,6 +142,78 @@ public class HostVmfsSpec
      */
     public void setVolumeName(String value) {
         this.volumeName = value;
+    }
+
+    /**
+     * Gets the value of the blockSize property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getBlockSize() {
+        return blockSize;
+    }
+
+    /**
+     * Sets the value of the blockSize property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setBlockSize(Integer value) {
+        this.blockSize = value;
+    }
+
+    /**
+     * Gets the value of the unmapGranularity property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getUnmapGranularity() {
+        return unmapGranularity;
+    }
+
+    /**
+     * Sets the value of the unmapGranularity property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setUnmapGranularity(Integer value) {
+        this.unmapGranularity = value;
+    }
+
+    /**
+     * Gets the value of the unmapPriority property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getUnmapPriority() {
+        return unmapPriority;
+    }
+
+    /**
+     * Sets the value of the unmapPriority property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setUnmapPriority(String value) {
+        this.unmapPriority = value;
     }
 
 }

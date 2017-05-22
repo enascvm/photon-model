@@ -22,6 +22,7 @@ import javax.xml.bind.annotation.XmlType;
  *       &lt;sequence&gt;
  *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/&gt;
  *         &lt;element name="product" type="{urn:vim25}AboutInfo"/&gt;
+ *         &lt;element name="deploymentInfo" type="{urn:vim25}HostDeploymentInfo" minOccurs="0"/&gt;
  *         &lt;element name="hyperThread" type="{urn:vim25}HostHyperThreadScheduleInfo" minOccurs="0"/&gt;
  *         &lt;element name="consoleReservation" type="{urn:vim25}ServiceConsoleReservationInfo" minOccurs="0"/&gt;
  *         &lt;element name="virtualMachineReservation" type="{urn:vim25}VirtualMachineMemoryReservationInfo" minOccurs="0"/&gt;
@@ -69,7 +70,9 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="hostConfigCheckSum" type="{http://www.w3.org/2001/XMLSchema}base64Binary" minOccurs="0"/&gt;
  *         &lt;element name="graphicsInfo" type="{urn:vim25}HostGraphicsInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="sharedPassthruGpuTypes" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="graphicsConfig" type="{urn:vim25}HostGraphicsConfig" minOccurs="0"/&gt;
  *         &lt;element name="ioFilterInfo" type="{urn:vim25}HostIoFilterInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="sriovDevicePool" type="{urn:vim25}HostSriovDevicePoolInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -82,6 +85,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "HostConfigInfo", propOrder = {
     "host",
     "product",
+    "deploymentInfo",
     "hyperThread",
     "consoleReservation",
     "virtualMachineReservation",
@@ -129,7 +133,9 @@ import javax.xml.bind.annotation.XmlType;
     "hostConfigCheckSum",
     "graphicsInfo",
     "sharedPassthruGpuTypes",
-    "ioFilterInfo"
+    "graphicsConfig",
+    "ioFilterInfo",
+    "sriovDevicePool"
 })
 public class HostConfigInfo
     extends DynamicData
@@ -139,6 +145,7 @@ public class HostConfigInfo
     protected ManagedObjectReference host;
     @XmlElement(required = true)
     protected AboutInfo product;
+    protected HostDeploymentInfo deploymentInfo;
     protected HostHyperThreadScheduleInfo hyperThread;
     protected ServiceConsoleReservationInfo consoleReservation;
     protected VirtualMachineMemoryReservationInfo virtualMachineReservation;
@@ -188,7 +195,9 @@ public class HostConfigInfo
     protected byte[] hostConfigCheckSum;
     protected List<HostGraphicsInfo> graphicsInfo;
     protected List<String> sharedPassthruGpuTypes;
+    protected HostGraphicsConfig graphicsConfig;
     protected List<HostIoFilterInfo> ioFilterInfo;
+    protected List<HostSriovDevicePoolInfo> sriovDevicePool;
 
     /**
      * Gets the value of the host property.
@@ -236,6 +245,30 @@ public class HostConfigInfo
      */
     public void setProduct(AboutInfo value) {
         this.product = value;
+    }
+
+    /**
+     * Gets the value of the deploymentInfo property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link HostDeploymentInfo }
+     *     
+     */
+    public HostDeploymentInfo getDeploymentInfo() {
+        return deploymentInfo;
+    }
+
+    /**
+     * Sets the value of the deploymentInfo property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link HostDeploymentInfo }
+     *     
+     */
+    public void setDeploymentInfo(HostDeploymentInfo value) {
+        this.deploymentInfo = value;
     }
 
     /**
@@ -1428,6 +1461,30 @@ public class HostConfigInfo
     }
 
     /**
+     * Gets the value of the graphicsConfig property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link HostGraphicsConfig }
+     *     
+     */
+    public HostGraphicsConfig getGraphicsConfig() {
+        return graphicsConfig;
+    }
+
+    /**
+     * Sets the value of the graphicsConfig property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link HostGraphicsConfig }
+     *     
+     */
+    public void setGraphicsConfig(HostGraphicsConfig value) {
+        this.graphicsConfig = value;
+    }
+
+    /**
      * Gets the value of the ioFilterInfo property.
      * 
      * <p>
@@ -1454,6 +1511,35 @@ public class HostConfigInfo
             ioFilterInfo = new ArrayList<HostIoFilterInfo>();
         }
         return this.ioFilterInfo;
+    }
+
+    /**
+     * Gets the value of the sriovDevicePool property.
+     * 
+     * <p>
+     * This accessor method returns a reference to the live list,
+     * not a snapshot. Therefore any modification you make to the
+     * returned list will be present inside the JAXB object.
+     * This is why there is not a <CODE>set</CODE> method for the sriovDevicePool property.
+     * 
+     * <p>
+     * For example, to add a new item, do as follows:
+     * <pre>
+     *    getSriovDevicePool().add(newItem);
+     * </pre>
+     * 
+     * 
+     * <p>
+     * Objects of the following type(s) are allowed in the list
+     * {@link HostSriovDevicePoolInfo }
+     * 
+     * 
+     */
+    public List<HostSriovDevicePoolInfo> getSriovDevicePool() {
+        if (sriovDevicePool == null) {
+            sriovDevicePool = new ArrayList<HostSriovDevicePoolInfo>();
+        }
+        return this.sriovDevicePool;
     }
 
 }

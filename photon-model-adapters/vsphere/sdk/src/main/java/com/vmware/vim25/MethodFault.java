@@ -7,6 +7,7 @@ import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlSeeAlso;
 import javax.xml.bind.annotation.XmlType;
+import com.vmware.pbm.PbmFault;
 
 
 /**
@@ -35,10 +36,11 @@ import javax.xml.bind.annotation.XmlType;
     "faultMessage"
 })
 @XmlSeeAlso({
-    VimFault.class,
     InvalidCollectorVersion.class,
     InvalidProperty.class,
-    RuntimeFault.class
+    RuntimeFault.class,
+    VimFault.class,
+    PbmFault.class
 })
 public class MethodFault {
 

@@ -25,6 +25,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="portgroupKey" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="inside" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
  *         &lt;element name="portKey" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -41,7 +42,8 @@ import javax.xml.bind.annotation.XmlType;
     "scope",
     "portgroupKey",
     "inside",
-    "portKey"
+    "portKey",
+    "host"
 })
 public class DistributedVirtualSwitchPortCriteria
     extends DynamicData
@@ -54,6 +56,7 @@ public class DistributedVirtualSwitchPortCriteria
     protected List<String> portgroupKey;
     protected Boolean inside;
     protected List<String> portKey;
+    protected List<ManagedObjectReference> host;
 
     /**
      * Gets the value of the connected property.
@@ -231,6 +234,35 @@ public class DistributedVirtualSwitchPortCriteria
             portKey = new ArrayList<String>();
         }
         return this.portKey;
+    }
+
+    /**
+     * Gets the value of the host property.
+     * 
+     * <p>
+     * This accessor method returns a reference to the live list,
+     * not a snapshot. Therefore any modification you make to the
+     * returned list will be present inside the JAXB object.
+     * This is why there is not a <CODE>set</CODE> method for the host property.
+     * 
+     * <p>
+     * For example, to add a new item, do as follows:
+     * <pre>
+     *    getHost().add(newItem);
+     * </pre>
+     * 
+     * 
+     * <p>
+     * Objects of the following type(s) are allowed in the list
+     * {@link ManagedObjectReference }
+     * 
+     * 
+     */
+    public List<ManagedObjectReference> getHost() {
+        if (host == null) {
+            host = new ArrayList<ManagedObjectReference>();
+        }
+        return this.host;
     }
 
 }

@@ -47,6 +47,17 @@ public class ResourceTracker {
         this.countdownLatch.countDown();
     }
 
+    public void track() {
+        this.countdownLatch.countDown();
+    }
+
+    public String getSelfLink(String id, String type) {
+        ManagedObjectReference moref = new ManagedObjectReference();
+        moref.setValue(id);
+        moref.setType(type);
+        return this.mapping.get(moref);
+    }
+
     public String getSelfLink(ManagedObjectReference moref) {
         return this.mapping.get(moref);
     }

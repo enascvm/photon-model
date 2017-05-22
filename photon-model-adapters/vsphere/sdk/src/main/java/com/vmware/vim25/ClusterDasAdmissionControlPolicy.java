@@ -17,6 +17,7 @@ import javax.xml.bind.annotation.XmlType;
  *   &lt;complexContent&gt;
  *     &lt;extension base="{urn:vim25}DynamicData"&gt;
  *       &lt;sequence&gt;
+ *         &lt;element name="resourceReductionToToleratePercent" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -26,7 +27,9 @@ import javax.xml.bind.annotation.XmlType;
  * 
  */
 @XmlAccessorType(XmlAccessType.FIELD)
-@XmlType(name = "ClusterDasAdmissionControlPolicy")
+@XmlType(name = "ClusterDasAdmissionControlPolicy", propOrder = {
+    "resourceReductionToToleratePercent"
+})
 @XmlSeeAlso({
     ClusterFailoverHostAdmissionControlPolicy.class,
     ClusterFailoverLevelAdmissionControlPolicy.class,
@@ -36,5 +39,30 @@ public class ClusterDasAdmissionControlPolicy
     extends DynamicData
 {
 
+    protected Integer resourceReductionToToleratePercent;
+
+    /**
+     * Gets the value of the resourceReductionToToleratePercent property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link Integer }
+     *     
+     */
+    public Integer getResourceReductionToToleratePercent() {
+        return resourceReductionToToleratePercent;
+    }
+
+    /**
+     * Sets the value of the resourceReductionToToleratePercent property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link Integer }
+     *     
+     */
+    public void setResourceReductionToToleratePercent(Integer value) {
+        this.resourceReductionToToleratePercent = value;
+    }
 
 }

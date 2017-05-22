@@ -76,6 +76,8 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="scheduledHardwareUpgradeInfo" type="{urn:vim25}ScheduledHardwareUpgradeInfo" minOccurs="0"/&gt;
  *         &lt;element name="vmProfile" type="{urn:vim25}VirtualMachineProfileSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
  *         &lt;element name="messageBusTunnelEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="crypto" type="{urn:vim25}CryptoSpec" minOccurs="0"/&gt;
+ *         &lt;element name="migrateEncryption" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -142,7 +144,9 @@ import javax.xml.bind.annotation.XmlType;
     "vpmcEnabled",
     "scheduledHardwareUpgradeInfo",
     "vmProfile",
-    "messageBusTunnelEnabled"
+    "messageBusTunnelEnabled",
+    "crypto",
+    "migrateEncryption"
 })
 public class VirtualMachineConfigSpec
     extends DynamicData
@@ -208,6 +212,8 @@ public class VirtualMachineConfigSpec
     protected ScheduledHardwareUpgradeInfo scheduledHardwareUpgradeInfo;
     protected List<VirtualMachineProfileSpec> vmProfile;
     protected Boolean messageBusTunnelEnabled;
+    protected CryptoSpec crypto;
+    protected String migrateEncryption;
 
     /**
      * Gets the value of the changeVersion property.
@@ -1605,6 +1611,54 @@ public class VirtualMachineConfigSpec
      */
     public void setMessageBusTunnelEnabled(Boolean value) {
         this.messageBusTunnelEnabled = value;
+    }
+
+    /**
+     * Gets the value of the crypto property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link CryptoSpec }
+     *     
+     */
+    public CryptoSpec getCrypto() {
+        return crypto;
+    }
+
+    /**
+     * Sets the value of the crypto property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link CryptoSpec }
+     *     
+     */
+    public void setCrypto(CryptoSpec value) {
+        this.crypto = value;
+    }
+
+    /**
+     * Gets the value of the migrateEncryption property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getMigrateEncryption() {
+        return migrateEncryption;
+    }
+
+    /**
+     * Sets the value of the migrateEncryption property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setMigrateEncryption(String value) {
+        this.migrateEncryption = value;
     }
 
 }

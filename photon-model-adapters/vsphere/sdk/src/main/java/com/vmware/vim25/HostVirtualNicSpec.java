@@ -26,6 +26,7 @@ import javax.xml.bind.annotation.XmlType;
  *         &lt;element name="opaqueNetwork" type="{urn:vim25}HostVirtualNicOpaqueNetworkSpec" minOccurs="0"/&gt;
  *         &lt;element name="externalId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
  *         &lt;element name="pinnedPnic" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="ipRouteSpec" type="{urn:vim25}HostVirtualNicIpRouteSpec" minOccurs="0"/&gt;
  *       &lt;/sequence&gt;
  *     &lt;/extension&gt;
  *   &lt;/complexContent&gt;
@@ -45,7 +46,8 @@ import javax.xml.bind.annotation.XmlType;
     "netStackInstanceKey",
     "opaqueNetwork",
     "externalId",
-    "pinnedPnic"
+    "pinnedPnic",
+    "ipRouteSpec"
 })
 public class HostVirtualNicSpec
     extends DynamicData
@@ -61,6 +63,7 @@ public class HostVirtualNicSpec
     protected HostVirtualNicOpaqueNetworkSpec opaqueNetwork;
     protected String externalId;
     protected String pinnedPnic;
+    protected HostVirtualNicIpRouteSpec ipRouteSpec;
 
     /**
      * Gets the value of the ip property.
@@ -300,6 +303,30 @@ public class HostVirtualNicSpec
      */
     public void setPinnedPnic(String value) {
         this.pinnedPnic = value;
+    }
+
+    /**
+     * Gets the value of the ipRouteSpec property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link HostVirtualNicIpRouteSpec }
+     *     
+     */
+    public HostVirtualNicIpRouteSpec getIpRouteSpec() {
+        return ipRouteSpec;
+    }
+
+    /**
+     * Sets the value of the ipRouteSpec property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link HostVirtualNicIpRouteSpec }
+     *     
+     */
+    public void setIpRouteSpec(HostVirtualNicIpRouteSpec value) {
+        this.ipRouteSpec = value;
     }
 
 }

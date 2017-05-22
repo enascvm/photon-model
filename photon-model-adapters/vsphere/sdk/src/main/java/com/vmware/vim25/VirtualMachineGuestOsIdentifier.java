@@ -64,8 +64,16 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="rhel7_64Guest"/&gt;
  *     &lt;enumeration value="centosGuest"/&gt;
  *     &lt;enumeration value="centos64Guest"/&gt;
+ *     &lt;enumeration value="centos6Guest"/&gt;
+ *     &lt;enumeration value="centos6_64Guest"/&gt;
+ *     &lt;enumeration value="centos7Guest"/&gt;
+ *     &lt;enumeration value="centos7_64Guest"/&gt;
  *     &lt;enumeration value="oracleLinuxGuest"/&gt;
  *     &lt;enumeration value="oracleLinux64Guest"/&gt;
+ *     &lt;enumeration value="oracleLinux6Guest"/&gt;
+ *     &lt;enumeration value="oracleLinux6_64Guest"/&gt;
+ *     &lt;enumeration value="oracleLinux7Guest"/&gt;
+ *     &lt;enumeration value="oracleLinux7_64Guest"/&gt;
  *     &lt;enumeration value="suseGuest"/&gt;
  *     &lt;enumeration value="suse64Guest"/&gt;
  *     &lt;enumeration value="slesGuest"/&gt;
@@ -96,16 +104,22 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="debian7_64Guest"/&gt;
  *     &lt;enumeration value="debian8Guest"/&gt;
  *     &lt;enumeration value="debian8_64Guest"/&gt;
+ *     &lt;enumeration value="debian9Guest"/&gt;
+ *     &lt;enumeration value="debian9_64Guest"/&gt;
+ *     &lt;enumeration value="debian10Guest"/&gt;
+ *     &lt;enumeration value="debian10_64Guest"/&gt;
  *     &lt;enumeration value="asianux3Guest"/&gt;
  *     &lt;enumeration value="asianux3_64Guest"/&gt;
  *     &lt;enumeration value="asianux4Guest"/&gt;
  *     &lt;enumeration value="asianux4_64Guest"/&gt;
  *     &lt;enumeration value="asianux5_64Guest"/&gt;
+ *     &lt;enumeration value="asianux7_64Guest"/&gt;
  *     &lt;enumeration value="opensuseGuest"/&gt;
  *     &lt;enumeration value="opensuse64Guest"/&gt;
  *     &lt;enumeration value="fedoraGuest"/&gt;
  *     &lt;enumeration value="fedora64Guest"/&gt;
  *     &lt;enumeration value="coreos64Guest"/&gt;
+ *     &lt;enumeration value="vmwarePhoton64Guest"/&gt;
  *     &lt;enumeration value="other24xLinuxGuest"/&gt;
  *     &lt;enumeration value="other26xLinuxGuest"/&gt;
  *     &lt;enumeration value="otherLinuxGuest"/&gt;
@@ -140,9 +154,12 @@ import javax.xml.bind.annotation.XmlType;
  *     &lt;enumeration value="darwin12_64Guest"/&gt;
  *     &lt;enumeration value="darwin13_64Guest"/&gt;
  *     &lt;enumeration value="darwin14_64Guest"/&gt;
+ *     &lt;enumeration value="darwin15_64Guest"/&gt;
+ *     &lt;enumeration value="darwin16_64Guest"/&gt;
  *     &lt;enumeration value="vmkernelGuest"/&gt;
  *     &lt;enumeration value="vmkernel5Guest"/&gt;
  *     &lt;enumeration value="vmkernel6Guest"/&gt;
+ *     &lt;enumeration value="vmkernel65Guest"/&gt;
  *     &lt;enumeration value="otherGuest"/&gt;
  *     &lt;enumeration value="otherGuest64"/&gt;
  *   &lt;/restriction&gt;
@@ -254,10 +271,26 @@ public enum VirtualMachineGuestOsIdentifier {
     CENTOS_GUEST("centosGuest"),
     @XmlEnumValue("centos64Guest")
     CENTOS_64_GUEST("centos64Guest"),
+    @XmlEnumValue("centos6Guest")
+    CENTOS_6_GUEST("centos6Guest"),
+    @XmlEnumValue("centos6_64Guest")
+    CENTOS_6_64_GUEST("centos6_64Guest"),
+    @XmlEnumValue("centos7Guest")
+    CENTOS_7_GUEST("centos7Guest"),
+    @XmlEnumValue("centos7_64Guest")
+    CENTOS_7_64_GUEST("centos7_64Guest"),
     @XmlEnumValue("oracleLinuxGuest")
     ORACLE_LINUX_GUEST("oracleLinuxGuest"),
     @XmlEnumValue("oracleLinux64Guest")
     ORACLE_LINUX_64_GUEST("oracleLinux64Guest"),
+    @XmlEnumValue("oracleLinux6Guest")
+    ORACLE_LINUX_6_GUEST("oracleLinux6Guest"),
+    @XmlEnumValue("oracleLinux6_64Guest")
+    ORACLE_LINUX_6_64_GUEST("oracleLinux6_64Guest"),
+    @XmlEnumValue("oracleLinux7Guest")
+    ORACLE_LINUX_7_GUEST("oracleLinux7Guest"),
+    @XmlEnumValue("oracleLinux7_64Guest")
+    ORACLE_LINUX_7_64_GUEST("oracleLinux7_64Guest"),
     @XmlEnumValue("suseGuest")
     SUSE_GUEST("suseGuest"),
     @XmlEnumValue("suse64Guest")
@@ -318,6 +351,14 @@ public enum VirtualMachineGuestOsIdentifier {
     DEBIAN_8_GUEST("debian8Guest"),
     @XmlEnumValue("debian8_64Guest")
     DEBIAN_8_64_GUEST("debian8_64Guest"),
+    @XmlEnumValue("debian9Guest")
+    DEBIAN_9_GUEST("debian9Guest"),
+    @XmlEnumValue("debian9_64Guest")
+    DEBIAN_9_64_GUEST("debian9_64Guest"),
+    @XmlEnumValue("debian10Guest")
+    DEBIAN_10_GUEST("debian10Guest"),
+    @XmlEnumValue("debian10_64Guest")
+    DEBIAN_10_64_GUEST("debian10_64Guest"),
     @XmlEnumValue("asianux3Guest")
     ASIANUX_3_GUEST("asianux3Guest"),
     @XmlEnumValue("asianux3_64Guest")
@@ -328,6 +369,8 @@ public enum VirtualMachineGuestOsIdentifier {
     ASIANUX_4_64_GUEST("asianux4_64Guest"),
     @XmlEnumValue("asianux5_64Guest")
     ASIANUX_5_64_GUEST("asianux5_64Guest"),
+    @XmlEnumValue("asianux7_64Guest")
+    ASIANUX_7_64_GUEST("asianux7_64Guest"),
     @XmlEnumValue("opensuseGuest")
     OPENSUSE_GUEST("opensuseGuest"),
     @XmlEnumValue("opensuse64Guest")
@@ -338,6 +381,8 @@ public enum VirtualMachineGuestOsIdentifier {
     FEDORA_64_GUEST("fedora64Guest"),
     @XmlEnumValue("coreos64Guest")
     COREOS_64_GUEST("coreos64Guest"),
+    @XmlEnumValue("vmwarePhoton64Guest")
+    VMWARE_PHOTON_64_GUEST("vmwarePhoton64Guest"),
     @XmlEnumValue("other24xLinuxGuest")
     OTHER_24_X_LINUX_GUEST("other24xLinuxGuest"),
     @XmlEnumValue("other26xLinuxGuest")
@@ -406,12 +451,18 @@ public enum VirtualMachineGuestOsIdentifier {
     DARWIN_13_64_GUEST("darwin13_64Guest"),
     @XmlEnumValue("darwin14_64Guest")
     DARWIN_14_64_GUEST("darwin14_64Guest"),
+    @XmlEnumValue("darwin15_64Guest")
+    DARWIN_15_64_GUEST("darwin15_64Guest"),
+    @XmlEnumValue("darwin16_64Guest")
+    DARWIN_16_64_GUEST("darwin16_64Guest"),
     @XmlEnumValue("vmkernelGuest")
     VMKERNEL_GUEST("vmkernelGuest"),
     @XmlEnumValue("vmkernel5Guest")
     VMKERNEL_5_GUEST("vmkernel5Guest"),
     @XmlEnumValue("vmkernel6Guest")
     VMKERNEL_6_GUEST("vmkernel6Guest"),
+    @XmlEnumValue("vmkernel65Guest")
+    VMKERNEL_65_GUEST("vmkernel65Guest"),
     @XmlEnumValue("otherGuest")
     OTHER_GUEST("otherGuest"),
     @XmlEnumValue("otherGuest64")
