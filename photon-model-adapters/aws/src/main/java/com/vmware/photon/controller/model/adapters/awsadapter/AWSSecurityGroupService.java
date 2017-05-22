@@ -13,27 +13,20 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_DESC;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.updateEgressRules;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.updateIngressRules;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_SECURITY_GROUP_DESC;
 import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
 
 import java.net.URI;
 import java.util.HashMap;
-
-import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
-import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
-import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
-import com.amazonaws.services.ec2.model.SecurityGroup;
+import java.util.UUID;
 
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -45,42 +38,38 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 public class AWSSecurityGroupService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER;
     public static final String SECURITY_GROUP_ID = "awsSecurityGroupID";
-    public static final String NAME_PREFIX = "vmw";
 
     private AWSClientManager clientManager;
-
-    public AWSSecurityGroupService() {
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
-    }
-
-    /**
-     * Security Group stages.
-     */
-    public enum SecurityGroupStage {
-        SECURITY_GROUP_STATE,
-        CREDENTIALS,
-        AWS_CLIENT,
-        PROVISION_SECURITY_GROUP,
-        UPDATE_RULES,
-        REMOVE_SECURITY_GROUP,
-        FINISHED,
-        FAILED
-    }
 
     /**
      * Security Group request stages.
      */
-    public static class AWSSecurityGroupRequestState {
-        public AmazonEC2AsyncClient client;
+    public static class AWSSecurityGroupContext {
+        public AWSSecurityGroupClient client;
         public AuthCredentialsServiceState credentials;
-        public SecurityGroupInstanceRequest securityGroupRequest;
+        public SecurityGroupInstanceRequest request;
         public SecurityGroupState securityGroup;
-        public String securityGroupID;
-        public SecurityGroupStage stage;
+        public String securityGroupId;
         public Throwable error;
         TaskManager taskManager;
 
+        AWSSecurityGroupContext(StatelessService service,
+                SecurityGroupInstanceRequest request) {
+            this.request = request;
+            this.taskManager = new TaskManager(service, request.taskReference,
+                    request.resourceLink());
+        }
+    }
+
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
+    @Override
+    public void handleStart(Operation op) {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
     }
 
     @Override
@@ -91,112 +80,142 @@ public class AWSSecurityGroupService extends StatelessService {
     }
 
     @Override
-    public void handleRequest(Operation op) {
-
-        switch (op.getAction()) {
-        case PATCH:
-            if (!op.hasBody()) {
-                op.fail(new IllegalArgumentException("body is required"));
-                return;
-            }
-            // initialize request state object
-            AWSSecurityGroupRequestState requestState = new AWSSecurityGroupRequestState();
-            requestState.securityGroupRequest = op
-                    .getBody(SecurityGroupInstanceRequest.class);
-            requestState.stage = SecurityGroupStage.SECURITY_GROUP_STATE;
-            requestState.taskManager = new TaskManager(this,
-                    requestState.securityGroupRequest.taskReference,
-                    requestState.securityGroupRequest.resourceLink());
-            op.complete();
-            handleStages(requestState);
-            break;
-        default:
-            super.handleRequest(op);
-        }
-    }
-
-    public void handleStages(AWSSecurityGroupRequestState requestState) {
-        switch (requestState.stage) {
-        case SECURITY_GROUP_STATE:
-            getSecurityGroupState(requestState, SecurityGroupStage.CREDENTIALS);
-            break;
-        case CREDENTIALS:
-            getCredentials(requestState, SecurityGroupStage.AWS_CLIENT);
-            break;
-        case AWS_CLIENT:
-            requestState.client = this.clientManager.getOrCreateEC2Client(requestState.credentials,
-                    requestState.securityGroup.regionId, this,
-                    (t) -> requestState.taskManager.patchTaskToFailure(t));
-            if (requestState.client == null) {
-                return;
-            }
-            if (requestState.securityGroupRequest.requestType == SecurityGroupInstanceRequest.InstanceRequestType.CREATE) {
-                requestState.stage = SecurityGroupStage.PROVISION_SECURITY_GROUP;
-            } else {
-                requestState.stage = SecurityGroupStage.REMOVE_SECURITY_GROUP;
-            }
-            handleStages(requestState);
-            break;
-        case PROVISION_SECURITY_GROUP:
-            String sgName = requestState.securityGroup.name;
-            String vpcId = getCustomProperty(requestState, AWSConstants.AWS_VPC_ID);
-            vpcId = (vpcId == null &&
-                    requestState.securityGroupRequest.customProperties != null) ?
-                    requestState.securityGroupRequest.customProperties.get(NETWORK_STATE_ID_PROP_NAME) :
-                    vpcId;
-
-            try {
-                requestState.securityGroupID = createSecurityGroup(
-                        requestState.client, sgName,
-                        requestState.securityGroup.desc != null ?
-                                requestState.securityGroup.desc : DEFAULT_SECURITY_GROUP_DESC,
-                        vpcId);
-            } catch (Exception e) {
-                handleError(requestState, e);
-                return;
-            }
-            requestState.securityGroup.id = requestState.securityGroupID;
-
-            updateSecurityGroupProperties(SECURITY_GROUP_ID,
-                    requestState.securityGroupID, requestState,
-                    SecurityGroupStage.UPDATE_RULES);
-            break;
-        case UPDATE_RULES:
-            try {
-                updateIngressRules(requestState.client,
-                        requestState.securityGroup.ingress, requestState.securityGroupID);
-                updateEgressRules(requestState.client,
-                        requestState.securityGroup.egress, requestState.securityGroupID);
-            } catch (Exception e) {
-                handleError(requestState, e);
-                return;
-            }
-            requestState.stage = SecurityGroupStage.FINISHED;
-            handleStages(requestState);
-            break;
-        case REMOVE_SECURITY_GROUP:
-            try {
-                deleteSecurityGroup(requestState.client, requestState.securityGroup.id);
-            } catch (Exception e) {
-                handleError(requestState, e);
-                return;
-            }
-            updateSecurityGroupProperties(SECURITY_GROUP_ID, AWSUtils.NO_VALUE,
-                    requestState, SecurityGroupStage.FINISHED);
-            break;
-        case FAILED:
-            requestState.taskManager.patchTaskToFailure(requestState.error);
-            break;
-        case FINISHED:
-            requestState.taskManager.finishTask();
+    public void handlePatch(Operation op) {
+        if (!op.hasBody()) {
+            op.fail(new IllegalArgumentException("body is required"));
             return;
-        default:
-            break;
         }
+
+        // initialize request context
+        AWSSecurityGroupContext context = new AWSSecurityGroupContext(this,
+                op.getBody(SecurityGroupInstanceRequest.class));
+
+        // Immediately complete the Operation from calling task.
+        op.complete();
+
+        DeferredResult.completed(context)
+                .thenCompose(this::populateContext)
+                .thenCompose(this::handleSecurityGroupInstanceRequest)
+                .whenComplete((o, e) -> {
+                    // Once done patch the calling task with correct stage.
+                    if (e == null) {
+                        context.taskManager.finishTask();
+                    } else {
+                        context.taskManager.patchTaskToFailure(e);
+                    }
+                });
 
     }
 
-    private String getCustomProperty(AWSSecurityGroupRequestState requestState,
+    private DeferredResult<AWSSecurityGroupContext> populateContext(
+            AWSSecurityGroupContext context) {
+        return DeferredResult.completed(context)
+                .thenCompose(this::getSecurityGroup)
+                .thenCompose(this::getCredentials)
+                .thenCompose(this::getAWSClient);
+    }
+
+    public DeferredResult<AWSSecurityGroupContext> getSecurityGroup(
+            AWSSecurityGroupContext context) {
+        return this.sendWithDeferredResult(
+                Operation.createGet(context.request.resourceReference),
+                SecurityGroupState.class)
+                .thenApply(securityGroup -> {
+                    context.securityGroup = securityGroup;
+                    context.securityGroupId = securityGroup.id;
+                    return context;
+                });
+    }
+
+    private DeferredResult<AWSSecurityGroupContext> getCredentials(
+            AWSSecurityGroupContext context) {
+        URI uri = context.request.buildUri(context.securityGroup.authCredentialsLink);
+        return this.sendWithDeferredResult(
+                Operation.createGet(uri),
+                AuthCredentialsServiceState.class)
+                .thenApply(authCredentialsServiceState -> {
+                    context.credentials = authCredentialsServiceState;
+                    return context;
+                });
+    }
+
+    private DeferredResult<AWSSecurityGroupContext> getAWSClient(AWSSecurityGroupContext context) {
+        DeferredResult<AWSSecurityGroupContext> r = new DeferredResult<>();
+        context.client = new AWSSecurityGroupClient(this,
+                this.clientManager.getOrCreateEC2Client(context.credentials,
+                        context.securityGroup.regionId,this, (t) -> r.fail(t)));
+
+        if (context.client != null) {
+            r.complete(context);
+        }
+        return r;
+    }
+
+    private DeferredResult<AWSSecurityGroupContext> handleSecurityGroupInstanceRequest(
+            AWSSecurityGroupContext context) {
+
+        DeferredResult<AWSSecurityGroupContext> execution = DeferredResult.completed(context);
+
+        switch (context.request.requestType) {
+        case CREATE:
+            if (context.request.isMockRequest) {
+                // no need to go the end-point; just generate AWS Security Group Id.
+                context.securityGroupId = UUID.randomUUID().toString();
+            } else {
+                execution = execution
+                        .thenCompose(this::createSecurityGroup)
+                        .thenCompose(this::updateRules);
+            }
+
+            return execution;
+
+        case DELETE:
+            if (context.request.isMockRequest) {
+                // no need to go to the end-point
+                this.logFine("Mock request to delete an AWS security group ["
+                        + context.securityGroup.name + "] processed.");
+            } else {
+                execution = execution.thenCompose(this::deleteSecurityGroup);
+            }
+
+            return execution.thenCompose(this::deleteSecurityGroupState);
+        default:
+            IllegalStateException ex = new IllegalStateException("unsupported request type");
+            return DeferredResult.failed(ex);
+        }
+    }
+
+    public DeferredResult<AWSSecurityGroupContext> createSecurityGroup(
+            AWSSecurityGroupContext context) {
+        String vpcId = getCustomProperty(context, AWSConstants.AWS_VPC_ID);
+        vpcId = (vpcId == null &&
+                context.request.customProperties != null) ?
+                context.request.customProperties.get(NETWORK_STATE_ID_PROP_NAME) :
+                vpcId;
+
+        return context.client.createSecurityGroupAsync(context.securityGroup.name,
+                context.securityGroup.desc != null ?
+                        context.securityGroup.desc : DEFAULT_SECURITY_GROUP_DESC,
+                vpcId)
+                .thenApply(sgId -> {
+                    context.securityGroup.id = context.securityGroupId = sgId;
+                    return context;
+                })
+                .thenCompose(ctx -> updateSecurityGroupProperties(context.securityGroup,
+                        SECURITY_GROUP_ID, context.securityGroupId)
+                .thenApply(sg ->  context));
+    }
+
+    public DeferredResult<AWSSecurityGroupContext> updateRules(
+            AWSSecurityGroupContext context) {
+        return context.client.updateIngressRules(context.securityGroup.ingress,
+                context.securityGroupId)
+                .thenCompose(v -> context.client.updateEgressRules(context.securityGroup.egress,
+                        context.securityGroupId))
+                .thenApply(v -> context);
+    }
+
+    private String getCustomProperty(AWSSecurityGroupContext requestState,
             String key) {
         if (requestState.securityGroup.customProperties != null) {
             return requestState.securityGroup.customProperties.get(key);
@@ -204,96 +223,30 @@ public class AWSSecurityGroupService extends StatelessService {
         return null;
     }
 
-    private void updateSecurityGroupProperties(String key, String value,
-            AWSSecurityGroupRequestState requestState, SecurityGroupStage next) {
-        if (requestState.securityGroup.customProperties == null) {
-            requestState.securityGroup.customProperties = new HashMap<>();
+    private DeferredResult<SecurityGroupState> updateSecurityGroupProperties(
+            SecurityGroupState securityGroup, String key, String value) {
+        if (securityGroup.customProperties == null) {
+            securityGroup.customProperties = new HashMap<>();
         }
 
-        requestState.securityGroup.customProperties.put(key, value);
+        securityGroup.customProperties.put(key, value);
 
-        URI securityGroupURI = requestState.securityGroupRequest.resourceReference;
-        sendRequest(Operation.createPatch(securityGroupURI)
-                .setBody(requestState.securityGroup).setCompletion((o, e) -> {
-                    if (e != null) {
-                        requestState.stage = SecurityGroupStage.FAILED;
-                        requestState.error = e;
-                        handleStages(requestState);
-                        return;
-                    }
-                    requestState.stage = next;
-                    handleStages(requestState);
-                }));
-
+        return this.sendWithDeferredResult(Operation.createPatch(this,
+                securityGroup.documentSelfLink).setBody(securityGroup))
+                .thenApply(o -> o.getBody(SecurityGroupState.class));
     }
 
-    private void getCredentials(AWSSecurityGroupRequestState requestState,
-            SecurityGroupStage next) {
-        sendRequest(Operation.createGet(this.getHost(),
-                requestState.securityGroup.authCredentialsLink).setCompletion(
-                        (o, e) -> {
-                            if (e != null) {
-                                requestState.stage = SecurityGroupStage.FAILED;
-                                requestState.error = e;
-                                handleStages(requestState);
-                                return;
-                            }
-                            requestState.credentials = o
-                                    .getBody(AuthCredentialsServiceState.class);
-                            requestState.stage = next;
-                            handleStages(requestState);
-                        }));
+    public DeferredResult<AWSSecurityGroupContext> deleteSecurityGroup(
+            AWSSecurityGroupContext context) {
+
+        return context.client.deleteSecurityGroupAsync(context.securityGroupId)
+                .thenApply(v -> context);
     }
 
-    private void getSecurityGroupState(AWSSecurityGroupRequestState requestState,
-            SecurityGroupStage next) {
-        sendRequest(Operation.createGet(
-                requestState.securityGroupRequest.resourceReference).setCompletion(
-                        (o, e) -> {
-                            if (e != null) {
-                                requestState.stage = SecurityGroupStage.FAILED;
-                                requestState.error = e;
-                                handleStages(requestState);
-                                return;
-                            }
-                            requestState.securityGroup = o.getBody(SecurityGroupState.class);
-                            requestState.stage = next;
-                            handleStages(requestState);
-                        }));
-    }
-
-    public SecurityGroup getSecurityGroupByID(AmazonEC2AsyncClient client,
-            String groupID) {
-        SecurityGroup cellGroup = null;
-
-        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest()
-                .withGroupIds(groupID);
-        DescribeSecurityGroupsResult cellGroups = client
-                .describeSecurityGroups(req);
-        if (cellGroups != null) {
-            cellGroup = cellGroups.getSecurityGroups().get(0);
-        }
-        return cellGroup;
-    }
-
-    public void deleteSecurityGroup(AmazonEC2AsyncClient client) {
-        SecurityGroup group = getSecurityGroup(client);
-        if (group != null) {
-            deleteSecurityGroup(client, group.getGroupId());
-        }
-    }
-
-    public void deleteSecurityGroup(AmazonEC2AsyncClient client, String groupId) {
-
-        DeleteSecurityGroupRequest req = new DeleteSecurityGroupRequest()
-                .withGroupId(groupId);
-
-        client.deleteSecurityGroup(req);
-    }
-
-    private void handleError(AWSSecurityGroupRequestState requestState, Throwable e) {
-        requestState.stage = SecurityGroupStage.FAILED;
-        requestState.error = e;
-        handleStages(requestState);
+    public DeferredResult<AWSSecurityGroupContext> deleteSecurityGroupState(
+            AWSSecurityGroupContext context) {
+        return this.sendWithDeferredResult(
+                Operation.createDelete(this, context.securityGroup.documentSelfLink))
+                .thenApply(operation -> context);
     }
 }

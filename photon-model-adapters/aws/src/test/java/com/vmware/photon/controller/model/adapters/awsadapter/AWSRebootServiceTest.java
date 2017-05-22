@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
@@ -63,6 +62,7 @@ import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
@@ -309,7 +309,8 @@ public class AWSRebootServiceTest {
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
 
         if (!this.isMock && !vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
-            SecurityGroup securityGroup = getSecurityGroup(this.client, TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
+            SecurityGroup securityGroup = new AWSSecurityGroupClient(this.client)
+                    .getSecurityGroup(TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
                     (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
             if (securityGroup != null) {
                 deleteSecurityGroupUsingEC2Client(this.client, this.host, securityGroup.getGroupId());

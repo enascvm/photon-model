@@ -18,10 +18,8 @@ import static java.util.Collections.singletonMap;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CREATE_CONTEXT_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GROUP_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.buildRules;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,28 +32,20 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupEgressRequest;
-import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupEgressResult;
-import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
-import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressResult;
-import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
-import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.CreateSubnetRequest;
 import com.amazonaws.services.ec2.model.CreateSubnetResult;
-import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
-import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeSubnetsRequest;
 import com.amazonaws.services.ec2.model.DescribeSubnetsResult;
 import com.amazonaws.services.ec2.model.DescribeVpcsRequest;
 import com.amazonaws.services.ec2.model.DescribeVpcsResult;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterfaceSpecification;
-import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
@@ -416,10 +406,11 @@ public class AWSInstanceContext
             return DeferredResult.completed(context);
         }
 
-        List<DeferredResult<DescribeSecurityGroupsResult>> getSecurityGroupsDRs = new ArrayList<>();
+        List<DeferredResult<Void>> getSecurityGroupsDRs = new ArrayList<>();
 
+        AWSSecurityGroupClient client = new AWSSecurityGroupClient(context.amazonEC2Client);
         for (AWSNicContext nicCtx : context.nics) {
-            getSecurityGroupsDRs.add(getSecurityGroupsPerNIC(context, nicCtx));
+            getSecurityGroupsDRs.add(getSecurityGroupsPerNIC(client, nicCtx, context.child.name));
         }
 
         return DeferredResult.allOf(getSecurityGroupsDRs).handle((all, exc) -> {
@@ -436,8 +427,8 @@ public class AWSInstanceContext
     /**
      * Utility method for obtaining AWS SecurityGroup objects from AWS based on SecurityGroupStates.
      */
-    private DeferredResult<DescribeSecurityGroupsResult> getSecurityGroupsPerNIC(
-            AWSInstanceContext context, AWSNicContext nicCtx) {
+    private DeferredResult<Void> getSecurityGroupsPerNIC(
+            AWSSecurityGroupClient client, AWSNicContext nicCtx, String vmName) {
 
         if (nicCtx.securityGroupStates == null || nicCtx.securityGroupStates.isEmpty()) {
             return DeferredResult.completed(null);
@@ -447,37 +438,17 @@ public class AWSInstanceContext
                 .map(securityGroupState -> securityGroupState.id)
                 .collect(Collectors.toList());
 
-        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest()
-                .withFilters(new Filter(AWS_GROUP_ID_FILTER, securityGroupIds))
-                .withFilters(new Filter(AWS_VPC_ID_FILTER, singletonList(nicCtx.vpc.getVpcId())));
+        return client.getSecurityGroups(securityGroupIds, nicCtx.vpc.getVpcId(),
+                        nicCtx.nicStateWithDesc.name, vmName)
+                .thenCompose(result -> {
+                    nicCtx.securityGroupIds.addAll(result
+                            .getSecurityGroups()
+                            .stream()
+                            .map(sg -> sg.getGroupId())
+                            .collect(Collectors.toList()));
 
-        String msg = "Getting AWS Security Groups by id ["
-                + securityGroupIds
-                + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
-                + context.child.name
-                + "] VM";
-
-        AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult> asyncHandler = new AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult>(
-                this.service, msg) {
-
-            @Override
-            protected DeferredResult<DescribeSecurityGroupsResult> consumeSuccess(
-                    DescribeSecurityGroupsRequest request,
-                    DescribeSecurityGroupsResult result) {
-
-                nicCtx.securityGroupIds.addAll(result
-                        .getSecurityGroups()
-                        .stream()
-                        .map(sg -> sg.getGroupId())
-                        .collect(Collectors.toList()));
-
-                return DeferredResult.completed(result);
-            }
-        };
-
-        context.amazonEC2Client.describeSecurityGroupsAsync(req, asyncHandler);
-
-        return asyncHandler.toDeferredResult();
+                    return DeferredResult.completed((Void) null);
+                });
     }
 
     /**
@@ -493,6 +464,7 @@ public class AWSInstanceContext
 
         List<DeferredResult<Void>> createSecurityGroupsDRs = new ArrayList<>();
 
+        AWSSecurityGroupClient sgClient = new AWSSecurityGroupClient(context.amazonEC2Client);
         for (AWSNicContext nicCtx : context.nics) {
             if (nicCtx.securityGroupStates == null) {
                 continue;
@@ -507,12 +479,12 @@ public class AWSInstanceContext
 
             for (SecurityGroupState missingSGState : missingSecurityGroupStates) {
 
-                DeferredResult<Void> createSGWithRulesDR = createSecurityGroup(context, nicCtx,
-                        missingSGState)
+                DeferredResult<Void> createSGWithRulesDR = createSecurityGroup(sgClient,
+                        context, nicCtx, missingSGState)
                                 .thenCompose(ignore -> createIngressRules(context, nicCtx,
-                                        missingSGState))
+                                        missingSGState, sgClient))
                                 .thenCompose(ignore -> createEgressRules(context, nicCtx,
-                                        missingSGState))
+                                        missingSGState, sgClient))
                                 .thenApply(ignore -> (Void) null);
 
                 createSecurityGroupsDRs.add(createSGWithRulesDR);
@@ -534,39 +506,13 @@ public class AWSInstanceContext
      * For the provided SecurityGroupState, create corresponding SecurityGroup on AWS.
      */
     private DeferredResult<Void> createSecurityGroup(
+            AWSSecurityGroupClient client,
             AWSInstanceContext context,
             AWSNicContext nicCtx,
             SecurityGroupState missingSecurityGroupState) {
 
-        CreateSecurityGroupRequest securityGroupRequest = new CreateSecurityGroupRequest()
-                .withDescription(missingSecurityGroupState.name)
-                .withGroupName(missingSecurityGroupState.name)
-                .withVpcId(nicCtx.vpc.getVpcId());
-
-        // Create AWS security group
-        String msg = "Create AWS Security Group [" + missingSecurityGroupState.name + "]";
-
-        AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult> createAWSSecurityGroup = new AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult>(
-                this.service, msg) {
-
-            @Override
-            protected DeferredResult<CreateSecurityGroupResult> consumeSuccess(
-                    CreateSecurityGroupRequest request,
-                    CreateSecurityGroupResult result) {
-
-                nicCtx.securityGroupIds.add(result.getGroupId());
-                // keep the new ID in order to patch the state after creation is done
-                missingSecurityGroupState.id = result.getGroupId();
-
-                return DeferredResult.completed(result);
-            }
-        };
-        context.amazonEC2Client.createSecurityGroupAsync(securityGroupRequest,
-                createAWSSecurityGroup);
-        // }}
-
         // Once AWS security group creation is done PATCH SecurityGroupState.id {{
-        Function<CreateSecurityGroupResult, DeferredResult<SecurityGroupState>> patchSecurityGroupState = (
+        Function<String, DeferredResult<SecurityGroupState>> patchSecurityGroupState = (
                 ignore) -> {
 
             SecurityGroupState patchSecurityGroup = new SecurityGroupState();
@@ -582,13 +528,23 @@ public class AWSInstanceContext
         // }}
 
         // Chain AWS security group creation with SecurityGroupState patching
-        return createAWSSecurityGroup.toDeferredResult().thenCompose(patchSecurityGroupState)
+        // use state name for both group name and description
+        return client.createSecurityGroupAsync(missingSecurityGroupState.name,
+                missingSecurityGroupState.name, nicCtx.vpc.getVpcId())
+                .thenCompose(sgId -> {
+                    nicCtx.securityGroupIds.add(sgId);
+                    // keep the new ID in order to patch the state after creation is done
+                    missingSecurityGroupState.id = sgId;
+
+                    return DeferredResult.completed(sgId);
+                })
+                .thenCompose(patchSecurityGroupState)
                 .thenApply(ignore -> (Void) null);
     }
 
-    private DeferredResult<AuthorizeSecurityGroupIngressResult> createIngressRules(
+    private DeferredResult<Void> createIngressRules(
             AWSInstanceContext context, AWSNicContext nicCtx,
-            SecurityGroupState createdGroupSGState) {
+            SecurityGroupState createdGroupSGState, AWSSecurityGroupClient sgClient) {
 
         if (!nicCtx.securityGroupIds.contains(createdGroupSGState.id)) {
             // The group was not successfully created on AWS, so no need to create Rules
@@ -598,35 +554,12 @@ public class AWSInstanceContext
             return DeferredResult.completed(null);
         }
 
-        List<IpPermission> ingressRules = buildRules(createdGroupSGState.ingress);
-
-        AuthorizeSecurityGroupIngressRequest req = new AuthorizeSecurityGroupIngressRequest()
-                .withGroupId(createdGroupSGState.id)
-                .withIpPermissions(ingressRules);
-
-        String msg = "Create AWS Ingress rules for [" + createdGroupSGState.name
-                + "] Security Group";
-
-        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult> asyncHandler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult>(
-                this.service, msg) {
-
-            @Override
-            protected DeferredResult<AuthorizeSecurityGroupIngressResult> consumeSuccess(
-                    AuthorizeSecurityGroupIngressRequest request,
-                    AuthorizeSecurityGroupIngressResult result) {
-
-                return DeferredResult.completed(result);
-            }
-        };
-
-        context.amazonEC2Client.authorizeSecurityGroupIngressAsync(req, asyncHandler);
-
-        return asyncHandler.toDeferredResult();
+        return sgClient.updateIngressRules(createdGroupSGState.ingress, createdGroupSGState.id);
     }
 
-    private DeferredResult<AuthorizeSecurityGroupEgressResult> createEgressRules(
+    private DeferredResult<Void> createEgressRules(
             AWSInstanceContext context, AWSNicContext nicCtx,
-            SecurityGroupState createdGroupSGState) {
+            SecurityGroupState createdGroupSGState, AWSSecurityGroupClient sgClient) {
 
         if (!nicCtx.securityGroupIds.contains(createdGroupSGState.id)) {
             // The group was not successfully created on AWS, so no need to create Rules
@@ -637,30 +570,7 @@ public class AWSInstanceContext
             return DeferredResult.completed(null);
         }
 
-        List<IpPermission> egressRules = buildRules(createdGroupSGState.egress);
-
-        AuthorizeSecurityGroupEgressRequest req = new AuthorizeSecurityGroupEgressRequest()
-                .withGroupId(createdGroupSGState.id)
-                .withIpPermissions(egressRules);
-
-        String msg = "Create AWS Egress rules for [" + createdGroupSGState.name
-                + "] Security Group";
-
-        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult> asyncHandler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult>(
-                this.service, msg) {
-
-            @Override
-            protected DeferredResult<AuthorizeSecurityGroupEgressResult> consumeSuccess(
-                    AuthorizeSecurityGroupEgressRequest request,
-                    AuthorizeSecurityGroupEgressResult result) {
-
-                return DeferredResult.completed(result);
-            }
-        };
-
-        context.amazonEC2Client.authorizeSecurityGroupEgressAsync(req, asyncHandler);
-
-        return asyncHandler.toDeferredResult();
+        return sgClient.updateEgressRules(createdGroupSGState.egress, createdGroupSGState.id);
     }
 
     /**

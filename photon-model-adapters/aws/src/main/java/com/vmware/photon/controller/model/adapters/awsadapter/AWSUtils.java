@@ -16,15 +16,14 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GROUP_NAME_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_PENDING;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_RUNNING;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_SHUTTING_DOWN;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_STOPPED;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_STOPPING;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_SECURITY_GROUP_NAME;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.IOException;
@@ -58,19 +57,12 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClientBuilder;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClientBuilder;
-import com.amazonaws.services.ec2.model.AmazonEC2Exception;
-import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupEgressRequest;
-import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
-import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
-import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import com.amazonaws.services.ec2.model.DeleteTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
-import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
-import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeTagsResult;
 import com.amazonaws.services.ec2.model.DescribeVpcsResult;
@@ -78,10 +70,6 @@ import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
 import com.amazonaws.services.ec2.model.InstanceStateChange;
-import com.amazonaws.services.ec2.model.IpPermission;
-import com.amazonaws.services.ec2.model.IpRange;
-import com.amazonaws.services.ec2.model.RevokeSecurityGroupEgressRequest;
-import com.amazonaws.services.ec2.model.RevokeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
@@ -95,16 +83,13 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
 
-import org.apache.commons.collections.CollectionUtils;
-
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
-import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
@@ -120,20 +105,10 @@ public class AWSUtils {
     public static final String AWS_FILTER_VPC_ID = "vpc-id";
     public static final String NO_VALUE = "no-value";
     public static final String TILDA = "~";
-    public static final String DEFAULT_SECURITY_GROUP_NAME = "photon-model-sg";
-    public static final String DEFAULT_SECURITY_GROUP_DESC = "VMware Photon model security group";
-    public static final int[] DEFAULT_ALLOWED_PORTS = { 22, 443, 80, 8080,
-            2376, 2375, 1 };
-    public static final String DEFAULT_ALLOWED_NETWORK = "0.0.0.0/0";
-    public static final String DEFAULT_PROTOCOL = "tcp";
-    public static final String ALL_TRAFFIC = "*";
     public static final String AWS_MOCK_EC2_ENDPOINT = "/aws-mock/ec2-endpoint/";
     public static final String AWS_MOCK_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
     public static final String AWS_MOCK_LOAD_BALANCING_ENDPOINT = "/aws-mock/load-balancing-endpoint/";
     public static final String AWS_REGION_HEADER = "region";
-
-    public static final String SECURITY_GROUP_RULE_NOT_FOUND = "InvalidPermission.NotFound";
-    public static final String SECURITY_GROUP_RULE_DUPLICATE = "InvalidPermission.Duplicate";
 
     /**
      * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
@@ -503,12 +478,14 @@ public class AWSUtils {
 
         List<String> groupIds = new ArrayList<>();
 
+        AWSSecurityGroupClient client = new AWSSecurityGroupClient(aws.amazonEC2Client);
+
         if (nicCtx != null) {
             if (nicCtx.securityGroupStates != null && !nicCtx.securityGroupStates.isEmpty()) {
                 List<String> securityGroupNames = nicCtx.securityGroupStates.stream()
                         .map(securityGroupState -> securityGroupState.name)
                         .collect(Collectors.toList());
-                List<SecurityGroup> securityGroups = getSecurityGroups(aws.amazonEC2Client,
+                List<SecurityGroup> securityGroups = client.getSecurityGroups(
                         new ArrayList<>(securityGroupNames), nicCtx.vpc.getVpcId());
                 for (SecurityGroup securityGroup : securityGroups) {
                     groupIds.add(securityGroup.getGroupId());
@@ -527,7 +504,7 @@ public class AWSUtils {
         // in case no group is configured in the properties, attempt to discover the default one
         if (nicCtx != null && nicCtx.vpc != null) {
             try {
-                group = getSecurityGroup(aws.amazonEC2Client, DEFAULT_SECURITY_GROUP_NAME,
+                group = client.getSecurityGroup(DEFAULT_SECURITY_GROUP_NAME,
                         nicCtx.vpc.getVpcId());
                 if (group != null) {
                     return Arrays.asList(group.getGroupId());
@@ -543,7 +520,7 @@ public class AWSUtils {
         // if the group doesn't exist an exception is thrown. We won't throw a
         // missing group exception
         // we will continue and create the group
-        groupId = createAWSSecurityGroup(aws);
+        groupId = createSecurityGroupOnDefaultVPC(aws);
 
         return Collections.singletonList(groupId);
     }
@@ -551,10 +528,12 @@ public class AWSUtils {
     public static List<String> getOrCreateDefaultSecurityGroup(AmazonEC2AsyncClient amazonEC2Client,
             AWSNicContext nicCtx) {
 
+        AWSSecurityGroupClient client = new AWSSecurityGroupClient(amazonEC2Client);
         // in case no group is configured in the properties, attempt to discover the default one
         if (nicCtx != null && nicCtx.vpc != null) {
             try {
-                SecurityGroup group = getSecurityGroup(amazonEC2Client, DEFAULT_SECURITY_GROUP_NAME,
+                SecurityGroup group = client.getSecurityGroup(
+                        DEFAULT_SECURITY_GROUP_NAME,
                         nicCtx.vpc.getVpcId());
                 if (group != null) {
                     return Arrays.asList(group.getGroupId());
@@ -570,77 +549,31 @@ public class AWSUtils {
         // if the group doesn't exist an exception is thrown. We won't throw a
         // missing group exception
         // we will continue and create the group
-        String groupId = createDefaultSecurityGroup(amazonEC2Client, nicCtx.vpc);
+        String groupId = client.createDefaultSecurityGroupWithDefaultRules( nicCtx.vpc);
 
         return Collections.singletonList(groupId);
     }
 
-    private static String createDefaultSecurityGroup(AmazonEC2AsyncClient amazonEC2Client,
-            Vpc vpc) {
-        String groupId;
-        try {
-            groupId = createSecurityGroup(amazonEC2Client, vpc.getVpcId());
-            addIngressRules(amazonEC2Client, groupId,
-                    getDefaultRules(vpc.getCidrBlock()));
-        } catch (AmazonServiceException t) {
-            if (t.getMessage().contains(
-                    DEFAULT_SECURITY_GROUP_NAME)) {
-                groupId = getSecurityGroup(amazonEC2Client, DEFAULT_SECURITY_GROUP_NAME,
-                        vpc.getVpcId()).getGroupId();
-            } else {
-                throw t;
-            }
-        }
-        return groupId;
-    }
-
     // method create a security group in the VPC from custom properties or the default VPC
-    private static String createAWSSecurityGroup(AWSInstanceContext aws) {
-        String groupId;
-        try {
-            String vpcId = null;
-            // get the subnet cidr (if any)
-            String subnetCidr = null;
-            // in case subnet will be obtained from the default vpc, the security group should
-            // as well be created there
-            Vpc defaultVPC = getDefaultVPC(aws);
-            if (defaultVPC != null) {
-                vpcId = defaultVPC.getVpcId();
-                subnetCidr = defaultVPC.getCidrBlock();
-            }
-
-            // no subnet or no vpc is not an option...
-            if (subnetCidr == null || vpcId == null) {
-                throw new AmazonServiceException("default VPC not found");
-            }
-
-            groupId = createSecurityGroup(aws.amazonEC2Client, vpcId);
-            addIngressRules(aws.amazonEC2Client, groupId,
-                    getDefaultRules(subnetCidr));
-        } catch (AmazonServiceException t) {
-            if (t.getMessage().contains(
-                    DEFAULT_SECURITY_GROUP_NAME)) {
-                groupId = getSecurityGroup(aws.amazonEC2Client).getGroupId();
-            } else {
-                throw t;
-            }
-        }
-        return groupId;
-    }
-
-    public static List<SecurityGroup> getSecurityGroups(AmazonEC2AsyncClient client,
-            List<String> names, String vpcId) {
-
-        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest();
-
-        req.withFilters(new Filter(AWS_GROUP_NAME_FILTER, names));
-        if (vpcId != null) {
-            req.withFilters(new Filter(AWS_VPC_ID_FILTER, Collections.singletonList(vpcId)));
+    private static String createSecurityGroupOnDefaultVPC(AWSInstanceContext aws) {
+        String vpcId = null;
+        // get the subnet cidr (if any)
+        String subnetCidr = null;
+        // in case subnet will be obtained from the default vpc, the security group should
+        // as well be created there
+        Vpc defaultVPC = getDefaultVPC(aws);
+        if (defaultVPC != null) {
+            vpcId = defaultVPC.getVpcId();
+            subnetCidr = defaultVPC.getCidrBlock();
         }
 
-        DescribeSecurityGroupsResult groups = client
-                .describeSecurityGroups(req);
-        return groups != null ? groups.getSecurityGroups() : Collections.emptyList();
+        // no subnet or no vpc is not an option...
+        if (subnetCidr == null || vpcId == null) {
+            throw new AmazonServiceException("default VPC not found");
+        }
+
+        return new AWSSecurityGroupClient(aws.amazonEC2Client)
+                .createDefaultSecurityGroupWithDefaultRules(defaultVPC);
     }
 
     public static String getFromCustomProperties(
@@ -651,153 +584,6 @@ public class AWSUtils {
         }
 
         return description.customProperties.get(key);
-    }
-
-    public static String createSecurityGroup(AmazonEC2AsyncClient client, String vpcId) {
-        return createSecurityGroup(client, DEFAULT_SECURITY_GROUP_NAME,
-                DEFAULT_SECURITY_GROUP_DESC, vpcId);
-    }
-
-    public static String createSecurityGroup(AmazonEC2AsyncClient client, String name,
-            String description, String vpcId) {
-
-        CreateSecurityGroupRequest req = new CreateSecurityGroupRequest()
-                .withDescription(description)
-                .withGroupName(name);
-
-        // set vpc for the security group if provided
-        if (vpcId != null) {
-            req = req.withVpcId(vpcId);
-        }
-
-        CreateSecurityGroupResult result = client.createSecurityGroup(req);
-
-        return result.getGroupId();
-    }
-
-    public static SecurityGroup getSecurityGroup(AmazonEC2AsyncClient client) {
-        return getSecurityGroup(client, DEFAULT_SECURITY_GROUP_NAME);
-    }
-
-    public static SecurityGroup getSecurityGroup(AmazonEC2AsyncClient client,
-            String name) {
-        return getSecurityGroup(client, name, null);
-    }
-
-    public static SecurityGroup getSecurityGroup(AmazonEC2AsyncClient client,
-            String name, String vpcId) {
-        SecurityGroup cellGroup = null;
-
-        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest()
-                .withFilters(new Filter("group-name", Collections.singletonList(name)));
-        if (vpcId != null) {
-            req.withFilters(new Filter("vpc-id", Collections.singletonList(vpcId)));
-        }
-        DescribeSecurityGroupsResult cellGroups = client
-                .describeSecurityGroups(req);
-        if (cellGroups != null && !cellGroups.getSecurityGroups().isEmpty()) {
-            cellGroup = cellGroups.getSecurityGroups().get(0);
-        }
-        return cellGroup;
-    }
-
-    public static List<IpPermission> getDefaultRules(String subnet) {
-        List<IpPermission> rules = new ArrayList<>();
-        for (int port : DEFAULT_ALLOWED_PORTS) {
-            if (port > 1) {
-                rules.add(createRule(port));
-            } else {
-                rules.add(createRule(1, 65535, subnet, DEFAULT_PROTOCOL));
-            }
-        }
-        return rules;
-    }
-
-    public static void updateIngressRules(AmazonEC2AsyncClient client,
-            List<Rule> rules, String groupId) {
-        addIngressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals
-                (Access.Allow)).collect(Collectors.toList())));
-        removeIngressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals
-                (Access.Deny)).collect(Collectors.toList())));
-    }
-
-    public static void addIngressRules(AmazonEC2AsyncClient client, String groupId,
-            List<IpPermission> rules) {
-        if (CollectionUtils.isNotEmpty(rules)) {
-            AuthorizeSecurityGroupIngressRequest req = new AuthorizeSecurityGroupIngressRequest()
-                    .withGroupId(groupId).withIpPermissions(rules);
-            try {
-                client.authorizeSecurityGroupIngress(req);
-            } catch (AmazonEC2Exception e) {
-                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_DUPLICATE)) {
-                    Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(),
-                            Level.WARNING, () -> String
-                                    .format("Ingress rules already exist: %s", Utils.toString(e)));
-                } else {
-                    throw e;
-                }
-            }
-        }
-    }
-
-    public static void removeIngressRules(AmazonEC2AsyncClient client, String groupId,
-            List<IpPermission> rules) {
-        if (CollectionUtils.isNotEmpty(rules)) {
-            RevokeSecurityGroupIngressRequest req = new RevokeSecurityGroupIngressRequest()
-                    .withGroupId(groupId).withIpPermissions(rules);
-            try {
-                client.revokeSecurityGroupIngress(req);
-            } catch (AmazonEC2Exception e) {
-                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_NOT_FOUND)) {
-                    Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(),
-                            Level.WARNING, () -> String
-                                    .format("Ingress rules cannot be removed because they do not "
-                                                    + "exist: %s", Utils.toString(e)));
-                } else {
-                    throw e;
-                }
-            }
-        }
-    }
-
-    public static IpPermission createRule(int port) {
-        return createRule(port, port, DEFAULT_ALLOWED_NETWORK, DEFAULT_PROTOCOL);
-    }
-
-    public static IpPermission createRule(int fromPort, int toPort, String subnet,
-            String protocol) {
-
-        IpRange ipRange = new IpRange().withCidrIp(subnet);
-
-        protocol = protocol.equals(ALL_TRAFFIC) ? "-1" : protocol;
-
-        return new IpPermission()
-                .withIpProtocol(protocol)
-                .withFromPort(fromPort)
-                .withToPort(toPort)
-                .withIpv4Ranges(ipRange);
-    }
-
-    /**
-     * Builds the white list rules for the firewall
-     */
-    public static List<IpPermission> buildRules(List<Rule> allowRules) {
-        ArrayList<IpPermission> awsRules = new ArrayList<>();
-        for (Rule rule : allowRules) {
-            int fromPort;
-            int toPort;
-            if (rule.ports.contains("-")) {
-                String[] ports = rule.ports.split("-");
-                fromPort = Integer.parseInt(ports[0]);
-                toPort = Integer.parseInt(ports[1]);
-            } else {
-                fromPort = Integer.parseInt(rule.ports);
-                toPort = fromPort;
-            }
-            awsRules.add(createRule(fromPort, toPort, rule.ipRangeCidr,
-                    rule.protocol));
-        }
-        return awsRules;
     }
 
     /**
@@ -942,52 +728,4 @@ public class AWSUtils {
         }
 
     }
-
-    public static void updateEgressRules(AmazonEC2AsyncClient client,
-            List<Rule> rules, String groupId) {
-        addEgressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals(
-                Access.Allow)).collect(Collectors.toList())));
-        removeEgressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals(
-                Access.Deny)).collect(Collectors.toList())));
-    }
-
-    public static void addEgressRules(AmazonEC2AsyncClient client, String groupId,
-            List<IpPermission> rules) {
-        if (CollectionUtils.isNotEmpty(rules)) {
-            AuthorizeSecurityGroupEgressRequest req = new AuthorizeSecurityGroupEgressRequest()
-                    .withGroupId(groupId).withIpPermissions(rules);
-            try {
-                client.authorizeSecurityGroupEgress(req);
-            } catch (AmazonEC2Exception e) {
-                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_DUPLICATE)) {
-                    Utils.log(AWSSecurityGroupService.class, AWSSecurityGroupService.class.getSimpleName(),
-                            Level.WARNING, () -> String
-                                    .format("Egress rules already exist: %s", Utils.toString(e)));
-                } else {
-                    throw e;
-                }
-            }
-        }
-    }
-
-    public static void removeEgressRules(AmazonEC2AsyncClient client, String groupId,
-            List<IpPermission> rules) {
-        if (CollectionUtils.isNotEmpty(rules)) {
-            RevokeSecurityGroupEgressRequest req = new RevokeSecurityGroupEgressRequest()
-                    .withGroupId(groupId).withIpPermissions(rules);
-            try {
-                client.revokeSecurityGroupEgress(req);
-            } catch (AmazonEC2Exception e) {
-                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_NOT_FOUND)) {
-                    Utils.log(AWSSecurityGroupService.class, AWSSecurityGroupService.class.getSimpleName(),
-                            Level.WARNING, () -> String
-                                    .format("Egress rules cannot be removed because they do not "
-                                            + "exist: %s", Utils.toString(e)));
-                } else {
-                    throw e;
-                }
-            }
-        }
-    }
-
 }

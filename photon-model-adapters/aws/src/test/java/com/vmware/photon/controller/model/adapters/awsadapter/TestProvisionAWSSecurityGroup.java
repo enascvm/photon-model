@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
-import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Vpc;
 
@@ -38,6 +37,7 @@ import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
@@ -47,6 +47,7 @@ import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskServic
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -166,11 +167,12 @@ public class TestProvisionAWSSecurityGroup {
         ProvisionSecurityGroupTaskState removeTask = remove.getBody(ProvisionSecurityGroupTaskState.class);
         waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, removeTask.documentSelfLink));
 
-        // verify custom property is now set to no value
-        SecurityGroupState removedSG = getSecurityGroupState(securityGroupState.documentSelfLink);
-        assertTrue(removedSG.customProperties.get(AWSSecurityGroupService.SECURITY_GROUP_ID)
-                .equalsIgnoreCase(AWSUtils.NO_VALUE));
-
+        // verify security group state is gone
+        try {
+            getSecurityGroupState(securityGroupState.documentSelfLink);
+        } catch (Exception ex) {
+            assertTrue(ex instanceof ServiceNotFoundException);
+        }
     }
 
     @Test
@@ -220,10 +222,10 @@ public class TestProvisionAWSSecurityGroup {
 
         SecurityGroupState securityGroup = getSecurityGroupState(securityGroupDescriptionLink);
 
-        AWSSecurityGroupService fwSVC = new AWSSecurityGroupService();
-        AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(creds, this.region, getExecutor());
+        AWSSecurityGroupClient client = new AWSSecurityGroupClient(
+                AWSUtils.getAsyncClient(creds, this.region, getExecutor()));
         // if any artifact is not present then an error will be thrown
-        SecurityGroup sg = fwSVC.getSecurityGroupByID(client,
+        SecurityGroup sg = client.getSecurityGroupById(
                 securityGroup.customProperties.get(AWSSecurityGroupService.SECURITY_GROUP_ID));
         assertNotNull(sg);
         assertNotNull(sg.getIpPermissions());

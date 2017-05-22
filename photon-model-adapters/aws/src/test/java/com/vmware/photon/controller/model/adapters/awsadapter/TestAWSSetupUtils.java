@@ -20,10 +20,8 @@ import static org.junit.Assert.assertNull;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCount;
 
@@ -108,6 +106,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSCom
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndDeletionAdapterService;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -354,7 +353,8 @@ public class TestAWSSetupUtils {
             String internetGatewayId = createInternetGateway(client);
             awsTestContext.put(INTERNET_GATEWAY_KEY, internetGatewayId);
             attachInternetGateway(client, vpcId, internetGatewayId);
-            awsTestContext.put(SECURITY_GROUP_KEY, createSecurityGroup(client, vpcId));
+            awsTestContext.put(SECURITY_GROUP_KEY, new AWSSecurityGroupClient(client)
+                    .createDefaultSecurityGroup(vpcId));
 
             NetSpec network = new NetSpec(vpcId, vpcId, AWS_DEFAULT_VPC_CIDR);
 
@@ -379,7 +379,8 @@ public class TestAWSSetupUtils {
             final String securityGroupId = (String) awsTestContext.get(SECURITY_GROUP_KEY);
             // clean up VPC and all its dependencies if creating one at setUp
             deleteSecurityGroupUsingEC2Client(client, host, securityGroupId);
-            SecurityGroup securityGroup = getSecurityGroup(client, AWS_DEFAULT_GROUP_NAME, vpcId);
+            SecurityGroup securityGroup = new AWSSecurityGroupClient(client)
+                    .getSecurityGroup(AWS_DEFAULT_GROUP_NAME, vpcId);
             if (securityGroup != null) {
                 deleteSecurityGroupUsingEC2Client(client, host, securityGroup.getGroupId());
             }

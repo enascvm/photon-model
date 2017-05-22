@@ -17,31 +17,26 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_ALLOWED_NETWORK;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_ALLOWED_PORTS;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_PROTOCOL;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_DESC;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_NAME;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.buildRules;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getDefaultRules;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_ALLOWED_NETWORK;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_ALLOWED_PORTS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_PROTOCOL;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.IpRange;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.xenon.common.CommandLineArgumentParser;
@@ -69,12 +64,15 @@ public class TestAWSSecurityGroupService {
     public String privateKeyId;
     public String region;
     public String subnet;
-    public AmazonEC2AsyncClient client;
 
     VerificationHost host;
 
     AWSSecurityGroupService svc;
     AWSInstanceContext aws;
+    AWSSecurityGroupClient client;
+
+    @org.junit.Rule
+    public ExpectedException expectedEx = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -92,7 +90,8 @@ public class TestAWSSecurityGroupService {
                     Operation.createPost(UriUtils.buildUri(this.host,
                             AWSSecurityGroupService.class)),
                     this.svc);
-            this.client = TestUtils.getClient(this.privateKeyId,this.privateKey,this.region,false);
+            this.client = new AWSSecurityGroupClient(
+                    TestUtils.getClient(this.privateKeyId,this.privateKey,this.region,false));
         } catch (Throwable e) {
             throw new Exception(e);
         }
@@ -108,12 +107,9 @@ public class TestAWSSecurityGroupService {
         this.host.tearDown();
     }
 
-    /*
-     * request a group that doesn't exist
-     */
     @Test
     public void testInvalidGetSecurityGroup() throws Throwable {
-        assertNull(getSecurityGroup(this.client, "foo-bar"));
+        assertNull(this.client.getSecurityGroup("foo-bar", null));
     }
 
     /*
@@ -122,9 +118,9 @@ public class TestAWSSecurityGroupService {
      */
     @Test
     public void testDefaultSecurityGroup() throws Throwable {
-        createSecurityGroup(this.client, null);
-        getSecurityGroup(this.client);
-        this.svc.deleteSecurityGroup(this.client);
+        String sgId = this.client.createDefaultSecurityGroup(null);
+        this.client.getDefaultSecurityGroup(null);
+        this.client.deleteSecurityGroup(sgId);
     }
 
     /*
@@ -135,13 +131,13 @@ public class TestAWSSecurityGroupService {
     @Test
     public void testDefaultSecurityGroupPorts() throws Throwable {
         // create the group
-        String groupId = createSecurityGroup(this.client, null);
+        String groupId = this.client.createDefaultSecurityGroup(null);
 
         // allow the default ports
-        AWSUtils.addIngressRules(this.client, groupId, getDefaultRules(this.subnet));
+        this.client.addIngressRules(groupId, this.client.getDefaultRules(this.subnet));
 
         // get the updated CM group
-        SecurityGroup group = getSecurityGroup(this.client);
+        SecurityGroup group = this.client.getDefaultSecurityGroup(null);
 
         List<IpPermission> rules = group.getIpPermissions();
 
@@ -149,7 +145,7 @@ public class TestAWSSecurityGroupService {
         validateDefaultRules(rules);
 
         // lets delete the default CM group
-        this.svc.deleteSecurityGroup(this.client);
+        this.client.deleteSecurityGroup(groupId);
     }
 
     /*
@@ -157,12 +153,11 @@ public class TestAWSSecurityGroupService {
      * default CM security group
      */
     @Test
-    @Ignore("This test doesn't throw an exception; deleting a non-existing security group fails "
-            + "silently")
     public void testDeleteMissingGroup() throws Throwable {
-        // lets delete the default CM group
-        // which doesn't exist
-        this.svc.deleteSecurityGroup(this.client);
+        this.expectedEx.expect(AmazonServiceException.class);
+        this.expectedEx.expectMessage("Invalid id: \"non-existing-security-group\"");
+
+        this.client.deleteSecurityGroup("non-existing-security-group");
     }
 
     /*
@@ -170,11 +165,10 @@ public class TestAWSSecurityGroupService {
      */
     @Test
     public void testAllocateSecurityGroup() throws Throwable {
-        createSecurityGroup(this.client,
-                DEFAULT_SECURITY_GROUP_NAME, DEFAULT_SECURITY_GROUP_DESC, null);
-        SecurityGroup group = getSecurityGroup(this.client);
+        this.client.createDefaultSecurityGroup(null);
+        SecurityGroup group = this.client.getDefaultSecurityGroup(null);
         validateDefaultRules(group.getIpPermissions());
-        this.svc.deleteSecurityGroup(this.client);
+        this.client.deleteSecurityGroup(group.getGroupId());
     }
 
     /*
@@ -182,8 +176,7 @@ public class TestAWSSecurityGroupService {
      */
     @Test
     public void testAllocateSecurityGroupUpdate() throws Throwable {
-        String groupId = createSecurityGroup(this.client,
-                DEFAULT_SECURITY_GROUP_NAME, DEFAULT_SECURITY_GROUP_DESC, null);
+        String groupId = this.client.createDefaultSecurityGroup(null);
 
         List<IpPermission> rules = new ArrayList<>();
         IpRange ipRange = new IpRange().withCidrIp(DEFAULT_ALLOWED_NETWORK);
@@ -192,10 +185,10 @@ public class TestAWSSecurityGroupService {
                 .withFromPort(22)
                 .withToPort(22)
                 .withIpv4Ranges(ipRange));
-        AWSUtils.addIngressRules(this.client, groupId, rules);
-        SecurityGroup updatedGroup = getSecurityGroup(this.client, DEFAULT_SECURITY_GROUP_NAME);
+        this.client.addIngressRules(groupId, rules);
+        SecurityGroup updatedGroup = this.client.getDefaultSecurityGroup(null);
         validateDefaultRules(updatedGroup.getIpPermissions());
-        this.svc.deleteSecurityGroup(this.client);
+        this.client.deleteSecurityGroup(groupId);
     }
 
     /*
@@ -205,7 +198,7 @@ public class TestAWSSecurityGroupService {
     @Test
     public void testBuildRules() throws Throwable {
         ArrayList<Rule> rules = TestUtils.getAllowIngressRules();
-        List<IpPermission> awsRules = buildRules(rules);
+        List<IpPermission> awsRules = this.client.buildRules(rules);
 
         for (IpPermission rule : awsRules) {
             assertDefaultRules(rule);
@@ -220,10 +213,10 @@ public class TestAWSSecurityGroupService {
 
     @Test
     public void testUpdateIngressRules() throws Throwable {
-        String groupID = createSecurityGroup(this.client, null);
+        String groupID = this.client.createDefaultSecurityGroup(null);
         ArrayList<Rule> rules = TestUtils.getAllowIngressRules();
-        AWSUtils.addIngressRules(this.client, groupID, buildRules(rules));
-        SecurityGroup awsSG = this.svc.getSecurityGroupByID(this.client,groupID);
+        this.client.addIngressRules(groupID, this.client.buildRules(rules));
+        SecurityGroup awsSG = this.client.getSecurityGroupById(groupID);
 
         List<IpPermission> ingress = awsSG.getIpPermissions();
 
@@ -231,8 +224,7 @@ public class TestAWSSecurityGroupService {
             assertDefaultRules(rule);
         }
 
-        this.svc.deleteSecurityGroup(this.client,groupID);
-
+        this.client.deleteSecurityGroup(groupID);
     }
 
     private void assertDefaultRules(IpPermission rule) {
