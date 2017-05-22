@@ -53,8 +53,8 @@ public class TestAWSNetworkService {
     * region is the ec2 region where the tests should be run (us-east-1)
     * subnet is the RFC-1918 subnet of the default VPC
     */
-    public String privateKey;
-    public String privateKeyId;
+    public String secretKey;
+    public String accessKey;
 
     VerificationHost host;
 
@@ -68,7 +68,7 @@ public class TestAWSNetworkService {
         CommandLineArgumentParser.parseFromProperties(this);
 
         // ignore if any of the required properties are missing
-        org.junit.Assume.assumeTrue(TestUtils.isNull(this.privateKey, this.privateKeyId));
+        org.junit.Assume.assumeTrue(TestUtils.isNull(this.secretKey, this.accessKey));
 
         this.host = VerificationHost.create(0);
         try {
@@ -84,7 +84,7 @@ public class TestAWSNetworkService {
                     netSvc);
 
             this.netClient = new AWSNetworkClient(
-                    TestUtils.getClient(this.privateKeyId, this.privateKey, regionId, false));
+                    TestUtils.getClient(this.accessKey, this.secretKey, regionId, false));
         } catch (Throwable e) {
             throw new Exception(e);
         }

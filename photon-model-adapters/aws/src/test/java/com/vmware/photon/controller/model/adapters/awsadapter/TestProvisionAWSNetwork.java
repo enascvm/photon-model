@@ -65,8 +65,8 @@ public class TestProvisionAWSNetwork {
     * region is the ec2 region where the tests should be run (us-east-1)
     * subnet is the RFC-1918 subnet of the default VPC
     */
-    public String privateKey;
-    public String privateKeyId;
+    public String secretKey;
+    public String accessKey;
 
     private VerificationHost host;
     private URI provisionNetworkFactory;
@@ -76,7 +76,7 @@ public class TestProvisionAWSNetwork {
         CommandLineArgumentParser.parseFromProperties(this);
 
         // ignore if any of the required properties are missing
-        org.junit.Assume.assumeTrue(TestUtils.isNull(this.privateKey, this.privateKeyId));
+        org.junit.Assume.assumeTrue(TestUtils.isNull(this.secretKey, this.accessKey));
 
         this.host = VerificationHost.create(0);
         try {
@@ -111,7 +111,7 @@ public class TestProvisionAWSNetwork {
         Operation response = new Operation();
         // create credentials
         Operation credsResponse = new Operation();
-        TestUtils.postCredentials(this.host,credsResponse,this.privateKey,this.privateKeyId);
+        TestUtils.postCredentials(this.host,credsResponse,this.secretKey,this.accessKey);
         AuthCredentialsServiceState creds = credsResponse.getBody(AuthCredentialsServiceState.class);
         // create resource pool
         Operation poolResponse = new Operation();
@@ -162,7 +162,7 @@ public class TestProvisionAWSNetwork {
         Operation response = new Operation();
         // create credentials
         Operation authResponse = new Operation();
-        TestUtils.postCredentials(this.host,authResponse,this.privateKey,"invalid");
+        TestUtils.postCredentials(this.host,authResponse,this.secretKey,"invalid");
         AuthCredentialsServiceState creds = authResponse.getBody(AuthCredentialsServiceState.class);
         // create resource pool
         Operation poolResponse = new Operation();
