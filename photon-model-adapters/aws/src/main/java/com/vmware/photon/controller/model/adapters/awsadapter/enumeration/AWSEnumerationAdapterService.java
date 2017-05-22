@@ -130,12 +130,14 @@ public class AWSEnumerationAdapterService extends StatelessService {
                 new AWSEnumerationAndDeletionAdapterService());
         this.getHost().startService(patchAWSStorageEnumerationService,
                 new AWSBlockStorageEnumerationAdapterService());
+        this.getHost().startService(new AWSVolumeTypeDiscoveryService());
 
         AdapterUtils.registerForServiceAvailability(getHost(),
                 operation -> startPost.complete(), startPost::fail,
                 AWSEnumerationAndCreationAdapterService.SELF_LINK,
                 AWSEnumerationAndDeletionAdapterService.SELF_LINK,
-                AWSBlockStorageEnumerationAdapterService.SELF_LINK);
+                AWSBlockStorageEnumerationAdapterService.SELF_LINK,
+                AWSVolumeTypeDiscoveryService.SELF_LINK);
     }
 
     /**

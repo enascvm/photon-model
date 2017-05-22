@@ -68,6 +68,8 @@ public class AWSUriPaths {
     public static final String AWS_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_MISSING_RESOURCES_SERVICE = PROVISIONING_AWS + "/missing_resources_enumeration";
+    public static final String AWS_VOLUME_TYPE_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
+            + "/volume-type-enumeration-adapter";
     /**
      * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
      */
