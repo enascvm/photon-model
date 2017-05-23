@@ -22,6 +22,7 @@ import java.net.URI;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.data.Schema;
@@ -148,6 +149,13 @@ public class ResourceOperationSpecService extends StatefulService {
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
+    }
+
+    @Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(template);
+        return template;
     }
 
     public static String buildDefaultAdapterLink(String endpointType,

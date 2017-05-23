@@ -19,6 +19,7 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.security.util.CertificateUtil;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.LocalizableValidationException;
@@ -216,6 +217,13 @@ public class SslTrustCertificateService extends StatefulService {
         this.setState(put, body);
         put.setBody(body);
         put.complete();
+    }
+
+    @Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(template);
+        return template;
     }
 
     private void validateStateOnStart(SslTrustCertificateState state) throws Exception {

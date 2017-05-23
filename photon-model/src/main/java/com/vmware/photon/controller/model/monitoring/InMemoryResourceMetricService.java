@@ -74,4 +74,11 @@ public class InMemoryResourceMetricService extends StatefulService {
         setState(put, currentState);
         put.setBody(null).complete();
     }
+
+    @Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }
 }

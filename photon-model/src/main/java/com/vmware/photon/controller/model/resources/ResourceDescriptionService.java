@@ -13,9 +13,11 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
@@ -83,6 +85,13 @@ public class ResourceDescriptionService extends StatefulService {
         ResourceDescription currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
                 ResourceDescription.class, null);
+    }
+
+    @Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(template);
+        return template;
     }
 
     private ResourceDescription processInput(Operation op) {

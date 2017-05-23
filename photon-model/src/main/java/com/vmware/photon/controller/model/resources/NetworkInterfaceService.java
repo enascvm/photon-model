@@ -22,10 +22,12 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
@@ -224,6 +226,13 @@ public class NetworkInterfaceService extends StatefulService {
                     }
                     return hasStateChanged;
                 });
+    }
+
+    @Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(template);
+        return template;
     }
 
     private NetworkInterfaceState processInput(Operation op) {

@@ -20,10 +20,12 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 
 import java.util.Map;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
@@ -119,6 +121,13 @@ public class EndpointService extends StatefulService {
         validateUpdates(currentState, newState);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
                 EndpointState.class, null);
+    }
+
+    @Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(template);
+        return template;
     }
 
     private EndpointState processInput(Operation op) {
