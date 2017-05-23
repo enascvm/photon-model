@@ -310,6 +310,7 @@ public class EndpointAllocationTaskServiceTest extends Suite {
 
             ComputeState computeState = getServiceSynchronously(
                     completeState.endpointState.computeLink, ComputeState.class);
+            assertNotNull(computeState.creationTimeMicros);
             assertEquals(startState.enumerationRequest.resourcePoolLink,
                     computeState.resourcePoolLink);
 

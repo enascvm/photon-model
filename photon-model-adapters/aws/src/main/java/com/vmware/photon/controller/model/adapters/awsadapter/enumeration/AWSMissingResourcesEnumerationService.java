@@ -160,6 +160,7 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
         computeState.type = primaryAccountCompute.type;
         computeState.adapterManagementReference = primaryAccountCompute.adapterManagementReference;
         computeState.tenantLinks = primaryAccountCompute.tenantLinks;
+        computeState.creationTimeMicros = Utils.getNowMicrosUtc();
         computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, linkedAccountId);
         computeState.customProperties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,

@@ -51,7 +51,6 @@ import com.vmware.xenon.services.common.QueryTask;
 
 public class TestAWSMissingEnumerationResourcesService extends BaseModelTest {
 
-    public static Map<String, ComputeState> linkedAccountComputes = new HashMap<>();
     public static Map<String, ComputeDescription> linkedAccountDescriptions = new HashMap<>();
 
     @Override
@@ -104,8 +103,8 @@ public class TestAWSMissingEnumerationResourcesService extends BaseModelTest {
         this.host.waitFor("Timeout waiting for getLinkedAccountComputeDescriptions()", () -> {
 
             ServiceDocumentQueryResult result = this.host
-                    .createAndWaitSimpleDirectQuery(getQuerySpecForComputeDesc(request), expectedCount,
-                            expectedCount);
+                    .createAndWaitSimpleDirectQuery(getQuerySpecForComputeDesc(request),
+                            expectedCount, expectedCount);
             Collection<Object> values = result.documents.values();
             if (values.size() != expectedCount) {
                 return false;
@@ -158,12 +157,14 @@ public class TestAWSMissingEnumerationResourcesService extends BaseModelTest {
             }
             for (Object computeState : result.documents.values()) {
                 ComputeState cs = Utils.fromJson(computeState, ComputeState.class);
-                linkedAccountComputes.put(cs.name, cs);
                 if (!cs.descriptionLink.equals(linkedAccountDescriptions.get(cs.name)
                         .documentSelfLink)) {
                     return false;
                 }
                 if (!cs.endpointLink.equals(request.primaryAccountCompute.endpointLink)) {
+                    return false;
+                }
+                if (cs.creationTimeMicros == null) {
                     return false;
                 }
             }

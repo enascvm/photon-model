@@ -821,6 +821,7 @@ public class EndpointAllocationTaskService
         computeHost.tenantLinks = state.tenantLinks;
         computeHost.endpointLink = state.documentSelfLink;
         computeHost.regionId = state.regionId;
+        computeHost.creationTimeMicros = Utils.getNowMicrosUtc();
         computeHost.customProperties = new HashMap<>();
         if (state.customProperties != null) {
             computeHost.customProperties.putAll(state.customProperties);
