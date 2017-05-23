@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getClientManager;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getClientReferenceCount;
@@ -22,13 +21,11 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCli
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
@@ -58,6 +55,10 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
     public String secretKey = "secretKey";
     public AmazonEC2AsyncClient client;
     boolean isMock = true;
+
+    private int ec2ClientReferenceCount;
+    private int cloudWatchClientReferenceCount;
+    private int clientCacheCount;
 
     @Before
     public void setUp() throws Exception {
@@ -94,58 +95,51 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         }
     }
 
-    @Ignore("https://jira-hzn.eng.vmware.com/browse/VSYM-1398")
     @Test
     public void testAWSClientManagement() throws Throwable {
-        this.host.setTimeoutSeconds(60);
-        assertEquals(count1, getClientReferenceCount(AwsClientType.EC2));
-        assertEquals(count1, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
+        this.ec2ClientReferenceCount = getClientReferenceCount(AwsClientType.EC2);
+        this.cloudWatchClientReferenceCount = getClientReferenceCount(AwsClientType.CLOUD_WATCH);
 
-        // Getting a reference to the client manager in the test
-        AWSClientManager clientManager = getClientManager(AwsClientType.EC2);
-        assertEquals(count2, getClientReferenceCount(AwsClientType.EC2));
+        this.host.setTimeoutSeconds(60);
+
+        // Getting a reference to client managers in the test
+        AWSClientManager ec2ClientManager = getClientManager(AwsClientType.EC2);
+        AWSClientManager cloudWatchClientManager = getClientManager(AwsClientType.CLOUD_WATCH);
+        assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.cloudWatchClientReferenceCount + count1, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
 
         // Getting an AWSclient from the client manager
         this.creds = new AuthCredentialsServiceState();
         this.creds.privateKey = this.accessKey;
         this.creds.privateKeyId = this.secretKey;
 
-        this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.regionId,
+        this.client = ec2ClientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.regionId,
                 this.instanceService, t -> {
                     throw new RuntimeException(t);
                 });
-        assertEquals(count1, clientManager.getCacheCount());
+        this.clientCacheCount = ec2ClientManager.getCacheCount();
 
         // Requesting another AWS client with the same set of credentials will not
         // create a new entry in the cache
-        this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.regionId,
+        this.client = ec2ClientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.regionId,
                 this.instanceService, t -> {
                     throw new RuntimeException(t);
                 });
-        assertEquals(count1, clientManager.getCacheCount());
-
-        // Saving a reference to the executor associated with the client to chec
-        // if it is shutdown when no references remain
-
-        ExecutorService executorService = this.client.getExecutorService();
+        assertEquals(this.clientCacheCount, ec2ClientManager.getCacheCount());
 
         // Emulating shutdown of individual services to check that the client resources are
         // cleaned up as expected.
         this.host.sendAndWaitExpectSuccess(
                 Operation.createDelete(UriUtils.buildUri(this.host, AWSInstanceService.SELF_LINK)));
-        assertEquals(count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.ec2ClientReferenceCount, getClientReferenceCount(AwsClientType.EC2));
+
         this.host.sendAndWaitExpectSuccess(
                 Operation.createDelete(UriUtils.buildUri(this.host, AWSStatsService.SELF_LINK)));
-        assertEquals(count0, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
+        assertEquals(this.cloudWatchClientReferenceCount, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
 
         // Returning the references from the test
-        returnClientManager(clientManager, AwsClientType.EC2);
-        assertEquals(count0, getClientReferenceCount(AwsClientType.EC2));
-
-        // Asserts that when all the references to the common cache has been returned back then the
-        // executor is shutDown
-        assertTrue(executorService.isShutdown());
-
+        returnClientManager(ec2ClientManager, AwsClientType.EC2);
+        assertEquals(this.ec2ClientReferenceCount - count1, getClientReferenceCount(AwsClientType.EC2));
     }
 
     @Test
