@@ -103,6 +103,7 @@ import org.joda.time.LocalDateTime;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEBSStorageEnumerationAdapterService;
@@ -275,7 +276,11 @@ public class TestAWSSetupUtils {
                 nextSubnetIp + "/28",
                 zoneId + avalabilityZoneIdentifier));
 
-        return new AwsNicSpecs(network, subnets);
+        NicSpec nicSpec = NicSpec.create()
+                .withSubnetSpec(subnets.get(0))
+                .withStaticIpAssignment();
+
+        return new AwsNicSpecs(network, Collections.singletonList(nicSpec));
     }
 
     /**
@@ -296,7 +301,11 @@ public class TestAWSSetupUtils {
                 AWS_DEFAULT_SUBNET_CIDR,
                 zoneId + avalabilityZoneIdentifier));
 
-        SINGLE_NIC_SPEC = new AwsNicSpecs(network, subnets);
+        NicSpec nicSpec = NicSpec.create()
+                .withSubnetSpec(subnets.get(0))
+                .withStaticIpAssignment();
+
+        SINGLE_NIC_SPEC = new AwsNicSpecs(network, Collections.singletonList(nicSpec));
     }
 
     // Next change: use this also by AzureTestUtil.createDefaultNicStates.
@@ -321,20 +330,96 @@ public class TestAWSSetupUtils {
             }
         }
 
-        public final NetSpec network;
-        public final List<NetSpec> subnets;
+        public static class NicSpec {
 
-        public AwsNicSpecs(NetSpec network, List<NetSpec> subnets) {
+            private IpAssignment ipAssignment;
+            private NetSpec subnetSpec;
+            private String staticIp;
+
+            public static NicSpec create() {
+                return new NicSpec();
+            }
+
+            public NicSpec withSubnetSpec(NetSpec subnetSpec) {
+                this.subnetSpec = subnetSpec;
+                return this;
+            }
+
+            public NicSpec withStaticIpAssignment() {
+
+                if (this.subnetSpec == null) {
+                    throw new IllegalArgumentException("'subnetSpec' can not be empty!");
+                }
+
+                this.ipAssignment = IpAssignment.STATIC;
+
+                try {
+                    this.staticIp = generateBaseOnCIDR();
+                } catch (UnknownHostException e) {
+                    throw new IllegalArgumentException(e);
+                }
+                return this;
+            }
+
+            public NicSpec withDynamicIpAssignment() {
+                this.ipAssignment = IpAssignment.DYNAMIC;
+                this.staticIp = null;
+                return this;
+            }
+
+            public String staticIp() {
+                return this.staticIp;
+            }
+
+            public IpAssignment getIpAssignment() {
+                return this.ipAssignment;
+            }
+
+            private String generateBaseOnCIDR() throws UnknownHostException {
+                assertNotNull(this.subnetSpec.cidr);
+                String[] startingIpAndRange = this.subnetSpec.cidr.split("/");
+                assertEquals(2, startingIpAndRange.length);
+                String startingIp = startingIpAndRange[0];
+                String range = startingIpAndRange[1];
+                String staticIp = generateIp(startingIp, range);
+                return staticIp;
+            }
+
+            private String generateIp(String startingIp, String range) throws UnknownHostException {
+                Random r = new Random();
+                int startingIpAsInt = ByteBuffer
+                        .wrap(InetAddress.getByName(startingIp).getAddress())
+                        .getInt();
+
+                int min = 3;
+                int max = Integer.valueOf(range);
+                // To prevent Address 172.31.48.0 is in subnet's reserved address range
+                int nextSubnetIpAsInt = startingIpAsInt | (r.nextInt((max - 1) - (min + 1)) + min);
+                return InetAddress
+                        .getByAddress(ByteBuffer.allocate(4).putInt(nextSubnetIpAsInt).array())
+                        .getHostAddress();
+            }
+
+            private NicSpec() {
+                // Leave the initialization to create() method.
+            }
+        }
+
+        public final NetSpec network;
+        public final List<NicSpec> nicSpecs;
+
+        public AwsNicSpecs(NetSpec network, List<NicSpec> nicSpecs) {
             this.network = network;
-            this.subnets = subnets;
+            this.nicSpecs = nicSpecs;
         }
 
         public final int numberOfNics() {
-            return this.subnets.size();
+            return this.nicSpecs.size();
         }
     }
 
-    public static void setUpTestVolume(VerificationHost host, AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
+    public static void setUpTestVolume(VerificationHost host, AmazonEC2AsyncClient client,
+            Map<String, Object> awsTestContext, boolean isMock) {
         if (!isMock) {
             String volumeId = createVolume(host, client);
             awsTestContext.put(DISK_KEY, volumeId);
@@ -371,7 +456,11 @@ public class TestAWSSetupUtils {
                     AWS_DEFAULT_SUBNET_CIDR,
                     zoneId + avalabilityZoneIdentifier));
 
-            awsTestContext.put(NIC_SPECS_KEY, new AwsNicSpecs(network, subnets));
+            NicSpec nicSpec = NicSpec.create()
+                    .withSubnetSpec(subnets.get(0))
+                    .withStaticIpAssignment();
+
+            awsTestContext.put(NIC_SPECS_KEY, new AwsNicSpecs(network, Collections.singletonList(nicSpec)));
         }
     }
 
@@ -967,7 +1056,6 @@ public class TestAWSSetupUtils {
             networkState.id = nicSpecs.network.id;
             networkState.name = nicSpecs.network.name;
             networkState.subnetCIDR = nicSpecs.network.cidr;
-
             networkState.authCredentialsLink = endpointState.authCredentialsLink;
             networkState.tenantLinks = endpointState.tenantLinks;
             networkState.endpointLink = endpointState.documentSelfLink;
@@ -984,17 +1072,17 @@ public class TestAWSSetupUtils {
         // Create NIC states.
         List<NetworkInterfaceState> nics = new ArrayList<>();
 
-        for (int i = 0; i < nicSpecs.subnets.size(); i++) {
+        for (int i = 0; i < nicSpecs.nicSpecs.size(); i++) {
 
             // Create subnet state per NIC.
             SubnetState subnetState;
             {
                 subnetState = new SubnetState();
 
-                subnetState.id = nicSpecs.subnets.get(i).id;
-                subnetState.name = nicSpecs.subnets.get(i).name;
-                subnetState.subnetCIDR = nicSpecs.subnets.get(i).cidr;
-                subnetState.zoneId = nicSpecs.subnets.get(i).zoneId;
+                subnetState.id = nicSpecs.nicSpecs.get(i).subnetSpec.id;
+                subnetState.name = nicSpecs.nicSpecs.get(i).subnetSpec.name;
+                subnetState.subnetCIDR = nicSpecs.nicSpecs.get(i).subnetSpec.cidr;
+                subnetState.zoneId = nicSpecs.nicSpecs.get(i).subnetSpec.zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
 
                 subnetState.tenantLinks = endpointState.tenantLinks;
@@ -1007,6 +1095,9 @@ public class TestAWSSetupUtils {
 
             // Create NIC description.
             NetworkInterfaceDescription nicDescription;
+
+            NicSpec nicSpec = nicSpecs.nicSpecs.get(0);
+
             {
                 nicDescription = new NetworkInterfaceDescription();
 
@@ -1017,6 +1108,13 @@ public class TestAWSSetupUtils {
 
                 nicDescription.tenantLinks = endpointState.tenantLinks;
                 nicDescription.endpointLink = endpointState.documentSelfLink;
+
+                if (i == 0) {
+                    // Set static ip only to default (device index=0) NIC
+                    nicDescription.assignment = nicSpec.getIpAssignment();
+                    nicDescription.address = nicSpec.staticIp();
+
+                }
 
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
@@ -1042,6 +1140,14 @@ public class TestAWSSetupUtils {
 
             nicState.securityGroupLinks = new ArrayList<>();
             nicState.securityGroupLinks.add(existingSecurityGroupState.documentSelfLink);
+
+            if (i == 0) {
+                // Set static ip only to default (device index=0) NIC
+                nicState.address = nicSpec.staticIp();
+                // To prevent java.lang.IllegalArgumentException: both networkLink and IP cannot be
+                // set
+                nicState.networkLink = null;
+            }
 
             if (addNewSecurityGroup) {
                 // Create security group state for a new security group

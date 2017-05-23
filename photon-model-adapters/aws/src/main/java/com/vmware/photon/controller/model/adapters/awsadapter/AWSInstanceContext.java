@@ -379,6 +379,7 @@ public class AWSInstanceContext
             primaryNic.nicSpec = new InstanceNetworkInterfaceSpecification()
                     .withDeviceIndex(primaryNic.nicStateWithDesc.deviceIndex)
                     .withSubnetId(primaryNic.subnet.getSubnetId())
+                    .withPrivateIpAddress(primaryNic.nicStateWithDesc.address)
                     .withAssociatePublicIpAddress(
                             primaryNic.nicStateWithDesc.description.assignPublicIpAddress);
             if (primaryNic.securityGroupIds.isEmpty()) {
