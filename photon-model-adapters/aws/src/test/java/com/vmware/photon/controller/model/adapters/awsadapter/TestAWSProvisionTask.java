@@ -670,6 +670,11 @@ public class TestAWSProvisionTask {
                     "Additional disk type in diskstate is not same as the type of the volume in aws",
                     diskState.customProperties.get(VOLUME_TYPE), volume.getVolumeType());
 
+            //assert encryption status
+            assertEquals("Additional disk encryption status is not matching the "
+                            + "actual encryption status of the disk on aws", diskState.encrypted,
+                    volume.getEncrypted());
+
             if (diskState.customProperties.containsKey(DISK_IOPS)) {
                 assertEquals("Additional disk speed in diskstate is not same as the speed of the"
                                 + " volume in aws",

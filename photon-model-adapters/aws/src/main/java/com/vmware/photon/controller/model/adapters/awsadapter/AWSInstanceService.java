@@ -474,6 +474,9 @@ public class AWSInstanceService extends StatelessService {
                                 Integer.parseInt(diskState.customProperties.get(DISK_IOPS)));
                     }
 
+                    diskState.encrypted = diskState.encrypted == null ? false : diskState.encrypted;
+                    ebsBlockDevice.setEncrypted(diskState.encrypted);
+
                     //Assumption:Total number of addititonal disks does not exceed AWS_DEVICE_NAMES.size
                     String deviceName = availableDiskNames.get(0);
                     availableDiskNames.remove(0);

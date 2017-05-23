@@ -921,6 +921,8 @@ public class TestAWSSetupUtils {
             disk.tenantLinks = endpointState.tenantLinks;
             disk.endpointLink = endpointState.documentSelfLink;
 
+            disk.encrypted = (i == 0) ? true : null;
+
             disk = TestUtils.doPost(host, disk, DiskService.DiskState.class,
                     UriUtils.buildUri(host, DiskService.FACTORY_LINK));
             disks.add(disk);
