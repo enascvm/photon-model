@@ -17,6 +17,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertNotNull;
 
+import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME;
+import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -32,7 +35,9 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -47,6 +52,7 @@ import com.vmware.xenon.services.common.TenantService;
         EndpointServiceTest.HandleStartTest.class,
         EndpointServiceTest.HandlePatchTest.class,
         EndpointServiceTest.HandlePatchValidationsTest.class,
+        EndpointServiceTest.HandleDeleteTest.class,
         EndpointServiceTest.QueryTest.class })
 public class EndpointServiceTest extends Suite {
 
@@ -188,6 +194,28 @@ public class EndpointServiceTest extends Suite {
 
             assertThat(updatedReturnState.name, is(patchState.name));
             assertThat(updatedReturnState.desc, is(patchState.desc));
+        }
+    }
+
+    public static class HandleDeleteTest extends BaseModelTest {
+        @Test
+        public void testDelete() throws Throwable {
+            EndpointService.EndpointState startState = buildValidStartState();
+            EndpointService.EndpointState returnState = postServiceSynchronously(
+                    EndpointService.FACTORY_LINK,
+                    startState, EndpointState.class);
+
+            Operation deleteOperation = Operation
+                    .createDelete(UriUtils.buildUri(this.host, returnState.documentSelfLink));
+            // custom header is not set in delete request, expect failure
+            this.host.sendAndWaitExpectFailure(deleteOperation);
+
+            // set custom header
+            deleteOperation.addRequestHeader(ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME,
+                    ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE);
+            // custom header is set in delete request, expect success
+            this.host.sendAndWaitExpectSuccess(deleteOperation);
+
         }
     }
 

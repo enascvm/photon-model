@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME;
+import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE;
+
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
@@ -287,6 +290,9 @@ public class EndpointRemovalTaskService
         Operation cdsOp = Operation.createDelete(this, endpoint.computeDescriptionLink);
         Operation csOp = Operation.createDelete(this, endpoint.computeLink);
         Operation epOp = Operation.createDelete(this, endpoint.documentSelfLink);
+        // custom header identifier for endpoint service to validate before deleting endpoint
+        epOp.addRequestHeader(ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME,
+                ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE);
 
         OperationJoin.create(crdOp, cdsOp, csOp, epOp).setCompletion((ops, exc) -> {
             if (exc != null) {
