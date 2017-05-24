@@ -272,6 +272,12 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                         imageAfterFirstEnum.endpointLink);
                 Assert.assertNull("Public image must NOT have tenantLinks set.",
                         imageAfterFirstEnum.tenantLinks);
+
+                Assert.assertNotNull("Disk configurations should not be null", imageAfterFirstEnum
+                        .diskConfigs);
+
+                Assert.assertTrue("There should be at least one disk configuration for boot disk",
+                        imageAfterFirstEnum.diskConfigs.size() > 0);
             }
         }
 
@@ -307,6 +313,12 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
                 Assert.assertTrue("Image name is not updated correctly after second enum.",
                         !imageAfterSecondEnum.name.contains("OVERRIDE"));
+
+                Assert.assertNotNull("Disk configurations should not be null", imageAfterSecondEnum
+                        .diskConfigs);
+
+                Assert.assertTrue("There should be at least one disk configuration for boot disk",
+                        imageAfterSecondEnum.diskConfigs.size() > 0);
             }
         }
     }

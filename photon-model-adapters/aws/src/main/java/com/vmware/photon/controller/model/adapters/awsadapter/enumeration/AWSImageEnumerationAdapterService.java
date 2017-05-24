@@ -14,15 +14,19 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.Filter;
@@ -274,6 +278,18 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             holder.localState.name = remoteImage.getName();
             holder.localState.description = remoteImage.getDescription();
             holder.localState.osFamily = remoteImage.getPlatform();
+
+            holder.localState.diskConfigs = new ArrayList<>();
+            for (BlockDeviceMapping blockDeviceMapping : remoteImage.getBlockDeviceMappings()) {
+                ImageState.DiskConfiguration diskConfig = new ImageState.DiskConfiguration();
+                diskConfig.id = blockDeviceMapping.getDeviceName();
+                diskConfig.capacityMBytes = blockDeviceMapping.getEbs().getVolumeSize() * 1024;
+                diskConfig.encrypted = blockDeviceMapping.getEbs().getEncrypted();
+                diskConfig.persistent = true;
+                diskConfig.properties = new HashMap<>();
+                diskConfig.properties.put(VOLUME_TYPE, blockDeviceMapping.getEbs().getVolumeType());
+                holder.localState.diskConfigs.add(diskConfig);
+            }
 
             for (Tag remoteImageTag : remoteImage.getTags()) {
                 holder.remoteTags.put(remoteImageTag.getKey(), remoteImageTag.getValue());

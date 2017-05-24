@@ -18,10 +18,16 @@ import static java.util.Collections.singletonList;
 
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
+import java.util.List;
+import java.util.Map;
+
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import io.netty.util.internal.StringUtil;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -44,6 +50,43 @@ public class ImageService extends StatefulService {
         public static final String FIELD_NAME_DESCRIPTION = "description";
         public static final String FIELD_NAME_OS_FAMILY = "osFamily";
         public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
+
+        /**
+         * Represents the properties of a data disk.
+         */
+        public static class DiskConfiguration {
+            /**
+             * Identifier of the disk.
+             */
+            public String id;
+
+            /**
+             * Size of the disk in Mega Bytes.
+             */
+            public Integer capacityMBytes;
+
+            /**
+             * Persistence capability of the disk across reboots.
+             */
+            public Boolean persistent;
+
+            /**
+             * Encryption status of the disk.
+             */
+            public Boolean encrypted;
+
+            /**
+             * Map to capture endpoint specific disk properties.
+             */
+            public Map<String,String> properties;
+        }
+
+        /**
+         * Captures the properties of each disk specified in the image.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_17)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public List<DiskConfiguration> diskConfigs;
 
         /**
          * User-friendly description of the image.

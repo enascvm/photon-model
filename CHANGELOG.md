@@ -18,6 +18,7 @@
 * Restrict endpoint deletion to only via EndpointRemovalTask.
 * Move 'regionId' from individual resource level to base resource.
 * Move creationTime field from individual resources to base resource.
+* ImageState is extended to enumerate the properties of each disk configured in the image.
 
 ## 0.6.16
 
