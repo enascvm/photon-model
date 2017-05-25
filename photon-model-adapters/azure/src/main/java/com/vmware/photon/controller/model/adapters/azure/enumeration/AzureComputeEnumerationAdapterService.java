@@ -170,6 +170,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         private NetworkInterfaceState state;
         private String macAddress;
         private String publicIp;
+        private String publicDnsName;
     }
 
     /**
@@ -1054,6 +1055,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             nic.address = nicIPConf.privateIPAddress();
                             if (nicIPConf.publicIPAddress() == null) {
                                 nicMeta.publicIp = null;
+                                nicMeta.publicDnsName = null;
                                 addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
                             } else {
                                 // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
@@ -1065,6 +1067,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                             @Override
                                             public void call(PublicIPAddress publicIPAddress) {
                                                 nicMeta.publicIp = publicIPAddress.ipAddress();
+                                                if (publicIPAddress.inner().dnsSettings() != null) {
+                                                    nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
+                                                } else {
+                                                    nicMeta.publicDnsName = null;
+                                                }
                                                 addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
                                             }
                                         });
@@ -1094,6 +1101,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             state.address = nicIPConf.privateIPAddress();
                             if (nicIPConf.publicIPAddress() == null) {
                                 nicMeta.publicIp = null;
+                                nicMeta.publicDnsName = null;
                                 addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
                             } else {
                                 // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
@@ -1105,6 +1113,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                             @Override
                                             public void call(PublicIPAddress publicIPAddress) {
                                                 nicMeta.publicIp = publicIPAddress.ipAddress();
+                                                if (publicIPAddress.inner().dnsSettings() != null) {
+                                                    nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
+                                                } else {
+                                                    nicMeta.publicDnsName = null;
+                                                }
                                                 addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
                                             }
                                         });
@@ -1296,6 +1309,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         .id());
         if (nicMeta != null) {
             computeState.address = nicMeta.publicIp;
+            computeState.hostName = nicMeta.publicDnsName;
             computeState.primaryMAC = nicMeta.macAddress;
             networkLinks.add(nicMeta.state.documentSelfLink);
         }
