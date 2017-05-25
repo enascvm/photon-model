@@ -1110,15 +1110,9 @@ public class AzureInstanceService extends StatelessService {
 
         sendWithDeferredResult(
                 Operation.createPatch(ctx.computeRequest.resourceReference)
-                        .setBody(cs)
-                        .setReferer(getHost().getUri()))
-                .whenComplete((operation, exc) -> {
-                    if (exc != null) {
-                        handleError(ctx, exc);
-                        return;
-                    }
-                    handleAllocation(ctx, nextStage);
-                });
+                        .setBody(cs))
+                .thenApply(op -> ctx)
+                .whenComplete(thenAllocation(ctx, nextStage));
     }
 
     /**
@@ -1210,9 +1204,9 @@ public class AzureInstanceService extends StatelessService {
                 && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
             // custom boot disk size is set then use that value. If value more than maximum
             // allowed then proceed with default size.
-            int diskSizeInGB = (int) ctx.bootDisk.capacityMBytes / 1024; // Converting MBs to GBs
-            // and
-            // casting as int
+
+            // Converting MBs to GBs and casting as int
+            int diskSizeInGB = (int) ctx.bootDisk.capacityMBytes / 1024;
             osDisk.withDiskSizeGB(diskSizeInGB);
         } else {
             logInfo(String.format("Proceeding with Default OS Disk Size defined by VHD %s",

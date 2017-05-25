@@ -132,7 +132,6 @@ public class AzureUtils {
         /**
          * The max delay. Defaults to 10 seconds.
          * <p>
-         * <p>
          * Once we exceed this value no more exponential delays are calculated.
          */
         public long maxDelayMillis = TimeUnit.SECONDS.toMillis(10);
