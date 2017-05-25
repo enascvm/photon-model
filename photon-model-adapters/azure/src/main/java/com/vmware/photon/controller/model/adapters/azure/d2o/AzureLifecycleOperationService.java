@@ -89,7 +89,7 @@ public class AzureLifecycleOperationService extends StatelessService {
             }
         };
         ResourceOperationUtils.registerResourceOperation(this,
-                getResourceOperationSpecs(), completionHandler);
+                completionHandler, getResourceOperationSpecs());
     }
 
     private Collection<ResourceOperationSpec> getResourceOperationSpecs() {

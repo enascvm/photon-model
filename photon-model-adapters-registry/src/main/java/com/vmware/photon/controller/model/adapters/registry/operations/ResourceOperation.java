@@ -27,7 +27,7 @@ public enum ResourceOperation {
 
     SHUTDOWN("Shutdown", "Shutdown", "Shutdown guest OS of Compute Resource"),
 
-    RESET("Reset", "Reset", "Suspend Compute Resource");
+    RESET("Reset", "Reset", "Reset Compute Resource");
 
     public final String operation;
 

@@ -52,7 +52,7 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
                 startPost.complete();
             }
         };
-        ResourceOperationUtils.registerResourceOperation(this, getResourceOperationSpecs(), handler);
+        ResourceOperationUtils.registerResourceOperation(this, handler, getResourceOperationSpecs());
     }
 
     @Override

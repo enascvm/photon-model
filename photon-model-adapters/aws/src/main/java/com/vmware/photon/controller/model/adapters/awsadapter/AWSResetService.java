@@ -13,16 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
-
 import java.util.ArrayList;
 import java.util.List;
 
-import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.RebootInstancesRequest;
-import com.amazonaws.services.ec2.model.RebootInstancesResult;
+import com.amazonaws.services.ec2.model.StartInstancesRequest;
+import com.amazonaws.services.ec2.model.StartInstancesResult;
+import com.amazonaws.services.ec2.model.StopInstancesRequest;
+import com.amazonaws.services.ec2.model.StopInstancesResult;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
@@ -41,21 +41,17 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.StatelessService;
 
-/**
- * Adapter to Restart EC2 instance.
- * An EC2 instance reboot is equivalent to an operating system reboot. In most cases,
- * it takes only a few minutes to reboot your instance. When you reboot an instance,
- * it remains on the same physical host, so your instance keeps its public DNS name
- * (IPv4), private IPv4 address, IPv6 address (if applicable), and any data on its
- * instance store volumes
- */
-
-public class AWSRebootService extends StatelessService {
+public class AWSResetService extends StatelessService {
     public static final String SELF_LINK = ResourceOperationSpecService.buildDefaultAdapterLink(
             EndpointType.aws.name(), ResourceType.COMPUTE,
-            ResourceOperation.REBOOT.name());
+            ResourceOperation.RESET.name());
 
     private AWSClientManager clientManager;
+
+    public AWSResetService() {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+    }
 
     @Override
     public void handleStart(Operation startPost) {
@@ -70,34 +66,67 @@ public class AWSRebootService extends StatelessService {
                 completionHandler, getResourceOperationSpecs());
     }
 
-    public AWSRebootService() {
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
-    }
-
-    private void reboot(AmazonEC2AsyncClient client, ResourceOperationRequest pr,
+    private void reset(AmazonEC2AsyncClient client, ResourceOperationRequest pr,
                         DefaultAdapterContext c) {
         if (!c.child.powerState.equals(ComputeService.PowerState.ON)) {
-            logInfo("Cannot Reboot an EC2 instance in powered off state." +
-                    "The machine should be powered on first");
+            logWarning(() -> String.format("Cannot perform a reset on this EC2 instance. " +
+                            "The machine should be in powered on state"));
             c.taskManager.patchTaskToFailure(new IllegalStateException("Incorrect power state. Expected the machine " +
                     "to be powered on "));
             return;
         }
 
-        RebootInstancesRequest request  = new RebootInstancesRequest();
-        request.withInstanceIds(c.child.id);
-        client.rebootInstancesAsync(request,
-                new AsyncHandler<RebootInstancesRequest, RebootInstancesResult>() {
+        // The stop action for reset is a force stop. So we use the withForce method to set the force parameter to TRUE
+        // This is similar to unplugging the machine from the power circuit.
+        // The OS and the applications are forcefully stopped.
+        StopInstancesRequest stopRequest  = new StopInstancesRequest();
+        stopRequest.withInstanceIds(c.child.id).withForce(Boolean.TRUE);
+        client.stopInstancesAsync(stopRequest,
+                new AWSAsyncHandler<StopInstancesRequest, StopInstancesResult>() {
                     @Override
-                    public void onSuccess(RebootInstancesRequest request,
-                                          RebootInstancesResult result) {
-                        c.taskManager.finishTask();
+                    protected void handleError(Exception e) {
+                        c.taskManager.patchTaskToFailure(e);
                     }
 
                     @Override
-                    public void onError(Exception e) {
+                    protected void handleSuccess(StopInstancesRequest request, StopInstancesResult result) {
+
+                        AWSUtils.waitForTransitionCompletion(getHost(),
+                                result.getStoppingInstances(), "stopped", client, (is, e) -> {
+                                    if (e != null) {
+                                        onError(e);
+                                        return;
+                                    } else {
+                                        //Instances will be started only if they're successfully stopped
+                                        startInstance(client,c);
+                                    }
+                                });
+                    }
+                });
+    }
+
+    private void startInstance(AmazonEC2AsyncClient client, DefaultAdapterContext c) {
+        StartInstancesRequest startRequest  = new StartInstancesRequest();
+        startRequest.withInstanceIds(c.child.id);
+        client.startInstancesAsync(startRequest,
+                new AWSAsyncHandler<StartInstancesRequest, StartInstancesResult>() {
+
+                    @Override
+                    protected void handleError(Exception e) {
                         c.taskManager.patchTaskToFailure(e);
+                    }
+
+                    @Override
+                    protected void handleSuccess(StartInstancesRequest request, StartInstancesResult result) {
+                        AWSUtils.waitForTransitionCompletion(getHost(),
+                                result.getStartingInstances(), "running",
+                                client, (is, e) -> {
+                                    if (e == null) {
+                                        c.taskManager.finishTask();
+                                    } else {
+                                        c.taskManager.patchTaskToFailure(e);
+                                    }
+                                });
                     }
                 });
     }
@@ -111,11 +140,11 @@ public class AWSRebootService extends StatelessService {
         ResourceOperationRequest request = op.getBody(ResourceOperationRequest.class);
         op.complete();
 
-        logInfo("Handle operation %s for compute %s.",
-                request.operation, request.resourceLink());
+        logInfo(() -> String.format("Handle operation %s for compute %s.",
+                request.operation, request.resourceLink()));
 
         if (request.isMockRequest) {
-            updateComputeState(request, new DefaultAdapterContext(this, request));
+            updateComputeState(new DefaultAdapterContext(this, request));
         } else {
             new DefaultAdapterContext(this, request)
                     .populateBaseContext(BaseAdapterStage.VMDESC)
@@ -124,7 +153,7 @@ public class AWSRebootService extends StatelessService {
                                 c.parentAuth, c.child.description.regionId, this,
                                 (t) -> c.taskManager.patchTaskToFailure(t));
                         if (client != null) {
-                            reboot(client,request,c);
+                            reset(client,request,c);
                         }
                         // if the client is found to be null, it implies the task is already patched to
                         // failure in the catch block of getOrCreateEC2Client method (failConsumer.accept()).
@@ -134,23 +163,23 @@ public class AWSRebootService extends StatelessService {
     }
 
     private List<ResourceOperationSpec> getResourceOperationSpecs() {
-        List<ResourceOperationSpec> specs = new ArrayList<>();
         ResourceOperationSpec spec = new ResourceOperationSpec();
         spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = EndpointType.aws.name();
         spec.resourceType = ResourceType.COMPUTE;
-        spec.operation = ResourceOperation.REBOOT.operation;
-        spec.name = ResourceOperation.REBOOT.displayName;
-        spec.description = ResourceOperation.REBOOT.description;
-        spec.targetCriteria = TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
+        spec.operation = ResourceOperation.RESET.operation;
+        spec.name = ResourceOperation.RESET.displayName;
+        spec.description = ResourceOperation.RESET.description;
+        spec.targetCriteria = ResourceOperationUtils.TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
+        List<ResourceOperationSpec> specs = new ArrayList<>();
         specs.add(spec);
         return specs;
     }
 
-    private void updateComputeState(ResourceOperationRequest ror, DefaultAdapterContext c) {
+    private void updateComputeState(DefaultAdapterContext c) {
         ComputeState state = new ComputeState();
         state.powerState = ComputeService.PowerState.ON;
-        Operation.createPatch(ror.resourceReference)
+        Operation.createPatch(c.resourceReference)
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     if (e != null) {

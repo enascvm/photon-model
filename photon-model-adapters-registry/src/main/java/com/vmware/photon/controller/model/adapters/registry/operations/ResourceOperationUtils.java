@@ -274,16 +274,15 @@ public class ResourceOperationUtils {
      * handle as input and submits them to the ResourceOperationSpecService's Factory. This call
      * should generally be part of handleStart method of the adapter/service, preferably near the
      * end after any service specification configuration settings.
-     *
      * @param service
      *        the resourceOperation service/adapter
-     * @param specs
-     *        list of intended the ResourceOperationSpec's to register with the service
      * @param handler
      *        the operation completion handler for making the success/failure actions
+     * @param specs
+     *        list of intended the ResourceOperationSpec's to register with the service
      */
-    public static void registerResourceOperation(Service service,
-            Collection<ResourceOperationSpec> specs, CompletionHandler handler) {
+    public static void registerResourceOperation(Service service, CompletionHandler handler,
+            Collection<ResourceOperationSpec> specs) {
         if (specs == null || specs.isEmpty()) {
             service.getHost().log(Level.FINE,
                     "No ResourceOperationSpec to register by %s",

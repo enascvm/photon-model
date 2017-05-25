@@ -69,6 +69,8 @@ import com.amazonaws.services.ec2.model.DeleteSnapshotRequest;
 import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
 import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
 import com.amazonaws.services.ec2.model.DeleteVpcRequest;
+import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest;
+import com.amazonaws.services.ec2.model.DescribeInstanceStatusResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
@@ -1584,6 +1586,17 @@ public class TestAWSSetupUtils {
         host.waitFor("Waiting to get response from AWS ", () -> {
             return enumerationHandler.responseReceived;
         });
+    }
+
+    /**
+     * Get the state of the EC2 instance.
+     */
+    public static String getVMState(AmazonEC2Client client,String id) {
+        DescribeInstanceStatusRequest request = new DescribeInstanceStatusRequest();
+        request.withInstanceIds(id);
+        request.withIncludeAllInstances(Boolean.TRUE);
+        DescribeInstanceStatusResult result = client.describeInstanceStatus(request);
+        return result.getInstanceStatuses().get(0).getInstanceState().getName();
     }
 
     /**

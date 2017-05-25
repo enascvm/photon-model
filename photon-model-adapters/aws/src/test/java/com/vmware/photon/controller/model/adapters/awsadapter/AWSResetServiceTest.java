@@ -13,9 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
@@ -24,7 +22,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteSecurityGroupUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsInstancesByIds;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getCompute;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getSecurityGroupsIdUsingEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getVMState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
@@ -47,9 +45,7 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 
 import org.junit.After;
@@ -89,14 +85,7 @@ import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
-/**
- * Test to provision a VM instance on AWS and tear it down The test exercises the AWS instance
- * adapter to create the VM All public fields below can be specified via command line arguments If
- * the 'isMock' flag is set to true the test runs the adapter in mock mode and does not actually
- * create a VM. Minimally the accessKey and secretKey for AWS must be specified.
- *
- */
-public class AWSRebootServiceTest {
+public class AWSResetServiceTest {
 
     private static final String INSTANCEID_PREFIX = "i-";
 
@@ -203,34 +192,34 @@ public class AWSRebootServiceTest {
                 this.awsMockEndpointReference, null /*tags*/);
     }
 
-    // Test the reboot operation.
+    // Test the reset operation.
     @Test
-    public void testReboot() throws Throwable {
+    public void testReset() throws Throwable {
+
         provisionSingleAWS();
 
         // check that the VM has been created
         ProvisioningUtils.queryComputeInstances(this.host, 2);
         ComputeState compute = getCompute(this.host, this.vmState.documentSelfLink);
         if (!this.isMock) {
-
             List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
                     Collections.singletonList(compute.id));
             Instance instance = instances.get(0);
             ComputeState vm = this.host.getServiceState(null,
                     ComputeState.class,
                     UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
-            assertAndSetVMSecurityGroupsToBeDeleted(instance,vm);
+            setVMSecurityGroupsToBeDeleted(instance,vm);
         }
 
         String taskLink = UUID.randomUUID().toString();
         ResourceOperationRequest request = new ResourceOperationRequest();
         request.isMockRequest = this.isMock;
-        request.operation = ResourceOperation.REBOOT.operation;
+        request.operation = ResourceOperation.RESET.operation;
         request.payload = new HashMap<>();
         request.resourceReference =  UriUtils.buildUri(this.host, compute.documentSelfLink);
         request.taskReference = UriUtils.buildUri(this.host, taskLink);
-        TestContext ctx = this.host.testCreate(2);
 
+        TestContext ctx = this.host.testCreate(1);
         createTaskResultListener(this.host, taskLink, (u) -> {
             if (u.getAction() != Service.Action.PATCH) {
                 return false;
@@ -244,23 +233,45 @@ public class AWSRebootServiceTest {
             }
             return true;
         });
-
-        Operation rebootOp = Operation.createPatch(UriUtils.buildUri(this.host,AWSRebootService.SELF_LINK))
+        TestContext ctx2 = this.host.testCreate(1);
+        Operation resetOp = Operation.createPatch(UriUtils.buildUri(this.host,AWSResetService.SELF_LINK))
                 .setBody(request)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o,e) -> {
                     if (e != null) {
-                        ctx.failIteration(e);
+                        ctx2.failIteration(e);
                         return;
                     }
-                    ctx.completeIteration();
+                    ctx2.completeIteration();
                 });
-        this.host.send(rebootOp);
-        ctx.await();
-        ComputeState vm = this.host.getServiceState(null,
-                ComputeState.class,
-                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
-        assertEquals(ComputeService.PowerState.ON, vm.powerState);
+        this.host.send(resetOp);
+        ctx2.await();
+
+        // The test validation flow is based on the Instance lifecycle diagram given
+        // in EC2 documentation
+        if (!this.isMock) {
+            // Waiting for power off
+            this.host.waitFor("Timed out waiting for EC2 to power off", () -> {
+                String state = getVMState(this.client, compute.id);
+                if (("stopping".equals(state) || "stopped".equals(state))) {
+                    this.host.log(Level.INFO, "EC2 is being powered off");
+                    return true;
+                } else {
+                    return false;
+                }
+            });
+
+            // Waiting for power on
+            this.host.waitFor("Timed out waiting for EC2 to power on", () -> {
+                String state = getVMState(this.client, compute.id);
+                if ("running".equals(state)) {
+                    this.host.log(Level.INFO, "EC2 is being powered on");
+                    return true;
+                } else {
+                    return false;
+                }
+            });
+        }
     }
 
     private void provisionSingleAWS() throws Throwable {
@@ -297,7 +308,9 @@ public class AWSRebootServiceTest {
     }
 
     private void deleteProvisionedVMs() throws Throwable  {
-
+        if (this.isMock) {
+            return;
+        }
         // store the network links and disk links for removal check later
         List<String> resourcesToDelete = new ArrayList<>();
         if (this.vmState.diskLinks != null) {
@@ -309,9 +322,9 @@ public class AWSRebootServiceTest {
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
 
         if (!this.isMock && !vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
-            SecurityGroup securityGroup = new AWSSecurityGroupClient(this.client)
-                    .getSecurityGroup(TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
-                    (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
+            SecurityGroup securityGroup  = new AWSSecurityGroupClient(this.client)
+                    .getSecurityGroup(AWS_DEFAULT_GROUP_NAME, (String) this
+                            .awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
             if (securityGroup != null) {
                 deleteSecurityGroupUsingEC2Client(this.client, this.host, securityGroup.getGroupId());
             }
@@ -324,14 +337,11 @@ public class AWSRebootServiceTest {
         this.sgToCleanUp = null;
     }
 
-    private void assertAndSetVMSecurityGroupsToBeDeleted(Instance instance, ComputeState vm) {
+    private void setVMSecurityGroupsToBeDeleted(Instance instance, ComputeState vm) {
         // This assert is only suitable for real (non-mocking env).
         if (this.isMock) {
             return;
         }
-
-        this.host.log(Level.INFO, "%s: Assert security groups configuration for [%s] VM",
-                this.currentTestName.getMethodName(), this.vmState.name);
 
         // Get the SecurityGroupStates that were provided in the request ComputeState
         Collector<SecurityGroupState, ?, Map<String, SecurityGroupState>> convertToMap =
@@ -353,41 +363,10 @@ public class AWSRebootServiceTest {
                 // collect security group states in a map with key = SG name
                 .collect(convertToMap);
 
-        // Compare ComputeState after provisioning to the ComputeState in the request
-        assertNotNull("Instance should have security groups attached.",
-                instance.getSecurityGroups());
-        // Provisioned Instance should have the same number of SecurityGroups as requested
-        assertEquals(instance.getSecurityGroups().size(), currentSGNamesToStates.size());
-
         for (SecurityGroupState currentSGState : currentSGNamesToStates.values()) {
-            // Get corresponding requested state
-            GroupIdentifier provisionedGroupIdentifier = null;
-            for (GroupIdentifier awsGroupIdentifier : instance.getSecurityGroups()) {
-                if (awsGroupIdentifier.getGroupId().equals(currentSGState.id)) {
-                    provisionedGroupIdentifier = awsGroupIdentifier;
-                    break;
-                }
-            }
-
             // Ensure that the requested SecurityGroup was actually provisioned
-            assertNotNull(provisionedGroupIdentifier);
-
             if (currentSGState.name.contains(TestAWSSetupUtils.AWS_NEW_GROUP_PREFIX)) {
-
                 this.sgToCleanUp = currentSGState.id;
-
-                SecurityGroup awsSecurityGroup = getSecurityGroupsIdUsingEC2Client(this.client, provisionedGroupIdentifier.getGroupId());
-
-                assertNotNull(awsSecurityGroup);
-                // Validate rules are correctly created as requested
-                IpPermission awsIngressRule = awsSecurityGroup.getIpPermissions().get(0);
-                IpPermission awsEgressRule = awsSecurityGroup.getIpPermissionsEgress().get(1);
-                assertNotNull(awsIngressRule);
-                assertNotNull(awsEgressRule);
-                assertEquals("Error in created ingress rule", awsIngressRule.getIpProtocol(), currentSGState.ingress.get(0).protocol);
-                assertEquals("Error in created ingress rule", awsIngressRule.getIpv4Ranges().get(0).getCidrIp(), currentSGState.ingress.get(0).ipRangeCidr);
-                assertEquals("Error in created egress rule", awsEgressRule.getIpProtocol(), currentSGState.egress.get(0).protocol);
-                assertEquals("Error in created egress rule", awsEgressRule.getIpv4Ranges().get(0).getCidrIp(), currentSGState.egress.get(0).ipRangeCidr);
             }
         }
     }
@@ -402,12 +381,10 @@ public class AWSRebootServiceTest {
                 }
             }
         };
-
         Operation startOp = Operation
                 .createPost(host, taskLink)
                 .setCompletion(this.host.getCompletion())
                 .setReferer(this.host.getReferer());
         this.host.startService(startOp, service);
-
     }
 }
