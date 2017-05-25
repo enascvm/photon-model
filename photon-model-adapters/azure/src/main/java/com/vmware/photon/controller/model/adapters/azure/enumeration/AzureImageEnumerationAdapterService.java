@@ -223,13 +223,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             DeferredResult<RemoteResourcesPage> defaultImagesPage = loadDefaultImagesPage();
 
-            if (defaultImagesPage != null) {
-                return defaultImagesPage;
-            }
+            return defaultImagesPage;
 
-            // Second load standard images which might be time consuming.
 
-            return loadStandardImagesPage();
+            // TODO: For now return only "default images".
+            // A flag that controls when to return the "standard" images will be introduced.
+            // Jira VCOM-911? is tracking this.
         }
 
         private DeferredResult<RemoteResourcesPage> loadDefaultImagesPage() {
