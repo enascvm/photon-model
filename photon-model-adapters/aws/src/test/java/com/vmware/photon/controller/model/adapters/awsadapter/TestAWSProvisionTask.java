@@ -17,7 +17,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
@@ -656,9 +655,6 @@ public class TestAWSProvisionTask {
 
             assertNotNull("Additional Disk should contain atleast one custom property",
                     diskState.customProperties);
-
-            assertTrue("'additional=true' custom property is not added for the additional disk",
-                    diskState.customProperties.containsKey(ADDITIONAL_DISK));
 
             assertTrue("deviceName is missing from the custom properties", diskState
                     .customProperties.containsKey(DEVICE_NAME));

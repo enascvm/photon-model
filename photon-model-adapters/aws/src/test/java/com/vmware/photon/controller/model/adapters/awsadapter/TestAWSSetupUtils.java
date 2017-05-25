@@ -17,7 +17,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
@@ -118,7 +117,6 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
-import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
@@ -832,8 +830,8 @@ public class TestAWSSetupUtils {
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.name = DEFAULT_ROOT_DISK_NAME;
-        rootDisk.type = DiskType.HDD;
-        rootDisk.sourceImageReference = URI.create(imageId + "dummy");
+        rootDisk.bootOrder = 1;
+        rootDisk.sourceImageReference = URI.create(imageId);
         rootDisk.imageLink = bootImage.documentSelfLink;
         rootDisk.bootConfig = new DiskState.BootConfig();
         rootDisk.bootConfig.label = DEFAULT_CONFIG_LABEL;
@@ -897,8 +895,8 @@ public class TestAWSSetupUtils {
     private static List<DiskState> getAdditionalDiskConfiguration(VerificationHost host,
             EndpointState endpointState) throws Throwable {
         List<String[]> additionalDiskConfigs = new ArrayList<>();
-        String[] disk1properties = { "ebs", "gp2", "true" };
-        String[] disk2properties = { "ebs", "io1", "true", "600" };
+        String[] disk1properties = { "ebs", "gp2" };
+        String[] disk2properties = { "ebs", "io1", "600" };
         additionalDiskConfigs.add(disk1properties);
         additionalDiskConfigs.add(disk2properties);
 
@@ -907,8 +905,8 @@ public class TestAWSSetupUtils {
             DiskState disk = new DiskState();
             disk.id = UUID.randomUUID().toString();
             disk.documentSelfLink = disk.id;
+            disk.bootOrder = i + 2;
             disk.name = "Test Volume" + i;
-            disk.type = DiskType.HDD;
             disk.sourceImageReference = URI.create(imageId);
             disk.capacityMBytes = ADDITIONAL_DISK_SIZE_IN_MEBI_BYTES;
 
@@ -916,9 +914,8 @@ public class TestAWSSetupUtils {
             disk.customProperties = new HashMap<>();
             disk.customProperties.put(DEVICE_TYPE, additionalDiskConfigs.get(i)[0]);
             disk.customProperties.put(VOLUME_TYPE, additionalDiskConfigs.get(i)[1]);
-            disk.customProperties.put(ADDITIONAL_DISK, additionalDiskConfigs.get(i)[2]);
-            if (additionalDiskConfigs.get(i).length > 3) {
-                disk.customProperties.put(DISK_IOPS, additionalDiskConfigs.get(i)[3]);
+            if (additionalDiskConfigs.get(i).length > 2) {
+                disk.customProperties.put(DISK_IOPS, additionalDiskConfigs.get(i)[2]);
             }
 
             disk.tenantLinks = endpointState.tenantLinks;

@@ -17,16 +17,13 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CREATE_CONTEXT_PROP_NAME;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -48,7 +45,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredRe
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
-import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.DeferredResult;
@@ -92,9 +88,9 @@ public class AWSInstanceContext
 
     public AmazonEC2AsyncClient amazonEC2Client;
 
-    public Map<DiskType, DiskState> childDisks = new HashMap<>();
+    public DiskState bootDisk;
 
-    public List<DiskState> additionalDisks = new ArrayList<>();
+    public List<DiskState> childDisks = new ArrayList<>();
 
     public String bootDiskImageNativeId;
 
@@ -595,15 +591,13 @@ public class AWSInstanceContext
         return DeferredResult.allOf(getStatesDR)
                 .thenAccept(diskStates -> diskStates.forEach(
                         diskState -> {
-                            if (diskState.customProperties != null &&
-                                    diskState.customProperties.containsKey(ADDITIONAL_DISK) &&
-                                    Boolean.valueOf(
-                                            diskState.customProperties.get(ADDITIONAL_DISK))) {
-                                context.additionalDisks.add(diskState);
+                            if (diskState.bootOrder == 1) {
+                                context.bootDisk = diskState;
                             } else {
-                                context.childDisks.put(diskState.type, diskState);
+                                context.childDisks.add(diskState);
                             }
-                        }))
+                        }
+                ))
                 .handle((all, exc) -> {
                     if (exc != null) {
                         String msg = String.format(
@@ -621,7 +615,7 @@ public class AWSInstanceContext
     private DeferredResult<AWSInstanceContext> getBootDiskImageNativeId(
             AWSInstanceContext context) {
 
-        DiskState bootDisk = context.childDisks.get(DiskType.HDD);
+        DiskState bootDisk = context.bootDisk;
 
         return context.getImageNativeId(bootDisk).thenApply(imageNativeId -> {
 
