@@ -29,7 +29,9 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -95,7 +97,6 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
                 .size());
         AtomicBoolean isSuccessful = new AtomicBoolean(true);
         context.request.missingLinkedAccountIds.forEach(linkedAccountId -> {
-
             ComputeDescription computeDescription = populateComputeDescription(context,
                     linkedAccountId);
             ComputeState computeState = populateComputeState(context, linkedAccountId);
@@ -105,7 +106,7 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
             Operation cdOp = Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                     .setBody(computeDescription);
 
-            OperationSequence.create(cdOp, csOp).setCompletion((ops, exs) -> {
+            JoinedCompletionHandler completionHandler = (ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
                     logWarning(() -> String.format("Error creating missing resources for"
                             + " account with ID %s.", linkedAccountId));
@@ -122,7 +123,20 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
                                 "for atleast one linked account."));
                     }
                 }
-            }).sendWith(this);
+            };
+
+            Operation.createGet(this, computeDescription.documentSelfLink)
+                    .setReferer(this.getUri())
+                    .setCompletion((o, e) -> {
+                        if (e != null && e instanceof ServiceNotFoundException) {
+                            OperationSequence.create(cdOp).next(csOp)
+                                    .setCompletion(completionHandler)
+                                    .sendWith(this);
+                        } else {
+                            OperationSequence.create(csOp).setCompletion(completionHandler)
+                                    .sendWith(this);
+                        }
+                    }).sendWith(this);
         });
     }
 
