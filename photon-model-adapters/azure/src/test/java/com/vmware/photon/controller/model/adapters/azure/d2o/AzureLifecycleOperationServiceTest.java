@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.d2o;
 
+import static org.junit.Assume.assumeFalse;
+
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
@@ -32,7 +34,6 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -161,9 +162,8 @@ public class AzureLifecycleOperationServiceTest extends BasicReusableHostTestCas
     }
 
     @Test
-    @Ignore("Azure provision and decommission is taking significant amount of time"
-            + "and could potentially delay the pre-flights or cause timeouts. Suitable for manual execution.")
     public void test() throws Throwable {
+        assumeFalse(this.isMock);
 
         this.vmState = createDefaultVMResource(this.host, azureVMName,
                 computeHost, endpointState, DEFAULT_NIC_SPEC);

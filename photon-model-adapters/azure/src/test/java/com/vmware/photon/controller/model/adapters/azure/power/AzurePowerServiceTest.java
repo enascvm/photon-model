@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.power;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeFalse;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
@@ -40,7 +41,6 @@ import com.microsoft.azure.management.compute.implementation.VirtualMachineInner
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -172,9 +172,9 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
     }
 
     @Test
-    @Ignore("This tests takes longer execution time as it involves provision-poweroff-poweron-decomission VM"
-            + "and could potentially delay the pre-flights or cause timeouts. Suitable for manual execution.")
     public void test() throws Throwable {
+        assumeFalse(this.isMock);
+
 
         this.vmState = createDefaultVMResource(this.host, azureVMName,
                 computeHost, endpointState, DEFAULT_NIC_SPEC);
