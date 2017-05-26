@@ -276,8 +276,7 @@ public class AzureUtils {
         storageAuth.documentSelfLink = UUID.randomUUID().toString();
         storageAuth.customProperties = new HashMap<>();
         for (StorageAccountKey key : keys.keys()) {
-            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY +
-                    Integer.toString(currentKeyCount(storageAuth.customProperties) + 1), key.value());
+            storageAuth.customProperties.put(getStorageAccountKeyName(storageAuth.customProperties), key.value());
         }
         storageAuth.tenantLinks = tenantLinks;
         if (endpointLink != null) {
@@ -324,8 +323,7 @@ public class AzureUtils {
         storageAuth.documentSelfLink = UUID.randomUUID().toString();
         storageAuth.customProperties = new HashMap<>();
         for (StorageAccountKey key : keys.keys()) {
-            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY +
-                    Integer.toString(currentKeyCount(storageAuth.customProperties) + 1), key.value());
+            storageAuth.customProperties.put(getStorageAccountKeyName(storageAuth.customProperties), key.value());
         }
         storageAuth.tenantLinks = tenantLinks;
         if (endpointLink != null) {
@@ -361,14 +359,20 @@ public class AzureUtils {
         return storageDescription;
     }
 
-    public static int currentKeyCount(Map<String, String> map) {
-        int count = 0;
+    /**
+     * Increments and returns the key name for next key being added (key1, key2 and so on) based
+     * on the number of keys already present in the map.
+     * @param map CustomProperties map
+     * @return Next storage account key identifier in map.
+     */
+    public static String getStorageAccountKeyName(Map<String, String> map) {
+        int count = 1;
         for (Map.Entry<String, String> entry : map.entrySet()) {
             if (entry.getKey().startsWith(AZURE_STORAGE_ACCOUNT_KEY)) {
                 count++;
             }
         }
-        return count;
+        return AZURE_STORAGE_ACCOUNT_KEY + Integer.toString(count);
     }
 
     /**

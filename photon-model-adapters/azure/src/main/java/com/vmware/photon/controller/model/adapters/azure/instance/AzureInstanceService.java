@@ -17,7 +17,6 @@ import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROU
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAMESPACE;
@@ -32,8 +31,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.currentKeyCount;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getStorageAccountKeyName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
@@ -1390,8 +1389,7 @@ public class AzureInstanceService extends StatelessService {
                         AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
                         storageAuth.customProperties = new HashMap<>();
                         for (StorageAccountKey key : result.keys()) {
-                            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY
-                                    + Integer.toString(currentKeyCount(storageAuth.customProperties) + 1), key.value());
+                            storageAuth.customProperties.put(getStorageAccountKeyName(storageAuth.customProperties), key.value());
                         }
                         Operation patchStorageDescriptionWithKeys = Operation
                                 .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
