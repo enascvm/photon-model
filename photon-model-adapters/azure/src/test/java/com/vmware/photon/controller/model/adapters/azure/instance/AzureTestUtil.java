@@ -13,11 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DATA_DISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
@@ -190,8 +192,12 @@ public class AzureTestUtil {
     public static final AzureNicSpecs SHARED_NETWORK_NIC_SPEC;
     public static final AzureNicSpecs NO_PUBLIC_IP_NIC_SPEC;
 
-    public static final long AZURE_CUSTOM_OSDISK_SIZE = 1024 * 32; // 32 GBs. We can only increase
-    // size of OS Disk. The Image used already has 30 GB size.
+    // Boot disk size of 32 GBs. We can only increase size of OS Disk. The Image used already has 30
+    // GB size.
+    public static final long AZURE_CUSTOM_OSDISK_SIZE = 1024 * 32;
+    // Data Disk Size of 20GBs
+    public static final long AZURE_CUSTOM_DATA_DISK_SIZE = 1024 * 20;
+
 
     public static final String AZURE_NETWORK_NAME = "test-vNet";
     private static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
@@ -217,6 +223,7 @@ public class AzureTestUtil {
     }
 
     public static final CachingTypes DEFAULT_OS_DISK_CACHING = CachingTypes.NONE;
+    public static final CachingTypes DEFAULT_DATA_DISK_CACHING = CachingTypes.READ_WRITE;
 
     public static class AzureNicSpecs {
 
@@ -555,12 +562,29 @@ public class AzureTestUtil {
             AzureNicSpecs nicSpecs) throws Throwable {
 
         return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
-                null /* networkRGLink */);
+                null /* networkRGLink */, 0);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
             ComputeState computeHost, EndpointState endpointState,
-            AzureNicSpecs nicSpecs, String networkRGLink)
+            int numberOfDisks ) throws Throwable {
+
+        return createDefaultVMResource(host, azureVMName, computeHost, endpointState,
+                DEFAULT_NIC_SPEC,
+                null, numberOfDisks);
+    }
+
+    public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
+            ComputeState computeHost, EndpointState endpointState,
+            AzureNicSpecs nicSpecs, String networkRGLink) throws Throwable {
+        return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
+                networkRGLink, 0);
+    }
+
+
+    public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
+            ComputeState computeHost, EndpointState endpointState,
+            AzureNicSpecs nicSpecs, String networkRGLink, int numberOfAdditionalDisks)
             throws Throwable {
 
         final ImageSource imageSource;
@@ -578,12 +602,12 @@ public class AzureTestUtil {
         }
 
         return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
-                networkRGLink, imageSource);
+                networkRGLink, imageSource, numberOfAdditionalDisks);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
             ComputeState computeHost, EndpointState endpointState,
-            AzureNicSpecs nicSpecs, String networkRGLink, ImageSource imageSource)
+            AzureNicSpecs nicSpecs, String networkRGLink, ImageSource imageSource, int numberOfAdditionalDisks)
             throws Throwable {
 
         final String defaultVmRGName = azureVMName;
@@ -643,6 +667,8 @@ public class AzureTestUtil {
         azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
                 UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
 
+        List<String> vmDisks = new ArrayList<>();
+
         DiskState rootDisk = new DiskState();
         rootDisk.name = azureVMName + "-boot-disk";
         rootDisk.id = UUID.randomUUID().toString();
@@ -676,6 +702,10 @@ public class AzureTestUtil {
         rootDisk = TestUtils.doPost(host, rootDisk, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
+        vmDisks.add(rootDisk.documentSelfLink);
+
+        //create additional disks
+        vmDisks.addAll(createAdditionalDisks(host,azureVMName,endpointState,numberOfAdditionalDisks));
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
                 host, computeHost, endpointState, networkRGLinks, sgRGLinks, nicSpecs)
@@ -692,7 +722,7 @@ public class AzureTestUtil {
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         computeState.descriptionLink = azureVMDesc.documentSelfLink;
         computeState.resourcePoolLink = computeHost.resourcePoolLink;
-        computeState.diskLinks = Collections.singletonList(rootDisk.documentSelfLink);
+        computeState.diskLinks = vmDisks;
         computeState.networkInterfaceLinks = nicLinks;
         computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, defaultVmRGName);
         computeState.groupLinks = Collections.singleton(defaultVmRGLink);
@@ -701,6 +731,41 @@ public class AzureTestUtil {
 
         return TestUtils.doPost(host, computeState, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
+    }
+
+    public static List<String> createAdditionalDisks(VerificationHost host,String azureVMName,
+            EndpointState endpointState,  int numberOfDisks) throws Throwable {
+
+        List<String> diskStateArrayList = new ArrayList<>();
+        for (int i = 0; i < numberOfDisks; i++ ) {
+            DiskState dataDisk = new DiskState();
+            dataDisk.name = azureVMName + "-data-disk-" + i;
+            dataDisk.id = UUID.randomUUID().toString();
+            dataDisk.type = DiskType.HDD;
+            dataDisk.capacityMBytes = AZURE_CUSTOM_DATA_DISK_SIZE; // Custom Data Disk size of 20GB
+            dataDisk.bootOrder = 2;
+
+            dataDisk.endpointLink = endpointState.documentSelfLink;
+            dataDisk.tenantLinks = endpointState.tenantLinks;
+
+            dataDisk.customProperties = new HashMap<>();
+            dataDisk.customProperties.put(AZURE_DATA_DISK_CACHING, DEFAULT_DATA_DISK_CACHING.toString());
+
+            dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
+                    (azureVMName + "sa").replace("-", "").toLowerCase());
+            dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                    azureVMName);
+            dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
+                    AZURE_STORAGE_ACCOUNT_TYPE);
+
+            dataDisk = TestUtils.doPost(host, dataDisk, DiskState.class,
+                    UriUtils.buildUri(host, DiskService.FACTORY_LINK));
+
+            diskStateArrayList.add(dataDisk.documentSelfLink);
+        }
+
+        return  diskStateArrayList;
+
     }
 
     public static void deleteServiceDocument(VerificationHost host, String documentSelfLink)

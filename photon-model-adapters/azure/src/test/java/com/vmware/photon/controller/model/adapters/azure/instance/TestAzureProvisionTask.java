@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NO_PUBLIC_IP_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
@@ -35,6 +36,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.management.compute.DataDisk;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
@@ -126,7 +128,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         assertVmNetworksConfiguration();
 
-        assertConfigurationOfDisks();
+        assertConfigurationOfDisks(0);
 
         assertStorageDescription();
 
@@ -145,6 +147,25 @@ public class TestAzureProvisionTask extends AzureBaseTest {
     }
 
     /**
+     * Creates a Azure instance with additional disk via a provision task.
+     */
+    @Test
+    @Ignore("This test does VM provisioning with additional disks. Ignored for timeouts of "
+            + "preflights")
+    public void testProvisionWithDataDisks() throws Throwable {
+
+        // Create a Azure VM compute resource with 2 additional disks.
+        int numberOfAdditionalDisks = 2;
+        this.vmState = createDefaultVMResource(getHost(), azureVMName,
+                computeHost, endpointState, DEFAULT_NIC_SPEC, null, numberOfAdditionalDisks);
+
+        kickOffProvisionTask();
+
+        // Assert if 2 additional disks were created
+        assertConfigurationOfDisks(numberOfAdditionalDisks);
+    }
+
+    /**
      * Creates a Azure instance via a provision task.
      */
     @Test
@@ -154,14 +175,15 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         ImageSource privateImageSource = createPrivateImageSource(getHost(), this.endpointState);
 
+        int numberOfAdditionalDisks = 0;
         // create a Azure VM compute resource.
         this.vmState = createDefaultVMResource(getHost(), azureVMName,
                 this.computeHost, this.endpointState, NO_PUBLIC_IP_NIC_SPEC,
-                null /* networkRGLink */, privateImageSource);
+                null /* networkRGLink */, privateImageSource,numberOfAdditionalDisks);
 
         kickOffProvisionTask();
 
-        assertConfigurationOfDisks();
+        assertConfigurationOfDisks(numberOfAdditionalDisks);
 
         assertStorageDescription();
     }
@@ -367,32 +389,55 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 provisionedSG);
     }
 
-    private void assertConfigurationOfDisks() {
+    private void assertConfigurationOfDisks(int numberOfAdditionalDisks) {
 
         ComputeState vm = getHost().getServiceState(null,
                 ComputeState.class, UriUtils.buildUri(getHost(), this.vmState.documentSelfLink));
+        List<DiskState> DiskStates = vm.diskLinks.stream().map(
+                diskLink -> { DiskState diskState = getHost().getServiceState(null, DiskState.class,UriUtils.buildUri(getHost(), diskLink));
+                    return diskState;
+                }).collect(Collectors.toList());
 
         final String vmRGName = vm.customProperties.get(ComputeProperties.RESOURCE_GROUP_NAME);
 
-        String diskLink = vm.diskLinks.get(0);
-        DiskState diskState = getHost().getServiceState(null, DiskState.class,
-                UriUtils.buildUri(getHost(), diskLink));
-        assertEquals("OS Disk size does not match", AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
-                diskState.capacityMBytes);
+        for (DiskState diskState: DiskStates) {
+            if (diskState.bootOrder == 1) {
+                assertEquals("OS Disk size does not match", AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
+                        diskState.capacityMBytes);
+            } else {
+                assertEquals("Data Disk size does not match", AzureTestUtil
+                        .AZURE_CUSTOM_DATA_DISK_SIZE,diskState.capacityMBytes);
+            }
+
+        }
 
         if (this.isMock) { // return. Nothing to check on Azure.
             return;
         }
 
         int OSDiskSizeInAzure = 0;
+        VirtualMachineInner provisionedVM = null;
         try {
-            VirtualMachineInner provisionedVM = AzureTestUtil.getAzureVirtualMachine(
+            provisionedVM = AzureTestUtil.getAzureVirtualMachine(
                     getAzureSdkClients().getComputeManagementClientImpl(),
                     vmRGName,
                     azureVMName);
-            OSDiskSizeInAzure = provisionedVM.storageProfile().osDisk().diskSizeGB();
         } catch (Exception e) {
-            fail("Unable to verify OS Disk Size on Azure. Details: " + e.getMessage());
+            fail("Unable to get Azure VM details: " + e.getMessage());
+        }
+        OSDiskSizeInAzure = provisionedVM.storageProfile().osDisk().diskSizeGB();
+        assertEquals("OS Disk size of the VM in azure does not match with the intended size",
+                AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE, OSDiskSizeInAzure * 1024);
+        // check if there is need to assert additional disk
+        if (numberOfAdditionalDisks > 0) {
+            //assert the number of disks attached to the VM
+            assertEquals("Mismatch in number of data disks found on VM in azure",
+                    numberOfAdditionalDisks, provisionedVM.storageProfile().dataDisks().size());
+            //assert size of each of the attached disks
+            for (DataDisk dataDisk: provisionedVM.storageProfile().dataDisks()) {
+                assertEquals("Mismatch in intended size of data disks " + dataDisk.name(),
+                        AZURE_CUSTOM_DATA_DISK_SIZE, dataDisk.diskSizeGB().longValue() * 1024);
+            }
         }
         assertEquals("OS Disk size of the VM in azure does not match with the intended size",
                 AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE, OSDiskSizeInAzure * 1024);

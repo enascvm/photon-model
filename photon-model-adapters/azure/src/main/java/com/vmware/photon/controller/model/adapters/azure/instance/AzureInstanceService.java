@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DATA_DISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_BLOB_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
@@ -33,6 +34,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getStorageAccountKeyName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
+
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
@@ -63,6 +65,7 @@ import com.microsoft.azure.CloudException;
 import com.microsoft.azure.SubResource;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.CachingTypes;
+import com.microsoft.azure.management.compute.DataDisk;
 import com.microsoft.azure.management.compute.DiskCreateOptionTypes;
 import com.microsoft.azure.management.compute.HardwareProfile;
 import com.microsoft.azure.management.compute.NetworkProfile;
@@ -163,6 +166,7 @@ public class AzureInstanceService extends StatelessService {
     private static final Pattern VHD_URI_PATTERN = Pattern
             .compile("https://([\\p{Lower}\\p{Digit}]+).blob.core.windows.net/(.+)\\.vhd");
     private static final String BOOT_DISK_SUFFIX = "-boot-disk";
+    private static final String DATA_DISK_SUFFIX = "-data-disk";
 
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
     private static final int RETRY_INTERVAL_SECONDS = 30;
@@ -1173,11 +1177,10 @@ public class AzureInstanceService extends StatelessService {
 
         // Set storage profile.
         // Create destination OS VHD
-        String vhdName = String.format(VHD_URI_FORMAT, ctx.storageAccountName, getVHDName(vmName));
-
         OSDisk osDisk = new OSDisk();
         osDisk.withName(vmName);
-        osDisk.withVhd(new VirtualHardDisk().withUri(vhdName));
+        osDisk.withVhd(new VirtualHardDisk().withUri(getVHDUriForOSDisk(vmName,
+                ctx.storageAccountName)));
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
         osDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
@@ -1203,7 +1206,7 @@ public class AzureInstanceService extends StatelessService {
         } else {
             logInfo(() -> String.format(
                     "Proceeding with Default OS Disk Size defined by VHD %s",
-                    vhdName));
+                    getVHDUriForOSDisk(vmName, ctx.storageAccountName)));
         }
 
         final StorageProfile storageProfile = new StorageProfile();
@@ -1229,8 +1232,10 @@ public class AzureInstanceService extends StatelessService {
                     osDiskConfig.properties.get(AZURE_OSDISK_BLOB_URI)));
         }
 
-        storageProfile.withOsDisk(osDisk);
+        List<DataDisk> dataDisks = getDataDisks(ctx);
 
+        storageProfile.withOsDisk(osDisk);
+        storageProfile.withDataDisks(dataDisks);
         request.withStorageProfile(storageProfile);
 
         // Set network profile {{
@@ -1292,6 +1297,32 @@ public class AzureInstanceService extends StatelessService {
                                         .setReferer(getHost().getUri()));
                     }
                 });
+    }
+
+    /**
+     * returns additional data disks for Azure VM
+     * @param ctx
+     * @return
+     */
+    private List<DataDisk> getDataDisks(AzureInstanceContext ctx) {
+        int i = 0;
+        List<DataDisk> dataDisks = new ArrayList<>();
+        for (DiskState diskState : ctx.childDisks) {
+            DataDisk dataDisk =   new DataDisk();
+            dataDisk.withName(diskState.name);
+            dataDisk.withDiskSizeGB((int) diskState.capacityMBytes / 1024);
+            dataDisk.withCaching(
+                    CachingTypes.fromString(diskState.customProperties.getOrDefault(
+                            AZURE_DATA_DISK_CACHING, CachingTypes.READ_WRITE.toString())));
+            dataDisk.withCreateOption(DiskCreateOptionTypes.EMPTY);
+            dataDisk.withLun(i);
+            VirtualHardDisk vhdData = new VirtualHardDisk();
+            vhdData.withUri(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, i));
+            dataDisk.withVhd(vhdData);
+            dataDisks.add(dataDisk) ;
+            i++;
+        }
+        return dataDisks;
     }
 
     /**
@@ -1457,8 +1488,14 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private String getVHDName(String vmName) {
-        return vmName + BOOT_DISK_SUFFIX;
+    private static String getVHDUriForOSDisk(String vmName, String storageAccountName) {
+        String vhdName = vmName + BOOT_DISK_SUFFIX;
+        return String.format(VHD_URI_FORMAT, storageAccountName, vhdName);
+    }
+
+    private static String getVHDUriForDataDisk(String vmName, String storageAccountName, int num) {
+        String vhdNameData = vmName + DATA_DISK_SUFFIX + "-" + num;
+        return String.format(VHD_URI_FORMAT, storageAccountName, vhdNameData);
     }
 
     private ImageReferenceInner getImageReference(String imageId) {

@@ -28,6 +28,7 @@ public class AzureConstants {
     public static final String AZURE_OSDISK_BLOB_URI = "azureOsDiskBlobUri";
 
     public static final String AZURE_DISK_CACHING = "azureDiskCaching";
+    public static final String AZURE_DATA_DISK_CACHING = "azureDataDiskCaching";
     public static final String AZURE_DISK_BLOB_URI = "azureDiskBlobUri";
     public static final String AZURE_DISK_LUN = "azureDiskLun";
 
