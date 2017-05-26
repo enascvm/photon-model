@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.REQUIRED;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
@@ -22,10 +24,10 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.data.Schema;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
-import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
 
@@ -56,6 +58,8 @@ public class ResourceOperationSpecService extends StatefulService {
         public static final String FIELD_NAME_NAME = "name";
         public static final String FIELD_NAME_DESCRIPTION = "description";
         public static final String FIELD_NAME_ADAPTER_REFERENCE = "adapterReference";
+        public static final String FIELD_NAME_TARGET_CRITERIA = "targetCriteria";
+        public static final String FIELD_NAME_SCHEMA = "schema";
 
         @Documentation(description = "The operation technical name.",
                 exampleString = "powerOff, powerOn, snapshot, reconfigure, etc.")
@@ -79,21 +83,21 @@ public class ResourceOperationSpecService extends StatefulService {
          */
         @Documentation(description = "Name of the photon model adapter configuration.",
                 exampleString = "Openstack, Virtustream, etc.")
-        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+        @PropertyOptions(usage = AUTO_MERGE_IF_NOT_NULL,
                 indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
         public String name;
 
         /**
          * User-friendly description of the resource operation.
          */
-        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+        @PropertyOptions(usage = AUTO_MERGE_IF_NOT_NULL,
                 indexing = PropertyIndexingOption.CASE_INSENSITIVE)
         public String description;
 
         /**
          * URI reference to the adapter used to power-on this host.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @UsageOption(option = AUTO_MERGE_IF_NOT_NULL)
         public URI adapterReference;
 
         /**
@@ -107,10 +111,17 @@ public class ResourceOperationSpecService extends StatefulService {
          * ".hostName.startsWith('myPrefix') && "
          * + ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE + ".cpuCount==4"}
          */
-        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+        @PropertyOptions(usage = AUTO_MERGE_IF_NOT_NULL,
                 indexing = PropertyIndexingOption.STORE_ONLY)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
         public String targetCriteria;
+
+        @Documentation(
+                description = "Optional schema describing the expected by the resource operation payload")
+        @PropertyOptions(usage = { AUTO_MERGE_IF_NOT_NULL, OPTIONAL },
+                indexing = PropertyIndexingOption.EXPAND)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_18)
+        public Schema schema;
 
         @Override
         public String toString() {
@@ -118,12 +129,16 @@ public class ResourceOperationSpecService extends StatefulService {
                             + "operation=%s, endpointType=%s, resourceType=%s, "
                             + "adapterReference=%s, "
                             + "name=%s, description=%s, "
-                            + "documentSelfLink=%s]",
+                            + "documentSelfLink=%s, "
+                            + "targetCriteria=%s,"
+                            + "schema=%s]",
                     getClass().getSimpleName(),
                     this.operation, this.endpointType, this.resourceType,
                     this.adapterReference,
                     this.name, this.description,
-                    this.documentSelfLink);
+                    this.documentSelfLink,
+                    this.targetCriteria,
+                    this.schema);
         }
     }
 

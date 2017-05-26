@@ -107,55 +107,6 @@ public class ResourceOperationUtils {
     }
 
     /**
-     * Lookup for {@link ResourceOperationSpec}s by given {@code endpointType},
-     * {@code resourceType} and optionally {@code operation}
-     * <p>
-     * If operation not specified then return all resource operation specs for the given
-     * {@code endpointType} and {@code resourceType}
-     * @param host
-     *         host to use to create operation
-     * @param refererURI
-     *         the referer to use when send the operation
-     * @param endpointType
-     *         the resource's endpoint type
-     * @param resourceType
-     *         the resource type
-     * @param operation
-     *         optional operation id argument
-     * @return
-     */
-    private static DeferredResult<List<ResourceOperationSpec>> lookUp(
-            ServiceHost host,
-            URI refererURI,
-            String endpointType,
-            ResourceType resourceType,
-            String operation) {
-
-        Query.Builder builder = Query.Builder.create()
-                .addKindFieldClause(ResourceOperationSpec.class)
-                .addFieldClause(
-                        ResourceOperationSpec.FIELD_NAME_ENDPOINT_TYPE,
-                        endpointType)
-                .addFieldClause(
-                        ResourceOperationSpec.FIELD_NAME_RESOURCE_TYPE,
-                        resourceType);
-        if (operation != null) {
-            builder.addFieldClause(
-                    ResourceOperationSpec.FIELD_NAME_OPERATION,
-                    operation);
-        }
-        Query query = builder.build();
-
-        QueryTop<ResourceOperationSpec> top = new QueryTop<>(
-                host, query, ResourceOperationSpec.class, null);
-        if (operation != null) {
-            top.setMaxResultsLimit(3);
-        }
-        top.setReferer(refererURI);
-        return top.collectDocuments(Collectors.toList());
-    }
-
-    /**
      * Lookup for {@link ResourceOperationSpec} by given {@code endpointLink},
      * {@code resourceType} and {@code operation}
      * @param host
@@ -185,10 +136,23 @@ public class ResourceOperationUtils {
                 );
     }
 
+    /**
+     * Lookup for {@link ResourceOperationSpec} by given {@code resourceState} and {@code operation}
+     * @param host
+     *         host to use to create operation
+     * @param refererURI
+     *         the referer to use when send the operation
+     * @param resourceState
+     *         the resource state specialization for which to lookup the spec
+     * @param operation
+     *         the operation
+     * @return
+     */
     public static <T extends ResourceState> DeferredResult<List<ResourceOperationSpec>> lookupByResourceState(
             ServiceHost host,
             URI refererURI,
-            T resourceState) {
+            T resourceState,
+            String operation) {
         AssertUtil.assertNotNull(resourceState, "'resourceState' must be set.");
         String endpointLink;
         ResourceType resourceType;
@@ -206,11 +170,11 @@ public class ResourceOperationUtils {
         }
         AssertUtil.assertNotNull(endpointLink, "'endpointLink' must be set.");
 
-        return host.sendWithDeferredResult(Operation.createGet(host, endpointLink)
-                .setReferer(refererURI))
-                .thenCompose(o -> lookUp(host, refererURI,
-                        (o.getBody(EndpointState.class)).endpointType,
-                        resourceType, null)
+        return host.sendWithDeferredResult(
+                Operation.createGet(host, endpointLink).setReferer(refererURI),
+                EndpointState.class)
+                .thenCompose(ep -> lookUp(
+                        host, refererURI, (ep).endpointType, resourceType, operation)
                 );
     }
 
@@ -275,14 +239,14 @@ public class ResourceOperationUtils {
      * should generally be part of handleStart method of the adapter/service, preferably near the
      * end after any service specification configuration settings.
      * @param service
-     *        the resourceOperation service/adapter
+     *         the resourceOperation service/adapter
      * @param handler
-     *        the operation completion handler for making the success/failure actions
+     *         the operation completion handler for making the success/failure actions
      * @param specs
-     *        list of intended the ResourceOperationSpec's to register with the service
+     *         list of intended the ResourceOperationSpec's to register with the service
      */
     public static void registerResourceOperation(Service service, CompletionHandler handler,
-            ResourceOperationSpec... specs ) {
+            ResourceOperationSpec... specs) {
         if (specs == null || specs.length == 0) {
             service.getHost().log(Level.FINE,
                     "No ResourceOperationSpec to register by %s",
@@ -314,6 +278,55 @@ public class ResourceOperationUtils {
                 OperationJoin.create(operations).setCompletion(jh).sendWith(service);
             }
         }, ResourceOperationSpecService.FACTORY_LINK);
+    }
+
+    /**
+     * Lookup for {@link ResourceOperationSpec}s by given {@code endpointType},
+     * {@code resourceType} and optionally {@code operation}
+     * <p>
+     * If operation not specified then return all resource operation specs for the given
+     * {@code endpointType} and {@code resourceType}
+     * @param host
+     *         host to use to create operation
+     * @param refererURI
+     *         the referer to use when send the operation
+     * @param endpointType
+     *         the resource's endpoint type
+     * @param resourceType
+     *         the resource type
+     * @param operation
+     *         optional operation id argument
+     * @return
+     */
+    private static DeferredResult<List<ResourceOperationSpec>> lookUp(
+            ServiceHost host,
+            URI refererURI,
+            String endpointType,
+            ResourceType resourceType,
+            String operation) {
+
+        Query.Builder builder = Query.Builder.create()
+                .addKindFieldClause(ResourceOperationSpec.class)
+                .addFieldClause(
+                        ResourceOperationSpec.FIELD_NAME_ENDPOINT_TYPE,
+                        endpointType)
+                .addFieldClause(
+                        ResourceOperationSpec.FIELD_NAME_RESOURCE_TYPE,
+                        resourceType);
+        if (operation != null) {
+            builder.addFieldClause(
+                    ResourceOperationSpec.FIELD_NAME_OPERATION,
+                    operation);
+        }
+        Query query = builder.build();
+
+        QueryTop<ResourceOperationSpec> top = new QueryTop<>(
+                host, query, ResourceOperationSpec.class, null);
+        if (operation != null) {
+            top.setMaxResultsLimit(3);
+        }
+        top.setReferer(refererURI);
+        return top.collectDocuments(Collectors.toList());
     }
 
     private static Operation createOperation(Service service, ResourceOperationSpec spec) {

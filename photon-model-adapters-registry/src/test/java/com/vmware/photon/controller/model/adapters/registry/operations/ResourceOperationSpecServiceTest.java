@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -55,27 +56,43 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
 
     @Test
     public void testGetByResourceState() throws Throwable {
-        EndpointState endpoint = registerEndpoint(this.endpointType);
 
+        ComputeState computeState = prepare(this.endpointType,
+                "testGetByResourceState_1", "testGetByResourceState_2");
         registerResourceOperation(
-                endpoint.endpointType, ResourceType.COMPUTE, "testGetByResourceState_1");
-        registerResourceOperation(
-                endpoint.endpointType, ResourceType.COMPUTE, "testGetByResourceState_2");
-        registerResourceOperation(
-                endpoint.endpointType, ResourceType.NETWORK, "testGetByResourceState_3");
-
-        ComputeState computeState = new ComputeState();
-        computeState.endpointLink = endpoint.documentSelfLink;
+                this.endpointType, ResourceType.NETWORK, "testGetByResourceState_3");
 
         DeferredResult<List<ResourceOperationSpec>> dr = ResourceOperationUtils
                 .lookupByResourceState(
                         super.host,
                         super.host.getReferer(),
-                        computeState
+                        computeState,
+                        null
                 );
         List<ResourceOperationSpec> found = join(dr);
         Assert.assertNotNull(found);
         Assert.assertEquals(2, found.size());
+    }
+
+    @Test
+    public void testGetByResourceStateAndOperation() throws Throwable {
+        String operation = UUID.randomUUID().toString();
+        ComputeState computeState = prepare(this.endpointType,
+                "testGetByResourceStateAndOperation_1",
+                "testGetByResourceStateAndOperation_2",
+                operation);
+        DeferredResult<List<ResourceOperationSpec>> dr = ResourceOperationUtils
+                .lookupByResourceState(
+                        super.host,
+                        super.host.getReferer(),
+                        computeState,
+                        operation
+                );
+        List<ResourceOperationSpec> found = join(dr);
+        Assert.assertNotNull(found);
+        Assert.assertEquals(1, found.size());
+        ResourceOperationSpec resourceOperationSpec = found.get(0);
+        Assert.assertEquals(operation, resourceOperationSpec.operation);
     }
 
     @Test
@@ -122,6 +139,18 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
         Assert.assertEquals(requestedState.resourceType, found.resourceType);
         Assert.assertEquals(requestedState.operation, found.operation);
         Assert.assertEquals(persistedState.documentSelfLink, found.documentSelfLink);
+    }
+
+    private ComputeState prepare(String endpointType, String... ops) throws Throwable {
+        EndpointState endpoint = registerEndpoint(endpointType);
+
+        for (String op : ops) {
+            registerResourceOperation(endpointType, ResourceType.COMPUTE, op);
+        }
+
+        ComputeState computeState = new ComputeState();
+        computeState.endpointLink = endpoint.documentSelfLink;
+        return computeState;
     }
 
 }

@@ -62,6 +62,8 @@ public class ResourceOperationService extends StatelessService {
 
     public static final String QUERY_PARAM_RESOURCE = "resource";
 
+    public static final String QUERY_PARAM_OPERATION = "operation";
+
     @Override
     public void handleGet(Operation get) {
         Map<String, String> params = UriUtils.parseUriQueryParams(get.getUri());
@@ -70,6 +72,7 @@ public class ResourceOperationService extends StatelessService {
             get.fail(new IllegalArgumentException("No resource link provided."));
             return;
         }
+        String operation = params.get(QUERY_PARAM_OPERATION);
 
         sendWithDeferredResult(Operation.createGet(this, resourceLink))
                 .thenCompose(op -> {
@@ -79,7 +82,7 @@ public class ResourceOperationService extends StatelessService {
                     }
                     final ResourceState resourceState = tmpResourceState;
                     return ResourceOperationUtils
-                            .lookupByResourceState(getHost(), getUri(), resourceState)
+                            .lookupByResourceState(getHost(), getUri(), resourceState, operation)
                             .thenApply(collectAvailable(resourceState));
                 })
                 .whenComplete((specs, e) -> {
