@@ -72,22 +72,32 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
      */
     public static final String DEFAUL_IMAGES_SOURCE_VALUE = "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json";
 
-    public static final String DEFAUL_IMAGES_ENABLED_PROPERTY = "photon-model.adapter.azure.images.default.enabled";
-
     public static String getDefaultImagesSource() {
         return System.getProperty(DEFAUL_IMAGES_SOURCE_PROPERTY, DEFAUL_IMAGES_SOURCE_VALUE);
     }
 
-    public static Boolean getDefaultImagesEnabled() {
-        String enabled = System.getProperty(DEFAUL_IMAGES_ENABLED_PROPERTY,
-                Boolean.TRUE.toString());
+    public static final String IMAGES_LOAD_MODE_PROPERTY = "photon-model.adapter.azure.images.load.mode";
 
-        return Boolean.valueOf(enabled);
+    public static enum ImagesLoadMode {
+        STANDARD, DEFAULT, ALL;
+    }
+
+    public static ImagesLoadMode getImagesLoadMode() {
+        String imagesLoadMode = System.getProperty(
+                IMAGES_LOAD_MODE_PROPERTY,
+                ImagesLoadMode.ALL.name());
+
+        try {
+            return ImagesLoadMode.valueOf(imagesLoadMode);
+        } catch (Exception exc) {
+            return ImagesLoadMode.ALL;
+        }
     }
 
     /**
      * {@link EndpointEnumerationProcess} specialization that loads Azure
-     * {@link com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner}s into {@link ImageState} store.
+     * {@link com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner}s into
+     * {@link ImageState} store.
      */
     private static class AzureImageEnumerationContext extends
             EndpointEnumerationProcess<AzureImageEnumerationContext, ImageState, VirtualMachineImageInner> {
@@ -222,22 +232,38 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             // First load default images to speed up overall images enumeration.
 
-            DeferredResult<RemoteResourcesPage> defaultImagesPage = loadDefaultImagesPage();
+            if (nextPageLink == null) {
+                DeferredResult<RemoteResourcesPage> defaultImagesPage = loadDefaultImagesPage();
 
-            return defaultImagesPage;
+                if (defaultImagesPage != null) {
+                    return defaultImagesPage;
+                }
+            }
 
+            // Second load standard images which might be time consuming.
 
-            // TODO: For now return only "default images".
-            // A flag that controls when to return the "standard" images will be introduced.
-            // Jira VCOM-911? is tracking this.
+            DeferredResult<RemoteResourcesPage> standardImagesPage = loadStandardImagesPage();
+
+            if (standardImagesPage != null) {
+                return standardImagesPage;
+            }
+
+            return DeferredResult.completed(new RemoteResourcesPage());
         }
 
+        /**
+         * @return <code>null</code> to indicate that default image loading is not applicable
+         *         (either disabled or already loaded)
+         */
         private DeferredResult<RemoteResourcesPage> loadDefaultImagesPage() {
 
             final String msg = "Enumerating Default Azure images";
 
-            if (getDefaultImagesEnabled() == false) {
+            final ImagesLoadMode imagesLoadMode = getImagesLoadMode();
+            if (!(imagesLoadMode == ImagesLoadMode.DEFAULT
+                    || imagesLoadMode == ImagesLoadMode.ALL)) {
                 this.service.logFine(() -> msg + ": DISABLED");
+
                 return null;
             }
 
@@ -253,7 +279,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             final RemoteResourcesPage page = new RemoteResourcesPage();
 
             page.nextPageLink = this.imageFilter == DEFAULT_IMAGES_FILTER
-                    // Load ONLY default images so NULL is returned as next page
+                    // Load ONLY default images so NULL is returned as next page.
+                    // This FORCE-stop image loading chain.
                     ? null
                     // Otherwise continue with standard images
                     : NEXT_PAGE_LINK + 0;
@@ -262,7 +289,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
                 if (exc != null) {
                     this.service.logWarning(
-                            () -> String.format(msg + ": FAILED - %s", Utils.toString(exc)));
+                            () -> String.format(msg + ": FAILED with %s", Utils.toString(exc)));
                 } else {
                     for (VirtualMachineImageInner image : defaultImages) {
                         page.resourcesPage.put(toImageReference(image), image);
@@ -275,6 +302,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             });
         }
 
+        /**
+         * @return <code>null</code> to indicate that standard image loading is not applicable (is
+         *         disabled)
+         */
         private DeferredResult<RemoteResourcesPage> loadStandardImagesPage() {
 
             final String msg = "Enumerating Azure images by [" +
@@ -282,6 +313,14 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                             .map(VirtualMachineImageResourceInner::name)
                             .collect(Collectors.joining(":"))
                     + "]";
+
+            final ImagesLoadMode imagesLoadMode = getImagesLoadMode();
+            if (!(imagesLoadMode == ImagesLoadMode.STANDARD
+                    || imagesLoadMode == ImagesLoadMode.ALL)) {
+                this.service.logFine(() -> msg + ": DISABLED");
+
+                return null;
+            }
 
             if (this.azureStandardImages == null) {
                 this.service.logInfo(() -> msg + ": STARTING");
@@ -305,7 +344,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             } else {
                 // Return null nextPageLink to the parent so we are NOT called back any more.
                 this.service.logFine(
-                        () -> msg + ": TOTAL number " + this.azureStandardImages.totalNumber());
+                        () -> msg + ": TOTAL number = " + this.azureStandardImages.totalNumber());
             }
 
             return DeferredResult.completed(page);
@@ -336,7 +375,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             holder.localState.name = toImageReference(remoteImage);
             holder.localState.description = toImageReference(remoteImage);
 
-            if (remoteImage.osDiskImage() != null && remoteImage.osDiskImage().operatingSystem() != null) {
+            if (remoteImage.osDiskImage() != null
+                    && remoteImage.osDiskImage().operatingSystem() != null) {
                 holder.localState.osFamily = remoteImage.osDiskImage().operatingSystem().name();
             }
 
@@ -376,6 +416,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 String[] tokens = StringUtils.splitPreserveAllTokens(filter, ":");
                 if (tokens.length == strFilters.length) {
                     strFilters = tokens;
+                } else {
+                    return DEFAULT_IMAGES_FILTER;
                 }
             }
 
@@ -491,9 +533,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     *
      * An Azure <b>default</b> images loader that reads pre-defined images from a file and exposes
      * them as {@code VirtualMachineImage}s.
+     *
+     * <pre>
      * {
           "$schema":"http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
           "contentVersion":"1.0.0.0",
@@ -582,8 +625,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
           }
         }
      * </pre>
-     */
-    private static class DefaultImagesLoader {
+     */    private static class DefaultImagesLoader {
 
         /**
          * Represents the inner most JSON node in the JSON file.
@@ -695,7 +737,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             {
                 final OSDiskImage osDiskImage = new OSDiskImage();
-                osDiskImage.withOperatingSystem(OperatingSystemTypes.fromString(imageRef.osFamily.toUpperCase()));
+                osDiskImage.withOperatingSystem(
+                        OperatingSystemTypes.fromString(imageRef.osFamily.toUpperCase()));
 
                 image.withOsDiskImage(osDiskImage);
             }

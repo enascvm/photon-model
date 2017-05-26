@@ -40,6 +40,7 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService.ImagesLoadMode;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -75,12 +76,14 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     // Format is 'publisher:offer:sku:version' {{
 
-    // As of now uniquely identify a SINGLE Azure image (version is not specified).
-    private static final String AZURE_SINGLE_IMAGE_FILTER = "cognosys:secured-wordpress-on-windows-2012-r2:secured-wordpress-on-windows-basic-lic:";
+    // Uniquely identify a SINGLE Azure image.
+    private static final String AZURE_SINGLE_IMAGE_FILTER = "cognosys:secured-wordpress-on-windows-2012-r2:secured-wordpress-on-windows-basic-lic:1.3.0";
 
     private static final String AZURE_MULTI_IMAGES_FILTER = "CoreOS:::";
 
     private static final String AZURE_DEFAULT_IMAGES_FILTER = "default";
+
+    private static final String AZURE_ALL_IMAGES_FILTER = null;
     // }}
 
     private static final int DEFAULT_IMAGES = 11;
@@ -147,14 +150,14 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
     @Test
     public void testPrivateImageEnumeration() throws Throwable {
 
-        kickOffImageEnumeration(createEndpointState(), PRIVATE, AZURE_SINGLE_IMAGE_FILTER);
+        kickOffImageEnumeration(createEndpointState(), PRIVATE, AZURE_ALL_IMAGES_FILTER);
 
         // Validate NO image states are CREATED
         queryDocumentsAndAssertExpectedCount(getHost(), 0, ImageService.FACTORY_LINK, EXACT_COUNT);
     }
 
     @Test
-    public void testPublicImageEnumeration_single() throws Throwable {
+    public void testPublicImageEnumeration_singleAndDefaults() throws Throwable {
 
         // Important: MUST share same Endpoint between the two enum runs.
         final EndpointState endpointState = createEndpointState();
@@ -250,9 +253,8 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
         Assume.assumeFalse(this.isMock);
 
-        System.setProperty(
-                AzureImageEnumerationAdapterService.DEFAUL_IMAGES_ENABLED_PROPERTY,
-                Boolean.FALSE.toString());
+        setImagesLoadMode(ImagesLoadMode.STANDARD);
+
         try {
             // Pre-create public and private image in different endpoint {{
             // Those images should not be touched by this image enum.
@@ -294,14 +296,12 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                     imagesAfterEnum.documentLinks
                             .contains(vSpherePublicImageState.documentSelfLink));
         } finally {
-            System.setProperty(
-                    AzureImageEnumerationAdapterService.DEFAUL_IMAGES_ENABLED_PROPERTY,
-                    Boolean.TRUE.toString());
+            setImagesLoadMode(ImagesLoadMode.ALL);
         }
     }
 
     @Test
-    public void testPublicImageEnumeration_default() throws Throwable {
+    public void testPublicImageEnumeration_defaultThroughFilter() throws Throwable {
 
         Assume.assumeFalse(this.isMock);
 
@@ -309,6 +309,47 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                 createEndpointState(), PUBLIC, AZURE_DEFAULT_IMAGES_FILTER);
 
         // Validate 11 image states are created.
+        assertDefaultImages(task);
+    }
+
+    @Test
+    public void testPublicImageEnumeration_defaultThroughMode() throws Throwable {
+
+        Assume.assumeFalse(this.isMock);
+
+        setImagesLoadMode(ImagesLoadMode.DEFAULT);
+
+        try {
+            ImageEnumerationTaskState task = kickOffImageEnumeration(
+                    createEndpointState(), PUBLIC, AZURE_ALL_IMAGES_FILTER);
+
+            assertDefaultImages(task);
+        } finally {
+            setImagesLoadMode(ImagesLoadMode.ALL);
+        }
+    }
+
+    @Test
+    public void testPublicImageEnumeration_singleNoDefaults() throws Throwable {
+
+        Assume.assumeFalse(this.isMock);
+
+        setImagesLoadMode(ImagesLoadMode.STANDARD);
+
+        try {
+            kickOffImageEnumeration(createEndpointState(), PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
+
+            queryDocumentsAndAssertExpectedCount(getHost(), 1, ImageService.FACTORY_LINK, EXACT_COUNT);
+        } finally {
+            setImagesLoadMode(ImagesLoadMode.ALL);
+        }
+    }
+
+
+    /**
+     * Validate 11 image states are created.
+     */
+    private void assertDefaultImages(ImageEnumerationTaskState task) {
 
         QueryTop<ImageState> queryAll = new QueryTop<ImageState>(
                 getHost(),
@@ -321,7 +362,8 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                         Collectors.groupingBy(imageState -> imageState.osFamily)));
 
         Assert.assertEquals("The OS families of default images enumerated is incorrect",
-                Sets.newHashSet(OS_TYPE_LINUX_NAME, OS_TYPE_WINDOWS_NAME), imagesByOsFamily.keySet());
+                Sets.newHashSet(OS_TYPE_LINUX_NAME, OS_TYPE_WINDOWS_NAME),
+                imagesByOsFamily.keySet());
 
         Assert.assertEquals("The count of default Linux images enumerated is incorrect",
                 7, imagesByOsFamily.get(OS_TYPE_LINUX_NAME).size());
@@ -485,6 +527,11 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                 this.clientKey,
                 this.subscriptionId,
                 this.tenantId);
+    }
+
+    private static void setImagesLoadMode(ImagesLoadMode mode) {
+        System.setProperty(
+                AzureImageEnumerationAdapterService.IMAGES_LOAD_MODE_PROPERTY, mode.name());
     }
 
 }
