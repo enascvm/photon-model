@@ -289,7 +289,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                 for (MetricAvailability metricAvailability : metricDefinitions.getValues().get(0)
                         .getMetricAvailabilities()) {
                     if (metricAvailability.getTimeGrain()
-                            .equals(AzureConstants.METRIC_TIME_GRAIN_1_MINUTE)) {
+                            .equals(AzureConstants.METRIC_TIME_GRAIN_1_HOUR)) {
                         Location location = metricAvailability.getLocation();
                         Date mostRecentTableDate = null;
                         for (TableInfo tableInfo : location.getTableInfo()) {
