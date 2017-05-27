@@ -67,7 +67,6 @@ import com.microsoft.azure.management.network.implementation.NetworkManagementCl
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
-import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -196,7 +195,6 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
     private ComputeManagementClientImpl computeManagementClient;
     private ResourceManagementClientImpl resourceManagementClient;
-    private StorageManagementClientImpl storageManagementClient;
     private NetworkManagementClientImpl networkManagementClient;
 
     private String enumeratedComputeLink;
@@ -271,9 +269,6 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                         .withSubscriptionId(this.subscriptionId);
 
                 this.resourceManagementClient = new ResourceManagementClientImpl(credentials)
-                        .withSubscriptionId(this.subscriptionId);
-
-                this.storageManagementClient = new StorageManagementClientImpl(credentials)
                         .withSubscriptionId(this.subscriptionId);
 
                 this.networkManagementClient = new NetworkManagementClientImpl(credentials)
@@ -447,13 +442,19 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .forEach(c -> assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE,
                         c.environmentName));
 
+        // validate creation time for computes
+        result.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
+                .forEach(c -> {
+                    if (c.type == ComputeType.VM_GUEST) {
+                        assertNotNull(c.creationTimeMicros);
+                    } else if (c.type == ComputeType.VM_HOST) {
+                        assertNull(c.creationTimeMicros);
+                    }
+                });
+
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
-            if (document.type == ComputeType.VM_GUEST) {
-                assertNotNull(document.creationTimeMicros);
-            } else if (document.type == ComputeType.VM_HOST) {
-                assertNull(document.creationTimeMicros);
-            }
             if (!document.documentSelfLink.equals(computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()
