@@ -20,10 +20,13 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 
 import java.util.Map;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -45,6 +48,7 @@ public class EndpointService extends StatefulService {
         public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
         public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
         public static final String FIELD_NAME_ENDPOINT_PROPERTIES = "endpointProperties";
+        public static final String FIELD_NAME_PARENT_LINK = "parentLink";
 
         @Documentation(description = "Endpoint type of the endpoint instance,e.g. aws,azure,...")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED },
@@ -66,6 +70,11 @@ public class EndpointService extends StatefulService {
         @Documentation(description = "The link to the resource pool that is default for an endpoint.")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
         public String resourcePoolLink;
+
+        @Documentation(description = "The link to the parent endpoint link of this endpoint")
+        @PropertyOptions(usage = { LINK })
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        public String parentLink;
 
         @Documentation(description = "Endpoint specific properties. The specific endpoint adapter"
                 + " will extract them and enhance the linked Credentials,Compute and"

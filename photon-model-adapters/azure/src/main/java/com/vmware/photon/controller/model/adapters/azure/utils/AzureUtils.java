@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,11 +49,17 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -70,6 +77,9 @@ public class AzureUtils {
 
     private static final String VIRTUAL_MACHINE_ID_FORMAT =
             "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s";
+
+    //azure-subscriptionId
+    private static final String COMPUTES_NAME_FORMAT = "%s-%s";
 
     /**
      * Strategy to control period between retry attempts.
@@ -347,6 +357,47 @@ public class AzureUtils {
         return storageDescription;
     }
 
+    public static ComputeState constructAzureSubscriptionComputeState(String endpointLink,
+            String descriptionLink, List<String> tenantLinks, String subscriptionId,
+            String resourcePoolLink, Map<String, String> customProperties, String name) {
+        ComputeState cs = new ComputeState();
+        cs.id = UUID.randomUUID().toString();
+        cs.name = name != null ? name :
+                String.format(COMPUTES_NAME_FORMAT, EndpointType.azure.name(), subscriptionId);
+        cs.tenantLinks = tenantLinks;
+        cs.endpointLink = endpointLink;
+        if (customProperties == null) {
+            customProperties = new HashMap<>();
+        }
+        customProperties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
+                EndpointType.azure.name());
+        cs.customProperties = customProperties;
+        cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+        cs.type = ComputeType.VM_HOST;
+        cs.descriptionLink = descriptionLink;
+        cs.resourcePoolLink = resourcePoolLink;
+        return cs;
+    }
+
+    public static ComputeDescription constructAzureSubscriptionComputeDescription(
+            String endpointLink, List<String> tenantLinks, String subscriptionId, String name,
+            Map<String, String> customProperties) {
+        ComputeDescription cd = new ComputeDescription();
+        cd.tenantLinks = tenantLinks;
+        cd.endpointLink = endpointLink;
+        cd.name = name != null ? name :
+                String.format(COMPUTES_NAME_FORMAT, EndpointType.azure.name(), subscriptionId);
+        cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+        cd.id = UUID.randomUUID().toString();
+        if (customProperties == null) {
+            customProperties = new HashMap<>();
+        }
+        customProperties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
+                EndpointType.azure.name());
+        cd.customProperties = customProperties;
+        return cd;
+    }
+
     /**
      * Increments and returns the key name for next key being added (key1, key2 and so on) based
      * on the number of keys already present in the map.
@@ -396,5 +447,20 @@ public class AzureUtils {
 
         AdapterUtils.awaitTermination(httpClientExecutor);
         httpClient = null;
+    }
+
+    /**
+     * Utility method to handle failures of operations executed parallely.
+     * @param service  Instance of service calling this method
+     * @param exs  Map of operationIds to exceptions
+     * @param parentOp Parent operation which invoked the parallel operations
+     */
+    public static void handleFailure(Service service, Map<Long, Throwable> exs,
+                                      Operation parentOp) {
+        long firstKey = exs.keySet().iterator().next();
+        exs.values()
+                .forEach(ex -> service.getHost().log(Level.WARNING, String.format("Error: %s",
+                        ex.getMessage())));
+        parentOp.fail(exs.get(firstKey));
     }
 }

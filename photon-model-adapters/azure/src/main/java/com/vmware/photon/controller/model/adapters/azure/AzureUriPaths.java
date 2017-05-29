@@ -58,6 +58,10 @@ public class AzureUriPaths {
             + "/firewall-enumeration-adapter";
     public static final String AZURE_SUBSCRIPTIONS_ENUMERATOR = PROVISIONING_AZURE
             + "/subscriptions-enumerator";
+    public static final String AZURE_SUBSCRIPTION_ENDPOINT_CREATOR = PROVISIONING_AZURE
+            + "/subscription-endpoint-creator";
+    public static final String AZURE_SUBSCRIPTION_ENDPOINTS_ENUMERATOR = PROVISIONING_AZURE
+            + "/subscription-endpoints-enumerator";
 
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.azure.name());

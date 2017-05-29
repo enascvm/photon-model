@@ -16,10 +16,8 @@ package com.vmware.photon.controller.model.adapters.azure.ea.enumeration;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -27,12 +25,12 @@ import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-
-import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -46,9 +44,7 @@ import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Enumerator for creating ComputeStates for the entities in Azure bill against which Azure
@@ -62,8 +58,6 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 public class AzureSubscriptionsEnumerationService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_SUBSCRIPTIONS_ENUMERATOR;
-
-    public static final String COMPUTES_NAME_FORMAT = "%s-%s"; //azure-subscriptionUuid
 
     private static final int OPERATION_BATCH_SIZE = 50;
 
@@ -167,81 +161,30 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
 
     private void fetchExistingResources(AzureSubscriptionsEnumerationContext enumerationContext,
                                         AzureCostComputeEnumerationStages nextStage) {
-        Consumer<AzureSubscriptionsEnumerationContext> queryCompletionConsumer =
-                (AzureSubscriptionsEnumerationContext enumContext) -> {
-                    enumContext.stage = nextStage;
-                    handleAzureSubscriptionsEnumerationRequest(enumContext);
-                };
-
-        Consumer<Collection<ComputeState>> queryResultsConsumer =
-                (Collection<ComputeState> computeStates) -> {
-                    filterExistingSubscriptions(enumerationContext, computeStates);
-                };
-
-        queryForAzureSubscriptionComputes(enumerationContext, queryResultsConsumer,
-                queryCompletionConsumer);
-    }
-
-    private void queryForAzureSubscriptionComputes(
-            AzureSubscriptionsEnumerationContext enumerationContext,
-            Consumer<Collection<ComputeState>> queryResultsConsumer,
-            Consumer<AzureSubscriptionsEnumerationContext> queryCompletionConsumer) {
         Query azureComputesQuery =
                 createQueryForAzureSubscriptionComputes(enumerationContext);
 
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
-                .setQuery(azureComputesQuery).build();
-        queryTask.tenantLinks = enumerationContext.parent.tenantLinks;
-
-        QueryUtils.startQueryTask(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
-                .whenComplete((responseTask, t) -> {
+        QueryByPages<ComputeState> querySubscriptionsComputes = new QueryByPages<>(
+                getHost(), azureComputesQuery, ComputeState.class,
+                enumerationContext.parent.tenantLinks);
+        querySubscriptionsComputes.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        querySubscriptionsComputes.queryDocuments(computeState -> {
+                    if (computeState.customProperties != null
+                            && computeState.customProperties
+                            .containsKey(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
+                        String subscriptionUuid = computeState.customProperties
+                                .get(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY);
+                        enumerationContext.idToSubscription.remove(subscriptionUuid);
+                    }
+                }
+                ).whenComplete((aVoid, t) -> {
                     if (t != null) {
                         getFailureConsumer(enumerationContext).accept(t);
                         return;
                     }
-                    queryResultsConsumer.accept(getComputeStates(responseTask.results.documents));
-                    if (responseTask.results.nextPageLink != null) {
-                        queryRemainingAzureSubscriptionComputes(responseTask.results.nextPageLink,
-                                enumerationContext, queryResultsConsumer, queryCompletionConsumer);
-                    } else {
-                        queryCompletionConsumer.accept(enumerationContext);
-                    }
+                    enumerationContext.stage = nextStage;
+                    handleAzureSubscriptionsEnumerationRequest(enumerationContext);
                 });
-    }
-
-    private Collection<ComputeState> getComputeStates(Map<String, Object> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return Collections.emptyList();
-        }
-        Collection<ComputeState> azureAccountComputeStates = documents
-                        .values().stream()
-                        .map(s -> Utils.fromJson(s, ComputeState.class))
-                        .collect(Collectors.toList());
-        return azureAccountComputeStates;
-    }
-
-    private void queryRemainingAzureSubscriptionComputes(
-            String nextPageLink,
-            AzureSubscriptionsEnumerationContext enumerationContext,
-            Consumer<Collection<ComputeState>> queryResultsConsumer,
-            Consumer<AzureSubscriptionsEnumerationContext> queryCompletionConsumer) {
-        sendRequest(Operation.createGet(UriUtils.extendUri(getInventoryServiceUri(), nextPageLink))
-                .setCompletion( (op, t) -> {
-                    if (t != null) {
-                        getFailureConsumer(enumerationContext).accept(t);
-                        return;
-                    }
-                    QueryTask responseTask = op.getBody(QueryTask.class);
-                    queryResultsConsumer.accept(getComputeStates(responseTask.results.documents));
-                    if (responseTask.results.nextPageLink != null) {
-                        queryRemainingAzureSubscriptionComputes(responseTask.results.nextPageLink,
-                                enumerationContext, queryResultsConsumer, queryCompletionConsumer);
-                    } else {
-                        queryCompletionConsumer.accept(enumerationContext);
-                    }
-                }));
     }
 
     private Query createQueryForAzureSubscriptionComputes(
@@ -272,7 +215,12 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 .map(subscription -> {
                     Operation op = Operation.createPost(UriUtils.extendUri(getInventoryServiceUri(),
                             ComputeDescriptionService.FACTORY_LINK))
-                            .setBody(createComputeDescription(enumerationContext, subscription))
+                            .setBody(AzureUtils
+                                    .constructAzureSubscriptionComputeDescription(
+                                            enumerationContext.parent.endpointLink,
+                                            enumerationContext.parent.tenantLinks,
+                                            subscription.entityId, null, null))
+
                             .setCompletion((o, e) -> {
                                 if (e != null) {
                                     logSevere(
@@ -282,8 +230,13 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                                     return;
                                 }
                                 ComputeDescription cd = o.getBody(ComputeDescription.class);
-                                computesToCreate.add(createComputeState(enumerationContext,
-                                                subscription, cd));
+                                computesToCreate.add(AzureUtils
+                                        .constructAzureSubscriptionComputeState(
+                                        enumerationContext.parent.endpointLink, cd.documentSelfLink,
+                                        enumerationContext.parent.tenantLinks,
+                                        subscription.entityId,
+                                        enumerationContext.parent.resourcePoolLink,
+                                        getPropertiesMap(enumerationContext, subscription), null));
                             });
                     return op;
                 })
@@ -334,57 +287,6 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         }).sendWith(this, OPERATION_BATCH_SIZE);
     }
 
-    private void filterExistingSubscriptions(
-            AzureSubscriptionsEnumerationContext enumerationContext,
-            Collection<ComputeState> existingComputes) {
-        // Go through each of existing computes  and look
-        // for ones without subscriptionUuid in custom property
-        existingComputes.stream()
-                .forEach(computeState -> {
-                    if (computeState.customProperties != null
-                            && computeState.customProperties
-                            .containsKey(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
-                        String subscriptionUuid = computeState.customProperties
-                                .get(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY);
-                        enumerationContext.idToSubscription.remove(subscriptionUuid);
-                    }
-                });
-    }
-
-    private ComputeDescription createComputeDescription(
-            AzureSubscriptionsEnumerationContext enumerationContext,
-            AzureSubscription subscription) {
-        ComputeDescription cd = new ComputeDescription();
-        cd.tenantLinks = enumerationContext.parent.tenantLinks;
-        cd.endpointLink = enumerationContext.parent.endpointLink;
-        cd.name = String.format(COMPUTES_NAME_FORMAT,
-                enumerationContext.parent.description.name,
-                subscription.entityId);
-        cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-        cd.id = UUID.randomUUID().toString();
-        Map<String, String> customProperties = new HashMap<>();
-        customProperties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
-                EndpointType.azure.name());
-        cd.customProperties = customProperties;
-        return cd;
-    }
-
-    private ComputeState createComputeState(AzureSubscriptionsEnumerationContext enumerationContext,
-                                            AzureSubscription subscription,
-                                            ComputeDescription computeDescription) {
-        ComputeState cs = new ComputeState();
-        cs.id = UUID.randomUUID().toString();
-        cs.name = String.format(COMPUTES_NAME_FORMAT,
-                enumerationContext.parent.name, subscription.entityId);
-        cs.tenantLinks = enumerationContext.parent.tenantLinks;
-        cs.endpointLink = enumerationContext.parent.endpointLink;
-        cs.customProperties = getPropertiesMap(enumerationContext, subscription);
-        cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-        cs.type = ComputeType.VM_HOST;
-        cs.descriptionLink = computeDescription.documentSelfLink;
-        return cs;
-    }
-
     private Map<String, String> getPropertiesMap(
             AzureSubscriptionsEnumerationContext enumerationContext,
             AzureSubscription subscription) {
@@ -395,8 +297,6 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 enumerationContext.parentAuth.privateKeyId);
         properties.put(AzureCostConstants.AZURE_ACCOUNT_ID,
                 subscription.parentEntityId);
-        properties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
-                EndpointType.azure.name());
         properties.put(PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString());
         return properties;
     }
