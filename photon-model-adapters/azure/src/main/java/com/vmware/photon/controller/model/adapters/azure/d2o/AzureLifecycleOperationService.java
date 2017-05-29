@@ -16,9 +16,6 @@ package com.vmware.photon.controller.model.adapters.azure.d2o;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 import com.microsoft.azure.AzureEnvironment;
@@ -92,27 +89,25 @@ public class AzureLifecycleOperationService extends StatelessService {
                 completionHandler, getResourceOperationSpecs());
     }
 
-    private Collection<ResourceOperationSpec> getResourceOperationSpecs() {
-        List<ResourceOperationSpec> specs = new ArrayList<>();
-        ResourceOperationSpec spec1 = new ResourceOperationSpec();
-        spec1.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
-        spec1.endpointType = EndpointType.azure.name();
-        spec1.resourceType = ResourceType.COMPUTE;
-        spec1.operation = ResourceOperation.RESTART.operation;
-        spec1.name = ResourceOperation.RESTART.displayName;
-        spec1.description = ResourceOperation.RESTART.description;
-        spec1.targetCriteria = TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
-        specs.add(spec1);
-        ResourceOperationSpec spec2 = new ResourceOperationSpec();
-        spec2.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
-        spec2.endpointType = EndpointType.azure.name();
-        spec2.resourceType = ResourceType.COMPUTE;
-        spec2.operation = ResourceOperation.SUSPEND.operation;
-        spec2.name = ResourceOperation.SUSPEND.displayName;
-        spec2.description = ResourceOperation.SUSPEND.description;
-        spec2.targetCriteria = TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
-        specs.add(spec2);
-        return specs;
+    private ResourceOperationSpec[] getResourceOperationSpecs() {
+        ResourceOperationSpec operationSpec1 = getResourceOperationSpec(ResourceOperation.RESTART,
+                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        ResourceOperationSpec operationSpec2 = getResourceOperationSpec(ResourceOperation.SUSPEND,
+                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        return new ResourceOperationSpec[] {operationSpec1, operationSpec2};
+    }
+
+    private ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
+                                                           String targetCriteria) {
+        ResourceOperationSpec spec = new ResourceOperationSpec();
+        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
+        spec.endpointType = EndpointType.azure.name();
+        spec.resourceType = ResourceType.COMPUTE;
+        spec.operation = operationType.operation;
+        spec.name = operationType.displayName;
+        spec.description = operationType.description;
+        spec.targetCriteria = targetCriteria;
+        return spec;
     }
 
     @Override

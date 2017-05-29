@@ -13,15 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
-
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -30,6 +28,7 @@ import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 
+
 /**
  * Day2 power operations service for vSphere provider
  * "Reboot" (restart guest OS), "Suspend" , "Shutdown" (guest OS), "Reset" operations
@@ -37,7 +36,7 @@ import com.vmware.xenon.common.StatelessService;
 public class VSphereAdapterD2PowerOpsService extends StatelessService {
 
     public static final String SELF_LINK = ResourceOperationSpecService.buildDefaultAdapterLink(
-            PhotonModelConstants.EndpointType.vsphere.name(), ResourceOperationSpecService.ResourceType.COMPUTE,
+            PhotonModelConstants.EndpointType.vsphere.name(), ResourceType.COMPUTE,
             "d2PowerOps");
 
     private static final long SHUTDOWN_GUEST_OS_TIMEOUT = Long.parseLong(System.getProperty("vsphere.shutdown.guest.timeout",
@@ -204,24 +203,24 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
         }
     }
 
-    private Collection<ResourceOperationSpecService.ResourceOperationSpec> getResourceOperationSpecs() {
-        ResourceOperationSpecService.ResourceOperationSpec operationSpec1 = getResourceOperationSpec(ResourceOperation.REBOOT,
-                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
-        ResourceOperationSpecService.ResourceOperationSpec operationSpec2 = getResourceOperationSpec(ResourceOperation.SUSPEND,
-                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
-        ResourceOperationSpecService.ResourceOperationSpec operationSpec3 = getResourceOperationSpec(ResourceOperation.SHUTDOWN,
-                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
-        ResourceOperationSpecService.ResourceOperationSpec operationSpec4 = getResourceOperationSpec(ResourceOperation.RESET,
-                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
-        return Arrays.asList(operationSpec1, operationSpec2, operationSpec3, operationSpec4);
+    private ResourceOperationSpec[] getResourceOperationSpecs() {
+        ResourceOperationSpec operationSpec1 = getResourceOperationSpec(ResourceOperation.REBOOT,
+                ResourceOperationUtils.TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        ResourceOperationSpec operationSpec2 = getResourceOperationSpec(ResourceOperation.SUSPEND,
+                ResourceOperationUtils.TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        ResourceOperationSpec operationSpec3 = getResourceOperationSpec(ResourceOperation.SHUTDOWN,
+                ResourceOperationUtils.TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        ResourceOperationSpec operationSpec4 = getResourceOperationSpec(ResourceOperation.RESET,
+                ResourceOperationUtils.TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        return new ResourceOperationSpec[] {operationSpec1, operationSpec2, operationSpec3, operationSpec4};
     }
 
-    private ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
+    private ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
                                                                                         String targetCriteria) {
-        ResourceOperationSpecService.ResourceOperationSpec spec = new ResourceOperationSpecService.ResourceOperationSpec();
+        ResourceOperationSpec spec = new ResourceOperationSpec();
         spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
-        spec.resourceType = ResourceOperationSpecService.ResourceType.COMPUTE;
+        spec.resourceType = ResourceType.COMPUTE;
         spec.operation = operationType.operation;
         spec.name = operationType.displayName;
         spec.description = operationType.description;

@@ -15,9 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.RebootInstancesRequest;
@@ -67,7 +64,7 @@ public class AWSRebootService extends StatelessService {
             }
         };
         ResourceOperationUtils.registerResourceOperation(this,
-                completionHandler, getResourceOperationSpecs());
+                completionHandler, getResourceOperationSpec());
     }
 
     public AWSRebootService() {
@@ -133,8 +130,7 @@ public class AWSRebootService extends StatelessService {
         }
     }
 
-    private List<ResourceOperationSpec> getResourceOperationSpecs() {
-        List<ResourceOperationSpec> specs = new ArrayList<>();
+    private ResourceOperationSpec getResourceOperationSpec() {
         ResourceOperationSpec spec = new ResourceOperationSpec();
         spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = EndpointType.aws.name();
@@ -143,8 +139,7 @@ public class AWSRebootService extends StatelessService {
         spec.name = ResourceOperation.REBOOT.displayName;
         spec.description = ResourceOperation.REBOOT.description;
         spec.targetCriteria = TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
-        specs.add(spec);
-        return specs;
+        return spec;
     }
 
     private void updateComputeState(ResourceOperationRequest ror, DefaultAdapterContext c) {

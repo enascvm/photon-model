@@ -13,9 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.StartInstancesRequest;
 import com.amazonaws.services.ec2.model.StartInstancesResult;
@@ -63,7 +60,7 @@ public class AWSResetService extends StatelessService {
             }
         };
         ResourceOperationUtils.registerResourceOperation(this,
-                completionHandler, getResourceOperationSpecs());
+                completionHandler, getResourceOperationSpec());
     }
 
     private void reset(AmazonEC2AsyncClient client, ResourceOperationRequest pr,
@@ -96,10 +93,9 @@ public class AWSResetService extends StatelessService {
                                     if (e != null) {
                                         onError(e);
                                         return;
-                                    } else {
-                                        //Instances will be started only if they're successfully stopped
-                                        startInstance(client,c);
                                     }
+                                    //Instances will be started only if they're successfully stopped
+                                    startInstance(client,c);
                                 });
                     }
                 });
@@ -162,7 +158,7 @@ public class AWSResetService extends StatelessService {
         }
     }
 
-    private List<ResourceOperationSpec> getResourceOperationSpecs() {
+    private ResourceOperationSpec getResourceOperationSpec() {
         ResourceOperationSpec spec = new ResourceOperationSpec();
         spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = EndpointType.aws.name();
@@ -171,9 +167,7 @@ public class AWSResetService extends StatelessService {
         spec.name = ResourceOperation.RESET.displayName;
         spec.description = ResourceOperation.RESET.description;
         spec.targetCriteria = ResourceOperationUtils.TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
-        List<ResourceOperationSpec> specs = new ArrayList<>();
-        specs.add(spec);
-        return specs;
+        return spec;
     }
 
     private void updateComputeState(DefaultAdapterContext c) {

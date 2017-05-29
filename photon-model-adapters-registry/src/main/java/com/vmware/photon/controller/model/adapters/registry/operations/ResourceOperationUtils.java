@@ -14,7 +14,7 @@
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
 import java.net.URI;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -282,20 +282,21 @@ public class ResourceOperationUtils {
      *        list of intended the ResourceOperationSpec's to register with the service
      */
     public static void registerResourceOperation(Service service, CompletionHandler handler,
-            Collection<ResourceOperationSpec> specs) {
-        if (specs == null || specs.isEmpty()) {
+            ResourceOperationSpec... specs ) {
+        if (specs == null || specs.length == 0) {
             service.getHost().log(Level.FINE,
                     "No ResourceOperationSpec to register by %s",
                     service.getSelfLink());
             handler.handle(null, null);
             return;
         }
+
         service.getHost().registerForServiceAvailability((op, ex) -> {
             if (ex != null) {
                 service.getHost().log(Level.SEVERE, Utils.toString(ex));
                 handler.handle(op, ex);
             } else {
-                List<Operation> operations = specs.stream()
+                List<Operation> operations = Arrays.stream(specs)
                         .map(spec -> createOperation(service, spec))
                         .collect(Collectors.toList());
 
