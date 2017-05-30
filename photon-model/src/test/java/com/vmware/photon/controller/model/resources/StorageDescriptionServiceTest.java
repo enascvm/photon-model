@@ -14,15 +14,18 @@
 package com.vmware.photon.controller.model.resources;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.UUID;
 
 import org.junit.Before;
@@ -34,7 +37,9 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescriptionExpanded;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -67,6 +72,16 @@ public class StorageDescriptionServiceTest extends Suite {
         storageState.resourcePoolLink = "http://resourcePoolLink";
 
         return storageState;
+    }
+
+    private static ResourceGroupState buildValidResourceGroupState(String value)
+            throws Throwable {
+        ResourceGroupState rg = new ResourceGroupState();
+        rg.id = value;
+        rg.name = "my resource group";
+        rg.customProperties = new HashMap<>();
+        rg.customProperties.put("key1", "value1");
+        return rg;
     }
 
     /**
@@ -351,6 +366,85 @@ public class StorageDescriptionServiceTest extends Suite {
             expectedCustomProperties.putAll(patchState.customProperties);
 
             assertThat(returnState.customProperties, is(expectedCustomProperties));
+        }
+    }
+
+    /**
+     * This class implements tests for the handleGet method.
+     */
+    public static class HandleGetTest extends BaseModelTest {
+        @Test
+        public void testGet() throws Throwable {
+            ResourceGroupService.ResourceGroupState rgState = buildValidResourceGroupState("1");
+            ResourceGroupService.ResourceGroupState rgResultState = postServiceSynchronously(
+                    ResourceGroupService.FACTORY_LINK, rgState,
+                    ResourceGroupService.ResourceGroupState.class);
+
+            StorageDescription startState = buildValidStartState();
+            startState.groupLinks = new HashSet<>();
+            startState.groupLinks.add(rgResultState.documentSelfLink);
+
+            StorageDescription returnState = postServiceSynchronously(
+                    StorageDescriptionService.FACTORY_LINK,
+                    startState, StorageDescription.class);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    StorageDescription.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.groupLinks.size(), is(1));
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.name, is(startState.name));
+            assertThat(returnState.tenantLinks.get(0),
+                    is(startState.tenantLinks.get(0)));
+            assertThat(returnState.regionId, is(startState.regionId));
+            assertThat(returnState.authCredentialsLink,
+                    is(startState.authCredentialsLink));
+            assertThat(returnState.resourcePoolLink,
+                    is(startState.resourcePoolLink));
+        }
+
+        @Test
+        public void testGetExpanded() throws Throwable {
+            ResourceGroupService.ResourceGroupState rgState1 = buildValidResourceGroupState("1");
+            ResourceGroupService.ResourceGroupState rgState2 = buildValidResourceGroupState("2");
+            ResourceGroupService.ResourceGroupState rgResultState1 = postServiceSynchronously(
+                    ResourceGroupService.FACTORY_LINK, rgState1,
+                    ResourceGroupService.ResourceGroupState.class);
+            ResourceGroupService.ResourceGroupState rgResultState2 = postServiceSynchronously(
+                    ResourceGroupService.FACTORY_LINK, rgState2,
+                    ResourceGroupService.ResourceGroupState.class);
+
+            StorageDescription startState = buildValidStartState();
+            startState.groupLinks = new HashSet<>();
+            startState.groupLinks.add(rgResultState1.documentSelfLink);
+            startState.groupLinks.add(rgResultState2.documentSelfLink);
+
+            StorageDescription returnState = postServiceSynchronously(
+                    StorageDescriptionService.FACTORY_LINK,
+                    startState, StorageDescription.class);
+
+            StorageDescriptionExpanded sdExpanded = getServiceSynchronously(
+                    returnState.documentSelfLink + "?$expand",
+                    StorageDescriptionExpanded.class);
+
+            assertNotNull(sdExpanded);
+            assertNotNull(sdExpanded.resourceGroupStates);
+            assertThat(sdExpanded.groupLinks.size(), is(2));
+            assertTrue(sdExpanded.groupLinks.contains(rgResultState1.documentSelfLink));
+            assertThat(sdExpanded.id, is(startState.id));
+            assertThat(sdExpanded.name, is(startState.name));
+            assertThat(sdExpanded.tenantLinks.get(0),
+                    is(startState.tenantLinks.get(0)));
+            assertThat(sdExpanded.regionId, is(startState.regionId));
+            assertThat(sdExpanded.authCredentialsLink,
+                    is(startState.authCredentialsLink));
+            assertThat(sdExpanded.resourcePoolLink,
+                    is(startState.resourcePoolLink));
+            // Assert for expanded resource group states
+            assertThat(sdExpanded.resourceGroupStates.size(), is(2));
+            assertThat(sdExpanded.resourceGroupStates.iterator().next().name, containsString(rgState1.name));
         }
     }
 

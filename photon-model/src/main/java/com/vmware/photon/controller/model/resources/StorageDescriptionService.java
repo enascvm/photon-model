@@ -14,15 +14,22 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 public class StorageDescriptionService extends StatefulService {
@@ -93,6 +100,36 @@ public class StorageDescriptionService extends StatefulService {
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_16)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Boolean supportsEncryption;
+
+        @Override
+        public void copyTo(ResourceState target) {
+            super.copyTo(target);
+            if (target instanceof StorageDescription) {
+                StorageDescription targetState = (StorageDescription) target;
+                targetState.type = this.type;
+                targetState.authCredentialsLink = this.authCredentialsLink;
+                targetState.resourcePoolLink = this.resourcePoolLink;
+                targetState.adapterManagementReference = this.adapterManagementReference;
+                targetState.capacityBytes = this.capacityBytes;
+                targetState.computeHostLink = this.computeHostLink;
+                targetState.endpointLink = this.endpointLink;
+                targetState.supportsEncryption = this.supportsEncryption;
+            }
+        }
+    }
+
+    /**
+     * Expanded storage description along with its resource group states.
+     */
+    public static class StorageDescriptionExpanded extends StorageDescription {
+        /**
+         * Set of resource group states to which this storage description belongs to.
+         */
+        public Set<ResourceGroupState> resourceGroupStates;
+
+        public static URI buildUri(URI sdUri) {
+            return UriUtils.buildExpandLinksQueryUri(sdUri);
+        }
     }
 
     @Override
@@ -143,5 +180,51 @@ public class StorageDescriptionService extends StatefulService {
         };
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
                 StorageDescription.class, customPatchHandler);
+    }
+
+    @Override
+    public void handleGet(Operation get) {
+        StorageDescription currentState = getState(get);
+        boolean doExpand = get.getUri().getQuery() != null &&
+                UriUtils.hasODataExpandParamValue(get.getUri());
+
+        if (!doExpand) {
+            get.setBody(currentState).complete();
+            return;
+        }
+
+        StorageDescriptionExpanded sdExpanded = new StorageDescriptionExpanded();
+        currentState.copyTo(sdExpanded);
+
+        List<Operation> getOps = new ArrayList<>();
+        if (currentState.groupLinks != null) {
+            sdExpanded.resourceGroupStates = new HashSet<>(currentState.groupLinks.size());
+            currentState.groupLinks.stream().forEach(rgLink -> {
+                getOps.add(Operation.createGet(this, rgLink)
+                        .setReferer(this.getUri())
+                        .setCompletion((o, e) -> {
+                            if (e == null) {
+                                sdExpanded.resourceGroupStates.add(o.getBody(ResourceGroupState.class));
+                            } else {
+                                logFine("Could not fetch resource group state %s due to %s",
+                                        rgLink, e.getMessage());
+                            }
+                        }));
+            });
+            if (!getOps.isEmpty()) {
+                OperationJoin.create(getOps)
+                        .setCompletion((ops, exs) -> {
+                            if (exs != null) {
+                                get.fail(new IllegalStateException(Utils.toString(exs)));
+                            } else {
+                                get.setBody(sdExpanded).complete();
+                            }
+                        }).sendWith(this);
+            } else {
+                get.setBody(sdExpanded).complete();
+            }
+        } else {
+            get.setBody(sdExpanded).complete();
+        }
     }
 }

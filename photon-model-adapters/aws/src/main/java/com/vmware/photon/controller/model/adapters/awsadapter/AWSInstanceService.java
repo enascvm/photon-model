@@ -350,7 +350,7 @@ public class AWSInstanceService extends StatelessService {
                 .withMaxCount(1)
                 .withMonitoring(true);
 
-        if (!aws.childDisks.isEmpty() || bootDisk.capacityMBytes > 0  ||
+        if (!aws.dataDisks.isEmpty() || bootDisk.capacityMBytes > 0  ||
                 bootDisk.customProperties != null ) {
             DescribeImagesRequest imagesDescriptionRequest = new DescribeImagesRequest();
             imagesDescriptionRequest.withImageIds(aws.bootDiskImageNativeId);
@@ -454,9 +454,9 @@ public class AWSInstanceService extends StatelessService {
     private List<BlockDeviceMapping> createAdditionalDiskMappings(AWSInstanceContext aws,
             List<String> usedDeviceNames) {
         List<BlockDeviceMapping> additionalDiskMappings = new ArrayList<>();
-        if (!aws.childDisks.isEmpty()) {
+        if (!aws.dataDisks.isEmpty()) {
             List<String> availableDiskNames = ListUtils.subtract(AWS_DEVICE_NAMES, usedDeviceNames);
-            for (DiskState diskState : aws.childDisks) {
+            for (DiskState diskState : aws.dataDisks) {
                 if (diskState.capacityMBytes > 0 && !availableDiskNames.isEmpty()) {
                     BlockDeviceMapping blockDeviceMapping = new BlockDeviceMapping();
                     EbsBlockDevice ebsBlockDevice = new EbsBlockDevice();
@@ -544,7 +544,7 @@ public class AWSInstanceService extends StatelessService {
                 cs.lifecycleState = LifecycleState.READY;
 
                 patchOperations.addAll(createPatchNICStatesOperations(this.context.nics, instance));
-                patchOperations.addAll(createPatchDiskStatesOperations(this.context.childDisks,
+                patchOperations.addAll(createPatchDiskStatesOperations(this.context.dataDisks,
                         instance));
 
                 Operation patchState = Operation

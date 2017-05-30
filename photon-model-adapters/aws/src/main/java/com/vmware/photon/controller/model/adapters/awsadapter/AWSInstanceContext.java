@@ -90,7 +90,7 @@ public class AWSInstanceContext
 
     public DiskState bootDisk;
 
-    public List<DiskState> childDisks = new ArrayList<>();
+    public List<DiskState> dataDisks = new ArrayList<>();
 
     public String bootDiskImageNativeId;
 
@@ -594,7 +594,7 @@ public class AWSInstanceContext
                             if (diskState.bootOrder == 1) {
                                 context.bootDisk = diskState;
                             } else {
-                                context.childDisks.add(diskState);
+                                context.dataDisks.add(diskState);
                             }
                         }
                 ))
