@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -36,6 +37,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootCo
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -79,48 +81,160 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         if (this.ovfUri == null) {
             return;
         }
+        ComputeState vm = null;
+        try {
+            // Create a resource pool where the VM will be housed
+            this.resourcePool = createResourcePool();
+            this.auth = createAuth();
 
-        // Create a resource pool where the VM will be housed
-        this.resourcePool = createResourcePool();
-        this.auth = createAuth();
+            this.computeHostDescription = createComputeDescription();
+            this.computeHost = createComputeHost(this.computeHostDescription);
 
-        this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost(this.computeHostDescription);
+            ComputeDescription computeDesc = createTemplate();
 
-        ComputeDescription computeDesc = createTemplate();
+            ImportOvfRequest req = new ImportOvfRequest();
+            req.ovfUri = this.ovfUri;
+            req.template = computeDesc;
 
-        ImportOvfRequest req = new ImportOvfRequest();
-        req.ovfUri = this.ovfUri;
-        req.template = computeDesc;
+            Operation op = Operation.createPatch(this.host, OvfImporterService.SELF_LINK)
+                    .setBody(req)
+                    .setReferer(this.host.getPublicUri());
 
-        Operation op = Operation.createPatch(this.host, OvfImporterService.SELF_LINK)
-                .setBody(req)
-                .setReferer(this.host.getPublicUri());
+            CompletableFuture<Operation> f = this.host.sendWithFuture(op);
 
-        CompletableFuture<Operation> f = this.host.sendWithFuture(op);
+            // depending on OVF location you may want to increase the timeout
+            f.get(300, TimeUnit.SECONDS);
 
-        // depending on OVF location you may want to increase the timeout
-        f.get(300, TimeUnit.SECONDS);
+            snapshotFactoryState("ovf", ComputeDescriptionService.class);
 
-        snapshotFactoryState("ovf", ComputeDescriptionService.class);
+            enumerateComputes(this.computeHost);
 
-        enumerateComputes(this.computeHost);
+            String descriptionLink = findFirstOvfDescriptionLink();
 
-        String descriptionLink = findFirstOvfDescriptionLink();
+            this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA, false);
+            vm = createVmState(descriptionLink);
 
-        this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA);
-        ComputeState vm = createVmState(descriptionLink);
+            // set timeout for the next step, vmdk upload may take some time
+            host.setTimeoutSeconds(60 * 5);
 
-        // set timeout for the next step, vmdk upload may take some time
-        host.setTimeoutSeconds(60 * 5);
+            // provision
+            ProvisionComputeTaskState outTask = createProvisionTask(vm);
+            awaitTaskEnd(outTask);
 
-        // provision
-        ProvisionComputeTaskState outTask = createProvisionTask(vm);
-        awaitTaskEnd(outTask);
+            snapshotFactoryState("ovf", ComputeService.class);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
 
-        snapshotFactoryState("ovf", ComputeService.class);
+    @Test
+    public void deployOvfWithoutDatastore() throws Throwable {
+        if (this.ovfUri == null) {
+            return;
+        }
+        // Re-init the datastore Id to null;
+        this.dataStoreId = null;
+        ComputeState vm = null;
+        try {
+            // Create a resource pool where the VM will be housed
+            this.resourcePool = createResourcePool();
+            this.auth = createAuth();
 
-        deleteVmAndWait(vm);
+            this.computeHostDescription = createComputeDescription();
+            this.computeHost = createComputeHost(this.computeHostDescription);
+
+            ComputeDescription computeDesc = createTemplate();
+
+            ImportOvfRequest req = new ImportOvfRequest();
+            req.ovfUri = this.ovfUri;
+            req.template = computeDesc;
+
+            Operation op = Operation.createPatch(this.host, OvfImporterService.SELF_LINK)
+                    .setBody(req)
+                    .setReferer(this.host.getPublicUri());
+
+            CompletableFuture<Operation> f = this.host.sendWithFuture(op);
+
+            // depending on OVF location you may want to increase the timeout
+            f.get(300, TimeUnit.SECONDS);
+
+            snapshotFactoryState("ovf", ComputeDescriptionService.class);
+
+            enumerateComputes(this.computeHost);
+
+            String descriptionLink = findFirstOvfDescriptionLink();
+
+            this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA);
+            vm = createVmState(descriptionLink);
+
+            // set timeout for the next step, vmdk upload may take some time
+            host.setTimeoutSeconds(60 * 5);
+
+            // provision
+            ProvisionComputeTaskState outTask = createProvisionTask(vm);
+            awaitTaskEnd(outTask);
+
+            snapshotFactoryState("ovf", ComputeService.class);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
+
+    @Test
+    public void deployOvfWithStoragePolicy() throws Throwable {
+        if (this.ovfUri == null) {
+            return;
+        }
+        ComputeState vm = null;
+        try {
+            // Create a resource pool where the VM will be housed
+            this.resourcePool = createResourcePool();
+            this.auth = createAuth();
+
+            this.computeHostDescription = createComputeDescription();
+            this.computeHost = createComputeHost(this.computeHostDescription);
+
+            ComputeDescription computeDesc = createTemplate();
+
+            ImportOvfRequest req = new ImportOvfRequest();
+            req.ovfUri = this.ovfUri;
+            req.template = computeDesc;
+
+            Operation op = Operation.createPatch(this.host, OvfImporterService.SELF_LINK)
+                    .setBody(req)
+                    .setReferer(this.host.getPublicUri());
+
+            CompletableFuture<Operation> f = this.host.sendWithFuture(op);
+
+            // depending on OVF location you may want to increase the timeout
+            f.get(300, TimeUnit.SECONDS);
+
+            snapshotFactoryState("ovf", ComputeDescriptionService.class);
+
+            enumerateComputes(this.computeHost);
+
+            String descriptionLink = findFirstOvfDescriptionLink();
+
+            this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA, true);
+            vm = createVmState(descriptionLink);
+
+            // set timeout for the next step, vmdk upload may take some time
+            host.setTimeoutSeconds(60 * 5);
+
+            // provision
+            ProvisionComputeTaskState outTask = createProvisionTask(vm);
+            awaitTaskEnd(outTask);
+
+            snapshotFactoryState("ovf", ComputeService.class);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
     }
 
     private String findFirstOvfDescriptionLink() throws Exception {
@@ -172,22 +286,14 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         return returnState;
     }
 
-    private DiskState createBootDisk(String cloudConfig) throws Throwable {
+    private DiskState buildBootDisk(String cloudConfig) throws
+            Throwable {
         DiskState res = new DiskState();
         res.bootOrder = 1;
         res.type = DiskType.HDD;
         res.id = res.name = "boot-disk";
         res.sourceImageReference = URI.create("file:///dev/null");
 
-        // Create storage description
-        StorageDescriptionService.StorageDescription sd = new StorageDescriptionService
-                .StorageDescription();
-        sd.id = sd.name = this.dataStoreId;
-        sd = TestUtils.doPost(this.host, sd,
-                StorageDescriptionService.StorageDescription.class,
-                UriUtils.buildUri(this.host, StorageDescriptionService.FACTORY_LINK));
-
-        res.storageDescriptionLink = sd.documentSelfLink;
         res.bootConfig = new BootConfig();
         res.bootConfig.files = new FileEntry[] { new FileEntry(), new FileEntry() };
         res.bootConfig.files[0].path = "user-data";
@@ -196,6 +302,37 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         res.bootConfig.files[1].path = "public-keys";
         res.bootConfig.files[1].contents = IOUtils
                 .toString(new File("src/test/resources/testkey.pub").toURI());
+
+        return res;
+    }
+
+    private DiskState createBootDisk(String cloudConfig) throws
+            Throwable {
+        DiskState res = buildBootDisk(cloudConfig);
+        return TestUtils.doPost(this.host, res,
+                DiskState.class,
+                UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+    private DiskState createBootDisk(String cloudConfig, boolean isStoragePolicyBased) throws
+            Throwable {
+        DiskState res = buildBootDisk(cloudConfig);
+        if (!isStoragePolicyBased) {
+            // Create storage description
+            StorageDescriptionService.StorageDescription sd = new StorageDescriptionService
+                    .StorageDescription();
+            sd.id = sd.name = this.dataStoreId;
+            sd = TestUtils.doPost(this.host, sd,
+                    StorageDescriptionService.StorageDescription.class,
+                    UriUtils.buildUri(this.host, StorageDescriptionService.FACTORY_LINK));
+
+            res.storageDescriptionLink = sd.documentSelfLink;
+        } else {
+            // Create Resource group state
+            ResourceGroupService.ResourceGroupState rg = createResourceGroupState();
+            res.groupLinks = new HashSet<>();
+            res.groupLinks.add(rg.documentSelfLink);
+        }
 
         return TestUtils.doPost(this.host, res,
                 DiskState.class,

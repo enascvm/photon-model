@@ -16,7 +16,11 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
+
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.net.URI;
@@ -35,6 +39,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -69,100 +74,182 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
 
     @Test
     public void createInstanceFromTemplate() throws Throwable {
-        this.auth = createAuth();
-        this.resourcePool = createResourcePool();
+        ComputeState vm = null;
+        ComputeState clonedVm = null;
+        try {
+            this.auth = createAuth();
+            this.resourcePool = createResourcePool();
 
-        if (isMock()) {
-            createNetwork(networkId);
-        }
-        this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost(this.computeHostDescription);
+            if (isMock()) {
+                createNetwork(networkId);
+            }
+            this.computeHostDescription = createComputeDescription();
+            this.computeHost = createComputeHost(this.computeHostDescription);
 
-        doRefresh();
+            doRefresh();
 
-        snapshotFactoryState("clone-refresh", NetworkService.class);
-        ComputeDescription vmDescription = createVmDescription();
-        ComputeState vm = createVmState(vmDescription, false);
+            snapshotFactoryState("clone-refresh", NetworkService.class);
+            ComputeDescription vmDescription = createVmDescription();
+            vm = createVmState(vmDescription, false, null);
 
-        // kick off a provision task to do the actual VM creation
-        ProvisionComputeTaskState provisionTask = createProvisionTask(vm);
-        awaitTaskEnd(provisionTask);
+            // kick off a provision task to do the actual VM creation
+            ProvisionComputeTaskState provisionTask = createProvisionTask(vm);
+            awaitTaskEnd(provisionTask);
 
-        vm = getComputeState(vm);
+            vm = getComputeState(vm);
 
-        // put fake moref in the vm
-        if (isMock()) {
-            ManagedObjectReference moref = new ManagedObjectReference();
-            moref.setValue("vm-0");
-            moref.setType(VimNames.TYPE_VM);
-            CustomProperties.of(vm).put(MOREF, moref);
-            vm = doPost(this.host, vm,
-                    ComputeState.class,
-                    UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
-        }
+            // put fake moref in the vm
+            if (isMock()) {
+                ManagedObjectReference moref = new ManagedObjectReference();
+                moref.setValue("vm-0");
+                moref.setType(VimNames.TYPE_VM);
+                CustomProperties.of(vm).put(MOREF, moref);
+                vm = doPost(this.host, vm,
+                        ComputeState.class,
+                        UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+            }
 
-        // create state & desc of the clone
-        ComputeDescription cloneDescription = createCloneDescription(vm.documentSelfLink);
-        ComputeState clonedVm = createCloneVmState(cloneDescription);
+            // create state & desc of the clone
+            ComputeDescription cloneDescription = createCloneDescription(vm.documentSelfLink);
+            clonedVm = createCloneVmState(cloneDescription, false);
 
-        provisionTask = createProvisionTask(clonedVm);
-        awaitTaskEnd(provisionTask);
+            provisionTask = createProvisionTask(clonedVm);
+            awaitTaskEnd(provisionTask);
 
-        clonedVm = getComputeState(clonedVm);
+            clonedVm = getComputeState(clonedVm);
 
-        if (!isMock()) {
-            // Verify that the disk is resized
-            BasicConnection connection = createConnection();
-            GetMoRef get = new GetMoRef(connection);
-            verifyDiskSize(clonedVm, get, CLONE_HDD_DISK_SIZE);
-
-            deleteVmAndWait(vm);
-            deleteVmAndWait(clonedVm);
+            if (!isMock()) {
+                // Verify that the disk is resized
+                BasicConnection connection = createConnection();
+                GetMoRef get = new GetMoRef(connection);
+                verifyDiskSize(clonedVm, get, CLONE_HDD_DISK_SIZE);
+            }
+        } finally {
+            if (!isMock()) {
+                cleanUpVm(vm, clonedVm);
+            }
         }
     }
 
     @Test
     public void verifyBootDiskCustomization() throws Throwable {
-        this.auth = createAuth();
-        this.resourcePool = createResourcePool();
+        ComputeState vm = null;
+        try {
+            this.auth = createAuth();
+            this.resourcePool = createResourcePool();
 
-        if (isMock()) {
-            createNetwork(networkId);
+            if (isMock()) {
+                createNetwork(networkId);
+            }
+            this.computeHostDescription = createComputeDescription();
+            this.computeHost = createComputeHost(this.computeHostDescription);
+
+            doRefresh();
+
+            snapshotFactoryState("clone-refresh", NetworkService.class);
+            ComputeDescription vmDescription = createVmDescription();
+            vm = createVmState(vmDescription, true, null);
+
+            // kick off a provision task to do the actual VM creation
+            ProvisionComputeTaskState provisionTask = createProvisionTask(vm);
+            awaitTaskEnd(provisionTask);
+
+            vm = getComputeState(vm);
+
+            // put fake moref in the vm
+            if (isMock()) {
+                ManagedObjectReference moref = new ManagedObjectReference();
+                moref.setValue("vm-0");
+                moref.setType(VimNames.TYPE_VM);
+                CustomProperties.of(vm).put(MOREF, moref);
+                vm = doPost(this.host, vm,
+                        ComputeState.class,
+                        UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+            }
+
+            if (!isMock()) {
+                // Verify that the disk is resized
+                BasicConnection connection = createConnection();
+                GetMoRef get = new GetMoRef(connection);
+                verifyDiskSize(vm, get, HDD_DISK_SIZE);
+                verifyDiskProperties(vm, get);
+            }
+        } finally {
+            if (!isMock() && vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
-        this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost(this.computeHostDescription);
+    }
 
-        doRefresh();
+    @Test
+    public void verifyBootDiskCustomizationWithStoragePolicy() throws Throwable {
+        ComputeState vm = null;
+        ComputeState clonedVm = null;
+        try {
+            this.auth = createAuth();
+            this.resourcePool = createResourcePool();
 
-        snapshotFactoryState("clone-refresh", NetworkService.class);
-        ComputeDescription vmDescription = createVmDescription();
-        ComputeState vm = createVmState(vmDescription, true);
+            if (isMock()) {
+                createNetwork(networkId);
+            }
+            this.computeHostDescription = createComputeDescription();
+            this.computeHost = createComputeHost(this.computeHostDescription);
 
-        // kick off a provision task to do the actual VM creation
-        ProvisionComputeTaskState provisionTask = createProvisionTask(vm);
-        awaitTaskEnd(provisionTask);
+            doRefresh();
 
-        vm = getComputeState(vm);
+            snapshotFactoryState("clone-refresh", NetworkService.class);
+            ComputeDescription vmDescription = createVmDescription();
+            DiskService.DiskState bootDisk = createDiskWithStoragePolicy("boot", DiskType.HDD,
+                    getDiskUri(), HDD_DISK_SIZE, buildCustomProperties());
+            vm = createVmState(vmDescription, true, bootDisk.documentSelfLink);
 
-        // put fake moref in the vm
-        if (isMock()) {
-            ManagedObjectReference moref = new ManagedObjectReference();
-            moref.setValue("vm-0");
-            moref.setType(VimNames.TYPE_VM);
-            CustomProperties.of(vm).put(MOREF, moref);
-            vm = doPost(this.host, vm,
-                    ComputeState.class,
-                    UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+            // kick off a provision task to do the actual VM creation
+            ProvisionComputeTaskState provisionTask = createProvisionTask(vm);
+            awaitTaskEnd(provisionTask);
+
+            vm = getComputeState(vm);
+
+            // put fake moref in the vm
+            if (isMock()) {
+                ManagedObjectReference moref = new ManagedObjectReference();
+                moref.setValue("vm-0");
+                moref.setType(VimNames.TYPE_VM);
+                CustomProperties.of(vm).put(MOREF, moref);
+                vm = doPost(this.host, vm,
+                        ComputeState.class,
+                        UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+            }
+
+            // create state & desc of the clone
+            ComputeDescription cloneDescription = createCloneDescription(vm.documentSelfLink);
+            clonedVm = createCloneVmState(cloneDescription, true);
+
+            provisionTask = createProvisionTask(clonedVm);
+            awaitTaskEnd(provisionTask);
+
+            clonedVm = getComputeState(clonedVm);
+
+            if (!isMock()) {
+                // Verify that the disk is resized
+                BasicConnection connection = createConnection();
+                GetMoRef get = new GetMoRef(connection);
+                verifyDiskSize(vm, get, HDD_DISK_SIZE);
+                verifyDiskSize(clonedVm, get, CLONE_HDD_DISK_SIZE);
+                verifyDiskProperties(vm, get);
+            }
+        } finally {
+            if (!isMock()) {
+                cleanUpVm(vm, clonedVm);
+            }
         }
+    }
 
-        if (!isMock()) {
-            // Verify that the disk is resized
-            BasicConnection connection = createConnection();
-            GetMoRef get = new GetMoRef(connection);
-            verifyDiskSize(vm, get, HDD_DISK_SIZE);
-            verifyDiskProperties(vm, get);
-
+    private void cleanUpVm(ComputeState vm, ComputeState clonedVm) {
+        if (vm != null) {
             deleteVmAndWait(vm);
+        }
+        if (clonedVm != null) {
+            deleteVmAndWait(clonedVm);
         }
     }
 
@@ -195,7 +282,8 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 
-    private ComputeState createVmState(ComputeDescription vmDescription, boolean diskCustomization)
+    private ComputeState createVmState(ComputeDescription vmDescription, boolean
+            diskCustomization, String bootDiskSelfLink)
             throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = vmDescription.name;
@@ -223,9 +311,13 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.diskLinks = new ArrayList<>(2);
 
 
-        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri(), HDD_DISK_SIZE,
-                diskCustomization ? buildCustomProperties() : null, null).documentSelfLink);
-        computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null, FLOPPY_DISK_SIZE, null, null)
+        if (bootDiskSelfLink != null) {
+            computeState.diskLinks.add(bootDiskSelfLink);
+        } else {
+            computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri(), HDD_DISK_SIZE,
+                    diskCustomization ? buildCustomProperties() : null).documentSelfLink);
+        }
+        computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null, FLOPPY_DISK_SIZE, null)
                 .documentSelfLink);
         String placementLink = findRandomResourcePoolOwningCompute();
 
@@ -276,7 +368,8 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         return placementLink;
     }
 
-    private ComputeState createCloneVmState(ComputeDescription vmDescription) throws Throwable {
+    private ComputeState createCloneVmState(ComputeDescription vmDescription,
+            boolean isStoragePolicyBased) throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = vmDescription.name;
         computeState.documentSelfLink = computeState.id;
@@ -290,8 +383,13 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.parentLink = this.computeHost.documentSelfLink;
 
         computeState.diskLinks = new ArrayList<>(1);
-        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri(),
-                CLONE_HDD_DISK_SIZE, null, null).documentSelfLink);
+        if (isStoragePolicyBased) {
+            computeState.diskLinks.add(createDiskWithStoragePolicy("boot", DiskType.HDD,
+                    getDiskUri(), CLONE_HDD_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+        } else {
+            computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri(),
+                    CLONE_HDD_DISK_SIZE, null).documentSelfLink);
+        }
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)

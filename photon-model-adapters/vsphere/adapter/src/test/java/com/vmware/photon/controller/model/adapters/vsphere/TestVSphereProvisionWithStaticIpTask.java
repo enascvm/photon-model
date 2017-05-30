@@ -74,54 +74,59 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
 
     @Test
     public void deployByCloningWithCustomization() throws Throwable {
-        this.nicDescription = new NetworkInterfaceDescription();
-        this.nicDescription.assignment = IpAssignment.STATIC;
-        this.nicDescription.address = "10.0.0.2";
+        ComputeState vm = null;
+        try {
+            this.nicDescription = new NetworkInterfaceDescription();
+            this.nicDescription.assignment = IpAssignment.STATIC;
+            this.nicDescription.address = "10.0.0.2";
 
-        // Create a resource pool where the VM will be housed
-        this.resourcePool = createResourcePool();
-        this.auth = createAuth();
+            // Create a resource pool where the VM will be housed
+            this.resourcePool = createResourcePool();
+            this.auth = createAuth();
 
-        this.computeHostDescription = createComputeHostDescription();
-        this.computeHost = createComputeHost();
+            this.computeHostDescription = createComputeHostDescription();
+            this.computeHost = createComputeHost();
 
-        // enumerate all resources hoping to find the template
-        doRefresh();
-        snapshotFactoryState("networks", NetworkService.class);
-        snapshotFactoryState("computes", ComputeService.class);
+            // enumerate all resources hoping to find the template
+            doRefresh();
+            snapshotFactoryState("networks", NetworkService.class);
+            snapshotFactoryState("computes", ComputeService.class);
 
-        // find the template by vm name
-        // template must have vm-tools and cloud-config installed
-        ComputeState template = findTemplate();
+            // find the template by vm name
+            // template must have vm-tools and cloud-config installed
+            ComputeState template = findTemplate();
 
-        this.subnet = fetchServiceState(SubnetState.class, findPortGroup(networkId));
-        this.subnet.dnsSearchDomains = Collections.singleton("local");
-        this.subnet.gatewayAddress = "10.0.0.1";
-        this.subnet.dnsServerAddresses = Collections.singleton("8.8.8.8");
-        this.subnet.domain = "local";
-        this.subnet.subnetCIDR = "10.0.0.0/24";
+            this.subnet = fetchServiceState(SubnetState.class, findPortGroup(networkId));
+            this.subnet.dnsSearchDomains = Collections.singleton("local");
+            this.subnet.gatewayAddress = "10.0.0.1";
+            this.subnet.dnsServerAddresses = Collections.singleton("8.8.8.8");
+            this.subnet.domain = "local";
+            this.subnet.subnetCIDR = "10.0.0.0/24";
 
-        // modify the subnet
-        Operation patch = Operation.createPatch(this.host,this.subnet.documentSelfLink)
-                .setBody(this.subnet);
-        patch = this.host.waitForResponse(patch);
-        this.subnet = patch.getBody(SubnetState.class);
+            // modify the subnet
+            Operation patch = Operation.createPatch(this.host, this.subnet.documentSelfLink)
+                    .setBody(this.subnet);
+            patch = this.host.waitForResponse(patch);
+            this.subnet = patch.getBody(SubnetState.class);
 
-        // create instance by cloning
-        ComputeDescription vmDescription = createVmDescription();
-        ComputeState vm = createVmState(vmDescription, template.documentSelfLink);
+            // create instance by cloning
+            ComputeDescription vmDescription = createVmDescription();
+            vm = createVmState(vmDescription, template.documentSelfLink);
 
-        // kick off a provision task to do the actual VM creation
-        ProvisionComputeTaskState outTask = createProvisionTask(vm);
-        awaitTaskEnd(outTask);
+            // kick off a provision task to do the actual VM creation
+            ProvisionComputeTaskState outTask = createProvisionTask(vm);
+            awaitTaskEnd(outTask);
 
-        vm = getComputeState(vm);
+            vm = getComputeState(vm);
 
-        if (!isMock()) {
-            assertEquals(vm.address, this.nicDescription.address);
+            if (!isMock()) {
+                assertEquals(vm.address, this.nicDescription.address);
+            }
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
-
-        deleteVmAndWait(vm);
     }
 
     private <T extends ServiceDocument> T fetchServiceState(Class<T> bodyType, String networkLink) {

@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -39,7 +40,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestName;
 
-import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -57,12 +57,15 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -123,11 +126,8 @@ public class BaseVSphereAdapterTest {
     public String networkId = System.getProperty(TestProperties.VC_NETWORK_ID);
 
     public String vcFolder = System.getProperty(TestProperties.VC_FOLDER);
-
-    protected static final String PROVISION_TYPE = "provisioningType";
-    protected static final String SHARES_LEVEL = "sharesLevel";
-    protected static final String SHARES = "shares";
-    protected static final String LIMIT_IOPS = "limit";
+    public String spName = System.getProperty(TestProperties.VC_STORAGE_POLICY_NAME);
+    public String spId = System.getProperty(TestProperties.VC_STORAGE_POLICY_ID);
 
     protected VerificationHost host;
     protected AuthCredentialsServiceState auth;
@@ -332,22 +332,26 @@ public class BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, NetworkService.FACTORY_LINK));
     }
 
-    protected void deleteVmAndWait(ComputeState vm) throws Throwable {
-        ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
-        deletionState.isMockRequest = isMock();
-        QuerySpecification resourceQuerySpec = new QuerySpecification();
-        resourceQuerySpec.query
-                .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
-                .setTermMatchValue(vm.documentSelfLink);
+    protected void deleteVmAndWait(ComputeState vm) {
+        try {
+            ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
+            deletionState.isMockRequest = isMock();
+            QuerySpecification resourceQuerySpec = new QuerySpecification();
+            resourceQuerySpec.query
+                    .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
+                    .setTermMatchValue(vm.documentSelfLink);
 
-        deletionState.resourceQuerySpec = resourceQuerySpec;
-        ResourceRemovalTaskState outDelete = TestUtils.doPost(this.host,
-                deletionState,
-                ResourceRemovalTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ResourceRemovalTaskService.FACTORY_LINK));
+            deletionState.resourceQuerySpec = resourceQuerySpec;
+            ResourceRemovalTaskState outDelete = TestUtils.doPost(this.host,
+                    deletionState,
+                    ResourceRemovalTaskState.class,
+                    UriUtils.buildUri(this.host,
+                            ResourceRemovalTaskService.FACTORY_LINK));
 
-        awaitTaskEnd(outDelete);
+            awaitTaskEnd(outDelete);
+        } catch (Throwable e) {
+            this.host.log("Error deleting VM %s", e.getMessage());
+        }
     }
 
     protected void rebootVSphereVMAndWait(ComputeState computeState) {
@@ -736,21 +740,26 @@ public class BaseVSphereAdapterTest {
     /**
      * Create a new disk state to attach it to the virual machine.
      */
-    protected DiskService.DiskState createDisk(String alias, DiskService.DiskType type,
+    protected DiskState createDisk(String alias, DiskService.DiskType type,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String>
-            customProperties, Constraint constraint) throws Throwable {
-        DiskService.DiskState res = new DiskService.DiskState();
-        res.capacityMBytes = capacityMBytes;
-        res.bootOrder = 1;
-        res.type = type;
-        res.id = res.name = "disk-" + alias;
-        res.constraint = constraint;
+            customProperties) throws Throwable {
+        DiskState diskState = constructDiskState(alias, type, sourceImageReference, capacityMBytes,
+                customProperties);
+        return doPost(this.host, diskState, DiskState.class,
+                UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
 
-        res.sourceImageReference = sourceImageReference;
-
-        res.customProperties = customProperties;
-        return doPost(this.host, res,
-                DiskService.DiskState.class,
+    /**
+     * Create a new disk state to attach it to the virual machine.
+     */
+    protected DiskState createDiskWithStoragePolicy(String alias, DiskService.DiskType type,
+            URI sourceImageReference, long capacityMBytes, HashMap<String, String>
+            customProperties) throws Throwable {
+        DiskState diskState = constructDiskState(alias, type, sourceImageReference, capacityMBytes,
+                customProperties);
+        diskState.groupLinks = new HashSet<>();
+        diskState.groupLinks.add(createResourceGroupState().documentSelfLink);
+        return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
 
@@ -776,5 +785,32 @@ public class BaseVSphereAdapterTest {
                 .filter(d -> d instanceof VirtualDisk)
                 .map(d -> (VirtualDisk) d).findFirst().orElse(null);
         return vd;
+    }
+
+    /**
+     * Creates storage policy as resource group state
+     */
+    protected ResourceGroupState createResourceGroupState() throws Throwable {
+        ResourceGroupState rg = new ResourceGroupState();
+        rg.id = this.spId;
+        rg.name = this.spName;
+        rg = TestUtils.doPost(this.host, rg,
+                ResourceGroupState.class,
+                UriUtils.buildUri(this.host, ResourceGroupService.FACTORY_LINK));
+        return rg;
+    }
+
+    private DiskState constructDiskState(String alias, DiskService.DiskType type,
+            URI sourceImageReference, long capacityMBytes, HashMap<String, String> customProperties) {
+        DiskState res = new DiskState();
+        res.capacityMBytes = capacityMBytes;
+        res.bootOrder = 1;
+        res.type = type;
+        res.id = res.name = "disk-" + alias;
+
+        res.sourceImageReference = sourceImageReference;
+
+        res.customProperties = customProperties;
+        return res;
     }
 }

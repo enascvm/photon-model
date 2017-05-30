@@ -407,7 +407,7 @@ public class EnumerationClient extends BaseHelper {
     /**
      * Retrieves list of datastore names that are compatible with the storage policy.
      */
-    public List<String> getDataStores(PbmProfileId pbmProfileId)
+    public List<String> getDatastores(PbmProfileId pbmProfileId)
             throws com.vmware.pbm.RuntimeFaultFaultMsg, PbmFaultFaultMsg {
         List<PbmPlacementHub> hubs = this.connection.getPbmPort().pbmQueryMatchingHub(
                 this.connection.getPbmServiceInstanceContent().getPlacementSolver(), null,

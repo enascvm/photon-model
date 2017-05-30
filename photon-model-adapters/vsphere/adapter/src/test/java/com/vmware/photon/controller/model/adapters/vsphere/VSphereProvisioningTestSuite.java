@@ -212,12 +212,16 @@ public class VSphereProvisioningTestSuite {
 
         @Test
         public void createInstanceSnapshotItAndDeleteIt() throws Throwable {
-            ComputeState vm = provisionVm();
-
-            createSnapshot(vm);
-
-            deleteVmAndWait(vm);
-            verifyVmIsDeleted(vm);
+            ComputeState vm = null;
+            try {
+                vm = provisionVm();
+                createSnapshot(vm);
+            } finally {
+                if (vm != null) {
+                    deleteVmAndWait(vm);
+                    verifyVmIsDeleted(vm);
+                }
+            }
         }
 
         private void createSnapshot(ComputeState vm) throws Throwable {
@@ -267,9 +271,15 @@ public class VSphereProvisioningTestSuite {
 
         @Test
         public void test() throws Throwable {
-            ComputeState vm = provisionVm();
-            deleteVmAndWait(vm);
-            verifyVmIsDeleted(vm);
+            ComputeState vm = null;
+            try {
+                vm = provisionVm();
+            } finally {
+                if (vm != null) {
+                    deleteVmAndWait(vm);
+                    verifyVmIsDeleted(vm);
+                }
+            }
         }
 
         @Override
@@ -291,9 +301,15 @@ public class VSphereProvisioningTestSuite {
 
         @Test
         public void test() throws Throwable {
-            ComputeState vm = provisionVm();
-            deleteVmAndWait(vm);
-            verifyVmIsDeleted(vm);
+            ComputeState vm = null;
+            try {
+                vm = provisionVm();
+            } finally {
+                if (vm != null) {
+                    deleteVmAndWait(vm);
+                    verifyVmIsDeleted(vm);
+                }
+            }
         }
 
         @Override

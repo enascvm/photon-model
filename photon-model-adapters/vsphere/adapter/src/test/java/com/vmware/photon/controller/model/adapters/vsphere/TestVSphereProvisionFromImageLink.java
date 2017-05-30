@@ -63,15 +63,20 @@ public class TestVSphereProvisionFromImageLink extends BaseVSphereAdapterTest {
 
     @Test
     public void deployFromLibrary() throws Throwable {
+        ComputeState vm = null;
+        try {
+            vm = provisionVMAndGetState();
+            if (vm == null) {
+                return;
+            }
 
-        ComputeState vm = provisionVMAndGetState();
-        if (vm == null) {
-            return;
+            snapshotFactoryState("ready", ComputeService.class);
+            snapshotFactoryState("ready", DiskService.class);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
-
-        snapshotFactoryState("ready", ComputeService.class);
-        snapshotFactoryState("ready", DiskService.class);
-        deleteVmAndWait(vm);
     }
 
     private ComputeState createVmState(ComputeDescription vmDescription, String imageLink) throws Throwable {

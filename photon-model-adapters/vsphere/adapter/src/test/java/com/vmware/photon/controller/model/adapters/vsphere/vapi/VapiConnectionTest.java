@@ -69,7 +69,8 @@ public class VapiConnectionTest {
         ManagedObjectReference ds = VimUtils.convertStringToMoRef("Datastore:datastore-4125");
         ManagedObjectReference rp = VimUtils.convertStringToMoRef("ResourcePool:resgroup-18");
         ObjectNode result = libraryClient
-                .deployOvfLibItem("f2de22cb-ac8e-4fa8-933e-1caa70bed721", "test", folder, ds, rp, new HashMap<>());
+                .deployOvfLibItem("f2de22cb-ac8e-4fa8-933e-1caa70bed721", "test", folder, ds, null,
+                        rp, new HashMap<>(), null);
 
         System.out.println(result);
     }

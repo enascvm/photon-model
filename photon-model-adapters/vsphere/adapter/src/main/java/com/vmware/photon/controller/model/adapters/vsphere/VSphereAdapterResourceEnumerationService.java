@@ -418,8 +418,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
             if (!pbmProfiles.isEmpty()) {
                 for (PbmProfile profile : pbmProfiles) {
-                    List<String> dataStores = client.getDataStores(profile.getProfileId());
-                    StoragePolicyOverlay spOverlay = new StoragePolicyOverlay(profile, dataStores);
+                    List<String> datastoreNames = client.getDatastores(profile.getProfileId());
+                    StoragePolicyOverlay spOverlay = new StoragePolicyOverlay(profile, datastoreNames);
                     storagePolicies.add(spOverlay);
                 }
             }
@@ -1043,7 +1043,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void updateDataStoreWithStoragePolicyGroup(EnumerationContext ctx,
             StoragePolicyOverlay sp, String selfLink) {
         List<Operation> getOps = new ArrayList<>();
-        sp.getDataStoreNames().stream().forEach(name -> {
+        sp.getDatastoreNames().stream().forEach(name -> {
             String dataStoreLink = ctx.getDatastoreTracker()
                     .getSelfLink(name, VimNames.TYPE_DATASTORE);
             if (dataStoreLink != null && !ResourceTracker.ERROR.equals(dataStoreLink)) {

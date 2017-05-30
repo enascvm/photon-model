@@ -60,31 +60,36 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
 
     @Test
     public void deployFromTemplateUsingCloudConfig() throws Throwable {
-        // Create a resource pool where the VM will be housed
-        this.resourcePool = createResourcePool();
-        this.auth = createAuth();
+        ComputeState vm = null;
+        try {
+            // Create a resource pool where the VM will be housed
+            this.resourcePool = createResourcePool();
+            this.auth = createAuth();
 
-        this.computeHostDescription = createComputeHostDescription();
-        this.computeHost = createComputeHost();
+            this.computeHostDescription = createComputeHostDescription();
+            this.computeHost = createComputeHost();
 
-        // enumerate all resources hoping to find the template
-        doRefresh();
+            // enumerate all resources hoping to find the template
+            doRefresh();
 
-        // find the template by vm name
-        // template must have vm-tools and cloud-config installed
-        ComputeState template = findTemplate();
+            // find the template by vm name
+            // template must have vm-tools and cloud-config installed
+            ComputeState template = findTemplate();
 
-        // create instance by cloning
-        ComputeDescription vmDescription = createVmDescription();
-        ComputeState vm = createVmState(vmDescription, template.documentSelfLink);
+            // create instance by cloning
+            ComputeDescription vmDescription = createVmDescription();
+            vm = createVmState(vmDescription, template.documentSelfLink);
 
-        // kick off a provision task to do the actual VM creation
-        ProvisionComputeTaskState outTask = createProvisionTask(vm);
-        awaitTaskEnd(outTask);
+            // kick off a provision task to do the actual VM creation
+            ProvisionComputeTaskState outTask = createProvisionTask(vm);
+            awaitTaskEnd(outTask);
 
-        vm = getComputeState(vm);
-
-        deleteVmAndWait(vm);
+            vm = getComputeState(vm);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
     }
 
     private ComputeState findTemplate()

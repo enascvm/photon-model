@@ -16,16 +16,20 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_INDEPENDENT;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
+
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
@@ -74,79 +78,117 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
 
     @Test
     public void deployFromLibrary() throws Throwable {
-
         ComputeState vm = provisionVMAndGetState();
-        if (vm == null) {
-            return;
+        try {
+            if (vm == null) {
+                return;
+            }
+
+            // Verify that the disk is resized
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            verifyDiskSize(vm, get, HDD_DISK_SIZE);
+            verifyDiskProperties(vm, get);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
+    }
 
-        // Verify that the disk is resized
-        BasicConnection connection = createConnection();
-        GetMoRef get = new GetMoRef(connection);
-        verifyDiskSize(vm, get, HDD_DISK_SIZE);
-        verifyDiskProperties(vm, get);
-
-        deleteVmAndWait(vm);
+    @Test
+    public void deployFromLibraryWithStoragePolicy() throws Throwable {
+        ComputeState vm = provisionVMAndGetState(true);
+        try {
+            if (vm == null) {
+                return;
+            }
+            // Verify that the disk is resized
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            verifyDiskSize(vm, get, HDD_DISK_SIZE);
+            verifyDiskProperties(vm, get);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
     }
 
     @Test
     public void deployFromLibraryWithReboot() throws Throwable {
         ComputeState vm = provisionVMAndGetState();
-        if (vm == null) {
-            return;
+        try {
+            if (vm == null) {
+                return;
+            }
+            // test reboot resource operation
+            rebootVSphereVMAndWait(vm);
+            // Verify that the disk is resized
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            verifyDiskSize(vm, get, HDD_DISK_SIZE);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
-        // test reboot resource operation
-        rebootVSphereVMAndWait(vm);
-        // Verify that the disk is resized
-        BasicConnection connection = createConnection();
-        GetMoRef get = new GetMoRef(connection);
-        verifyDiskSize(vm, get, HDD_DISK_SIZE);
-
-        deleteVmAndWait(vm);
     }
 
     @Test
     public void deployFromLibraryAndSuspendVM() throws Throwable {
         ComputeState vm = provisionVMAndGetState();
-        if (vm == null) {
-            return;
+        try {
+            if (vm == null) {
+                return;
+            }
+            // test suspend resource operation
+            suspendVSphereVM(vm);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
-        // test suspend resource operation
-        suspendVSphereVM(vm);
-
-        deleteVmAndWait(vm);
     }
 
     @Test
     public void deployFromLibraryWithShutdown() throws Throwable {
         ComputeState vm = provisionVMAndGetState();
-        if (vm == null) {
-            return;
+        try {
+            if (vm == null) {
+                return;
+            }
+            // test shutdown Guest OS resource operation
+            shutdownGuestOS(vm);
+            // Verify that the disk is resized and is reflected even for a POWERED_OFF vm
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            verifyDiskSize(vm, get, HDD_DISK_SIZE);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
-        // test shutdown Guest OS resource operation
-        shutdownGuestOS(vm);
-        // Verify that the disk is resized and is reflected even for a POWERED_OFF vm
-        BasicConnection connection = createConnection();
-        GetMoRef get = new GetMoRef(connection);
-        verifyDiskSize(vm, get, HDD_DISK_SIZE);
-
-        deleteVmAndWait(vm);
     }
 
     @Test
     public void deployFromLibraryAndResetVM() throws Throwable {
         ComputeState vm = provisionVMAndGetState();
-        if (vm == null) {
-            return;
+        try {
+            if (vm == null) {
+                return;
+            }
+            // test reset VM operation
+            resetVSphereVM(vm);
+
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            verifyDiskSize(vm, get, HDD_DISK_SIZE);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
         }
-        // test reset VM operation
-        resetVSphereVM(vm);
-
-        BasicConnection connection = createConnection();
-        GetMoRef get = new GetMoRef(connection);
-        verifyDiskSize(vm, get, HDD_DISK_SIZE);
-
-        deleteVmAndWait(vm);
     }
 
     private void verifyDiskProperties(ComputeState vm, GetMoRef get)
@@ -159,7 +201,8 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         assertTrue(backing.isThinProvisioned());
     }
 
-    private ComputeState createVmState(ComputeDescription vmDescription, String imageLink) throws Throwable {
+    private ComputeState createVmState(ComputeDescription vmDescription, String imageLink,
+            boolean isStoragePolicyBased) throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = vmDescription.name;
         computeState.documentSelfLink = computeState.id;
@@ -175,13 +218,13 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         computeState.networkInterfaceLinks = new ArrayList<>(1);
 
         computeState.diskLinks = new ArrayList<>(1);
-        Constraint constraint = new Constraint();
-        List<Constraint.Condition> conditions = new ArrayList<>();
-        conditions.add(Constraint.Condition.forTag("INDEPENDENT", null,
-                Constraint.Condition.Enforcement.SOFT, QueryTask.Query.Occurance.MUST_OCCUR));
-        constraint.conditions = conditions;
-        computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, null,
-                HDD_DISK_SIZE, buildCustomProperties(), constraint).documentSelfLink);
+        if (isStoragePolicyBased) {
+            computeState.diskLinks.add(createDiskWithStoragePolicy("boot", DiskService.DiskType.HDD,
+                    null, HDD_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+        } else {
+            computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, null,
+                    HDD_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+        }
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
@@ -201,6 +244,7 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         customProperties.put(SHARES_LEVEL, SharesLevel.CUSTOM.value());
         customProperties.put(SHARES, "3000");
         customProperties.put(LIMIT_IOPS, "50");
+        customProperties.put(DISK_MODE_INDEPENDENT, "true");
 
         return customProperties;
     }
@@ -277,6 +321,10 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
     }
 
     private ComputeState provisionVMAndGetState() throws Throwable {
+        return provisionVMAndGetState(false);
+    }
+
+    private ComputeState provisionVMAndGetState(boolean isStoragePolicyBased) throws Throwable {
         if (isMock()) {
             return null;
         }
@@ -306,7 +354,7 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
 
         String imageLink = findImage();
         ComputeDescription desc = createVmDescription();
-        ComputeState vm = createVmState(desc, imageLink);
+        ComputeState vm = createVmState(desc, imageLink, isStoragePolicyBased);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState outTask = createProvisionTask(vm);

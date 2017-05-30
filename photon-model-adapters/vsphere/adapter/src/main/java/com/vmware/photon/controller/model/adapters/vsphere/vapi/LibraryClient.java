@@ -22,6 +22,8 @@ import org.apache.http.client.HttpClient;
 import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.VirtualDiskType;
+import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 
 public class LibraryClient extends VapiClient {
     private final String sessionId;
@@ -115,8 +117,10 @@ public class LibraryClient extends VapiClient {
             String vmName,
             ManagedObjectReference vmFolder,
             ManagedObjectReference datastore,
+            VirtualMachineDefinedProfileSpec pbmSpec,
             ManagedObjectReference resourcePool,
-            Map<String, String> networkMappings) throws IOException, RpcException {
+            Map<String, String> networkMappings,
+            VirtualDiskType diskType) throws IOException, RpcException {
 
         RpcRequest call = newCall("com.vmware.vcenter.ovf.library_item", "deploy");
         bindToSession(call, this.sessionId);
@@ -127,7 +131,7 @@ public class LibraryClient extends VapiClient {
                 .putObject(K_OPERATION_INPUT);
 
         ObjectNode target = makeTarget(vmFolder.getValue(), resourcePool.getValue());
-        ObjectNode spec = makeSpec(datastore.getValue(), vmName, networkMappings);
+        ObjectNode spec = makeSpec(datastore, pbmSpec, vmName, networkMappings, diskType);
 
         opInput.put("deployment_spec", spec);
         opInput.put("ovf_library_item_id", itemId);
@@ -147,13 +151,25 @@ public class LibraryClient extends VapiClient {
                 .get("com.vmware.vcenter.ovf.library_item.deployment_result");
     }
 
-    private ObjectNode makeSpec(String datastoreId, String vmName, Map<String, String> networkMappings) {
+    private ObjectNode makeSpec(ManagedObjectReference datastore,
+            VirtualMachineDefinedProfileSpec pbmSpec, String vmName,
+            Map<String, String> networkMappings,
+            VirtualDiskType diskType) {
         ObjectNode res = newNode();
         ObjectNode t = res.putObject(K_STRUCTURE)
                 .putObject("com.vmware.vcenter.ovf.library_item.resource_pool_deployment_spec");
         t.put("accept_all_EULA", true);
 
-        t.putObject("default_datastore_id").put(K_OPTIONAL, datastoreId);
+        if (datastore != null) {
+            t.putObject("default_datastore_id").put(K_OPTIONAL, datastore.getValue());
+        }
+        if (pbmSpec != null) {
+            t.putObject("storage_profile_id").put(K_OPTIONAL, pbmSpec.getProfileId());
+        }
+        if (diskType != null) {
+            t.putObject("storage_provisioning").put(K_OPTIONAL, diskType.value());
+        }
+
         t.putObject("name").put(K_OPTIONAL, vmName);
         return res;
     }

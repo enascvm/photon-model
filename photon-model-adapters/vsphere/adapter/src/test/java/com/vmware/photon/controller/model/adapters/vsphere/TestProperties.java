@@ -24,4 +24,6 @@ public class TestProperties {
     public static final String VC_NETWORK_ID = "vc.networkId";
     public static final String VC_FOLDER = "vc.folder";
     public static final String VC_DATECENTER_ID = "vc.datacenterId";
+    public static final String VC_STORAGE_POLICY_ID = "vc.storagePolicyId";
+    public static final String VC_STORAGE_POLICY_NAME = "vc.storagePolicyName";
 }

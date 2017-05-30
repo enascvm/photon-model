@@ -28,7 +28,6 @@ import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -66,7 +65,7 @@ public class ProvisionContext {
     public ManagedObjectReference computeMoRef;
     public String datacenterPath; // target datacenter resolved from the target placement
 
-    public List<DiskService.DiskStateExpanded> disks;
+    public List<DiskStateExpanded> disks;
     public List<NetworkInterfaceStateWithDetails> nics;
     public AuthCredentialsServiceState vSphereCredentials;
 
@@ -293,8 +292,7 @@ public class ProvisionContext {
                 }
 
                 populateContextThen(service, ctx, onSuccess);
-            })
-                    .sendWith(service);
+            }).sendWith(service);
 
             return;
         }
@@ -314,7 +312,7 @@ public class ProvisionContext {
             Stream<Operation> opsGetDisk = ctx.child.diskLinks.stream()
                     .map(link -> {
                         URI diskStateUri = UriUtils.buildUri(service.getHost(), link);
-                        return Operation.createGet(DiskService.DiskStateExpanded.buildUri(diskStateUri));
+                        return Operation.createGet(DiskStateExpanded.buildUri(diskStateUri));
                     });
 
             OperationJoin join = OperationJoin.create(opsGetDisk)
@@ -327,7 +325,7 @@ public class ProvisionContext {
                             return;
                         }
 
-                        os.values().forEach(op -> ctx.disks.add(op.getBody(DiskService.DiskStateExpanded.class)));
+                        os.values().forEach(op -> ctx.disks.add(op.getBody(DiskStateExpanded.class)));
 
                         populateContextThen(service, ctx, onSuccess);
                     });

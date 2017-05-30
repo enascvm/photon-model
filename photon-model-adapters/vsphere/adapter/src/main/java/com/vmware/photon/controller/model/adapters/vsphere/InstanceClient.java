@@ -14,6 +14,11 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_INDEPENDENT;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 
 import java.net.URI;
 import java.nio.file.Paths;
@@ -37,7 +42,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
-import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
@@ -107,6 +111,7 @@ import com.vmware.vim25.VirtualIDEController;
 import com.vmware.vim25.VirtualLsiLogicController;
 import com.vmware.vim25.VirtualMachineCloneSpec;
 import com.vmware.vim25.VirtualMachineConfigSpec;
+import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.vim25.VirtualMachineFileInfo;
 import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.vim25.VirtualMachineRelocateDiskMoveOptions;
@@ -141,13 +146,6 @@ public class InstanceClient extends BaseHelper {
     private static final String CLONE_STRATEGY_FULL = "FULL";
 
     private static final String CLONE_STRATEGY_LINKED = "LINKED";
-
-    // Storage Related constants
-    private static final String DISK_MODE_INDEPENDENT = "INDEPENDENT";
-    private static final String PROVISION_TYPE = "provisioningType";
-    private static final String SHARES_LEVEL = "sharesLevel";
-    private static final String SHARES = "shares";
-    private static final String LIMIT_IOPS = "limit";
 
     private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
     private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
@@ -261,11 +259,18 @@ public class InstanceClient extends BaseHelper {
 
     private ManagedObjectReference cloneVm(ManagedObjectReference template) throws Exception {
         ManagedObjectReference folder = getVmFolder();
+        DiskStateExpanded bootDisk = findBootDisk();
+        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(bootDisk);
         ManagedObjectReference datastore = getDatastore();
         ManagedObjectReference resourcePool = getResourcePool();
 
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
         relocSpec.setDatastore(datastore);
+        if (pbmSpec != null) {
+            pbmSpec.stream().forEach(spec -> {
+                relocSpec.getProfile().add(spec);
+            });
+        }
         relocSpec.setFolder(folder);
         relocSpec.setPool(resourcePool);
         relocSpec.setDiskMoveType(computeDiskMoveType().value());
@@ -387,8 +392,10 @@ public class InstanceClient extends BaseHelper {
 
         ManagedObjectReference folder = getVmFolder();
         DiskStateExpanded bootDisk = findBootDisk();
-        ManagedObjectReference ds = getDataStoreForDisk(bootDisk);
+        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(bootDisk);
+        ManagedObjectReference ds = getDataStoreForDisk(bootDisk, pbmSpec);
         ManagedObjectReference resourcePool = getResourcePool();
+        ManagedObjectReference defaultDs = getDatastore();
 
         String vmName = "pmt-" + deployer.getRetriever().hash(ovfUri);
 
@@ -407,7 +414,7 @@ public class InstanceClient extends BaseHelper {
                     List<OvfNetworkMapping> networks = mapNetworks(parser.extractNetworks(ovfDoc),
                             ovfDoc, this.ctx.nics);
                     vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, networks,
-                            ds, Collections.emptyList(), config, resourcePool);
+                            defaultDs, Collections.emptyList(), config, resourcePool);
 
                     logger.info("Removing NICs from deployed template: {} ({})", vmName,
                             vm.getValue());
@@ -447,10 +454,10 @@ public class InstanceClient extends BaseHelper {
             if (snapshot == null) {
                 vm = awaitVM(vmName, folder, get);
             }
-            vm = replicateVMTemplate(resourcePool, ds, folder, vmName, vm, get);
+            vm = replicateVMTemplate(resourcePool, ds, pbmSpec, folder, vmName, vm, get);
         }
 
-        return cloneOvfBasedTemplate(vm, ds, folder, resourcePool);
+        return cloneOvfBasedTemplate(vm, ds, folder, resourcePool, pbmSpec);
     }
 
     private List<OvfNetworkMapping> mapNetworks(List<String> ovfNetworkNames, Document ovfDoc,
@@ -487,12 +494,16 @@ public class InstanceClient extends BaseHelper {
     }
 
     private ManagedObjectReference replicateVMTemplate(ManagedObjectReference resourcePool,
-            ManagedObjectReference datastore, ManagedObjectReference vmFolder, String vmName,
+            ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec,
+            ManagedObjectReference vmFolder, String vmName,
             ManagedObjectReference vm, GetMoRef get) throws Exception {
         logger.info("Template lives on a different datastore, looking for a local copy of: {}.",
                 vmName);
 
-        String replicatedName = vmName + "_" + datastore.getValue();
+        String replicatedName = vmName;
+        if (datastore != null) {
+            replicatedName = replicatedName + "_" + datastore.getValue();
+        }
         ManagedObjectReference repVm = findTemplateByName(replicatedName, get);
         if (repVm != null) {
             return repVm;
@@ -504,6 +515,14 @@ public class InstanceClient extends BaseHelper {
         try {
             VirtualMachineRelocateSpec spec = new VirtualMachineRelocateSpec();
             spec.setPool(resourcePool);
+            if (datastore != null) {
+                spec.setDatastore(datastore);
+            }
+            if (pbmSpec != null) {
+                pbmSpec.stream().forEach(sp -> {
+                    spec.getProfile().add(sp);
+                });
+            }
             spec.setDatastore(datastore);
             spec.setFolder(vmFolder);
             spec.setDiskMoveType(
@@ -599,6 +618,9 @@ public class InstanceClient extends BaseHelper {
 
     private boolean isSameDatastore(ManagedObjectReference datastore, ManagedObjectReference vm,
             GetMoRef get) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (datastore == null) {
+            return false;
+        }
         ArrayOfManagedObjectReference datastores = get.entityProp(vm,
                 VimPath.vm_datastore);
         if (null != datastores) {
@@ -613,7 +635,8 @@ public class InstanceClient extends BaseHelper {
 
     private ManagedObjectReference cloneOvfBasedTemplate(ManagedObjectReference vmTempl,
             ManagedObjectReference datastore, ManagedObjectReference folder,
-            ManagedObjectReference resourcePool) throws Exception {
+            ManagedObjectReference resourcePool, List<VirtualMachineDefinedProfileSpec> pbmSpec)
+            throws Exception {
 
         String vmName = this.ctx.child.name;
 
@@ -643,7 +666,7 @@ public class InstanceClient extends BaseHelper {
                 String path = makePathToVmdkFile("ephemeral_disk", vmName);
                 String diskName = String.format("[%s] %s", datastoreName, path);
                 VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(), scsiUnit, bootDisk,
-                        diskName, datastore);
+                        diskName, datastore, pbmSpec);
                 newDisks.add(hdd);
             } else {
                 // skip for now, as there is a problem with concurrent operation after that, have to
@@ -707,6 +730,11 @@ public class InstanceClient extends BaseHelper {
                 .forEach(d -> addRemoveDeviceFromVm(spec, d));
 
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
+        if (pbmSpec != null) {
+            pbmSpec.stream().forEach(sp -> {
+                relocSpec.getProfile().add(sp);
+            });
+        }
         relocSpec.setDatastore(datastore);
         relocSpec.setFolder(folder);
         relocSpec.setPool(resourcePool);
@@ -794,16 +822,18 @@ public class InstanceClient extends BaseHelper {
             String diskPath = VimUtils.uriToDatastorePath(ds.sourceImageReference);
 
             if (ds.type == DiskType.HDD) {
+                // Find if there is a storage policy defined for this disk
+                List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(ds);
+                VirtualDeviceConfigSpec hdd;
                 if (diskPath != null) {
                     // create full clone of given disk
-                    VirtualDeviceConfigSpec hdd = createFullCloneAndAttach(diskPath, ds, dir,
-                            scsiController, scsiUnit);
+                    hdd = createFullCloneAndAttach(diskPath, ds, dir, scsiController, scsiUnit, pbmSpec);
                     newDisks.add(hdd);
                     bootDisk = ds;
                 } else {
                     String diskName = makePathToVmdkFile(ds.id, dir);
-                    VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(),
-                            scsiUnit, ds, diskName, getDataStoreForDisk(ds));
+                    hdd = createHdd(scsiController.getKey(),
+                            scsiUnit, ds, diskName, getDataStoreForDisk(ds, pbmSpec), pbmSpec);
                     newDisks.add(hdd);
                 }
                 scsiUnit = nextUnitNumber(scsiUnit);
@@ -895,7 +925,8 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualDeviceConfigSpec createFullCloneAndAttach(String sourcePath, DiskStateExpanded ds,
-            String dir, VirtualDevice scsiController, int unitNumber)
+            String dir, VirtualDevice scsiController, int unitNumber,
+            List<VirtualMachineDefinedProfileSpec> pbmSpec)
             throws Exception {
 
         ManagedObjectReference diskManager = this.connection.getServiceContent()
@@ -929,7 +960,7 @@ public class InstanceClient extends BaseHelper {
         backing.setThinProvisioned(provisionType == VirtualDiskType.THIN);
         backing.setEagerlyScrub(provisionType == VirtualDiskType.EAGER_ZEROED_THICK);
         backing.setFileName(destName);
-        backing.setDatastore(getDataStoreForDisk(ds));
+        backing.setDatastore(getDataStoreForDisk(ds, pbmSpec));
 
         VirtualDisk disk = new VirtualDisk();
         disk.setBacking(backing);
@@ -940,6 +971,12 @@ public class InstanceClient extends BaseHelper {
 
         VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
         change.setDevice(disk);
+        // Add storage policy spec
+        if (pbmSpec != null) {
+            pbmSpec.stream().forEach(sp -> {
+                change.getProfile().add(sp);
+            });
+        }
         change.setOperation(VirtualDeviceConfigSpecOperation.ADD);
 
         return change;
@@ -1078,7 +1115,7 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualDeviceConfigSpec createHdd(Integer controllerKey, int unitNumber, DiskStateExpanded ds,
-            String diskName, ManagedObjectReference datastore)
+            String diskName, ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
 
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
@@ -1099,6 +1136,12 @@ public class InstanceClient extends BaseHelper {
 
         VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
         change.setDevice(disk);
+        if (pbmSpec != null) {
+            // Add storage policy spec
+            pbmSpec.stream().forEach(sp -> {
+                change.getProfile().add(sp);
+            });
+        }
         change.setOperation(VirtualDeviceConfigSpecOperation.ADD);
         change.setFileOperation(VirtualDeviceConfigSpecFileOperation.CREATE);
 
@@ -1638,14 +1681,11 @@ public class InstanceClient extends BaseHelper {
      * Disk mode is determined based on the disk state properties.
      */
     private String getDiskMode(DiskStateExpanded diskState) {
-        List<Constraint.Condition> conditions =
-                diskState.constraint != null ? diskState.constraint.conditions : null;
         boolean isIndependent = false;
-        if (conditions != null) {
-            isIndependent = conditions.stream()
-                    .filter(c -> DISK_MODE_INDEPENDENT.equals(c.expression.propertyName)).count() > 0;
+        if (diskState.customProperties != null
+                && diskState.customProperties.get(DISK_MODE_INDEPENDENT) != null) {
+            isIndependent = Boolean.valueOf(diskState.customProperties.get(DISK_MODE_INDEPENDENT));
         }
-
         if (diskState.persistent == null) {
             return isIndependent ?
                     VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
@@ -1703,15 +1743,34 @@ public class InstanceClient extends BaseHelper {
 
     /**
      * If there is a datastore that is specified for the disk in custom properties, then it will
-     * be used, otherwise fall back to default datastore selection.
+     * be used, otherwise fall back to default datastore selection if there is no storage policy
+     * specified for this disk. If storage policy is specified for this disk, then that will be
+     * honored.
      */
-    private ManagedObjectReference getDataStoreForDisk(DiskStateExpanded diskState)
+    private ManagedObjectReference getDataStoreForDisk(DiskStateExpanded diskState,
+            List<VirtualMachineDefinedProfileSpec> pbmSpec)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ManagedObjectReference datastore = null;
-        if (diskState.storageDescription != null && diskState.storageDescription.id != null) {
+        if (diskState.storageDescription != null) {
             datastore = this.finder.datastore(diskState.storageDescription.id).object;
         }
-        return datastore != null ? datastore : getDatastore();
+        return datastore != null ? datastore : (pbmSpec == null ? getDatastore() : null);
+    }
+
+    /**
+     * Construct storage policy profile spec for a profile Id
+     */
+    private List<VirtualMachineDefinedProfileSpec> getPbmProfileSpec(DiskStateExpanded diskState) {
+        if (diskState == null || diskState.resourceGroupStates == null || diskState.resourceGroupStates.isEmpty()) {
+            return null;
+        }
+        List<VirtualMachineDefinedProfileSpec> profileSpecs = diskState.resourceGroupStates.stream()
+                .map(rg -> {
+                    VirtualMachineDefinedProfileSpec spbmProfile = new VirtualMachineDefinedProfileSpec();
+                    spbmProfile.setProfileId(rg.id);
+                    return spbmProfile;
+                }).collect(Collectors.toList());
+        return profileSpecs;
     }
 
     /**
@@ -1804,9 +1863,14 @@ public class InstanceClient extends BaseHelper {
         vapi.login();
         LibraryClient client = vapi.newLibraryClient();
 
+        DiskStateExpanded bootDisk = findBootDisk();
+        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(bootDisk);
+
         Map<String, String> mapping = new HashMap<>();
-        ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name,
-                getVmFolder(), getDatastore(), getResourcePool(), mapping);
+        ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
+                getDataStoreForDisk(bootDisk, pbmSpec),
+                pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
+                getResourcePool(), mapping, getDiskProvisioningType(bootDisk));
 
         if (!result.get("succeeded").asBoolean()) {
             throw new Exception("error deploying from library");

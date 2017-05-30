@@ -76,6 +76,33 @@ public class CustomProperties {
      */
     public static final String TARGET_LINK = "__targetLink";
 
+    // Storage Related constants
+    /**
+     * Disk mode of the disk to be independent of snapshots or not.
+     */
+    public static final String DISK_MODE_INDEPENDENT = "independent";
+
+    /**
+     * Provisioning type of the disk. See also {@link com.vmware.vim25.VirtualDiskType}
+     */
+    public static final String PROVISION_TYPE = "provisioningType";
+
+    /**
+     * Shares level of the disk. See also {@link com.vmware.vim25.SharesLevel}
+     */
+    public static final String SHARES_LEVEL = "sharesLevel";
+
+    /**
+     * Shares which are defaulted to based on the shares level. If the shares level is
+     * {@link com.vmware.vim25.SharesLevel.CUSTOM}, then this value can be customized.
+     */
+    public static final String SHARES = "shares";
+
+    /**
+     * Limit IOPS for the disk.
+     */
+    public static final String LIMIT_IOPS = "limitIops";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

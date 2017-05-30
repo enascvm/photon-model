@@ -14,7 +14,11 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -24,8 +28,10 @@ import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -281,6 +287,10 @@ public class DiskService extends StatefulService {
          * valid {@link #storageDescriptionLink}.
          */
         public StorageDescription storageDescription;
+        /**
+         * Set of resource group states to which this storage description belongs to.
+         */
+        public Set<ResourceGroupState> resourceGroupStates;
 
         public static URI buildUri(URI diskStateUri) {
             return UriUtils.buildExpandLinksQueryUri(diskStateUri);
@@ -335,23 +345,46 @@ public class DiskService extends StatefulService {
             return;
         }
 
-        DiskStateExpanded diskStateExpanded = new DiskStateExpanded();
-        currentState.copyTo(diskStateExpanded);
+        DiskStateExpanded dsExpanded = new DiskStateExpanded();
+        currentState.copyTo(dsExpanded);
 
+        List<Operation> getOps = new ArrayList<>();
         if (currentState.storageDescriptionLink != null) {
-            Operation.createGet(this, currentState.storageDescriptionLink)
-                    .setReferer(this.getUri())
+            getOps.add(Operation.createGet(this, currentState.storageDescriptionLink)
                     .setCompletion((o, e) -> {
-                        if (e != null) {
-                            get.fail(e);
+                        if (e == null) {
+                            dsExpanded.storageDescription = o.getBody(StorageDescription.class);
                         } else {
-                            diskStateExpanded.storageDescription = o
-                                    .getBody(StorageDescription.class);
-                            get.setBody(diskStateExpanded).complete();
+                            logFine("Could not fetch storage description %s due to %s",
+                                    currentState.storageDescriptionLink, e.getMessage());
+                        }
+                    }));
+        }
+        if (currentState.groupLinks != null) {
+            dsExpanded.resourceGroupStates = new HashSet<>(currentState.groupLinks.size());
+            currentState.groupLinks.stream().forEach(rgLink -> {
+                getOps.add(Operation.createGet(this, rgLink));
+            });
+        }
+        if (!getOps.isEmpty()) {
+            OperationJoin.create(getOps)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            get.fail(new IllegalStateException(Utils.toString(exs)));
+                        } else {
+                            // Now update the map with the results of gets
+                            ops.values().stream().forEach((op) -> {
+                                if (op.getUri().toString().contains(ResourceGroupService
+                                        .FACTORY_LINK)) {
+                                    dsExpanded.resourceGroupStates
+                                            .add(op.getBody(ResourceGroupState.class));
+                                }
+                            });
+                            get.setBody(dsExpanded).complete();
                         }
                     }).sendWith(this);
         } else {
-            get.setBody(diskStateExpanded).complete();
+            get.setBody(dsExpanded).complete();
         }
     }
 
