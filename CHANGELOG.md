@@ -1,7 +1,17 @@
 # CHANGELOG
 
-## 0.6.17-SNAPSHOT
+## 0.6.17
 
+* Upgrade to xenon 1.5.0
+* Add support to add Azure EA endpoints.
+* Collect hourly stats from azure tables instead of latest value.
+* Linked accounts' query is scoped to Primary account's tenantLinks.
+* [Azure] Adding stats service for costing data.
+* Add creationTimeMicros for VM_HOST computes.
+* Upgrade Azure SDK to 1.0.0.
+* Restrict endpoint deletion to only via EndpointRemovalTask.
+* Move 'regionId' from individual resource level to base resource.
+* Move creationTime field from individual resources to base resource.
 
 ## 0.6.16
 
