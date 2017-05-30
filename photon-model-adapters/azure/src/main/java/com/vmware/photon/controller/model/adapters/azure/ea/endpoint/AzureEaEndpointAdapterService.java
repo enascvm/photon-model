@@ -17,6 +17,8 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 
+import java.net.URI;
+import java.util.LinkedHashSet;
 import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -73,8 +75,11 @@ public class AzureEaEndpointAdapterService extends StatelessService {
         return (cd, r) -> {
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
-            cd.statsAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            URI costStatsAdapterUri = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     AzureUriPaths.AZURE_COST_STATS_ADAPTER);
+            cd.statsAdapterReference = costStatsAdapterUri;
+            cd.statsAdapterReferences = new LinkedHashSet<>();
+            cd.statsAdapterReferences.add(costStatsAdapterUri);
         };
     }
 

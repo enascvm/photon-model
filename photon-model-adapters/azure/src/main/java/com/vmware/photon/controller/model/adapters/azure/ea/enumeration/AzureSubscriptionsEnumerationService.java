@@ -38,6 +38,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -104,9 +106,8 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
 
         @Override
         protected URI getParentAuthRef(AzureSubscriptionsEnumerationContext context) {
-            // This is overridden to eventually allow this service to run remotely and work on
-            // PhotonModel resources residing in a remote host
-            return UriUtils.buildUri(context.service.getHost(),
+            return UriUtils.extendUri(ClusterUtil.getClusterUri(context.service.getHost(),
+                    ServiceTypeCluster.DISCOVERY_SERVICE),
                     context.parent.description.authCredentialsLink);
         }
     }
@@ -193,7 +194,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 .setQuery(azureComputesQuery).build();
         queryTask.tenantLinks = enumerationContext.parent.tenantLinks;
 
-        QueryUtils.startQueryTask(this, queryTask)
+        QueryUtils.startQueryTask(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
                 .whenComplete((responseTask, t) -> {
                     if (t != null) {
                         getFailureConsumer(enumerationContext).accept(t);
@@ -225,7 +226,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             AzureSubscriptionsEnumerationContext enumerationContext,
             Consumer<Collection<ComputeState>> queryResultsConsumer,
             Consumer<AzureSubscriptionsEnumerationContext> queryCompletionConsumer) {
-        sendRequest(Operation.createGet(getHost(), nextPageLink)
+        sendRequest(Operation.createGet(UriUtils.extendUri(getInventoryServiceUri(), nextPageLink))
                 .setCompletion( (op, t) -> {
                     if (t != null) {
                         getFailureConsumer(enumerationContext).accept(t);
@@ -268,8 +269,8 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         Collection<Operation> createComputeDescOps = enumerationContext.idToSubscription.values()
                 .stream()
                 .map(subscription -> {
-                    Operation op = Operation.createPost(getHost(),
-                            ComputeDescriptionService.FACTORY_LINK)
+                    Operation op = Operation.createPost(UriUtils.extendUri(getInventoryServiceUri(),
+                            ComputeDescriptionService.FACTORY_LINK))
                             .setBody(createComputeDescription(enumerationContext, subscription))
                             .setCompletion((o, e) -> {
                                 if (e != null) {
@@ -291,7 +292,8 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             // Now create the ComputeState
             Collection<Operation> createComputeOps = computesToCreate.stream()
                     .map(computeState -> {
-                        Operation op = Operation.createPost(getHost(), ComputeService.FACTORY_LINK)
+                        Operation op = Operation.createPost(UriUtils
+                                .extendUri(getInventoryServiceUri(), ComputeService.FACTORY_LINK))
                                 .setBody(computeState)
                                 .setCompletion((o, e) -> {
                                     if (e != null) {
@@ -403,5 +405,9 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                     statsData.stage.toString(), Utils.toString(t)));
             statsData.operation.fail(t);
         });
+    }
+
+    private URI getInventoryServiceUri() {
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
     }
 }

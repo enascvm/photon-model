@@ -47,7 +47,6 @@ import okhttp3.Response;
 import okio.BufferedSink;
 import okio.Okio;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 import org.joda.time.format.DateTimeFormat;
@@ -81,6 +80,8 @@ import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -293,22 +294,10 @@ public class AzureCostStatsService extends StatelessService {
     private void getAuth(Context context, Stages next) {
         logInfo(() -> "Starting cost stats collection for account: ");
 
-        URI authUri = UriUtils.buildUri(this.getHost(),
+        URI authUri = UriUtils.extendUri(getInventoryServiceUri(),
                 context.computeHostDesc.description.authCredentialsLink);
         Consumer<Operation> onSuccess = (op) -> {
             context.auth = op.getBody(AuthCredentialsServiceState.class);
-            context.auth.privateKeyId = System
-                    .getProperty(AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY);
-            context.auth.privateKey = System
-                    .getProperty(AzureCostConstants.AZURE_USAGE_ACCESS_API_KEY);
-            if (context.auth == null || StringUtils.isBlank(context.auth.privateKeyId)
-                    || StringUtils.isBlank(context.auth.privateKey)) {
-                logSevere(
-                        () -> "Enrollment number and access not set. Set system properties " +
-                        "\"enrollmentNumber\" & \"usageApiKey\" to collect EA cost stats");
-                handleError(context, next, null, false);
-                return;
-            }
             context.stage = next;
             handleRequest(context);
         };
@@ -329,8 +318,9 @@ public class AzureCostStatsService extends StatelessService {
                                 PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS),
                 QueryTask.NumericRange
                         .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
-
-        Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+        URI queryUri = UriUtils.extendUri(getMetricsServiceUri(),
+                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+        Operation.createPost(queryUri)
                 .setBody(QueryTask.Builder.createDirectTask()
                         .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
                         .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
@@ -601,7 +591,7 @@ public class AzureCostStatsService extends StatelessService {
                         newSubscriptions.toString()));
         AzureSubscriptionsEnumerationRequest request = new AzureSubscriptionsEnumerationRequest();
         request.resourceReference = UriUtils
-                .buildUri(getHost(), context.computeHostDesc.documentSelfLink);
+                .extendUri(getInventoryServiceUri(), context.computeHostDesc.documentSelfLink);
         request.azureSubscriptions = newSubscriptions;
         Operation.createPatch(getHost(), AzureSubscriptionsEnumerationService.SELF_LINK)
                 .setBody(request)
@@ -654,7 +644,8 @@ public class AzureCostStatsService extends StatelessService {
                 .setQuery(azureSubscriptionsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeHostDesc.tenantLinks;
-        return Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+        return Operation.createPost(UriUtils.extendUri(getInventoryServiceUri(),
+                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(queryTask)
                 .setConnectionSharing(true)
                 .setCompletion((operation, exception) -> {
@@ -954,7 +945,8 @@ public class AzureCostStatsService extends StatelessService {
         ComputeState accountState = new ComputeState();
         accountState.customProperties = new HashMap<>();
         accountState.customProperties.put(key, value);
-        sendRequest(Operation.createPatch(this.getHost(), context.computeHostDesc.documentSelfLink)
+        sendRequest(Operation.createPatch(UriUtils.extendUri(getInventoryServiceUri(),
+                context.computeHostDesc.documentSelfLink))
                 .setBody(accountState)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
@@ -1405,4 +1397,11 @@ public class AzureCostStatsService extends StatelessService {
         return ((t) -> context.taskManager.patchTaskToFailure(t));
     }
 
+    private URI getInventoryServiceUri() {
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
+    }
+
+    private URI getMetricsServiceUri() {
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE);
+    }
 }
