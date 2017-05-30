@@ -42,6 +42,8 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 
@@ -384,8 +386,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         }
 
         assertNotNull("Primary NIC security group should be set.",
-                primaryNicState.securityGroupLinks != null
-                        && primaryNicState.securityGroupLinks.size() == 1);
+                primaryNicState.securityGroupLinks != null);
 
         assertEquals("VM address should be the same as primary NIC public IP.", vm.address,
                 primaryNicState.address);
@@ -399,6 +400,35 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                     nonPrimaryNicState.address);
             assertNull("Non-primary NIC" + i + " security group should not be set.",
                     nonPrimaryNicState.securityGroupLinks);
+        }
+
+        // Ensure that from the list of provided network resource groups,
+        // and security group resource groups, the one with the correct type has been chosen.
+        // For network, and sg, the correct RG is the default one named over the azureVMName.
+        // Verifying the resources can be obtained from this RG, ensures they have been placed
+        // correctly.
+        try {
+            // the provisioned resource contains its resource group in its id, preceded by "/resourceGroups/"
+            // validations check for the existence of this combination to ensure the resource has been
+            // provisioned in the correct RG
+            String resourceGroupNameString = "resourceGroups/" + azureVMName;
+
+            VirtualNetworkInner provisionedNetwork = AzureTestUtil.getAzureVirtualNetwork(
+                    this.networkManagementClient, azureVMName, AzureTestUtil.AZURE_NETWORK_NAME);
+            assertNotNull("Virtual network with correct name and by correct RG should be obtained.",
+                    provisionedNetwork);
+            assertTrue("Created virtual network should be in the correct RG.",
+                    provisionedNetwork.id().contains(resourceGroupNameString));
+
+            NetworkSecurityGroupInner networkSG = AzureTestUtil.getAzureSecurityGroup(
+                    this.networkManagementClient, azureVMName,
+                    AzureTestUtil.AZURE_SECURITY_GROUP_NAME);
+            assertNotNull("Security Group with correct name and by correct RG should be obtained.",
+                    networkSG);
+            assertTrue("Created security group should be in the correct RG.",
+                    provisionedNetwork.id().contains(resourceGroupNameString));
+        } catch (Exception e) {
+            fail("Unable to verify actually provisioned network on Azure");
         }
     }
 
@@ -429,7 +459,6 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                     OSDiskSizeInAzure * 1024);
         } catch (Exception e) {
             fail("Unable to verify OS Disk Size on Azure");
-            e.printStackTrace();
         }
 
     }

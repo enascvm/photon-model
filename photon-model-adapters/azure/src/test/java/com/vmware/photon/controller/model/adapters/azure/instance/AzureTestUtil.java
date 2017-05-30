@@ -177,6 +177,9 @@ public class AzureTestUtil {
 
     public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "test-sharedNetworkRG";
 
+    // used to test network and SG RG assignment - this RG should be filtered out, its not the correct type
+    public static final String AZURE_STORAGE_CONTAINER_RG_NAME = "test-StorageContainerRG";
+
     public static final AzureNicSpecs DEFAULT_NIC_SPEC;
     public static final AzureNicSpecs SHARED_NETWORK_NIC_SPEC;
     public static final AzureNicSpecs NO_PUBLIC_IP_NIC_SPEC;
@@ -184,7 +187,7 @@ public class AzureTestUtil {
     public static final long AZURE_CUSTOM_OSDISK_SIZE = 1024 * 32; // 32 GBs. We can only increase
     // size of OS Disk. The Image used already has 30 GB size.
 
-    private static final String AZURE_NETWORK_NAME = "test-vNet";
+    public static final String AZURE_NETWORK_NAME = "test-vNet";
     private static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
     private static final String AZURE_SUBNET_NAME = "test-subnet";
 
@@ -534,15 +537,27 @@ public class AzureTestUtil {
             AzureNicSpecs nicSpecs, String networkRGLink)
             throws Throwable {
 
-        ResourceGroupState vmRG = createDefaultResourceGroupState(
+        ResourceGroupState defaultVmRG = createDefaultResourceGroupState(
                 host, azureVMName, computeHost, endpointState, ResourceGroupStateType.AzureResourceGroup);
 
-        String resourceGroupLink = vmRG.documentSelfLink;
+        String defaultVMRGLink = defaultVmRG.documentSelfLink;
 
         if (networkRGLink == null) {
             // The RG where the VM is deployed is also used as RG for the Network!
-            networkRGLink = resourceGroupLink;
+            networkRGLink = defaultVMRGLink;
         }
+
+        // Create resource group with a different type. It should be filtered out.
+        ResourceGroupState azureStorageContainerRG = createDefaultResourceGroupState(
+                host, AZURE_STORAGE_CONTAINER_RG_NAME, computeHost, endpointState, ResourceGroupStateType.AzureStorageContainer);
+
+        Set<String> networkRGLinks = new HashSet<>();
+        networkRGLinks.add(azureStorageContainerRG.documentSelfLink);
+        networkRGLinks.add(networkRGLink);
+
+        Set<String> sgRGLinks = new HashSet<>();
+        sgRGLinks.add(azureStorageContainerRG.documentSelfLink);
+        sgRGLinks.add(defaultVMRGLink); //place the SG in the VM's RG
 
         AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
         azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
@@ -617,7 +632,7 @@ public class AzureTestUtil {
 
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
-                host, computeHost, endpointState, networkRGLink, nicSpecs)
+                host, computeHost, endpointState, networkRGLinks, sgRGLinks, nicSpecs)
                         .stream()
                         .map(nic -> nic.documentSelfLink)
                         .collect(Collectors.toList());
@@ -636,7 +651,7 @@ public class AzureTestUtil {
         computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
         computeState.groupLinks = new HashSet<>();
-        computeState.groupLinks.add(resourceGroupLink);
+        computeState.groupLinks.add(defaultVMRGLink);
         computeState.endpointLink = endpointState.documentSelfLink;
         computeState.tenantLinks = endpointState.tenantLinks;
 
@@ -754,7 +769,8 @@ public class AzureTestUtil {
     public static List<NetworkInterfaceState> createDefaultNicStates(
             VerificationHost host,
             ComputeState computeHost, EndpointState endpointSate,
-            String networkRGLink,
+            Set<String> networkRGLinks,
+            Set<String> sgRGLinks,
             AzureNicSpecs nicSpecs) throws Throwable {
 
         // Create network state.
@@ -768,7 +784,7 @@ public class AzureTestUtil {
             networkState.endpointLink = endpointSate.documentSelfLink;
             networkState.tenantLinks = endpointSate.tenantLinks;
             networkState.resourcePoolLink = computeHost.resourcePoolLink;
-            networkState.groupLinks = Collections.singleton(networkRGLink);
+            networkState.groupLinks = networkRGLinks;
             networkState.regionId = nicSpecs.network.zoneId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     DEFAULT_INSTANCE_ADAPTER_REFERENCE);
@@ -809,7 +825,7 @@ public class AzureTestUtil {
                 securityGroupState.authCredentialsLink = endpointSate.authCredentialsLink;
                 securityGroupState.endpointLink = endpointSate.documentSelfLink;
                 securityGroupState.tenantLinks = endpointSate.tenantLinks;
-                securityGroupState.groupLinks = Collections.singleton(networkRGLink);
+                securityGroupState.groupLinks = sgRGLinks;
                 ArrayList<Rule> ingressRules = new ArrayList<>();
 
                 Rule ssh = new Rule();
@@ -900,12 +916,8 @@ public class AzureTestUtil {
             AzureNicSpecs nicSpecs) throws Throwable {
 
         // Create the shared RG itself
-        ResourceGroupInner sharedNetworkRGParams = new ResourceGroupInner();
-        sharedNetworkRGParams.withName(AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME);
-        sharedNetworkRGParams.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
-
-        ResourceGroupInner sharedNetworkRG = resourceManagementClient.resourceGroups()
-                .createOrUpdate(sharedNetworkRGParams.name(), sharedNetworkRGParams);
+        ResourceGroupInner sharedNetworkRG = createResourceGroup(resourceManagementClient,
+                AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME);
 
         // Create shared vNet-Subnet-Gateway under shared RG
         createAzureVirtualNetwork(sharedNetworkRG.name(), nicSpecs,
@@ -915,6 +927,23 @@ public class AzureTestUtil {
         createAzureNetworkSecurityGroup(sharedNetworkRG.name(), networkManagementClient);
 
         return sharedNetworkRG;
+    }
+
+    public static ResourceGroupInner createResourceGroup(
+            ResourceManagementClientImpl resourceManagementClient,
+            String name) {
+        ResourceGroupInner rgParams = new ResourceGroupInner();
+        rgParams.withName(name);
+        rgParams.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+        ResourceGroupInner resourceGroup = resourceManagementClient.resourceGroups()
+                .createOrUpdate(rgParams.name(), rgParams);
+        return resourceGroup;
+    }
+
+    public static void deleteResourceGroup(ResourceManagementClientImpl resourceManagementClient,
+            String name) {
+        resourceManagementClient.resourceGroups().delete(name);
     }
 
     private static void createAzureVirtualNetwork(String resourceGroupName,

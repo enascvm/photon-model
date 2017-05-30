@@ -302,7 +302,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     /**
      * Get {@link ResourceGroupState}s of the {@link NetworkState}s the NICs are assigned to.
      */
-    private DeferredResult<T> getNicNetworkResourceGroupStates(T context) {
+    protected DeferredResult<T> getNicNetworkResourceGroupStates(T context) {
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }

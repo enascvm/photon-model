@@ -35,16 +35,21 @@ import com.microsoft.azure.management.storage.implementation.StorageManagementCl
 
 import com.microsoft.rest.RestClient;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.DeferredResult;
-import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * Context object to store relevant information during different stages.
@@ -297,31 +302,22 @@ public class AzureInstanceContext extends
 
         List<DeferredResult<Void>> getStatesDR = context.nics
                 .stream()
-                // Filter only SGs with existing RG links
                 .filter(nicCtx -> nicCtx.securityGroupState() != null
                         && nicCtx.securityGroupState().groupLinks != null
                         && !nicCtx.securityGroupState().groupLinks.isEmpty())
                 .map(nicCtx -> {
-                    Set<String> groupLinks = nicCtx.securityGroupState().groupLinks;
+                    DeferredResult<ResourceGroupState> filteredRGStates = queryFirstRGFilterByType(
+                            context, nicCtx.securityGroupState().groupLinks);
 
-                    // NOTE: Get first RG Link! If there are more than one link log a warning.
-                    String rgLink = groupLinks.iterator().next();
+                    return filteredRGStates
+                            .thenApply(resourceGroupState -> {
 
-                    if (groupLinks.size() > 1) {
-                        context.service.logSevere(
-                                "More than one resource group links are assigned to [%s] NIC's"
-                                        + " Security Group state. Get: %s",
-                                nicCtx.securityGroupState().name, rgLink);
-                    }
+                                nicCtx.securityGroupRGState = resourceGroupState;
 
-                    Operation getRGOp = Operation.createGet(context.service.getHost(), rgLink);
+                                return (Void) null;
+                            });
 
-                    // Get the RG by link
-                    return context.service
-                            .sendWithDeferredResult(getRGOp, ResourceGroupState.class)
-                            .thenAccept(rgState -> nicCtx.securityGroupRGState = rgState);
-                })
-                .collect(Collectors.toList());
+                }).collect(Collectors.toList());
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
@@ -335,4 +331,72 @@ public class AzureInstanceContext extends
         });
     }
 
+    /**
+     * Get {@link ResourceGroupState}s of the {@link NetworkState}s the NICs are assigned to.
+     */
+    @Override
+    protected DeferredResult<AzureInstanceContext> getNicNetworkResourceGroupStates(AzureInstanceContext context) {
+        if (context.nics.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
+        List<DeferredResult<Void>> getStatesDR = context.nics
+                .stream()
+                .filter(nicCtx -> nicCtx.networkState != null
+                        && nicCtx.networkState.groupLinks != null
+                        && !nicCtx.networkState.groupLinks.isEmpty())
+                .map(nicCtx -> {
+
+                    DeferredResult<ResourceGroupState> filteredRGStates = queryFirstRGFilterByType(
+                            context, nicCtx.networkState.groupLinks);
+
+                    return filteredRGStates
+                            .thenApply(resourceGroupState -> {
+
+                                nicCtx.networkRGState = resourceGroupState;
+
+                                return (Void) null;
+                            });
+
+                }).collect(Collectors.toList());
+
+        return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
+            if (exc != null) {
+                String msg = String.format(
+                        "Error getting ResourceGroup states of NIC Network states for "
+                                + "[%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
+            }
+            return context;
+        });
+
+    }
+
+    /**
+     * Utility method for filtering resource group list by type, and
+     * returning the first one, which is of ResourceGroupStateType.AzureResourceGroup
+     * type.
+     */
+    private DeferredResult<ResourceGroupState> queryFirstRGFilterByType(
+            AzureInstanceContext context, Set<String> groupLinks) {
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(ResourceGroupState.class)
+                .addInClause(ResourceState.FIELD_NAME_SELF_LINK, groupLinks)
+                .addCompositeFieldClause(
+                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        ComputeProperties.RESOURCE_TYPE_KEY,
+                        ResourceGroupStateType.AzureResourceGroup.name());
+
+        QueryStrategy<ResourceGroupState> queryByPages = new QueryTop<>(
+                this.service().getHost(),
+                qBuilder.build(),
+                ResourceGroupState.class,
+                context.childAuth.tenantLinks,
+                context.child.endpointLink)
+                        .setMaxResultsLimit(1);// only one group is required
+        return queryByPages.collectDocuments(Collectors.toList())
+                .thenApply(resourceGroupStates -> resourceGroupStates.isEmpty() ? null
+                        : resourceGroupStates.get(0));
+    }
 }
