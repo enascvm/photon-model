@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.18-SNAPSHOT
+
+
 ## 0.6.17
 
 * Upgrade to xenon 1.5.0
