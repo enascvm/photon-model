@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE;
+
 import java.net.URI;
 import java.util.List;
 
@@ -96,6 +98,13 @@ public class NetworkInterfaceService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
         public String endpointLink;
+
+        /**
+         * Network resource sub-type
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_18)
+        @UsageOption(option = PropertyUsageOption.SINGLE_ASSIGNMENT)
+        public String type = NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE;
     }
 
     /**

@@ -19,6 +19,11 @@ import java.util.Map;
 
 public class PhotonModelConstants {
 
+    // Network resource sub-type constants
+    public static final String NETWORK_SUBTYPE_NETWORK_STATE = "NetworkState";
+    public static final String NETWORK_SUBTYPE_SUBNET_STATE = "SubnetState";
+    public static final String NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE = "NetworkInterfaceState";
+
     // Photon-Model Metric related Constants
     public static final String CPU_UTILIZATION_PERCENT = "CPUUtilizationPercent";
     public static final String DISK_READ_BYTES = "DiskReadBytes";

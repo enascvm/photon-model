@@ -18,6 +18,8 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -127,6 +129,7 @@ public class NetworkInterfaceServiceTest extends Suite {
                     startState,
                     NetworkInterfaceService.NetworkInterfaceState.class);
 
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
             assertThat(returnState.address, is(startState.address));
@@ -140,6 +143,7 @@ public class NetworkInterfaceServiceTest extends Suite {
                     startState,
                     NetworkInterfaceService.NetworkInterfaceState.class);
 
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
             assertNotNull(returnState);
 
             returnState = postServiceSynchronously(
