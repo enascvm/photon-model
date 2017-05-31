@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -122,6 +123,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
     }
 
     @Test
+    @Ignore("VSYM-7059")
     public void testAwsCostAdapterEndToEnd() throws Throwable {
         if (this.isMock || new LocalDate(DateTimeZone.UTC).getDayOfMonth() == 1) {
             return;
