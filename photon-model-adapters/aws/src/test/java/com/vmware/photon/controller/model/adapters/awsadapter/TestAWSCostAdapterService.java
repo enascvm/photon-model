@@ -158,7 +158,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
 
         //Check if second iteration of adapter succeeds.
         triggerStatsCollection(resourcePool);
-        verifyPersistedStats(completeState, AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, 2);
+        verifyPersistedStats(completeState, AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, 3);
 
         System.clearProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
     }
@@ -176,7 +176,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                             QueryTask.QueryTerm.MatchType.PREFIX)
                     .addRangeClause(buildCompositeFieldName(
                             ResourceMetrics.FIELD_NAME_ENTRIES, metric),
-                            createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
+                            createDoubleRange(0.0, Double.MAX_VALUE, true, true))
                     .build();
             querySpec.options.add(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
             ServiceDocumentQueryResult result = this.host
