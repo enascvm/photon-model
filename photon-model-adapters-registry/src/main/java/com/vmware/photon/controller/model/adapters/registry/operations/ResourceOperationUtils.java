@@ -88,22 +88,8 @@ public class ResourceOperationUtils {
             ResourceType resourceType,
             String operation) {
 
-        return lookUp(host, refererURI, endpointType, resourceType, operation).thenApply(specs -> {
-            if (specs.isEmpty()) {
-                return null;
-            } else {
-                ResourceOperationSpec spec = specs.iterator().next();
-                if (specs.size() > 1) {
-                    Utils.log(ResourceOperationUtils.class, "lookUpByEndpointType",
-                            Level.SEVERE,
-                            "Multiple specs for endpointType: %s, resourceType: %s and "
-                                    + "operation: %s. Will use the first one: %s",
-                            endpointType, resourceType, operation, spec);
-
-                }
-                return spec;
-            }
-        });
+        return lookUp(host, refererURI, endpointType, resourceType, operation)
+                .thenApply(specs -> specs.isEmpty() ? null : specs.iterator().next());
     }
 
     /**
@@ -323,7 +309,9 @@ public class ResourceOperationUtils {
         QueryTop<ResourceOperationSpec> top = new QueryTop<>(
                 host, query, ResourceOperationSpec.class, null);
         if (operation != null) {
-            top.setMaxResultsLimit(3);
+            //resource operation spec id and selfLink are built from the endpoint type, resource
+            // type and operation id, so the query result is guaranteed to return at most 1 element
+            top.setMaxResultsLimit(1);
         }
         top.setReferer(refererURI);
         return top.collectDocuments(Collectors.toList());
