@@ -36,6 +36,9 @@ public class VSphereVMContext extends BaseAdapterContext<VSphereVMContext> {
 
     public VSphereVMContext(StatelessService service, ResourceRequest resourceRequest) {
         super(service, resourceRequest);
+        this.errorHandler = failure -> {
+            this.taskManager.patchTaskToFailure(failure);
+        };
     }
 
     /**
