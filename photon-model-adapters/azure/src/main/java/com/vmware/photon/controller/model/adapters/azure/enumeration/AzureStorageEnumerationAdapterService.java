@@ -653,7 +653,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .thenApply(auth -> {
                     StorageDescription storageDesc = AzureUtils.constructStorageDescription(
                             context.parentCompute, context.request, storageAccount, auth.documentSelfLink);
-                    context.storageDescriptionsForPatching.put(storageDesc.id, storageDesc);
                     return storageDesc;
                 })
                 .thenCompose(sd -> sendWithDeferredResult(Operation
@@ -664,6 +663,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                 logWarning(
                                         "Unable to store storage description for storage account:[%s], reason: %s",
                                         storageAccount.name, Utils.toJsonHtml(e));
+                            } else {
+                                StorageDescription storageDescription = o.getBody(StorageDescription.class);
+                                context.storageDescriptionsForPatching.put(storageDescription.id,
+                                        storageDescription);
                             }
                         }), StorageDescription.class));
     }
