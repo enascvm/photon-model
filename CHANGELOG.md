@@ -1,6 +1,13 @@
 # CHANGELOG
 
 ## 0.6.19-SNAPSHOT
+* Enhanced ResourceOperationSpec with:
+  * optional 'schema' element which describes the structure of the payload expected at runtime 
+  when request a resource operation 
+  * optional 'extensions' map, which purpose is to enable contributor to specify additional 
+  meta-data to the resource operation specification. Such additional meta-data could be for 
+  example UI related information like icon, custom UI, etc, so that interested parties can 
+  leverage this mata-data and process accordingly (visualize the icon, UI, etc) 
 
 ## 0.6.18
 * Add 'type' category field for Network resources.

@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,6 +25,9 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.test.TestRequestSender;
 
 public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest {
 
@@ -41,14 +45,64 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
     }
 
     @Test
+    public void testRegisterAndPatchExtensions() {
+        ResourceOperationSpec[] states = registerResourceOperation(
+                this.endpointType, ResourceType.COMPUTE, "testRegisterAndPatchExtensions");
+        ResourceOperationSpec requestedState = states[0];
+        ResourceOperationSpec persistedState = states[1];
+        Assert.assertTrue(persistedState.documentSelfLink.endsWith
+                (ResourceOperationSpecFactoryService.generateSelfLink(requestedState)));
+        this.logger.info("Persisted: " + persistedState);
+
+        String E_2 = "e2";
+
+        ResourceOperationSpec specWithExtension = new ResourceOperationSpec();
+        specWithExtension.documentSelfLink = ResourceOperationSpecFactoryService.generateSelfLink
+                (requestedState.endpointType, requestedState.resourceType,
+                        requestedState.operation);
+        specWithExtension.extensions = new HashMap<>();
+        specWithExtension.extensions.put(E_2, "v2");
+
+        Operation patchOne = Operation.createPatch(
+                super.host,
+                specWithExtension.documentSelfLink)
+                .setBodyNoCloning(specWithExtension);
+        TestRequestSender sender = super.host.getTestRequestSender();
+        sender.sendAndWait(patchOne);
+        ResourceOperationSpec patchedSpec = sender.sendGetAndWait(
+                UriUtils.buildUri(super.host, specWithExtension.documentSelfLink),
+                ResourceOperationSpec.class);
+
+        Assert.assertNotNull(patchedSpec);
+        Assert.assertNotNull(patchedSpec.extensions);
+        Assert.assertNotNull(patchedSpec.extensions.get(E_2));
+
+        specWithExtension.name = "tryNewName";
+        Operation patchTwo = Operation.createPatch(
+                super.host,
+                specWithExtension.documentSelfLink)
+                .setBodyNoCloning(specWithExtension);
+        try {
+            sender.sendAndWait(patchTwo);
+        } catch (RuntimeException rte) {
+            Throwable[] allSuppressed = rte.getSuppressed();
+            Assert.assertNotNull(allSuppressed);
+            Assert.assertEquals(1, allSuppressed.length);
+            Throwable suppressed = allSuppressed[0];
+            this.logger.info("Suppressed error: " + suppressed.getMessage());
+            Assert.assertTrue(suppressed instanceof IllegalArgumentException);
+        }
+    }
+
+    @Test
     public void testGetByEndpointType_neg() {
 
         DeferredResult<ResourceOperationSpec> dr = ResourceOperationUtils.lookUpByEndpointType(
                 super.host,
                 super.host.getReferer(),
-                "endpointType",
+                UUID.randomUUID().toString(),
                 ResourceType.COMPUTE,
-                "operation"
+                UUID.randomUUID().toString()
         );
         ResourceOperationSpec found = join(dr);
         Assert.assertNull(found);

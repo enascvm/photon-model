@@ -30,4 +30,5 @@ public class ReleaseConstants {
     public static final int RELEASE_VERSION_0_6_16 = 616;
     public static final int RELEASE_VERSION_0_6_17 = 617;
     public static final int RELEASE_VERSION_0_6_18 = 618;
+    public static final int RELEASE_VERSION_0_6_19 = 619;
 }

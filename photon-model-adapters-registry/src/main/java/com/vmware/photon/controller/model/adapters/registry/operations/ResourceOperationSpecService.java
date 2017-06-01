@@ -19,6 +19,7 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
 import java.net.URI;
+import java.util.Map;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
@@ -27,10 +28,12 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.data.Schema;
 import com.vmware.photon.controller.model.util.AssertUtil;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Represents an resource operation specification.
@@ -53,6 +56,14 @@ public class ResourceOperationSpecService extends StatefulService {
      * {@link ResourceOperationSpecService}.
      */
     public static class ResourceOperationSpec extends ServiceDocument {
+
+        public static class Extension {
+            public static final String KIND = Utils.buildKind(Extension.class);
+
+            public String documentKind = KIND;
+
+        }
+
         public static final String FIELD_NAME_OPERATION = "operation";
         public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
         public static final String FIELD_NAME_RESOURCE_TYPE = "resourceType";
@@ -76,7 +87,7 @@ public class ResourceOperationSpecService extends StatefulService {
 
         @Documentation(description = "Resource type for which the resource operation is applicable")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED },
-                indexing = PropertyIndexingOption.FIXED_ITEM_NAME)
+                indexing = { PropertyIndexingOption.FIXED_ITEM_NAME, PropertyIndexingOption.SORT })
         public ResourceType resourceType;
 
         /**
@@ -84,21 +95,22 @@ public class ResourceOperationSpecService extends StatefulService {
          */
         @Documentation(description = "Name of the photon model adapter configuration.",
                 exampleString = "Openstack, Virtustream, etc.")
-        @PropertyOptions(usage = AUTO_MERGE_IF_NOT_NULL,
+        @PropertyOptions(
                 indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
         public String name;
 
         /**
          * User-friendly description of the resource operation.
          */
-        @PropertyOptions(usage = AUTO_MERGE_IF_NOT_NULL,
+        @PropertyOptions(
                 indexing = PropertyIndexingOption.CASE_INSENSITIVE)
         public String description;
 
         /**
-         * URI reference to the adapter used to power-on this host.
+         * URI reference to the adapter for the resource operation.
          */
-        @UsageOption(option = AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED },
+                indexing = PropertyIndexingOption.STORE_ONLY)
         public URI adapterReference;
 
         /**
@@ -112,17 +124,26 @@ public class ResourceOperationSpecService extends StatefulService {
          * ".hostName.startsWith('myPrefix') && "
          * + ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE + ".cpuCount==4"}
          */
-        @PropertyOptions(usage = AUTO_MERGE_IF_NOT_NULL,
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT },
                 indexing = PropertyIndexingOption.STORE_ONLY)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
         public String targetCriteria;
 
         @Documentation(
                 description = "Optional schema describing the expected by the resource operation payload")
-        @PropertyOptions(usage = { AUTO_MERGE_IF_NOT_NULL, OPTIONAL },
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL },
                 indexing = PropertyIndexingOption.EXPAND)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_18)
         public Schema schema;
+
+        @Documentation(
+                description = "Optional extensions, e.g. UI specific configuration, related to the "
+                        + "resource operation specification.The values of the map shall be"
+                        + "specialization of ResourceOperationSpec.Extension")
+        @PropertyOptions(usage = { AUTO_MERGE_IF_NOT_NULL, OPTIONAL },
+                indexing = PropertyIndexingOption.EXPAND)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        public Map<String, String> extensions;
 
         @Override
         public String toString() {
@@ -131,15 +152,17 @@ public class ResourceOperationSpecService extends StatefulService {
                             + "adapterReference=%s, "
                             + "name=%s, description=%s, "
                             + "documentSelfLink=%s, "
-                            + "targetCriteria=%s,"
-                            + "schema=%s]",
+                            + "targetCriteria=%s, "
+                            + "schema=%s, "
+                            + "extensions=%s]",
                     getClass().getSimpleName(),
                     this.operation, this.endpointType, this.resourceType,
                     this.adapterReference,
                     this.name, this.description,
                     this.documentSelfLink,
                     this.targetCriteria,
-                    this.schema);
+                    this.schema,
+                    this.extensions);
         }
     }
 
@@ -172,4 +195,32 @@ public class ResourceOperationSpecService extends StatefulService {
                 operation.toLowerCase() + "-adapter");
     }
 
+    @Override
+    public void handlePatch(Operation patch) {
+        ResourceOperationSpec currentState = getState(patch);
+        ResourceOperationSpec body = patch.getBody(ResourceOperationSpec.class);
+
+        validate(body, patch.getRefererAsString());
+        boolean merged = Utils.mergeWithState(getStateDescription(), currentState, body);
+
+        if (merged) {
+            logFine("%s updated.", currentState);
+        } else {
+            patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+        }
+        patch.complete();
+    }
+
+    private void validate(ResourceOperationSpec body, String referer) {
+        AssertUtil.assertTrue(body.name == null,
+                "Cannot override 'name'. Referer: " + referer);
+        AssertUtil.assertTrue(body.description == null,
+                "Cannot override 'description'. Referer: " + referer);
+        AssertUtil.assertTrue(body.adapterReference == null,
+                "Cannot override 'adapterReference'. Referer: " + referer);
+        AssertUtil.assertTrue(body.targetCriteria == null,
+                "Cannot override 'targetCriteria'. Referer: " + referer);
+        AssertUtil.assertTrue(body.schema == null,
+                "Cannot override 'schema'. Referer: " + referer);
+    }
 }

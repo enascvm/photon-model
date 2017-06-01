@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -56,7 +57,9 @@ public class ResourceOperationSpecFactoryService extends FactoryService {
     @Override
     protected String buildDefaultChildSelfLink(ServiceDocument document) {
         ResourceOperationSpec initState = (ResourceOperationSpec) document;
-        if (initState.operation != null && initState.endpointType != null) {
+        if (initState.operation != null
+                && initState.resourceType != null
+                && initState.endpointType != null) {
             return generateId(initState);
         }
         if (initState.documentSelfLink != null) {
@@ -66,13 +69,24 @@ public class ResourceOperationSpecFactoryService extends FactoryService {
     }
 
     public static String generateSelfLink(ResourceOperationSpec state) {
-        String id = generateId(state);
+        return generateSelfLink(state.endpointType, state.resourceType, state.operation);
+    }
+
+    public static String generateSelfLink(String endpointType,
+            ResourceType resourceType,
+            String operation) {
+        String id = generateId(endpointType, resourceType, operation);
         return UriUtils.buildUriPath(ResourceOperationSpecService.FACTORY_LINK, id);
     }
 
+    private static String generateId(String endpointType, ResourceType resourceType,
+            String operation) {
+        return endpointType.replace(TOKEN_SEPARATOR, TOKEN_SEPARATOR_REPLACEMENT)
+                + TOKEN_SEPARATOR + resourceType.name().toLowerCase()
+                + TOKEN_SEPARATOR + operation;
+    }
+
     private static String generateId(ResourceOperationSpec state) {
-        return state.endpointType.replace(TOKEN_SEPARATOR, TOKEN_SEPARATOR_REPLACEMENT)
-                + TOKEN_SEPARATOR + state.resourceType.name().toLowerCase()
-                + TOKEN_SEPARATOR + state.operation;
+        return generateId(state.endpointType, state.resourceType, state.operation);
     }
 }

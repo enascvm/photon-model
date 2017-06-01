@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.data;
 
 import java.util.Map;
+import java.util.Objects;
 
 import com.google.gson.annotations.SerializedName;
 
@@ -137,4 +138,46 @@ public class SchemaField {
      * Field constraints.
      */
     public Map<Constraint, Object> constraints;
+
+    @Override
+    public String toString() {
+        return String.format("%s[label=%s, "
+                        + "dataType=%s, "
+                        + "type=%s, "
+                        + "description=%s, "
+                        + "schema=%s, "
+                        + "constraints=%s]",
+                getClass().getSimpleName(),
+                this.label,
+                this.dataType,
+                this.type,
+                this.description,
+                this.schema,
+                this.constraints);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.label, this.dataType, this.type, this.schema, this.constraints);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (obj == this) {
+            return true;
+        }
+        if (!(obj instanceof SchemaField)) {
+            return false;
+        }
+        SchemaField other = (SchemaField) obj;
+
+        return Objects.equals(this.label, other.label)
+                && Objects.equals(this.dataType, other.dataType)
+                && Objects.equals(this.type, other.type)
+                && Objects.equals(this.schema, other.schema)
+                && Objects.equals(this.constraints, other.constraints);
+    }
 }
