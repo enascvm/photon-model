@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.19-SNAPSHOT
+
 ## 0.6.18
 * Add 'type' category field for Network resources.
 * Enhanced resource operations service to accept operation as qparam.
