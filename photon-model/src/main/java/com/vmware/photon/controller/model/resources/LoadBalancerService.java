@@ -21,9 +21,12 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
@@ -52,6 +55,8 @@ public class LoadBalancerService extends StatefulService {
     public static final String FIELD_NAME_PORT = "port";
     public static final String FIELD_NAME_INSTANCE_PROTOCOL = "instanceProtocol";
     public static final String FIELD_NAME_INSTANCE_PORT = "instancePort";
+    public static final String FIELD_NAME_INTERNET_FACING = "internetFacing";
+    public static final String FIELD_NAME_ADDRESS = "address";
 
     public static final int MIN_PORT_NUMBER = 1;
     public static final int MAX_PORT_NUMBER = 65535;
@@ -122,6 +127,20 @@ public class LoadBalancerService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI instanceAdapterReference;
 
+        /**
+         * Internet-facing load balancer or an internal load balancer
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Boolean internetFacing;
+
+        /**
+         * The address of this load balancer instance.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String address;
+
         @Override
         public void copyTo(ResourceState target) {
             super.copyTo(target);
@@ -137,6 +156,8 @@ public class LoadBalancerService extends StatefulService {
                 targetState.instanceProtocol = this.instanceProtocol;
                 targetState.instancePort = this.instancePort;
                 targetState.instanceAdapterReference = this.instanceAdapterReference;
+                targetState.internetFacing = this.internetFacing;
+                targetState.address = this.address;
             }
         }
     }
@@ -258,6 +279,8 @@ public class LoadBalancerService extends StatefulService {
         template.port = 80;
         template.instanceProtocol = "HTTP";
         template.instancePort = 80;
+        template.internetFacing = Boolean.TRUE;
+        template.address = "my-address";
 
         return template;
     }

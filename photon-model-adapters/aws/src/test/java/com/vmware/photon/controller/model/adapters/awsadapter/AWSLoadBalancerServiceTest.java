@@ -41,6 +41,8 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionLoadBalancerTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState;
@@ -60,6 +62,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
     public String secretKey = "test123";
     public String accessKey = "blas123";
     public String regionId = TestAWSSetupUtils.regionId;
+    public String subnetId = "subnet123";
     private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
     public boolean isMock = true;
     private AmazonElasticLoadBalancingAsyncClient client;
@@ -114,7 +117,10 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         lb = getServiceSynchronously(lb.documentSelfLink, LoadBalancerState.class);
 
         if (!this.isMock) {
-            assertNotNull(getAwsLoadBalancer(this.lbName));
+            LoadBalancerDescription awsLoadBalancer = getAwsLoadBalancer(this.lbName);
+            assertNotNull(awsLoadBalancer);
+            assertEquals(awsLoadBalancer.getDNSName(), lb.address);
+            assertEquals("internet-facing", awsLoadBalancer.getScheme());
         }
 
         kickOffLoadBalancerProvision(InstanceRequestType.DELETE, lb.documentSelfLink,
@@ -157,6 +163,19 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
                 AuthCredentialsServiceState.class);
     }
 
+    private SubnetState createSubnetState(String name) throws Throwable {
+        SubnetState subnetState = new SubnetState();
+        subnetState.name = name;
+        subnetState.id = name;
+        subnetState.endpointLink = this.endpointState.documentSelfLink;
+        subnetState.networkLink = "dummy";
+        subnetState.subnetCIDR = "10.10.10.10/24";
+        subnetState.tenantLinks = this.endpointState.tenantLinks;
+
+        return postServiceSynchronously(SubnetService.FACTORY_LINK, subnetState,
+              SubnetState.class);
+    }
+
     private LoadBalancerState createLoadBalancerState(String name) throws Throwable {
         LoadBalancerState state = new LoadBalancerState();
         state.name = name;
@@ -164,12 +183,14 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         state.regionId = this.regionId;
         state.computeLinks = new HashSet<>();
         state.subnetLinks = new HashSet<>();
+        state.subnetLinks.add(createSubnetState(this.subnetId).documentSelfLink);
         state.protocol = "HTTP";
         state.port = 80;
         state.instanceProtocol = "HTTP";
         state.instancePort = 80;
         state.instanceAdapterReference = UriUtils.buildUri(this.host,
                 AWSLoadBalancerService.SELF_LINK);
+        state.internetFacing = Boolean.TRUE;
 
         return postServiceSynchronously(LoadBalancerService.FACTORY_LINK, state,
                 LoadBalancerState.class);

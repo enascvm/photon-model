@@ -17,9 +17,12 @@ import java.net.URI;
 import java.util.Set;
 import java.util.UUID;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -41,6 +44,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
     public static final String FIELD_NAME_PORT = "port";
     public static final String FIELD_NAME_INSTANCE_PROTOCOL = "instanceProtocol";
     public static final String FIELD_NAME_INSTANCE_PORT = "instancePort";
+    public static final String FIELD_NAME_INTERNET_FACING = "internetFacing";
 
     public static final int MIN_PORT_NUMBER = 1;
     public static final int MAX_PORT_NUMBER = 65535;
@@ -103,6 +107,13 @@ public class LoadBalancerDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI instanceAdapterReference;
+
+        /**
+         * Internet-facing load balancer or an internal load balancer
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Boolean internetFacing;
     }
 
     public LoadBalancerDescriptionService() {
