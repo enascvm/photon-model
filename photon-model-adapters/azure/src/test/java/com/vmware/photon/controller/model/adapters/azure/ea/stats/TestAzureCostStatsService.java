@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea.stats;
 
+import static com.vmware.photon.controller.model.util.AssertUtil.assertNotNull;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;
 
@@ -22,9 +23,8 @@ import java.util.HashMap;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
+import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -58,6 +58,9 @@ public class TestAzureCostStatsService extends BaseModelTest {
     private String clientId = System.getProperty(AZURE_CLIENT_ID);
     private String clientSecret = System.getProperty(AZURE_CLIENT_SECRET);
 
+    public String enrollmentNumber;
+    public String usageApiKey;
+
     @Override
     protected void startRequiredServices() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
@@ -65,10 +68,10 @@ public class TestAzureCostStatsService extends BaseModelTest {
         PhotonModelTaskServices.startServices(this.host);
         PhotonModelAdaptersRegistryAdapters.startServices(this.host);
         this.host.startService(new AzureCostStatsService());
-        AzureAdapters.startServices(this.host);
+        AzureEaAdapters.startServices(this.host);
         this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
         this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-        this.host.waitForServiceAvailable(AzureAdapters.LINKS);
+        this.host.waitForServiceAvailable(AzureEaAdapters.LINKS);
         this.host.setTimeoutSeconds(900);
     }
 
@@ -82,17 +85,18 @@ public class TestAzureCostStatsService extends BaseModelTest {
 
         EndpointService.EndpointState endpointState = new EndpointService.EndpointState();
         endpointState.resourcePoolLink = resourcePool.documentSelfLink;
-        endpointState.endpointType = PhotonModelConstants.EndpointType.azure.name();
+        endpointState.endpointType = PhotonModelConstants.EndpointType.azure_ea.name();
         endpointState.name = "test-azure-endpoint";
         endpointState.endpointProperties = new HashMap<>();
         endpointState.endpointProperties
-                .put(EndpointConfigRequest.PRIVATE_KEYID_KEY, this.clientId);
+                .put(EndpointConfigRequest.PRIVATE_KEYID_KEY, this.enrollmentNumber);
         endpointState.endpointProperties
-                .put(EndpointConfigRequest.PRIVATE_KEY_KEY, this.clientSecret);
-        String subscriptionId = System.getProperty(AZURE_SUBSCRIPTION_ID);
-        endpointState.endpointProperties.put(EndpointConfigRequest.USER_LINK_KEY, subscriptionId);
-        String tenantId = System.getProperty(AZURE_TENANT_ID);
-        endpointState.endpointProperties.put(AzureConstants.AZURE_TENANT_ID, tenantId);
+                .put(EndpointConfigRequest.PRIVATE_KEY_KEY, this.usageApiKey);
+
+        assertNotNull(this.enrollmentNumber,
+                "Provide \"xenon.enrollmentNumber\" and \"xenon.usageApiKey\" as system properties.");
+        assertNotNull(this.usageApiKey,
+                "Provide \"xenon.enrollmentNumber\" and \"xenon.usageApiKey\" as system properties.");
 
         EndpointAllocationTaskService.EndpointAllocationTaskState endpointAllocationTaskState =
                 new EndpointAllocationTaskService.EndpointAllocationTaskState();

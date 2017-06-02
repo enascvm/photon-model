@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
-
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 
 public class AWSConstants {
 
@@ -62,7 +62,7 @@ public class AWSConstants {
     public static final String VOLUME_TYPE = "volumeType";
     public static final String AWS_ATTACHMENT_VPC_FILTER = "attachment.vpc-id";
     public static final String AWS_BILLS_S3_BUCKET_NAME_KEY = "billsBucketName";
-    public static final String AWS_ACCOUNT_ID_KEY = "accountId";
+    public static final String AWS_ACCOUNT_ID_KEY = PhotonModelConstants.CLOUD_ACCOUNT_ID;
     public static final String AWS_LINKED_ACCOUNT_IDS = "linkedAccountIds";
     public static final String ACCOUNT_IS_AUTO_DISCOVERED = "autoDiscovered";
     public static final int NO_OF_DAYS_MARGIN_FOR_AWS_TO_UPDATE_BILL = 5;

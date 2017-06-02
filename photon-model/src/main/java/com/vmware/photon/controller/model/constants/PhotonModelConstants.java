@@ -140,6 +140,9 @@ public class PhotonModelConstants {
 
     public static final String CUSTOM_PROP_CREDENTIALS_SCOPE = "scope";
 
+    // Endpoint identifier as provided by the cloud-provider
+    public static final String CLOUD_ACCOUNT_ID = "accountId";
+
     public static final String CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS = "CloudAccountCostSyncMarkerMillis";
 
 }

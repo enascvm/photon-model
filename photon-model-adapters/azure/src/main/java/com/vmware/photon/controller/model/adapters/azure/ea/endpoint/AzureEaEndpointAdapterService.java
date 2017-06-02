@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.function.BiConsumer;
 
@@ -27,6 +28,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -56,10 +58,12 @@ public class AzureEaEndpointAdapterService extends StatelessService {
                 computeDesc(), compute(), endpoint(), validate());
     }
 
-    private BiConsumer<EndpointState,Retriever> endpoint() {
-        return (e , r) -> {
+    private BiConsumer<EndpointState, Retriever> endpoint() {
+        return (e, r) -> {
             e.endpointProperties.put(PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
             r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
+            e.endpointProperties
+                    .put(PhotonModelConstants.CLOUD_ACCOUNT_ID, r.getRequired(PRIVATE_KEYID_KEY));
         };
     }
 
@@ -68,6 +72,8 @@ public class AzureEaEndpointAdapterService extends StatelessService {
             c.type = ComputeType.VM_HOST;
             c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             c.adapterManagementReference = UriUtils.buildUri(AzureConstants.AZURE_EA_BASE_URI);
+            addEntryToCustomProperties(c, PhotonModelConstants.CLOUD_ACCOUNT_ID,
+                    r.getRequired(PRIVATE_KEYID_KEY));
         };
     }
 
@@ -125,4 +131,10 @@ public class AzureEaEndpointAdapterService extends StatelessService {
         };
     }
 
+    private void addEntryToCustomProperties(ComputeState c, String key, String value) {
+        if (c.customProperties == null) {
+            c.customProperties = new HashMap<>();
+        }
+        c.customProperties.put(key, value);
+    }
 }

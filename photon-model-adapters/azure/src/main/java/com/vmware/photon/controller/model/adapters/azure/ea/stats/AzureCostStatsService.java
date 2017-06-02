@@ -941,6 +941,7 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private void setCustomProperty(Context context, String key, String value, Stages next) {
+        OperationContext.restoreOperationContext(context.opContext);
         context.computeHostDesc.customProperties.put(key, value);
         ComputeState accountState = new ComputeState();
         accountState.customProperties = new HashMap<>();
