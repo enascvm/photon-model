@@ -358,14 +358,14 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         final DeferredResult<String> imageNativeIdDR;
 
         if (bootDisk.imageLink != null) {
-            // Either get 'image native id' from ImageState.id as pointed by 'bootDisk.imageLink'
+            // Get 'image native id' from ImageState.id that's pointed by 'bootDisk.imageLink'
             Operation getImageStateOp = Operation.createGet(this.service.getHost(), bootDisk.imageLink);
 
             imageNativeIdDR = this.service
                     .sendWithDeferredResult(getImageStateOp, ImageState.class)
                     .thenApply(imageState -> imageState.id);
         } else {
-            // Or use directly 'bootDisk.sourceImageReference' as 'image native id'
+            // Use directly 'bootDisk.sourceImageReference' as 'image native id'
             imageNativeIdDR = DeferredResult.completed(bootDisk.sourceImageReference.toString());
         }
 

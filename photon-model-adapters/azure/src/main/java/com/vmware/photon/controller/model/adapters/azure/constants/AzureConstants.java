@@ -24,6 +24,7 @@ public class AzureConstants {
     public static final String AZURE_TENANT_ID = "azureTenantId";
     public static final String AZURE_RESOURCE_GROUP_NAME = "azureResourceGroupName";
     public static final String AZURE_OSDISK_CACHING = "azureOsDiskCaching";
+    public static final String AZURE_OSDISK_BLOB_URI = "azureOsDiskBlobUri";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "azureStorageAccountType";
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "azureStorageAccountName";
     public static final String AZURE_STORAGE_ACCOUNT_RG_NAME = "azureSAResourceGroupName";

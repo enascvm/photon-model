@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 import com.google.common.collect.Sets;
 
 import org.apache.commons.lang3.StringUtils;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -38,8 +37,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
-import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService.ImagesLoadMode;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
@@ -52,6 +51,7 @@ import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -88,13 +88,15 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     private static final int DEFAULT_IMAGES = 11;
 
+    private static final String PRIVATE_IMAGE_NAME = "PhModelLinuxImage";
+
     private static final boolean EXACT_COUNT = true;
 
     private static final boolean PUBLIC = true;
     private static final boolean PRIVATE = false;
 
-    private static final String OS_TYPE_WINDOWS_NAME = OSType.WINDOWS.name();
-    private static final String OS_TYPE_LINUX_NAME = OSType.LINUX.name();
+    private static final String OS_TYPE_WINDOWS_NAME = "Windows";
+    private static final String OS_TYPE_LINUX_NAME = "Linux";
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -147,13 +149,59 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
         getHost().waitForServiceAvailable(AzureAdapters.CONFIG_LINK);
     }
 
+    /**
+     * That's the only private image:
+     * {@link https://portal.azure.com/#resource/subscriptions/817776f9-ef2a-4681-9774-a66f9be11e22/resourceGroups/group1496675321811/providers/Microsoft.Compute/images/PhModelLinuxImage/overview}
+     * created as described here
+     * {@link https://docs.microsoft.com/en-us/azure/virtual-machines/linux/capture-image}
+     */
     @Test
-    public void testPrivateImageEnumeration() throws Throwable {
+    public void testPrivateImageEnumeration_single() throws Throwable {
 
-        kickOffImageEnumeration(createEndpointState(), PRIVATE, AZURE_ALL_IMAGES_FILTER);
+        Assume.assumeFalse(this.isMock);
 
-        // Validate NO image states are CREATED
-        queryDocumentsAndAssertExpectedCount(getHost(), 0, ImageService.FACTORY_LINK, EXACT_COUNT);
+        {
+            // Jon Schulman Azure subscription
+            this.subscriptionId = "817776f9-ef2a-4681-9774-a66f9be11e22";
+            this.clientID = "e3f0a5a1-df21-4b25-8580-4a54b4295856";
+            this.clientKey = "zRR1m3j2IxiXz+w8iSe+AiIBrxILsvWSppbMw5cHYDM=";
+            this.tenantId = "9340b30e-fb52-4208-a40a-325497357c8b";
+        }
+
+        EndpointState endpointState = createEndpointState();
+
+        kickOffImageEnumeration(endpointState, PRIVATE, AZURE_ALL_IMAGES_FILTER);
+
+        // Validate 1 image state is CREATED
+        ServiceDocumentQueryResult images = queryDocumentsAndAssertExpectedCount(
+                getHost(), 1,
+                ImageService.FACTORY_LINK,
+                EXACT_COUNT);
+
+        ImageState image = Utils.fromJson(
+                images.documents.values().iterator().next(),
+                ImageState.class);
+
+        // Validate created image is correctly populated
+        Assert.assertNull("Private image must NOT have endpointType set.",
+                image.endpointType);
+        Assert.assertEquals("Private image must have endpointLink set.",
+                endpointState.documentSelfLink, image.endpointLink);
+        Assert.assertEquals("Private image must have tenantLinks set.",
+                endpointState.tenantLinks, image.tenantLinks);
+
+        Assert.assertTrue("Image.id is invalid", image.id.endsWith(PRIVATE_IMAGE_NAME));
+        Assert.assertEquals("Image.name is invalid", PRIVATE_IMAGE_NAME, image.name);
+        Assert.assertEquals("Image.description is invalid", PRIVATE_IMAGE_NAME, image.description);
+
+        Assert.assertNotNull("Image.diskConfigs", image.diskConfigs);
+        Assert.assertEquals("Image.diskConfigs.size", 1, image.diskConfigs.size());
+
+        DiskConfiguration diskConfig = image.diskConfigs.get(0);
+
+        Assert.assertNotNull("Image.diskConfig.properties", diskConfig.properties);
+        Assert.assertNotNull("Image.diskConfig.properties.blobUri",
+                diskConfig.properties.get(AzureConstants.AZURE_OSDISK_BLOB_URI));
     }
 
     @Test
@@ -245,6 +293,23 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
         }
     }
 
+    @Test
+    public void testPublicImageEnumeration_singleNoDefaults() throws Throwable {
+
+        Assume.assumeFalse(this.isMock);
+
+        setImagesLoadMode(ImagesLoadMode.STANDARD);
+
+        try {
+            kickOffImageEnumeration(createEndpointState(), PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
+
+            queryDocumentsAndAssertExpectedCount(getHost(), 1, ImageService.FACTORY_LINK,
+                    EXACT_COUNT);
+        } finally {
+            setImagesLoadMode(ImagesLoadMode.ALL);
+        }
+    }
+
     /**
      * Validate that during enum only images of this 'endpointType' are deleted.
      */
@@ -328,23 +393,6 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
             setImagesLoadMode(ImagesLoadMode.ALL);
         }
     }
-
-    @Test
-    public void testPublicImageEnumeration_singleNoDefaults() throws Throwable {
-
-        Assume.assumeFalse(this.isMock);
-
-        setImagesLoadMode(ImagesLoadMode.STANDARD);
-
-        try {
-            kickOffImageEnumeration(createEndpointState(), PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
-
-            queryDocumentsAndAssertExpectedCount(getHost(), 1, ImageService.FACTORY_LINK, EXACT_COUNT);
-        } finally {
-            setImagesLoadMode(ImagesLoadMode.ALL);
-        }
-    }
-
 
     /**
      * Validate 11 image states are created.

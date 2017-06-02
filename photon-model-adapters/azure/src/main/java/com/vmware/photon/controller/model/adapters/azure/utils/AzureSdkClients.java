@@ -17,11 +17,10 @@ import java.util.concurrent.ExecutorService;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.ComputeManager;
 import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
-
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
-
 import com.microsoft.rest.RestClient;
 
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -41,6 +40,9 @@ public class AzureSdkClients implements AutoCloseable {
 
     // Azure SDK clients being used {{
     private RestClient restClient;
+
+    private ComputeManager computeManager;
+
     private ComputeManagementClientImpl computeManagementClient;
     private ResourceManagementClientImpl resourceManagementClient;
     private NetworkManagementClientImpl networkManagementClient;
@@ -57,6 +59,14 @@ public class AzureSdkClients implements AutoCloseable {
         this.azureCredentials = AzureUtils.getAzureConfig(authentication);
 
         this.restClient = AzureUtils.buildRestClient(this.azureCredentials, this.executorService);
+    }
+
+    public synchronized ComputeManager getComputeManager() {
+        if (this.computeManager == null) {
+            this.computeManager = ComputeManager.authenticate(this.restClient, this.authentication.userLink);
+        }
+
+        return this.computeManager;
     }
 
     public synchronized ComputeManagementClientImpl getComputeManagementClientImpl() {

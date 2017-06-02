@@ -373,11 +373,19 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
             Assert.assertTrue(pIter.hasNext());
 
+            Assert.assertEquals(0, pIter.pageNumber());
+
             Assert.assertEquals(Arrays.asList("1", "2", "3"), pIter.next());
+
+            Assert.assertEquals(1, pIter.pageNumber());
 
             Assert.assertEquals(Arrays.asList("4"), pIter.next());
 
+            Assert.assertEquals(2, pIter.pageNumber());
+
             Assert.assertFalse(pIter.hasNext());
+
+            Assert.assertEquals(original.size(), pIter.totalNumber());
         }
 
         {
@@ -387,11 +395,19 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
             Assert.assertTrue(pIter.hasNext());
 
+            Assert.assertEquals(0, pIter.pageNumber());
+
             Assert.assertEquals(Arrays.asList("1", "2"), pIter.next());
+
+            Assert.assertEquals(1, pIter.pageNumber());
 
             Assert.assertEquals(Arrays.asList("3", "4"), pIter.next());
 
+            Assert.assertEquals(2, pIter.pageNumber());
+
             Assert.assertFalse(pIter.hasNext());
+
+            Assert.assertEquals(original.size(), pIter.totalNumber());
         }
 
         {
@@ -400,6 +416,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
             PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 3);
 
             Assert.assertFalse(pIter.hasNext());
+
+            Assert.assertEquals(original.size(), pIter.totalNumber());
         }
     }
 

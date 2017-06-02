@@ -21,29 +21,36 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.microsoft.azure.CloudException;
-import com.microsoft.azure.management.compute.OSDiskImage;
-import com.microsoft.azure.management.compute.OperatingSystemTypes;
+import com.microsoft.azure.management.compute.ImageOSDisk;
 import com.microsoft.azure.management.compute.PurchasePlan;
+import com.microsoft.azure.management.compute.VirtualMachineCustomImage;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineImageResourceInner;
-
 import com.microsoft.azure.management.compute.implementation.VirtualMachineImagesInner;
+
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -79,28 +86,72 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
     public static final String IMAGES_LOAD_MODE_PROPERTY = "photon-model.adapter.azure.images.load.mode";
 
     public static enum ImagesLoadMode {
-        STANDARD, DEFAULT, ALL;
+        /**
+         * Load standard images (in case of public and private images enumeration).
+         */
+        STANDARD,
+
+        /**
+         * Load default images (in case of public images enumeration).
+         */
+        DEFAULT,
+
+        /**
+         * Load standard and default images.
+         */
+        ALL;
     }
 
+    /**
+     * Get {@code ImagesLoadMode} from {@value #IMAGES_LOAD_MODE_PROPERTY} system property.
+     *
+     * @return by default return {@link ImagesLoadMode#ALL}
+     */
     public static ImagesLoadMode getImagesLoadMode() {
+
         String imagesLoadMode = System.getProperty(
                 IMAGES_LOAD_MODE_PROPERTY,
                 ImagesLoadMode.ALL.name());
 
         try {
             return ImagesLoadMode.valueOf(imagesLoadMode);
+
         } catch (Exception exc) {
+
             return ImagesLoadMode.ALL;
         }
     }
 
+    public static final String IMAGES_PAGE_SIZE_PROPERTY = "photon-model.adapter.azure.images.page.size";
+
     /**
-     * {@link EndpointEnumerationProcess} specialization that loads Azure
-     * {@link com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner}s into
-     * {@link ImageState} store.
+     * Get images page size from {@value #IMAGES_PAGE_SIZE_PROPERTY} system property.
+     *
+     * @return by default return 100
+     */
+    public static int getImagesPageSize() {
+
+        final int DEFAULT_IMAGES_PAGE_SIZE = 100;
+
+        String imagesPageSizeStr = System.getProperty(
+                IMAGES_PAGE_SIZE_PROPERTY,
+                String.valueOf(DEFAULT_IMAGES_PAGE_SIZE));
+
+        try {
+            return Integer.parseInt(imagesPageSizeStr);
+
+        } catch (NumberFormatException exc) {
+
+            return DEFAULT_IMAGES_PAGE_SIZE;
+        }
+    }
+
+    /**
+     * {@link EndpointEnumerationProcess} specialization that loads Azure {@link AzureImageData}s
+     * into {@link ImageState} store.
      */
     private static class AzureImageEnumerationContext extends
-            EndpointEnumerationProcess<AzureImageEnumerationContext, ImageState, VirtualMachineImageInner> {
+            EndpointEnumerationProcess<AzureImageEnumerationContext, ImageState, AzureImageData> {
 
         static final String DEFAULT_FILTER_VALUE = "default";
 
@@ -137,9 +188,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         String regionId;
 
-        DefaultImagesLoader azureDefaultImages;
-
-        StandardImagesLoader azureStandardImages;
+        AzureImagesLoader azureImagesLoader;
 
         TaskManager taskManager;
 
@@ -159,6 +208,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 // Public/Shared images should NOT consider tenantLinks and endpointLink
                 setApplyInfraFields(false);
             }
+        }
+
+        ImagesLoadMode perRequestImagesLoadMode() {
+            return this.imageFilter == DEFAULT_IMAGES_FILTER
+                    ? ImagesLoadMode.DEFAULT
+                    : getImagesLoadMode();
         }
 
         /**
@@ -227,124 +282,78 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return context;
         }
 
+        /**
+         * Get next page of Azure images from AzureImagesLoader.
+         */
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
 
-            // First load default images to speed up overall images enumeration.
-
-            if (nextPageLink == null) {
-                DeferredResult<RemoteResourcesPage> defaultImagesPage = loadDefaultImagesPage();
-
-                if (defaultImagesPage != null) {
-                    return defaultImagesPage;
-                }
-            }
-
-            // Second load standard images which might be time consuming.
-
-            DeferredResult<RemoteResourcesPage> standardImagesPage = loadStandardImagesPage();
-
-            if (standardImagesPage != null) {
-                return standardImagesPage;
-            }
-
-            return DeferredResult.completed(new RemoteResourcesPage());
+            return getAzureImagesPage(getAzureImagesLoader());
         }
 
         /**
-         * @return <code>null</code> to indicate that default image loading is not applicable
-         *         (either disabled or already loaded)
+         * Initialize correct images loader depending on {@code ImageEnumerateRequestType} and
+         * {@code ImagesLoadMode}.
          */
-        private DeferredResult<RemoteResourcesPage> loadDefaultImagesPage() {
+        private AzureImagesLoader getAzureImagesLoader() {
 
-            final String msg = "Enumerating Default Azure images";
+            if (this.azureImagesLoader == null) {
 
-            final ImagesLoadMode imagesLoadMode = getImagesLoadMode();
-            if (!(imagesLoadMode == ImagesLoadMode.DEFAULT
-                    || imagesLoadMode == ImagesLoadMode.ALL)) {
-                this.service.logFine(() -> msg + ": DISABLED");
+                // Initialize correct images loader...
 
-                return null;
-            }
+                ImagesLoadMode imagesLoadMode = perRequestImagesLoadMode();
 
-            if (this.azureDefaultImages != null) {
-                // Already loaded.
-                return null;
-            }
+                if (this.request.requestType == ImageEnumerateRequestType.PUBLIC) {
 
-            this.azureDefaultImages = new DefaultImagesLoader(this);
+                    // PUBLIC images enum
 
-            this.service.logFine(() -> msg + ": STARTING");
+                    if (imagesLoadMode == ImagesLoadMode.DEFAULT) {
 
-            final RemoteResourcesPage page = new RemoteResourcesPage();
+                        this.azureImagesLoader = new DefaultImagesLoader(this);
 
-            page.nextPageLink = this.imageFilter == DEFAULT_IMAGES_FILTER
-                    // Load ONLY default images so NULL is returned as next page.
-                    // This FORCE-stop image loading chain.
-                    ? null
-                    // Otherwise continue with standard images
-                    : NEXT_PAGE_LINK + 0;
+                    } else if (imagesLoadMode == ImagesLoadMode.STANDARD) {
 
-            return this.azureDefaultImages.load().handle((defaultImages, exc) -> {
+                        this.azureImagesLoader = new StandardImagesLoader(
+                                this, getImagesPageSize());
 
-                if (exc != null) {
-                    this.service.logWarning(
-                            () -> String.format(msg + ": FAILED with %s", Utils.toString(exc)));
-                } else {
-                    for (VirtualMachineImageInner image : defaultImages) {
-                        page.resourcesPage.put(toImageReference(image), image);
+                    } else if (imagesLoadMode == ImagesLoadMode.ALL) {
+
+                        this.azureImagesLoader = new ConcatenatedAzureImagesLoader(this,
+                                Arrays.asList(
+                                        new DefaultImagesLoader(this),
+                                        new StandardImagesLoader(this, getImagesPageSize())));
                     }
-
-                    this.service.logFine(() -> msg + ": TOTAL number " + defaultImages.size());
+                } else {
+                    // PRIVATE images enumeration
+                    this.azureImagesLoader = new PrivateImagesLoader(this, getImagesPageSize());
                 }
+            }
 
-                return page;
-            });
+            return this.azureImagesLoader;
         }
 
         /**
-         * @return <code>null</code> to indicate that standard image loading is not applicable (is
-         *         disabled)
+         * Read Azure images page-by-page as served by passed {@link AzureImagesLoader} and convert
+         * to {@link RemoteResourcesPage}.
          */
-        private DeferredResult<RemoteResourcesPage> loadStandardImagesPage() {
-
-            final String msg = "Enumerating Azure images by [" +
-                    Arrays.asList(this.imageFilter).stream()
-                            .map(VirtualMachineImageResourceInner::name)
-                            .collect(Collectors.joining(":"))
-                    + "]";
-
-            final ImagesLoadMode imagesLoadMode = getImagesLoadMode();
-            if (!(imagesLoadMode == ImagesLoadMode.STANDARD
-                    || imagesLoadMode == ImagesLoadMode.ALL)) {
-                this.service.logFine(() -> msg + ": DISABLED");
-
-                return null;
-            }
-
-            if (this.azureStandardImages == null) {
-                this.service.logInfo(() -> msg + ": STARTING");
-
-                this.azureStandardImages = new StandardImagesLoader(
-                        this, StandardImagesLoader.DEFAULT_PAGE_SIZE);
-            }
+        private DeferredResult<RemoteResourcesPage> getAzureImagesPage(
+                AzureImagesLoader azureImagesLoader) {
 
             final RemoteResourcesPage page = new RemoteResourcesPage();
 
-            if (this.azureStandardImages.hasNext()) {
+            if (azureImagesLoader.hasNext()) {
                 // Consume this page from underlying Iterator
-                for (VirtualMachineImageInner image : this.azureStandardImages.next()) {
-                    page.resourcesPage.put(toImageReference(image), image);
+                for (AzureImageData image : azureImagesLoader.next()) {
+                    page.resourcesPage.put(image.id, image);
                 }
             }
 
-            if (this.azureStandardImages.hasNext()) {
+            if (azureImagesLoader.hasNext()) {
                 // Return a non-null nextPageLink to the parent so we are called back.
-                page.nextPageLink = NEXT_PAGE_LINK + (this.azureStandardImages.pageNumber() + 1);
-            } else {
-                // Return null nextPageLink to the parent so we are NOT called back any more.
-                this.service.logFine(
-                        () -> msg + ": TOTAL number = " + this.azureStandardImages.totalNumber());
+                page.nextPageLink = NEXT_PAGE_LINK
+                        + azureImagesLoader.getClass().getSimpleName()
+                        + "_"
+                        + azureImagesLoader.pageNumber;
             }
 
             return DeferredResult.completed(page);
@@ -352,7 +361,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         @Override
         protected DeferredResult<LocalStateHolder> buildLocalResourceState(
-                VirtualMachineImageInner remoteImage, ImageState existingImageState) {
+                AzureImageData azureImageData, ImageState existingImageState) {
 
             LocalStateHolder holder = new LocalStateHolder();
 
@@ -371,18 +380,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             // Both flows - populate from remote Image
 
-            // publisher:offer:sku:version
-            holder.localState.name = toImageReference(remoteImage);
-            holder.localState.description = toImageReference(remoteImage);
+            holder.localState.name = azureImageData.name;
+            holder.localState.description = azureImageData.description;
+            holder.localState.osFamily = azureImageData.osFamily;
+            holder.localState.diskConfigs = azureImageData.diskConfigs;
 
-            if (remoteImage.osDiskImage() != null
-                    && remoteImage.osDiskImage().operatingSystem() != null) {
-                holder.localState.osFamily = remoteImage.osDiskImage().operatingSystem().name();
-            }
-
-            if (remoteImage.tags() != null) {
-                holder.remoteTags.putAll(remoteImage.tags());
-            }
+            holder.remoteTags.putAll(azureImageData.tags);
 
             return DeferredResult.completed(holder);
         }
@@ -437,14 +440,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return posv;
         }
 
-        static String toImageReference(VirtualMachineImageInner azureImage) {
-
-            final PurchasePlan plan = azureImage.plan();
-
-            return toImageReference(
-                    plan.publisher(), plan.product(), plan.name(), azureImage.name());
-        }
-
         static String toImageReference(String publisher, String offer, String sku, String version) {
             return publisher + ":" + offer + ":" + sku + ":" + version;
         }
@@ -491,25 +486,19 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        if (ctx.request.requestType == ImageEnumerateRequestType.PRIVATE) {
-            // So far PRIVATE image enumeration is not supported.
-            // Complete the task with FINISHED
-            logFine(() -> ctx.request.requestType + " image enumeration: SKIPPED");
-            completeWithSuccess(ctx);
-            return;
-        }
+        final String msg = ctx.request.requestType + " images enumeration";
 
-        logFine(() -> ctx.request.requestType + " image enumeration: STARTED");
-        // Start PUBLIC image enumeration process...
+        logFine(() -> msg + ": STARTED");
+
+        // Start image enumeration process...
         ctx.enumerate()
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
-                        logFine(() -> ctx.request.requestType + " image enumeration: COMPLETED");
+                        logFine(() -> msg + ": COMPLETED");
                         completeWithSuccess(ctx);
                     } else {
-                        logSevere(() -> String.format("%s image enumeration: FAILED with %s",
-                                ctx.request.requestType, Utils.toString(e)));
+                        logSevere(() -> msg + ": FAILED with " + Utils.toString(e));
                         completeWithFailure(ctx, e);
                     }
                 });
@@ -625,7 +614,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
           }
         }
      * </pre>
-     */    private static class DefaultImagesLoader {
+     */
+    private static class DefaultImagesLoader extends AzureImagesLoader {
 
         /**
          * Represents the inner most JSON node in the JSON file.
@@ -641,7 +631,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             @Override
             public String toString() {
-                return this.getClass().getSimpleName()
+                return getClass().getSimpleName()
                         + " [osFamily=" + this.osFamily
                         + ", publisher=" + this.publisher
                         + ", offer=" + this.offer
@@ -650,27 +640,41 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             }
         }
 
-        final AzureImageEnumerationContext ctx;
-
         DefaultImagesLoader(AzureImageEnumerationContext ctx) {
-            this.ctx = ctx;
+            super(ctx);
+        }
+
+        @Override
+        public String toString() {
+            return "Enumerating " + ctx.request.requestType + " default images";
+        }
+
+        /**
+         * All default images are returned within a <b>single</b> page, so return {@code true} just
+         * once, prior consuming {@link #next()}.
+         */
+        @Override
+        public boolean hasNext() {
+            return this.pageNumber == 0;
+        }
+
+        @Override
+        List<AzureImageData> nextPage() {
+            return ((CompletableFuture<List<AzureImageData>>) load().toCompletionStage()).join();
         }
 
         /**
          * Download aliases.json file, parse it and convert image entries presented to
-         * {@code VirtualMachineImage}s.
-         *
-         * <p>
-         * The return type is designed to be consistent with {@code StandardImagesLoader}.
+         * {@code AzureImageData}s.
          */
-        public DeferredResult<List<VirtualMachineImageInner>> load() {
+        private DeferredResult<List<AzureImageData>> load() {
 
             URI defaultImagesSource = URI.create(getDefaultImagesSource());
 
             return this.ctx.service
                     .sendWithDeferredResult(Operation.createGet(defaultImagesSource), String.class)
                     .thenApply(this::parseJson)
-                    .thenApply(this::toVirtualMachineImages);
+                    .thenApply(this::toAzureImageDatas);
         }
 
         /**
@@ -707,56 +711,41 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         }
 
         /**
-         * Convert {@code ImageRef}s to {@code VirtualMachineImage}s.
+         * Convert {@code ImageRef}s to {@code AzureImageData}s.
+         *
+         * @see #toImageState(ImageRef)
          */
-        private List<VirtualMachineImageInner> toVirtualMachineImages(List<ImageRef> imageRefs) {
+        private List<AzureImageData> toAzureImageDatas(List<ImageRef> imageRefs) {
 
-            return imageRefs.stream().map(this::toVirtualMachineImage).collect(Collectors.toList());
+            return imageRefs.stream().map(this::toAzureImageData).collect(Collectors.toList());
         }
 
         /**
-         * Convert {@code ImageRef} to {@code VirtualMachineImage}.
+         * Convert {@code ImageRef} to {@code AzureImageData}.
          */
-        private VirtualMachineImageInner toVirtualMachineImage(ImageRef imageRef) {
+        private AzureImageData toAzureImageData(ImageRef imageRef) {
 
-            // Create artificial Azure image object
-            final VirtualMachineImageInner image = new VirtualMachineImageInner();
+            final AzureImageData azureImageData = new AzureImageData();
 
-            image.withLocation(this.ctx.regionId);
+            azureImageData.id = AzureImageEnumerationContext.toImageReference(
+                    imageRef.publisher, imageRef.offer, imageRef.sku, imageRef.version);
 
-            image.withName(imageRef.version);
+            azureImageData.name = azureImageData.id;
 
-            {
-                final PurchasePlan plan = new PurchasePlan();
-                plan.withPublisher(imageRef.publisher);
-                plan.withProduct(imageRef.offer);
-                plan.withName(imageRef.sku);
+            azureImageData.description = azureImageData.id;
 
-                image.withPlan(plan);
-            }
+            azureImageData.osFamily = imageRef.osFamily;
 
-            {
-                final OSDiskImage osDiskImage = new OSDiskImage();
-                osDiskImage.withOperatingSystem(
-                        OperatingSystemTypes.fromString(imageRef.osFamily.toUpperCase()));
-
-                image.withOsDiskImage(osDiskImage);
-            }
-
-            return image;
+            return azureImageData;
         }
+
     }
 
     /**
      * An Azure images loader that traverses (in depth) 'publisher-offer-sku-version' hierarchy and
-     * exposes {@code VirtualMachineImage}s through an {@code Iterator} interface.
+     * exposes {@code ImageState}s through an {@code Iterator} interface.
      */
-    private static class StandardImagesLoader implements Iterator<List<VirtualMachineImageInner>> {
-
-        static final int DEFAULT_PAGE_SIZE = 100;
-
-        final AzureImageEnumerationContext ctx;
-        final int pageSize;
+    private static class StandardImagesLoader extends AzureImagesLoader {
 
         final VirtualMachineImagesInner imagesOp;
 
@@ -776,12 +765,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 .iterator();
         private VirtualMachineImageResourceInner currentVersion;
 
-        private int pageNumber = -1;
-        private int totalNumber = 0;
+        final int pageSize;
 
         StandardImagesLoader(AzureImageEnumerationContext ctx, int pageSize) {
 
-            this.ctx = ctx;
+            super(ctx);
+
             this.pageSize = pageSize;
 
             this.imagesOp = ctx.azureClient
@@ -789,18 +778,13 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                     .virtualMachineImages();
         }
 
-        /**
-         * Return the number of pages returned by {@code next} so far.
-         */
-        public int pageNumber() {
-            return this.pageNumber;
-        }
-
-        /**
-         * Return the total number of elements returned by {@code next} so far.
-         */
-        public int totalNumber() {
-            return this.totalNumber;
+        @Override
+        public String toString() {
+            return "Enumerating " + this.ctx.request.requestType + " standard images by [" +
+                    Arrays.asList(this.ctx.imageFilter).stream()
+                            .map(VirtualMachineImageResourceInner::name)
+                            .collect(Collectors.joining(":"))
+                    + "]";
         }
 
         @Override
@@ -834,14 +818,9 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         }
 
         @Override
-        public List<VirtualMachineImageInner> next() {
+        List<AzureImageData> nextPage() {
 
-            if (!hasNext()) {
-                throw new NoSuchElementException(
-                        getClass().getSimpleName() + " has already been consumed.");
-            }
-
-            List<VirtualMachineImageInner> page = new ArrayList<>();
+            List<AzureImageData> page = new ArrayList<>();
 
             try {
                 while (hasNext(this.publishersIt)) {
@@ -884,13 +863,14 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
                                 this.currentVersion = this.versionsIt.next();
 
-                                VirtualMachineImageInner image = loadImage();
+                                VirtualMachineImageInner azureImage = loadVirtualMachineImage();
 
-                                page.add(image);
+                                AzureImageData azureImageData = toAzureImageData(
+                                        azureImage);
+
+                                page.add(azureImageData);
 
                                 if (page.size() == this.pageSize) {
-                                    this.pageNumber++;
-                                    this.totalNumber += page.size();
                                     return page;
                                 }
                             }
@@ -901,8 +881,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 throw new RuntimeException("An error while traversing Azure images.", e);
             }
 
-            this.pageNumber++;
-            this.totalNumber += page.size();
             return page;
         }
 
@@ -1027,7 +1005,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             }
         }
 
-        private VirtualMachineImageInner loadImage() throws CloudException, IOException {
+        private VirtualMachineImageInner loadVirtualMachineImage()
+                throws CloudException, IOException {
 
             VirtualMachineImageInner image = this.imagesOp.get(
                     this.ctx.regionId,
@@ -1037,8 +1016,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                     this.currentVersion.name());
 
             if (image.plan() == null) {
-                // For some reason some images does not have Plan
-                // so we create one
+                // For some reason some images does not have Plan so we create one
                 PurchasePlan plan = new PurchasePlan();
                 plan.withPublisher(this.currentPublisher.name());
                 plan.withProduct(this.currentOffer.name());
@@ -1050,6 +1028,257 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return image;
         }
 
+        /**
+         * Convert {@code VirtualMachineImageInner} to {@code AzureImageData}.
+         */
+        private AzureImageData toAzureImageData(VirtualMachineImageInner azureImage) {
+
+            final AzureImageData azureImageData = new AzureImageData();
+
+            azureImageData.id = AzureImageEnumerationContext.toImageReference(
+                    azureImage.plan().publisher(),
+                    azureImage.plan().product(),
+                    azureImage.plan().name(),
+                    azureImage.name());
+
+            azureImageData.name = azureImageData.id;
+
+            azureImageData.description = azureImageData.id;
+
+            if (azureImage.osDiskImage() != null
+                    && azureImage.osDiskImage().operatingSystem() != null) {
+                azureImageData.osFamily = azureImage.osDiskImage().operatingSystem().name();
+            }
+
+            if (azureImage.tags() != null) {
+                azureImageData.tags.putAll(azureImage.tags());
+            }
+
+            return azureImageData;
+        }
+
+    }
+
+    /**
+     * An Azure private/custom images loader that traverses custom images under current subscription
+     * and exposes {@code VirtualMachineImage}s through an {@code Iterator} interface.
+     */
+    private static class PrivateImagesLoader extends AzureImagesLoader {
+
+        final int pageSize;
+
+        // Ref to underlying Azure paged images
+        final Iterator<VirtualMachineCustomImage> azurePagedImagesIt;
+
+        PrivateImagesLoader(AzureImageEnumerationContext ctx, int pageSize) {
+
+            super(ctx);
+
+            this.pageSize = pageSize;
+
+            this.azurePagedImagesIt = ctx.azureClient
+                    .getComputeManager()
+                    .virtualMachineCustomImages()
+                    .list()
+                    .iterator();
+        }
+
+        @Override
+        public String toString() {
+            return "Enumerating " + this.ctx.request.requestType + " images";
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this.azurePagedImagesIt.hasNext();
+        }
+
+        @Override
+        List<AzureImageData> nextPage() {
+
+            List<AzureImageData> page = new ArrayList<>();
+
+            for (int idx = 0; idx < this.pageSize && this.azurePagedImagesIt.hasNext(); idx++) {
+
+                VirtualMachineCustomImage azureImage = this.azurePagedImagesIt.next();
+
+                AzureImageData azureImageData = toAzureImageData(azureImage);
+
+                page.add(azureImageData);
+            }
+
+            return page;
+        }
+
+        private AzureImageData toAzureImageData(VirtualMachineCustomImage azureCustomImage) {
+
+            final AzureImageData azureImageData = new AzureImageData();
+
+            azureImageData.id = azureCustomImage.id();
+
+            azureImageData.name = azureCustomImage.name();
+
+            azureImageData.description = azureImageData.name;
+
+            // Configure OS Disk
+
+            final ImageOSDisk azureOsDiskImage = azureCustomImage.osDiskImage();
+            if (azureOsDiskImage != null) {
+                if (azureOsDiskImage.osType() != null) {
+                    azureImageData.osFamily = azureOsDiskImage.osType().name();
+                }
+
+                azureImageData.diskConfigs = new ArrayList<>();
+
+                ImageState.DiskConfiguration osDiskConfig = new ImageState.DiskConfiguration();
+                osDiskConfig.properties = new HashMap<>();
+
+                if (azureOsDiskImage.diskSizeGB() != null) {
+                    osDiskConfig.capacityMBytes = azureOsDiskImage.diskSizeGB() * 1024;
+                }
+
+                if (azureOsDiskImage.caching() != null) {
+                    osDiskConfig.properties.put(AzureConstants.AZURE_OSDISK_CACHING,
+                            azureOsDiskImage.caching().name());
+                }
+
+                if (azureOsDiskImage.blobUri() != null) {
+                    osDiskConfig.properties.put(AzureConstants.AZURE_OSDISK_BLOB_URI,
+                            azureOsDiskImage.blobUri());
+                }
+
+                azureImageData.diskConfigs.add(osDiskConfig);
+            }
+
+            // Configure tags
+
+            if (azureCustomImage.tags() != null) {
+                azureImageData.tags.putAll(azureCustomImage.tags());
+            }
+
+            return azureImageData;
+        }
+
+    }
+
+    /**
+     * A generic abstraction of Azure image, such as standard (VirtualMachineImageInner), default
+     * (ImageRef) and private (VirtualMachineCustomImage).
+     *
+     * @see StandardImagesLoader#toAzureImageData(VirtualMachineImageInner)
+     * @see DefaultImagesLoader#toAzureImageData(DefaultImagesLoader.ImageRef)
+     * @see PrivateImagesLoader#toAzureImageData(VirtualMachineCustomImage)
+     */
+    // NOTE: reuse ImageState in order not to duplicate all existing props.
+    private static class AzureImageData extends ImageState {
+
+        Map<String, String> tags = new HashMap<>();
+    }
+
+    /**
+     * Defines the contract of a loader capable to load Azure images, such as standard, default and
+     * private.
+     */
+    private abstract static class AzureImagesLoader implements Iterator<List<AzureImageData>> {
+
+        final AzureImageEnumerationContext ctx;
+
+        /**
+         * Return the number of pages returned by {@link #next()} so far.
+         */
+        int pageNumber = 0;
+
+        /**
+         * Return the total number of elements returned by {@link #next()} so far.
+         */
+        int totalNumber = 0;
+
+        AzureImagesLoader(AzureImageEnumerationContext ctx) {
+            this.ctx = ctx;
+        }
+
+        /**
+         * Provides common functionality (such as 1) hasNext validation, 2) pageNumber and
+         * totalNumber manipulation and 3) logging) so descendants should focus only on providing
+         * {@link #nextPage() next page}.
+         */
+        @Override
+        public final List<AzureImageData> next() {
+
+            if (!hasNext()) {
+                throw new NoSuchElementException(
+                        getClass().getSimpleName() + " has already been consumed.");
+            }
+
+            if (this.pageNumber == 0) {
+                this.ctx.service.logFine(() -> toString() + ": STARTING");
+            }
+
+            List<AzureImageData> page = nextPage();
+
+            this.pageNumber++;
+            this.totalNumber += page.size();
+
+            if (!hasNext()) {
+                this.ctx.service.logFine(
+                        () -> toString() + ": TOTAL number = " + this.totalNumber);
+            }
+
+            return page;
+        }
+
+        /**
+         * Descendants should focus on just loading next page.
+         */
+        abstract List<AzureImageData> nextPage();
+
+        /**
+         * Used for logging purposes, so 'enforce' descendants to provide user-friendly message.
+         */
+        @Override
+        public abstract String toString();
+
+    }
+
+    /**
+     * Combines multiple {@link AzureImagesLoader} into a single {@code AzureImagesLoader}. The
+     * returned loader iterates across the elements of each loader and the loaders are not polled
+     * until necessary.
+     */
+    private static final class ConcatenatedAzureImagesLoader extends AzureImagesLoader {
+
+        private final Queue<AzureImagesLoader> delegates;
+
+        ConcatenatedAzureImagesLoader(
+                AzureImageEnumerationContext ctx,
+                Collection<AzureImagesLoader> azureImagesLoaders) {
+
+            super(ctx);
+
+            this.delegates = new LinkedList<>(azureImagesLoaders);
+        }
+
+        @Override
+        public String toString() {
+            return "Enumerating " + this.ctx.request.requestType + " images with "
+                    + getClass().getSimpleName();
+        }
+
+        @Override
+        public boolean hasNext() {
+            while (!this.delegates.isEmpty()) {
+                if (this.delegates.peek().hasNext()) {
+                    return true;
+                }
+                this.delegates.poll();
+            }
+            return false;
+        }
+
+        @Override
+        List<AzureImageData> nextPage() {
+            return this.delegates.peek().next();
+        }
     }
 
 }

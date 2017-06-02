@@ -60,6 +60,30 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_IMAGE_ENUMERATION_ADAPTER;
 
+    public static final String IMAGES_PAGE_SIZE_PROPERTY = "photon-model.adapter.aws.images.page.size";
+
+    /**
+     * Get images page size from {@value #IMAGES_PAGE_SIZE_PROPERTY} system property.
+     *
+     * @return by default return 1000
+     */
+    public static int getImagesPageSize() {
+
+        final int DEFAULT_IMAGES_PAGE_SIZE = 1000;
+
+        try {
+            String imagesPageSizeStr = System.getProperty(
+                    IMAGES_PAGE_SIZE_PROPERTY,
+                    String.valueOf(DEFAULT_IMAGES_PAGE_SIZE));
+
+            return Integer.parseInt(imagesPageSizeStr);
+
+        } catch (NumberFormatException exc) {
+
+            return DEFAULT_IMAGES_PAGE_SIZE;
+        }
+    }
+
     private AWSClientManager clientManager;
 
     /**
@@ -252,9 +276,9 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             return handler.toDeferredResult().thenApply(imagesResult -> {
 
+                // "artificially" partition images once we load them all
                 return this.awsImages = new PartitionedIterator<>(
-                        imagesResult.getImages(),
-                        PartitionedIterator.DEFAULT_PARTITION_SIZE);
+                        imagesResult.getImages(), getImagesPageSize());
             });
         }
 
@@ -324,72 +348,6 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         }
     }
 
-    /**
-     * An iterator of sublists of a list, each of the same size (the final list may be smaller).
-     */
-    public static final class PartitionedIterator<T> implements Iterator<List<T>> {
-
-        public static final int DEFAULT_PARTITION_SIZE = 1000;
-
-        private final List<T> originalList;
-
-        private final int partitionSize;
-
-        private int lastIndex = 0;
-
-        private int pageNumber;
-
-        private int totalNumber;
-
-        public PartitionedIterator(List<T> originalList, int partitionSize) {
-            // we are tolerant to null values
-            this.originalList = originalList == null ? Collections.emptyList() : originalList;
-            this.partitionSize = partitionSize;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return this.lastIndex < this.originalList.size();
-        }
-
-        /**
-         * Returns the next partition from original list.
-         */
-        @Override
-        public List<T> next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException(
-                        getClass().getSimpleName() + " has already been consumed.");
-            }
-
-            int beginIndex = this.lastIndex;
-
-            this.lastIndex = Math.min(beginIndex + this.partitionSize, this.originalList.size());
-
-            List<T> page = this.originalList.subList(beginIndex, this.lastIndex);
-
-            this.pageNumber++;
-            this.totalNumber += page.size();
-
-            return page;
-        }
-
-        /**
-         * Return the number of pages returned by {@code next} so far.
-         */
-        public int pageNumber() {
-            return this.pageNumber;
-        }
-
-        /**
-         * Return the total number of elements returned by {@code next} so far.
-         */
-        public int totalNumber() {
-            return this.totalNumber;
-        }
-
-    }
-
     public AWSImageEnumerationAdapterService() {
 
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -438,17 +396,19 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        logFine(() -> ctx.request.requestType + " image enumeration: STARTED");
-        // Start enumeration process...
+        final String msg = ctx.request.requestType + " images enumeration";
+
+        logFine(() -> msg + ": STARTED");
+
+        // Start image enumeration process...
         ctx.enumerate()
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
-                        logFine(() -> ctx.request.requestType + " image enumeration: COMPLETED");
+                        logFine(() -> msg + ": COMPLETED");
                         completeWithSuccess(ctx);
                     } else {
-                        logSevere(() -> String.format("%s image enumeration: FAILED with %s",
-                                ctx.request.requestType, Utils.toString(e)));
+                        logSevere(() -> msg + ": FAILED with " + Utils.toString(e));
                         completeWithFailure(ctx, e);
                     }
                 });
@@ -460,5 +420,68 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
     private void completeWithSuccess(AWSImageEnumerationContext ctx) {
         ctx.taskManager.finishTask();
+    }
+
+    /**
+     * An iterator of sublists of a list, each of the same size (the final list may be smaller).
+     */
+    public static final class PartitionedIterator<T> implements Iterator<List<T>> {
+
+        private final List<T> originalList;
+
+        private final int partitionSize;
+
+        private int lastIndex = 0;
+
+        private int pageNumber = 0;
+
+        private int totalNumber = 0;
+
+        public PartitionedIterator(List<T> originalList, int partitionSize) {
+            // we are tolerant to null values
+            this.originalList = originalList == null ? Collections.emptyList() : originalList;
+            this.partitionSize = partitionSize;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this.lastIndex < this.originalList.size();
+        }
+
+        /**
+         * Returns the next partition from original list.
+         */
+        @Override
+        public List<T> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException(
+                        getClass().getSimpleName() + " has already been consumed.");
+            }
+
+            int beginIndex = this.lastIndex;
+
+            this.lastIndex = Math.min(beginIndex + this.partitionSize, this.originalList.size());
+
+            List<T> page = this.originalList.subList(beginIndex, this.lastIndex);
+
+            this.pageNumber++;
+            this.totalNumber += page.size();
+
+            return page;
+        }
+
+        /**
+         * Return the number of pages returned by {@link #next()} so far.
+         */
+        public int pageNumber() {
+            return this.pageNumber;
+        }
+
+        /**
+         * Return the total number of elements returned by {@link #next()} so far.
+         */
+        public int totalNumber() {
+            return this.totalNumber;
+        }
     }
 }
