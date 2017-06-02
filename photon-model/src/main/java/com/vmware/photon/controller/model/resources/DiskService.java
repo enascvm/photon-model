@@ -67,6 +67,7 @@ public class DiskService extends StatefulService {
         public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
         public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
         public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
+        public static final String FIELD_NAME_STORAGE_TYPE = "storageType";
 
         /**
          * Identifier of the zone associated with this disk service instance.
@@ -123,6 +124,12 @@ public class DiskService extends StatefulService {
          * Type of this disk service instance.
          */
         public DiskType type;
+
+        /**
+         * Cloud storage type the disk service instance represents.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_18)
+        public String storageType;
 
         /**
          * Status of this disk service instance.
@@ -402,12 +409,6 @@ public class DiskService extends StatefulService {
 
         if (state.name == null) {
             throw new IllegalArgumentException("name is required.");
-        }
-
-        if (state.capacityMBytes <= 1 && state.sourceImageReference == null && state.imageLink == null
-                && state.customizationServiceReference == null) {
-            throw new IllegalArgumentException(
-                    "capacityMBytes, sourceImageReference, imageLink, or customizationServiceReference is required");
         }
 
         if (state.status == null) {

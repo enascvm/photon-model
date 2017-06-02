@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_ENCRYPTED_FLAG;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.SNAPSHOT_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_EBS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_GENERAL_PURPOSED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
@@ -76,29 +77,25 @@ import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
- * Block Storage Enumeration Adapter for the Amazon Web Services.
+ * EBS Storage Enumeration Adapter for the Amazon Web Services.
  * - Performs a list call to the EBS list volumes API and reconciles the local state with the state on the remote system.
  * - It lists the volumes on the remote system. Compares those with the local system and creates or updates
  * the volumes that are missing in the local system. In the local system each EBS volume is mapped to a disk state.
  */
-public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
-    public static final String SELF_LINK = AWSUriPaths.AWS_STORAGE_ENUMERATION_ADAPTER_SERVICE;
+public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
+    public static final String SELF_LINK = AWSUriPaths.AWS_EBS_STORAGE_ENUMERATION_ADAPTER_SERVICE;
     public static final int GB_TO_MB_MULTIPLIER = 1000;
     private AWSClientManager clientManager;
 
-    public enum AWSStorageEnumerationStages {
+    public enum AWSEBSStorageEnumerationStages {
         CLIENT, ENUMERATE, ERROR
-    }
-
-    private enum AWSStorageEnumerationRefreshSubStage {
-        EBS_VOLUMES, S3_BUCKETS
     }
 
     public enum EBSVolumesEnumerationSubStage {
         QUERY_LOCAL_RESOURCES, COMPARE, CREATE_TAGS, CREATE_UPDATE_DISK_STATES, UPDATE_TAGS, GET_NEXT_PAGE, DELETE_DISKS, ENUMERATION_STOP
     }
 
-    public AWSBlockStorageEnumerationAdapterService() {
+    public AWSEBSStorageEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
@@ -108,13 +105,12 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
      * The enumeration service context that holds all the information needed to determine the list
      * of volumes that need to be represented in the system.
      */
-    public static class BlockStorageEnumerationContext {
+    public static class EBSStorageEnumerationContext {
         public AmazonEC2AsyncClient amazonEC2Client;
         public ComputeEnumerateAdapterRequest request;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public ComputeStateWithDescription parentCompute;
-        public AWSStorageEnumerationStages stage;
-        public AWSStorageEnumerationRefreshSubStage refreshSubStage;
+        public AWSEBSStorageEnumerationStages stage;
         public EBSVolumesEnumerationSubStage subStage;
         public Throwable error;
         public int pageNo;
@@ -138,12 +134,12 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         // local system.
         public String deletionNextPageLink;
         public Operation operation;
-        // The list of operations that have to created/updated as part of the storage enumeration.
+        // The list of operations that have to created/updated as part of the EBS enumeration.
         public List<Operation> enumerationOperations;
         // The time stamp at which the enumeration started.
         public long enumerationStartTimeInMicros;
 
-        public BlockStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
+        public EBSStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
             this.operation = op;
             this.request = request;
@@ -156,8 +152,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             this.volumesToBeCreated = new ArrayList<>();
             this.enumerationOperations = new ArrayList<>();
             this.remoteAWSVolumeIds = new HashSet<>();
-            this.stage = AWSStorageEnumerationStages.CLIENT;
-            this.refreshSubStage = AWSStorageEnumerationRefreshSubStage.EBS_VOLUMES;
+            this.stage = AWSEBSStorageEnumerationStages.CLIENT;
             this.subStage = EBSVolumesEnumerationSubStage.QUERY_LOCAL_RESOURCES;
             this.pageNo = 1;
         }
@@ -182,7 +177,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        BlockStorageEnumerationContext awsEnumerationContext = new BlockStorageEnumerationContext(
+        EBSStorageEnumerationContext awsEnumerationContext = new EBSStorageEnumerationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
         if (awsEnumerationContext.request.original.isMockRequest) {
             awsEnumerationContext.operation.complete();
@@ -195,25 +190,35 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
      * Handles the different steps required to hit the AWS endpoint and get the set of resources
      * available and proceed to update the state in the local system based on the received data.
      */
-    private void handleEnumerationRequest(BlockStorageEnumerationContext aws) {
+    private void handleEnumerationRequest(EBSStorageEnumerationContext aws) {
         switch (aws.stage) {
         case CLIENT:
-            getAWSAsyncClient(aws, AWSStorageEnumerationStages.ENUMERATE);
+            getAWSAsyncClient(aws, AWSEBSStorageEnumerationStages.ENUMERATE);
             break;
         case ENUMERATE:
             switch (aws.request.original.enumerationAction) {
             case START:
-                logInfo(() -> String.format("Started storage enumeration for %s",
+                logInfo(() -> String.format("Started EBS enumeration for %s",
                         aws.request.original.resourceReference));
                 aws.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 aws.request.original.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
                 break;
             case REFRESH:
-                processRefreshSubStages(aws);
+                if (aws.pageNo == 1) {
+                    logInfo(() -> String.format("Running creation enumeration in refresh mode for %s",
+                            aws.request.original.resourceReference));
+                }
+                logFine(() -> String.format("Processing page %d ", aws.pageNo));
+                aws.pageNo++;
+                if (aws.describeVolumesRequest == null) {
+                    createAWSRequestAndAsyncHandler(aws);
+                }
+                aws.amazonEC2Client.describeVolumesAsync(aws.describeVolumesRequest,
+                        aws.resultHandler);
                 break;
             case STOP:
-                logInfo(() -> String.format("Stopping storage enumeration for %s",
+                logInfo(() -> String.format("Stopping EBS enumeration for %s",
                         aws.request.original.resourceReference));
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
@@ -229,38 +234,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
                     aws.stage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
-            aws.stage = AWSStorageEnumerationStages.ERROR;
+            aws.stage = AWSEBSStorageEnumerationStages.ERROR;
             handleEnumerationRequest(aws);
-            break;
-        }
-    }
-
-    /**
-     * Method for performing enumeration of EBS volumes or S3 buckets from AWS.
-     */
-    private void processRefreshSubStages(BlockStorageEnumerationContext aws) {
-        switch (aws.refreshSubStage) {
-        case EBS_VOLUMES:
-            if (aws.pageNo == 1) {
-                logInfo(() -> String.format("Running creation enumeration in refresh mode for %s",
-                        aws.request.original.resourceReference));
-            }
-            logFine(() -> String.format("Processing page %d ", aws.pageNo));
-            aws.pageNo++;
-            if (aws.describeVolumesRequest == null) {
-                createAWSRequestAndAsyncHandler(aws);
-            }
-            aws.amazonEC2Client.describeVolumesAsync(aws.describeVolumesRequest,
-                    aws.resultHandler);
-            break;
-        case S3_BUCKETS:
-            // TODO https://jira-hzn.eng.vmware.com/browse/VSYM-2319
-            break;
-        default:
-            logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
-                    aws.refreshSubStage.toString()));
-            aws.error = new Exception("Unknown AWS enumeration stage %s");
-            aws.operation.fail(aws.error);
             break;
         }
     }
@@ -268,12 +243,12 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
     /**
      * Method to instantiate the AWS Async client for future use
      */
-    private void getAWSAsyncClient(BlockStorageEnumerationContext aws,
-            AWSStorageEnumerationStages next) {
+    private void getAWSAsyncClient(EBSStorageEnumerationContext aws,
+            AWSEBSStorageEnumerationStages next) {
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
                 aws.request.regionId, this, t -> aws.error = t);
         if (aws.error != null) {
-            aws.stage = AWSStorageEnumerationStages.ERROR;
+            aws.stage = AWSEBSStorageEnumerationStages.ERROR;
             handleEnumerationRequest(aws);
             return;
         }
@@ -288,7 +263,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 t -> {
                     OperationContext.restoreOperationContext(opContext);
                     aws.error = t;
-                    aws.stage = AWSStorageEnumerationStages.ERROR;
+                    aws.stage = AWSEBSStorageEnumerationStages.ERROR;
                     handleEnumerationRequest(aws);
                 });
     }
@@ -299,7 +274,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
      * responses received from AWS. It sets the nextToken value in the request object sent to AWS
      * for getting the next page of results from AWS.
      */
-    private void createAWSRequestAndAsyncHandler(BlockStorageEnumerationContext aws) {
+    private void createAWSRequestAndAsyncHandler(EBSStorageEnumerationContext aws) {
         DescribeVolumesRequest request = new DescribeVolumesRequest();
         request.setMaxResults(getQueryPageSize());
         request.setNextToken(aws.nextToken);
@@ -316,12 +291,12 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
     public static class AWSStorageEnumerationAsyncHandler implements
             AsyncHandler<DescribeVolumesRequest, DescribeVolumesResult> {
 
-        private AWSBlockStorageEnumerationAdapterService service;
-        private BlockStorageEnumerationContext context;
+        private AWSEBSStorageEnumerationAdapterService service;
+        private EBSStorageEnumerationContext context;
         private OperationContext opContext;
 
-        private AWSStorageEnumerationAsyncHandler(AWSBlockStorageEnumerationAdapterService service,
-                BlockStorageEnumerationContext context) {
+        private AWSStorageEnumerationAsyncHandler(AWSEBSStorageEnumerationAdapterService service,
+                EBSStorageEnumerationContext context) {
             this.service = service;
             this.context = context;
             this.opContext = OperationContext.getOperationContext();
@@ -344,7 +319,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     });
 
             this.service.logFine(() -> String.format("Successfully enumerated %d volumes on the AWS"
-                            + " host", result.getVolumes().size()));
+                    + " host", result.getVolumes().size()));
             // Save the reference to the next token that will be used to retrieve the next page of
             // results from AWS.
             this.context.nextToken = result.getNextToken();
@@ -420,6 +395,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
+                    .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE, STORAGE_TYPE_EBS)
                     .addInClause(ComputeState.FIELD_NAME_ID,
                             this.context.remoteAWSVolumes.keySet());
 
@@ -437,7 +413,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .whenComplete((qrt, e) -> {
                         if (e != null) {
                             this.service.logSevere(() -> String.format("Failure retrieving query"
-                                            + " results: %s", e.toString()));
+                                    + " results: %s", e.toString()));
                             signalErrorToEnumerationAdapter(e);
                             return;
                         }
@@ -448,7 +424,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                     localDisk);
 
                         });
-                        this.service.logFine(() -> String.format("%d disk states found.",
+                        this.service.logFine(() -> String.format("%d EBS disk states found.",
                                 qrt.results.documentCount));
                         this.context.subStage = next;
                         handleReceivedEnumerationData();
@@ -550,7 +526,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     this.context.enumerationOperations.add(
                             createPostOperation(this.service, diskState,
                                     DiskService.FACTORY_LINK)));
-            this.service.logFine(() -> String.format("Creating %d disks",
+            this.service.logFine(() -> String.format("Creating %d EBS disks",
                     this.context.volumesToBeCreated.size()));
             // For all the disks to be updated, map the updated state from the received
             // volumes and issue patch requests against the existing disk state representations
@@ -595,7 +571,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         /**
          * Update newly identified tags for disk states based on volumes.
          */
-        private DeferredResult<BlockStorageEnumerationContext> updateTagLinks() {
+        private DeferredResult<EBSStorageEnumerationContext> updateTagLinks() {
             if (this.context.volumesToBeUpdated == null
                     || this.context.volumesToBeUpdated.size() == 0) {
 
@@ -624,7 +600,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             }
         }
 
-        private BiConsumer<BlockStorageEnumerationContext, Throwable> thenDiskStateCreateOrUpdate(
+        private BiConsumer<EBSStorageEnumerationContext, Throwable> thenDiskStateCreateOrUpdate(
                 EBSVolumesEnumerationSubStage next) {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             return (ignoreCtx, exc) -> {
@@ -647,6 +623,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
             // AWS returns the disk size in GBs
             diskState.capacityMBytes = volume.getSize() * GB_TO_MB_MULTIPLIER;
+            diskState.storageType = STORAGE_TYPE_EBS;
             diskState.regionId = regionId;
             diskState.zoneId = volume.getAvailabilityZone();
             diskState.authCredentialsLink = authCredentialsLink;
@@ -750,6 +727,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                             this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_REGION_ID,
                             this.context.request.regionId)
+                    .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE,
+                            STORAGE_TYPE_EBS)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
                             NumericRange
                                     .createLessThanRange(this.context.enumerationStartTimeInMicros))
@@ -841,7 +820,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                                                 ex -> this.service
                                                                         .logWarning(() ->
                                                                                 String.format("Error: %s",
-                                                                                ex.getMessage())));
+                                                                                        ex.getMessage())));
                                                     }
                                                     processDeletionRequest(next);
                                                 })
@@ -865,7 +844,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          */
         private void signalErrorToEnumerationAdapter(Throwable t) {
             this.context.error = t;
-            this.context.stage = AWSStorageEnumerationStages.ERROR;
+            this.context.stage = AWSEBSStorageEnumerationStages.ERROR;
             this.service.handleEnumerationRequest(this.context);
         }
 
@@ -893,7 +872,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
     private static void addScopeCriteria(
             Query.Builder qBuilder,
             Class<? extends ResourceState> stateClass,
-            BlockStorageEnumerationContext ctx) {
+            EBSStorageEnumerationContext ctx) {
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria

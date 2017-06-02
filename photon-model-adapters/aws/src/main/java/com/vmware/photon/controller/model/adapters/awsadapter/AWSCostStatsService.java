@@ -124,7 +124,7 @@ public class AWSCostStatsService extends StatelessService {
 
     public AWSCostStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.S3);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.S3_TRANSFER_MANAGER);
     }
 
     protected class AWSCostStatsCreationContext {
@@ -172,7 +172,7 @@ public class AWSCostStatsService extends StatelessService {
 
     @Override
     public void handleStop(Operation delete) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AwsClientType.S3);
+        AWSClientManagerFactory.returnClientManager(this.clientManager, AwsClientType.S3_TRANSFER_MANAGER);
         this.executor.shutdown();
         AdapterUtils.awaitTermination(this.executor);
         super.handleStop(delete);
@@ -357,10 +357,10 @@ public class AWSCostStatsService extends StatelessService {
             AWSCostStatsCreationStages next) {
         this.executor.submit(() -> {
             OperationContext.restoreOperationContext(statsData.opContext);
-            statsData.s3Client = this.clientManager.getOrCreateS3AsyncClient(statsData.parentAuth,
+            statsData.s3Client = this.clientManager.getOrCreateS3TransferManager(statsData.parentAuth,
                     null, this, getFailureConsumer(statsData));
             if (statsData.s3Client == null) {
-                logWarning(() -> String.format("Couldn't get S3 client while collecting stats for "
+                logWarning(() -> String.format("Couldn't get S3_TRANSFER_MANAGER client while collecting stats for "
                         + "%s", statsData.computeDesc.documentSelfLink));
                 postAccumulatedCostStats(statsData, true);
                 return;

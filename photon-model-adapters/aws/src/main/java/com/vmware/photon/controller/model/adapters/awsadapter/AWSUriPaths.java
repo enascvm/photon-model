@@ -53,8 +53,10 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_ENUMERATION_DELETION_ADAPTER = AdapterTypePath.ENUMERATION_DELETION_ADAPTER
             .adapterLink(EndpointType.aws.name());
-    public static final String AWS_STORAGE_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
-            + "/storage-enumeration-adapter";
+    public static final String AWS_EBS_STORAGE_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
+            + "/ebs-storage-enumeration-adapter";
+    public static final String AWS_S3_STORAGE_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
+            + "/s3-storage-enumeration-adapter";
     public static final String AWS_COMPUTE_DESCRIPTION_CREATION_ADAPTER = AdapterTypePath.COMPUTE_DESCRIPTION_CREATION_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_COMPUTE_STATE_CREATION_ADAPTER = AdapterTypePath.COMPUTE_STATE_CREATION_ADAPTER

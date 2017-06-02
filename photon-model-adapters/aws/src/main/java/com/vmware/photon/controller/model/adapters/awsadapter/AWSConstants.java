@@ -124,6 +124,9 @@ public class AWSConstants {
     //All properties related to the aws storage
     public static final String DEVICE_TYPE = "deviceType";
     public static final String DEVICE_NAME = "deviceName";
+    public static final String BUCKET_OWNER_NAME = "ownerName";
+    public static final String STORAGE_TYPE_EBS = "EBS";
+    public static final String STORAGE_TYPE_S3 = "S3";
 
     // AWS Metric Unit related constants
     public static final String UNIT_COUNT = "Count";
@@ -143,7 +146,7 @@ public class AWSConstants {
 
     // AWS client types
     public enum AwsClientType {
-        EC2, CLOUD_WATCH, S3, LOAD_BALANCING
+        EC2, CLOUD_WATCH, S3, S3_TRANSFER_MANAGER, LOAD_BALANCING
     }
 
     /**

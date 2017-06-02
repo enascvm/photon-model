@@ -1371,8 +1371,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
         diskState.capacityMBytes = bLength / B_TO_MB_FACTOR;
         diskState.customProperties = new HashMap<>();
-        String diskType = isDisk(diskState.name) ? AZURE_STORAGE_DISKS : AZURE_STORAGE_BLOBS;
-        diskState.customProperties.put(AZURE_STORAGE_TYPE, diskType);
+        String storageType = isDisk(diskState.name) ? AZURE_STORAGE_DISKS : AZURE_STORAGE_BLOBS;
+        diskState.storageType = storageType;
         // following two properties are set to defaults - can't retrieve that information from
         // existing calls
         diskState.type = DEFAULT_DISK_TYPE;

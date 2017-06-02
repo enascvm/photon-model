@@ -33,6 +33,7 @@ import com.amazonaws.services.cloudwatch.model.DescribeAlarmsRequest;
 import com.amazonaws.services.cloudwatch.model.DescribeAlarmsResult;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
+import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -54,13 +55,16 @@ public class AWSClientManager {
     private AwsClientType awsClientType;
     private LRUCache<String, AmazonEC2AsyncClient> ec2ClientCache;
     private LRUCache<String, AmazonCloudWatchAsyncClient> cloudWatchClientCache;
-    private LRUCache<String, TransferManager> s3ClientCache;
+    private LRUCache<String, AmazonS3Client> s3clientCache;
+    private LRUCache<String, TransferManager> s3TransferManagerCache;
     private LRUCache<String, AmazonElasticLoadBalancingAsyncClient> loadBalancingClientCache;
     private LRUCache<URI, ExecutorService> executorCache;
 
     private LRUCache<String, Long> invalidEc2Clients;
     private LRUCache<String, Long> invalidCloudWatchClients;
     private LRUCache<String, Long> invalidLoadBalancingClients;
+    private LRUCache<String, Long> invalidS3Clients;
+
     public static final String AWS_RETRY_AFTER_INTERVAL_MINUTES = UriPaths.PROPERTY_PREFIX + "AWSClientManager.retryInterval";
     private static final int DEFAULT_RETRY_AFTER_INTERVAL_MINUTES = 60;
     private static final int RETRY_AFTER_INTERVAL_MINUTES =
@@ -85,7 +89,11 @@ public class AWSClientManager {
                     CLIENT_CACHE_MAX_SIZE);
             return;
         case S3:
-            this.s3ClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            this.s3clientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            this.invalidS3Clients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            return;
+        case S3_TRANSFER_MANAGER:
+            this.s3TransferManagerCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
             return;
         case LOAD_BALANCING:
             this.loadBalancingClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
@@ -214,21 +222,21 @@ public class AWSClientManager {
         this.cloudWatchClientCache.remove(cacheKey);
     }
 
-    public synchronized TransferManager getOrCreateS3AsyncClient(
+    public synchronized TransferManager getOrCreateS3TransferManager(
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
-        if (this.awsClientType != AwsClientType.S3) {
+        if (this.awsClientType != AwsClientType.S3_TRANSFER_MANAGER) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        if (this.s3ClientCache.containsKey(cacheKey)) {
-            return this.s3ClientCache.get(cacheKey);
+        if (this.s3TransferManagerCache.containsKey(cacheKey)) {
+            return this.s3TransferManagerCache.get(cacheKey);
         }
         try {
             TransferManager s3AsyncClient = AWSUtils
-                    .getS3AsyncClient(credentials, regionId, getExecutor(service.getHost()));
-            this.s3ClientCache.put(cacheKey, s3AsyncClient);
+                    .getS3TransferManager(credentials, regionId, getExecutor(service.getHost()));
+            this.s3TransferManagerCache.put(cacheKey, s3AsyncClient);
             return s3AsyncClient;
         } catch (Throwable t) {
             service.logSevere(t);
@@ -289,6 +297,39 @@ public class AWSClientManager {
         this.loadBalancingClientCache.remove(cacheKey);
     }
 
+    public synchronized void markS3ClientInvalid(StatelessService service, String cacheKey) {
+        service.logWarning("Marking S3 client cache entry invalid for key: " + cacheKey);
+        this.invalidS3Clients.put(cacheKey, Utils.getNowMicrosUtc());
+    }
+
+    public AmazonS3Client getOrCreateS3Client(AuthCredentialsServiceState credentials,
+            String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
+        if (this.awsClientType != AwsClientType.S3) {
+            throw new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients.");
+        }
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+
+        if (isInvalidClient(this.invalidS3Clients, cacheKey)) {
+            failConsumer.accept(new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
+            return null;
+        }
+
+        AmazonS3Client amazonS3Client = null;
+
+        if (this.s3clientCache.containsKey(cacheKey)) {
+            return this.s3clientCache.get(cacheKey);
+        }
+        try {
+            amazonS3Client = AWSUtils.getS3Client(credentials,regionId);
+            this.s3clientCache.put(cacheKey, amazonS3Client);
+        } catch (Exception e) {
+            markS3ClientInvalid(service, cacheKey);
+            service.logSevere(e);
+            failConsumer.accept(e);
+        }
+        return amazonS3Client;
+    }
     /**
      * Checks if a client (via cache key) has been marked as invalid within the last
      * {@link #RETRY_AFTER_INTERVAL_MINUTES} minutes. If a client has been marked before, but
@@ -339,9 +380,9 @@ public class AWSClientManager {
             this.ec2ClientCache.clear();
             break;
 
-        case S3:
-            this.s3ClientCache.values().forEach(c -> c.shutdownNow());
-            this.s3ClientCache.clear();
+        case S3_TRANSFER_MANAGER:
+            this.s3TransferManagerCache.values().forEach(c -> c.shutdownNow());
+            this.s3TransferManagerCache.clear();
             break;
 
         case LOAD_BALANCING:
@@ -421,8 +462,13 @@ public class AWSClientManager {
             }
             break;
         case S3:
-            if (this.s3ClientCache != null) {
-                return this.s3ClientCache.size();
+            if (this.s3clientCache != null) {
+                return this.s3clientCache.size();
+            }
+            break;
+        case S3_TRANSFER_MANAGER:
+            if (this.s3TransferManagerCache != null) {
+                return this.s3TransferManagerCache.size();
             }
             break;
         case LOAD_BALANCING:

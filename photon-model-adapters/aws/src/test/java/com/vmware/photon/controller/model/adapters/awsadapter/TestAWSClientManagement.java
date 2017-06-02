@@ -147,22 +147,22 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
     public void testAwsS3ClientManagement() throws Throwable {
 
         // Ensure that we start with a clean state.
-        AWSClientManagerFactory.cleanUp(AwsClientType.S3);
+        AWSClientManagerFactory.cleanUp(AwsClientType.S3_TRANSFER_MANAGER);
 
         // Get a reference to the client manager in the test
-        AWSClientManager s3ClientManager = getClientManager(AwsClientType.S3);
-        assertEquals(count1, getClientReferenceCount(AwsClientType.S3));
+        AWSClientManager s3ClientManager = getClientManager(AwsClientType.S3_TRANSFER_MANAGER);
+        assertEquals(count1, getClientReferenceCount(AwsClientType.S3_TRANSFER_MANAGER));
 
         AuthCredentialsServiceState testCreds = new AuthCredentialsServiceState();
         testCreds.privateKey = this.accessKey;
         testCreds.privateKeyId = this.secretKey;
 
-        s3ClientManager.getOrCreateS3AsyncClient(testCreds, TestAWSSetupUtils.zoneId,
+        s3ClientManager.getOrCreateS3TransferManager(testCreds, TestAWSSetupUtils.zoneId,
                 this.statsService, null);
         assertEquals(count1, s3ClientManager.getCacheCount());
 
         // Return the references from the test
-        returnClientManager(s3ClientManager, AwsClientType.S3);
-        assertEquals(count0, getClientReferenceCount(AwsClientType.S3));
+        returnClientManager(s3ClientManager, AwsClientType.S3_TRANSFER_MANAGER);
+        assertEquals(count0, getClientReferenceCount(AwsClientType.S3_TRANSFER_MANAGER));
     }
 }

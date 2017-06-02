@@ -103,12 +103,13 @@ import org.joda.time.LocalDateTime;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetSpec;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSBlockStorageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEBSStorageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndDeletionAdapterService;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSS3StorageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -1743,12 +1744,18 @@ public class TestAWSSetupUtils {
                         .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSEnumerationAndDeletionAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(deletionEnumerationStats));
-        host.log("\n==Total Time Spent in Storage Enumeration Workflow==\n");
-        ServiceStats storageEnumerationStats = host.getServiceState(null, ServiceStats.class,
+        host.log("\n==Total Time Spent in EBS Storage Enumeration Workflow==\n");
+        ServiceStats ebsStorageEnumerationStats = host.getServiceState(null, ServiceStats.class,
                 UriUtils
                         .buildStatsUri(createServiceURI(host, peerURI,
-                                AWSBlockStorageEnumerationAdapterService.SELF_LINK)));
-        host.log(Utils.toJsonHtml(storageEnumerationStats));
+                                AWSEBSStorageEnumerationAdapterService.SELF_LINK)));
+        host.log(Utils.toJsonHtml(ebsStorageEnumerationStats));
+        host.log("\n==Total Time Spent in S3 Storage Enumeration Workflow==\n");
+        ServiceStats s3StorageEnumerationStats = host.getServiceState(null, ServiceStats.class,
+                UriUtils
+                        .buildStatsUri(createServiceURI(host, peerURI,
+                                AWSS3StorageEnumerationAdapterService.SELF_LINK)));
+        host.log(Utils.toJsonHtml(s3StorageEnumerationStats));
     }
 
     /**

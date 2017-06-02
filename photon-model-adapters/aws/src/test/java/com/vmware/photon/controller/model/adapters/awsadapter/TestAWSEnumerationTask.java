@@ -81,7 +81,10 @@ import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Tag;
 
+import com.amazonaws.services.s3.AmazonS3Client;
+
 import io.netty.util.internal.StringUtil;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -119,11 +122,15 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Test to enumerate instances on AWS and tear it down. The test creates VM using the Provisioning
@@ -152,6 +159,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String TEST_CASE_DELETE_VM = "Delete VM ";
     private static final String TEST_CASE_DELETE_VMS = "Delete multiple VMs ";
     private static final String TEST_CASE_MOCK_MODE = "Mock Mode ";
+    private static final String TEST_BUCKET_NAME = "enumtest-bucket";
     private static final int DEFAULT_TEST_PAGE_SIZE = 5;
     private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     private static final String VM_NAME = "TestAWSEnumerationTask-create";
@@ -179,8 +187,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private EndpointState endpointState;
 
     private List<String> instancesToCleanUp = new ArrayList<>();
+    private String bucketToBeDeleted;
     private String nicToCleanUp = null;
     private AmazonEC2AsyncClient client;
+    private AmazonS3Client s3Client;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
 
@@ -215,6 +225,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
         this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor());
+        this.s3Client = AWSUtils.getS3Client(creds, TestAWSSetupUtils.regionId);
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
@@ -250,9 +261,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         if (this.host == null) {
             return;
         }
+        if (this.bucketToBeDeleted != null) {
+            this.s3Client.deleteBucket(this.bucketToBeDeleted);
+        }
         tearDownAwsVMs();
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
+        this.s3Client.shutdown();
         setAwsClientMockInfo(false, null);
     }
 
@@ -298,8 +313,15 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Xenon does not know about the new instances.
         ProvisioningUtils.queryComputeInstances(this.host, count2);
 
+        // Create S3 bucket on amazon
+        this.s3Client.createBucket(TEST_BUCKET_NAME);
+        this.bucketToBeDeleted = TEST_BUCKET_NAME;
+
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_INITIAL);
+
+        // Validate if the S3 bucket is enumerated.
+        validateS3Enumeration(count1);
 
         // 5 new resources should be discovered. Mapping to 2 new compute description and 5 new
         // compute states.
@@ -355,6 +377,14 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Validate stale resources have been deleted
         validateStaleResourceStateDeletion(staleSubnetDocumentSelfLink, staleNetworkDocumentSelfLink);
 
+        // After two enumeration cycles, validate that we did not create a duplicate document for existing
+        // S3 bucket.
+        validateS3Enumeration(count1);
+
+        // Delete the S3 bucket created in the test
+        this.s3Client.deleteBucket(TEST_BUCKET_NAME);
+        this.bucketToBeDeleted = null;
+
         // Because one public NIC and its document are removed,
         // the totalNetworkInterfaceStateCount should go down by 1
         validateRemovalOfPublicNetworkInterface(instanceIdsToStop,
@@ -400,6 +430,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 count2, ComputeService.FACTORY_LINK, false);
         queryDocumentsAndAssertExpectedCount(this.host,
                 count2, DiskService.FACTORY_LINK, false);
+
+
+        // Validate that the document for the deleted S3 bucket is deleted after enumeration.
+        validateS3Enumeration(ZERO);
     }
 
     // Runs the enumeration task after a new nic has been added to a CS and then after it has been
@@ -775,6 +809,27 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             unTagResources(this.client, diskTags, this.diskId);
             tearDownTestDisk(this.client, this.host, this.awsTestContext, this.isMock);
         }
+    }
+
+    // Validate S3 bucket enumeration by querying DiskState and comparing result to expected number of documents.
+    private void validateS3Enumeration(int expectedCount) {
+        Query s3Query = QueryTask.Query.Builder.create()
+                .addKindFieldClause(DiskState.class)
+                .addFieldClause(DiskState.FIELD_NAME_NAME, TEST_BUCKET_NAME)
+                .build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(s3Query)
+                .build();
+
+        Operation s3QueryOp = Operation.createPost(this.host,ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+                .setBody(queryTask).setReferer(this.host.getUri());
+
+        Operation s3QueryResponse = this.host.waitForResponse(s3QueryOp);
+
+        QueryTask response = s3QueryResponse.getBody(QueryTask.class);
+
+        assertEquals(expectedCount, response.results.documentLinks.size());
     }
 
     /**

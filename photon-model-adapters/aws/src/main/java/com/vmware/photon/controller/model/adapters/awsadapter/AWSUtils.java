@@ -77,6 +77,7 @@ import com.amazonaws.services.ec2.model.Vpc;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectListing;
@@ -296,7 +297,7 @@ public class AWSUtils {
         return (AmazonCloudWatchAsyncClient) amazonCloudWatchAsyncClientBuilder.build();
     }
 
-    public static TransferManager getS3AsyncClient(AuthCredentialsServiceState credentials,
+    public static TransferManager getS3TransferManager(AuthCredentialsServiceState credentials,
             String region, ExecutorService executorService) {
 
         AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
@@ -351,6 +352,21 @@ public class AWSUtils {
                 .build();
     }
 
+    public static AmazonS3Client getS3Client(AuthCredentialsServiceState credentials, String regionId) {
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
+                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+                        EncryptionUtils.decrypt(credentials.privateKey)));
+
+        AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder.standard()
+                .withCredentials(awsStaticCredentialsProvider)
+                .withRegion(regionId);
+
+        if (isAwsClientMock()) {
+            throw new IllegalArgumentException("AWS Mock does not support S3 client");
+        }
+
+        return (AmazonS3Client) amazonS3ClientBuilder.build();
+    }
     /**
      * Synchronous UnTagging of one or many AWS resources with the provided tags.
      */

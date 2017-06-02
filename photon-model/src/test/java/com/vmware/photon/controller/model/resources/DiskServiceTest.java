@@ -171,19 +171,6 @@ public class DiskServiceTest extends Suite {
         }
 
         @Test
-        public void testMissingTwoReferencesWhenCapacityLessThanOneMB()
-                throws Throwable {
-            DiskState startState = buildValidStartState();
-            startState.capacityMBytes = 0;
-            startState.sourceImageReference = null;
-            startState.customizationServiceReference = null;
-
-            postServiceSynchronously(DiskService.FACTORY_LINK,
-                    startState, DiskState.class,
-                    IllegalArgumentException.class);
-        }
-
-        @Test
         public void testMissingStatus() throws Throwable {
             DiskState startState = buildValidStartState();
             startState.status = null;

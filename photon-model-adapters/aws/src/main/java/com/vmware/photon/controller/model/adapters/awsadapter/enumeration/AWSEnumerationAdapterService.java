@@ -120,23 +120,30 @@ public class AWSEnumerationAdapterService extends StatelessService {
                 .createPatch(this.getHost(), AWSEnumerationAndDeletionAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
-        Operation patchAWSStorageEnumerationService = Operation.createPatch(this.getHost(),
-                AWSBlockStorageEnumerationAdapterService.SELF_LINK)
+        Operation patchAWSEBSStorageEnumerationService = Operation.createPatch(this.getHost(),
+                AWSEBSStorageEnumerationAdapterService.SELF_LINK)
+                .setReferer(this.getUri());
+
+        Operation patchAWSS3StorageEnumerationService = Operation.createPatch(this.getHost(),
+                AWSS3StorageEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
         this.getHost().startService(patchAWSEnumerationCreationService,
                 new AWSEnumerationAndCreationAdapterService());
         this.getHost().startService(patchAWSEnumerationDeletionService,
                 new AWSEnumerationAndDeletionAdapterService());
-        this.getHost().startService(patchAWSStorageEnumerationService,
-                new AWSBlockStorageEnumerationAdapterService());
+        this.getHost().startService(patchAWSEBSStorageEnumerationService,
+                new AWSEBSStorageEnumerationAdapterService());
+        this.getHost().startService(patchAWSS3StorageEnumerationService,
+                new AWSS3StorageEnumerationAdapterService());
         this.getHost().startService(new AWSVolumeTypeDiscoveryService());
 
         AdapterUtils.registerForServiceAvailability(getHost(),
                 operation -> startPost.complete(), startPost::fail,
                 AWSEnumerationAndCreationAdapterService.SELF_LINK,
                 AWSEnumerationAndDeletionAdapterService.SELF_LINK,
-                AWSBlockStorageEnumerationAdapterService.SELF_LINK,
+                AWSEBSStorageEnumerationAdapterService.SELF_LINK,
+                AWSS3StorageEnumerationAdapterService.SELF_LINK,
                 AWSVolumeTypeDiscoveryService.SELF_LINK);
     }
 
@@ -207,15 +214,22 @@ public class AWSEnumerationAdapterService extends StatelessService {
                     .setBody(awsEnumerationRequest)
                     .setReferer(getHost().getUri());
 
-            Operation patchAWSStorageAdapterService = Operation
+            Operation patchAWSEBSStorageAdapterService = Operation
                     .createPatch(this,
-                            AWSBlockStorageEnumerationAdapterService.SELF_LINK)
+                            AWSEBSStorageEnumerationAdapterService.SELF_LINK)
+                    .setBody(awsEnumerationRequest)
+                    .setReferer(getHost().getUri());
+
+            Operation patchAWSS3StorageAdapterService = Operation
+                    .createPatch(this,
+                            AWSS3StorageEnumerationAdapterService.SELF_LINK)
                     .setBody(awsEnumerationRequest)
                     .setReferer(getHost().getUri());
 
             enumOperationsForRegion.add(patchAWSCreationAdapterService);
             enumOperationsForRegion.add(patchAWSDeletionAdapterService);
-            enumOperationsForRegion.add(patchAWSStorageAdapterService);
+            enumOperationsForRegion.add(patchAWSEBSStorageAdapterService);
+            enumOperationsForRegion.add(patchAWSS3StorageAdapterService);
             enumOperations.add(enumOperationsForRegion);
         }
 
