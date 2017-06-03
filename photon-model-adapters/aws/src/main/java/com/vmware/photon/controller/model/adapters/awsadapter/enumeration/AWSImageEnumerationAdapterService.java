@@ -29,6 +29,7 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
+import com.amazonaws.services.ec2.model.DeviceType;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Tag;
@@ -58,6 +59,8 @@ import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 public class AWSImageEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_IMAGE_ENUMERATION_ADAPTER;
+
+    private AWSClientManager clientManager;
 
     /**
      * {@link EndpointEnumerationProcess} specialization that loads AWS {@link Image}s into
@@ -280,17 +283,23 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             holder.localState.osFamily = remoteImage.getPlatform();
 
             holder.localState.diskConfigs = new ArrayList<>();
-            for (BlockDeviceMapping blockDeviceMapping : remoteImage.getBlockDeviceMappings()) {
-                ImageState.DiskConfiguration diskConfig = new ImageState.DiskConfiguration();
-                diskConfig.id = blockDeviceMapping.getDeviceName();
-                diskConfig.capacityMBytes = blockDeviceMapping.getEbs().getVolumeSize() * 1024;
-                diskConfig.encrypted = blockDeviceMapping.getEbs().getEncrypted();
-                diskConfig.persistent = true;
-                diskConfig.properties = new HashMap<>();
-                diskConfig.properties.put(VOLUME_TYPE, blockDeviceMapping.getEbs().getVolumeType());
-                holder.localState.diskConfigs.add(diskConfig);
+            if (DeviceType.Ebs == DeviceType.fromValue(remoteImage.getRootDeviceType())) {
+                for (BlockDeviceMapping blockDeviceMapping : remoteImage.getBlockDeviceMappings()) {
+                    // blockDeviceMapping can be with noDevice
+                    if (blockDeviceMapping.getEbs() != null) {
+                        ImageState.DiskConfiguration diskConfig = new ImageState.DiskConfiguration();
+                        diskConfig.id = blockDeviceMapping.getDeviceName();
+                        diskConfig.capacityMBytes = blockDeviceMapping.getEbs().getVolumeSize()
+                                * 1024;
+                        diskConfig.encrypted = blockDeviceMapping.getEbs().getEncrypted();
+                        diskConfig.persistent = true;
+                        diskConfig.properties = new HashMap<>();
+                        diskConfig.properties
+                                .put(VOLUME_TYPE, blockDeviceMapping.getEbs().getVolumeType());
+                        holder.localState.diskConfigs.add(diskConfig);
+                    }
+                }
             }
-
             for (Tag remoteImageTag : remoteImage.getTags()) {
                 holder.remoteTags.put(remoteImageTag.getKey(), remoteImageTag.getValue());
             }
@@ -313,79 +322,6 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                         this.endpointState.endpointType);
             }
         }
-    }
-
-    private AWSClientManager clientManager;
-
-    public AWSImageEnumerationAdapterService() {
-
-        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-    }
-
-    /**
-     * Extend default 'start' logic with loading AWS client.
-     */
-    @Override
-    public void handleStart(Operation op) {
-
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
-
-        super.handleStart(op);
-    }
-
-    /**
-     * Extend default 'stop' logic with releasing AWS client.
-     */
-    @Override
-    public void handleStop(Operation op) {
-
-        returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
-
-        super.handleStop(op);
-    }
-
-    @Override
-    public void handlePatch(Operation op) {
-
-        if (!op.hasBody()) {
-            op.fail(new IllegalArgumentException("body is required"));
-            return;
-        }
-
-        // Immediately complete the Operation from calling task.
-        op.complete();
-
-        AWSImageEnumerationContext ctx = new AWSImageEnumerationContext(
-                this, op.getBody(ImageEnumerateRequest.class));
-
-        if (ctx.request.isMockRequest) {
-            // Complete the task with FINISHED
-            completeWithSuccess(ctx);
-            return;
-        }
-
-        logFine(() -> ctx.request.requestType + " image enumeration: STARTED");
-        // Start enumeration process...
-        ctx.enumerate()
-                .whenComplete((o, e) -> {
-                    // Once done patch the calling task with correct stage.
-                    if (e == null) {
-                        logFine(() -> ctx.request.requestType + " image enumeration: COMPLETED");
-                        completeWithSuccess(ctx);
-                    } else {
-                        logSevere(() -> String.format("%s image enumeration: FAILED with %s", ctx.request.requestType, Utils.toString(e)));
-                        completeWithFailure(ctx, e);
-                    }
-                });
-    }
-
-    private void completeWithFailure(AWSImageEnumerationContext ctx, Throwable exc) {
-        ctx.taskManager.patchTaskToFailure(exc);
-    }
-
-    private void completeWithSuccess(AWSImageEnumerationContext ctx) {
-        ctx.taskManager.finishTask();
     }
 
     /**
@@ -452,5 +388,77 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             return this.totalNumber;
         }
 
+    }
+
+    public AWSImageEnumerationAdapterService() {
+
+        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+    }
+
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
+    @Override
+    public void handleStart(Operation op) {
+
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
+    }
+
+    /**
+     * Extend default 'stop' logic with releasing AWS client.
+     */
+    @Override
+    public void handleStop(Operation op) {
+
+        returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+
+        super.handleStop(op);
+    }
+
+    @Override
+    public void handlePatch(Operation op) {
+
+        if (!op.hasBody()) {
+            op.fail(new IllegalArgumentException("body is required"));
+            return;
+        }
+
+        // Immediately complete the Operation from calling task.
+        op.complete();
+
+        AWSImageEnumerationContext ctx = new AWSImageEnumerationContext(
+                this, op.getBody(ImageEnumerateRequest.class));
+
+        if (ctx.request.isMockRequest) {
+            // Complete the task with FINISHED
+            completeWithSuccess(ctx);
+            return;
+        }
+
+        logFine(() -> ctx.request.requestType + " image enumeration: STARTED");
+        // Start enumeration process...
+        ctx.enumerate()
+                .whenComplete((o, e) -> {
+                    // Once done patch the calling task with correct stage.
+                    if (e == null) {
+                        logFine(() -> ctx.request.requestType + " image enumeration: COMPLETED");
+                        completeWithSuccess(ctx);
+                    } else {
+                        logSevere(() -> String.format("%s image enumeration: FAILED with %s",
+                                ctx.request.requestType, Utils.toString(e)));
+                        completeWithFailure(ctx, e);
+                    }
+                });
+    }
+
+    private void completeWithFailure(AWSImageEnumerationContext ctx, Throwable exc) {
+        ctx.taskManager.patchTaskToFailure(exc);
+    }
+
+    private void completeWithSuccess(AWSImageEnumerationContext ctx) {
+        ctx.taskManager.finishTask();
     }
 }
