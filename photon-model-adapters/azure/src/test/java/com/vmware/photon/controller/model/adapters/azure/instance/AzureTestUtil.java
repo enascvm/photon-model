@@ -841,7 +841,7 @@ public class AzureTestUtil {
                 out.name = "out";
                 out.protocol = "tcp";
                 out.ipRangeCidr = "0.0.0.0/0";
-                out.ports = "1-65535";
+                out.ports = SecurityGroupService.ALL_PORTS;
                 egressRules.add(out);
                 securityGroupState.egress = egressRules;
 

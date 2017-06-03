@@ -235,7 +235,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 }
 
                 if (SecurityGroupService.ANY.equals(ports)) {
-                    ports = "1-65535";
+                    ports = SecurityGroupService.ALL_PORTS;
                 }
 
                 rule.ports = ports;

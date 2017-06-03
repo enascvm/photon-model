@@ -46,7 +46,7 @@ public class SecurityGroupService extends StatefulService {
 
     public enum Protocol {
 
-        ANY(SecurityGroupService.ANY, 0), TCP("tcp", 6), UDP("udp", 17), ICMP("icmp", 1);
+        ANY(SecurityGroupService.ANY, 0), TCP("tcp", 6), UDP("udp", 17), ICMPv4("icmp", 1), ICMPv6("icmpv6", 58);
 
         private final int protocolNumber;
         private final String name;
@@ -83,6 +83,27 @@ public class SecurityGroupService extends StatefulService {
                     .filter(fullPredicate)
                     .findFirst().orElse(null);
         }
+
+        /**
+         * Protocol must be one of the supported types.
+         */
+        public static Protocol validateProtocol(String protocol) {
+
+            if (protocol == null || protocol.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Provided protocol is empty."
+                                + " Supported protocols: " + Arrays.toString(Protocol.values()));
+            }
+
+            Protocol protocolEnumVal = Protocol.fromString(protocol.toLowerCase());
+            if (protocolEnumVal == null) {
+                throw new IllegalArgumentException(
+                        "Protocol is not correctly specified " + protocol.toLowerCase()
+                                + " Supported protocols: " +  Arrays.toString(Protocol.values()));
+            }
+
+            return protocolEnumVal;
+        }
     }
 
     /**
@@ -93,6 +114,11 @@ public class SecurityGroupService extends StatefulService {
      * </ul>
      */
     public static final String ANY = "*";
+
+    /**
+     * ALL_PORTS can be used for SecurityGroup rules, where all ports are allowed.
+     */
+    public static final String ALL_PORTS = "1-65535";
 
     /**
      * Security Group State document.
@@ -305,32 +331,38 @@ public class SecurityGroupService extends StatefulService {
      */
     private static void validateRules(List<Rule> rules) {
         for (Rule rule : rules) {
+
             validateRuleName(rule.name);
-            // validate protocol and convert to lower case
-            rule.protocol = validateProtocol(rule.protocol);
+
+            Protocol ruleProtocol = Protocol.validateProtocol(rule.protocol);
 
             // IP range must be in CIDR notation or "*".
             // creating new SubnetUtils to validate
             if (!ANY.equals(rule.ipRangeCidr)) {
                 new SubnetUtils(rule.ipRangeCidr);
             }
-            validatePorts(rule.ports);
+            // port validation has no meaning for ICMP protocol
+            if (!Protocol.ICMPv4.equals(ruleProtocol) &&
+                    !Protocol.ICMPv6.equals(ruleProtocol)) {
+                validatePorts(rule.ports);
+            }
         }
     }
 
-    /*
-     * validate ports
+    /**
+     * Validate ports
      */
     private static void validatePorts(String ports) {
         if (ports == null) {
             throw new IllegalArgumentException(
-                    "an allow rule requires a minimum of one port, none supplied");
+                    "minimum of one port is required, "
+                    + "none supplied");
         }
         String[] pp = ports.split("-");
         if (pp.length > 2) {
             // invalid port range
             throw new IllegalArgumentException(
-                    "invalid allow rule port range supplied");
+                    "invalid allow rule port range supplied " + ports);
         }
         int previousPort = 0;
         if (pp.length > 0) {
@@ -339,12 +371,12 @@ public class SecurityGroupService extends StatefulService {
                     int iPort = Integer.parseInt(aPp);
                     if (iPort < 0 || iPort > 65535) {
                         throw new IllegalArgumentException(
-                                "allow rule port numbers must be between 0 and 65535 but was "
+                                "port numbers must be between 0 and 65535 but was "
                                         + iPort);
                     }
                     if (previousPort > 0 && previousPort > iPort) {
                         throw new IllegalArgumentException(
-                                "allow rule from port is greater than to port " + iPort);
+                                "from port is greater than to port " + iPort);
                     }
                     previousPort = iPort;
                 } catch (NumberFormatException e) {
@@ -361,25 +393,6 @@ public class SecurityGroupService extends StatefulService {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("a rule name is required");
         }
-    }
-
-    /*
-     * Protocol must be tcp, udp or icmpi
-     */
-    private static String validateProtocol(String protocol) {
-
-        if (protocol == null || protocol.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "only tcp, udp or icmp protocols are supported, none supplied");
-        }
-
-        String proto = protocol.toLowerCase();
-
-        if (Protocol.fromString(proto) == null) {
-            throw new IllegalArgumentException(
-                    "only tcp, udp or icmp protocols are supported, provide a supported protocol");
-        }
-        return proto;
     }
 
 }
