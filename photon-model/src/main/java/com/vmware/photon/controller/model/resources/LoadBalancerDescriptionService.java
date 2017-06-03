@@ -20,7 +20,6 @@ import java.util.UUID;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -53,7 +52,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
         /**
          * Link to the cloud account endpoint the load balancer belongs to.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String endpointLink;
 
@@ -69,7 +67,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
          * availability zones, and have nothing to do with the subnets the cluster instances are
          * attached to.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Set<String> subnetLinks;
 
@@ -154,7 +151,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
 
     private void validateState(LoadBalancerDescription state) {
         Utils.validateState(getStateDescription(), state);
-        PhotonModelUtils.validateRegionId(state);
         if (state.port < MIN_PORT_NUMBER || state.port > MAX_PORT_NUMBER) {
             throw new IllegalArgumentException("Invalid load balancer port number.");
         }

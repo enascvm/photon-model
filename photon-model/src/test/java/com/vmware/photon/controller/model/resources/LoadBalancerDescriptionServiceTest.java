@@ -136,9 +136,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
 
         @Test
         public void testInvalidValues() throws Throwable {
-            LoadBalancerDescription missingEndpointLink = buildValidStartState();
             LoadBalancerDescription missingComputeDescriptionLink = buildValidStartState();
-            LoadBalancerDescription missingSubnetLinks = buildValidStartState();
             LoadBalancerDescription missingProtocol = buildValidStartState();
             LoadBalancerDescription missingPort = buildValidStartState();
             LoadBalancerDescription missingInstanceProtocol = buildValidStartState();
@@ -146,9 +144,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             LoadBalancerDescription invalidPort = buildValidStartState();
             LoadBalancerDescription invalidInstancePort = buildValidStartState();
 
-            missingEndpointLink.endpointLink = null;
             missingComputeDescriptionLink.computeDescriptionLink = null;
-            missingSubnetLinks.subnetLinks = null;
             missingProtocol.protocol = null;
             missingPort.port = null;
             missingInstanceProtocol.instanceProtocol = null;
@@ -156,10 +152,9 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             invalidPort.port = LoadBalancerDescriptionService.MIN_PORT_NUMBER - 1;
             invalidInstancePort.instancePort = LoadBalancerDescriptionService.MAX_PORT_NUMBER + 1;
 
-            LoadBalancerDescription[] states = { missingEndpointLink,
-                    missingComputeDescriptionLink, missingSubnetLinks,  missingProtocol,
-                    missingPort, missingInstanceProtocol, missingInstancePort, invalidPort,
-                    invalidInstancePort };
+            LoadBalancerDescription[] states = { missingComputeDescriptionLink,
+                    missingProtocol, missingPort, missingInstanceProtocol, missingInstancePort,
+                    invalidPort, invalidInstancePort };
             for (LoadBalancerDescription state : states) {
                 postServiceSynchronously(LoadBalancerDescriptionService.FACTORY_LINK,
                         state, LoadBalancerDescription.class,
