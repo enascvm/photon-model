@@ -204,6 +204,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             stateHolder.localState.customProperties.put(
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                     this.request.parentCompute.documentSelfLink);
+            stateHolder.localState.customProperties.put(
+                    AWSConstants.AWS_VPC_ID, remoteResource.getVpcId());
 
             if (remoteResource.getTags() != null) {
 

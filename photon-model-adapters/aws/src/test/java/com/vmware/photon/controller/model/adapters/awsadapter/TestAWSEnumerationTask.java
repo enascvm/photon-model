@@ -79,6 +79,7 @@ import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Tag;
 
+import io.netty.util.internal.StringUtil;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -889,6 +890,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             // In the test setup there are both ingress and egress rules added
             assertTrue(sgStatesToLinksMap.get(uri).ingress.size() > 0);
             assertTrue(sgStatesToLinksMap.get(uri).egress.size() > 0);
+            assertFalse(
+                    StringUtil.isNullOrEmpty(
+                            sgStatesToLinksMap.get(uri).customProperties.get(AWS_VPC_ID)));
         }
     }
 
