@@ -56,7 +56,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.vapi.LibraryClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
@@ -152,42 +151,27 @@ public class InstanceClient extends BaseHelper {
 
     private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
     private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
-    private final ComputeStateWithDescription state;
-    private final ComputeStateWithDescription parent;
-    private final List<DiskStateExpanded> disks;
-    private final List<NetworkInterfaceStateWithDetails> nics;
-    private final ManagedObjectReference placementTarget;
-    private final String targetDatacenterPath;
+
     private final GetMoRef get;
     private final Finder finder;
+    private final ProvisionContext ctx;
     private ManagedObjectReference vm;
     private ManagedObjectReference datastore;
     private ManagedObjectReference resourcePool;
     private ManagedObjectReference host;
 
-    public InstanceClient(Connection connection,
-            ComputeStateWithDescription resource,
-            ComputeStateWithDescription parent,
-            List<DiskStateExpanded> disks,
-            List<NetworkInterfaceStateWithDetails> nics,
-            ManagedObjectReference placementTarget,
-            String targetDatacenterPath)
+    public InstanceClient(Connection connection, ProvisionContext ctx)
             throws ClientException, FinderException {
         super(connection);
 
-        this.state = resource;
-        this.parent = parent;
-        this.disks = disks;
-        this.nics = nics;
-        this.placementTarget = placementTarget;
-        this.targetDatacenterPath = targetDatacenterPath;
+        this.ctx = ctx;
 
         try {
-            this.finder = new Finder(connection, this.targetDatacenterPath);
+            this.finder = new Finder(connection, this.ctx.datacenterPath);
         } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
             throw new ClientException(
                     String.format("Error looking for datacenter for id '%s'",
-                            this.targetDatacenterPath),
+                            this.ctx.datacenterPath),
                     e);
         }
 
@@ -210,7 +194,7 @@ public class InstanceClient extends BaseHelper {
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
-                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
+                .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
 
         return state;
     }
@@ -220,14 +204,14 @@ public class InstanceClient extends BaseHelper {
 
         // even though this is a clone, hw config from the compute resource
         // is takes precedence
-        spec.setNumCPUs((int) this.state.description.cpuCount);
+        spec.setNumCPUs((int) this.ctx.child.description.cpuCount);
 
-        String gt = CustomProperties.of(this.state).getString(CustomProperties.GUEST_ID, null);
+        String gt = CustomProperties.of(this.ctx.child).getString(CustomProperties.GUEST_ID, null);
         if (gt != null) {
             spec.setGuestId(gt);
         }
 
-        spec.setMemoryMB(toMemoryMb(this.state.description.totalMemoryBytes));
+        spec.setMemoryMB(toMemoryMb(this.ctx.child.description.totalMemoryBytes));
 
         // set ovf environment
         ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm,
@@ -236,7 +220,7 @@ public class InstanceClient extends BaseHelper {
 
         // remove nics and attach to proper networks if nics are configured
         ArrayOfVirtualDevice devices = null;
-        if (this.nics != null && this.nics.size() > 0) {
+        if (this.ctx.nics != null && this.ctx.nics.size() > 0) {
             devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
             devices.getVirtualDevice().stream()
                     .filter(d -> d instanceof VirtualEthernetCard)
@@ -247,13 +231,13 @@ public class InstanceClient extends BaseHelper {
                         spec.getDeviceChange().add(removeNicChange);
                     });
 
-            for (NetworkInterfaceStateWithDetails niState : this.nics) {
+            for (NetworkInterfaceStateWithDetails niState : this.ctx.nics) {
                 VirtualDevice nic = createNic(niState, null);
                 addDeviceToVm(spec, nic);
             }
         }
 
-        if (this.disks != null && this.disks.size() > 0) {
+        if (this.ctx.disks != null && this.ctx.disks.size() > 0) {
             // Find whether it has HDD disk
             DiskStateExpanded bootDisk = findBootDisk();
             if (bootDisk != null && bootDisk.capacityMBytes > 0) {
@@ -291,7 +275,7 @@ public class InstanceClient extends BaseHelper {
         cloneSpec.setPowerOn(false);
         cloneSpec.setTemplate(false);
 
-        String displayName = this.state.name;
+        String displayName = this.ctx.child.name;
 
         ManagedObjectReference cloneTask = getVimPort()
                 .cloneVMTask(template, folder, displayName, cloneSpec);
@@ -312,7 +296,7 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualMachineRelocateDiskMoveOptions computeDiskMoveType() {
-        String strategy = CustomProperties.of(this.state)
+        String strategy = CustomProperties.of(this.ctx.child)
                 .getString(CustomProperties.CLONE_STRATEGY, CLONE_STRATEGY_LINKED);
 
         if (CLONE_STRATEGY_FULL.equals(strategy)) {
@@ -326,7 +310,7 @@ public class InstanceClient extends BaseHelper {
     }
 
     public void deleteInstance() throws Exception {
-        ManagedObjectReference vm = CustomProperties.of(this.state)
+        ManagedObjectReference vm = CustomProperties.of(this.ctx.child)
                 .getMoRef(CustomProperties.MOREF);
         if (vm == null) {
             logger.info("No moref associated with the given instance, skipping delete.");
@@ -372,25 +356,25 @@ public class InstanceClient extends BaseHelper {
 
             // store reference to created vm for further processing
             this.vm = vm;
-            attachDisks(this.disks);
+            attachDisks(this.ctx.disks);
         }
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
-                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
+                .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
 
         return state;
     }
 
     private boolean isOvfDeploy() {
-        CustomProperties cp = CustomProperties.of(this.state.description);
+        CustomProperties cp = CustomProperties.of(this.ctx.child.description);
         return cp.getString(OvfParser.PROP_OVF_URI) != null ||
                 cp.getString(OvfParser.PROP_OVF_ARCHIVE_URI) != null;
     }
 
     private ManagedObjectReference deployOvf() throws Exception {
         OvfDeployer deployer = new OvfDeployer(this.connection);
-        CustomProperties cust = CustomProperties.of(this.state.description);
+        CustomProperties cust = CustomProperties.of(this.ctx.child.description);
 
         URI ovfUri = cust.getUri(OvfParser.PROP_OVF_URI);
 
@@ -421,7 +405,7 @@ public class InstanceClient extends BaseHelper {
                     OvfParser parser = new OvfParser();
                     Document ovfDoc = parser.retrieveDescriptor(ovfUri);
                     List<OvfNetworkMapping> networks = mapNetworks(parser.extractNetworks(ovfDoc),
-                            ovfDoc, this.nics);
+                            ovfDoc, this.ctx.nics);
                     vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, networks,
                             ds, Collections.emptyList(), config, resourcePool);
 
@@ -631,7 +615,7 @@ public class InstanceClient extends BaseHelper {
             ManagedObjectReference datastore, ManagedObjectReference folder,
             ManagedObjectReference resourcePool) throws Exception {
 
-        String vmName = this.state.name;
+        String vmName = this.ctx.child.name;
 
         Map<String, Object> props = this.get.entityProps(vmTempl, VimPath.vm_summary_config_numCpu,
                 VimPath.vm_summary_config_memorySizeMB, VimPath.vm_snapshot,
@@ -692,9 +676,9 @@ public class InstanceClient extends BaseHelper {
 
         // even though this is a clone, hw config from the compute resource
         // is takes precedence
-        spec.setNumCPUs((int) this.state.description.cpuCount);
-        spec.setMemoryMB(toMemoryMb(this.state.description.totalMemoryBytes));
-        String gt = CustomProperties.of(this.state).getString(CustomProperties.GUEST_ID, null);
+        spec.setNumCPUs((int) this.ctx.child.description.cpuCount);
+        spec.setMemoryMB(toMemoryMb(this.ctx.child.description.totalMemoryBytes));
+        String gt = CustomProperties.of(this.ctx.child).getString(CustomProperties.GUEST_ID, null);
         if (gt != null) {
             spec.setGuestId(gt);
         }
@@ -712,7 +696,7 @@ public class InstanceClient extends BaseHelper {
 
         // configure network
         VirtualPCIController pci = getFirstPciController(devices);
-        for (NetworkInterfaceStateWithDetails nicWithDetails : this.nics) {
+        for (NetworkInterfaceStateWithDetails nicWithDetails : this.ctx.nics) {
             VirtualDevice nic = createNic(nicWithDetails, pci.getControllerKey());
             addDeviceToVm(spec, nic);
         }
@@ -752,11 +736,11 @@ public class InstanceClient extends BaseHelper {
      * @return
      */
     private DiskStateExpanded findBootDisk() {
-        if (this.disks == null) {
+        if (this.ctx.disks == null) {
             return null;
         }
 
-        return this.disks.stream()
+        return this.ctx.disks.stream()
                 .filter(d -> d.type == DiskType.HDD)
                 .findFirst()
                 .orElse(null);
@@ -921,7 +905,7 @@ public class InstanceClient extends BaseHelper {
         String destName = makePathToVmdkFile(ds.id, dir);
 
         // all ops are within a datacenter
-        ManagedObjectReference sourceDc = this.finder.datacenter(this.targetDatacenterPath).object;
+        ManagedObjectReference sourceDc = this.finder.datacenter(this.ctx.datacenterPath).object;
         ManagedObjectReference destDc = sourceDc;
 
         Boolean force = true;
@@ -1237,7 +1221,7 @@ public class InstanceClient extends BaseHelper {
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);
 
-        String gt = CustomProperties.of(this.state).getString(CustomProperties.GUEST_ID, null);
+        String gt = CustomProperties.of(this.ctx.child).getString(CustomProperties.GUEST_ID, null);
         if (gt != null) {
             try {
                 gt = VirtualMachineGuestOsIdentifier.valueOf(gt).value();
@@ -1269,7 +1253,7 @@ public class InstanceClient extends BaseHelper {
 
     private boolean populateVAppProperties(VirtualMachineConfigSpec spec,
             ArrayOfVAppPropertyInfo currentProps) {
-        if (this.disks == null || this.disks.size() == 0) {
+        if (this.ctx.disks == null || this.ctx.disks.size() == 0) {
             return false;
         }
 
@@ -1339,7 +1323,7 @@ public class InstanceClient extends BaseHelper {
      */
     private boolean populateCloudConfig(VirtualMachineConfigSpec spec,
             ArrayOfVAppPropertyInfo currentProps) {
-        if (this.disks == null || this.disks.size() == 0) {
+        if (this.ctx.disks == null || this.ctx.disks.size() == 0) {
             return false;
         }
 
@@ -1505,12 +1489,12 @@ public class InstanceClient extends BaseHelper {
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, FinderException {
 
         // look for a configured folder in compute state
-        String folderPath = CustomProperties.of(this.state)
+        String folderPath = CustomProperties.of(this.ctx.child)
                 .getString(RESOURCE_GROUP_NAME);
 
         if (folderPath == null) {
             // look for a configured folder in parent
-            folderPath = CustomProperties.of(this.parent)
+            folderPath = CustomProperties.of(this.ctx.parent)
                     .getString(RESOURCE_GROUP_NAME);
         }
 
@@ -1532,13 +1516,13 @@ public class InstanceClient extends BaseHelper {
      */
     private VirtualMachineConfigSpec buildVirtualMachineConfigSpec(String datastoreName)
             throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
-        String displayName = this.state.name;
+        String displayName = this.ctx.child.name;
 
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
         spec.setName(displayName);
-        spec.setNumCPUs((int) this.state.description.cpuCount);
+        spec.setNumCPUs((int) this.ctx.child.description.cpuCount);
         spec.setGuestId(VirtualMachineGuestOsIdentifier.OTHER_GUEST_64.value());
-        spec.setMemoryMB(toMemoryMb(this.state.description.totalMemoryBytes));
+        spec.setMemoryMB(toMemoryMb(this.ctx.child.description.totalMemoryBytes));
 
         VirtualMachineFileInfo files = new VirtualMachineFileInfo();
         // Use a full path to the config file to avoid creating a VM with the same name
@@ -1546,7 +1530,7 @@ public class InstanceClient extends BaseHelper {
         files.setVmPathName(path);
         spec.setFiles(files);
 
-        for (NetworkInterfaceStateWithDetails ni : this.nics) {
+        for (NetworkInterfaceStateWithDetails ni : this.ctx.nics) {
             VirtualDevice nic = createNic(ni, null);
             addDeviceToVm(spec, nic);
         }
@@ -1744,11 +1728,11 @@ public class InstanceClient extends BaseHelper {
             return this.datastore;
         }
 
-        String datastorePath = this.state.description.dataStoreId;
+        String datastorePath = this.ctx.child.description.dataStoreId;
 
         if (datastorePath == null) {
             ArrayOfManagedObjectReference datastores = findDatastoresForPlacement(
-                    this.placementTarget);
+                    this.ctx.computeMoRef);
             if (datastores == null || datastores.getManagedObjectReference().isEmpty()) {
                 this.datastore = this.finder.defaultDatastore().object;
             } else {
@@ -1778,21 +1762,21 @@ public class InstanceClient extends BaseHelper {
             return this.resourcePool;
         }
 
-        if (VimNames.TYPE_HOST.equals(this.placementTarget.getType())) {
+        if (VimNames.TYPE_HOST.equals(this.ctx.computeMoRef.getType())) {
             // find the ComputeResource representing this host and use its root resource pool
-            ManagedObjectReference parentCompute = this.get.entityProp(this.placementTarget,
+            ManagedObjectReference parentCompute = this.get.entityProp(this.ctx.computeMoRef,
                     VimPath.host_parent);
             this.resourcePool = this.get.entityProp(parentCompute, VimPath.res_resourcePool);
-        } else if (VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(this.placementTarget.getType()) ||
-                VimNames.TYPE_COMPUTE_RESOURCE.equals(this.placementTarget.getType())) {
+        } else if (VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(this.ctx.computeMoRef.getType()) ||
+                VimNames.TYPE_COMPUTE_RESOURCE.equals(this.ctx.computeMoRef.getType())) {
             // place in the root resource pool of a cluster
-            this.resourcePool = this.get.entityProp(this.placementTarget, VimPath.res_resourcePool);
-        } else if (VimNames.TYPE_RESOURCE_POOL.equals(this.placementTarget.getType())) {
+            this.resourcePool = this.get.entityProp(this.ctx.computeMoRef, VimPath.res_resourcePool);
+        } else if (VimNames.TYPE_RESOURCE_POOL.equals(this.ctx.computeMoRef.getType())) {
             // place in the resource pool itself
-            this.resourcePool = this.placementTarget;
+            this.resourcePool = this.ctx.computeMoRef;
         } else {
             throw new IllegalArgumentException("Cannot place instance on " +
-                    VimUtils.convertMoRefToString(this.placementTarget));
+                    VimUtils.convertMoRefToString(this.ctx.computeMoRef));
         }
 
         return this.resourcePool;
@@ -1804,8 +1788,8 @@ public class InstanceClient extends BaseHelper {
             return this.host;
         }
 
-        if (VimNames.TYPE_HOST.equals(this.placementTarget.getType())) {
-            this.host = this.placementTarget;
+        if (VimNames.TYPE_HOST.equals(this.ctx.computeMoRef.getType())) {
+            this.host = this.ctx.computeMoRef;
         }
 
         return this.host;
@@ -1821,7 +1805,7 @@ public class InstanceClient extends BaseHelper {
         LibraryClient client = vapi.newLibraryClient();
 
         Map<String, String> mapping = new HashMap<>();
-        ObjectNode result = client.deployOvfLibItem(image.id, this.state.name,
+        ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name,
                 getVmFolder(), getDatastore(), getResourcePool(), mapping);
 
         if (!result.get("succeeded").asBoolean()) {
@@ -1843,7 +1827,7 @@ public class InstanceClient extends BaseHelper {
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
-                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
+                .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
 
         return state;
     }

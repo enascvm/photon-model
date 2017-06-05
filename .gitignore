@@ -18,6 +18,7 @@ tags
 .classpath
 .checkstyle
 bin
+.vscode/
 
 # src/main/resources created after building
 **/photon-model.git.properties

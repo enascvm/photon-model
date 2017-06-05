@@ -111,9 +111,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                     }
 
                     try {
-                        InstanceClient client = new InstanceClient(connection, ctx.child,
-                                ctx.parent, ctx.disks, ctx.nics, ctx.computeMoRef,
-                                ctx.datacenterPath);
+                        InstanceClient client = new InstanceClient(connection, ctx);
 
                         ComputeState state;
 
@@ -334,8 +332,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                     }
 
                     try {
-                        InstanceClient client = new InstanceClient(conn, ctx.child, ctx.parent,
-                                ctx.disks, ctx.nics, null, null);
+                        InstanceClient client = new InstanceClient(conn, ctx);
                         client.deleteInstance();
 
                         ctx.mgr.finishTask();
