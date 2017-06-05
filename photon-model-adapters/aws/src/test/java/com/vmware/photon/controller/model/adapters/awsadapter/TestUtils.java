@@ -135,9 +135,9 @@ public class TestUtils {
     public static void postSecurityGroup(VerificationHost host, SecurityGroupState state, Operation
             response)
             throws Throwable {
-        URI firewallFactory = UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK);
+        URI securityGroupFactory = UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK);
         host.testStart(1);
-        Operation startPost = Operation.createPost(firewallFactory)
+        Operation startPost = Operation.createPost(securityGroupFactory)
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     if (e != null) {
@@ -151,6 +151,19 @@ public class TestUtils {
         host.testWait();
     }
 
+    public static void deleteSecurityGroup(VerificationHost host, String sgLink) throws Throwable {
+        host.testStart(1);
+        Operation startDelete = Operation.createDelete(host, sgLink)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        host.failIteration(e);
+                        return;
+                    }
+                    host.completeIteration();
+                });
+        host.send(startDelete);
+        host.testWait();
+    }
 
     public static void postNetwork(VerificationHost host, NetworkState state, Operation response)
             throws Throwable {

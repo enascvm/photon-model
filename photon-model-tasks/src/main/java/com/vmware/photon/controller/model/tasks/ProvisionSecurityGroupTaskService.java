@@ -19,8 +19,11 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -45,7 +48,7 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
      * Substages of the tasks.
      */
     public enum SubStage {
-        CREATED, PROVISIONING_SECURITY_GROUP, FINISHED, FAILED
+        CREATED, PROVISIONING_SECURITY_GROUPS, REMOVING_SECURITY_GROUPS, FINISHED, FAILED
     }
 
     /**
@@ -55,7 +58,14 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
         public InstanceRequestType requestType;
 
         /**
+         * The descriptions of the security group instances being realized/destroyed.
+         */
+        public Set<String> securityGroupDescriptionLinks;
+
+        /**
          * The description of the security group instance being realized.
+         * NOTE: this field has been deprecated. It will be removed after the Prelude code using it
+         * is updated.
          */
         public String securityGroupDescriptionLink;
 
@@ -93,10 +103,10 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
                 throw new IllegalArgumentException("requestType required");
             }
 
-            if (this.securityGroupDescriptionLink == null
-                    || this.securityGroupDescriptionLink.isEmpty()) {
+            if (this.securityGroupDescriptionLinks == null
+                    || this.securityGroupDescriptionLinks.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "securityGroupDescriptionLink required");
+                        "securityGroupDescriptionLinks required");
             }
         }
     }
@@ -151,8 +161,8 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
             currState.taskSubStage = nextStage(currState);
 
             handleSubStages(currState);
-            logInfo(() -> String.format("%s %s on %s started", "Security Group",
-                    currState.requestType.toString(), currState.securityGroupDescriptionLink));
+            logInfo(() -> String.format("Security Group %s on %s started",
+                    currState.requestType.toString(), currState.securityGroupDescriptionLinks));
             break;
 
         case STARTED:
@@ -188,14 +198,19 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
     }
 
     private SubStage nextSubStageOnCreate(SubStage currStage) {
-        return SubStage.values()[currStage.ordinal() + 1];
+        if (currStage == SubStage.CREATED) {
+            return SubStage.PROVISIONING_SECURITY_GROUPS;
+        } else if (currStage == SubStage.PROVISIONING_SECURITY_GROUPS) {
+            return SubStage.FINISHED;
+        } else {
+            return SubStage.values()[currStage.ordinal() + 1];
+        }
     }
 
-    // deletes follow the inverse order;
     private SubStage nextSubstageOnDelete(SubStage currStage) {
         if (currStage == SubStage.CREATED) {
-            return SubStage.PROVISIONING_SECURITY_GROUP;
-        } else if (currStage == SubStage.PROVISIONING_SECURITY_GROUP) {
+            return SubStage.REMOVING_SECURITY_GROUPS;
+        } else if (currStage == SubStage.REMOVING_SECURITY_GROUPS) {
             return SubStage.FINISHED;
         } else {
             return SubStage.values()[currStage.ordinal() + 1];
@@ -204,8 +219,9 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
 
     private void handleSubStages(ProvisionSecurityGroupTaskState currState) {
         switch (currState.taskSubStage) {
-        case PROVISIONING_SECURITY_GROUP:
-            patchAdapter(currState);
+        case PROVISIONING_SECURITY_GROUPS:
+        case REMOVING_SECURITY_GROUPS:
+            patchAdapter(currState, null);
             break;
         case FINISHED:
             sendSelfPatch(TaskState.TaskStage.FINISHED, null);
@@ -218,50 +234,96 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
     }
 
     private SecurityGroupInstanceRequest toReq(SecurityGroupState securityGroupState,
-            ProvisionSecurityGroupTaskState taskState) {
+            ProvisionSecurityGroupTaskState taskState, String securityGroupDescriptionLink,
+            String subTaskLink) {
         SecurityGroupInstanceRequest req = new SecurityGroupInstanceRequest();
         req.requestType = taskState.requestType;
         req.resourceReference = UriUtils.buildUri(this.getHost(),
-                taskState.securityGroupDescriptionLink);
+                securityGroupDescriptionLink);
         req.authCredentialsLink = securityGroupState.authCredentialsLink;
         req.resourcePoolLink = securityGroupState.resourcePoolLink;
-        req.taskReference = this.getUri();
+        req.taskReference = UriUtils.buildUri(getHost(), subTaskLink);
         req.isMockRequest = taskState.isMockRequest;
         req.customProperties = taskState.customProperties;
 
         return req;
     }
 
-    private void patchAdapter(ProvisionSecurityGroupTaskState taskState) {
+    private void patchAdapter(ProvisionSecurityGroupTaskState taskState, String subTaskLink) {
+        if (subTaskLink == null) {
+            createSubTask(taskState, link -> patchAdapter(taskState, link));
+            return;
+        }
 
-        sendRequest(Operation
-                .createGet(
-                        UriUtils.buildUri(this.getHost(),
-                                taskState.securityGroupDescriptionLink))
+        taskState.securityGroupDescriptionLinks.forEach(sgLink ->
+                sendRequest(Operation
+                        .createGet(
+                                UriUtils.buildUri(this.getHost(), sgLink))
+                        .setCompletion(
+                                (o, e) -> {
+                                    if (e != null) {
+                                        // don't fail the task; just update the subtask, which will
+                                        // handle the failure if necessary
+                                        ResourceOperationResponse subTaskPatchBody =
+                                                ResourceOperationResponse.fail(sgLink, e);
+                                        updateSubTask(subTaskLink, subTaskPatchBody);
+                                        return;
+                                    }
+                                    SecurityGroupState securityGroupState = o
+                                            .getBody(SecurityGroupState.class);
+                                    SecurityGroupInstanceRequest req = toReq(securityGroupState,
+                                            taskState, sgLink, subTaskLink);
+
+                                    sendRequest(Operation
+                                            .createPatch(
+                                                    securityGroupState.instanceAdapterReference)
+                                            .setBody(req)
+                                            .setCompletion(
+                                                    (oo, ee) -> {
+                                                        if (ee != null) {
+                                                            ResourceOperationResponse
+                                                                    subTaskPatchBody =
+                                                                    ResourceOperationResponse
+                                                                            .fail(sgLink, ee);
+                                                            updateSubTask(subTaskLink,
+                                                                    subTaskPatchBody);
+                                                        }
+                                                    }));
+                                }))
+        );
+    }
+
+    private void createSubTask(ProvisionSecurityGroupTaskState taskState,
+            Consumer<String> subTaskLinkConsumer) {
+
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
+        callback.onSuccessFinishTask();
+
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<>();
+
+        // tell the sub task with what to patch us, on completion
+        subTaskInitState.serviceTaskCallback = callback;
+        subTaskInitState.completionsRemaining = taskState.securityGroupDescriptionLinks.size();
+        subTaskInitState.tenantLinks = taskState.tenantLinks;
+        subTaskInitState.documentExpirationTimeMicros = taskState.documentExpirationTimeMicros;
+        Operation startPost = Operation
+                .createPost(this, SubTaskService.FACTORY_LINK)
+                .setBody(subTaskInitState)
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
+                                logWarning(() -> String.format("Failure creating sub task: %s",
+                                        Utils.toString(e)));
                                 sendSelfPatch(TaskState.TaskStage.FAILED, e);
                                 return;
                             }
-                            SecurityGroupState securityGroupState = o
-                                    .getBody(SecurityGroupState.class);
-                            SecurityGroupInstanceRequest req = toReq(securityGroupState,
-                                    taskState);
+                            SubTaskService.SubTaskState<?> body = o
+                                    .getBody(SubTaskService.SubTaskState.class);
 
-                            sendRequest(Operation
-                                    .createPatch(
-                                            securityGroupState.instanceAdapterReference)
-                                    .setBody(req)
-                                    .setCompletion(
-                                            (oo, ee) -> {
-                                                if (ee != null) {
-                                                    sendSelfPatch(
-                                                            TaskState.TaskStage.FAILED,
-                                                            ee);
-                                                }
-                                            }));
-                        }));
+                            subTaskLinkConsumer.accept(body.documentSelfLink);
+                        });
+        sendRequest(startPost);
     }
 
     private void sendSelfPatch(TaskState.TaskStage stage, Throwable e) {
@@ -293,5 +355,19 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
 
         sendRequest(Operation.createPatch(currentState.serviceTaskCallback.serviceURI)
                 .setBody(parentPatchBody));
+    }
+
+    private void updateSubTask(String link, Object body) {
+        Operation patch = Operation
+                .createPatch(this, link)
+                .setBody(body)
+                .setCompletion(
+                        (o, ex) -> {
+                            if (ex != null) {
+                                logWarning(() -> String.format("SubTask patch failed: %s",
+                                        Utils.toString(ex)));
+                            }
+                        });
+        sendRequest(patch);
     }
 }

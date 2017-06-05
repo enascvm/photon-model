@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.Reque
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
@@ -40,7 +41,6 @@ import com.vmware.photon.controller.model.support.CertificateInfo;
 import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
-import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.xenon.common.Operation;
@@ -619,12 +619,11 @@ public class MockAdapter {
             case PATCH:
                 SecurityGroupInstanceRequest request = op
                         .getBody(SecurityGroupInstanceRequest.class);
-                ProvisionSecurityGroupTaskState provisionSecurityGroupTaskState = new ProvisionSecurityGroupTaskState();
-                provisionSecurityGroupTaskState.taskInfo = new TaskState();
-                provisionSecurityGroupTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                ResourceOperationResponse response = ResourceOperationResponse.finish(request
+                        .resourceLink());
+                response.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
-                        request.taskReference).setBody(
-                        provisionSecurityGroupTaskState));
+                        request.taskReference).setBody(response));
                 op.complete();
                 break;
             default:
@@ -651,11 +650,13 @@ public class MockAdapter {
             case PATCH:
                 SecurityGroupInstanceRequest request = op
                         .getBody(SecurityGroupInstanceRequest.class);
-                ProvisionSecurityGroupTaskState provisionSecurityGroupTaskState = new ProvisionSecurityGroupTaskState();
-                provisionSecurityGroupTaskState.taskInfo = createFailedTaskInfo();
+                TaskState taskState = createFailedTaskInfo();
+                ResourceOperationResponse response = ResourceOperationResponse.fail(
+                        request.resourceLink(), taskState.failure);
+                response.failureMessage = taskState.failure.message;
+                response.taskInfo.stage = TaskState.TaskStage.FAILED;
                 sendRequest(Operation.createPatch(
-                        request.taskReference).setBody(
-                        provisionSecurityGroupTaskState));
+                        request.taskReference).setBody(response));
                 op.complete();
                 break;
             default:

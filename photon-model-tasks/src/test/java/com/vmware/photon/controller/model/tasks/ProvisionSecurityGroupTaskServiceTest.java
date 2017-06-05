@@ -19,6 +19,8 @@ import static org.hamcrest.Matchers.is;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -62,32 +64,15 @@ public class ProvisionSecurityGroupTaskServiceTest extends Suite {
             boolean success) throws Throwable {
         ProvisionSecurityGroupTaskState startState = new ProvisionSecurityGroupTaskState();
 
-        SecurityGroupState securityGroupState = new SecurityGroupState();
-        securityGroupState.authCredentialsLink = "authCredentialsLink";
-        securityGroupState.name = "security-group-name";
-        securityGroupState.regionId = "regionId";
-        securityGroupState.resourcePoolLink = "/resourcePoolLink";
-        if (success) {
-            securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
-                    MockSecurityGroupInstanceSuccessAdapter.SELF_LINK);
-        } else {
-            securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
-                    MockSecurityGroupInstanceFailureAdapter.SELF_LINK);
-        }
-        securityGroupState.id = UUID.randomUUID().toString();
-        ArrayList<Rule> rules = new ArrayList<>();
-        Rule ssh = new Rule();
-        ssh.name = "ssh";
-        ssh.protocol = "tcp";
-        ssh.ipRangeCidr = "0.0.0.0/0";
-        ssh.ports = "22";
-        rules.add(ssh);
-        securityGroupState.ingress = rules;
-        securityGroupState.egress = rules;
-        SecurityGroupState returnState = test.postServiceSynchronously(
-                SecurityGroupService.FACTORY_LINK, securityGroupState, SecurityGroupState.class);
+        SecurityGroupState securityGroupState1 = createSecurityGroupState(test, success);
+        SecurityGroupState returnState1 = test.postServiceSynchronously(
+                SecurityGroupService.FACTORY_LINK, securityGroupState1, SecurityGroupState.class);
+        SecurityGroupState securityGroupState2 = createSecurityGroupState(test, success);
+        SecurityGroupState returnState2 = test.postServiceSynchronously(
+                SecurityGroupService.FACTORY_LINK, securityGroupState2, SecurityGroupState.class);
         startState.requestType = requestType;
-        startState.securityGroupDescriptionLink = returnState.documentSelfLink;
+        startState.securityGroupDescriptionLinks = Stream.of(returnState1.documentSelfLink,
+                returnState2.documentSelfLink).collect(Collectors.toSet());
 
         startState.isMockRequest = true;
 
@@ -117,6 +102,34 @@ public class ProvisionSecurityGroupTaskServiceTest extends Suite {
     private static void startFactoryServices(BaseModelTest test) throws Throwable {
         PhotonModelTaskServices.startServices(test.getHost());
         MockAdapter.startFactories(test);
+    }
+
+    private static SecurityGroupState createSecurityGroupState(BaseModelTest test,
+            boolean success) {
+        SecurityGroupState securityGroupState = new SecurityGroupState();
+        securityGroupState.authCredentialsLink = "authCredentialsLink";
+        securityGroupState.name = UUID.randomUUID().toString();
+        securityGroupState.regionId = "regionId";
+        securityGroupState.resourcePoolLink = "/resourcePoolLink";
+        if (success) {
+            securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
+                    MockSecurityGroupInstanceSuccessAdapter.SELF_LINK);
+        } else {
+            securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
+                    MockSecurityGroupInstanceFailureAdapter.SELF_LINK);
+        }
+        securityGroupState.id = UUID.randomUUID().toString();
+        ArrayList<Rule> rules = new ArrayList<>();
+        Rule ssh = new Rule();
+        ssh.name = "ssh";
+        ssh.protocol = "tcp";
+        ssh.ipRangeCidr = "0.0.0.0/0";
+        ssh.ports = "22";
+        rules.add(ssh);
+        securityGroupState.ingress = rules;
+        securityGroupState.egress = rules;
+
+        return securityGroupState;
     }
 
     /**
@@ -175,7 +188,7 @@ public class ProvisionSecurityGroupTaskServiceTest extends Suite {
                     SecurityGroupInstanceRequest.InstanceRequestType.CREATE, true);
 
             invalidRequestType.requestType = null;
-            invalidSecurityGroupDescriptionLink.securityGroupDescriptionLink = null;
+            invalidSecurityGroupDescriptionLink.securityGroupDescriptionLinks = null;
 
             this.postServiceSynchronously(
                             ProvisionSecurityGroupTaskService.FACTORY_LINK,
@@ -232,6 +245,22 @@ public class ProvisionSecurityGroupTaskServiceTest extends Suite {
             ProvisionSecurityGroupTaskState startState = buildValidStartState(
                     this, SecurityGroupInstanceRequest.InstanceRequestType.CREATE,
                     false);
+
+            ProvisionSecurityGroupTaskState completeState = postAndWaitForService(
+                    this, startState);
+            assertThat(completeState.taskInfo.stage,
+                    is(TaskState.TaskStage.FAILED));
+        }
+
+        @Test
+        public void testCreateSecurityGroupServiceAdapterPartialFailure() throws Throwable {
+            ProvisionSecurityGroupTaskState startState = buildValidStartState(
+                    this, SecurityGroupInstanceRequest.InstanceRequestType.CREATE,
+                    true);
+            SecurityGroupState securityGroupState = createSecurityGroupState(this, false);
+            SecurityGroupState returnState = this.postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK, securityGroupState, SecurityGroupState.class);
+            startState.securityGroupDescriptionLinks.add(returnState.documentSelfLink);
 
             ProvisionSecurityGroupTaskState completeState = postAndWaitForService(
                     this, startState);

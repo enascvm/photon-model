@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
@@ -25,6 +26,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Vpc;
@@ -130,18 +133,7 @@ public class TestProvisionAWSSecurityGroup {
 
         // create sg service
         Operation securityGroupResponse = new Operation();
-        SecurityGroupState initialSecurityGroupState = buildSecurityGroupState();
-        initialSecurityGroupState.ingress = getGlobalSSHRule();
-        initialSecurityGroupState.egress = getGlobalSSHRule();
-        initialSecurityGroupState.egress.get(0).ipRangeCidr = this.vpc.getCidrBlock();
-        initialSecurityGroupState.authCredentialsLink = creds.documentSelfLink;
-        initialSecurityGroupState.authCredentialsLink = creds.documentSelfLink;
-        initialSecurityGroupState.resourcePoolLink = pool.documentSelfLink;
-        initialSecurityGroupState.regionId = this.region;
-        initialSecurityGroupState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
-                this.host.getPort(),
-                AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER,
-                null);
+        SecurityGroupState initialSecurityGroupState = buildSecurityGroupState(creds, pool);
 
         TestUtils.postSecurityGroup(this.host, initialSecurityGroupState, securityGroupResponse);
         SecurityGroupState securityGroupState = securityGroupResponse.getBody(SecurityGroupState
@@ -150,7 +142,8 @@ public class TestProvisionAWSSecurityGroup {
         // set up security group task state
         ProvisionSecurityGroupTaskState task = new ProvisionSecurityGroupTaskState();
         task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.CREATE;
-        task.securityGroupDescriptionLink = securityGroupState.documentSelfLink;
+        task.securityGroupDescriptionLinks = Stream.of(securityGroupState.documentSelfLink)
+                .collect(Collectors.toSet());
         task.customProperties = new HashMap<>();
         task.customProperties.put(NETWORK_STATE_ID_PROP_NAME, this.vpcId);
 
@@ -176,6 +169,72 @@ public class TestProvisionAWSSecurityGroup {
     }
 
     @Test
+    public void testProvisionAWSSecurityGroupPartialFailure() throws Throwable {
+        // create credentials
+        Operation authResponse = new Operation();
+        TestUtils.postCredentials(this.host, authResponse, this.privateKey, this.privateKeyId);
+        AuthCredentialsServiceState creds = authResponse.getBody(AuthCredentialsServiceState.class);
+
+        // create resource pool
+        Operation poolResponse = new Operation();
+        TestUtils.postResourcePool(this.host, poolResponse);
+        ResourcePoolState pool = poolResponse.getBody(ResourcePoolState.class);
+
+        // create two security groups
+        Operation securityGroupResponse = new Operation();
+        SecurityGroupState initialSecurityGroupState = buildSecurityGroupState(creds, pool);
+
+        TestUtils.postSecurityGroup(this.host, initialSecurityGroupState, securityGroupResponse);
+        SecurityGroupState securityGroupState1 = securityGroupResponse.getBody(SecurityGroupState
+                .class);
+        initialSecurityGroupState = buildSecurityGroupState(creds, pool);
+
+        TestUtils.postSecurityGroup(this.host, initialSecurityGroupState, securityGroupResponse);
+        SecurityGroupState securityGroupState2 = securityGroupResponse.getBody(SecurityGroupState
+                .class);
+
+        // delete the second security group to simulate failure
+        TestUtils.deleteSecurityGroup(this.host, securityGroupState2.documentSelfLink);
+        // verify the second security group is gone
+        try {
+            getSecurityGroupState(securityGroupState2.documentSelfLink);
+        } catch (Exception ex) {
+            assertTrue(ex instanceof ServiceNotFoundException);
+        }
+
+        // set up security group task state
+        ProvisionSecurityGroupTaskState task = new ProvisionSecurityGroupTaskState();
+        task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.CREATE;
+        task.securityGroupDescriptionLinks = Stream.of(securityGroupState1.documentSelfLink,
+                securityGroupState2.documentSourceLink).collect(Collectors.toSet());
+        task.customProperties = new HashMap<>();
+        task.customProperties.put(NETWORK_STATE_ID_PROP_NAME, this.vpcId);
+
+        Operation provision = new Operation();
+        provisionSecurityGroup(task, provision);
+        ProvisionSecurityGroupTaskState ps = provision.getBody(ProvisionSecurityGroupTaskState.class);
+        waitForTaskFailure(this.host, UriUtils.buildUri(this.host, ps.documentSelfLink));
+        validateAWSArtifacts(securityGroupState1.documentSelfLink, creds);
+
+        // validate that the second security group was not created
+        assertNull(getAWSSecurityGroup(securityGroupState2.name, creds));
+
+        // reuse previous task, but switch to a delete
+        task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.DELETE;
+        Operation remove = new Operation();
+        provisionSecurityGroup(task, remove);
+        ProvisionSecurityGroupTaskState removeTask = remove.getBody(ProvisionSecurityGroupTaskState.class);
+        waitForTaskFailure(this.host, UriUtils.buildUri(this.host, removeTask.documentSelfLink));
+
+        // verify security group state is gone
+        try {
+            getSecurityGroupState(securityGroupState1.documentSelfLink);
+        } catch (Exception ex) {
+            assertTrue(ex instanceof ServiceNotFoundException);
+        }
+    }
+
+    @Test
     public void testInvalidAuthAWSSecurityGroup() throws Throwable {
         // create credentials
         Operation authResponse = new Operation();
@@ -189,16 +248,7 @@ public class TestProvisionAWSSecurityGroup {
 
         // create sq service
         Operation securityGroupResponse = new Operation();
-        SecurityGroupState securityGroupInitialState = buildSecurityGroupState();
-        securityGroupInitialState.ingress = getGlobalSSHRule();
-        securityGroupInitialState.egress = getGlobalSSHRule();
-        securityGroupInitialState.authCredentialsLink = creds.documentSelfLink;
-        securityGroupInitialState.resourcePoolLink = pool.documentSelfLink;
-        securityGroupInitialState.regionId = this.region;
-        securityGroupInitialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
-                this.host.getPort(),
-                AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER,
-                null);
+        SecurityGroupState securityGroupInitialState = buildSecurityGroupState(creds, pool);
 
         TestUtils.postSecurityGroup(this.host, securityGroupInitialState, securityGroupResponse);
         SecurityGroupState securityGroupState = securityGroupResponse.getBody(SecurityGroupState.class);
@@ -206,7 +256,8 @@ public class TestProvisionAWSSecurityGroup {
         // set up security group task state
         ProvisionSecurityGroupTaskState task = new ProvisionSecurityGroupTaskState();
         task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.CREATE;
-        task.securityGroupDescriptionLink = securityGroupState.documentSelfLink;
+        task.securityGroupDescriptionLinks = Stream.of(securityGroupState.documentSelfLink)
+                .collect(Collectors.toSet());
         task.customProperties = new HashMap<>();
         task.customProperties.put(NETWORK_STATE_ID_PROP_NAME, this.vpcId);
 
@@ -233,6 +284,15 @@ public class TestProvisionAWSSecurityGroup {
         assertNotNull(sg.getIpPermissionsEgress());
         // there are two egress rules (one that was added as part of this test, and the default one)
         assertTrue(sg.getIpPermissionsEgress().size() == 2);
+    }
+
+    private SecurityGroup getAWSSecurityGroup(String name, AuthCredentialsServiceState creds)
+            throws Throwable {
+
+        AWSSecurityGroupClient client = new AWSSecurityGroupClient(
+                AWSUtils.getAsyncClient(creds, this.region, getExecutor()));
+        // if any artifact is not present then an error will be thrown
+        return client.getSecurityGroup(name, this.vpcId);
     }
 
     private SecurityGroupState getSecurityGroupState(String securityGroupLink) throws Throwable {
@@ -277,7 +337,8 @@ public class TestProvisionAWSSecurityGroup {
 
     }
 
-    private SecurityGroupState buildSecurityGroupState() {
+    private SecurityGroupState buildSecurityGroupState(AuthCredentialsServiceState creds,
+            ResourcePoolState pool) {
         URI tenantFactoryURI = UriUtils.buildFactoryUri(this.host, TenantService.class);
         SecurityGroupState securityGroup = new SecurityGroupState();
         securityGroup.id = UUID.randomUUID().toString();
@@ -285,6 +346,18 @@ public class TestProvisionAWSSecurityGroup {
 
         securityGroup.tenantLinks = new ArrayList<>();
         securityGroup.tenantLinks.add(UriUtils.buildUriPath(tenantFactoryURI.getPath(), "tenantA"));
+        securityGroup.ingress = getGlobalSSHRule();
+        securityGroup.egress = getGlobalSSHRule();
+        securityGroup.egress.get(0).ipRangeCidr = this.vpc.getCidrBlock();
+        securityGroup.authCredentialsLink = creds.documentSelfLink;
+        securityGroup.authCredentialsLink = creds.documentSelfLink;
+        securityGroup.resourcePoolLink = pool.documentSelfLink;
+        securityGroup.regionId = this.region;
+        securityGroup.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
+                this.host.getPort(),
+                AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER,
+                null);
+
         return securityGroup;
     }
 
