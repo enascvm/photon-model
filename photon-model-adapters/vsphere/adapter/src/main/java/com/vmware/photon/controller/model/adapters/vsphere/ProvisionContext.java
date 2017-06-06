@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -350,6 +351,24 @@ public class ProvisionContext {
                 populateContextThen(service, ctx, onSuccess);
             }, ctx.errorHandler);
             return;
+        }
+
+
+        if (ctx.instanceRequestType == InstanceRequestType.CREATE) {
+            if (ctx.image == null) {
+                DiskStateExpanded bootDisk = ctx.disks.stream()
+                        .filter(d -> d.imageLink != null)
+                        .findFirst().orElse(null);
+
+                if (bootDisk != null) {
+                    AdapterUtils.getServiceState(service, bootDisk.imageLink, op -> {
+                        ImageState body = op.getBody(ImageState.class);
+                        ctx.image = body;
+                        populateContextThen(service, ctx, onSuccess);
+                    }, ctx.errorHandler);
+                    return;
+                }
+            }
         }
 
         // context populated, invoke handler

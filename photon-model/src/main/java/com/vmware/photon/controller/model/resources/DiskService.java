@@ -371,10 +371,10 @@ public class DiskService extends StatefulService {
             throw new IllegalArgumentException("name is required.");
         }
 
-        if (state.capacityMBytes <= 1 && state.sourceImageReference == null
+        if (state.capacityMBytes <= 1 && state.sourceImageReference == null && state.imageLink == null
                 && state.customizationServiceReference == null) {
             throw new IllegalArgumentException(
-                    "capacityMBytes, sourceImageReference, or customizationServiceReference is required");
+                    "capacityMBytes, sourceImageReference, imageLink, or customizationServiceReference is required");
         }
 
         if (state.status == null) {
