@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -70,6 +71,9 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     private static final String QUERY_RESULT_LIMIT = System.getProperty(STATS_QUERY_RESULT_LIMIT);
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
     private static final String PROP_NEXT_PAGE_LINK = "__nextPageLink";
+    public static final String STATS_COLLECTION_EXPIRATION_HOURS = UriPaths.PROPERTY_PREFIX +
+            "StatsCollectionTaskService.expiration.hours";
+    private static final int DEFAULT_COLLECTION_EXPIRATION_HOURS = 12;
 
     public enum StatsCollectionStage {
         INIT, GET_RESOURCES
@@ -120,9 +124,10 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                 start.fail(new IllegalArgumentException("body is required"));
                 return;
             }
-            StatsCollectionTaskState state = start
-                    .getBody(StatsCollectionTaskState.class);
-
+            StatsCollectionTaskState state = start.getBody(StatsCollectionTaskState.class);
+            int expirationHours = Integer
+                    .getInteger(STATS_COLLECTION_EXPIRATION_HOURS, DEFAULT_COLLECTION_EXPIRATION_HOURS);
+            setExpiration(state, expirationHours, TimeUnit.HOURS);
             validateState(state);
             logInfo(() -> String.format("Starting stats collection task for: %s",
                     state.resourcePoolLink));
