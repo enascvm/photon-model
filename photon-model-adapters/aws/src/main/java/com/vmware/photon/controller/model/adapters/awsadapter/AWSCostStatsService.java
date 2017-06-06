@@ -731,7 +731,7 @@ public class AWSCostStatsService extends StatelessService {
         // create resource stats for only live EC2 instances that exist in system
         Map<String, AwsServiceDetailDto> serviceDetails = awsAccountDetailDto.serviceDetailsMap;
         for (String service : serviceDetails.keySet()) {
-            if (!service.equalsIgnoreCase(AWSCsvBillParser.AwsServices.ec2.getName())) {
+            if (!service.equalsIgnoreCase(AWSCsvBillParser.AwsServices.EC2.getName())) {
                 // Instance Costs are present only with EC2 service.
                 continue;
             }

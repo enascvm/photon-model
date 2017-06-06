@@ -271,7 +271,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         }
 
         // check that service level stats exist
-        String serviceCode = AWSCsvBillParser.AwsServices.ec2.getName().replaceAll(" ", "");
+        String serviceCode = AWSCsvBillParser.AwsServices.EC2.getName().replaceAll(" ", "");
         String serviceResourceCostMetric = String
                 .format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
         assertTrue(!account1Stats.statValues.get(serviceResourceCostMetric).isEmpty());
