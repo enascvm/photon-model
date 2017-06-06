@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNotNull;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,8 +63,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
         state.name = "networkName";
         state.endpointLink = EndpointService.FACTORY_LINK + "/my-endpoint";
         state.computeDescriptionLink = ComputeDescriptionService.FACTORY_LINK + "/a-compute-desc";
-        state.subnetLinks = new HashSet<>();
-        state.subnetLinks.add(SubnetService.FACTORY_LINK + "/a-subnet");
+        state.networkName = "lb-net";
         state.regionId = "regionId";
         state.protocol = "HTTP";
         state.port = 80;
@@ -143,6 +143,8 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             LoadBalancerDescription missingInstancePort = buildValidStartState();
             LoadBalancerDescription invalidPort = buildValidStartState();
             LoadBalancerDescription invalidInstancePort = buildValidStartState();
+            LoadBalancerDescription bothNetworkAndSubnetsSet = buildValidStartState();
+            LoadBalancerDescription noNetworkAndSubnetsSet = buildValidStartState();
 
             missingComputeDescriptionLink.computeDescriptionLink = null;
             missingProtocol.protocol = null;
@@ -151,10 +153,14 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             missingInstancePort.instancePort = null;
             invalidPort.port = LoadBalancerDescriptionService.MIN_PORT_NUMBER - 1;
             invalidInstancePort.instancePort = LoadBalancerDescriptionService.MAX_PORT_NUMBER + 1;
+            bothNetworkAndSubnetsSet.subnetLinks = Collections
+                    .singleton(SubnetService.FACTORY_LINK + "/a-subnet");
+            noNetworkAndSubnetsSet.networkName = null;
 
             LoadBalancerDescription[] states = { missingComputeDescriptionLink,
                     missingProtocol, missingPort, missingInstanceProtocol, missingInstancePort,
-                    invalidPort, invalidInstancePort };
+                    invalidPort, invalidInstancePort, bothNetworkAndSubnetsSet,
+                    noNetworkAndSubnetsSet };
             for (LoadBalancerDescription state : states) {
                 postServiceSynchronously(LoadBalancerDescriptionService.FACTORY_LINK,
                         state, LoadBalancerDescription.class,
@@ -198,7 +204,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             assertThat(returnState.name, is(patchState.name));
             assertThat(returnState.endpointLink, is(patchState.endpointLink));
             assertThat(returnState.computeDescriptionLink, is(patchState.computeDescriptionLink));
-            assertThat(returnState.subnetLinks.size(), is(2));
+            assertThat(returnState.subnetLinks.size(), is(1));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));
             assertThat(returnState.tenantLinks.size(), is(2));

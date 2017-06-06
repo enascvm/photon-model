@@ -67,9 +67,23 @@ public class LoadBalancerDescriptionService extends StatefulService {
         public String computeDescriptionLink;
 
         /**
+         * Name of the network the load balancer is attached to. Similar to the {@code name} field
+         * in {@code NetworkInterfaceDescription} that is used to find a network for each NIC on
+         * the compute.
+         *
+         * Overridden by the {@link #subnetLinks} field, if set. One of the two fields must be set.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String networkName;
+
+        /**
          * List of subnets the load balancer is attached to. Typically these must be in different
          * availability zones, and have nothing to do with the subnets the cluster instances are
          * attached to.
+         *
+         * If not set, the subnets are determined based on the {@link #networkName} field. One of
+         * the two fields must be set.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Set<String> subnetLinks;
@@ -162,11 +176,16 @@ public class LoadBalancerDescriptionService extends StatefulService {
 
     private void validateState(LoadBalancerDescription state) {
         Utils.validateState(getStateDescription(), state);
+        if ((state.networkName == null) == (state.subnetLinks == null)) {
+            throw new IllegalArgumentException("Either networkName or subnetLinks must be set.");
+        }
         if (state.port < MIN_PORT_NUMBER || state.port > MAX_PORT_NUMBER) {
-            throw new IllegalArgumentException("Invalid load balancer port number.");
+            throw new IllegalArgumentException(
+                    "Invalid load balancer port number: %d." + state.port);
         }
         if (state.instancePort < MIN_PORT_NUMBER || state.instancePort > MAX_PORT_NUMBER) {
-            throw new IllegalArgumentException("Invalid instance port number.");
+            throw new IllegalArgumentException(
+                    "Invalid instance port number: %d." + state.instancePort);
         }
     }
 
@@ -180,6 +199,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
         template.name = "load-balancer";
         template.endpointLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
                 "my-endpoint");
+        template.networkName = "lb-net";
         template.protocol = "HTTP";
         template.port = 80;
         template.instanceProtocol = "HTTP";
