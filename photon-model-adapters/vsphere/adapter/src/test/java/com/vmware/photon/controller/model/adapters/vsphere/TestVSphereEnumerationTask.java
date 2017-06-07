@@ -136,6 +136,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                             .fromJson(result.documents.get(result.documentLinks.get(0)),
                                     ResourceGroupService.ResourceGroupState.class);
                     assertNotNull(rg.name);
+                    assertNotNull(rg.customProperties);
+                    assertNotNull(rg.customProperties.get(CustomProperties.TARGET_LINK));
                 }
             });
         }
@@ -219,9 +221,6 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         Query.Builder builder = Query.Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_REGION_ID, this.datacenterId)
                 .addKindFieldClause(ResourceGroupService.ResourceGroupState.class);
-
-//               .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-//                       CustomProperties.TYPE, "Storage");
         QueryUtils.addTenantLinks(builder, this.computeHost.tenantLinks);
 
         return QueryTask.Builder.createDirectTask()

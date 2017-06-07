@@ -1035,6 +1035,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
                 .put(CustomProperties.TYPE, sp.getType())
+                .put(CustomProperties.TARGET_LINK, request.endpointLink)
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink());
 
         return res;
