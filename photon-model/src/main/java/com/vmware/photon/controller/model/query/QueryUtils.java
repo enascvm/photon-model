@@ -65,12 +65,13 @@ public class QueryUtils {
 
     /**
      * Executes the given query task on a Cluster.
+     *
      * @param service
-     *         The service executing the query task.
+     *            The service executing the query task.
      * @param queryTask
-     *         The query task.
+     *            The query task.
      * @param cluster
-     *         The cluster, the query runs against.
+     *            The cluster, the query runs against.
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask,
             ServiceTypeCluster cluster) {
@@ -83,8 +84,8 @@ public class QueryUtils {
             queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
         }
         if (queryTask.documentExpirationTimeMicros == 0) {
-            queryTask.documentExpirationTimeMicros =
-                    Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                    + QueryUtils.TEN_MINUTES_IN_MICROS;
         }
 
         return service.sendWithDeferredResult(Operation
@@ -96,10 +97,11 @@ public class QueryUtils {
 
     /**
      * Executes the given query task.
+     *
      * @param service
-     *         The service executing the query task.
+     *            The service executing the query task.
      * @param queryTask
-     *         The query task.
+     *            The query task.
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
         return startQueryTask(service, queryTask, null);
@@ -147,6 +149,7 @@ public class QueryUtils {
 
     /**
      * Query strategy template.
+     *
      * @see {#link {@link QueryTop}
      * @see {#link {@link QueryByPages}
      */
@@ -168,6 +171,7 @@ public class QueryUtils {
         protected final List<String> tenantLinks;
 
         protected URI referer;
+        protected ServiceTypeCluster cluster;
 
         protected Level level = Level.FINE;
         protected String msg;
@@ -176,14 +180,15 @@ public class QueryUtils {
          * Default constructor.
          * <p>
          * Note: The client is off-loaded from setting the {@code tenantLinks} to the query.
+         *
          * @param host
-         *         The host initiating the query.
+         *            The host initiating the query.
          * @param query
-         *         The query criteria.
+         *            The query criteria.
          * @param documentClass
-         *         The class of documents to query for.
+         *            The class of documents to query for.
          * @param tenantLinks
-         *         The scope of the query.
+         *            The scope of the query.
          */
         public QueryTemplate(ServiceHost host,
                 Query query,
@@ -198,16 +203,17 @@ public class QueryUtils {
          * <p>
          * Note: The client is off-loaded from setting the {@code tenantLinks} and
          * {@code ednpointLink} to the query.
+         *
          * @param host
-         *         The host initiating the query.
+         *            The host initiating the query.
          * @param query
-         *         The query criteria.
+         *            The query criteria.
          * @param documentClass
-         *         The class of documents to query for.
+         *            The class of documents to query for.
          * @param tenantLinks
-         *         The scope of the query.
+         *            The scope of the query.
          * @param endpointLink
-         *         The scope of the query.
+         *            The scope of the query.
          */
         public QueryTemplate(ServiceHost host,
                 Query query,
@@ -243,9 +249,9 @@ public class QueryUtils {
         protected abstract int getResultLimit();
 
         /**
-         * set custom referer to use for REST operations
+         * Set custom referrer to use for REST operations.
          * <p>
-         * default is {@code host.getUri()}. Callers are recommended to set more
+         * Default value, if not set, is {@code host.getUri()}. Callers are recommended to set more
          * pertinent value for better traceability, e.g {@link Service#getUri()}.
          */
         public void setReferer(URI referer) {
@@ -254,9 +260,21 @@ public class QueryUtils {
         }
 
         /**
+         * Set the cluster URI to query against.
+         * <p>
+         * Default value, if not set, is {@code null}.
+         *
+         * @see ClusterUtil#getClusterUri(ServiceHost, ServiceTypeCluster)
+         */
+        public void setClusterType(ServiceTypeCluster cluster) {
+            this.cluster = cluster;
+        }
+
+        /**
          * Each query strategy should provide its own {@link QueryTask} processing logic.
+         *
          * @param queryTask
-         *         The QueryTask instance as returned by post-QueryTask-operation.
+         *            The QueryTask instance as returned by post-QueryTask-operation.
          */
         @SuppressWarnings("rawtypes")
         protected abstract DeferredResult<Void> handleQueryTask(
@@ -272,13 +290,10 @@ public class QueryUtils {
         @Override
         public DeferredResult<Void> queryDocuments(Consumer<T> documentConsumer) {
 
-            QueryTask queryTask = newQueryTaskBuilder()
-                    .addOption(QueryOption.EXPAND_CONTENT)
-                    .build();
-            queryTask.tenantLinks = this.tenantLinks;
-            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+            QueryTask.Builder queryTaskBuilder = newQueryTaskBuilder()
+                    .addOption(QueryOption.EXPAND_CONTENT);
 
-            return queryImpl(queryTask, documentConsumer);
+            return queryImpl(queryTaskBuilder, documentConsumer);
         }
 
         /*
@@ -291,11 +306,9 @@ public class QueryUtils {
         @Override
         public DeferredResult<Void> queryLinks(Consumer<String> linkConsumer) {
 
-            QueryTask queryTask = newQueryTaskBuilder().build();
-            queryTask.tenantLinks = this.tenantLinks;
-            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+            QueryTask.Builder queryTaskBuilder = newQueryTaskBuilder();
 
-            return queryImpl(queryTask, linkConsumer);
+            return queryImpl(queryTaskBuilder, linkConsumer);
         }
 
         /*
@@ -352,15 +365,31 @@ public class QueryUtils {
         }
 
         @SuppressWarnings("rawtypes")
-        private DeferredResult<Void> queryImpl(QueryTask queryTask, Consumer resultConsumer) {
+        private DeferredResult<Void> queryImpl(
+                QueryTask.Builder queryTaskBuilder,
+                Consumer resultConsumer) {
 
-            Operation createQueryTaskOp = Operation
-                    .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+            // Prepare QueryTask
+            final QueryTask queryTask = queryTaskBuilder.build();
+            queryTask.tenantLinks = this.tenantLinks;
+            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                    + QueryUtils.TEN_MINUTES_IN_MICROS;
+
+            // Build PhM URI to query against
+            final URI uri = UriUtils.buildUri(
+                    ClusterUtil.getClusterUri(this.host, this.cluster),
+                    ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+
+            // Prepare 'query-task' create/POST request
+            final Operation createQueryTaskOp = Operation
+                    .createPost(uri)
                     .setReferer(this.referer)
                     .setBody(queryTask);
 
-            this.host.log(this.level, this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));
+            this.host.log(this.level,
+                    this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));
 
+            // Initiate the query
             return this.host.sendWithDeferredResult(createQueryTaskOp, QueryTask.class)
                     // Delegate to descendant to actually do QT processing
                     .thenCompose(qt -> handleQueryTask(qt, resultConsumer));
@@ -546,12 +575,13 @@ public class QueryUtils {
 
     /**
      * Query for all "referrer" documents which refer a "referred" document.
+     *
      * @param referredDocumentSelfLink
-     *         All referrers point to this document.
+     *            All referrers point to this document.
      * @param referrerClass
-     *         The class of referrers that we want to query for.
+     *            The class of referrers that we want to query for.
      * @param referrerLinkFieldName
-     *         The name of the "foreign key link" field of the referrer class.
+     *            The name of the "foreign key link" field of the referrer class.
      */
     public static Query queryForReferrers(
             String referredDocumentSelfLink,
