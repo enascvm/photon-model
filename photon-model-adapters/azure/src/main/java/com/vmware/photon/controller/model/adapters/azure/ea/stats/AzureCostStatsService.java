@@ -472,6 +472,7 @@ public class AzureCostStatsService extends StatelessService {
      */
     private void downloadDetailedBill(Context context, Stages next) {
         this.executor.submit(() -> {
+            // Restore context since this is a new thread
             OperationContext.restoreOperationContext(context.opContext);
             final LocalDate firstDayOfCurrentMonth = AzureCostStatsServiceHelper
                     .getFirstDayOfCurrentMonth();
@@ -490,11 +491,15 @@ public class AzureCostStatsService extends StatelessService {
             client.newCall(oldDetailedBillRequest).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException ioEx) {
+                    // Restore context on failure to enable sending failure patch
+                    OperationContext.restoreOperationContext(context.opContext);
                     handleError(context, next, ioEx, false);
                 }
 
                 @Override
                 public void onResponse(Call call, final Response response) throws IOException {
+                    // Restore context on success
+                    OperationContext.restoreOperationContext(context.opContext);
                     if (response == null || !response.isSuccessful()) {
                         if (response == null) {
                             handleError(context, next,
@@ -941,7 +946,6 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private void setCustomProperty(Context context, String key, String value, Stages next) {
-        OperationContext.restoreOperationContext(context.opContext);
         context.computeHostDesc.customProperties.put(key, value);
         ComputeState accountState = new ComputeState();
         accountState.customProperties = new HashMap<>();

@@ -33,7 +33,7 @@ public class AzureUriPaths {
     public static final String AZURE_SUBNET_ADAPTER = AdapterTypePath.SUBNET_ADAPTER
             .adapterLink(EndpointType.azure.name());
     public static final String AZURE_COST_STATS_ADAPTER = AdapterTypePath.COST_STATS_ADAPTER
-            .adapterLink(EndpointType.azure.name());
+            .adapterLink(EndpointType.azure_ea.name());
     public static final String AZURE_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER
             .adapterLink(EndpointType.azure.name());
     public static final String AZURE_COMPUTE_STATS_GATHERER = PROVISIONING_AZURE
