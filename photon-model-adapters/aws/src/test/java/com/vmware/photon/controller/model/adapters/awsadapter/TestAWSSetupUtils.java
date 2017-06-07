@@ -197,11 +197,15 @@ public class TestAWSSetupUtils {
     private static final String AWS_SECONDARY_SUBNET_CIDR = "172.31.64.0/20";
     // }}
 
+    // Used to create and delete after that to test subnet states enumeration
+    public static final String AWS_SUBNET_TO_DELETE_CIDR = "172.31.96.0/20";
+
     public static final String AWS_NON_EXISTING_SUBNET_CIDR = "172.31.80.0/20";
     public static final String AWS_NON_EXISTING_SUBNET_NAME = "nonexisting";
 
     public static final String VPC_KEY = "vpc-id";
     public static final String SUBNET_KEY = "subnet-id";
+    public static final String SUBNET_TO_DELETE_KEY = "third-subnet-id";
     public static final String INTERNET_GATEWAY_KEY = "internet-gateway";
     public static final String NIC_SPECS_KEY = "nicSpecs";
     public static final String SECURITY_GROUP_KEY = "security-group";
@@ -377,6 +381,7 @@ public class TestAWSSetupUtils {
             final String subnetId = (String) awsTestContext.get(SUBNET_KEY);
             final String internetGatewayId = (String) awsTestContext.get(INTERNET_GATEWAY_KEY);
             final String securityGroupId = (String) awsTestContext.get(SECURITY_GROUP_KEY);
+            final String toDeleteSubnetId = (String) awsTestContext.getOrDefault(SUBNET_TO_DELETE_KEY, null);
             // clean up VPC and all its dependencies if creating one at setUp
             deleteSecurityGroupUsingEC2Client(client, host, securityGroupId);
             SecurityGroup securityGroup = new AWSSecurityGroupClient(client)
@@ -385,6 +390,7 @@ public class TestAWSSetupUtils {
                 deleteSecurityGroupUsingEC2Client(client, host, securityGroup.getGroupId());
             }
             deleteSubnet(client, subnetId);
+            deleteSubnet(client, toDeleteSubnetId);
             detachInternetGateway(client, vpcId, internetGatewayId);
             deleteInternetGateway(client, internetGatewayId);
             deleteVPC(client, vpcId);
@@ -525,7 +531,9 @@ public class TestAWSSetupUtils {
      * Delete a Subnet
      */
     public static void deleteSubnet(AmazonEC2AsyncClient client, String subnetId) {
-        client.deleteSubnet(new DeleteSubnetRequest().withSubnetId(subnetId));
+        if (subnetId != null) {
+            client.deleteSubnet(new DeleteSubnetRequest().withSubnetId(subnetId));
+        }
     }
 
     /**

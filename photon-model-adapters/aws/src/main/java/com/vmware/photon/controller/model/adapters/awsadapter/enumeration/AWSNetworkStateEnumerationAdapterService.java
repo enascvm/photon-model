@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.crea
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
+import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonWebServiceRequest;
@@ -57,6 +59,7 @@ import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.Vpc;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
@@ -66,21 +69,27 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandl
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 
 /**
  * Stateless service for the creation of compute states. It accepts a list of AWS instances that
@@ -91,6 +100,9 @@ import com.vmware.xenon.services.common.QueryTask;
 public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_NETWORK_STATE_CREATION_ADAPTER;
+    private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE = Integer
+            .getInteger(UriPaths.PROPERTY_PREFIX
+                    + "enum.max.resources.query.on.delete", 950);
 
     private AWSClientManager clientManager;
 
@@ -129,6 +141,12 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      * list of compute states that will be persisted in the system.
      */
     static class AWSNetworkStateCreationContext {
+
+        /**
+         * The time when this enumeration started. It is used to identify stale resources that should be
+         * deleted during deletion stage.
+         */
+        protected long enumStartTimeInMicros;
 
         // Cached operation to signal completion to the AWS instance adapter once all the compute
         // states are successfully created.
@@ -182,6 +200,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         UPDATE_TAG_LINKS,
         CREATE_NETWORKSTATE,
         CREATE_SUBNETSTATE,
+        DELETE_STALE_RESOURCE_STATES,
         SIGNAL_COMPLETION
     }
 
@@ -225,6 +244,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void handleNetworkStateChanges(AWSNetworkStateCreationContext context) {
         switch (context.networkCreationStage) {
         case CLIENT:
+            context.enumStartTimeInMicros = Utils.getNowMicrosUtc();
             getAWSAsyncClient(context, AWSNetworkStateCreationStage.GET_REMOTE_VPC);
             break;
         case GET_REMOTE_VPC:
@@ -257,7 +277,12 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             break;
         case UPDATE_TAG_LINKS:
             updateTagLinks(context).whenComplete(thenNetworkStateChanges(context,
-                    AWSNetworkStateCreationStage.SIGNAL_COMPLETION));
+                    AWSNetworkStateCreationStage.DELETE_STALE_RESOURCE_STATES));
+            break;
+        case DELETE_STALE_RESOURCE_STATES:
+            deleteStaleSubnetStates(context)
+                .thenCompose(this::deleteStaleNetworkStates)
+                .whenComplete(thenNetworkStateChanges(context, AWSNetworkStateCreationStage.SIGNAL_COMPLETION));
             break;
         case SIGNAL_COMPLETION:
             setOperationDurationStat(context.operation);
@@ -684,6 +709,75 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         OperationJoin.create(subnetOperations)
                 .setCompletion(joinCompletion)
                 .sendWith(this);
+    }
+
+    private DeferredResult<AWSNetworkStateCreationContext> deleteStaleNetworkStates(AWSNetworkStateCreationContext context) {
+
+        return deleteStaleLocalStates(context, NetworkState.class, context.vpcs.keySet());
+    }
+
+    private DeferredResult<AWSNetworkStateCreationContext> deleteStaleSubnetStates(
+            AWSNetworkStateCreationContext context) {
+
+        return deleteStaleLocalStates(context, SubnetState.class, context.awsSubnets.keySet());
+    }
+
+    private DeferredResult<AWSNetworkStateCreationContext> deleteStaleLocalStates(AWSNetworkStateCreationContext context,
+            Class localStateClass, Set<String> remoteResourcesKeys) {
+
+        final String msg = "Delete %ss that no longer exist in the endpoint: %s";
+
+        logFine(
+                () -> String.format(msg, localStateClass.getSimpleName(), "STARTING"));
+
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(localStateClass)
+                .addRangeClause(
+                        ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
+                        createLessThanRange(context.enumStartTimeInMicros));
+
+        if (!remoteResourcesKeys.isEmpty() &&
+                remoteResourcesKeys.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {
+            // do not load resources from enumExternalResourcesIds
+            qBuilder.addInClause(
+                    ResourceState.FIELD_NAME_ID,
+                    remoteResourcesKeys,
+                    Occurance.MUST_NOT_OCCUR);
+        }
+
+        QueryStrategy<SubnetState> queryLocalStates = new QueryByPages<>(
+                this.getHost(),
+                qBuilder.build(),
+                localStateClass,
+                context.request.tenantLinks,
+                context.request.request.endpointLink);
+
+        List<DeferredResult<Operation>> ops = new ArrayList<>();
+
+        // Delete stale resources.
+        return queryLocalStates.queryDocuments(ls -> {
+            if (remoteResourcesKeys.contains(ls.id)) {
+                return;
+            }
+
+            Operation dOp = Operation.createDelete(this, ls.documentSelfLink);
+
+            DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
+                    .whenComplete((o, e) -> {
+                        final String message = "Delete stale %s state";
+                        if (e != null) {
+                            logWarning(message + ": FAILED with %s",
+                                    ls.documentSelfLink, Utils.toString(e));
+                        } else {
+                            log(Level.FINEST, message + ": SUCCESS",
+                                    ls.documentSelfLink);
+                        }
+                    });
+
+            ops.add(dr);
+        })
+                .thenCompose(r -> DeferredResult.allOf(ops))
+                .thenApply(r -> context);
     }
 
     private void setResourceTags(ResourceState resourceState, List<Tag> tags) {

@@ -188,6 +188,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private Map<String, Object> awsTestContext;
     private String vpcId;
     private String subnetId;
+    private String secondarySubnetId;
     private String securityGroupId;
     private AwsNicSpecs singleNicSpec;
 
@@ -290,11 +291,27 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.instancesToCleanUp.addAll(instanceIdsToDeleteFirstTime);
         waitForProvisioningToComplete(instanceIdsToDeleteFirstTime, this.host, this.client, ZERO);
 
+        // Create Subnet directly on AWS
+        this.secondarySubnetId = TestAWSSetupUtils.createSubnet(this.client,
+                TestAWSSetupUtils.AWS_SUBNET_TO_DELETE_CIDR, this.vpcId);
+        this.awsTestContext.put(TestAWSSetupUtils.SUBNET_TO_DELETE_KEY, this.secondarySubnetId);
+
         // Xenon does not know about the new instances.
         ProvisioningUtils.queryComputeInstances(this.host, count2);
 
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_INITIAL);
+
+        // Newly provisioned Subnet should be enumerated
+        Map<String, SubnetService.SubnetState> subnetStates = ProvisioningUtils
+                .<SubnetState> getResourceStates(this.host, SubnetService.FACTORY_LINK,
+                        SubnetState.class);
+        assertTrue("Newly provisioned subnet should be enumerated",
+                subnetStates.containsKey(this.secondarySubnetId));
+
+        //Delete the newly provisioned subnet
+        TestAWSSetupUtils.deleteSubnet(this.client, this.secondarySubnetId);
+        this.awsTestContext.remove(TestAWSSetupUtils.SUBNET_TO_DELETE_KEY);
         // 5 new resources should be discovered. Mapping to 2 new compute description and 5 new
         // compute states.
         // Even though the "t2.micro" is common to the VM provisioned from Xenon
@@ -335,11 +352,18 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Stop one instance
         stopVMsUsingEC2Client(this.client, this.host, new ArrayList<>(Arrays.asList(
                 instanceIdsToStop)));
+
         // During the enumeration, if one instance is stopped, its public ip address
         // will disappear, then the corresponding link of local ComputeState's public
         // network interface and its document will be removed.
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_STOP_VM);
+
+        // State for the deleted Subnet should be removed
+        subnetStates = ProvisioningUtils.<SubnetState> getResourceStates(host,
+                SubnetService.FACTORY_LINK, SubnetState.class);
+        assertFalse("Newly deleted subnet should be removed from local db",
+                subnetStates.containsKey(this.secondarySubnetId));
 
         // Because one public NIC and its document are removed,
         // the totalNetworkInterfaceStateCount should go down by 1
