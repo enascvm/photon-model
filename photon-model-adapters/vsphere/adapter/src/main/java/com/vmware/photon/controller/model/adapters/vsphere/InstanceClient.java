@@ -348,8 +348,9 @@ public class InstanceClient extends BaseHelper {
     public ComputeState createInstance() throws Exception {
         ManagedObjectReference vm;
 
-        if (isOvfDeploy()) {
-            vm = deployOvf();
+        URI ovfUri = getOvfUri();
+        if (ovfUri != null) {
+            vm = deployOvf(ovfUri);
             this.vm = vm;
         } else {
             vm = createVm();
@@ -371,17 +372,33 @@ public class InstanceClient extends BaseHelper {
         return state;
     }
 
-    private boolean isOvfDeploy() {
+    private URI getOvfUri() {
         CustomProperties cp = CustomProperties.of(this.ctx.child.description);
-        return cp.getString(OvfParser.PROP_OVF_URI) != null ||
-                cp.getString(OvfParser.PROP_OVF_ARCHIVE_URI) != null;
+
+        String result = cp.getString(OvfParser.PROP_OVF_URI);
+        if (result == null) {
+            result = cp.getString(OvfParser.PROP_OVF_ARCHIVE_URI);
+        }
+
+        if (result == null) {
+            DiskStateExpanded bootDisk = findBootDisk();
+            if (bootDisk != null && bootDisk.sourceImageReference != null) {
+                if (bootDisk.sourceImageReference.getScheme().startsWith("http")) {
+                    result = bootDisk.sourceImageReference.toString();
+                }
+            }
+        }
+
+        if (result == null) {
+            return null;
+        }
+
+        return URI.create(result);
     }
 
-    private ManagedObjectReference deployOvf() throws Exception {
+    private ManagedObjectReference deployOvf(URI ovfUri) throws Exception {
         OvfDeployer deployer = new OvfDeployer(this.connection);
         CustomProperties cust = CustomProperties.of(this.ctx.child.description);
-
-        URI ovfUri = cust.getUri(OvfParser.PROP_OVF_URI);
 
         URI archiveUri = cust.getUri(OvfParser.PROP_OVF_ARCHIVE_URI);
         if (archiveUri != null) {
@@ -779,7 +796,7 @@ public class InstanceClient extends BaseHelper {
      * diskStates are enriched with data from vSphere and can be patched back to xenon.
      */
     public void attachDisks(List<DiskStateExpanded> diskStates) throws Exception {
-        if (isOvfDeploy()) {
+        if (getOvfUri() != null) {
             return;
         }
 
