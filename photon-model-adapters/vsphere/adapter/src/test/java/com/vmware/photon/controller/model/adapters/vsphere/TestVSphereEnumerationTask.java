@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -137,7 +138,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                                     ResourceGroupService.ResourceGroupState.class);
                     assertNotNull(rg.name);
                     assertNotNull(rg.customProperties);
-                    assertNotNull(rg.customProperties.get(CustomProperties.TARGET_LINK));
+                    assertNotNull(rg.customProperties.get(ComputeProperties.RESOURCE_TYPE_KEY));
+                    assertNotNull(rg.customProperties.get(ComputeProperties.ENDPOINT_LINK_PROP_NAME));
                 }
             });
         }

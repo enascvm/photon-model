@@ -46,6 +46,7 @@ import java.util.stream.Stream;
 import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.pbm.PbmProfile;
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
@@ -1034,8 +1035,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.regionId = regionId;
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
-                .put(CustomProperties.TYPE, sp.getType())
-                .put(CustomProperties.TARGET_LINK, request.endpointLink)
+                .put(ComputeProperties.RESOURCE_TYPE_KEY, sp.getType())
+                .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, request.endpointLink)
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink());
 
         return res;
