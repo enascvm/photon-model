@@ -128,7 +128,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         try {
             EnumerationClient client = new EnumerationClient(connection, parent);
             processAllTemplates(request.resourceLink(), request.taskLink(), client,
-                    parent.description.regionId);
+                    parent.description.regionId, parent.tenantLinks);
         } catch (Throwable e) {
             mgr.patchTaskToFailure("Error processing library items", e);
             return;
@@ -138,7 +138,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             VapiConnection vapi = VapiConnection.createFromVimConnection(connection);
             vapi.login();
             LibraryClient libraryClient = vapi.newLibraryClient();
-            processAllLibraries(request.resourceLink(), request.taskLink(), libraryClient);
+            processAllLibraries(request.resourceLink(), request.taskLink(), libraryClient, parent.tenantLinks);
 
             mgr.patchTask(TaskStage.FINISHED);
         } catch (Throwable t) {
@@ -151,7 +151,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
     }
 
     private void processAllTemplates(String endpointLink, String taskLink, EnumerationClient client,
-            String datacenterId) throws ClientException, RuntimeFaultFaultMsg {
+            String datacenterId, List<String> tenantLinks) throws ClientException, RuntimeFaultFaultMsg {
         PropertyFilterSpec spec = client.createVmFilterSpec(datacenterId);
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
             Phaser phaser = new Phaser(1);
@@ -168,6 +168,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 ImageState state = makeImageFromTemplate(vm);
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
                 state.endpointLink = endpointLink;
+                state.tenantLinks = tenantLinks;
                 CustomProperties.of(state)
                         .put(CustomProperties.ENUMERATED_BY_TASK_LINK, taskLink);
 
@@ -232,7 +233,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
     }
 
     private void processAllLibraries(String endpointLink, String taskLink,
-            LibraryClient libraryClient)
+            LibraryClient libraryClient, List<String> tenantLinks)
             throws IOException, RpcException {
         Phaser phaser = new Phaser(1);
 
@@ -250,6 +251,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 ImageState state = makeImageFromItem(libModel, itemModel);
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
                 state.endpointLink = endpointLink;
+                state.tenantLinks = tenantLinks;
                 CustomProperties.of(state)
                         .put(CustomProperties.ENUMERATED_BY_TASK_LINK, taskLink);
 

@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertFalse;
+
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.concurrent.ExecutionException;
@@ -26,11 +28,13 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  *
@@ -68,6 +72,21 @@ public class TestVSphereImageEnumerationTask extends BaseVSphereAdapterTest {
         doRefresh();
 
         captureFactoryState("initial");
+
+        Query q = Query.Builder.create()
+                .addKindFieldClause(ImageState.class)
+                .build();
+
+        ImageState anImage = null;
+        try {
+            anImage = findFirstMatching(q, ImageState.class);
+        } catch (Exception ignore) {
+
+        }
+
+        if (anImage != null) {
+            assertFalse(anImage.tenantLinks.isEmpty());
+        }
 
         doRefresh();
 
