@@ -63,13 +63,6 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
         public Set<String> securityGroupDescriptionLinks;
 
         /**
-         * The description of the security group instance being realized.
-         * NOTE: this field has been deprecated. It will be removed after the Prelude code using it
-         * is updated.
-         */
-        public String securityGroupDescriptionLink;
-
-        /**
          * Tracks the sub stage (creating network or security group). Set by the
          * run-time.
          */
