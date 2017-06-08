@@ -363,48 +363,66 @@ public class AWSInstanceService extends StatelessService {
             }
 
             Image image = imagesDescriptionResult.getImages().get(0);
+
+            String deviceType = bootDisk.customProperties != null &&
+                    bootDisk.customProperties.containsKey(DEVICE_TYPE) ?
+                    bootDisk.customProperties.get(DEVICE_TYPE) : null;
+
+            if (deviceType != null & !image.getRootDeviceType().equals(deviceType)) {
+                this.logSevere(() -> String.format(
+                        "[AWSInstanceService] Boot disk type mismatch. "
+                                + "Boot disk selected by allocation is of %s type and "
+                                + "actual boot disk in image is of %s type",
+                        deviceType, image.getRootDeviceType()));
+                aws.error = new IllegalStateException("Boot disk type selected by "
+                        + "allocation is not matching the actual boot disk type from image");
+                aws.stage = AWSInstanceStage.ERROR;
+                handleAllocation(aws);
+                return;
+            }
+
             List<BlockDeviceMapping> blockDeviceMappings = image.getBlockDeviceMappings();
             if (bootDisk.capacityMBytes > 0 || bootDisk.customProperties != null) {
-                BlockDeviceMapping rootDeviceMapping = blockDeviceMappings.stream()
-                        .filter(blockDeviceMapping ->
-                                blockDeviceMapping.getDeviceName()
-                                        .equals(image.getRootDeviceName()))
-                        .findAny()
-                        .orElse(null);
+                if (image.getRootDeviceType().equals(AWSStorageType.EBS.name().toLowerCase())) {
+                    BlockDeviceMapping rootDeviceMapping = blockDeviceMappings.stream()
+                            .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName()
+                                    .equals(image.getRootDeviceName()))
+                            .findAny()
+                            .orElse(null);
 
-                String deviceType = bootDisk.customProperties != null &&
-                        bootDisk.customProperties.containsKey(DEVICE_TYPE) ?
-                        bootDisk.customProperties.get(DEVICE_TYPE) : AWSStorageType.EBS.name();
-                AWSStorageType storageType = AWSStorageType.valueOf(deviceType.toUpperCase());
-
-                if (rootDeviceMapping.getEbs() != null && storageType == AWSStorageType.EBS) {
-                    if (bootDisk.capacityMBytes > 0) {
-                        rootDeviceMapping.getEbs()
-                                .setVolumeSize((int) bootDisk.capacityMBytes / 1024);
-                        rootDeviceMapping.getEbs().setEncrypted(null);
-                    }
-                    if (bootDisk.customProperties != null &&
-                            bootDisk.customProperties.containsKey(VOLUME_TYPE)) {
-
-                        String rootVolumeType = rootDeviceMapping.getEbs().getVolumeType();
-                        if (!rootVolumeType.equals(bootDisk.customProperties.get(VOLUME_TYPE))) {
-                            rootDeviceMapping.getEbs()
-                                    .setVolumeType(bootDisk.customProperties.get(VOLUME_TYPE));
+                    try {
+                        EbsBlockDevice ebsBlockDevice = rootDeviceMapping.getEbs();
+                        if (bootDisk.capacityMBytes > 0) {
+                            ebsBlockDevice.setVolumeSize((int) bootDisk.capacityMBytes / 1024);
+                            ebsBlockDevice.setEncrypted(null);
                         }
-                    }
-                    if (bootDisk.customProperties != null &&
-                            bootDisk.customProperties.containsKey(DISK_IOPS)) {
-                        try {
-                            int iops = Integer.parseInt(bootDisk.customProperties.get(DISK_IOPS));
-                            rootDeviceMapping.getEbs().setIops(iops);
-                        } catch (Exception e) {
-                            handleError(aws, e);
-                            return;
+                        if (bootDisk.customProperties != null &&
+                                bootDisk.customProperties.containsKey(VOLUME_TYPE) &&
+                                bootDisk.customProperties.get(VOLUME_TYPE) != null) {
+                            String rootVolumeType = ebsBlockDevice.getVolumeType();
+                            if (!rootVolumeType
+                                    .equals(bootDisk.customProperties.get(VOLUME_TYPE))) {
+                                ebsBlockDevice.setVolumeType(
+                                        bootDisk.customProperties.get(VOLUME_TYPE));
+                            }
                         }
+                        if (bootDisk.customProperties != null &&
+                                bootDisk.customProperties.containsKey(DISK_IOPS) &&
+                                bootDisk.customProperties.get(DISK_IOPS) != null) {
+                            int iops = Integer
+                                    .parseInt(bootDisk.customProperties.get(DISK_IOPS));
+                            ebsBlockDevice.setIops(iops);
+                        }
+                    } catch (Exception e) {
+                        aws.error = e;
+                        aws.stage = AWSInstanceStage.ERROR;
+                        handleAllocation(aws);
+                        return;
                     }
-                } else {
-                    this.logWarning(() -> "[AWSInstanceService] Properties of boot disk are not "
-                            + "modified.");
+                } else if (bootDisk.capacityMBytes > 0) {
+                    // Instance store disks cannot be customized. Hence logged a warning.
+                    this.logWarning(() -> "[AWSInstanceService] Instance-store boot disk cannot be "
+                            + "resized. Uses the default size from the image.");
                 }
             }
             List<String> usedDeviceNames = getUsedDeviceNamesList(blockDeviceMappings);
