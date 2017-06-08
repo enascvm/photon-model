@@ -145,4 +145,6 @@ public class PhotonModelConstants {
 
     public static final String CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS = "BillProcessedTimeMillis";
 
+    // Auto discovered entities will be marked with the following custom property
+    public static final String AUTO_DISCOVERED_ENTITY = "autoDiscovered";
 }

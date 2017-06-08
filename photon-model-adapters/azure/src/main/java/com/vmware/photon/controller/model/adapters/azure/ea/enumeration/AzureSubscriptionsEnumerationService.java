@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostCons
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -396,6 +397,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 subscription.parentEntityId);
         properties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                 EndpointType.azure.name());
+        properties.put(PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString());
         return properties;
     }
 
