@@ -82,6 +82,7 @@ public class AWSUriPaths {
         adapterLinksByType.put(AWS_NETWORK_ADAPTER, AdapterTypePath.NETWORK_ADAPTER.key);
         adapterLinksByType.put(AWS_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER.key);
         adapterLinksByType.put(AWS_SECURITY_GROUP_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER.key);
+        adapterLinksByType.put(AWS_LOAD_BALANCER_ADAPTER, AdapterTypePath.LOAD_BALANCER_ADAPTER.key);
         adapterLinksByType.put(AWS_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER.key);
         adapterLinksByType.put(AWS_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER.key);
         adapterLinksByType.put(AWS_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
