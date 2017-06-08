@@ -209,8 +209,29 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
                     is(patchState.customProperties));
             assertThat(returnState.tenantLinks.size(), is(2));
             assertEquals(returnState.groupLinks, patchState.groupLinks);
-            // region ID should not be updated
+            // region ID must not be changed
             assertEquals(returnState.regionId, startState.regionId);
+        }
+
+        @Test
+        public void testRegionIdPatch() throws Throwable {
+            LoadBalancerDescription startState = buildValidStartState();
+            startState.regionId = null;
+
+            LoadBalancerDescription returnState = postServiceSynchronously(
+                    LoadBalancerDescriptionService.FACTORY_LINK,
+                    startState, LoadBalancerDescription.class);
+
+            LoadBalancerDescription patchState = new LoadBalancerDescription();
+            patchState.regionId = "new-region";
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    LoadBalancerDescription.class);
+
+            // region ID must be set
+            assertEquals(patchState.regionId, returnState.regionId);
         }
     }
 

@@ -171,7 +171,17 @@ public class LoadBalancerDescriptionService extends StatefulService {
     public void handlePatch(Operation patch) {
         LoadBalancerDescription currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                LoadBalancerDescription.class, null);
+                LoadBalancerDescription.class, op -> {
+                    LoadBalancerDescription patchBody = op.getBody(LoadBalancerDescription.class);
+                    boolean hasChanged = false;
+
+                    if (patchBody.regionId != null && currentState.regionId == null) {
+                        hasChanged = true;
+                        currentState.regionId = patchBody.regionId;
+                    }
+
+                    return Boolean.valueOf(hasChanged);
+                });
     }
 
     private void validateState(LoadBalancerDescription state) {
