@@ -131,17 +131,8 @@ public class AWSCsvBillParser {
                     // Consume the batch
                     hourlyStatsConsumer.accept(monthlyBill);
                 }
-                readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge,
-                        accountIdToBillProcessedTime);
+                readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge, accountIdToBillProcessedTime);
                 prevRowTime = curRowTime;
-            }
-            // Subtract the one-time subscription charges from the account cost
-            // since the one-time subscription charges is divided among the total cost of all months
-            for (AwsAccountDetailDto awsAccountDetail : monthlyBill.values()) {
-                Double otherCharges = awsAccountDetail.otherCharges;
-                if (otherCharges != 0) {
-                    awsAccountDetail.cost = awsAccountDetail.cost - otherCharges;
-                }
             }
 
             // Consume the final batch of parsed rows
@@ -237,8 +228,7 @@ public class AWSCsvBillParser {
         if (millisForBillHour == null ||
                 (millisForBillHour >= getMonthStartMillis() && millisForBillHour > markerTime)) {
 
-            AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails,
-                    serviceName);
+            AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails, serviceName);
             Double resourceCost = getResourceCost(rowMap);
             // In case we do not have resource id, this might be unknown
             // cost(unallocated) or one of summary line items {otherCost
@@ -260,8 +250,8 @@ public class AWSCsvBillParser {
                     serviceDetail.addToDirectCosts(millisForBillHour, resourceCost);
                     //currently we need only EC2 instance details
                     if (resourceId.startsWith("i-")) {
-                        AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(
-                                rowMap, serviceDetail, resourceId);
+                        AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(rowMap, serviceDetail,
+                                resourceId);
                         resourceDetail.addToDirectCosts(millisForBillHour, resourceCost);
                         setLatestResourceValues(rowMap, tagHeaders, resourceDetail);
                     }
@@ -269,8 +259,7 @@ public class AWSCsvBillParser {
             }
         }
 
-        if (millisForBillHour != null
-                && millisForBillHour > accountDetails.billProcessedTimeMillis) {
+        if (millisForBillHour != null && millisForBillHour > accountDetails.billProcessedTimeMillis) {
             accountDetails.billProcessedTimeMillis = millisForBillHour;
         }
     }
@@ -379,7 +368,7 @@ public class AWSCsvBillParser {
          * If the service is not present, add the service and its details from
          * the bill
          */
-        if (serviceDetail == null) {
+        if (serviceDetail == null && serviceName != null && !serviceName.isEmpty()) {
             serviceDetail = new AwsServiceDetailDto();
             serviceDetail.id = serviceName;
             serviceDetail.type = AwsServices.getTypeByName(serviceName).toString();
@@ -439,16 +428,18 @@ public class AWSCsvBillParser {
         }
         String invoiceId = getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID);
         if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, DetailedCsvHeaders.LINE_ITEM)) {
+            AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(awsAccountDetail, productName);
             // If the RecordType is LineItem then it is either sign up charge or
             // recurring charges for reserved purchase
             if (matchFieldValue(rowMap, DetailedCsvHeaders.OPERATION, RUN_INSTANCES)) {
                 // If the Operation is RunInstances, it is recurring charge
-                AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(
-                        createOrGetAccountDetailObject(accountDetails, linkedAccountId),
-                        productName);
                 serviceDetail.addToReservedRecurringCost(getResourceCost(rowMap));
             } else if (invoiceId.matches("[0-9]+")) {
-                awsAccountDetail.otherCharges += getResourceCost(rowMap);
+                if (serviceDetail != null) {
+                    serviceDetail.addToRemainingCost(getResourceCost(rowMap));
+                } else {
+                    awsAccountDetail.otherCharges += getResourceCost(rowMap);
+                }
                 ignorableInvoiceCharge.add(invoiceId);
             }
         } else if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, INVOICE_TOTAL)

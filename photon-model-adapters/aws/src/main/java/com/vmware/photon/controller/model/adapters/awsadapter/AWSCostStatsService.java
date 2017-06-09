@@ -984,9 +984,11 @@ public class AWSCostStatsService extends StatelessService {
         String serviceResourceCostMetric = String
                 .format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
         for (Entry<Long, Double> cost : serviceDetailDto.directCosts.entrySet()) {
-            ServiceStat resourceCostStat = createStat(currencyUnit,
-                    serviceResourceCostMetric, cost.getKey(), cost.getValue());
-            serviceStats.add(resourceCostStat);
+            if (cost.getValue() > 0) {
+                ServiceStat resourceCostStat = createStat(currencyUnit,
+                        serviceResourceCostMetric, cost.getKey(), cost.getValue());
+                serviceStats.add(resourceCostStat);
+            }
         }
         if (!serviceStats.isEmpty()) {
             stats.put(serviceResourceCostMetric, serviceStats);
@@ -996,33 +998,36 @@ public class AWSCostStatsService extends StatelessService {
         serviceStats = new ArrayList<>();
         String serviceOtherCostMetric = String.format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
         for (Entry<Long, Double> cost : serviceDetailDto.otherCosts.entrySet()) {
-            ServiceStat otherCostStat = createStat(currencyUnit, serviceOtherCostMetric,
-                    cost.getKey(), cost.getValue());
-            serviceStats.add(otherCostStat);
+            if (cost.getValue() > 0) {
+                ServiceStat otherCostStat = createStat(currencyUnit, serviceOtherCostMetric,
+                        cost.getKey(), cost.getValue());
+                serviceStats.add(otherCostStat);
+            }
         }
         if (!serviceStats.isEmpty()) {
             stats.put(serviceOtherCostMetric, serviceStats);
         }
 
         // Create stats for monthly other costs
-        String serviceMonthlyOtherCostMetric = String
-                .format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
-        serviceStats = new ArrayList<>();
-        ServiceStat monthlyOtherCostStat = createStat(currencyUnit,
-                serviceMonthlyOtherCostMetric, currentBillProcessedTimeMillis,
-                serviceDetailDto.remainingCost);
-        serviceStats.add(monthlyOtherCostStat);
-        stats.put(serviceMonthlyOtherCostMetric, serviceStats);
+        if (serviceDetailDto.remainingCost > 0) {
+            String serviceMonthlyOtherCostMetric = String.format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
+            serviceStats = new ArrayList<>();
+            ServiceStat monthlyOtherCostStat = createStat(currencyUnit, serviceMonthlyOtherCostMetric,
+                    currentBillProcessedTimeMillis, serviceDetailDto.remainingCost);
+            serviceStats.add(monthlyOtherCostStat);
+            stats.put(serviceMonthlyOtherCostMetric, serviceStats);
+        }
 
         // Create stats for monthly reserved recurring instance costs
-        String serviceReservedRecurringCostMetric = String
-                .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode);
-        serviceStats = new ArrayList<>();
-        ServiceStat recurringCostStat = createStat(currencyUnit,
-                serviceReservedRecurringCostMetric,
-                currentBillProcessedTimeMillis, serviceDetailDto.reservedRecurringCost);
-        serviceStats.add(recurringCostStat);
-        stats.put(serviceReservedRecurringCostMetric, serviceStats);
+        if (serviceDetailDto.reservedRecurringCost > 0) {
+            String serviceReservedRecurringCostMetric = String.format(AWSConstants.SERVICE_RESERVED_RECURRING_COST,
+                    serviceCode);
+            serviceStats = new ArrayList<>();
+            ServiceStat recurringCostStat = createStat(currencyUnit, serviceReservedRecurringCostMetric,
+                    currentBillProcessedTimeMillis, serviceDetailDto.reservedRecurringCost);
+            serviceStats.add(recurringCostStat);
+            stats.put(serviceReservedRecurringCostMetric, serviceStats);
+        }
 
         return stats;
     }
