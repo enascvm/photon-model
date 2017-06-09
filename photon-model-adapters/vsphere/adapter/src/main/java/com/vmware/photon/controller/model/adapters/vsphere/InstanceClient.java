@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -151,10 +152,13 @@ public class InstanceClient extends BaseHelper {
     private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
     private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
     private static final String EXTRA_CONFIG_CREATED = "photon-model-created-millis";
+    private static final String VM_PATH_FORMAT = "[%s] %s";
 
     private final GetMoRef get;
     private final Finder finder;
     private final ProvisionContext ctx;
+    private DiskStateExpanded bootDisk;
+    private List<DiskStateExpanded> dataDisks;
     private ManagedObjectReference vm;
     private ManagedObjectReference datastore;
     private ManagedObjectReference resourcePool;
@@ -165,6 +169,12 @@ public class InstanceClient extends BaseHelper {
         super(connection);
 
         this.ctx = ctx;
+        if (ctx.disks != null) {
+            this.bootDisk = findBootDisk();
+            this.dataDisks = new ArrayList<>(ctx.disks);
+            // Remove the boot Disk reference from the dataDisks
+            this.dataDisks.remove(this.bootDisk);
+        }
 
         try {
             this.finder = new Finder(connection, this.ctx.datacenterPath);
@@ -186,11 +196,10 @@ public class InstanceClient extends BaseHelper {
             // vm was created by someone else
             return null;
         }
-
-        customizeAfterClone(vm);
-
         // store reference to created vm for further processing
         this.vm = vm;
+
+        customizeAfterClone();
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
@@ -199,7 +208,7 @@ public class InstanceClient extends BaseHelper {
         return state;
     }
 
-    private void customizeAfterClone(ManagedObjectReference vm) throws Exception {
+    private void customizeAfterClone() throws Exception {
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
 
         // even though this is a clone, hw config from the compute resource
@@ -215,14 +224,14 @@ public class InstanceClient extends BaseHelper {
         recordTimestamp(spec.getExtraConfig());
 
         // set ovf environment
-        ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm,
+        ArrayOfVAppPropertyInfo infos = this.get.entityProp(this.vm,
                 VimPath.vm_config_vAppConfig_property);
         populateCloudConfig(spec, infos);
 
         // remove nics and attach to proper networks if nics are configured
         ArrayOfVirtualDevice devices = null;
         if (this.ctx.nics != null && this.ctx.nics.size() > 0) {
-            devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
+            devices = this.get.entityProp(this.vm, VimPath.vm_config_hardware_device);
             devices.getVirtualDevice().stream()
                     .filter(d -> d instanceof VirtualEthernetCard)
                     .forEach(nic -> {
@@ -238,25 +247,27 @@ public class InstanceClient extends BaseHelper {
             }
         }
 
-        if (this.ctx.disks != null && this.ctx.disks.size() > 0) {
-            // Find whether it has HDD disk
-            DiskStateExpanded bootDisk = findBootDisk();
-            if (bootDisk != null && bootDisk.capacityMBytes > 0) {
-                // If there are nics, then devices would have already retrieved, so that it
-                // can avoid one more network call.
-                VirtualDeviceConfigSpec bootDiskSpec = getBootDiskCustomizeConfigSpec(vm, bootDisk,
-                        devices);
-                if (bootDiskSpec != null) {
-                    spec.getDeviceChange().add(bootDiskSpec);
-                }
+        // Find whether it has HDD disk
+        if (this.bootDisk != null && this.bootDisk.capacityMBytes > 0) {
+            // If there are nics, then devices would have already retrieved, so that it
+            // can avoid one more network call.
+            VirtualDeviceConfigSpec bootDiskSpec = getBootDiskCustomizeConfigSpec(this.vm, this.bootDisk,
+                    devices);
+            if (bootDiskSpec != null) {
+                spec.getDeviceChange().add(bootDiskSpec);
             }
         }
 
-        ManagedObjectReference task = getVimPort().reconfigVMTask(vm, spec);
+        ManagedObjectReference task = getVimPort().reconfigVMTask(this.vm, spec);
         TaskInfo info = waitTaskEnd(task);
 
         if (info.getState() == TaskInfoState.ERROR) {
             VimUtils.rethrow(info.getError());
+        }
+
+        // If there are any data disks then attach then to the VM
+        if (this.dataDisks != null && !this.dataDisks.isEmpty()) {
+            attachDisks(this.dataDisks, false);
         }
     }
 
@@ -279,8 +290,7 @@ public class InstanceClient extends BaseHelper {
 
     private ManagedObjectReference cloneVm(ManagedObjectReference template) throws Exception {
         ManagedObjectReference folder = getVmFolder();
-        DiskStateExpanded bootDisk = findBootDisk();
-        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(bootDisk);
+        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference datastore = getDatastore();
         ManagedObjectReference resourcePool = getResourcePool();
 
@@ -374,15 +384,18 @@ public class InstanceClient extends BaseHelper {
             this.vm = vm;
         } else {
             vm = createVm();
-
             if (vm == null) {
                 // vm was created by someone else
                 return null;
             }
-
             // store reference to created vm for further processing
             this.vm = vm;
-            attachDisks(this.ctx.disks);
+
+            attachDisks(Arrays.asList(this.bootDisk), true);
+        }
+        // If there are any data disks then attach then to the VM
+        if (this.dataDisks != null && !this.dataDisks.isEmpty()) {
+            attachDisks(this.dataDisks, false);
         }
 
         ComputeState state = new ComputeState();
@@ -401,10 +414,9 @@ public class InstanceClient extends BaseHelper {
         }
 
         if (result == null) {
-            DiskStateExpanded bootDisk = findBootDisk();
-            if (bootDisk != null && bootDisk.sourceImageReference != null) {
-                if (bootDisk.sourceImageReference.getScheme().startsWith("http")) {
-                    result = bootDisk.sourceImageReference.toString();
+            if (this.bootDisk != null && this.bootDisk.sourceImageReference != null) {
+                if (this.bootDisk.sourceImageReference.getScheme().startsWith("http")) {
+                    result = this.bootDisk.sourceImageReference.toString();
                 }
             }
         }
@@ -428,9 +440,8 @@ public class InstanceClient extends BaseHelper {
         }
 
         ManagedObjectReference folder = getVmFolder();
-        DiskStateExpanded bootDisk = findBootDisk();
-        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(bootDisk);
-        ManagedObjectReference ds = getDataStoreForDisk(bootDisk, pbmSpec);
+        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
+        ManagedObjectReference ds = getDataStoreForDisk(this.bootDisk, pbmSpec);
         ManagedObjectReference resourcePool = getResourcePool();
         ManagedObjectReference defaultDs = getDatastore();
 
@@ -692,17 +703,16 @@ public class InstanceClient extends BaseHelper {
                 .map(d -> (VirtualDisk) d).findFirst().orElse(null);
         VirtualMachineRelocateDiskMoveOptions diskMoveOptions = VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
 
-        VirtualDevice scsiController = getFirstScsiController(devices);
-        int scsiUnit = findFreeUnit(scsiController, devices.getVirtualDevice());
+        VirtualSCSIController scsiController = getFirstScsiController(devices);
+        Integer[] scsiUnit = findFreeScsiUnit(scsiController, devices.getVirtualDevice());
 
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
-        DiskStateExpanded bootDisk = findBootDisk();
-        if (bootDisk != null) {
+        if (this.bootDisk != null) {
             if (vd == null) {
                 String datastoreName = this.get.entityProp(datastore, VimPath.ds_summary_name);
                 String path = makePathToVmdkFile("ephemeral_disk", vmName);
-                String diskName = String.format("[%s] %s", datastoreName, path);
-                VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(), scsiUnit, bootDisk,
+                String diskName = String.format(VM_PATH_FORMAT, datastoreName, path);
+                VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(), scsiUnit[0], this.bootDisk,
                         diskName, datastore, pbmSpec);
                 newDisks.add(hdd);
             } else {
@@ -802,12 +812,12 @@ public class InstanceClient extends BaseHelper {
      * @return
      */
     private DiskStateExpanded findBootDisk() {
-        if (this.ctx.disks == null) {
+        if (this.ctx.disks == null || this.ctx.disks.isEmpty()) {
             return null;
         }
 
         return this.ctx.disks.stream()
-                .filter(d -> d.type == DiskType.HDD)
+                .filter(d -> d.type == DiskType.HDD && d.bootOrder == 1)
                 .findFirst()
                 .orElse(null);
     }
@@ -816,7 +826,8 @@ public class InstanceClient extends BaseHelper {
      * Creates disks and attaches them to the vm created by {@link #createInstance()}. The given
      * diskStates are enriched with data from vSphere and can be patched back to xenon.
      */
-    public void attachDisks(List<DiskStateExpanded> diskStates) throws Exception {
+    public void attachDisks(List<DiskStateExpanded> diskStates, boolean customizeBootDisk) throws
+            Exception {
         if (getOvfUri() != null) {
             return;
         }
@@ -842,8 +853,9 @@ public class InstanceClient extends BaseHelper {
         ArrayOfVirtualDevice devices = this.get
                 .entityProp(this.vm, VimPath.vm_config_hardware_device);
 
-        VirtualDevice scsiController = getFirstScsiController(devices);
-        int scsiUnit = findFreeUnit(scsiController, devices.getVirtualDevice());
+        VirtualSCSIController scsiController = getFirstScsiController(devices);
+        // Get available free unit numbers for the given scsi controller.
+        Integer[] scsiUnits = findFreeScsiUnit(scsiController, devices.getVirtualDevice());
 
         VirtualDevice ideController = getFirstIdeController(devices);
         int ideUnit = findFreeUnit(ideController, devices.getVirtualDevice());
@@ -856,6 +868,7 @@ public class InstanceClient extends BaseHelper {
         boolean cdromAdded = false;
         DiskStateExpanded bootDisk = null;
 
+        int scsiUnitIndex = 0;
         for (DiskStateExpanded ds : diskStates) {
             String diskPath = VimUtils.uriToDatastorePath(ds.sourceImageReference);
 
@@ -865,16 +878,21 @@ public class InstanceClient extends BaseHelper {
                 VirtualDeviceConfigSpec hdd;
                 if (diskPath != null) {
                     // create full clone of given disk
-                    hdd = createFullCloneAndAttach(diskPath, ds, dir, scsiController, scsiUnit, pbmSpec);
+                    hdd = createFullCloneAndAttach(diskPath, ds, dir, scsiController,
+                            scsiUnits[scsiUnitIndex], pbmSpec);
                     newDisks.add(hdd);
-                    bootDisk = ds;
+                    // Don't overwrite, assume the first HDD disk.
+                    if (bootDisk == null && customizeBootDisk) {
+                        bootDisk = ds;
+                    }
                 } else {
-                    String diskName = makePathToVmdkFile(ds.id, dir);
-                    hdd = createHdd(scsiController.getKey(),
-                            scsiUnit, ds, diskName, getDataStoreForDisk(ds, pbmSpec), pbmSpec);
+                    String dsDirForDisk = getDatastorePathForDisk(ds, dir);
+                    String diskName = makePathToVmdkFile(ds.id, dsDirForDisk);
+                    hdd = createHdd(scsiController.getKey(), scsiUnits[scsiUnitIndex], ds, diskName,
+                            getDataStoreForDisk(ds, pbmSpec), pbmSpec);
                     newDisks.add(hdd);
                 }
-                scsiUnit = nextUnitNumber(scsiUnit);
+                scsiUnitIndex++;
             }
             if (ds.type == DiskType.CDROM) {
                 VirtualDeviceConfigSpec cdrom = createCdrom(ideController, ideUnit);
@@ -901,7 +919,7 @@ public class InstanceClient extends BaseHelper {
         }
 
         // add a cdrom so that ovf transport works
-        if (!cdromAdded) {
+        if (!cdromAdded && customizeBootDisk) {
             VirtualDeviceConfigSpec cdrom = createCdrom(ideController, ideUnit);
             newDisks.add(cdrom);
         }
@@ -970,8 +988,9 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference diskManager = this.connection.getServiceContent()
                 .getVirtualDiskManager();
 
+        String dsDirForDisk = getDatastorePathForDisk(ds, dir);
         // put full clone in the vm folder
-        String destName = makePathToVmdkFile(ds.id, dir);
+        String destName = makePathToVmdkFile(ds.id, dsDirForDisk);
 
         // all ops are within a datacenter
         ManagedObjectReference sourceDc = this.finder.datacenter(this.ctx.datacenterPath).object;
@@ -1152,6 +1171,39 @@ public class InstanceClient extends BaseHelper {
         return unitNumber + 1;
     }
 
+    /**
+     * Find available free unit number for scsi controller.
+     */
+    private Integer[] findFreeScsiUnit(VirtualSCSIController controller, List<VirtualDevice>
+            devices) {
+        // Max scsi controller number is 16, but supported runtime value could be fetched from
+        // VirtualHardwareOption
+        int[] slots = new int[16];
+        // Unit 7 is reserved
+        slots[7] = 1;
+
+        Map<Integer, VirtualDevice> deviceMap = new HashMap<>();
+        devices.stream().forEach(device -> deviceMap.put(device.getKey(), device));
+        controller.getDevice().stream().forEach(deviceKey -> {
+            if (deviceMap.get(deviceKey).getUnitNumber() != null) {
+                slots[deviceMap.get(deviceKey).getUnitNumber()] = 1;
+            }
+        });
+
+        List<Integer> freeUnitNumbers = new ArrayList<>();
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i] != 1) {
+                freeUnitNumbers.add(i);
+            }
+        }
+        // Default to start from 0
+        if (freeUnitNumbers.isEmpty()) {
+            freeUnitNumbers.add(0);
+        }
+        Integer[] unitNumbersArray = new Integer[freeUnitNumbers.size()];
+        return freeUnitNumbers.toArray(unitNumbersArray);
+    }
+
     private VirtualDeviceConfigSpec createHdd(Integer controllerKey, int unitNumber, DiskStateExpanded ds,
             String diskName, ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
@@ -1316,7 +1368,8 @@ public class InstanceClient extends BaseHelper {
 
         populateCloudConfig(spec, null);
         recordTimestamp(spec.getExtraConfig());
-        ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool, host);
+        ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool,
+                host);
 
         TaskInfo info = waitTaskEnd(vmTask);
 
@@ -1335,13 +1388,7 @@ public class InstanceClient extends BaseHelper {
 
     private boolean populateVAppProperties(VirtualMachineConfigSpec spec,
             ArrayOfVAppPropertyInfo currentProps) {
-        if (this.ctx.disks == null || this.ctx.disks.size() == 0) {
-            return false;
-        }
-
-        DiskStateExpanded bootDisk = findBootDisk();
-
-        if (bootDisk == null) {
+        if (this.bootDisk == null) {
             return false;
         }
 
@@ -1355,7 +1402,7 @@ public class InstanceClient extends BaseHelper {
             nextKey++;
         }
 
-        String ovfEnv = getFileItemByPath(bootDisk, OVF_PROPERTY_ENV);
+        String ovfEnv = getFileItemByPath(this.bootDisk, OVF_PROPERTY_ENV);
         if (ovfEnv != null) {
             @SuppressWarnings("unchecked")
             Map<String, String> map = Utils.fromJson(ovfEnv, Map.class);
@@ -1405,13 +1452,7 @@ public class InstanceClient extends BaseHelper {
      */
     private boolean populateCloudConfig(VirtualMachineConfigSpec spec,
             ArrayOfVAppPropertyInfo currentProps) {
-        if (this.ctx.disks == null || this.ctx.disks.size() == 0) {
-            return false;
-        }
-
-        DiskStateExpanded bootDisk = findBootDisk();
-
-        if (bootDisk == null) {
+        if (this.bootDisk == null) {
             return false;
         }
 
@@ -1428,7 +1469,7 @@ public class InstanceClient extends BaseHelper {
         VmConfigSpec configSpec = new VmConfigSpec();
         configSpec.getOvfEnvironmentTransport().add(OvfDeployer.TRANSPORT_ISO);
 
-        String cloudConfig = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_USER_DATA);
+        String cloudConfig = getFileItemByPath(this.bootDisk, CLOUD_CONFIG_PROPERTY_USER_DATA);
         if (cloudConfig != null) {
             VAppPropertySpec propertySpec = new VAppPropertySpec();
 
@@ -1478,7 +1519,7 @@ public class InstanceClient extends BaseHelper {
             customizationsApplied = true;
         }
 
-        String publicKeys = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
+        String publicKeys = getFileItemByPath(this.bootDisk, CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
         if (publicKeys != null) {
             VAppPropertySpec propertySpec = new VAppPropertySpec();
 
@@ -1505,7 +1546,7 @@ public class InstanceClient extends BaseHelper {
             customizationsApplied = true;
         }
 
-        String hostname = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_HOSTNAME);
+        String hostname = getFileItemByPath(this.bootDisk, CLOUD_CONFIG_PROPERTY_HOSTNAME);
         if (hostname != null) {
             VAppPropertySpec propertySpec = new VAppPropertySpec();
 
@@ -1797,6 +1838,20 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
+     * Datastore name if any specified for the disk, if not fall back to the default datastore.
+     */
+    private String getDatastorePathForDisk(DiskStateExpanded diskState, String defaultDsPath)
+            throws Exception {
+        String dsPath = defaultDsPath;
+        if (diskState.storageDescription != null) {
+            String vmName = defaultDsPath.substring(defaultDsPath.indexOf(']') + 2, defaultDsPath
+                    .length());
+            dsPath = String.format(VM_PATH_FORMAT, diskState.storageDescription.id, vmName);
+        }
+        return dsPath;
+    }
+
+    /**
      * Construct storage policy profile spec for a profile Id
      */
     private List<VirtualMachineDefinedProfileSpec> getPbmProfileSpec(DiskStateExpanded diskState) {
@@ -1902,14 +1957,13 @@ public class InstanceClient extends BaseHelper {
         vapi.login();
         LibraryClient client = vapi.newLibraryClient();
 
-        DiskStateExpanded bootDisk = findBootDisk();
-        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(bootDisk);
+        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
 
         Map<String, String> mapping = new HashMap<>();
         ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
-                getDataStoreForDisk(bootDisk, pbmSpec),
+                getDataStoreForDisk(this.bootDisk, pbmSpec),
                 pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
-                getResourcePool(), mapping, getDiskProvisioningType(bootDisk));
+                getResourcePool(), mapping, getDiskProvisioningType(this.bootDisk));
 
         if (!result.get("succeeded").asBoolean()) {
             throw new Exception("error deploying from library");
@@ -1926,7 +1980,7 @@ public class InstanceClient extends BaseHelper {
 
         this.vm = ref;
 
-        customizeAfterClone(ref);
+        customizeAfterClone();
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils

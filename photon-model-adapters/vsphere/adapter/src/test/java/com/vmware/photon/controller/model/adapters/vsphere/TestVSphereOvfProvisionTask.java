@@ -13,10 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -26,6 +29,8 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.ImportOvfRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -41,6 +46,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.vim25.VirtualDisk;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -78,55 +84,17 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
     @Test
     public void deployOvf() throws Throwable {
-        if (this.ovfUri == null) {
-            return;
-        }
-        ComputeState vm = null;
-        try {
-            // Create a resource pool where the VM will be housed
-            this.resourcePool = createResourcePool();
-            this.auth = createAuth();
+        deployOvf(false);
+    }
 
-            this.computeHostDescription = createComputeDescription();
-            this.computeHost = createComputeHost(this.computeHostDescription);
+    @Test
+    public void deployOvfWithStoragePolicy() throws Throwable {
+        deployOvf(true);
+    }
 
-            ComputeDescription computeDesc = createTemplate();
-
-            ImportOvfRequest req = new ImportOvfRequest();
-            req.ovfUri = this.ovfUri;
-            req.template = computeDesc;
-
-            Operation op = Operation.createPatch(this.host, OvfImporterService.SELF_LINK)
-                    .setBody(req)
-                    .setReferer(this.host.getPublicUri());
-
-            CompletableFuture<Operation> f = this.host.sendWithFuture(op);
-
-            // depending on OVF location you may want to increase the timeout
-            f.get(300, TimeUnit.SECONDS);
-
-            snapshotFactoryState("ovf", ComputeDescriptionService.class);
-
-            enumerateComputes(this.computeHost);
-
-            String descriptionLink = findFirstOvfDescriptionLink();
-
-            this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA, false);
-            vm = createVmState(descriptionLink);
-
-            // set timeout for the next step, vmdk upload may take some time
-            host.setTimeoutSeconds(60 * 5);
-
-            // provision
-            ProvisionComputeTaskState outTask = createProvisionTask(vm);
-            awaitTaskEnd(outTask);
-
-            snapshotFactoryState("ovf", ComputeService.class);
-        } finally {
-            if (vm != null) {
-                deleteVmAndWait(vm);
-            }
-        }
+    @Test
+    public void deployOvfWithAdditionalDisks() throws Throwable {
+        deployOvf(false, true);
     }
 
     @Test
@@ -184,8 +152,12 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         }
     }
 
-    @Test
-    public void deployOvfWithStoragePolicy() throws Throwable {
+    private void deployOvf(boolean isStoragePolicyBased) throws Throwable {
+        deployOvf(isStoragePolicyBased, false);
+    }
+
+    private void deployOvf(boolean isStoragePolicyBased, boolean withAdditionalDisks) throws
+            Throwable {
         if (this.ovfUri == null) {
             return;
         }
@@ -219,8 +191,8 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
             String descriptionLink = findFirstOvfDescriptionLink();
 
-            this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA, true);
-            vm = createVmState(descriptionLink);
+            this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA, isStoragePolicyBased);
+            vm = createVmState(descriptionLink, withAdditionalDisks);
 
             // set timeout for the next step, vmdk upload may take some time
             host.setTimeoutSeconds(60 * 5);
@@ -230,6 +202,12 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
             awaitTaskEnd(outTask);
 
             snapshotFactoryState("ovf", ComputeService.class);
+            if (!isMock() && withAdditionalDisks) {
+                BasicConnection connection = createConnection();
+                GetMoRef get = new GetMoRef(connection);
+                List<VirtualDisk> virtualDisks = fetchAllVirtualDisks(vm, get);
+                assertEquals(3, virtualDisks.size());
+            }
         } finally {
             if (vm != null) {
                 deleteVmAndWait(vm);
@@ -255,6 +233,11 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
     }
 
     private ComputeState createVmState(String descriptionLink) throws Throwable {
+        return createVmState(descriptionLink, false);
+    }
+
+    private ComputeState createVmState(String descriptionLink, boolean withAdditionalDisks) throws
+            Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = computeState.name = nextName("from-ovf");
         computeState.documentSelfLink = computeState.id;
@@ -268,6 +251,14 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
         computeState.diskLinks = new ArrayList<>();
         computeState.diskLinks.add(this.bootDisk.documentSelfLink);
+
+        if (withAdditionalDisks) {
+            computeState.diskLinks.add(createDiskWithDatastore("AdditionalDisk1", DiskType.HDD,
+                    2, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+            computeState.diskLinks
+                    .add(createDiskWithStoragePolicy("AdditionalDisk2", DiskType.HDD, 3, null,
+                            ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+        }
 
         computeState.networkInterfaceLinks = new ArrayList<>(1);
 

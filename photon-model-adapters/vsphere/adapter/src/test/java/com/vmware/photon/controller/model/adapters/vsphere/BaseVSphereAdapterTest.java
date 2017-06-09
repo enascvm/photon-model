@@ -16,7 +16,10 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.io.File;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.junit.After;
 import org.junit.Before;
@@ -68,6 +72,8 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.security.PhotonModelSecurityServices;
@@ -89,7 +95,9 @@ import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.vim25.SharesLevel;
 import com.vmware.vim25.VirtualDisk;
+import com.vmware.vim25.VirtualDiskType;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.Service;
@@ -123,17 +131,20 @@ public class BaseVSphereAdapterTest {
 
     public String datacenterId = System.getProperty(TestProperties.VC_DATECENTER_ID);
     public String dataStoreId = System.getProperty(TestProperties.VC_DATASTORE_ID);
+    public String diskDataStoreId = System.getProperty(TestProperties.VC_DISK_DATASTORE_ID);
     public String networkId = System.getProperty(TestProperties.VC_NETWORK_ID);
 
     public String vcFolder = System.getProperty(TestProperties.VC_FOLDER);
-    public String spName = System.getProperty(TestProperties.VC_STORAGE_POLICY_NAME);
-    public String spId = System.getProperty(TestProperties.VC_STORAGE_POLICY_ID);
+    public String spName = System.getProperty(TestProperties.VC_STORAGE_POLICY_NAME, "");
+    public String spId = System.getProperty(TestProperties.VC_STORAGE_POLICY_ID, "");
 
     protected VerificationHost host;
     protected AuthCredentialsServiceState auth;
     protected ResourcePoolState resourcePool;
     public NetworkInterfaceDescription nicDescription;
     public SubnetState subnet;
+
+    protected static final long ADDITIONAL_DISK_SIZE = 1024;
 
     @Rule
     public TestName testName = new TestName();
@@ -187,6 +198,11 @@ public class BaseVSphereAdapterTest {
 
                 this.host.waitForResponse(op);
             }
+        }
+
+        if (this.dataStoreId != null) {
+            this.dataStoreId = this.dataStoreId
+                    .substring(this.dataStoreId.lastIndexOf("/") + 1, this.dataStoreId.length());
         }
     }
 
@@ -740,11 +756,11 @@ public class BaseVSphereAdapterTest {
     /**
      * Create a new disk state to attach it to the virual machine.
      */
-    protected DiskState createDisk(String alias, DiskService.DiskType type,
+    protected DiskState createDisk(String alias, DiskService.DiskType type, int bootOrder,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String>
             customProperties) throws Throwable {
-        DiskState diskState = constructDiskState(alias, type, sourceImageReference, capacityMBytes,
-                customProperties);
+        DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
+                capacityMBytes, customProperties);
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
@@ -752,15 +768,39 @@ public class BaseVSphereAdapterTest {
     /**
      * Create a new disk state to attach it to the virual machine.
      */
-    protected DiskState createDiskWithStoragePolicy(String alias, DiskService.DiskType type,
+    protected DiskState createDiskWithStoragePolicy(String alias, DiskService.DiskType type, int bootOrder,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String>
             customProperties) throws Throwable {
-        DiskState diskState = constructDiskState(alias, type, sourceImageReference, capacityMBytes,
-                customProperties);
+        DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
+                capacityMBytes, customProperties);
         diskState.groupLinks = new HashSet<>();
         diskState.groupLinks.add(createResourceGroupState().documentSelfLink);
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+    /**
+     * Create a new disk state to attach it to the virual machine.
+     */
+    protected DiskState createDiskWithDatastore(String alias, DiskService.DiskType type, int bootOrder,
+            URI sourceImageReference, long capacityMBytes, HashMap<String, String>
+            customProperties) throws Throwable {
+        DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
+                capacityMBytes, customProperties);
+        diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
+        return doPost(this.host, diskState, DiskState.class,
+                UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+
+    protected HashMap<String, String> buildCustomProperties() {
+        HashMap<String, String> customProperties = new HashMap<>();
+
+        customProperties.put(PROVISION_TYPE, VirtualDiskType.THIN.value());
+        customProperties.put(SHARES_LEVEL, SharesLevel.HIGH.value());
+        customProperties.put(LIMIT_IOPS, "100");
+
+        return customProperties;
     }
 
     /**
@@ -788,23 +828,48 @@ public class BaseVSphereAdapterTest {
     }
 
     /**
+     * Get the reference to Virtual Disk from VM.
+     */
+    protected List<VirtualDisk> fetchAllVirtualDisks(ComputeState vm, GetMoRef get)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ManagedObjectReference vmMoRef = CustomProperties.of(vm).getMoRef(MOREF);
+        ArrayOfVirtualDevice devices = get.entityProp(vmMoRef, VimPath.vm_config_hardware_device);
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d).collect(Collectors.toList());
+    }
+
+    /**
      * Creates storage policy as resource group state
      */
     protected ResourceGroupState createResourceGroupState() throws Throwable {
         ResourceGroupState rg = new ResourceGroupState();
-        rg.id = this.spId;
-        rg.name = this.spName;
+        rg.id = this.spId != null ? this.spId : "testRG";
+        rg.name = this.spName != null ? this.spName : "testRG";
         rg = TestUtils.doPost(this.host, rg,
                 ResourceGroupState.class,
                 UriUtils.buildUri(this.host, ResourceGroupService.FACTORY_LINK));
         return rg;
     }
 
-    private DiskState constructDiskState(String alias, DiskService.DiskType type,
+    /**
+     * Creates datastore as storage description state.
+     */
+    protected StorageDescription createStorageDescriptionState() throws Throwable {
+        StorageDescription sd = new StorageDescription();
+        String datastoreId = this.diskDataStoreId != null ? this.diskDataStoreId : this.dataStoreId;
+        sd.name = sd.id = datastoreId != null ? datastoreId : "testDatastore";
+        sd = TestUtils.doPost(this.host, sd,
+                StorageDescription.class,
+                UriUtils.buildUri(this.host, StorageDescriptionService.FACTORY_LINK));
+        return sd;
+    }
+
+    private DiskState constructDiskState(String alias, DiskService.DiskType type, int bootOrder,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String> customProperties) {
         DiskState res = new DiskState();
         res.capacityMBytes = capacityMBytes;
-        res.bootOrder = 1;
+        res.bootOrder = bootOrder;
         res.type = type;
         res.id = res.name = "disk-" + alias;
 

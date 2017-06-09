@@ -21,6 +21,7 @@ public class TestProperties {
     public static final String VC_URL = "vc.url";
     public static final String VC_ZONE_ID = "vc.zoneId";
     public static final String VC_DATASTORE_ID = "vc.dataStoreId";
+    public static final String VC_DISK_DATASTORE_ID = "vc.disk.dataStoreId";
     public static final String VC_NETWORK_ID = "vc.networkId";
     public static final String VC_FOLDER = "vc.folder";
     public static final String VC_DATECENTER_ID = "vc.datacenterId";

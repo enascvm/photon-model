@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -97,8 +98,27 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
     }
 
     @Test
+    public void deployFromLibraryWithAdditionalDisks() throws Throwable {
+        ComputeState vm = provisionVMAndGetState(true, true);
+        try {
+            if (vm == null) {
+                return;
+            }
+            // Verify that the disk is resized
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            List<VirtualDisk> virtualDisks = fetchAllVirtualDisks(vm, get);
+            assertEquals(3, virtualDisks.size());
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
+
+    @Test
     public void deployFromLibraryWithStoragePolicy() throws Throwable {
-        ComputeState vm = provisionVMAndGetState(true);
+        ComputeState vm = provisionVMAndGetState(true, false);
         try {
             if (vm == null) {
                 return;
@@ -202,7 +222,7 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
     }
 
     private ComputeState createVmState(ComputeDescription vmDescription, String imageLink,
-            boolean isStoragePolicyBased) throws Throwable {
+            boolean isStoragePolicyBased, boolean withAdditionalDisks) throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = vmDescription.name;
         computeState.documentSelfLink = computeState.id;
@@ -220,10 +240,18 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         computeState.diskLinks = new ArrayList<>(1);
         if (isStoragePolicyBased) {
             computeState.diskLinks.add(createDiskWithStoragePolicy("boot", DiskService.DiskType.HDD,
-                    null, HDD_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+                    1, null, HDD_DISK_SIZE, buildDiskCustomProperties()).documentSelfLink);
         } else {
-            computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, null,
-                    HDD_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+            computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, 1, null,
+                    HDD_DISK_SIZE, buildDiskCustomProperties()).documentSelfLink);
+        }
+
+        if (withAdditionalDisks) {
+            computeState.diskLinks.add(createDiskWithDatastore("AdditionalDisk1", DiskService
+                    .DiskType.HDD, 2, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+            computeState.diskLinks
+                    .add(createDiskWithStoragePolicy("AdditionalDisk2", DiskService.DiskType.HDD, 3,
+                            null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
         }
 
         CustomProperties.of(computeState)
@@ -237,7 +265,7 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         return returnState;
     }
 
-    private HashMap<String, String> buildCustomProperties() {
+    private HashMap<String, String> buildDiskCustomProperties() {
         HashMap<String, String> customProperties = new HashMap<>();
 
         customProperties.put(PROVISION_TYPE, VirtualDiskType.THIN.value());
@@ -321,10 +349,11 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
     }
 
     private ComputeState provisionVMAndGetState() throws Throwable {
-        return provisionVMAndGetState(false);
+        return provisionVMAndGetState(false, false);
     }
 
-    private ComputeState provisionVMAndGetState(boolean isStoragePolicyBased) throws Throwable {
+    private ComputeState provisionVMAndGetState(boolean isStoragePolicyBased, boolean
+            withAdditionalDisks) throws Throwable {
         if (isMock()) {
             return null;
         }
@@ -354,7 +383,7 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
 
         String imageLink = findImage();
         ComputeDescription desc = createVmDescription();
-        ComputeState vm = createVmState(desc, imageLink, isStoragePolicyBased);
+        ComputeState vm = createVmState(desc, imageLink, isStoragePolicyBased, withAdditionalDisks);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState outTask = createProvisionTask(vm);
