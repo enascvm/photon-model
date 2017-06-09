@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -52,8 +51,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 /**
  */
 public class ProvisionContext {
-    private static final Logger logger = Logger.getLogger(ProvisionContext.class.getName());
-
     public final URI computeReference;
     public final TaskManager mgr;
 

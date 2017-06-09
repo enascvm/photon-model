@@ -100,15 +100,4 @@ public class ResourceOperationService extends StatelessService {
                 .filter(spec -> ResourceOperationUtils.isAvailable(resourceState, spec))
                 .collect(Collectors.toList());
     }
-
-    private String extractResourceLink(Operation op, String selfLink) {
-        String currentPath = UriUtils.normalizeUriPath(op.getUri().getPath());
-        // resolve the link to the requested resource
-        String resourceLink = null;
-        if (currentPath.startsWith(selfLink)) {
-            resourceLink = currentPath.substring(selfLink.length());
-        }
-        return resourceLink;
-    }
-
 }

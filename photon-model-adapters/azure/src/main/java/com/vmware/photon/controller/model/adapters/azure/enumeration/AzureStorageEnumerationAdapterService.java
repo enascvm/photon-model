@@ -69,7 +69,6 @@ import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
-
 import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -199,17 +198,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     public AzureStorageEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-    }
-
-    /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
-     */
-    private static void addScopeCriteria(Query.Builder qBuilder,
-            Class<? extends ResourceState> stateClass, StorageEnumContext ctx) {
-        // Add TENANT_LINKS criteria
-        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 
     @Override

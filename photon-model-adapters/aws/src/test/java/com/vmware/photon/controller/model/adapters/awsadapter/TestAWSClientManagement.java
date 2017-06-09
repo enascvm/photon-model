@@ -104,6 +104,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
 
         // Getting a reference to client managers in the test
         AWSClientManager ec2ClientManager = getClientManager(AwsClientType.EC2);
+        @SuppressWarnings("unused")
         AWSClientManager cloudWatchClientManager = getClientManager(AwsClientType.CLOUD_WATCH);
         assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
         assertEquals(this.cloudWatchClientReferenceCount + count1, getClientReferenceCount(AwsClientType.CLOUD_WATCH));

@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.xenon.common.Operation;
@@ -32,7 +31,6 @@ public class TaskManager implements CompletionHandler {
     private final ServiceRequestSender service;
     private final URI taskReference;
     private String resourceLink;
-    private Logger lg = Logger.getLogger(this.getClass().getName());
 
     public TaskManager(ServiceRequestSender service, URI taskReference, String resourceLink) {
         this.service = service;

@@ -188,6 +188,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
     private ComputeManagementClientImpl computeManagementClient;
     private ResourceManagementClientImpl resourceManagementClient;
+    @SuppressWarnings("unused")
     private StorageManagementClientImpl storageManagementClient;
     private NetworkManagementClientImpl networkManagementClient;
 

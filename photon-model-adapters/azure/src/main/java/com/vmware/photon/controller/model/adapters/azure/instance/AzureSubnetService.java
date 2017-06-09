@@ -21,7 +21,6 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.implementation.SubnetInner;
 import com.microsoft.azure.management.network.implementation.SubnetsInner;
-
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
 
@@ -325,13 +324,5 @@ public class AzureSubnetService extends StatelessService {
         return this.sendWithDeferredResult(
                 Operation.createDelete(this, context.subnetState.documentSelfLink))
                 .thenApply(operation -> context);
-    }
-
-    private DeferredResult<AzureSubnetContext> cleanUpAzureHttpClient(AzureSubnetContext context) {
-        if (context.restClient.httpClient() != null) {
-            AzureUtils.cleanUpHttpClient(context.restClient.httpClient());
-            context.restClient = null;
-        }
-        return DeferredResult.completed(context);
     }
 }
