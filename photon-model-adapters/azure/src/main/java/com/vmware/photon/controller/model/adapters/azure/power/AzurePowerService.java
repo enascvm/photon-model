@@ -22,9 +22,9 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
 import com.microsoft.rest.RestClient;
-import com.microsoft.rest.ServiceCallback;
 
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
+import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
@@ -133,32 +133,33 @@ public class AzurePowerService extends StatelessService {
     }
 
     private void powerOff(AzurePowerDataHolder dh, DefaultAdapterContext c) {
-        dh.azureClient.virtualMachines().inner().powerOffAsync(dh.rgName,dh.vmName,new ServiceCallback<OperationStatusResponseInner>() {
-            @Override
-            public void failure(Throwable paramThrowable) {
-                c.taskManager.patchTaskToFailure(paramThrowable);
-                AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
-            }
+        dh.azureClient.virtualMachines().inner().powerOffAsync(dh.rgName, dh.vmName,
+                new AzureAsyncCallback<OperationStatusResponseInner>() {
+                    @Override
+                    public void onError(Throwable paramThrowable) {
+                        c.taskManager.patchTaskToFailure(paramThrowable);
+                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                    }
 
-            @Override
-            public void success(OperationStatusResponseInner paramServiceResponse) {
-                updateComputeState(dh,c);
-                AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
-            }
-        });
+                    @Override
+                    public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
+                        updateComputeState(dh, c);
+                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                    }
+                });
     }
 
     private void powerOn(AzurePowerDataHolder dh, DefaultAdapterContext c) {
         dh.azureClient.virtualMachines().inner().startAsync(dh.rgName, dh.vmName,
-                    new ServiceCallback<OperationStatusResponseInner>() {
+                new AzureAsyncCallback<OperationStatusResponseInner>() {
                         @Override
-                        public void failure(Throwable paramThrowable) {
+                    public void onError(Throwable paramThrowable) {
                             c.taskManager.patchTaskToFailure(paramThrowable);
                             AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
                         }
 
                         @Override
-                        public void success(OperationStatusResponseInner paramServiceResponse) {
+                    public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
                             updateComputeState(dh, c);
                             AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
                         }

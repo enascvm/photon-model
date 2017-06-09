@@ -23,9 +23,8 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
 import com.microsoft.rest.RestClient;
-import com.microsoft.rest.ServiceCallback;
 
-
+import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
@@ -179,9 +178,9 @@ public class AzureLifecycleOperationService extends StatelessService {
 
     private void restart(AzureLifecycleOpDataHolder dh, DefaultAdapterContext ctx) {
         dh.azureClient.virtualMachines().inner().restartAsync(dh.rgName, dh.vmName,
-                new ServiceCallback<OperationStatusResponseInner>() {
+                new AzureAsyncCallback<OperationStatusResponseInner>() {
                     @Override
-                    public void failure(Throwable paramThrowable) {
+                    public void onError(Throwable paramThrowable) {
                         logSevere(
                                 "Error: Azure restart operation failed for resource %s in resourceGroup %s with error %s",
                                 dh.vmName, dh.rgName, Utils.toString(paramThrowable));
@@ -190,7 +189,7 @@ public class AzureLifecycleOperationService extends StatelessService {
                     }
 
                     @Override
-                    public void success(OperationStatusResponseInner paramServiceResponse) {
+                    public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
                         logFine(
                                 "Success: Azure restart operation for resource %s in resourceGroup %s completed successfully.",
                                 dh.vmName, dh.rgName);
@@ -202,9 +201,9 @@ public class AzureLifecycleOperationService extends StatelessService {
 
     private void suspend(AzureLifecycleOpDataHolder dh, DefaultAdapterContext ctx) {
         dh.azureClient.virtualMachines().inner().deallocateAsync(dh.rgName, dh.vmName,
-                new ServiceCallback<OperationStatusResponseInner>() {
+                new AzureAsyncCallback<OperationStatusResponseInner>() {
                     @Override
-                    public void failure(Throwable paramThrowable) {
+                    public void onError(Throwable paramThrowable) {
                         logSevere(
                                 "Error: Azure deallocate operation failed for resource %s in resourceGroup %s with error %s",
                                 dh.vmName, dh.rgName, Utils.toString(paramThrowable));
@@ -213,7 +212,7 @@ public class AzureLifecycleOperationService extends StatelessService {
                     }
 
                     @Override
-                    public void success(OperationStatusResponseInner paramServiceResponse) {
+                    public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
                         logFine(
                                 "Success: Azure deallocate operation for resource %s in resourceGroup %s completed successfully.",
                                 dh.vmName, dh.rgName);
