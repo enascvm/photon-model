@@ -76,6 +76,7 @@ import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
+import com.vmware.vim25.OptionValue;
 import com.vmware.vim25.OvfNetworkMapping;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.SharesInfo;
@@ -149,6 +150,7 @@ public class InstanceClient extends BaseHelper {
 
     private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
     private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
+    private static final String EXTRA_CONFIG_CREATED = "photon-model-created-millis";
 
     private final GetMoRef get;
     private final Finder finder;
@@ -210,6 +212,7 @@ public class InstanceClient extends BaseHelper {
         }
 
         spec.setMemoryMB(toMemoryMb(this.ctx.child.description.totalMemoryBytes));
+        recordTimestamp(spec.getExtraConfig());
 
         // set ovf environment
         ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm,
@@ -255,6 +258,23 @@ public class InstanceClient extends BaseHelper {
         if (info.getState() == TaskInfoState.ERROR) {
             VimUtils.rethrow(info.getError());
         }
+    }
+
+    /**
+     * Stores a timestamp into a VM's extraConfig on provisioning.
+     * Currently used for resource cleanup only.
+     *
+     * @param extraConfig
+     */
+    private void recordTimestamp(List<OptionValue> extraConfig) {
+        if (extraConfig == null) {
+            return;
+        }
+
+        OptionValue ov = new OptionValue();
+        ov.setKey(EXTRA_CONFIG_CREATED);
+        ov.setValue(Long.toString(System.currentTimeMillis()));
+        extraConfig.add(ov);
     }
 
     private ManagedObjectReference cloneVm(ManagedObjectReference template) throws Exception {
@@ -729,6 +749,7 @@ public class InstanceClient extends BaseHelper {
         // VimPath.vm_config_vAppConfig_property);
         populateVAppProperties(spec, infos);
         populateCloudConfig(spec, infos);
+        recordTimestamp(spec.getExtraConfig());
         // add disks one at a time
         for (VirtualDeviceConfigSpec newDisk : newDisks) {
             spec.getDeviceChange().add(newDisk);
@@ -1294,6 +1315,7 @@ public class InstanceClient extends BaseHelper {
         }
 
         populateCloudConfig(spec, null);
+        recordTimestamp(spec.getExtraConfig());
         ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool, host);
 
         TaskInfo info = waitTaskEnd(vmTask);
