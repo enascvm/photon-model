@@ -68,6 +68,11 @@ public class ProvisionLoadBalancerTaskService extends TaskService<ProvisionLoadB
         public List<String> tenantLinks;
 
         /**
+         * A callback to the initiating task.
+         */
+        public ServiceTaskCallback<?> serviceTaskCallback;
+
+        /**
          * Tracks the sub stage. Set by the run-time.
          */
         public SubStage taskSubStage;
@@ -143,6 +148,7 @@ public class ProvisionLoadBalancerTaskService extends TaskService<ProvisionLoadB
             if (nextStage == SubStage.FINISHED) {
                 currState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 logInfo(() -> "Task is complete");
+                ServiceTaskCallback.sendResponse(currState.serviceTaskCallback, this, currState);
             } else {
                 sendSelfPatch(TaskState.TaskStage.CREATED, null);
             }
@@ -150,6 +156,7 @@ public class ProvisionLoadBalancerTaskService extends TaskService<ProvisionLoadB
         case FAILED:
             logWarning(() -> String.format("Task failed with %s",
                     Utils.toJsonHtml(currState.taskInfo.failure)));
+            ServiceTaskCallback.sendResponse(currState.serviceTaskCallback, this, currState);
             break;
         case CANCELLED:
             break;

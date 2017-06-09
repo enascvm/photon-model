@@ -151,6 +151,10 @@ public class AWSLoadBalancerService extends StatelessService {
     }
 
     private DeferredResult<AWSLoadBalancerContext> getAWSClient(AWSLoadBalancerContext context) {
+        if (context.request.isMockRequest) {
+            return DeferredResult.completed(context);
+        }
+
         DeferredResult<AWSLoadBalancerContext> r = new DeferredResult<>();
         context.client = this.clientManager.getOrCreateLoadBalancingClient(context.credentials,
                 context.loadBalancerStateExpanded.regionId, this, context.request.isMockRequest,

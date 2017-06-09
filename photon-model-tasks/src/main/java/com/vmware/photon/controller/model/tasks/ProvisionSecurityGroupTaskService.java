@@ -28,7 +28,6 @@ import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceReques
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
-import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.TaskState;
@@ -166,7 +165,7 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
             if (nextStage == SubStage.FINISHED) {
                 currState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 logInfo(() -> "Task is complete");
-                notifyParentTask(currState);
+                ServiceTaskCallback.sendResponse(currState.serviceTaskCallback, this, currState);
             } else {
                 sendSelfPatch(TaskState.TaskStage.CREATED, null);
             }
@@ -174,7 +173,7 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
         case FAILED:
             logWarning(() -> String.format("Task failed with %s",
                     Utils.toJsonHtml(currState.taskInfo.failure)));
-            notifyParentTask(currState);
+            ServiceTaskCallback.sendResponse(currState.serviceTaskCallback, this, currState);
             break;
         case CANCELLED:
             break;
@@ -331,23 +330,6 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
         }
 
         sendSelfPatch(body);
-    }
-
-    private void notifyParentTask(ProvisionSecurityGroupTaskState currentState) {
-        if (currentState.serviceTaskCallback == null) {
-            return;
-        }
-
-        ServiceTaskCallbackResponse<?> parentPatchBody;
-        if (currentState.taskInfo.stage == TaskState.TaskStage.FAILED) {
-            parentPatchBody = currentState.serviceTaskCallback
-                    .getFailedResponse(currentState.taskInfo.failure);
-        } else {
-            parentPatchBody = currentState.serviceTaskCallback.getFinishedResponse();
-        }
-
-        sendRequest(Operation.createPatch(currentState.serviceTaskCallback.serviceURI)
-                .setBody(parentPatchBody));
     }
 
     private void updateSubTask(String link, Object body) {

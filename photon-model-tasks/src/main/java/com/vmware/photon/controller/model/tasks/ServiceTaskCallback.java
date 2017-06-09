@@ -19,10 +19,13 @@ import java.util.Map;
 import java.util.Set;
 
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
  * Service Task Callback Factory to provide an instance of {@link ServiceTaskCallbackResponse}
@@ -61,16 +64,20 @@ public class ServiceTaskCallback<E extends Enum<E>> {
     }
 
     public ServiceTaskCallback<E> onErrorFailTask() {
-        this.stageComplete = TaskStage.FAILED;
+        this.stageFailed = TaskStage.FAILED;
         return this;
     }
 
     public ServiceTaskCallback<E> onSuccessTo(E subStage) {
+        // sub-stages are only honored in the STARTED primary stage
+        this.stageComplete = TaskStage.STARTED;
         this.subStageComplete = subStage;
         return this;
     }
 
     public ServiceTaskCallback<E> onErrorTo(E subStage) {
+        // sub-stages are only honored in the STARTED primary stage
+        this.stageFailed = TaskStage.STARTED;
         this.subStageFailed = subStage;
         return this;
     }
@@ -96,6 +103,39 @@ public class ServiceTaskCallback<E extends Enum<E>> {
         return new ServiceTaskCallbackResponse<E>(this.stageFailed, this.subStageFailed,
                 this.customProperties,
                 failure);
+    }
+
+    public void sendResponse(Service sender, Throwable e) {
+        sendResponse(sender, e != null ? getFailedResponse(e) : getFinishedResponse());
+    }
+
+    public void sendResponse(Service sender, TaskServiceState taskState) {
+        sendResponse(sender, taskState.taskInfo.stage == TaskState.TaskStage.FAILED
+                ? getFailedResponse(taskState.taskInfo.failure) : getFinishedResponse());
+    }
+
+    public void sendResponse(Service sender, ServiceTaskCallbackResponse<E> response) {
+        sender.sendRequest(Operation.createPatch(this.serviceURI).setBody(response));
+    }
+
+    public static void sendResponse(ServiceTaskCallback<?> callback, Service sender, Throwable e) {
+        if (callback != null) {
+            callback.sendResponse(sender, e);
+        }
+    }
+
+    public static void sendResponse(ServiceTaskCallback<?> callback, Service sender,
+            TaskServiceState taskState) {
+        if (callback != null) {
+            callback.sendResponse(sender, taskState);
+        }
+    }
+
+    public static <E extends Enum<E>> void sendResponse(ServiceTaskCallback<E> callback,
+            Service sender, ServiceTaskCallbackResponse<E> response) {
+        if (callback != null) {
+            callback.sendResponse(sender, response);
+        }
     }
 
     /**

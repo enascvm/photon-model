@@ -266,7 +266,7 @@ public class EndpointAllocationTaskService
 
         ServiceTaskCallback<SubStage> callback = ServiceTaskCallback
                 .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
-        callback.onSuccessTo(nextStage).onErrorTo(SubStage.FAILED);
+        callback.onSuccessTo(nextStage).onErrorFailTask();
 
         SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<>();
         subTaskInitState.errorThreshold = 0;

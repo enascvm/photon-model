@@ -27,7 +27,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.BootDevice;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
-import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
@@ -240,31 +239,14 @@ public class ProvisionComputeTaskService
         case FAILED:
             logWarning(() -> String.format("Task failed with %s",
                     Utils.toJsonHtml(currentState.taskInfo.failure)));
-            notifyParentTask(currentState);
+            ServiceTaskCallback.sendResponse(currentState.serviceTaskCallback, this, currentState);
             break;
         case FINISHED:
-            notifyParentTask(currentState);
+            ServiceTaskCallback.sendResponse(currentState.serviceTaskCallback, this, currentState);
             break;
         default:
             break;
         }
-    }
-
-    private void notifyParentTask(ProvisionComputeTaskState currentState) {
-        if (currentState.serviceTaskCallback == null) {
-            return;
-        }
-
-        ServiceTaskCallbackResponse<?> parentPatchBody;
-        if (currentState.taskInfo.stage == TaskState.TaskStage.FAILED) {
-            parentPatchBody = currentState.serviceTaskCallback
-                    .getFailedResponse(currentState.taskInfo.failure);
-        } else {
-            parentPatchBody = currentState.serviceTaskCallback.getFinishedResponse();
-        }
-
-        sendRequest(Operation.createPatch(currentState.serviceTaskCallback.serviceURI)
-                .setBody(parentPatchBody));
     }
 
     private void processNextSubStage(ProvisionComputeTaskState updatedState) {

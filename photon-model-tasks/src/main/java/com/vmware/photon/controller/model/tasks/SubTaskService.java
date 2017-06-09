@@ -152,8 +152,7 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
         parentPatchBody.completed = currentState.completed;
         parentPatchBody.failures = currentState.failures;
 
-        sendRequest(Operation.createPatch(currentState.serviceTaskCallback.serviceURI)
-                .setBody(parentPatchBody));
+        currentState.serviceTaskCallback.sendResponse(this, parentPatchBody);
 
         // we are a one shot task, self DELETE
         sendRequest(Operation.createDelete(this, getSelfLink()));
