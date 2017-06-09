@@ -83,7 +83,7 @@ public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
         ProvisionSubnetTaskState createTask = new ProvisionSubnetTaskState();
         createTask.options = createOptions();
         createTask.requestType = InstanceRequestType.CREATE;
-        createTask.subnetDescriptionLink = subnet.documentSelfLink;
+        createTask.subnetLink = subnet.documentSelfLink;
 
         createTask = TestUtils.doPost(this.host,
                 createTask,
@@ -112,7 +112,7 @@ public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
         ProvisionSubnetTaskState removalTask = new ProvisionSubnetTaskState();
         removalTask.options = createOptions();
         removalTask.requestType = InstanceRequestType.DELETE;
-        removalTask.subnetDescriptionLink = subnet.documentSelfLink;
+        removalTask.subnetLink = subnet.documentSelfLink;
 
         removalTask = TestUtils.doPost(this.host,
                 removalTask,

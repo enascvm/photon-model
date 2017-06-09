@@ -85,7 +85,7 @@ public class ProvisionSubnetTaskServiceTest extends Suite {
         ProvisionSubnetTaskState startState = new ProvisionSubnetTaskState();
 
         startState.requestType = requestType;
-        startState.subnetDescriptionLink = returnState.documentSelfLink;
+        startState.subnetLink = returnState.documentSelfLink;
         startState.options = EnumSet.of(TaskOption.IS_MOCK);
 
         return startState;
@@ -187,7 +187,7 @@ public class ProvisionSubnetTaskServiceTest extends Suite {
                         this,
                         SubnetInstanceRequest.InstanceRequestType.CREATE,
                         InstanceAdapterTestTypes.SUCCESS);
-                invalidNetworkDescriptionLink.subnetDescriptionLink = null;
+                invalidNetworkDescriptionLink.subnetLink = null;
 
                 postServiceSynchronously(
                         ProvisionSubnetTaskService.FACTORY_LINK,

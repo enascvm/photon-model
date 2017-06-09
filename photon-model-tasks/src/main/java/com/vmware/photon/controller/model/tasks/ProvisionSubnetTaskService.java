@@ -53,8 +53,16 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
 
         /**
          * The description of the subnet instance being realized. Required
+         *
+         * Deprecated in favor of {@link #subnetLink}.
          */
+        @Deprecated
         public String subnetDescriptionLink;
+
+        /**
+         * The subnet instance being realized. Required
+         */
+        public String subnetLink;
 
         /**
          * Tracks the sub stage. Set by the run-time.
@@ -81,8 +89,12 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
                 throw new IllegalArgumentException("requestType required");
             }
 
-            if (this.subnetDescriptionLink == null || this.subnetDescriptionLink.isEmpty()) {
-                throw new IllegalArgumentException("subnetDescriptionLink required");
+            if (this.subnetLink == null || this.subnetLink.isEmpty()) {
+                if (this.subnetDescriptionLink != null) {
+                    this.subnetLink = this.subnetDescriptionLink;
+                } else {
+                    throw new IllegalArgumentException("subnetLink required");
+                }
             }
 
             if (this.options == null) {
@@ -140,7 +152,7 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
 
             handleSubStages(currentState);
             logInfo(() -> String.format("%s %s on %s started", "Subnet",
-                    currentState.requestType.toString(), currentState.subnetDescriptionLink));
+                    currentState.requestType.toString(), currentState.subnetLink));
             break;
         case STARTED:
             currentState.taskInfo.stage = TaskState.TaskStage.STARTED;
@@ -217,7 +229,7 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
         SubnetInstanceRequest req = new SubnetInstanceRequest();
         req.requestType = taskState.requestType;
         req.resourceReference = UriUtils.buildUri(this.getHost(),
-                taskState.subnetDescriptionLink);
+                taskState.subnetLink);
         req.taskReference = this.getUri();
         req.isMockRequest = taskState.options.contains(TaskOption.IS_MOCK);
 
@@ -226,9 +238,7 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
 
     private void patchAdapter(ProvisionSubnetTaskState taskState) {
         sendRequest(Operation
-                .createGet(
-                        UriUtils.buildUri(this.getHost(),
-                                taskState.subnetDescriptionLink))
+                .createGet(UriUtils.buildUri(this.getHost(), taskState.subnetLink))
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
@@ -240,7 +250,7 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
                                 sendSelfPatch(TaskState.TaskStage.FAILED,
                                         new IllegalArgumentException(String.format(
                                                 "instanceAdapterReference required (%s)",
-                                                taskState.subnetDescriptionLink)));
+                                                taskState.subnetLink)));
                                 return;
                             }
 

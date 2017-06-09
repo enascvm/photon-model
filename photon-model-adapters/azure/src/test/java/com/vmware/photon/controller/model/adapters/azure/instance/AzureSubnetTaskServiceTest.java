@@ -46,7 +46,6 @@ import com.microsoft.azure.management.resources.implementation.ResourceGroupsInn
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
-
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -319,7 +318,7 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
 
         ProvisionSubnetTaskState taskState = new ProvisionSubnetTaskState();
         taskState.requestType = requestType;
-        taskState.subnetDescriptionLink = subnetState.documentSelfLink;
+        taskState.subnetLink = subnetState.documentSelfLink;
         taskState.options = this.isMock
                 ? EnumSet.of(TaskOption.IS_MOCK)
                 : EnumSet.noneOf(TaskOption.class);

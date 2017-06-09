@@ -274,7 +274,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
 
         ProvisionSubnetTaskState taskState = new ProvisionSubnetTaskState();
         taskState.requestType = requestType;
-        taskState.subnetDescriptionLink = subnetState.documentSelfLink;
+        taskState.subnetLink = subnetState.documentSelfLink;
         taskState.options = this.isMock
                 ? EnumSet.of(TaskOption.IS_MOCK)
                 : EnumSet.noneOf(TaskOption.class);
