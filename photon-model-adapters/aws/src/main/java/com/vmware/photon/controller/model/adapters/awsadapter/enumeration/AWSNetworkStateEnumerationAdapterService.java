@@ -72,6 +72,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -732,6 +733,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(localStateClass)
+                .addFieldClause(SubnetState.FIELD_NAME_LIFECYCLE_STATE,
+                        LifecycleState.PROVISIONING.toString(), Occurance.MUST_NOT_OCCUR)
                 .addRangeClause(
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
                         createLessThanRange(context.enumStartTimeInMicros));

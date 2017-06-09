@@ -76,6 +76,8 @@ import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeSnapshotsRequest;
 import com.amazonaws.services.ec2.model.DescribeSnapshotsResult;
+import com.amazonaws.services.ec2.model.DescribeSubnetsRequest;
+import com.amazonaws.services.ec2.model.DescribeSubnetsResult;
 import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
 import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest;
@@ -351,7 +353,7 @@ public class TestAWSSetupUtils {
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
             String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
             awsTestContext.put(VPC_KEY, vpcId);
-            String subnetId = createSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId);
+            String subnetId = createOrUpdateSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId);
             awsTestContext.put(SUBNET_KEY, subnetId);
 
             String internetGatewayId = createInternetGateway(client);
@@ -467,14 +469,24 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Creates a Subnet and return the Subnet id.
+     * Creates a Subnet if not exist and return the Subnet id.
      */
-    public static String createSubnet(AmazonEC2AsyncClient client, String subnetCidr, String vpcId) {
-        CreateSubnetRequest req = new CreateSubnetRequest()
-                .withCidrBlock(subnetCidr)
-                .withVpcId(vpcId);
-        CreateSubnetResult res = client.createSubnet(req);
-        return res.getSubnet().getSubnetId();
+    public static String createOrUpdateSubnet(AmazonEC2AsyncClient client, String subnetCidr,
+            String vpcId) {
+        Filter cidrBlockFilter = new Filter();
+        cidrBlockFilter.withName("cidrBlock");
+        cidrBlockFilter.withValues(subnetCidr);
+        DescribeSubnetsResult result = client.describeSubnets(new DescribeSubnetsRequest()
+                .withFilters(cidrBlockFilter));
+        if (result.getSubnets() != null && !result.getSubnets().isEmpty()) {
+            return result.getSubnets().get(0).getSubnetId();
+        } else {
+            CreateSubnetRequest req = new CreateSubnetRequest()
+                    .withCidrBlock(subnetCidr)
+                    .withVpcId(vpcId);
+            CreateSubnetResult res = client.createSubnet(req);
+            return res.getSubnet().getSubnetId();
+        }
     }
 
     /**

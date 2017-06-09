@@ -188,7 +188,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private Map<String, Object> awsTestContext;
     private String vpcId;
     private String subnetId;
-    private String secondarySubnetId;
+    private String subnetToDeleteId;
     private String securityGroupId;
     private AwsNicSpecs singleNicSpec;
 
@@ -292,9 +292,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         waitForProvisioningToComplete(instanceIdsToDeleteFirstTime, this.host, this.client, ZERO);
 
         // Create Subnet directly on AWS
-        this.secondarySubnetId = TestAWSSetupUtils.createSubnet(this.client,
+        this.subnetToDeleteId = TestAWSSetupUtils.createOrUpdateSubnet(this.client,
                 TestAWSSetupUtils.AWS_SUBNET_TO_DELETE_CIDR, this.vpcId);
-        this.awsTestContext.put(TestAWSSetupUtils.SUBNET_TO_DELETE_KEY, this.secondarySubnetId);
+        this.awsTestContext.put(TestAWSSetupUtils.SUBNET_TO_DELETE_KEY, this.subnetToDeleteId);
 
         // Xenon does not know about the new instances.
         ProvisioningUtils.queryComputeInstances(this.host, count2);
@@ -307,10 +307,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 .<SubnetState> getResourceStates(this.host, SubnetService.FACTORY_LINK,
                         SubnetState.class);
         assertTrue("Newly provisioned subnet should be enumerated",
-                subnetStates.containsKey(this.secondarySubnetId));
+                subnetStates.containsKey(this.subnetToDeleteId));
 
         //Delete the newly provisioned subnet
-        TestAWSSetupUtils.deleteSubnet(this.client, this.secondarySubnetId);
+        TestAWSSetupUtils.deleteSubnet(this.client, this.subnetToDeleteId);
         this.awsTestContext.remove(TestAWSSetupUtils.SUBNET_TO_DELETE_KEY);
         // 5 new resources should be discovered. Mapping to 2 new compute description and 5 new
         // compute states.
@@ -363,7 +363,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         subnetStates = ProvisioningUtils.<SubnetState> getResourceStates(host,
                 SubnetService.FACTORY_LINK, SubnetState.class);
         assertFalse("Newly deleted subnet should be removed from local db",
-                subnetStates.containsKey(this.secondarySubnetId));
+                subnetStates.containsKey(this.subnetToDeleteId));
 
         // Because one public NIC and its document are removed,
         // the totalNetworkInterfaceStateCount should go down by 1
