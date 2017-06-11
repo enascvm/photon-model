@@ -17,10 +17,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 
+import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
@@ -34,6 +37,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -41,6 +45,7 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -56,18 +61,20 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * Tests for the {@link AWSLoadBalancerService} class.
  */
 public class AWSLoadBalancerServiceTest extends BaseModelTest {
-    private static final int DEFAULT_TIMOUT_SECONDS = 200;
+    private static final int DEFAULT_TIMEOUT_SECONDS = 200;
     private static final String TEST_LOAD_BALANCER_NAME_PREFIX = "pm-test-";
 
     public String secretKey = "test123";
     public String accessKey = "blas123";
     public String regionId = TestAWSSetupUtils.regionId;
     public String subnetId = "subnet123";
-    private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
+    private int timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
     public boolean isMock = true;
     private AmazonElasticLoadBalancingAsyncClient client;
+    private AWSSecurityGroupClient securityGroupClient;
 
     private String lbName;
+    private String sgId;
 
     private EndpointState endpointState;
 
@@ -87,6 +94,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             creds.privateKeyId = this.accessKey;
             this.client = AWSUtils.getLoadBalancingAsyncClient(creds, this.regionId,
                     TestUtils.getExecutor());
+            this.securityGroupClient  = new AWSSecurityGroupClient(
+                    AWSUtils.getAsyncClient(creds, this.regionId, getExecutor()));
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
             this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
@@ -105,6 +114,9 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         if (this.lbName != null) {
             deleteAwsLoadBalancer(this.lbName);
         }
+        if (this.sgId != null) {
+            deleteAwsSecurityGroup(this.sgId);
+        }
     }
 
     @Test
@@ -118,9 +130,26 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
         if (!this.isMock) {
             LoadBalancerDescription awsLoadBalancer = getAwsLoadBalancer(this.lbName);
+            String securityGroupDocumentSelfLink = lb.customProperties.get(AWSLoadBalancerService
+                    .SECURITY_GROUP_DOCUMENT_SELF_LINK);
+
+            assertNotNull(securityGroupDocumentSelfLink);
+
+            SecurityGroupState sgs = getServiceSynchronously(securityGroupDocumentSelfLink,
+                    SecurityGroupState.class);
+
+            this.sgId = sgs.id;
+
+            SecurityGroup securityGroup = getAwsSecurityGroup(sgs.id);
             assertNotNull(awsLoadBalancer);
             assertEquals(awsLoadBalancer.getDNSName(), lb.address);
             assertEquals("internet-facing", awsLoadBalancer.getScheme());
+
+            assertNotNull(securityGroup);
+
+            String lbSecGroupId = awsLoadBalancer.getSecurityGroups().stream().findFirst()
+                    .orElse(null);
+            assertEquals(securityGroup.getGroupId(), lbSecGroupId);
         }
 
         kickOffLoadBalancerProvision(InstanceRequestType.DELETE, lb.documentSelfLink,
@@ -128,9 +157,11 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
         if (!this.isMock) {
             assertNull(getAwsLoadBalancer(this.lbName));
+            assertNull(getAwsSecurityGroup(this.sgId));
         }
 
         this.lbName = null;
+        this.sgId = null;
     }
 
     private EndpointState createEndpointState() throws Throwable {
@@ -143,6 +174,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         endpoint.endpointType = endpointType;
         endpoint.tenantLinks = Collections.singletonList(endpointType + "Tenant");
         endpoint.authCredentialsLink = createAuthCredentialsState().documentSelfLink;
+        endpoint.resourcePoolLink = "dummy";
 
         return postServiceSynchronously(
                 EndpointService.FACTORY_LINK,
@@ -258,4 +290,27 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             this.host.log("Exception deleting a load balancer '%s': %s", name, e.toString());
         }
     }
+
+    private SecurityGroup getAwsSecurityGroup(String id) {
+        try {
+            return this.securityGroupClient.getSecurityGroupById(id);
+        } catch (Exception e) {
+            this.host.log("Exception describing security group with id '%s': %s", id,
+                    e.toString());
+        }
+        return null;
+    }
+
+    private void deleteAwsSecurityGroup(String id) {
+        if (this.isMock) {
+            return;
+        }
+
+        try {
+            this.securityGroupClient.deleteSecurityGroup(id);
+        } catch (Exception e) {
+            this.host.log("Exception deleting security group '%s': %s", id, e.toString());
+        }
+    }
+
 }

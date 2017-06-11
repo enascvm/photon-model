@@ -45,6 +45,7 @@ public class AWSSecurityGroupService extends StatelessService {
      * Security Group request stages.
      */
     public static class AWSSecurityGroupContext {
+
         public AWSSecurityGroupClient client;
         public AuthCredentialsServiceState credentials;
         public SecurityGroupInstanceRequest request;
@@ -52,12 +53,21 @@ public class AWSSecurityGroupService extends StatelessService {
         public String securityGroupId;
         public Throwable error;
         TaskManager taskManager;
+        public Operation operation;
 
-        AWSSecurityGroupContext(StatelessService service,
+        AWSSecurityGroupContext(StatelessService service, Operation operation,
                 SecurityGroupInstanceRequest request) {
             this.request = request;
-            this.taskManager = new TaskManager(service, request.taskReference,
-                    request.resourceLink());
+            if (request.taskReference != null) {
+                this.taskManager = new TaskManager(service, request.taskReference,
+                        request.resourceLink());
+            }
+
+            this.operation = operation;
+        }
+
+        public boolean isAsync() {
+            return this.taskManager != null;
         }
     }
 
@@ -85,13 +95,14 @@ public class AWSSecurityGroupService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
+        SecurityGroupInstanceRequest request = op.getBody(SecurityGroupInstanceRequest.class);
 
         // initialize request context
-        AWSSecurityGroupContext context = new AWSSecurityGroupContext(this,
-                op.getBody(SecurityGroupInstanceRequest.class));
-
-        // Immediately complete the Operation from calling task.
-        op.complete();
+        AWSSecurityGroupContext context = new AWSSecurityGroupContext(this, op, request);
+        if (context.isAsync()) {
+            // Immediately complete the Operation from calling task.
+            op.complete();
+        }
 
         DeferredResult.completed(context)
                 .thenCompose(this::populateContext)
@@ -99,9 +110,18 @@ public class AWSSecurityGroupService extends StatelessService {
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
-                        context.taskManager.finishTask();
+                        if (context.isAsync()) {
+                            context.taskManager.finishTask();
+                        } else {
+                            context.operation.setBody(context.securityGroup);
+                            context.operation.complete();
+                        }
                     } else {
-                        context.taskManager.patchTaskToFailure(e);
+                        if (context.isAsync()) {
+                            context.taskManager.patchTaskToFailure(e);
+                        } else {
+                            context.operation.fail(e);
+                        }
                     }
                 });
 
@@ -143,7 +163,7 @@ public class AWSSecurityGroupService extends StatelessService {
         DeferredResult<AWSSecurityGroupContext> r = new DeferredResult<>();
         context.client = new AWSSecurityGroupClient(this,
                 this.clientManager.getOrCreateEC2Client(context.credentials,
-                        context.securityGroup.regionId,this, (t) -> r.fail(t)));
+                        context.securityGroup.regionId, this, (t) -> r.fail(t)));
 
         if (context.client != null) {
             r.complete(context);
@@ -203,7 +223,7 @@ public class AWSSecurityGroupService extends StatelessService {
                 })
                 .thenCompose(ctx -> updateSecurityGroupProperties(context.securityGroup,
                         SECURITY_GROUP_ID, context.securityGroupId)
-                .thenApply(sg ->  context));
+                        .thenApply(sg -> context));
     }
 
     public DeferredResult<AWSSecurityGroupContext> updateRules(
