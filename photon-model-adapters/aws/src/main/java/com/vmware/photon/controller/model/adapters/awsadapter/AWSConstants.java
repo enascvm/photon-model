@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -136,8 +135,6 @@ public class AWSConstants {
     public static final String UNIT_HOURS = "Hours";
 
     public static final String WINDOWS_PLATFORM = "windows";
-
-    public static final long AGGREGATION_WINDOW_ALIGNMENT_TIME = TimeUnit.SECONDS.toMillis(1);
 
     /**
      * Number of operations to send in a batch when using OperationJoin

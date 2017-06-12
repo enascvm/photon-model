@@ -21,7 +21,6 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,11 +28,16 @@ import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
@@ -59,14 +63,17 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         statsData.accountId = TestAWSCostAdapterService.account1Id;
         ComputeStateWithDescription account1ComputeState = new ComputeStateWithDescription();
         account1ComputeState.documentSelfLink = TestAWSCostAdapterService.account1SelfLink;
+        account1ComputeState.type = ComputeType.VM_HOST;
         account1ComputeState.endpointLink = "endpoint1";
+        account1ComputeState.name = "account1";
         account1ComputeState.descriptionLink = UriUtils
-                .buildUriPath(ComputeDescriptionService.FACTORY_LINK,
-                        generateUuidFromStr("123"));
+                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, generateUuidFromStr("123"));
         account1ComputeState.creationTimeMicros = Utils.getNowMicrosUtc();
         account1ComputeState.customProperties = new HashMap<>();
         account1ComputeState.customProperties
                 .put(AWSConstants.AWS_ACCOUNT_ID_KEY, "account1Id");
+        account1ComputeState.customProperties
+                .put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE, EndpointType.aws.name());
         account1ComputeState.description = new ComputeDescription();
         account1ComputeState.description.statsAdapterReferences = statsAdapterReferences;
         account1ComputeState.tenantLinks = Collections.singletonList("tenant-1");
@@ -91,8 +98,16 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     }
 
     @Override
-    protected void queryBillProcessedTime(AWSCostStatsCreationContext context,
-            AWSCostStatsCreationStages next) {
+    protected void queryMarkers(AWSCostStatsCreationContext context, AWSCostStatsCreationStages next) {
+        context.awsAccountIdToComputeStates.forEach((accId, states) -> {
+            if (accId.equals(TestAWSCostAdapterService.account2Id)) {
+                states.get(0).documentSelfLink = TestAWSCostAdapterService.account2SelfLink;
+            }
+        });
+        context.accountsMarkersMap.put(TestAWSCostAdapterService.account1Id,
+                getMockMarkerMetrics(TestAWSCostAdapterService.account1SelfLink));
+        context.accountsMarkersMap.put(TestAWSCostAdapterService.account2Id,
+                getMockMarkerMetrics(TestAWSCostAdapterService.account2SelfLink));
         context.stage = next;
         handleCostStatsCreationRequest(context);
     }
@@ -102,6 +117,14 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
             AWSCostStatsCreationStages next) {
         context.stage = next;
         handleCostStatsCreationRequest(context);
+    }
+
+    private ResourceMetrics getMockMarkerMetrics(String selfLink) {
+        ResourceMetrics markerMetrics = new ResourceMetrics();
+        markerMetrics.timestampMicrosUtc = getCurrentMonthStartTimeMicros();
+        markerMetrics.entries = new HashMap<>();
+        markerMetrics.documentSelfLink = StatsUtil.getMetricKey(selfLink, Utils.getNowMicrosUtc());
+        return markerMetrics;
     }
 
     @Override
@@ -114,12 +137,9 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         try {
             csvBillZipFilePath = TestUtils.getTestResourcePath(TestAWSCostAdapterService.class,
                     TestAWSSetupUtils.getCurrentMonthsSampleBillFilePath().toString());
-            Map<String, Long> accountMarkers = new HashMap<>();
-            accountMarkers.put(TestAWSCostAdapterService.account1Id, 0L);
-            accountMarkers.put(TestAWSCostAdapterService.account2Id, 0L);
             LocalDate billMonth = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1);
             parser.parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath,
-                    accountMarkers, getHourlyStatsConsumer(billMonth, statsData),
+                    statsData.awsAccountIdToComputeStates.keySet(), getHourlyStatsConsumer(billMonth, statsData),
                     getMonthlyStatsConsumer(billMonth, statsData));
         } catch (Throwable e) {
             statsData.taskManager.patchTaskToFailure(e);
@@ -129,31 +149,16 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         handleCostStatsCreationRequest(statsData);
     }
 
-    private void validatePastMonthsBillsAreScheduledForDownload(
-            AWSCostStatsCreationContext statsData) {
-
-        // Backup the accountIdToBillProcessedTimeMap and restore after test
-        Map<String, Long> accountIdToBillProcessedTimeBackup = statsData
-                .accountIdToBillProcessedTime;
-
-        // Set billProcessedTime to 0 for this test case
-        for (Map.Entry<String, Long> entries : statsData.accountIdToBillProcessedTime.entrySet()) {
-            entries.setValue(0L);
-        }
+    private void validatePastMonthsBillsAreScheduledForDownload(AWSCostStatsCreationContext statsData) {
         AWSCostStatsService costStatsService = new AWSCostStatsService();
         costStatsService.populateBillMonthToProcess(statsData);
 
-        String property = System.getProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
-        int numberOfMonthsToDownloadBill = AWSConstants.DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS;
-
-        if (property != null) {
-            numberOfMonthsToDownloadBill = new Integer(property);
-        }
+        int numberOfMonthsToDownloadBill = Integer.getInteger(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY,
+                AWSConstants.DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS);
 
         assertEquals("Bill collection starting month is incorrect. Expected: %s Got: %s",
                 LocalDate.now(DateTimeZone.UTC).getMonthOfYear(), statsData.billMonthToDownload
                         .plusMonths(numberOfMonthsToDownloadBill).getMonthOfYear());
-        statsData.accountIdToBillProcessedTime = accountIdToBillProcessedTimeBackup;
     }
 
     @Override

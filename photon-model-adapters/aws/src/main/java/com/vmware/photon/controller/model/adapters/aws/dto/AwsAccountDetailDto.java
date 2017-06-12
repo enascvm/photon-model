@@ -21,7 +21,6 @@ public class AwsAccountDetailDto {
     public String id;
     public String name;
     public Double cost = 0d;
-    public Integer deletedVmCount = 0;
     public Map<String, AwsServiceDetailDto> serviceDetailsMap = new HashMap<>();
     //This will contain all taxes, like VAT,Sales Tax etc for this account.
     public Double otherCharges = 0d;
@@ -29,7 +28,8 @@ public class AwsAccountDetailDto {
     // the last collection cycle. The bill records (rows) will be processed beginning from
     // the next record in the bill being processed in the current collection cycle. In case
     // this value is 0, the complete bill be processed and persisted.
-    public long billProcessedTimeMillis;
+    public Long billProcessedTimeMillis = 0L;
+    public Map<Long, Integer> lineCountPerHour = new HashMap<>();
 
     public AwsServiceDetailDto fetchServiceDetail(String serviceName) {
         return this.serviceDetailsMap.get(serviceName);

@@ -28,6 +28,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -64,9 +66,9 @@ public class AWSCsvBillParser {
     public static final String INVOICE_TOTAL = "InvoiceTotal";
     public static final String ACCOUNT_TOTAL = "AccountTotal";
 
-    public void parseDetailedCsvBill(List<String> ignorableInvoiceCharge, Path csvBillZipFilePath,
-            Map<String, Long> accountIdToBillProcessedTime,
-            Consumer<Map<String, AwsAccountDetailDto>> hourlyStatsConsumer,
+    public void parseDetailedCsvBill(List<String> ignorableInvoiceCharge,
+            Path csvBillZipFilePath, Set<String> configuredAccounts,
+            BiConsumer<Map<String, AwsAccountDetailDto>, Long> hourlyStatsConsumer,
             Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer)
             throws IOException {
 
@@ -75,22 +77,17 @@ public class AWSCsvBillParser {
         String unzippedCsvFilePathStr = csvBillZipFilePath.toString()
                 .substring(0, csvBillZipFilePath.toString().lastIndexOf('.'));
         Path unzippedCsvFilePath = Paths.get(unzippedCsvFilePathStr);
-
-        try (InputStream extractedObjectContentInputStream = new FileInputStream(
-                unzippedCsvFilePath.toFile())) {
-            parseDetailedCsvBill(extractedObjectContentInputStream, ignorableInvoiceCharge,
-                    accountIdToBillProcessedTime, hourlyStatsConsumer, monthlyStatsConsumer);
+        try (InputStream extractedObjectContentInputStream = new FileInputStream(unzippedCsvFilePath.toFile())) {
+            parseDetailedCsvBill(extractedObjectContentInputStream, ignorableInvoiceCharge, configuredAccounts,
+                    hourlyStatsConsumer, monthlyStatsConsumer);
         } finally {
             Files.deleteIfExists(unzippedCsvFilePath);
         }
     }
 
-    private void parseDetailedCsvBill(InputStream inputStream,
-            Collection<String> ignorableInvoiceCharge,
-            Map<String, Long> accountIdToBillProcessedTime,
-            Consumer<Map<String, AwsAccountDetailDto>> hourlyStatsConsumer,
-            Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer)
-            throws IOException {
+    private void parseDetailedCsvBill(InputStream inputStream, Collection<String> ignorableInvoiceCharge,
+            Set<String> configuredAccounts, BiConsumer<Map<String, AwsAccountDetailDto>, Long> hourlyStatsConsumer,
+            Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer) throws IOException {
 
         final CsvPreference STANDARD_SKIP_COMMENTS = new CsvPreference.Builder(
                 CsvPreference.STANDARD_PREFERENCE)
@@ -126,17 +123,18 @@ public class AWSCsvBillParser {
                         .get(DetailedCsvHeaders.USAGE_START_DATE);
                 Long curRowTime = getMillisForHour(currRowLocalDateTime);
                 if (prevRowTime != null && curRowTime != null && !prevRowTime.equals(curRowTime)) {
-                    // This indicates that we have processed all rows belonging to a
-                    // corresponding hour in the current month bill.
-                    // Consume the batch
-                    hourlyStatsConsumer.accept(monthlyBill);
+                    // This indicates that we have processed all rows belonging to a corresponding hour in the
+                    // current month bill. Consume the batch
+                    hourlyStatsConsumer.accept(monthlyBill, prevRowTime);
                 }
-                readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge, accountIdToBillProcessedTime);
-                prevRowTime = curRowTime;
+                readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge,configuredAccounts);
+                if (curRowTime != null) {
+                    prevRowTime = curRowTime;
+                }
             }
 
             // Consume the final batch of parsed rows
-            hourlyStatsConsumer.accept(monthlyBill);
+            hourlyStatsConsumer.accept(monthlyBill, prevRowTime);
             monthlyStatsConsumer.accept(monthlyBill);
         }
     }
@@ -188,11 +186,9 @@ public class AWSCsvBillParser {
      * monthlyBill Map.
      **/
     private void readRow(Map<String, Object> rowMap, Map<String, AwsAccountDetailDto> monthlyBill,
-            List<String> tagHeaders, Collection<String> ignorableInvoiceCharge,
-            Map<String, Long> accountIdToBillProcessedTime) {
+            List<String> tagHeaders, Collection<String> ignorableInvoiceCharge, Set<String> configuredAccounts) {
 
-        final String linkedAccountId = getStringFieldValue(rowMap,
-                DetailedCsvHeaders.LINKED_ACCOUNT_ID);
+        final String linkedAccountId = getStringFieldValue(rowMap, DetailedCsvHeaders.LINKED_ACCOUNT_ID);
         String serviceName = getStringFieldValue(rowMap, DetailedCsvHeaders.PRODUCT_NAME);
         String subscriptionId = getStringFieldValue(rowMap, DetailedCsvHeaders.SUBSCRIPTION_ID);
 
@@ -202,31 +198,26 @@ public class AWSCsvBillParser {
                 || serviceName.length() == 0) {
             // Reads the summary lines in bill file, which consists of the
             // account cost and puts it in the monthly bill map
-            readSummaryRow(rowMap, linkedAccountId, serviceName, monthlyBill,
-                    ignorableInvoiceCharge);
+            readSummaryRow(rowMap, linkedAccountId, serviceName, monthlyBill, ignorableInvoiceCharge);
             return;
         }
 
         //------------------------------------------------------------------------------------
         // Check if the account corresponding to this row is configured in the system.
         // If not, we skip holding related information in memory.
-        AwsAccountDetailDto accountDetails = createOrGetAccountDetailObject(monthlyBill,
-                linkedAccountId);
-        Long markerTime = accountIdToBillProcessedTime.get(linkedAccountId);
-        if (markerTime == null) {
+        AwsAccountDetailDto accountDetails = createOrGetAccountDetailObject(monthlyBill, linkedAccountId);
+        if (!configuredAccounts.contains(linkedAccountId)) {
             return;
         }
 
         //------------------------------------------------------------------------------------
         // Non-summary rows.
-        LocalDateTime usageStartTimeFromCsv = (LocalDateTime) rowMap
-                .get(DetailedCsvHeaders.USAGE_START_DATE);
+        LocalDateTime usageStartTimeFromCsv = (LocalDateTime) rowMap.get(DetailedCsvHeaders.USAGE_START_DATE);
         Long millisForBillHour = getMillisForHour(usageStartTimeFromCsv);
 
         // Populate hourly resource and service stats only for current month since they are not needed
-        // for previous months. Also don't parse already persisted line items.
-        if (millisForBillHour == null ||
-                (millisForBillHour >= getMonthStartMillis() && millisForBillHour > markerTime)) {
+        // for previous months.
+        if (millisForBillHour == null || (millisForBillHour >= getMonthStartMillis())) {
 
             AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails, serviceName);
             Double resourceCost = getResourceCost(rowMap);
@@ -261,6 +252,12 @@ public class AWSCsvBillParser {
 
         if (millisForBillHour != null && millisForBillHour > accountDetails.billProcessedTimeMillis) {
             accountDetails.billProcessedTimeMillis = millisForBillHour;
+        }
+
+        // update the line count of the account to whom this row belongs to
+        if (millisForBillHour != null) {
+            Integer currentLineCount = accountDetails.lineCountPerHour.getOrDefault(millisForBillHour,0);
+            accountDetails.lineCountPerHour.put(millisForBillHour, currentLineCount + 1);
         }
     }
 

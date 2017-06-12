@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.MockCostSta
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -206,6 +207,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
     }
 
     private void issueStatsRequest(ComputeState account) throws Throwable {
+        List<ComputeStats> allStats = new ArrayList<>();
         // spin up a stateless service that acts as the parent link to patch back to
         StatelessService parentService = new StatelessService() {
             @Override
@@ -214,11 +216,10 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                     if (TestAWSCostAdapterService.this.isMock) {
                         SingleResourceStatsCollectionTaskState resp = op
                                 .getBody(SingleResourceStatsCollectionTaskState.class);
+                        allStats.addAll(resp.statsList);
                         if (resp.isFinalBatch) {
-                            verifyCollectedStats(resp, true);
+                            verifyCollectedStats(allStats);
                             TestAWSCostAdapterService.this.host.completeIteration();
-                        } else {
-                            verifyCollectedStats(resp, false);
                         }
                     } else {
                         TestAWSCostAdapterService.this.host.completeIteration();
@@ -247,41 +248,30 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                 .setReferer(this.host.getUri()));
     }
 
-    protected void verifyCollectedStats(SingleResourceStatsCollectionTaskState resp,
-            boolean isFinalBatch) {
+    private void verifyCollectedStats(List<ComputeStats> statsList) {
 
-        Map<String, ComputeStats> computeStatsByLink = resp.statsList.stream()
-                .collect(Collectors.toMap(e -> e.computeLink, Function.identity()));
+        Map<String, ComputeStats> computeStatsByLink = statsList.stream()
+                .collect(Collectors.toMap(e -> e.computeLink, Function.identity(), (allStats, stats) -> {
+                    allStats.statValues.putAll(stats.statValues);
+                    return allStats;
+                }));
         ComputeStats account1Stats = computeStatsByLink.get(account1SelfLink);
         ComputeStats account2Stats = computeStatsByLink.get(account2SelfLink);
-        String normalizedStatKeyValue = AWSStatsNormalizer
-                .getNormalizedStatKeyValue(AWSConstants.COST);
-        if (isFinalBatch) {
-            // verify account costs
-            if (account2Stats != null) {
-                assertTrue(account2Stats.statValues.get(normalizedStatKeyValue)
-                        .get(0).latestValue == account2TotalCost);
-            }
-            return;
-        }
-        if (account1Stats != null && account1Stats.statValues.get(normalizedStatKeyValue) != null) {
-            assertTrue(account1Stats.statValues.get(normalizedStatKeyValue)
-                    .get(0).latestValue == account1TotalCost);
-            return;
-        }
+        String normalizedStatKeyValue = AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.COST);
+
+        // verify account costs
+        assertTrue(account1Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue == account1TotalCost);
+        assertTrue(account2Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue == account2TotalCost);
 
         // check that service level stats exist
         String serviceCode = AWSCsvBillParser.AwsServices.EC2.getName().replaceAll(" ", "");
-        String serviceResourceCostMetric = String
-                .format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
+        String serviceResourceCostMetric = String.format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
         assertTrue(!account1Stats.statValues.get(serviceResourceCostMetric).isEmpty());
 
-        String serviceOtherCostMetric = String
-                .format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
+        String serviceOtherCostMetric = String.format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
         assertTrue(!account1Stats.statValues.get(serviceOtherCostMetric).isEmpty());
 
-        String serviceMonthlyOtherCostMetric = String
-                .format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
+        String serviceMonthlyOtherCostMetric = String.format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
         assertTrue(!account1Stats.statValues.get(serviceMonthlyOtherCostMetric).isEmpty());
 
         String serviceReservedRecurringCostMetric = String
@@ -300,6 +290,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                 .get(0).latestValue, 0);
         assertEquals(1.0, instance1Stats.statValues.get(normalizedReservedInstanceStatKeyValue)
                 .get(0).latestValue, 0);
+
         // Check that stat values are accompanied with Units.
         for (String key : account1Stats.statValues.keySet()) {
             List<ServiceStat> stats = account1Stats.statValues.get(key);
@@ -308,5 +299,4 @@ public class TestAWSCostAdapterService extends BaseModelTest {
             }
         }
     }
-
 }
