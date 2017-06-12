@@ -325,11 +325,6 @@ public class AzureCostStatsService extends StatelessService {
                                 AzureCostConstants.USAGE_COST),
                 QueryTask.NumericRange
                         .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
-        builder.addRangeClause(QueryTask.QuerySpecification
-                        .buildCompositeFieldName(
-                                ResourceMetricsService.ResourceMetrics.FIELD_NAME_TIMESTAMP),
-                QueryTask.NumericRange
-                        .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
         URI queryUri = UriUtils.extendUri(getMetricsServiceUri(),
                 ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
         Operation.createPost(queryUri)
@@ -340,8 +335,8 @@ public class AzureCostStatsService extends StatelessService {
                         // This will prevent Lucene from holding the full result set in memory.
                         .addOption(QueryTask.QuerySpecification.QueryOption.INCLUDE_ALL_VERSIONS)
                         .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                        .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                ServiceDocumentDescription.TypeName.STRING)
+                        .orderDescending(ResourceMetricsService.ResourceMetrics.FIELD_NAME_TIMESTAMP,
+                                ServiceDocumentDescription.TypeName.LONG)
                         .setResultLimit(1)
                         .setQuery(builder.build()).build())
                 .setCompletion((operation, exception) -> {
@@ -544,6 +539,8 @@ public class AzureCostStatsService extends StatelessService {
         if (eaAccountCost != null) {
             Double collectedCurrentMonthEaUsageCost = eaAccountCost.monthlyEaAccountUsageCost;
             if (collectedCurrentMonthEaUsageCost.equals(context.storedCurrentMonthEaUsageCost)) {
+                logInfo(() -> "Microsoft Azure hasn't updated the bill since the last run."
+                        + "Aborting this run.");
                 postStats(context, true);
                 return;
             }
@@ -717,7 +714,7 @@ public class AzureCostStatsService extends StatelessService {
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         PhotonModelConstants.EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AzureCostConstants.SUBSCRIPTION_GUID, subscriptionGuid)
+                        PhotonModelConstants.CLOUD_ACCOUNT_ID, subscriptionGuid)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE,
                         ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST)
                 .build();
@@ -947,8 +944,6 @@ public class AzureCostStatsService extends StatelessService {
         String usageCostStatName = AzureCostConstants.USAGE_COST;
         String marketplaceCostStatName = AzureCostConstants.MARKETPLACE_COST;
         String separatelyBilledCostStatName = AzureCostConstants.SEPARATELY_BILLED_COST;
-        String totalCostStatName = AzureStatsNormalizer
-                .getNormalizedStatKeyValue(AzureCostConstants.COST);
         String costUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
 
         for (Entry<LocalDate, Double> monthlyTotalCost : monthlyTotalCosts.entrySet()) {
@@ -957,22 +952,19 @@ public class AzureCostStatsService extends StatelessService {
             accountStat.statValues = new ConcurrentSkipListMap<>();
 
             LocalDate month = monthlyTotalCost.getKey();
+            long timeStamp = adaptMonthToCostTimeStamp(month);
             EaAccountCost eaAccountCost = monthlyEaAccountCosts.get(month);
             ServiceStat usageCostServiceStat = AzureCostStatsServiceHelper
                     .createServiceStat(usageCostStatName, eaAccountCost.monthlyEaAccountUsageCost,
-                            costUnit, AzureCostStatsServiceHelper.getMillisForDate(month));
+                            costUnit, timeStamp);
             ServiceStat marketplaceCostServiceStat = AzureCostStatsServiceHelper
                     .createServiceStat(marketplaceCostStatName,
                             eaAccountCost.monthlyEaAccountMarketplaceCost,
-                            costUnit, AzureCostStatsServiceHelper.getMillisForDate(month));
+                            costUnit, timeStamp);
             ServiceStat separatelyBilledCostServiceStat = AzureCostStatsServiceHelper
                     .createServiceStat(separatelyBilledCostStatName,
                             eaAccountCost.monthlyEaAccountSeparatelyBilledCost,
-                            costUnit, AzureCostStatsServiceHelper.getMillisForDate(month));
-            ServiceStat totalCostServiceStat = AzureCostStatsServiceHelper
-                    .createServiceStat(totalCostStatName,
-                            monthlyTotalCosts.get(month),
-                            costUnit, AzureCostStatsServiceHelper.getMillisForDate(month));
+                            costUnit, timeStamp);
 
             accountStat.statValues
                     .put(usageCostStatName, Collections.singletonList(usageCostServiceStat));
@@ -980,11 +972,18 @@ public class AzureCostStatsService extends StatelessService {
                     Collections.singletonList(marketplaceCostServiceStat));
             accountStat.statValues.put(separatelyBilledCostStatName,
                     Collections.singletonList(separatelyBilledCostServiceStat));
-            accountStat.statValues
-                    .put(totalCostStatName, Collections.singletonList(totalCostServiceStat));
             accountStats.add(accountStat);
         }
         return accountStats;
+    }
+
+    private static long adaptMonthToCostTimeStamp(LocalDate month) {
+        if (AzureCostStatsServiceHelper.isCurrentMonth(month)) {
+            return AzureCostStatsServiceHelper.getMillisForDate(LocalDate.now(DateTimeZone.UTC));
+        } else {
+            return AzureCostStatsServiceHelper
+                    .getMillisForDate(month.dayOfMonth().withMaximumValue());
+        }
     }
 
     private static ComputeStats createBillProcessedTimeStat(

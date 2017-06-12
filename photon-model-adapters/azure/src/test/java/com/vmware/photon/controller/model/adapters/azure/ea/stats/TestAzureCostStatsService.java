@@ -58,6 +58,8 @@ public class TestAzureCostStatsService extends BaseModelTest {
     private String clientId = System.getProperty(AZURE_CLIENT_ID);
     private String clientSecret = System.getProperty(AZURE_CLIENT_SECRET);
 
+    private static final int NO_OF_MONTHS_COST_REQUIRED = 12;
+
     public String enrollmentNumber;
     public String usageApiKey;
 
@@ -112,15 +114,24 @@ public class TestAzureCostStatsService extends BaseModelTest {
                         state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
                                 .ordinal());
 
-        System.setProperty(AzureCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY, "1");
+        System.setProperty(AzureCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY,
+                Integer.toString(NO_OF_MONTHS_COST_REQUIRED - 1));
 
         triggerStatsCollection(resourcePool);
-        verifyPersistedStats(completeState, AzureCostConstants.COST);
+        verifyPersistedStats(completeState, AzureCostConstants.USAGE_COST,
+                NO_OF_MONTHS_COST_REQUIRED);
+        verifyPersistedStats(completeState,
+                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 1);
 
         //Check if second iteration of adapter succeeds.
         triggerStatsCollection(resourcePool);
+        // Expected count is same since the second run is not supposed to persist any stat
+        // since the second run is running almost immediately after the first and Azure
+        // may not (99.9% of the time) have updated the cost during this time.
+        verifyPersistedStats(completeState, AzureCostConstants.USAGE_COST,
+                NO_OF_MONTHS_COST_REQUIRED);
         verifyPersistedStats(completeState,
-                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS);
+                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 1);
 
         System.clearProperty(AzureCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
     }
@@ -142,7 +153,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
 
     private void verifyPersistedStats(
             EndpointAllocationTaskService.EndpointAllocationTaskState completeState,
-            String metric) {
+            String metric, int expectedCount) {
         this.host.waitFor("Timeout waiting for stats", () -> {
             QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
             querySpec.query = QueryTask.Query.Builder.create()
@@ -158,7 +169,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
                     .build();
             querySpec.options.add(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
             ServiceDocumentQueryResult result = this.host
-                    .createAndWaitSimpleDirectQuery(querySpec, 2, 2);
+                    .createAndWaitSimpleDirectQuery(querySpec, expectedCount, expectedCount);
             boolean statsCollected = true;
             for (Object metrics : result.documents.values()) {
                 ResourceMetricsService.ResourceMetrics rawMetrics = Utils

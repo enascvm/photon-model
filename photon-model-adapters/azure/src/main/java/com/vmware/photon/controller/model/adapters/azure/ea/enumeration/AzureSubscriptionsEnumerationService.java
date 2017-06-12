@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
@@ -179,9 +179,9 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         querySubscriptionsComputes.queryDocuments(computeState -> {
                     if (computeState.customProperties != null
                             && computeState.customProperties
-                            .containsKey(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
+                            .containsKey(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
                         String subscriptionUuid = computeState.customProperties
-                                .get(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY);
+                                .get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY);
                         enumerationContext.idToSubscription.remove(subscriptionUuid);
                     }
                 }
@@ -278,7 +278,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY,
+                        AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                         enumerationContext.parentAuth.privateKeyId)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .build();
@@ -374,11 +374,13 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             AzureSubscriptionsEnumerationContext enumerationContext,
             AzureSubscription subscription, boolean isAutoCreated) {
         Map<String, String> properties = new HashMap<>();
-        properties.put(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY,
-                subscription.entityId);
-        properties.put(AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY,
+        // Store the subscription GUID as the account ID since Azure accounts are
+        // identified by their subscription GUIDs.
+        properties.put(PhotonModelConstants.CLOUD_ACCOUNT_ID, subscription.entityId);
+        properties.put(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY, subscription.entityId);
+        properties.put(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                 enumerationContext.parentAuth.privateKeyId);
-        properties.put(AzureCostConstants.AZURE_ACCOUNT_ID,
+        properties.put(AzureConstants.AZURE_ACCOUNT_EMAIL_ID,
                 subscription.parentEntityId);
         if (isAutoCreated) {
             properties.put(PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString());

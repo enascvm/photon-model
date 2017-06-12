@@ -40,7 +40,7 @@ public class AzureConstants {
     // Azure EA
     public static final String AZURE_ENROLLMENT_NUMBER_KEY = "enrollmentNumber";
     public static final String AZURE_SUBSCRIPTION_ID_KEY = "subscriptionId";
-    public static final String AZURE_ACCOUNT_ID = "accountId";
+    public static final String AZURE_ACCOUNT_EMAIL_ID = "accountEmailId";
     public static final String AZURE_EA_BASE_URI = "https://ea.azure.com";
     public static final String AZURE_EA_USAGE_REPORTS_URI = AZURE_EA_BASE_URI
             + "/rest/{enrollmentNumber}/usage-reports";

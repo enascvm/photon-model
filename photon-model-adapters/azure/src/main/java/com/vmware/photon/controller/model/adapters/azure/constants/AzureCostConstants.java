@@ -154,14 +154,6 @@ public class AzureCostConstants {
 
     public static final String ERROR_RESPONSE_MESSAGE_SERVICE_UNAVAILABLE = "error 503 for GET";
 
-    // EA endpoint state properties
-    public static final String AZURE_USAGE_ACCESS_API_KEY = "usageApiKey";
-
-    // EA compute state properties
-    public static final String AZURE_ENROLLMENT_NUMBER_KEY = "enrollmentNumber";
-    public static final String AZURE_SUBSCRIPTION_ID_KEY = "subscriptionId";
-    public static final String AZURE_ACCOUNT_ID = "accountId";
-
     // For stats normalization
     public static final String COST = "Cost";
     public static final String USAGE_COST = "UsageCost";

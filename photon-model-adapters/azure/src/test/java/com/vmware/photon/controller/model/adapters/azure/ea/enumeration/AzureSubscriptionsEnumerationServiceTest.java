@@ -38,7 +38,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
 import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
@@ -81,8 +81,8 @@ public class AzureSubscriptionsEnumerationServiceTest {
     private static final String SUBSCRIPTION_EXISTING_2 = "subscriptionExisting2";
     private static final String SUBSCRIPTION_ID_1 = "subscriptionId1";
     private static final String SUBSCRIPTION_ID_2 = "subscriptionId2";
-    private static final String ACCOUNT_ID_1 = "accountId1";
-    private static final String ACCOUNT_ID_2 = "accountId2";
+    private static final String ACCOUNT_EMAIL_ID_1 = "accountId1";
+    private static final String ACCOUNT_EMAIL_ID_2 = "accountId2";
     // Azure EA account enrollment number
     private static final String ENROLLMENT_NUMNBER = "100";
     private static final String API_KEY = "clientKey";
@@ -209,10 +209,12 @@ public class AzureSubscriptionsEnumerationServiceTest {
 
     private void testAddSameAzureSubscriptions() throws  Throwable {
         // Request for creating computes for existing Azure Subscriptions
-        AzureSubscription subscription1 = getAzureSubscription(SUBSCRIPTION_ID_1, ACCOUNT_ID_1);
-        AzureSubscription subscription2 = getAzureSubscription(SUBSCRIPTION_ID_2, ACCOUNT_ID_2);
+        AzureSubscription subscription1 = getAzureSubscription(SUBSCRIPTION_ID_1,
+                ACCOUNT_EMAIL_ID_1);
+        AzureSubscription subscription2 = getAzureSubscription(SUBSCRIPTION_ID_2,
+                ACCOUNT_EMAIL_ID_2);
         AzureSubscription existingSubscription2 = getAzureSubscription(SUBSCRIPTION_EXISTING_2,
-                ACCOUNT_ID_2);
+                ACCOUNT_EMAIL_ID_2);
         createAzureCostComputesForSubscriptions(Arrays.asList(subscription1, subscription2,
                 existingSubscription2));
 
@@ -239,7 +241,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
 
     private void testAddMoreAzureSubscriptions() throws Throwable {
         // Request for creating computes for another Azure Subscriptions
-        AzureSubscription subscription = getAzureSubscription(SUBSCRIPTION_ID_2, ACCOUNT_ID_2);
+        AzureSubscription subscription = getAzureSubscription(SUBSCRIPTION_ID_2, ACCOUNT_EMAIL_ID_2);
         createAzureCostComputesForSubscriptions(Collections.singletonList(subscription));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
@@ -267,7 +269,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                         ComputeState.class);
         assertPropertiesOfComputeState(cs,
                 ENROLLMENT_NUMNBER, SUBSCRIPTION_ID_2,
-                ACCOUNT_ID_2, this.compute.endpointLink, this.compute.tenantLinks);
+                ACCOUNT_EMAIL_ID_2, this.compute.endpointLink, this.compute.tenantLinks);
 
         this.createdComputeLinks.add(cs.documentSelfLink);
 
@@ -283,9 +285,10 @@ public class AzureSubscriptionsEnumerationServiceTest {
         Assert.assertNotNull("Root compute of Azure EA account is null", this.compute);
 
         // Request for creating computes for 1 Azure Subscriptions
-        AzureSubscription subscription = getAzureSubscription(SUBSCRIPTION_ID_1, ACCOUNT_ID_1);
+        AzureSubscription subscription = getAzureSubscription(SUBSCRIPTION_ID_1,
+                ACCOUNT_EMAIL_ID_1);
         AzureSubscription existingSubscription1 = getAzureSubscription(SUBSCRIPTION_EXISTING_1,
-                ACCOUNT_ID_1);
+                ACCOUNT_EMAIL_ID_1);
         createAzureCostComputesForSubscriptions(Arrays.asList(subscription, existingSubscription1));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
@@ -306,7 +309,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 .fromJson(queryTaskResponse.results.documents.values().iterator().next(),
                         ComputeState.class);
         assertPropertiesOfComputeState(cs,
-                ENROLLMENT_NUMNBER, SUBSCRIPTION_ID_1, ACCOUNT_ID_1,
+                ENROLLMENT_NUMNBER, SUBSCRIPTION_ID_1, ACCOUNT_EMAIL_ID_1,
                 this.compute.endpointLink, this.compute.tenantLinks);
 
         this.createdComputeLinks.add(cs.documentSelfLink);
@@ -363,7 +366,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY, azureEnrollmentNumber)
+                        AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY, azureEnrollmentNumber)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
@@ -376,16 +379,16 @@ public class AzureSubscriptionsEnumerationServiceTest {
 
     private void assertPropertiesOfComputeState(ComputeState cs, String expectedEnrollmentNumber,
                                                 String expectedSubscriptionUuid,
-                                                String expectedAccountId,
+                                                String expectedAccountEmailId,
                                                 String expectedEndpointLink,
                                                 List<String> expectedTenantLinks) {
         Assert.assertNotNull(cs.customProperties);
         Assert.assertEquals(expectedEnrollmentNumber,
-                cs.customProperties.get(AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY));
-        Assert.assertEquals(expectedAccountId,
-                cs.customProperties.get(AzureCostConstants.AZURE_ACCOUNT_ID));
+                cs.customProperties.get(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY));
+        Assert.assertEquals(expectedAccountEmailId,
+                cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_EMAIL_ID));
         Assert.assertEquals(expectedSubscriptionUuid,
-                cs.customProperties.get(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY));
+                cs.customProperties.get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY));
         Assert.assertEquals(Boolean.TRUE.toString(),
                 cs.customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
         Assert.assertEquals(expectedEndpointLink, cs.endpointLink);

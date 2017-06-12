@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -205,13 +206,12 @@ public class AzureSubscriptionEndpointCreationService extends StatelessService {
     private Map<String, String> getCustomPropertiesMap(
             EndpointState azureEaEndpoint, AzureSubscriptionEndpointCreationRequest request) {
         Map<String, String> properties = new HashMap<>();
-        properties.put(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY,
-                request.subscriptionId);
+        properties.put(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY, request.subscriptionId);
+        properties.put(PhotonModelConstants.CLOUD_ACCOUNT_ID, request.subscriptionId);
         properties.put(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                 azureEaEndpoint.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEYID_KEY));
         if (request.accountId != null) {
-            properties.put(AzureConstants.AZURE_ACCOUNT_ID,
-                    request.accountId);
+            properties.put(AzureConstants.AZURE_ACCOUNT_EMAIL_ID, request.accountId);
         }
         return properties;
     }
