@@ -56,7 +56,7 @@ public enum AzureInstanceStage {
     /**
      * Differentiate between a Windows VM and a Linux VM.
      */
-    GET_DISK_OS_FAMILY,
+    GET_IMAGE,
 
     /**
      * Stage where resource group is initialized.

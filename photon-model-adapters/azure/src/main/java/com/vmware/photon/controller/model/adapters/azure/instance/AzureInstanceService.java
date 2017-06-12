@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_BLOB_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
@@ -46,6 +47,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -55,6 +57,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.CloudError;
@@ -67,13 +71,13 @@ import com.microsoft.azure.management.compute.HardwareProfile;
 import com.microsoft.azure.management.compute.NetworkProfile;
 import com.microsoft.azure.management.compute.OSDisk;
 import com.microsoft.azure.management.compute.OSProfile;
+import com.microsoft.azure.management.compute.OperatingSystemTypes;
 import com.microsoft.azure.management.compute.StorageProfile;
 import com.microsoft.azure.management.compute.VirtualHardDisk;
 import com.microsoft.azure.management.compute.VirtualMachineSizeTypes;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
-import com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineImageResourceInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.AddressSpace;
@@ -107,7 +111,6 @@ import com.microsoft.azure.management.storage.StorageAccountKey;
 import com.microsoft.azure.management.storage.implementation.StorageAccountCreateParametersInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
-import com.microsoft.azure.management.storage.implementation.StorageAccountsInner;
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 import com.microsoft.rest.ServiceCallback;
 
@@ -124,6 +127,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioning
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
+import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -131,6 +135,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -161,6 +167,8 @@ public class AzureInstanceService extends StatelessService {
     private static final String NICCONFIG_NAME_PREFIX = "nicconfig";
     private static final String DEFAULT_GROUP_PREFIX = "group";
     private static final String VHD_URI_FORMAT = "https://%s.blob.core.windows.net/vhds/%s.vhd";
+    private static final Pattern VHD_URI_PATTERN = Pattern
+            .compile("https://([\\p{Lower}\\p{Digit}]+).blob.core.windows.net/(.+)\\.vhd");
     private static final String BOOT_DISK_SUFFIX = "-boot-disk";
 
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
@@ -276,7 +284,7 @@ public class AzureInstanceService extends StatelessService {
      * .
      */
     private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx,
-                                                                       AzureInstanceStage next, String namespace) {
+            AzureInstanceStage next, String namespace) {
         return (ignoreCtx, exc) -> {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
@@ -293,7 +301,7 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx,
-                                                                       AzureInstanceStage next) {
+            AzureInstanceStage next) {
         return thenAllocation(ctx, next, null);
     }
 
@@ -334,10 +342,10 @@ public class AzureInstanceService extends StatelessService {
                 getVMDisks(ctx, AzureInstanceStage.INIT_RES_GROUP);
                 break;
             case INIT_RES_GROUP:
-                createResourceGroup(ctx, AzureInstanceStage.GET_DISK_OS_FAMILY);
+                createResourceGroup(ctx, AzureInstanceStage.GET_IMAGE);
                 break;
-            case GET_DISK_OS_FAMILY:
-                differentiateVMImages(ctx)
+            case GET_IMAGE:
+                getImageSource(ctx)
                         .whenComplete(thenAllocation(ctx, AzureInstanceStage.INIT_STORAGE));
                 break;
             case INIT_STORAGE:
@@ -582,6 +590,56 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
+    private void createStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
+        // First create SA RG (if does not exist), then create the SA itself (if does not exist)
+        DeferredResult.completed(ctx)
+                .thenCompose(this::createStorageAccountRG)
+                .thenCompose(this::createStorageAccount)
+                .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
+    }
+
+    private DeferredResult<AzureInstanceContext> resolveStorageAccountForPrivateImage(
+            AzureInstanceContext ctx) {
+
+        final String imageOsDiskUri = ctx.imageOsDisk().properties.get(AZURE_OSDISK_BLOB_URI);
+
+        final Matcher matcher = VHD_URI_PATTERN.matcher(imageOsDiskUri);
+
+        if (!matcher.matches()) {
+            return DeferredResult.failed(new IllegalArgumentException(
+                    "Invalid VHD URI format of image OS Disk: " + imageOsDiskUri));
+        }
+
+        // Override StorageAccount from request with the SA of the private VM image
+        ctx.storageAccountName = matcher.group(1);
+
+        String msg = "Getting Resource Group for [" + ctx.storageAccountName + "] SA for ["
+                + ctx.vmName + "] VM";
+
+        AzureDeferredResultServiceCallback<List<StorageAccountInner>> handler = new AzureDeferredResultServiceCallback<List<StorageAccountInner>>(
+                this, msg) {
+
+            @Override
+            protected DeferredResult<List<StorageAccountInner>> consumeSuccess(
+                    List<StorageAccountInner> result) {
+                // Filter by StorageAccount name
+                for (StorageAccountInner sA : result) {
+                    if (Objects.equals(ctx.storageAccountName, sA.name())) {
+                        ctx.storageAccountRGName = AzureUtils.getResourceGroupName(sA.id());
+                        return DeferredResult.completed(result);
+                    }
+                }
+                return DeferredResult.failed(new IllegalArgumentException(
+                        "Unable to find SA with name: " + ctx.storageAccountName));
+            }
+        };
+
+        getStorageManagementClientImpl(ctx).storageAccounts().listAsync(handler);
+
+        return handler.toDeferredResult().thenApply(ignore -> ctx);
+    }
+
     /**
      * Init storage account name and resource group, using the following approach:
      * <table border=1>
@@ -618,7 +676,14 @@ public class AzureInstanceService extends StatelessService {
      */
     private DeferredResult<AzureInstanceContext> createStorageAccountRG(AzureInstanceContext ctx) {
 
-        //null check in-case storage description is not set
+        if (ctx.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
+            // Special handling for Private images which implies that the VM storage account
+            // must be same as the storage account the Custom/Private VM image resides.
+            return DeferredResult.completed(ctx)
+                    .thenCompose(this::resolveStorageAccountForPrivateImage);
+        }
+
+        // null check in-case storage description is not set
         if (ctx.bootDisk.storageDescription != null) {
             ctx.storageAccountName = ctx.bootDisk.storageDescription.name;
         } else {
@@ -636,10 +701,6 @@ public class AzureInstanceService extends StatelessService {
             return DeferredResult.completed(ctx);
         }
 
-        // Use shared RG. In case not provided in the bootDisk properties, use the default one
-        final ResourceGroupInner sharedSARG = new ResourceGroupInner();
-        sharedSARG.withLocation(ctx.child.description.regionId);
-
         String msg = "Create/Update SA Resource Group [" + ctx.storageAccountRGName + "] for ["
                 + ctx.vmName + "] VM";
 
@@ -648,24 +709,27 @@ public class AzureInstanceService extends StatelessService {
             @Override
             protected Throwable consumeError(Throwable exc) {
                 exc = super.consumeError(exc);
-                if (exc instanceof CloudException) {
-                    CloudException azureExc = (CloudException) exc;
-                    CloudError body = azureExc.body();
-                    if (body != null) {
-                        String code = body.code();
-                        if (RESOURCE_GROUP_NOT_FOUND.equals(code)) {
-                            return RECOVERED;
-                        } else if (INVALID_RESOURCE_GROUP.equals(code)) {
-                            String invalidParameterMsg = String.format(
-                                    "Invalid resource group parameter. %s",
-                                    body.message());
 
-                            IllegalStateException e = new IllegalStateException(invalidParameterMsg,
-                                    exc);
-                            return e;
-                        }
-                    }
+                if (!(exc instanceof CloudException)) {
+                    return exc;
                 }
+
+                final CloudError body = ((CloudException) exc).body();
+                if (body == null) {
+                    return exc;
+                }
+
+                if (RESOURCE_GROUP_NOT_FOUND.equals(body.code())) {
+                    return RECOVERED;
+                }
+                if (INVALID_RESOURCE_GROUP.equals(body.code())) {
+                    String invalidParameterMsg = String.format(
+                            "Invalid resource group parameter. %s",
+                            body.message());
+
+                    return new IllegalStateException(invalidParameterMsg, exc);
+                }
+
                 return exc;
             }
 
@@ -675,6 +739,10 @@ public class AzureInstanceService extends StatelessService {
             }
         };
 
+        // Use shared RG. In case not provided in the bootDisk properties, use the default one
+        final ResourceGroupInner sharedSARG = new ResourceGroupInner();
+        sharedSARG.withLocation(ctx.child.description.regionId);
+
         getResourceManagementClientImpl(ctx)
                 .resourceGroups()
                 .createOrUpdateAsync(ctx.storageAccountRGName, sharedSARG, handler);
@@ -682,36 +750,26 @@ public class AzureInstanceService extends StatelessService {
         return handler.toDeferredResult().thenApply(ignore -> ctx);
     }
 
-    private void createStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+    private DeferredResult<AzureInstanceContext> createStorageAccount(AzureInstanceContext ctx) {
+
+        String msg = "Create/Update Azure Storage Account [" + ctx.storageAccountName + "] for ["
+                + ctx.vmName + "] VM";
 
         StorageAccountCreateParametersInner storageParameters = new StorageAccountCreateParametersInner();
         storageParameters.withLocation(ctx.child.description.regionId);
+        storageParameters.withSku(new Sku().withName(SkuName.STANDARD_LRS));
         storageParameters.withKind(Kind.STORAGE);
-        Sku sku = new Sku();
-        sku.withName(SkuName.STANDARD_LRS);
-        storageParameters.withSku(sku);
-        storageParameters.withKind(Kind.STORAGE);
-        String msg = "Creating Azure Storage Account for [" + ctx.vmName + "] VM";
 
-        StorageAccountsInner azureSAClient = getStorageManagementClientImpl(ctx)
-                .storageAccounts();
+        StorageAccountProvisioningCallback handler = new StorageAccountProvisioningCallback(ctx,
+                msg);
 
-        StorageAccountAsyncHandler handler = new StorageAccountAsyncHandler(ctx, azureSAClient,
-                this, msg);
+        getStorageManagementClientImpl(ctx).storageAccounts().createAsync(
+                ctx.storageAccountRGName,
+                ctx.storageAccountName,
+                storageParameters,
+                handler);
 
-        // First create SA RG (if does not exist), then create the SA itself (if does not exist)
-        createStorageAccountRG(ctx)
-                .thenCompose(context -> {
-
-                    azureSAClient.createAsync(
-                            context.storageAccountRGName,
-                            context.storageAccountName,
-                            storageParameters,
-                            handler);
-
-                    return handler.toDeferredResult().thenApply(ignore -> context);
-                })
-                .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
+        return handler.toDeferredResult().thenApply(ignore -> ctx);
     }
 
     private void createNetworkIfNotExist(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -933,7 +991,7 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private void createSecurityGroupsIfNotExist(AzureInstanceContext ctx,
-                                                AzureInstanceStage nextStage) {
+            AzureInstanceStage nextStage) {
 
         if (ctx.nics.isEmpty()) {
             handleAllocation(ctx, nextStage);
@@ -942,9 +1000,9 @@ public class AzureInstanceService extends StatelessService {
 
         List<DeferredResult<NetworkSecurityGroupInner>> createSGDR = ctx.nics.stream()
                 .filter(nicCtx -> (
-                        // Security Group is requested but no existing security group is mapped.
-                        nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
-                                && nicCtx.securityGroup == null))
+                // Security Group is requested but no existing security group is mapped.
+                nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
+                        && nicCtx.securityGroup == null))
                 .map(nicCtx -> {
                     SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
                     NetworkSecurityGroupInner nsg = newAzureSecurityGroup(ctx, sgState);
@@ -963,7 +1021,7 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private NetworkSecurityGroupInner newAzureSecurityGroup(AzureInstanceContext ctx,
-                                                            SecurityGroupState sg) {
+            SecurityGroupState sg) {
 
         if (sg == null) {
             throw new IllegalStateException("SecurityGroup state should not be null.");
@@ -989,7 +1047,8 @@ public class AzureInstanceService extends StatelessService {
         return nsg;
     }
 
-    private SecurityRuleInner newAzureSecurityRule(Rule rule, SecurityRuleDirection direction, int priority) {
+    private SecurityRuleInner newAzureSecurityRule(Rule rule, SecurityRuleDirection direction,
+            int priority) {
         SecurityRuleInner sr = new SecurityRuleInner();
         sr.withPriority(priority);
         sr.withAccess(SecurityRuleAccess.ALLOW);
@@ -1090,7 +1149,8 @@ public class AzureInstanceService extends StatelessService {
                     ctx.resourceGroup.name(),
                     nicName,
                     nic,
-                    new TransitionToCallback<NetworkInterfaceInner>(ctx, nextStage, callContext, msg) {
+                    new TransitionToCallback<NetworkInterfaceInner>(ctx, nextStage, callContext,
+                            msg) {
                         @Override
                         protected CompletionStage<NetworkInterfaceInner> handleSuccess(
                                 NetworkInterfaceInner nic) {
@@ -1114,8 +1174,8 @@ public class AzureInstanceService extends StatelessService {
         sendWithDeferredResult(
                 Operation.createPatch(ctx.computeRequest.resourceReference)
                         .setBody(cs))
-                .thenApply(op -> ctx)
-                .whenComplete(thenAllocation(ctx, nextStage));
+                                .thenApply(op -> ctx)
+                                .whenComplete(thenAllocation(ctx, nextStage));
     }
 
     /**
@@ -1187,46 +1247,71 @@ public class AzureInstanceService extends StatelessService {
         // Set hardware profile.
         HardwareProfile hardwareProfile = new HardwareProfile();
         hardwareProfile.withVmSize(
-                description.instanceType != null ? new VirtualMachineSizeTypes(description.instanceType)
+                description.instanceType != null
+                        ? new VirtualMachineSizeTypes(description.instanceType)
                         : VirtualMachineSizeTypes.BASIC_A0);
         request.withHardwareProfile(hardwareProfile);
 
         // Set storage profile.
-        VirtualHardDisk vhd = new VirtualHardDisk();
-        String vhdName = getVHDName(vmName);
-        vhd.withUri(String.format(VHD_URI_FORMAT, ctx.storageAccountName, vhdName));
+        // Create destination OS VHD
+        String vhdName = String.format(VHD_URI_FORMAT, ctx.storageAccountName, getVHDName(vmName));
 
         OSDisk osDisk = new OSDisk();
         osDisk.withName(vmName);
-        osDisk.withVhd(vhd);
-
-        if (bootDisk.customProperties != null && bootDisk.customProperties.get(AZURE_OSDISK_CACHING) != null) {
-            osDisk.withCaching(CachingTypes.fromString(bootDisk.customProperties.get(AZURE_OSDISK_CACHING)));
-        } else {
-            //Recommended default caching for OS disk
-            osDisk.withCaching(CachingTypes.READ_WRITE);
-        }
-
+        osDisk.withVhd(new VirtualHardDisk().withUri(vhdName));
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
         osDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
+
+        if (bootDisk.customProperties != null &&
+                bootDisk.customProperties.get(AZURE_OSDISK_CACHING) != null) {
+
+            osDisk.withCaching(CachingTypes.fromString(
+                    bootDisk.customProperties.get(AZURE_OSDISK_CACHING)));
+        } else {
+            // Recommended default caching for OS disk
+            osDisk.withCaching(CachingTypes.NONE);
+        }
+
         if (ctx.bootDisk.capacityMBytes > 31744
-                && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
-            // custom boot disk size is set then use that value. If value more than maximum
-            // allowed then proceed with default size.
+                && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) {
+            // In case custom boot disk size is set then use that
+            // value. If value more than maximum allowed then proceed with default size.
 
             // Converting MBs to GBs and casting as int
             int diskSizeInGB = (int) ctx.bootDisk.capacityMBytes / 1024;
             osDisk.withDiskSizeGB(diskSizeInGB);
         } else {
-            logInfo(String.format("Proceeding with Default OS Disk Size defined by VHD %s",
+            logInfo(() -> String.format(
+                    "Proceeding with Default OS Disk Size defined by VHD %s",
                     vhdName));
         }
 
-        StorageProfile storageProfile = new StorageProfile();
-        // Currently we only support platform images.
-        storageProfile.withImageReference(ctx.imageReference);
+        final StorageProfile storageProfile = new StorageProfile();
+
+        // Apply Public/Private images specifics
+
+        if (ctx.imageSource.type == ImageSource.Type.PUBLIC_IMAGE
+                || ctx.imageSource.type == ImageSource.Type.IMAGE_REFERENCE) {
+
+            storageProfile.withImageReference(ctx.imageReference);
+
+        } else if (ctx.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
+
+            final ImageState privateImage = ctx.imageSource.asImageState();
+
+            // Image OS type
+            osDisk.withOsType(OperatingSystemTypes.fromString(privateImage.osFamily));
+
+            final DiskConfiguration osDiskConfig = ctx.imageOsDisk();
+
+            // Ref to OS disk (VHD) of the image
+            osDisk.withImage(new VirtualHardDisk().withUri(
+                    osDiskConfig.properties.get(AZURE_OSDISK_BLOB_URI)));
+        }
+
         storageProfile.withOsDisk(osDisk);
+
         request.withStorageProfile(storageProfile);
 
         // Set network profile {{
@@ -1274,7 +1359,7 @@ public class AzureInstanceService extends StatelessService {
                         cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.name());
 
                         Operation.CompletionHandler completionHandler = (ox,
-                                                                         exc) -> {
+                                exc) -> {
                             if (exc != null) {
                                 handleError(ctx, exc);
                                 return;
@@ -1342,7 +1427,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching compute state with VM"
-                                                        + " Public IP address [%s]: SUCCESS",
+                                                + " Public IP address [%s]: SUCCESS",
                                                 computeState.address));
                                     }
                                 });
@@ -1363,7 +1448,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching primary NIC state"
-                                                        + " with VM Public IP address [%s] : SUCCESS",
+                                                + " with VM Public IP address [%s] : SUCCESS",
                                                 primaryNicState.address));
                                     }
                                 });
@@ -1379,7 +1464,8 @@ public class AzureInstanceService extends StatelessService {
         StorageManagementClientImpl client = getStorageManagementClientImpl(ctx);
 
         client.storageAccounts().listKeysAsync(ctx.storageAccountRGName,
-                ctx.storageAccountName, new AzureAsyncCallback<StorageAccountListKeysResultInner>() {
+                ctx.storageAccountName,
+                new AzureAsyncCallback<StorageAccountListKeysResultInner>() {
                     @Override
                     public void onError(Throwable e) {
                         handleError(ctx, e);
@@ -1388,12 +1474,14 @@ public class AzureInstanceService extends StatelessService {
                     @Override
                     public void onSuccess(StorageAccountListKeysResultInner result) {
                         logFine(() -> String.format("Retrieved the storage account keys for storage"
-                                + " account [%s].", ctx.storageAccountName));
+                                + " account [%s]", ctx.storageAccountName));
 
                         AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
                         storageAuth.customProperties = new HashMap<>();
                         for (StorageAccountKey key : result.keys()) {
-                            storageAuth.customProperties.put(getStorageAccountKeyName(storageAuth.customProperties), key.value());
+                            storageAuth.customProperties.put(
+                                    getStorageAccountKeyName(storageAuth.customProperties),
+                                    key.value());
                         }
                         Operation patchStorageDescriptionWithKeys = Operation
                                 .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
@@ -1452,7 +1540,7 @@ public class AzureInstanceService extends StatelessService {
      * through next specific error handler.
      */
     private void handleCloudError(String msg, AzureInstanceContext ctx, String namespace,
-                                  Throwable e) {
+            Throwable e) {
         if (e instanceof CloudException) {
             CloudException ce = (CloudException) e;
             CloudError body = ce.body();
@@ -1502,7 +1590,7 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private void getSubscriptionState(AzureInstanceContext ctx,
-                                      String namespace, long retryExpiration) {
+            String namespace, long retryExpiration) {
         if (Utils.getNowMicrosUtc() > retryExpiration) {
             String msg = String.format("Subscription for %s namespace did not reach %s state",
                     namespace, PROVIDER_REGISTRED_STATE);
@@ -1648,8 +1736,8 @@ public class AzureInstanceService extends StatelessService {
 
                             ctx.childDisks = new ArrayList<>();
                             for (Operation op : ops.values()) {
-                                DiskService.DiskStateExpanded disk = op.getBody(DiskService.DiskStateExpanded
-                                        .class);
+                                DiskService.DiskStateExpanded disk = op
+                                        .getBody(DiskService.DiskStateExpanded.class);
 
                                 // We treat the first disk in the boot order as the boot disk.
                                 if (disk.bootOrder == 1) {
@@ -1679,22 +1767,62 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Differentiate between Windows and Linux Images
      */
-    private DeferredResult<AzureInstanceContext> differentiateVMImages(AzureInstanceContext ctx) {
+    private DeferredResult<AzureInstanceContext> getImageSource(AzureInstanceContext ctx) {
 
-        return ctx.getImageNativeId(ctx.bootDisk)
-                .thenApply(imageReferenceStr -> {
-                    // Convert Azure image ref string to object
-                    ctx.imageReference = getImageReference(imageReferenceStr);
+        return ctx.getImageSource(ctx.bootDisk)
+
+                .thenApply(imageSource -> {
+                    ctx.imageSource = imageSource;
                     return ctx;
                 })
-                .thenCompose(this::getLatestVirtualMachineImage)
-                .thenCompose(this::getVirtualMachineImage);
+
+                .thenCompose(context -> {
+                    if (context.imageSource.type == ImageSource.Type.PUBLIC_IMAGE) {
+                        return handlePublicImage(context);
+                    }
+                    if (context.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
+                        return handlePrivateImage(context);
+                    }
+                    if (context.imageSource.type == ImageSource.Type.IMAGE_REFERENCE) {
+                        return handleImageRef(context);
+                    }
+                    return DeferredResult.failed(
+                            new IllegalStateException(
+                                    "Unexpected ImageSource.Type: " + context.imageSource.type));
+                });
+    }
+
+    private DeferredResult<AzureInstanceContext> handlePublicImage(AzureInstanceContext ctx) {
+
+        return DeferredResult.completed(ctx)
+                .thenApply(context -> {
+                    // Convert Azure 'ImageState.id' string to ImageReferenceInner object
+                    context.imageReference = getImageReference(context.imageSource.asNativeId());
+                    return context;
+                })
+                .thenCompose(this::resolveLatestVirtualMachineImage);
+    }
+
+    private DeferredResult<AzureInstanceContext> handlePrivateImage(AzureInstanceContext ctx) {
+
+        return DeferredResult.completed(ctx);
+    }
+
+    private DeferredResult<AzureInstanceContext> handleImageRef(AzureInstanceContext ctx) {
+
+        return DeferredResult.completed(ctx)
+                .thenApply(context -> {
+                    // Convert Azure 'source image reference' string to ImageReferenceInner object
+                    context.imageReference = getImageReference(context.imageSource.asNativeId());
+                    return context;
+                })
+                .thenCompose(this::resolveLatestVirtualMachineImage);
     }
 
     /**
      * Get the LATEST VirtualMachineImage using publisher, offer and SKU.
      */
-    private DeferredResult<AzureInstanceContext> getLatestVirtualMachineImage(
+    private DeferredResult<AzureInstanceContext> resolveLatestVirtualMachineImage(
             AzureInstanceContext ctx) {
 
         if (AzureConstants.AZURE_URN_VERSION_LATEST
@@ -1737,53 +1865,10 @@ public class AzureInstanceService extends StatelessService {
                 ctx.imageReference.withVersion(imageResources.get(0).name());
 
                 return DeferredResult.completed(ctx);
-
             });
         }
 
         return DeferredResult.completed(ctx);
-    }
-
-    /**
-     * Get the VirtualMachineImage using publisher, offer, SKU and version.
-     */
-    private DeferredResult<AzureInstanceContext> getVirtualMachineImage(AzureInstanceContext ctx) {
-
-        String msg = String.format("Getting Azure image by %s:%s:%s:%s",
-                ctx.imageReference.publisher(),
-                ctx.imageReference.offer(),
-                ctx.imageReference.sku(),
-                ctx.imageReference.version());
-
-        AzureDeferredResultServiceCallback<VirtualMachineImageInner> callback = new AzureDeferredResultServiceCallback<VirtualMachineImageInner>(
-                ctx.service, msg) {
-            @Override
-            protected DeferredResult<VirtualMachineImageInner> consumeSuccess(
-                    VirtualMachineImageInner image) {
-                return DeferredResult.completed(image);
-            }
-        };
-
-        getComputeManagementClientImpl(ctx).virtualMachineImages().getAsync(
-                ctx.resourceGroup.location(),
-                ctx.imageReference.publisher(),
-                ctx.imageReference.offer(),
-                ctx.imageReference.sku(),
-                ctx.imageReference.version(),
-                callback);
-
-        return callback.toDeferredResult().thenCompose(image -> {
-
-            if (image == null || image.osDiskImage() == null) {
-                return DeferredResult
-                        .failed(new IllegalStateException("OS Disk Image not found."));
-            }
-
-            // Get the operating system family
-            ctx.operatingSystemFamily = image.osDiskImage().operatingSystem().name();
-
-            return DeferredResult.completed(ctx);
-        });
     }
 
     private void enableMonitoring(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -1825,7 +1910,8 @@ public class AzureInstanceService extends StatelessService {
                     Operation.MEDIA_TYPE_APPLICATION_JSON);
             try {
                 operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                        AzureConstants.AUTH_HEADER_BEARER_PREFIX + credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
+                        AzureConstants.AUTH_HEADER_BEARER_PREFIX
+                                + credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
             } catch (Exception ex) {
                 handleError(ctx, ex);
                 return;
@@ -1871,17 +1957,15 @@ public class AzureInstanceService extends StatelessService {
         return resourceGroupName;
     }
 
-    public class StorageAccountAsyncHandler extends AzureProvisioningCallback<StorageAccountInner> {
+    private class StorageAccountProvisioningCallback
+            extends AzureProvisioningCallback<StorageAccountInner> {
 
-        private AzureInstanceContext ctx;
-        private StorageAccountsInner azureSAClient;
+        private final AzureInstanceContext ctx;
 
-        public StorageAccountAsyncHandler(AzureInstanceContext ctx,
-                                          StorageAccountsInner azureSAClient,
-                                          StatelessService service, String message) {
-            super(service, message);
+        public StorageAccountProvisioningCallback(AzureInstanceContext ctx, String message) {
+            super(ctx.service, message);
+
             this.ctx = ctx;
-            this.azureSAClient = azureSAClient;
         }
 
         @Override
@@ -1900,24 +1984,26 @@ public class AzureInstanceService extends StatelessService {
         @Override
         protected DeferredResult<StorageAccountInner> consumeProvisioningSuccess(
                 StorageAccountInner sa) {
+
             this.ctx.storage = sa;
 
             return createStorageDescription(this.ctx)
                     // Start next op, patch boot disk, in the sequence
-                    .thenCompose((woid) -> {
+                    .thenCompose(woid -> {
+                        URI uri = this.ctx.computeRequest.buildUri(
+                                this.ctx.bootDisk.documentSelfLink);
+
                         Operation patchBootDiskOp = Operation
-                                .createPatch(this.ctx.computeRequest
-                                        .buildUri(this.ctx.bootDisk.documentSelfLink))
+                                .createPatch(uri)
                                 .setBody(this.ctx.bootDisk);
-                        return sendWithDeferredResult(patchBootDiskOp).thenRun(() -> {
-                            logFine(() -> String.format("Updating boot disk [%s]: SUCCESS",
-                                    this.ctx.bootDisk.name));
-                        });
+
+                        return this.ctx.service.sendWithDeferredResult(patchBootDiskOp)
+                                .thenRun(() -> this.ctx.service.logFine(
+                                        () -> String.format("Updating boot disk [%s]: SUCCESS",
+                                                this.ctx.bootDisk.name)));
                     })
                     // Return processed context with StorageAccount
-                    .thenApply((woid) -> {
-                        return this.ctx.storage;
-                    });
+                    .thenApply(woid -> this.ctx.storage);
         }
 
         /**
@@ -1931,6 +2017,7 @@ public class AzureInstanceService extends StatelessService {
 
             String msg = "Getting Azure StorageAccountKeys for [" + ctx.storage.name()
                     + "] Storage Account";
+
             AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler = new AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner>(
                     this.service, msg) {
 
@@ -1951,8 +2038,9 @@ public class AzureInstanceService extends StatelessService {
                 }
             };
 
-            this.azureSAClient.listKeysAsync(ctx.storageAccountRGName, ctx.storage.name(),
-                    handler);
+            getStorageManagementClientImpl(ctx)
+                    .storageAccounts()
+                    .listKeysAsync(ctx.storageAccountRGName, ctx.storage.name(), handler);
 
             return handler.toDeferredResult()
                     .thenCompose(keys -> {
@@ -1960,16 +2048,16 @@ public class AzureInstanceService extends StatelessService {
                                 .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
                                 .setBody(AzureUtils.constructStorageDescription(
                                         getHost(), getSelfLink(),
-                                        this.ctx.storage, ctx, keys))
+                                        ctx.storage, ctx, keys))
                                 .setReferer(getUri());
                         return sendWithDeferredResult(createStorageDescOp,
                                 StorageDescription.class);
                     })
                     .thenCompose(storageDescription -> {
-                        this.ctx.storageDescription = storageDescription;
-                        this.ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
+                        ctx.storageDescription = storageDescription;
+                        ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
 
-                        return DeferredResult.completed(this.ctx.storageDescription);
+                        return DeferredResult.completed(ctx.storageDescription);
                     });
         }
 
@@ -1988,11 +2076,12 @@ public class AzureInstanceService extends StatelessService {
         @Override
         protected Runnable checkProvisioningStateCall(
                 ServiceCallback<StorageAccountInner> checkProvisioningStateCallback) {
-            return () -> this.azureSAClient.getByResourceGroupAsync(
-                    this.ctx.storageAccountRGName,
-                    this.ctx.storageAccountName,
-                    checkProvisioningStateCallback);
-
+            return () -> getStorageManagementClientImpl(this.ctx)
+                    .storageAccounts()
+                    .getByResourceGroupAsync(
+                            this.ctx.storageAccountRGName,
+                            this.ctx.storageAccountName,
+                            checkProvisioningStateCallback);
         }
     }
 

@@ -341,10 +341,10 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     }
 
     /**
-     * Helper method to load image native id either from {@code ImageState.id} that is pointed by
+     * Helper method to load {@link ImageSource} either from {@code ImageState} that is pointed by
      * {@code bootDisk.imageLink} or directly from {@code bootDisk.sourceImageReference}.
      */
-    public DeferredResult<String> getImageNativeId(DiskState bootDisk) {
+    public DeferredResult<ImageSource> getImageSource(DiskState bootDisk) {
 
         if (bootDisk == null) {
             return DeferredResult.failed(new IllegalStateException("bootDisk should be specified"));
@@ -355,21 +355,112 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
                     "Either bootDisk.sourceImageReference or bootDisk.imageLink should be specified"));
         }
 
-        final DeferredResult<String> imageNativeIdDR;
+        final DeferredResult<ImageSource> imageSourceDR;
 
         if (bootDisk.imageLink != null) {
-            // Get 'image native id' from ImageState.id that's pointed by 'bootDisk.imageLink'
-            Operation getImageStateOp = Operation.createGet(this.service.getHost(), bootDisk.imageLink);
+            // Either get ImageState as pointed by 'bootDisk.imageLink'
+            Operation getImageStateOp = Operation.createGet(
+                    this.service.getHost(), bootDisk.imageLink);
 
-            imageNativeIdDR = this.service
+            imageSourceDR = this.service
                     .sendWithDeferredResult(getImageStateOp, ImageState.class)
-                    .thenApply(imageState -> imageState.id);
+                    .thenApply(ImageSource::fromImageState);
         } else {
-            // Use directly 'bootDisk.sourceImageReference' as 'image native id'
-            imageNativeIdDR = DeferredResult.completed(bootDisk.sourceImageReference.toString());
+            // Or use directly 'bootDisk.sourceImageReference' as 'image native id'
+            imageSourceDR = DeferredResult.completed(
+                    ImageSource.fromRef(bootDisk.sourceImageReference.toString()));
         }
 
-        return imageNativeIdDR;
+        return imageSourceDR;
     }
 
+    /**
+     * Generic enough representation of a source of an image, such as local ImageState or native/raw
+     * image reference.
+     */
+    public static class ImageSource {
+
+        /**
+         * The type of the source so we can do/apply conditional logic.
+         */
+        public enum Type {
+            PUBLIC_IMAGE, PRIVATE_IMAGE, IMAGE_REFERENCE;
+        }
+
+        /**
+         * Create image source from actual public/private ImageState.
+         */
+        public static ImageSource fromImageState(ImageState imageState) {
+
+            final ImageSource imageHolder = new ImageSource();
+
+            if (imageState.isPublicImage()) {
+
+                imageHolder.type = Type.PUBLIC_IMAGE;
+
+            } else if (imageState.isPrivateImage()) {
+
+                imageHolder.type = Type.PRIVATE_IMAGE;
+
+            } else {
+                throw new IllegalStateException("Unexpected ImageState type.");
+            }
+
+            imageHolder.source = imageState;
+
+            return imageHolder;
+        }
+
+        /**
+         * Create image source from native/raw image reference.
+         */
+        public static ImageSource fromRef(String imageRef) {
+
+            return new ImageSource(Type.IMAGE_REFERENCE, imageRef);
+        }
+
+        public Type type;
+        public Object source;
+
+        public ImageSource(Type type, Object source) {
+            this.type = type;
+            this.source = source;
+        }
+
+        private ImageSource() {
+        }
+
+        /**
+         * Cast image source to actual ImageState.
+         */
+        public ImageState asImageState() {
+            if (this.type == Type.PUBLIC_IMAGE || this.type == Type.PRIVATE_IMAGE) {
+                return (ImageState) this.source;
+            }
+            return null;
+        }
+
+        /**
+         * Cast image source to actual image reference.
+         */
+        public String asRef() {
+            if (this.type == Type.IMAGE_REFERENCE) {
+                return (String) this.source;
+            }
+            return null;
+        }
+
+        /**
+         * Helper method converting supported image sources to native image id.
+         */
+        public String asNativeId() {
+            if (asImageState() != null) {
+                return asImageState().id;
+            }
+            if (asRef() != null) {
+                return asRef();
+            }
+            return null;
+        }
+    }
 }

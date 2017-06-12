@@ -89,6 +89,8 @@ import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComput
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.GatewaySpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
+import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource.Type;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
@@ -104,6 +106,7 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -177,7 +180,8 @@ public class AzureTestUtil {
 
     public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "test-sharedNetworkRG";
 
-    // used to test network and SG RG assignment - this RG should be filtered out, its not the correct type
+    // used to test network and SG RG assignment - this RG should be filtered out, its not the
+    // correct type
     public static final String AZURE_STORAGE_CONTAINER_RG_NAME = "test-StorageContainerRG";
 
     public static final AzureNicSpecs DEFAULT_NIC_SPEC;
@@ -240,8 +244,10 @@ public class AzureTestUtil {
             public final VpnType vpnType;
 
             public GatewaySpec(String name, String cidr, String zoneId, String ipConfigurationName,
-                    String publicIpName, IPAllocationMethod ipAllocationMethod, VirtualNetworkGatewaySkuName skuName,
-                               VirtualNetworkGatewaySkuTier skuTier, VirtualNetworkGatewayType type, VpnType vpnType) {
+                    String publicIpName, IPAllocationMethod ipAllocationMethod,
+                    VirtualNetworkGatewaySkuName skuName,
+                    VirtualNetworkGatewaySkuTier skuTier, VirtualNetworkGatewayType type,
+                    VpnType vpnType) {
                 this.name = name;
                 this.cidr = cidr;
                 this.zoneId = zoneId;
@@ -342,7 +348,6 @@ public class AzureTestUtil {
         return response;
     }
 
-
     public static NetworkSecurityGroupInner getAzureSecurityGroup(
             NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
             String securityGroupName) throws Exception {
@@ -365,7 +370,8 @@ public class AzureTestUtil {
 
     public static NetworkSecurityGroupInner updateAzureSecurityGroup(
             NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
-            String networkSecurityGroupName, NetworkSecurityGroupInner parameters) throws Exception {
+            String networkSecurityGroupName, NetworkSecurityGroupInner parameters)
+            throws Exception {
         NetworkSecurityGroupInner response = networkManagementClient
                 .networkSecurityGroups()
                 .createOrUpdate(resourceGroupName, networkSecurityGroupName, parameters);
@@ -444,7 +450,8 @@ public class AzureTestUtil {
      * Create a compute host description for an Azure instance
      */
     public static ComputeState createDefaultComputeHost(
-            VerificationHost host, String resourcePoolLink, EndpointState endpointState) throws Throwable {
+            VerificationHost host, String resourcePoolLink, EndpointState endpointState)
+            throws Throwable {
 
         ComputeDescription azureHostDescription = new ComputeDescription();
         azureHostDescription.id = UUID.randomUUID().toString();
@@ -489,7 +496,8 @@ public class AzureTestUtil {
         return createEndpointState(host, authLink, EndpointType.azure);
     }
 
-    public static EndpointState createEndpointState(VerificationHost host, String authLink, EndpointType endpointType)
+    public static EndpointState createEndpointState(VerificationHost host, String authLink,
+            EndpointType endpointType)
             throws Throwable {
 
         EndpointState endpoint = new EndpointState();
@@ -529,7 +537,8 @@ public class AzureTestUtil {
             ComputeState computeHost, EndpointState endpointState,
             AzureNicSpecs nicSpecs) throws Throwable {
 
-        return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs, null /* networkRGLink */);
+        return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
+                null /* networkRGLink */);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
@@ -537,8 +546,32 @@ public class AzureTestUtil {
             AzureNicSpecs nicSpecs, String networkRGLink)
             throws Throwable {
 
+        final ImageSource imageSource;
+        {
+            // Create Public image state
+            ImageState bootImage = new ImageState();
+
+            bootImage.id = IMAGE_REFERENCE;
+            bootImage.endpointType = endpointState.endpointType;
+
+            bootImage = TestUtils.doPost(host, bootImage, ImageState.class,
+                    UriUtils.buildUri(host, ImageService.FACTORY_LINK));
+
+            imageSource = ImageSource.fromImageState(bootImage);
+        }
+
+        return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
+                networkRGLink, imageSource);
+    }
+
+    public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
+            ComputeState computeHost, EndpointState endpointState,
+            AzureNicSpecs nicSpecs, String networkRGLink, ImageSource imageSource)
+            throws Throwable {
+
         ResourceGroupState defaultVmRG = createDefaultResourceGroupState(
-                host, azureVMName, computeHost, endpointState, ResourceGroupStateType.AzureResourceGroup);
+                host, azureVMName, computeHost, endpointState,
+                ResourceGroupStateType.AzureResourceGroup);
 
         String defaultVMRGLink = defaultVmRG.documentSelfLink;
 
@@ -549,7 +582,8 @@ public class AzureTestUtil {
 
         // Create resource group with a different type. It should be filtered out.
         ResourceGroupState azureStorageContainerRG = createDefaultResourceGroupState(
-                host, AZURE_STORAGE_CONTAINER_RG_NAME, computeHost, endpointState, ResourceGroupStateType.AzureStorageContainer);
+                host, AZURE_STORAGE_CONTAINER_RG_NAME, computeHost, endpointState,
+                ResourceGroupStateType.AzureStorageContainer);
 
         Set<String> networkRGLinks = new HashSet<>();
         networkRGLinks.add(azureStorageContainerRG.documentSelfLink);
@@ -557,7 +591,7 @@ public class AzureTestUtil {
 
         Set<String> sgRGLinks = new HashSet<>();
         sgRGLinks.add(azureStorageContainerRG.documentSelfLink);
-        sgRGLinks.add(defaultVMRGLink); //place the SG in the VM's RG
+        sgRGLinks.add(defaultVMRGLink); // place the SG in the VM's RG
 
         AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
         azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
@@ -586,17 +620,7 @@ public class AzureTestUtil {
                 AzureUriPaths.AZURE_POWER_ADAPTER);
 
         azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
-                        UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
-
-        ImageState bootImage;
-        {
-            bootImage = new ImageState();
-            bootImage.id = IMAGE_REFERENCE;
-            bootImage.endpointType = endpointState.endpointType;
-
-            bootImage = TestUtils.doPost(host, bootImage, ImageState.class,
-                    UriUtils.buildUri(host, ImageService.FACTORY_LINK));
-        }
+                UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
 
         List<String> vmDisks = new ArrayList<>();
 
@@ -605,11 +629,13 @@ public class AzureTestUtil {
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.type = DiskType.HDD;
-        rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE; // Custom OSDisk size of 32 GBs
-        // Set both sourceImageReference and imageLink. Still imageLink should be used. {{
-        rootDisk.sourceImageReference = URI.create(IMAGE_REFERENCE + "dummy");
-        rootDisk.imageLink = bootImage.documentSelfLink;
-        // }}
+        // Custom OSDisk size of 32 GBs
+        rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE;
+        if (imageSource.type == Type.PRIVATE_IMAGE || imageSource.type == Type.PUBLIC_IMAGE) {
+            rootDisk.imageLink = imageSource.asImageState().documentSelfLink;
+        } else if (imageSource.type == Type.IMAGE_REFERENCE) {
+            rootDisk.sourceImageReference = URI.create(imageSource.asRef());
+        }
         rootDisk.bootOrder = 1;
 
         rootDisk.endpointLink = endpointState.documentSelfLink;
@@ -702,7 +728,8 @@ public class AzureTestUtil {
     }
 
     public static ResourceGroupState createDefaultResourceGroupState(VerificationHost host,
-            String resourceGroupName, ComputeState computeHost, EndpointState endpointState, ResourceGroupStateType resourceGroupType)
+            String resourceGroupName, ComputeState computeHost, EndpointState endpointState,
+            ResourceGroupStateType resourceGroupType)
             throws Throwable {
 
         ResourceGroupState rGroupState = new ResourceGroupState();
@@ -944,6 +971,32 @@ public class AzureTestUtil {
     public static void deleteResourceGroup(ResourceManagementClientImpl resourceManagementClient,
             String name) {
         resourceManagementClient.resourceGroups().delete(name);
+    }
+
+    public static ImageSource createPrivateImageSource(
+            VerificationHost host,
+            EndpointState endpointState) throws Throwable {
+
+        ImageState bootImage = new ImageState();
+
+        bootImage.id = "/subscriptions/817776f9-ef2a-4681-9774-a66f9be11e22/resourceGroups/Images/providers/Microsoft.Compute/images/SourceImageLinuxUnmanagedAPI";
+        bootImage.name = "SourceImageLinuxUnmanagedAPI";
+        bootImage.osFamily = "Linux";
+        bootImage.tenantLinks = endpointState.tenantLinks;
+        bootImage.endpointLink = endpointState.documentSelfLink;
+
+        DiskConfiguration osDiskConfig = new DiskConfiguration();
+
+        osDiskConfig.properties = Collections.singletonMap(
+                AzureConstants.AZURE_DISK_BLOB_URI,
+                "https://stg4339322451611.blob.core.windows.net/vhds/SourceVMLinuxUnmanagedAPI-os-disk-f57d8371-8f45-4d8e-a8b3-84865aaf3f99.vhd");
+
+        bootImage.diskConfigs = Collections.singletonList(osDiskConfig);
+
+        bootImage = TestUtils.doPost(host, bootImage, ImageState.class,
+                UriUtils.buildUri(host, ImageService.FACTORY_LINK));
+
+        return ImageSource.fromImageState(bootImage);
     }
 
     private static void createAzureVirtualNetwork(String resourceGroupName,

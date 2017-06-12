@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.microsoft.azure.CloudException;
+import com.microsoft.azure.management.compute.ImageDataDisk;
 import com.microsoft.azure.management.compute.ImageOSDisk;
 import com.microsoft.azure.management.compute.PurchasePlan;
 import com.microsoft.azure.management.compute.VirtualMachineCustomImage;
@@ -1120,6 +1121,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             azureImageData.description = azureImageData.name;
 
+            // Configure Disks
+
+            azureImageData.diskConfigs = new ArrayList<>();
+
             // Configure OS Disk
 
             final ImageOSDisk azureOsDiskImage = azureCustomImage.osDiskImage();
@@ -1127,8 +1132,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 if (azureOsDiskImage.osType() != null) {
                     azureImageData.osFamily = azureOsDiskImage.osType().name();
                 }
-
-                azureImageData.diskConfigs = new ArrayList<>();
 
                 ImageState.DiskConfiguration osDiskConfig = new ImageState.DiskConfiguration();
                 osDiskConfig.properties = new HashMap<>();
@@ -1138,16 +1141,48 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 }
 
                 if (azureOsDiskImage.caching() != null) {
-                    osDiskConfig.properties.put(AzureConstants.AZURE_OSDISK_CACHING,
+                    osDiskConfig.properties.put(
+                            AzureConstants.AZURE_OSDISK_CACHING,
                             azureOsDiskImage.caching().name());
                 }
 
                 if (azureOsDiskImage.blobUri() != null) {
-                    osDiskConfig.properties.put(AzureConstants.AZURE_OSDISK_BLOB_URI,
+                    osDiskConfig.properties.put(
+                            AzureConstants.AZURE_OSDISK_BLOB_URI,
                             azureOsDiskImage.blobUri());
                 }
 
                 azureImageData.diskConfigs.add(osDiskConfig);
+            }
+
+            // Configure Data Disk
+
+            for (ImageDataDisk azureDataDisk : azureCustomImage.dataDiskImages().values()) {
+
+                ImageState.DiskConfiguration dataDiskConfig = new ImageState.DiskConfiguration();
+                dataDiskConfig.properties = new HashMap<>();
+
+                dataDiskConfig.properties.put(
+                        AzureConstants.AZURE_DISK_LUN,
+                        Integer.toString(azureDataDisk.lun()));
+
+                if (azureDataDisk.diskSizeGB() != null) {
+                    dataDiskConfig.capacityMBytes = azureDataDisk.diskSizeGB() * 1024;
+                }
+
+                if (azureDataDisk.caching() != null) {
+                    dataDiskConfig.properties.put(
+                            AzureConstants.AZURE_DISK_CACHING,
+                            azureDataDisk.caching().name());
+                }
+
+                if (azureDataDisk.blobUri() != null) {
+                    dataDiskConfig.properties.put(
+                            AzureConstants.AZURE_DISK_BLOB_URI,
+                            azureDataDisk.blobUri());
+                }
+
+                azureImageData.diskConfigs.add(dataDiskConfig);
             }
 
             // Configure tags

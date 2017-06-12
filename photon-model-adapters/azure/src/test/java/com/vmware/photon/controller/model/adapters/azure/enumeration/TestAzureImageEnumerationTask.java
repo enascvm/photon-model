@@ -89,7 +89,7 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     private static final int DEFAULT_IMAGES = 11;
 
-    private static final String PRIVATE_IMAGE_NAME = "PhModelLinuxImage";
+    private static final String PRIVATE_IMAGE_NAME = "LinuxImageWithOsAndDataUnmanaged";
 
     private static final boolean EXACT_COUNT = true;
 
@@ -151,10 +151,8 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
     }
 
     /**
-     * That's the only private image:
-     * {@link /resourceGroups/group1496675321811/providers/Microsoft.Compute/images/PhModelLinuxImage/overview}
-     * created as described here
-     * {@link https://docs.microsoft.com/en-us/azure/virtual-machines/linux/capture-image}
+     * That's the private image we are testing:
+     * {@link /resourceGroups/Images/providers/Microsoft.Compute/images/LinuxImageWithOsAndDataUnmanaged/overview}
      */
     @Test
     @Ignore("For now run the test manually. Will enable it once the image is created programatically, but not hardcoded")
@@ -166,17 +164,32 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
         kickOffImageEnumeration(endpointState, PRIVATE, AZURE_ALL_IMAGES_FILTER);
 
-        // Validate 1 image state is CREATED
-        ServiceDocumentQueryResult images = queryDocumentsAndAssertExpectedCount(
-                getHost(), 1,
-                ImageService.FACTORY_LINK,
-                EXACT_COUNT);
+        // Validate at least 1 image state is CREATED
+        QueryTop<ImageState> queryAll = new QueryTop<ImageState>(
+                getHost(),
+                Builder.create().addKindFieldClause(ImageState.class).build(),
+                ImageState.class,
+                endpointState.tenantLinks,
+                endpointState.documentSelfLink);
 
-        ImageState image = Utils.fromJson(
-                images.documents.values().iterator().next(),
-                ImageState.class);
+        List<ImageState> images = QueryByPages.waitToComplete(
+                queryAll.collectDocuments(Collectors.toList()));
+
+        Assert.assertTrue("Expected at least " + 1 + " private image, but found " + images.size(),
+                images.size() >= 1);
+
+        ImageState image = images.stream()
+                .filter(imageState -> {
+                    return imageState.name.equalsIgnoreCase(PRIVATE_IMAGE_NAME);
+                })
+                .findFirst()
+                .orElse(null);
 
         // Validate created image is correctly populated
+        Assert.assertNotNull(
+                "Private image with '" + PRIVATE_IMAGE_NAME + "' name must have been enumerated.",
+                image);
+
         Assert.assertNull("Private image must NOT have endpointType set.",
                 image.endpointType);
         Assert.assertEquals("Private image must have endpointLink set.",
@@ -189,13 +202,26 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
         Assert.assertEquals("Image.description is invalid", PRIVATE_IMAGE_NAME, image.description);
 
         Assert.assertNotNull("Image.diskConfigs", image.diskConfigs);
-        Assert.assertEquals("Image.diskConfigs.size", 1, image.diskConfigs.size());
+        Assert.assertEquals("Image.diskConfigs.size", 2, image.diskConfigs.size());
 
-        DiskConfiguration diskConfig = image.diskConfigs.get(0);
+        {
+            DiskConfiguration osDiskConfig = image.diskConfigs.get(0);
 
-        Assert.assertNotNull("Image.diskConfig.properties", diskConfig.properties);
-        Assert.assertNotNull("Image.diskConfig.properties.blobUri",
-                diskConfig.properties.get(AzureConstants.AZURE_OSDISK_BLOB_URI));
+            Assert.assertNotNull("Image.osDiskConfig.properties", osDiskConfig.properties);
+            Assert.assertNotNull("Image.osDiskConfig.properties.blobUri",
+                    osDiskConfig.properties.get(AzureConstants.AZURE_DISK_BLOB_URI));
+            Assert.assertNull("Image.osDiskConfig.properties.lun",
+                    osDiskConfig.properties.get(AzureConstants.AZURE_DISK_LUN));
+        }
+        {
+            DiskConfiguration dataDiskConfig = image.diskConfigs.get(1);
+
+            Assert.assertNotNull("Image.dataDiskConfig.properties", dataDiskConfig.properties);
+            Assert.assertNotNull("Image.dataDiskConfig.properties.blobUri",
+                    dataDiskConfig.properties.get(AzureConstants.AZURE_DISK_BLOB_URI));
+            Assert.assertEquals("Image.dataDiskConfig.properties.lun",
+                    "0", dataDiskConfig.properties.get(AzureConstants.AZURE_DISK_LUN));
+        }
     }
 
     @Test

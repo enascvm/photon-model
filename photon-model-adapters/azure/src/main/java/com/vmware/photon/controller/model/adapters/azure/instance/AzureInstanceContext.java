@@ -32,7 +32,6 @@ import com.microsoft.azure.management.resources.implementation.ResourceGroupInne
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
-
 import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -43,6 +42,8 @@ import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInst
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -80,7 +81,8 @@ public class AzureInstanceContext extends
         public PublicIPAddressInner publicIP;
 
         /**
-         * The public IP address sub resource ID. Maps an ID string with IP address, required by Azure.
+         * The public IP address sub resource ID. Maps an ID string with IP address, required by
+         * Azure.
          */
         SubResource publicIPSubResource;
 
@@ -90,7 +92,8 @@ public class AzureInstanceContext extends
         public NetworkSecurityGroupInner securityGroup;
 
         /**
-         * The security group sub resource ID. Maps an ID string with security group, required by Azure.
+         * The security group sub resource ID. Maps an ID string with security group, required by
+         * Azure.
          */
         SubResource securityGroupSubResource;
 
@@ -125,10 +128,11 @@ public class AzureInstanceContext extends
     public ResourceGroupInner resourceGroup;
     public StorageAccountInner storage;
 
-    public String storageAccountRGName;
     public String storageAccountName;
+    public String storageAccountRGName;
+
+    public ImageSource imageSource;
     public ImageReferenceInner imageReference;
-    public String operatingSystemFamily;
 
     public ResourceManagementClientImpl resourceManagementClient;
     public NetworkManagementClientImpl networkManagementClient;
@@ -332,10 +336,11 @@ public class AzureInstanceContext extends
     }
 
     /**
-     * Get {@link ResourceGroupState}s of the {@link NetworkState}s the NICs are assigned to.
+     * Get {@link ResourceGroupState}s of the {@code NetworkState}s the NICs are assigned to.
      */
     @Override
-    protected DeferredResult<AzureInstanceContext> getNicNetworkResourceGroupStates(AzureInstanceContext context) {
+    protected DeferredResult<AzureInstanceContext> getNicNetworkResourceGroupStates(
+            AzureInstanceContext context) {
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
@@ -374,12 +379,12 @@ public class AzureInstanceContext extends
     }
 
     /**
-     * Utility method for filtering resource group list by type, and
-     * returning the first one, which is of ResourceGroupStateType.AzureResourceGroup
-     * type.
+     * Utility method for filtering resource group list by type, and returning the first one, which
+     * is of ResourceGroupStateType.AzureResourceGroup type.
      */
     private DeferredResult<ResourceGroupState> queryFirstRGFilterByType(
             AzureInstanceContext context, Set<String> groupLinks) {
+
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
                 .addInClause(ResourceState.FIELD_NAME_SELF_LINK, groupLinks)
@@ -389,14 +394,36 @@ public class AzureInstanceContext extends
                         ResourceGroupStateType.AzureResourceGroup.name());
 
         QueryStrategy<ResourceGroupState> queryByPages = new QueryTop<>(
-                this.service().getHost(),
+                service().getHost(),
                 qBuilder.build(),
                 ResourceGroupState.class,
                 context.childAuth.tenantLinks,
                 context.child.endpointLink)
-                        .setMaxResultsLimit(1);// only one group is required
+                        // only one group is required
+                        .setMaxResultsLimit(1);
+
         return queryByPages.collectDocuments(Collectors.toList())
-                .thenApply(resourceGroupStates -> resourceGroupStates.isEmpty() ? null
-                        : resourceGroupStates.get(0));
+                .thenApply(rgStates -> rgStates.stream().findFirst().orElse(null));
+    }
+
+    /**
+     * Shortcut method to image OS disk configuration:
+     * {@code this.imageSource.asImage().diskConfigs.get(0)}.
+     *
+     * @return might be null
+     */
+    DiskConfiguration imageOsDisk() {
+
+        if (this.imageSource == null || this.imageSource.asImageState() == null) {
+            return null;
+        }
+
+        ImageState image = this.imageSource.asImageState();
+
+        if (image.diskConfigs == null || image.diskConfigs.isEmpty()) {
+            return null;
+        }
+
+        return image.diskConfigs.get(0);
     }
 }

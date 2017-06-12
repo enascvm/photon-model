@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createPrivateImageSource;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
@@ -64,6 +65,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -225,6 +227,28 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 return true;
             });
         }
+    }
+
+    /**
+     * Creates a Azure instance via a provision task.
+     */
+    @Test
+    @Ignore("This test does an additional VM provisioning that will cause the total preflight "
+            + "time to exceed the limit and timeout the preflight. Only for manual execution.")
+    public void testProvisionFromPrivateImage() throws Throwable {
+
+        ImageSource privateImageSource = createPrivateImageSource(this.host, endpointState);
+
+        // create a Azure VM compute resource.
+        this.vmState = createDefaultVMResource(this.host, azureVMName,
+                computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC,
+                null /* networkRGLink */, privateImageSource);
+
+        kickOffProvisionTask();
+
+        assertConfigurationOfDisks();
+
+        assertStorageDescription();
     }
 
     /**
@@ -436,6 +460,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
         ComputeState vm = this.host.getServiceState(null,
                 ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
         String diskLink = vm.diskLinks.get(0);
         DiskState diskState = this.host.getServiceState(null, DiskState.class,
                 UriUtils.buildUri(this.host, diskLink));
@@ -446,21 +471,18 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
             return;
         }
 
+        int OSDiskSizeInAzure = 0;
         try {
             VirtualMachineInner provisionedVM = AzureTestUtil.getAzureVirtualMachine(
-                    this
-                            .computeManagementClient,
+                    this.computeManagementClient,
                     azureVMName,
                     azureVMName);
-            int OSDiskSizeInAzure = provisionedVM.storageProfile().osDisk().diskSizeGB();
-            assertEquals("OS Disk size of the VM in azure does not match with the intended size",
-                    AzureTestUtil
-                            .AZURE_CUSTOM_OSDISK_SIZE,
-                    OSDiskSizeInAzure * 1024);
+            OSDiskSizeInAzure = provisionedVM.storageProfile().osDisk().diskSizeGB();
         } catch (Exception e) {
-            fail("Unable to verify OS Disk Size on Azure");
+            fail("Unable to verify OS Disk Size on Azure. Details: " + e.getMessage());
         }
-
+        assertEquals("OS Disk size of the VM in azure does not match with the intended size",
+                AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE, OSDiskSizeInAzure * 1024);
     }
 
     /**

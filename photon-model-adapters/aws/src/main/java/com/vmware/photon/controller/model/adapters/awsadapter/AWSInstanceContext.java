@@ -618,9 +618,9 @@ public class AWSInstanceContext
 
         DiskState bootDisk = context.bootDisk;
 
-        return context.getImageNativeId(bootDisk).thenApply(imageNativeId -> {
+        return context.getImageSource(bootDisk).thenApply(imageSource -> {
 
-            context.bootDiskImageNativeId = imageNativeId;
+            context.bootDiskImageNativeId = imageSource.asNativeId();
 
             return context;
         });
