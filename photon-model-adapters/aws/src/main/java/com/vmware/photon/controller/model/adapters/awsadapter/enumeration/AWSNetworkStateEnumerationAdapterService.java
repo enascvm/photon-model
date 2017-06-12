@@ -724,7 +724,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     }
 
     private DeferredResult<AWSNetworkStateCreationContext> deleteStaleLocalStates(AWSNetworkStateCreationContext context,
-            Class localStateClass, Set<String> remoteResourcesKeys) {
+            Class<? extends ResourceState> localStateClass, Set<String> remoteResourcesKeys) {
 
         final String msg = "Delete %ss that no longer exist in the endpoint: %s";
 
@@ -733,7 +733,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(localStateClass)
-                .addFieldClause(SubnetState.FIELD_NAME_LIFECYCLE_STATE,
+                .addFieldClause("lifecycleState",
                         LifecycleState.PROVISIONING.toString(), Occurance.MUST_NOT_OCCUR)
                 .addRangeClause(
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
@@ -748,7 +748,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                     Occurance.MUST_NOT_OCCUR);
         }
 
-        QueryStrategy<SubnetState> queryLocalStates = new QueryByPages<>(
+        QueryStrategy<? extends ResourceState> queryLocalStates = new QueryByPages<>(
                 this.getHost(),
                 qBuilder.build(),
                 localStateClass,

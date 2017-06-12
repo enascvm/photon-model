@@ -207,7 +207,6 @@ public class TestAWSSetupUtils {
 
     public static final String VPC_KEY = "vpc-id";
     public static final String SUBNET_KEY = "subnet-id";
-    public static final String SUBNET_TO_DELETE_KEY = "third-subnet-id";
     public static final String INTERNET_GATEWAY_KEY = "internet-gateway";
     public static final String NIC_SPECS_KEY = "nicSpecs";
     public static final String SECURITY_GROUP_KEY = "security-group";
@@ -353,7 +352,7 @@ public class TestAWSSetupUtils {
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
             String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
             awsTestContext.put(VPC_KEY, vpcId);
-            String subnetId = createOrUpdateSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId);
+            String subnetId = createOrGetSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId);
             awsTestContext.put(SUBNET_KEY, subnetId);
 
             String internetGatewayId = createInternetGateway(client);
@@ -383,7 +382,6 @@ public class TestAWSSetupUtils {
             final String subnetId = (String) awsTestContext.get(SUBNET_KEY);
             final String internetGatewayId = (String) awsTestContext.get(INTERNET_GATEWAY_KEY);
             final String securityGroupId = (String) awsTestContext.get(SECURITY_GROUP_KEY);
-            final String toDeleteSubnetId = (String) awsTestContext.getOrDefault(SUBNET_TO_DELETE_KEY, null);
             // clean up VPC and all its dependencies if creating one at setUp
             deleteSecurityGroupUsingEC2Client(client, host, securityGroupId);
             SecurityGroup securityGroup = new AWSSecurityGroupClient(client)
@@ -392,7 +390,6 @@ public class TestAWSSetupUtils {
                 deleteSecurityGroupUsingEC2Client(client, host, securityGroup.getGroupId());
             }
             deleteSubnet(client, subnetId);
-            deleteSubnet(client, toDeleteSubnetId);
             detachInternetGateway(client, vpcId, internetGatewayId);
             deleteInternetGateway(client, internetGatewayId);
             deleteVPC(client, vpcId);
@@ -471,7 +468,7 @@ public class TestAWSSetupUtils {
     /**
      * Creates a Subnet if not exist and return the Subnet id.
      */
-    public static String createOrUpdateSubnet(AmazonEC2AsyncClient client, String subnetCidr,
+    public static String createOrGetSubnet(AmazonEC2AsyncClient client, String subnetCidr,
             String vpcId) {
         Filter cidrBlockFilter = new Filter();
         cidrBlockFilter.withName("cidrBlock");
