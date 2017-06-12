@@ -274,7 +274,7 @@ public class AWSLoadBalancerService extends StatelessService {
         Rule rule = new Rule();
 
         //TODO determine the ip range cidr
-        rule.ipRangeCidr = "0.0.0.0/24";
+        rule.ipRangeCidr = "0.0.0.0/0";
         rule.ports = port;
         rule.name = port + "_rule";
         rule.protocol = Protocol.TCP.getName();
