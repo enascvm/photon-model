@@ -60,8 +60,10 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getSubnetStates;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
+import static com.vmware.photon.controller.model.tasks.TestUtils.doPatch;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -105,6 +107,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -113,11 +116,13 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -188,7 +193,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private Map<String, Object> awsTestContext;
     private String vpcId;
     private String subnetId;
-    private String subnetToDeleteId;
     private String securityGroupId;
     private AwsNicSpecs singleNicSpec;
 
@@ -338,11 +342,18 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         stopVMsUsingEC2Client(this.client, this.host, new ArrayList<>(Arrays.asList(
                 instanceIdsToStop)));
 
+        // Create stale resources, that later should be deleted by the enumeration
+        String staleSubnetDocumentSelfLink = markFirstResourceStateAsStale(host, SubnetState.class, SubnetService.FACTORY_LINK);
+        String staleNetworkDocumentSelfLink = markFirstResourceStateAsStale(host, NetworkState.class, NetworkService.FACTORY_LINK);
+
         // During the enumeration, if one instance is stopped, its public ip address
         // will disappear, then the corresponding link of local ComputeState's public
         // network interface and its document will be removed.
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_STOP_VM);
+
+        // Validate stale resources have been deleted
+        validateStaleResourceStateDeletion(staleSubnetDocumentSelfLink, staleNetworkDocumentSelfLink);
 
         // Because one public NIC and its document are removed,
         // the totalNetworkInterfaceStateCount should go down by 1
@@ -855,12 +866,52 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertNotNull(networkState.customProperties.get(AWS_GATEWAY_ID));
         assertNotNull(networkState.customProperties.get(AWS_VPC_ROUTE_TABLE_ID));
 
-        List<SubnetState> subnetStates = TestUtils.getSubnetStates(this.host, networkState);
+        List<SubnetState> subnetStates = getSubnetStates(this.host, networkState);
         assertFalse(subnetStates.isEmpty());
         subnetStates.stream().forEach(subnetState -> {
             assertNotNull(subnetState.subnetCIDR);
             assertNotNull(subnetState.zoneId);
         });
+    }
+
+    /**
+     * From all the particular resource states, gets the first one, and patch it with an id, which
+     * do not correspond to any actually existing resource
+     * on the cloud, in order to test that this resource state will be deleted after the next enumeration run.
+     */
+    private String markFirstResourceStateAsStale(VerificationHost host,
+            Class<? extends ResourceState> resourceClass,
+            String serviceFactoryLink) throws Throwable {
+        // get enumerated resources, and change the id of one of them, so that it is deleted on the
+        // next enum
+        Map<String, ? extends ResourceState> statesMap = ProvisioningUtils
+                .getResourceStates(host,
+                        serviceFactoryLink, resourceClass);
+
+        assertNotNull("There should be resources enumerated.", statesMap);
+        assertFalse("There should be resources enumerated.", statesMap.isEmpty());
+        ResourceState existingState = statesMap.values().iterator().next();
+
+        existingState.id = existingState.id + "-stale";
+        existingState = doPatch(host, existingState,
+                resourceClass,
+                UriUtils.buildUri(host,
+                        existingState.documentSelfLink));
+        return existingState.documentSelfLink;
+    }
+
+    private void validateStaleResourceStateDeletion(String... staleResourceSelfLinks) throws Throwable {
+        for (String selfLink : staleResourceSelfLinks) {
+            ResourceState resourceState = null;
+            try {
+                resourceState = host.getServiceState(null,
+                        ResourceState.class,
+                        UriUtils.buildUri(this.host, selfLink));
+            } catch (Throwable e) {
+                // do nothing, expected is the resource not to be found
+            }
+            assertTrue("Stale subnet state should have been deleted.", resourceState == null);
+        }
     }
 
     private void validateSecurityGroupsInformation(Set<String> securityGroupLinks) throws Throwable {
@@ -989,5 +1040,4 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         return computeState;
     }
-
 }
