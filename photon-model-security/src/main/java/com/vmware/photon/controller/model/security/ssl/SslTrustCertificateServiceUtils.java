@@ -13,12 +13,13 @@
 
 package com.vmware.photon.controller.model.security.ssl;
 
-import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.security.service.SslTrustCertificateService.SslTrustCertificateState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
@@ -49,6 +50,12 @@ class SslTrustCertificateServiceUtils {
      * every host start.
      */
     private static final long QUERY_TASK_EXPIRATION_DAYS = 5 * 365; // 5 years
+
+    /** Used for the pagination. */
+    private static final String PROPERTY_QUERY_SIZE = "SslTrustCertificateServiceUtils.QUERY_SIZE";
+    private static final int DEFAULT_QUERY_SIZE = 100;
+    private static final int QUERY_RESULT_LIMIT = Integer.getInteger(PROPERTY_QUERY_SIZE, DEFAULT_QUERY_SIZE);
+
 
     /**
      * Subscribes a consumer to the given continuous query.
@@ -99,38 +106,30 @@ class SslTrustCertificateServiceUtils {
     }
 
     static void loadCertificates(ServiceHost host, Consumer<SslTrustCertificateState> consumer) {
-        Query query = Query.Builder.create()
-                .addKindFieldClause(SslTrustCertificateState.class)
-                .build();
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+        Query.Builder query = Query.Builder.create()
+                .addKindFieldClause(SslTrustCertificateState.class);
 
-        Operation.createPost(host, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setReferer(SslTrustCertificateServiceUtils.class.getSimpleName())
-                .setBody(queryTask)
-                .setCompletion((o, err) -> {
-                    if (err != null) {
-                        host.log(Level.WARNING, "Error when get ssl trust documents. "
-                                + Utils.toString(err));
-                    } else {
-                        QueryTask qTask = o.getBody(QueryTask.class);
-                        Collection<Object> values = qTask.results.documents.values();
-                        values.stream().forEach(t -> {
-                            try {
-                                host.log(Level.FINE, "Processing '%s'.", t);
-                                SslTrustCertificateState sslTrustCert =
-                                        Utils.fromJson(t, SslTrustCertificateState.class);
-                                host.log(Level.FINE,
-                                        "Certificate with '%s', issuer '%s' and alias '%s' loaded.",
-                                        sslTrustCert.commonName, sslTrustCert.issuerName,
-                                        sslTrustCert.getAlias());
-                                consumer.accept(sslTrustCert);
-                            } catch (Exception e) {
-                                host.log(Level.WARNING, "cannot deserialize " + t);
-                            }
-                        });
-                    }
-                }).sendWith(host);
+        QueryStrategy<SslTrustCertificateState> queryLocalStates = new QueryUtils.QueryByPages<>(
+                host,
+                query.build(),
+                SslTrustCertificateState.class,
+                null,
+                null)
+                .setMaxPageSize(QUERY_RESULT_LIMIT);
+
+        queryLocalStates.queryDocuments(c -> {
+            try {
+                host.log(Level.FINE, "Processing '%s'.", c);
+                SslTrustCertificateState sslTrustCert =
+                        Utils.fromJson(c, SslTrustCertificateState.class);
+                host.log(Level.FINE,
+                        "Certificate with '%s', issuer '%s' and alias '%s' loaded.",
+                        sslTrustCert.commonName, sslTrustCert.issuerName,
+                        sslTrustCert.getAlias());
+                consumer.accept(sslTrustCert);
+            } catch (Exception e) {
+                host.log(Level.WARNING, "cannot deserialize " + c);
+            }
+        });
     }
 }

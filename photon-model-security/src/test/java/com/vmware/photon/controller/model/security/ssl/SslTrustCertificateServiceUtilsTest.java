@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.security.ssl;
 
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -94,6 +96,60 @@ public class SslTrustCertificateServiceUtilsTest extends BaseTestCase {
             Assert.fail("No delete notification received for " + deleteLink);
         }
         this.logger.info("Certificate " + certDocumentId + " deleted.");
+    }
+
+    @Test
+    public void testLoadCertificates() throws Throwable {
+        int numCerts = 10;
+
+        // create certificates
+        SslTrustCertificateState[] certState = new SslTrustCertificateState[numCerts];
+        for (int i = 0; i < numCerts; i++) {
+            String certPEM = CommonTestStateFactory.getFileContent("test_ssl_trust.PEM").trim();
+            X509Certificate[] certificates =
+                    CertificateUtil.createCertificateChain(certPEM);
+            // Populate the certificate properties based on the first (end server) certificate
+            X509Certificate endCertificate = certificates[0];
+            certState[i] = new SslTrustCertificateState();
+            certState[i].certificate =
+                    CertificateUtil.toPEMformat(endCertificate);
+            // since documentSelfLink is calculated from certState.certificate
+            // we need to make it unique in each of the 10 certStates
+            // be careful if you make any changes to file 'test_ssl_trust.PEM'
+            // then you will have to change following lines to pick a different
+            // set of characters (here 'EMMA') to replace, for creating unique cert
+            String replacement = String.valueOf(i);
+            certState[i].certificate =
+                    certState[i].certificate.replaceAll("P", replacement);
+            this.host.sendAndWaitExpectSuccess(
+                    Operation.createPost(
+                            this.host,
+                            SslTrustCertificateService.FACTORY_LINK)
+                            .setBody(certState[i])
+            );
+        }
+
+        // test different page sizes
+        testLoadCertificatesPagination(numCerts, 1);
+        testLoadCertificatesPagination(numCerts, 2);
+        testLoadCertificatesPagination(numCerts, 3);
+        testLoadCertificatesPagination(numCerts, 10);
+        testLoadCertificatesPagination(numCerts, 11);
+    }
+
+    private void testLoadCertificatesPagination(int numCerts, int pageSize) {
+        // create a mock consumer to collect the certificates processed
+        final List<SslTrustCertificateState> result = new ArrayList<>();
+        Consumer<SslTrustCertificateState> mockConsumer = (sslTrustCertificateState) -> {
+            result.add(sslTrustCertificateState);
+        };
+        // set page size
+        System.setProperty("SslTrustCertificateServiceUtils.QUERY_SIZE", String.valueOf(pageSize));
+
+        SslTrustCertificateServiceUtils.loadCertificates(this.host, mockConsumer);
+        host.waitFor(String.format("incorrect number of certs collected. expected=%s, actual=%s",
+                numCerts, result.size()),
+                () -> result.size() == numCerts);
     }
 
     private Consumer<Operation> consumer(
