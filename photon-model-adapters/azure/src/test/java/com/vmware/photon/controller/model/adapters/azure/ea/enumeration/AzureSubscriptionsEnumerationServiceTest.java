@@ -15,9 +15,12 @@ package com.vmware.photon.controller.model.adapters.azure.ea.enumeration;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -34,11 +37,13 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
 import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -69,7 +74,11 @@ public class AzureSubscriptionsEnumerationServiceTest {
     private String computeLink;
     private Collection<String> createdComputeLinks;
     private ComputeState compute;
+    private String existingSubsComputeLink1;
+    private String existingSubsComputeLink2;
 
+    private static final String SUBSCRIPTION_EXISTING_1 = "subscriptionExisting1";
+    private static final String SUBSCRIPTION_EXISTING_2 = "subscriptionExisting2";
     private static final String SUBSCRIPTION_ID_1 = "subscriptionId1";
     private static final String SUBSCRIPTION_ID_2 = "subscriptionId2";
     private static final String ACCOUNT_ID_1 = "accountId1";
@@ -78,6 +87,9 @@ public class AzureSubscriptionsEnumerationServiceTest {
     private static final String ENROLLMENT_NUMNBER = "100";
     private static final String API_KEY = "clientKey";
     private static final String TENANT_ID = "tenantId";
+    private static final String REGION = "westus";
+    private static final String CLIENT_ID = "clientId";
+    private static final String CLIET_KEY = "clientKey";
 
     @Before
     public void setUp() throws Exception {
@@ -90,37 +102,29 @@ public class AzureSubscriptionsEnumerationServiceTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
+            AzureAdapters.startServices(this.host);
             AzureEaAdapters.startServices(this.host);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
+            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
             this.host.waitForServiceAvailable(AzureEaAdapters.LINKS);
 
             this.host.setTimeoutSeconds(600);
 
+            // Create Azure non-ea endpoints
+            EndpointState nonEaEp1 = createNonEaEndpointState(SUBSCRIPTION_EXISTING_1);
+            EndpointAllocationTaskState state1 = createEndpoint(nonEaEp1);
+            this.existingSubsComputeLink1 = state1.endpointState.computeLink;
+            EndpointState nonEaEp2 = createNonEaEndpointState(SUBSCRIPTION_EXISTING_2);
+            EndpointAllocationTaskState state2 = createEndpoint(nonEaEp2);
+            this.existingSubsComputeLink2 = state2.endpointState.computeLink;
+
             // Create an Azure endpoint which will act as Azure EA endpoint
-            EndpointState ep = createEndpointState();
-
-            EndpointAllocationTaskState validateEndpoint = new EndpointAllocationTaskState();
-            validateEndpoint.endpointState = ep;
-            validateEndpoint.options = this.isMock ? EnumSet.of(TaskOption.IS_MOCK) : null;
-            validateEndpoint.tenantLinks = Collections.singletonList(TENANT_ID);
-            EndpointAllocationTaskState outTask = TestUtils
-                    .doPost(this.host, validateEndpoint,
-                            EndpointAllocationTaskState.class,
-                            UriUtils.buildUri(this.host,
-                                    EndpointAllocationTaskService.FACTORY_LINK));
-
-            this.host.waitForFinishedTask(
-                    EndpointAllocationTaskState.class,
-                    outTask.documentSelfLink);
-
-            EndpointAllocationTaskState taskState = getServiceSynchronously(
-                    outTask.documentSelfLink,
-                    EndpointAllocationTaskState.class);
-
+            EndpointState ep = createEaEndpointState();
+            EndpointAllocationTaskState taskState = createEndpoint(ep);
             this.computeLink = taskState.endpointState.computeLink;
             this.compute = getServiceSynchronously(this.computeLink, ComputeState.class);
 
@@ -129,7 +133,29 @@ public class AzureSubscriptionsEnumerationServiceTest {
         }
     }
 
-    private EndpointService.EndpointState createEndpointState() {
+    private EndpointAllocationTaskState createEndpoint(
+            EndpointState endpointState) throws Throwable {
+        EndpointAllocationTaskState validateEndpoint = new EndpointAllocationTaskState();
+        validateEndpoint.endpointState = endpointState;
+        validateEndpoint.options = this.isMock ? EnumSet.of(TaskOption.IS_MOCK) : null;
+        validateEndpoint.tenantLinks = Collections.singletonList(TENANT_ID);
+        EndpointAllocationTaskState outTask = TestUtils
+                .doPost(this.host, validateEndpoint,
+                        EndpointAllocationTaskState.class,
+                        UriUtils.buildUri(this.host,
+                                EndpointAllocationTaskService.FACTORY_LINK));
+
+        this.host.waitForFinishedTask(
+                EndpointAllocationTaskState.class,
+                outTask.documentSelfLink);
+
+        EndpointAllocationTaskState taskState = getServiceSynchronously(
+                outTask.documentSelfLink,
+                EndpointAllocationTaskState.class);
+        return taskState;
+    }
+
+    private EndpointService.EndpointState createEaEndpointState() {
         EndpointService.EndpointState endpoint = new EndpointService.EndpointState();
         endpoint.endpointType = EndpointType.azure_ea.name();
         endpoint.name = EndpointType.azure_ea.name();
@@ -137,6 +163,20 @@ public class AzureSubscriptionsEnumerationServiceTest {
         endpoint.endpointProperties = new HashMap<>();
         endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, ENROLLMENT_NUMNBER);
         endpoint.endpointProperties.put(PRIVATE_KEY_KEY, API_KEY);
+        return endpoint;
+    }
+
+    public EndpointService.EndpointState createNonEaEndpointState(String subscriptionId) {
+        EndpointService.EndpointState endpoint = new EndpointService.EndpointState();
+        endpoint.endpointType = PhotonModelConstants.EndpointType.azure.name();
+        endpoint.name = PhotonModelConstants.EndpointType.azure.name();
+        endpoint.regionId = REGION;
+
+        endpoint.endpointProperties = new HashMap<>();
+        endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, CLIENT_ID);
+        endpoint.endpointProperties.put(PRIVATE_KEY_KEY, CLIET_KEY);
+        endpoint.endpointProperties.put(AZURE_TENANT_ID, TENANT_ID);
+        endpoint.endpointProperties.put(USER_LINK_KEY, subscriptionId);
         return endpoint;
     }
 
@@ -171,17 +211,30 @@ public class AzureSubscriptionsEnumerationServiceTest {
         // Request for creating computes for existing Azure Subscriptions
         AzureSubscription subscription1 = getAzureSubscription(SUBSCRIPTION_ID_1, ACCOUNT_ID_1);
         AzureSubscription subscription2 = getAzureSubscription(SUBSCRIPTION_ID_2, ACCOUNT_ID_2);
-        Collection<AzureSubscription> subscriptions = new ArrayList<>();
-        subscriptions.add(subscription1);
-        subscriptions.add(subscription2);
-        createAzureCostComputesForSubscriptions(subscriptions);
+        AzureSubscription existingSubscription2 = getAzureSubscription(SUBSCRIPTION_EXISTING_2,
+                ACCOUNT_ID_2);
+        createAzureCostComputesForSubscriptions(Arrays.asList(subscription1, subscription2,
+                existingSubscription2));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
         QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
 
-        assertQueryTaskResponse(queryTaskResponse, 2);
+        assertQueryTaskResponse(queryTaskResponse, 4);
+
+        // Remove compute for existing subscription
+        ComputeState existingSubsCs1 = Utils.fromJson(queryTaskResponse.results
+                .documents.remove(this.existingSubsComputeLink1), ComputeState.class);
+        Assert.assertNotNull(existingSubsCs1);
+        Assert.assertNull(existingSubsCs1
+                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
+
+        ComputeState existingSubsCs2 = Utils.fromJson(queryTaskResponse.results
+                .documents.remove(this.existingSubsComputeLink2), ComputeState.class);
+        Assert.assertNotNull(existingSubsCs2);
+        Assert.assertNull(existingSubsCs1
+                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
     }
 
     private void testAddMoreAzureSubscriptions() throws Throwable {
@@ -194,7 +247,14 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
 
-        assertQueryTaskResponse(queryTaskResponse, 2);
+        assertQueryTaskResponse(queryTaskResponse, 3);
+
+        // Remove compute for existing subscription
+        ComputeState existingSubsCs = Utils.fromJson(queryTaskResponse.results
+                .documents.remove(this.existingSubsComputeLink1), ComputeState.class);
+        Assert.assertNotNull(existingSubsCs);
+        Assert.assertNull(existingSubsCs
+                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
 
         // Remove the already asserted computes
         this.createdComputeLinks.stream().forEach(computeLnk -> {
@@ -224,13 +284,22 @@ public class AzureSubscriptionsEnumerationServiceTest {
 
         // Request for creating computes for 1 Azure Subscriptions
         AzureSubscription subscription = getAzureSubscription(SUBSCRIPTION_ID_1, ACCOUNT_ID_1);
-        createAzureCostComputesForSubscriptions(Collections.singletonList(subscription));
+        AzureSubscription existingSubscription1 = getAzureSubscription(SUBSCRIPTION_EXISTING_1,
+                ACCOUNT_ID_1);
+        createAzureCostComputesForSubscriptions(Arrays.asList(subscription, existingSubscription1));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
         QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
-        assertQueryTaskResponse(queryTaskResponse, 1);
+        assertQueryTaskResponse(queryTaskResponse, 2);
+
+        // Remove compute for existing subscription
+        ComputeState existingSubsCs = Utils.fromJson(queryTaskResponse.results
+                .documents.remove(this.existingSubsComputeLink1), ComputeState.class);
+        Assert.assertNotNull(existingSubsCs);
+        Assert.assertNull(existingSubsCs
+                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
 
         // Get and assert the returned compute
         ComputeState cs = Utils
@@ -317,6 +386,8 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 cs.customProperties.get(AzureCostConstants.AZURE_ACCOUNT_ID));
         Assert.assertEquals(expectedSubscriptionUuid,
                 cs.customProperties.get(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY));
+        Assert.assertEquals(Boolean.TRUE.toString(),
+                cs.customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
         Assert.assertEquals(expectedEndpointLink, cs.endpointLink);
         Assert.assertEquals(ComputeType.VM_HOST, cs.type);
         Assert.assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE, cs.environmentName);
