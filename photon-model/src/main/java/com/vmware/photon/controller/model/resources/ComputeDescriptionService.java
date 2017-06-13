@@ -80,8 +80,7 @@ public class ComputeDescriptionService extends StatefulService {
         /**
          * List of compute types this host supports actuating.
          */
-        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = {
-                PropertyIndexingOption.EXPAND })
+        @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
         public List<String> supportedChildren;
 
         /**
@@ -379,6 +378,21 @@ public class ComputeDescriptionService extends StatefulService {
                     if (patchBody.regionId != null && currentState.regionId == null) {
                         hasChanged = true;
                         currentState.regionId = patchBody.regionId;
+                    }
+
+                    // make sure the supportChildren list only contains unique values
+                    if (patchBody.supportedChildren != null) {
+                        if (currentState.supportedChildren == null) {
+                            currentState.supportedChildren = patchBody.supportedChildren;
+                            hasChanged = true;
+                        } else {
+                            for (String newSupportedChild : patchBody.supportedChildren) {
+                                if (!currentState.supportedChildren.contains(newSupportedChild)) {
+                                    currentState.supportedChildren.add(newSupportedChild);
+                                    hasChanged = true;
+                                }
+                            }
+                        }
                     }
 
                     return Boolean.valueOf(hasChanged);
