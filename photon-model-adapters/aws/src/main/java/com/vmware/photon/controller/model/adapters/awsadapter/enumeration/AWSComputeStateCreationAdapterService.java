@@ -671,7 +671,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 .filter(existingNicState -> existingNicState != null)
 
                 // create NIC patch operation for update
-                .map(existingNicState -> updateNICState(context, instance, existingNicState));
+                .forEach(existingNicState -> updateNICState(context, instance, existingNicState));
         // }}
 
         Map<String, Map<String, Collection<Object>>> nicsDeltaMap = new HashMap<>();
