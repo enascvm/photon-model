@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -54,6 +55,103 @@ public class LoadBalancerDescriptionService extends StatefulService {
      */
     public static class LoadBalancerDescription extends ResourceState {
         /**
+         * Non-exhaustive list of commonly used protocols for routing and health checks.
+         */
+        public static enum Protocol {
+            HTTP,
+            HTTPS,
+            TCP,
+            UDP
+        }
+
+        /**
+         * Represents a load balancer configuration for checking the health of the load-balanced
+         * back-end instances.
+         */
+        public static class HealthCheckConfiguration {
+            /**
+             * (Required) Protocol used for the health check. String representation of
+             * {@link LoadBalancerDescription.Protocol} values can be used or a custom string that
+             * will be sent to the cloud provider.
+             */
+            public String protocol;
+
+            /**
+             * (Required) Port on the back-end instance machine to use for the health check.
+             */
+            public String port;
+
+            /**
+             * (Optional) URL path on the back-end instance against which a {@code GET} request will
+             * be performed for the health check. Useful when the health check protocol is
+             * HTTP/HTTPS.
+             */
+            public String urlPath;
+
+            /**
+             * (Optional) Interval (in seconds) at which the health checks will be performed. If
+             * not specified, a provider-default will be used.
+             */
+            public Integer intervalSeconds;
+
+            /**
+             * (Optional) Timeout (in seconds) to wait for a response from the back-end instance. If
+             * not specified, a provider-default will be used.
+             */
+            public Integer timeoutSeconds;
+
+            /**
+             * (Optional) Number of consecutive check failures before considering a particular
+             * back-end instance as unhealthy. If not specified, a provider-default will be used.
+             */
+            public Integer unhealthyThreshold;
+
+            /**
+             * (Optional) Number of consecutive successful checks before considering a particular
+             * back-end instance as healthy. If not specified, a provider-default will be used.
+             */
+            public Integer healthyThreshold;
+        }
+
+        /**
+         * Represents a configuration for routing incoming requests to the back-end instances.
+         * A load balancer may support multiple such configurations.
+         */
+        public static class RouteConfiguration {
+            /**
+             * (Required) Front-end (incoming) protocol. String representation of
+             * {@link LoadBalancerDescription.Protocol} values can be used or a custom string that
+             * will be sent to the cloud provider.
+             */
+            public String protocol;
+
+            /**
+             * (Required) Front-end (incoming) port where the load balancer is listening to.
+             */
+            public String port;
+
+            /**
+             * (Required) Back-end instance protocol. String representation of
+             * {@link LoadBalancerDescription.Protocol} values can be used or a custom string that
+             * will be sent to the cloud provider.
+             */
+            public String instanceProtocol;
+
+            /**
+             * (Required) Back-end instance port where the traffic is routed to.
+             */
+            public String instancePort;
+
+            /**
+             * (Optional) Health check configuration for this route configuration. Note that some
+             * providers may only support a single health check configuration even if there are
+             * multiple route configurations. In that case, it is up to the provider to pick the
+             * health configuration to use.
+             */
+            public HealthCheckConfiguration healthCheckConfiguration;
+        }
+
+        /**
          * Link to the cloud account endpoint the load balancer belongs to.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -93,6 +191,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String protocol;
 
         /**
@@ -100,6 +199,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public Integer port;
 
         /**
@@ -107,6 +207,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String instanceProtocol;
 
         /**
@@ -114,13 +215,8 @@ public class LoadBalancerDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public Integer instancePort;
-
-        /**
-         * The adapter to use to create the load balancer instance.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public URI instanceAdapterReference;
 
         /**
          * Internet-facing load balancer or an internal load balancer
@@ -128,6 +224,22 @@ public class LoadBalancerDescriptionService extends StatefulService {
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Boolean internetFacing;
+
+        /**
+         * Routing configuration between the load balancer and the back-end instances.
+         *
+         * <p>{@code PATCH} merging strategy: if not {@code NULL} in the patch body, the current
+         * value is replaced by the one given in the patch request (no advanced per-item merging).
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        //@UsageOption(option = PropertyUsageOption.REQUIRED)
+        public List<RouteConfiguration> routes;
+
+        /**
+         * The adapter to use to create the load balancer instance.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public URI instanceAdapterReference;
     }
 
     public LoadBalancerDescriptionService() {

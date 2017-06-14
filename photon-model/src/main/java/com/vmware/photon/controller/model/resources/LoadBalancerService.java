@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.resources;
 import java.net.URI;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -30,6 +31,7 @@ import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
@@ -98,6 +100,7 @@ public class LoadBalancerService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String protocol;
 
         /**
@@ -105,6 +108,7 @@ public class LoadBalancerService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public Integer port;
 
         /**
@@ -112,6 +116,7 @@ public class LoadBalancerService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String instanceProtocol;
 
         /**
@@ -119,13 +124,8 @@ public class LoadBalancerService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public Integer instancePort;
-
-        /**
-         * The adapter to use to create the load balancer instance.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public URI instanceAdapterReference;
 
         /**
          * Internet-facing load balancer or an internal load balancer
@@ -135,11 +135,27 @@ public class LoadBalancerService extends StatefulService {
         public Boolean internetFacing;
 
         /**
+         * Routing configuration between the load balancer and the back-end instances.
+         *
+         * <p>{@code PATCH} merging strategy: if not {@code NULL} in the patch body, the current
+         * value is replaced by the one given in the patch request (no advanced per-item merging).
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
+        //@UsageOption(option = PropertyUsageOption.REQUIRED)
+        public List<RouteConfiguration> routes;
+
+        /**
          * The address of this load balancer instance.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String address;
+
+        /**
+         * The adapter to use to create the load balancer instance.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public URI instanceAdapterReference;
 
         @Override
         public void copyTo(ResourceState target) {
