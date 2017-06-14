@@ -122,7 +122,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.ENUMERATION_SERVICE;
 
     private static final int MAX_CONCURRENT_ENUM_PROCESSES = 10;
-    private static final String ALL_IPS_SUBNET_CIDR = "0.0.0.0/0";
+
     private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(1);
 
     /*
@@ -708,7 +708,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         state.id = state.name = net.getName();
         state.endpointLink = enumerationContext.getRequest().endpointLink;
-        state.subnetCIDR = ALL_IPS_SUBNET_CIDR;
 
         ManagedObjectReference parentSwitch = net.getParentSwitch();
         state.networkLink = buildStableDvsLink(parentSwitch, request.endpointLink);
@@ -764,7 +763,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
         subnet.id = subnet.name = net.getName();
         subnet.endpointLink = enumerationContext.getRequest().endpointLink;
-        subnet.subnetCIDR = ALL_IPS_SUBNET_CIDR;
         subnet.networkLink = networkState.documentSelfLink;
         subnet.tenantLinks = enumerationContext.getTenantLinks();
 
@@ -802,7 +800,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
         subnet.id = subnet.name = net.getName();
         subnet.endpointLink = enumerationContext.getRequest().endpointLink;
-        subnet.subnetCIDR = ALL_IPS_SUBNET_CIDR;
         subnet.networkLink = networkState.documentSelfLink;
         subnet.tenantLinks = enumerationContext.getTenantLinks();
 
@@ -891,7 +888,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.documentSelfLink = NetworkService.FACTORY_LINK + "/" + this.getHost().nextUUID();
         state.id = state.name = net.getName();
         state.endpointLink = enumerationContext.getRequest().endpointLink;
-        state.subnetCIDR = ALL_IPS_SUBNET_CIDR;
         state.regionId = enumerationContext.getRegionId();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;

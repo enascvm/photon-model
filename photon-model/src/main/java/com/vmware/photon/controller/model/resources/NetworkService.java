@@ -49,7 +49,6 @@ public class NetworkService extends StatefulService {
         /**
          * Subnet CIDR
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String subnetCIDR;
 
@@ -137,7 +136,9 @@ public class NetworkService extends StatefulService {
 
         // do we have a subnet in CIDR notation
         // creating new SubnetUtils to validate
-        new SubnetUtils(state.subnetCIDR);
+        if (state.subnetCIDR != null) {
+            new SubnetUtils(state.subnetCIDR);
+        }
     }
 
     @Override

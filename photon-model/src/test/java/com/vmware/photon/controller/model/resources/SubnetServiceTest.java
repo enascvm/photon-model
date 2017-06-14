@@ -131,15 +131,12 @@ public class SubnetServiceTest extends Suite {
 
         @Test
         public void testInvalidValues() throws Throwable {
-            SubnetState missingSubnet = buildValidStartState();
             SubnetState invalidSubnet1 = buildValidStartState();
             SubnetState invalidSubnet2 = buildValidStartState();
             SubnetState invalidSubnet3 = buildValidStartState();
             SubnetState invalidSubnet4 = buildValidStartState();
             SubnetState invalidSubnet5 = buildValidStartState();
 
-            missingSubnet.subnetCIDR = null;
-            // no subnet
             invalidSubnet1.subnetCIDR = "10.0.0.0";
             // invalid IP
             invalidSubnet2.subnetCIDR = "10.0.0.A";
@@ -151,7 +148,7 @@ public class SubnetServiceTest extends Suite {
             invalidSubnet5.subnetCIDR = "10.0.0.0\\0";
 
             SubnetState[] states = {
-                    missingSubnet, invalidSubnet1, invalidSubnet2, invalidSubnet3,
+                    invalidSubnet1, invalidSubnet2, invalidSubnet3,
                     invalidSubnet4, invalidSubnet5 };
             for (SubnetState state : states) {
                 postServiceSynchronously(SubnetService.FACTORY_LINK,

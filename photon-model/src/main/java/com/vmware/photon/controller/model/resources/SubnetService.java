@@ -71,7 +71,6 @@ public class SubnetService extends StatefulService {
         /**
          * Subnet CIDR
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String subnetCIDR;
 
