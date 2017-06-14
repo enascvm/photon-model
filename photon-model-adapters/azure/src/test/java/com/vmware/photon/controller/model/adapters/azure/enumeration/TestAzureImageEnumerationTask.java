@@ -33,6 +33,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -151,22 +152,15 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     /**
      * That's the only private image:
-     * {@link https://portal.azure.com/#resource/subscriptions/817776f9-ef2a-4681-9774-a66f9be11e22/resourceGroups/group1496675321811/providers/Microsoft.Compute/images/PhModelLinuxImage/overview}
+     * {@link /resourceGroups/group1496675321811/providers/Microsoft.Compute/images/PhModelLinuxImage/overview}
      * created as described here
      * {@link https://docs.microsoft.com/en-us/azure/virtual-machines/linux/capture-image}
      */
     @Test
+    @Ignore("For now run the test manually. Will enable it once the image is created programatically, but not hardcoded")
     public void testPrivateImageEnumeration_single() throws Throwable {
 
         Assume.assumeFalse(this.isMock);
-
-        {
-            // Jon Schulman Azure subscription
-            this.subscriptionId = "817776f9-ef2a-4681-9774-a66f9be11e22";
-            this.clientID = "e3f0a5a1-df21-4b25-8580-4a54b4295856";
-            this.clientKey = "zRR1m3j2IxiXz+w8iSe+AiIBrxILsvWSppbMw5cHYDM=";
-            this.tenantId = "9340b30e-fb52-4208-a40a-325497357c8b";
-        }
 
         EndpointState endpointState = createEndpointState();
 
