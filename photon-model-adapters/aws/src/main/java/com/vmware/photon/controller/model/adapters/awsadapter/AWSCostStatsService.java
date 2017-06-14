@@ -258,11 +258,19 @@ public class AWSCostStatsService extends StatelessService {
         handleCostStatsCreationRequest(statsData);
     }
 
+    private boolean isAutoDiscoveryEnabled(AWSCostStatsCreationContext context) {
+        String autoDiscoveryFlag = context.computeDesc.customProperties
+                .getOrDefault(PhotonModelConstants.IS_RESOURCE_AUTO_DISCOVERY_ENABLED, null);
+        return (autoDiscoveryFlag == null || autoDiscoveryFlag.isEmpty() || Boolean
+                .valueOf(autoDiscoveryFlag));
+    }
+
     private void createMissingResourcesComputes(AWSCostStatsCreationContext context,
             AWSCostStatsCreationStages next) {
 
         String linkedAccountsCsv = context.computeDesc.customProperties.get(AWS_LINKED_ACCOUNT_IDS);
-        if (context.isSecondPass || linkedAccountsCsv == null || linkedAccountsCsv.isEmpty()) {
+        if (context.isSecondPass || linkedAccountsCsv == null || linkedAccountsCsv.isEmpty() ||
+                !isAutoDiscoveryEnabled(context)) {
             context.stage = next;
             handleCostStatsCreationRequest(context);
             return;

@@ -147,4 +147,6 @@ public class PhotonModelConstants {
 
     // Auto discovered entities will be marked with the following custom property
     public static final String AUTO_DISCOVERED_ENTITY = "autoDiscovered";
+
+    public static final String IS_RESOURCE_AUTO_DISCOVERY_ENABLED = "isAutoDiscoveryEnabled";
 }
