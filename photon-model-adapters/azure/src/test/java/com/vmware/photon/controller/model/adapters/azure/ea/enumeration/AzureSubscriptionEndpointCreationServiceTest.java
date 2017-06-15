@@ -131,9 +131,9 @@ public class AzureSubscriptionEndpointCreationServiceTest extends BasicReusableH
 
         ComputeState cs = getServiceSynchronously(subscriptionEndpoint.computeLink,
                 ComputeState.class);
-        Assert.assertNotNull(cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_EMAIL_ID));
+        Assert.assertNotNull(cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_OWNER_EMAIL_ID));
         Assert.assertEquals(ACCOUNT_ID,
-                cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_EMAIL_ID));
+                cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_OWNER_EMAIL_ID));
         Assert.assertNotNull(cs.customProperties.get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY));
         Assert.assertEquals(SUBSCRIPTION_ID,
                 cs.customProperties.get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY));

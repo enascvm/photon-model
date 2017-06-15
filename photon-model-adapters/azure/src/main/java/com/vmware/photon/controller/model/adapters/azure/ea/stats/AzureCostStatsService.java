@@ -785,8 +785,8 @@ public class AzureCostStatsService extends StatelessService {
             String subscriptionGuid = subscription.entityId;
             if (context.allSubscriptionsCost.get(subscriptionGuid) == null) {
                 AzureSubscription newSubscription = new AzureSubscription(
-                        subscriptionGuid, subscription.subscriptionName,
-                        subscription.parentEntityId);
+                        subscriptionGuid, subscription.entityName, subscription.parentEntityId,
+                        subscription.parentEntityName);
                 newSubscription.addCost(subscription.getCost());
                 context.allSubscriptionsCost.put(subscriptionGuid, newSubscription);
             } else {

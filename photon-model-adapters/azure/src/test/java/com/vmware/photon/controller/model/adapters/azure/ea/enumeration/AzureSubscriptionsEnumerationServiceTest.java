@@ -386,7 +386,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
         Assert.assertEquals(expectedEnrollmentNumber,
                 cs.customProperties.get(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY));
         Assert.assertEquals(expectedAccountEmailId,
-                cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_EMAIL_ID));
+                cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_OWNER_EMAIL_ID));
         Assert.assertEquals(expectedSubscriptionUuid,
                 cs.customProperties.get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY));
         Assert.assertEquals(Boolean.TRUE.toString(),

@@ -34,7 +34,15 @@ public class AzureSubscription extends AzureEntity {
             String accountOwnerId) {
         super.entityId = subscriptionGuid;
         super.parentEntityId = accountOwnerId;
-        this.subscriptionName = subscriptionName;
+        super.entityName = subscriptionName;
+    }
+
+    public AzureSubscription(String subscriptionGuid, String subscriptionName,
+            String accountOwnerId, String accountOwnerName) {
+        super.entityId = subscriptionGuid;
+        super.parentEntityId = accountOwnerId;
+        super.entityName = subscriptionName;
+        super.parentEntityName = accountOwnerName;
     }
 
     public Map<String, AzureService> getServices() {

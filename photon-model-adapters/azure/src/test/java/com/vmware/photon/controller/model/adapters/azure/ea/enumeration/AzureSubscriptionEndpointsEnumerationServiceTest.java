@@ -248,7 +248,7 @@ public class AzureSubscriptionEndpointsEnumerationServiceTest {
         Assert.assertEquals(subscriptionId, computeStateCreated.customProperties
                 .get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY));
         Assert.assertEquals(accountId, computeStateCreated.customProperties
-                .get(AzureConstants.AZURE_ACCOUNT_EMAIL_ID));
+                .get(AzureConstants.AZURE_ACCOUNT_OWNER_EMAIL_ID));
         Assert.assertEquals(this.compute.resourcePoolLink, computeStateCreated.resourcePoolLink);
         Assert.assertEquals(this.compute.tenantLinks, computeStateCreated.tenantLinks);
     }

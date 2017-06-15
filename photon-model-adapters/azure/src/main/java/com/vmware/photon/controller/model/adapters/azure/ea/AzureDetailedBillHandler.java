@@ -182,25 +182,20 @@ public class AzureDetailedBillHandler {
         AzureSubscription subscription = monthlyBill.get(subscriptionGuid);
         if (subscription == null) {
             // New subscription found in the bill.
-            AzureSubscription newSubscription = createSubscriptionDto(
-                    billElement);
-            AzureService newService = newSubscription
-                    .addToServicesMap(billElement);
+            AzureSubscription newSubscription = createSubscriptionDto(billElement);
+            AzureService newService = newSubscription.addToServicesMap(billElement);
             newService.addToResourcesMap(billElement);
             monthlyBill.put(subscriptionGuid, newSubscription);
         } else if (subscription.fetchServiceDetail(billElement.meterCategory) == null) {
             // New service found.
             subscription.addCost(billElement.extendedCost);
-            AzureService newService = subscription
-                    .addToServicesMap(billElement);
+            AzureService newService = subscription.addToServicesMap(billElement);
             newService.addToResourcesMap(billElement);
             monthlyBill.put(subscriptionGuid, subscription);
         } else {
             subscription.addCost(billElement.extendedCost);
-            AzureService service = subscription
-                    .fetchServiceDetail(billElement.meterCategory);
-            service.addToDailyCosts(billElement.epochDate,
-                    billElement.extendedCost);
+            AzureService service = subscription.fetchServiceDetail(billElement.meterCategory);
+            service.addToDailyCosts(billElement.epochDate, billElement.extendedCost);
             service.addToResourcesMap(billElement);
             monthlyBill.put(subscriptionGuid, subscription);
         }
@@ -212,7 +207,7 @@ public class AzureDetailedBillHandler {
     private AzureSubscription createSubscriptionDto(
             EaDetailedBillElement billElement) {
         return new AzureSubscription(billElement.subscriptionGuid, billElement.subscriptionName,
-                billElement.accountOwnerId);
+                billElement.accountOwnerId, billElement.accountName);
     }
 
     /**

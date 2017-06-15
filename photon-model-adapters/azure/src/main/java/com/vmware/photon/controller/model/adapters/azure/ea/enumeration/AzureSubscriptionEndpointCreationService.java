@@ -211,7 +211,7 @@ public class AzureSubscriptionEndpointCreationService extends StatelessService {
         properties.put(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                 azureEaEndpoint.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEYID_KEY));
         if (request.accountId != null) {
-            properties.put(AzureConstants.AZURE_ACCOUNT_EMAIL_ID, request.accountId);
+            properties.put(AzureConstants.AZURE_ACCOUNT_OWNER_EMAIL_ID, request.accountId);
         }
         return properties;
     }

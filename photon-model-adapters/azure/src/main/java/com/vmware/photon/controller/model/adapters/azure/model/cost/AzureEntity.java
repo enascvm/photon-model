@@ -18,7 +18,9 @@ package com.vmware.photon.controller.model.adapters.azure.model.cost;
  */
 public class AzureEntity {
     public String entityId;
+    public String entityName;
     public String parentEntityId;
+    public String parentEntityName;
 
     public AzureEntity () {
     }

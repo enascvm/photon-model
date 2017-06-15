@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -380,8 +382,10 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         properties.put(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY, subscription.entityId);
         properties.put(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                 enumerationContext.parentAuth.privateKeyId);
-        properties.put(AzureConstants.AZURE_ACCOUNT_EMAIL_ID,
-                subscription.parentEntityId);
+        properties.put(AzureConstants.AZURE_ACCOUNT_OWNER_EMAIL_ID, subscription.parentEntityId);
+        if (StringUtils.isNotBlank(subscription.parentEntityName)) {
+            properties.put(AzureConstants.AZURE_ACCOUNT_OWNER_NAME, subscription.parentEntityName);
+        }
         if (isAutoCreated) {
             properties.put(PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString());
         }
