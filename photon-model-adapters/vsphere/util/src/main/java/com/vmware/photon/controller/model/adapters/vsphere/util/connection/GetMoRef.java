@@ -353,8 +353,11 @@ public class GetMoRef extends BaseHelper {
         listpfs.add(propertyFilterSpec);
 
         RetrieveOptions options = new RetrieveOptions();
+        RetrieveResult retrieveResult =
+                this.vimPort.retrievePropertiesEx(propCollectorRef, listpfs, options);
         List<ObjectContent> listobcont =
-                this.vimPort.retrievePropertiesEx(propCollectorRef, listpfs, options).getObjects();
+                (retrieveResult != null) ?
+                        retrieveResult.getObjects() : null;
 
         if (listobcont != null) {
             for (ObjectContent oc : listobcont) {
