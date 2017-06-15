@@ -15,11 +15,15 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.CLONE_STRATEGY;
+
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -88,13 +92,20 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
     }
 
     @Test
+    public void deployOvfWithFullClone() throws Throwable {
+        Map<String, String> customProperties = new HashMap<>();
+        customProperties.put(CLONE_STRATEGY, InstanceClient.CLONE_STRATEGY_FULL);
+        deployOvf(false, false, customProperties);
+    }
+
+    @Test
     public void deployOvfWithStoragePolicy() throws Throwable {
         deployOvf(true);
     }
 
     @Test
     public void deployOvfWithAdditionalDisks() throws Throwable {
-        deployOvf(false, true);
+        deployOvf(false, true, null);
     }
 
     @Test
@@ -153,11 +164,11 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
     }
 
     private void deployOvf(boolean isStoragePolicyBased) throws Throwable {
-        deployOvf(isStoragePolicyBased, false);
+        deployOvf(isStoragePolicyBased, false, null);
     }
 
-    private void deployOvf(boolean isStoragePolicyBased, boolean withAdditionalDisks) throws
-            Throwable {
+    private void deployOvf(boolean isStoragePolicyBased, boolean withAdditionalDisks,
+            Map<String, String> customProperties) throws Throwable {
         if (this.ovfUri == null) {
             return;
         }
@@ -192,7 +203,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
             String descriptionLink = findFirstOvfDescriptionLink();
 
             this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA, isStoragePolicyBased);
-            vm = createVmState(descriptionLink, withAdditionalDisks);
+            vm = createVmState(descriptionLink, withAdditionalDisks, customProperties);
 
             // set timeout for the next step, vmdk upload may take some time
             host.setTimeoutSeconds(60 * 5);
@@ -233,11 +244,11 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
     }
 
     private ComputeState createVmState(String descriptionLink) throws Throwable {
-        return createVmState(descriptionLink, false);
+        return createVmState(descriptionLink, false, null);
     }
 
-    private ComputeState createVmState(String descriptionLink, boolean withAdditionalDisks) throws
-            Throwable {
+    private ComputeState createVmState(String descriptionLink, boolean withAdditionalDisks,
+            Map<String, String> customProperties) throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = computeState.name = nextName("from-ovf");
         computeState.documentSelfLink = computeState.id;
@@ -271,6 +282,10 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
                 .put(ComputeProperties.PLACEMENT_LINK, findFirstMatching(q, ComputeState.class).documentSelfLink);
 
+        if (customProperties != null) {
+            computeState.customProperties.putAll(customProperties);
+        }
+
         ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
@@ -284,6 +299,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         res.type = DiskType.HDD;
         res.id = res.name = "boot-disk";
         res.sourceImageReference = URI.create("file:///dev/null");
+        res.capacityMBytes = 10240;
 
         res.bootConfig = new BootConfig();
         res.bootConfig.files = new FileEntry[] { new FileEntry(), new FileEntry() };

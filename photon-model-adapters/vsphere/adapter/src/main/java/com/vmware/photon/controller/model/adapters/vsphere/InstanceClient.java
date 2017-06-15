@@ -145,9 +145,9 @@ public class InstanceClient extends BaseHelper {
     private static final String CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS = "public-keys";
     private static final String OVF_PROPERTY_ENV = "ovf-env";
 
-    private static final String CLONE_STRATEGY_FULL = "FULL";
+    public static final String CLONE_STRATEGY_FULL = "FULL";
 
-    private static final String CLONE_STRATEGY_LINKED = "LINKED";
+    public static final String CLONE_STRATEGY_LINKED = "LINKED";
 
     private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
     private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
@@ -274,8 +274,6 @@ public class InstanceClient extends BaseHelper {
     /**
      * Stores a timestamp into a VM's extraConfig on provisioning.
      * Currently used for resource cleanup only.
-     *
-     * @param extraConfig
      */
     private void recordTimestamp(List<OptionValue> extraConfig) {
         if (extraConfig == null) {
@@ -331,15 +329,14 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualMachineRelocateDiskMoveOptions computeDiskMoveType() {
-        String strategy = CustomProperties.of(this.ctx.child)
-                .getString(CustomProperties.CLONE_STRATEGY, CLONE_STRATEGY_LINKED);
+        String strategy = CustomProperties.of(this.ctx.child).getString(CustomProperties.CLONE_STRATEGY);
 
         if (CLONE_STRATEGY_FULL.equals(strategy)) {
             return VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING;
         } else if (CLONE_STRATEGY_LINKED.equals(strategy)) {
-            return VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
+            return VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
         } else {
-            logger.warn("Unknown clone strategy {}, defaulting to LINKED", strategy);
+            logger.warn("Unknown clone strategy {}, defaulting to MOVE_CHILD_MOST_DISK_BACKING");
             return VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
         }
     }
@@ -693,19 +690,19 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_config_hardware_device, VimPath.vm_config_vAppConfig_property);
 
         VirtualMachineSnapshotInfo snapshot = (VirtualMachineSnapshotInfo) props
-                .get(VimPath.vm_snapshot);// this.get.entityProp(vmTempl, VimPath.vm_snapshot);
+                .get(VimPath.vm_snapshot);
         ArrayOfVirtualDevice devices = (ArrayOfVirtualDevice) props
-                .get(VimPath.vm_config_hardware_device);// this.get.entityProp(vmTempl,
-        // VimPath.vm_config_hardware_device);
+                .get(VimPath.vm_config_hardware_device);
 
         VirtualDisk vd = devices.getVirtualDevice().stream()
                 .filter(d -> d instanceof VirtualDisk)
                 .map(d -> (VirtualDisk) d).findFirst().orElse(null);
-        VirtualMachineRelocateDiskMoveOptions diskMoveOptions = VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
 
         VirtualSCSIController scsiController = getFirstScsiController(devices);
         Integer[] scsiUnit = findFreeScsiUnit(scsiController, devices.getVirtualDevice());
 
+        VirtualMachineRelocateDiskMoveOptions diskMoveOption = computeDiskMoveType();
+        boolean customizeBootDisk = false;
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
         if (this.bootDisk != null) {
             if (vd == null) {
@@ -716,14 +713,11 @@ public class InstanceClient extends BaseHelper {
                         diskName, datastore, pbmSpec);
                 newDisks.add(hdd);
             } else {
-                // skip for now, as there is a problem with concurrent operation after that, have to
-                // investigate more.
-                // if (vd.getCapacityInKB() < toKb(bootDisk.capacityMBytes)) {
-                // VirtualDeviceConfigSpec hdd = resizeHdd(vd, bootDisk);
-                // newDisks.add(hdd);
-                // diskMoveOptions =
-                // VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
-                // }
+                // get customization spec for boot disk if it is not linked clone
+                if (diskMoveOption != VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING
+                        && toKb(this.bootDisk.capacityMBytes) > vd.getCapacityInKB()) {
+                    customizeBootDisk = true;
+                }
             }
         }
 
@@ -786,7 +780,7 @@ public class InstanceClient extends BaseHelper {
         relocSpec.setDatastore(datastore);
         relocSpec.setFolder(folder);
         relocSpec.setPool(resourcePool);
-        relocSpec.setDiskMoveType(diskMoveOptions.value());
+        relocSpec.setDiskMoveType(diskMoveOption.value());
 
         VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
         cloneSpec.setLocation(relocSpec);
@@ -803,7 +797,15 @@ public class InstanceClient extends BaseHelper {
             return VimUtils.rethrow(info.getError());
         }
 
-        return (ManagedObjectReference) info.getResult();
+        ManagedObjectReference vmMoref = (ManagedObjectReference) info.getResult();
+        // Apply boot disk customization if any, if done through full clone.
+        if (customizeBootDisk) {
+            VirtualDeviceConfigSpec hddDevice = getBootDiskCustomizeConfigSpec(vmMoref,
+                    this.bootDisk, null);
+            reconfigureBootDisk(vmMoref, hddDevice);
+        }
+
+        return vmMoref;
     }
 
     /**
@@ -940,15 +942,23 @@ public class InstanceClient extends BaseHelper {
         if (bootDisk != null && bootDisk.capacityMBytes > 0) {
             VirtualDeviceConfigSpec hddDevice = getBootDiskCustomizeConfigSpec(this.vm, bootDisk,
                     null);
-            if (hddDevice != null) {
-                VirtualMachineConfigSpec bootDiskSpec = new VirtualMachineConfigSpec();
-                bootDiskSpec.getDeviceChange().add(hddDevice);
-                ManagedObjectReference task = getVimPort().reconfigVMTask(this.vm, bootDiskSpec);
-                TaskInfo info = waitTaskEnd(task);
+            reconfigureBootDisk(this.vm, hddDevice);
+        }
+    }
 
-                if (info.getState() == TaskInfoState.ERROR) {
-                    VimUtils.rethrow(info.getError());
-                }
+    /**
+     * Reconfigure boot disk with the customizations
+     */
+    private void reconfigureBootDisk(ManagedObjectReference vmMoref,
+            VirtualDeviceConfigSpec hddDevice) throws Exception {
+        if (hddDevice != null) {
+            VirtualMachineConfigSpec bootDiskSpec = new VirtualMachineConfigSpec();
+            bootDiskSpec.getDeviceChange().add(hddDevice);
+            ManagedObjectReference task = getVimPort().reconfigVMTask(vmMoref, bootDiskSpec);
+            TaskInfo info = waitTaskEnd(task);
+
+            if (info.getState() == TaskInfoState.ERROR) {
+                VimUtils.rethrow(info.getError());
             }
         }
     }
