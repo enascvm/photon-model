@@ -1,13 +1,24 @@
 # CHANGELOG
 
-## 0.6.19-SNAPSHOT
+## 0.6.19
 * Enhanced ResourceOperationSpec with:
-  * optional 'schema' element which describes the structure of the payload expected at runtime 
-  when request a resource operation 
-  * optional 'extensions' map, which purpose is to enable contributor to specify additional 
-  meta-data to the resource operation specification. Such additional meta-data could be for 
-  example UI related information like icon, custom UI, etc, so that interested parties can 
-  leverage this mata-data and process accordingly (visualize the icon, UI, etc) 
+  * optional 'schema' element which describes the structure of the payload expected at runtime
+  when request a resource operation
+  * optional 'extensions' map, which purpose is to enable contributor to specify additional
+  meta-data to the resource operation specification. Such additional meta-data could be for
+  example UI related information like icon, custom UI, etc, so that interested parties can
+  leverage this mata-data and process accordingly (visualize the icon, UI, etc)
+* Added retention limit to stateful service documents.
+* Added support to add azure storage account type in storage description and
+  also to populate the encryption status of the storage account.
+* Added support for ResourceOperationSpec extensions.
+* Added filtering for ResourceGroups by type.
+* Added enrollment number of an Azure EA account as a custom property to its compute state.
+* Introduced networkName to LoadBalancerDescription.
+* Added support for ICMP protocol for SecurityGroup Rules.
+* Added endpoint link in storage policy enumeration.
+* Added support to remove stale AWS Network and Subnet states.
+* Added support to discover 'storageType' for AWS S3 resources.
 
 ## 0.6.18
 * Add 'type' category field for Network resources.
