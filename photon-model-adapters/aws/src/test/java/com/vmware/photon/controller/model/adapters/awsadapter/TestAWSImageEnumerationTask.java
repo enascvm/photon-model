@@ -191,7 +191,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         testImageEnumeration_delete(PRIVATE, AMAZON_PRIVATE_IMAGE_FILTER);
     }
 
-    private void testImageEnumeration_delete(boolean isPublic, String imageFilter) throws Throwable {
+    private void testImageEnumeration_delete(boolean isPublic, String imageFilter)
+            throws Throwable {
 
         Assume.assumeFalse(this.isMock);
 
@@ -235,7 +236,6 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 imagesAfterEnum.documentLinks
                         .contains(azurePublicImageState.documentSelfLink));
     }
-
 
     @Test
     public void testPublicImageEnumeration_single() throws Throwable {
@@ -527,7 +527,5 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         return TestUtils.doPost(host, endpoint, EndpointState.class,
                 UriUtils.buildUri(host, EndpointService.FACTORY_LINK));
     }
-
-
 
 }

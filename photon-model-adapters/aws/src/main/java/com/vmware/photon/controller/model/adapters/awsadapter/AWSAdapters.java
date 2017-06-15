@@ -42,6 +42,7 @@ public class AWSAdapters {
             AWSReservedInstancePlanService.SELF_LINK,
             AWSEnumerationAdapterService.SELF_LINK,
             AWSImageEnumerationAdapterService.SELF_LINK,
+            AWSInstanceTypeService.SELF_LINK,
             AWSEndpointAdapterService.SELF_LINK,
             AWSPowerService.SELF_LINK,
             AWSSecurityGroupService.SELF_LINK,
@@ -68,6 +69,7 @@ public class AWSAdapters {
             host.startService(new AWSReservedInstancePlanService());
             host.startService(new AWSEnumerationAdapterService());
             host.startService(new AWSImageEnumerationAdapterService());
+            host.startService(new AWSInstanceTypeService());
             host.startService(new AWSEndpointAdapterService());
             host.startService(new AWSPowerService());
             host.startService(new AWSSecurityGroupService());

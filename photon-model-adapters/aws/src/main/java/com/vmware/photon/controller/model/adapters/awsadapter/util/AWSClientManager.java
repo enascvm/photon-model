@@ -17,7 +17,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CLIENT_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_INITIAL_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_MAX_SIZE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths.AWS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
 
 import java.net.URI;
@@ -41,6 +40,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsCl
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -422,7 +422,7 @@ public class AWSClientManager {
         return Executors.newFixedThreadPool(threadCount, new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
-                return new Thread(r, uri + AWS + "/" + Utils.getNowMicrosUtc());
+                return new Thread(r, uri + EndpointType.aws.name() + "/" + Utils.getNowMicrosUtc());
             }
         });
     }

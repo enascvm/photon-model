@@ -20,14 +20,16 @@ import java.util.Map;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * URI definitions for AWS adapters.
  */
 public class AWSUriPaths {
-    public static final String AWS = "/aws";
-    public static final String PROVISIONING_AWS = UriPaths.PROVISIONING
-            + AWS;
+    public static final String PROVISIONING_AWS =
+            UriUtils.buildUriPath(UriPaths.PROVISIONING, EndpointType.aws.name());
+    public static final String ADAPTER_AWS = UriUtils.buildUriPath(
+            UriPaths.ADAPTER, EndpointType.aws.name());
 
     public static final String AWS_INSTANCE_ADAPTER = AdapterTypePath.INSTANCE_ADAPTER
             .adapterLink(EndpointType.aws.name());
@@ -49,6 +51,8 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_IMAGE_ENUMERATION_ADAPTER = AdapterTypePath.IMAGE_ENUMERATION_ADAPTER
             .adapterLink(EndpointType.aws.name());
+    public static final String AWS_INSTANCE_TYPE_ADAPTER = UriUtils.buildUriPath(ADAPTER_AWS,
+            "instance-type-adapter");
     public static final String AWS_ENUMERATION_CREATION_ADAPTER = AdapterTypePath.ENUMERATION_CREATION_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_ENUMERATION_DELETION_ADAPTER = AdapterTypePath.ENUMERATION_DELETION_ADAPTER
