@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNotNull;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -36,6 +37,9 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -57,20 +61,33 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static LoadBalancerDescription buildValidStartState() {
+    public static LoadBalancerDescription buildValidStartState() {
         LoadBalancerDescription state = new LoadBalancerDescription();
         state.id = UUID.randomUUID().toString();
-        state.name = "networkName";
+        state.name = "lbName";
         state.endpointLink = EndpointService.FACTORY_LINK + "/my-endpoint";
         state.computeDescriptionLink = ComputeDescriptionService.FACTORY_LINK + "/a-compute-desc";
         state.networkName = "lb-net";
         state.regionId = "regionId";
-        state.protocol = "HTTP";
-        state.port = 80;
-        state.instanceProtocol = "HTTP";
-        state.instancePort = 80;
         state.tenantLinks = new ArrayList<>();
         state.tenantLinks.add("tenant-linkA");
+
+        RouteConfiguration route1 = new RouteConfiguration();
+        route1.protocol = Protocol.HTTP.name();
+        route1.port = "80";
+        route1.instanceProtocol = Protocol.HTTP.name();
+        route1.instancePort = "80";
+        route1.healthCheckConfiguration = new HealthCheckConfiguration();
+        route1.healthCheckConfiguration.protocol = Protocol.HTTP.name();
+        route1.healthCheckConfiguration.port = "80";
+
+        RouteConfiguration route2 = new RouteConfiguration();
+        route2.protocol = Protocol.HTTPS.name();
+        route2.port = "443";
+        route2.instanceProtocol = Protocol.HTTP.name();
+        route2.instancePort = "443";
+
+        state.routes = Arrays.asList(route1, route2);
 
         return state;
     }
@@ -141,30 +158,57 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             LoadBalancerDescription missingPort = buildValidStartState();
             LoadBalancerDescription missingInstanceProtocol = buildValidStartState();
             LoadBalancerDescription missingInstancePort = buildValidStartState();
-            LoadBalancerDescription invalidPort = buildValidStartState();
-            LoadBalancerDescription invalidInstancePort = buildValidStartState();
+            LoadBalancerDescription invalidPortString = buildValidStartState();
+            LoadBalancerDescription invalidPortNumber = buildValidStartState();
+            LoadBalancerDescription invalidInstancePortString = buildValidStartState();
+            LoadBalancerDescription invalidInstancePortNumber = buildValidStartState();
+            LoadBalancerDescription missingHealthProtocol = buildValidStartState();
+            LoadBalancerDescription missingHealthPort = buildValidStartState();
+            LoadBalancerDescription invalidHealthPortString = buildValidStartState();
+            LoadBalancerDescription invalidHealthPortNumber = buildValidStartState();
             LoadBalancerDescription bothNetworkAndSubnetsSet = buildValidStartState();
             LoadBalancerDescription noNetworkAndSubnetsSet = buildValidStartState();
 
             missingComputeDescriptionLink.computeDescriptionLink = null;
-            missingProtocol.protocol = null;
-            missingPort.port = null;
-            missingInstanceProtocol.instanceProtocol = null;
-            missingInstancePort.instancePort = null;
-            invalidPort.port = LoadBalancerDescriptionService.MIN_PORT_NUMBER - 1;
-            invalidInstancePort.instancePort = LoadBalancerDescriptionService.MAX_PORT_NUMBER + 1;
+            missingProtocol.routes.get(0).protocol = null;
+            missingPort.routes.get(0).port = null;
+            missingInstanceProtocol.routes.get(0).instanceProtocol = null;
+            missingInstancePort.routes.get(0).instancePort = null;
+            invalidPortString.routes.get(0).port = "text";
+            invalidPortNumber.routes.get(0).port =
+                    "" + (LoadBalancerDescriptionService.MIN_PORT_NUMBER - 1);
+            invalidInstancePortString.routes.get(0).port = "random string";
+            invalidInstancePortNumber.routes.get(0).instancePort =
+                    "" + (LoadBalancerDescriptionService.MAX_PORT_NUMBER + 1);
+            missingHealthProtocol.routes.get(0).healthCheckConfiguration.protocol = null;
+            missingHealthPort.routes.get(0).healthCheckConfiguration.port = null;
+            invalidHealthPortString.routes.get(0).healthCheckConfiguration.port = "20-30";
+            invalidHealthPortNumber.routes.get(0).healthCheckConfiguration.port = "100000";
             bothNetworkAndSubnetsSet.subnetLinks = Collections
                     .singleton(SubnetService.FACTORY_LINK + "/a-subnet");
             noNetworkAndSubnetsSet.networkName = null;
 
-            LoadBalancerDescription[] states = { missingComputeDescriptionLink,
-                    missingProtocol, missingPort, missingInstanceProtocol, missingInstancePort,
-                    invalidPort, invalidInstancePort, bothNetworkAndSubnetsSet,
-                    noNetworkAndSubnetsSet };
-            for (LoadBalancerDescription state : states) {
-                postServiceSynchronously(LoadBalancerDescriptionService.FACTORY_LINK,
-                        state, LoadBalancerDescription.class,
-                        IllegalArgumentException.class);
+            {
+                LoadBalancerDescription[] states = { missingComputeDescriptionLink,
+                        missingProtocol, missingPort, missingInstanceProtocol, missingInstancePort,
+                        invalidPortNumber, invalidInstancePortNumber, missingHealthProtocol,
+                        missingHealthPort, invalidHealthPortNumber, bothNetworkAndSubnetsSet,
+                        noNetworkAndSubnetsSet };
+                for (LoadBalancerDescription state : states) {
+                    postServiceSynchronously(LoadBalancerDescriptionService.FACTORY_LINK,
+                            state, LoadBalancerDescription.class,
+                            IllegalArgumentException.class);
+                }
+            }
+
+            {
+                LoadBalancerDescription[] states = { invalidPortString, invalidInstancePortString,
+                        invalidHealthPortString };
+                for (LoadBalancerDescription state : states) {
+                    postServiceSynchronously(LoadBalancerDescriptionService.FACTORY_LINK,
+                            state, LoadBalancerDescription.class,
+                            NumberFormatException.class);
+                }
             }
         }
     }
@@ -195,6 +239,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             patchState.groupLinks = new HashSet<String>();
             patchState.groupLinks.add("group1");
             patchState.regionId = "new-region";
+            patchState.routes = Arrays.asList(startState.routes.get(1));
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             returnState = getServiceSynchronously(
@@ -211,6 +256,8 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             assertEquals(returnState.groupLinks, patchState.groupLinks);
             // region ID must not be changed
             assertEquals(returnState.regionId, startState.regionId);
+            assertEquals(1, returnState.routes.size());
+            assertEquals(2, startState.routes.size());
         }
 
         @Test

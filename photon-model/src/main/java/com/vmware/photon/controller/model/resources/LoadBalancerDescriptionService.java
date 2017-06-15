@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -24,6 +25,10 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -189,7 +194,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
         /**
          * Load balancer protocol.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public String protocol;
@@ -197,7 +201,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
         /**
          * The port the load balancer is listening on.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public Integer port;
@@ -205,7 +208,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
         /**
          * The protocol to use for routing traffic to instances.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public String instanceProtocol;
@@ -213,7 +215,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
         /**
          * The port on which the instances are listening.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public Integer instancePort;
@@ -292,23 +293,57 @@ public class LoadBalancerDescriptionService extends StatefulService {
                         currentState.regionId = patchBody.regionId;
                     }
 
+                    // if routes are passed, they override the current ones
+                    if (patchBody.routes != null) {
+                        hasChanged = true;
+                        currentState.routes = patchBody.routes;
+                    }
+
                     return Boolean.valueOf(hasChanged);
                 });
     }
 
     private void validateState(LoadBalancerDescription state) {
         Utils.validateState(getStateDescription(), state);
-        if ((state.networkName == null) == (state.subnetLinks == null)) {
-            throw new IllegalArgumentException("Either networkName or subnetLinks must be set.");
+        AssertUtil.assertTrue((state.networkName == null) != (state.subnetLinks == null),
+                "Either networkName or subnetLinks must be set.");
+        validateRoutes(state.routes);
+    }
+
+    static void validateRoutes(List<RouteConfiguration> routes) {
+        // TODO: 'routes' will be made required when existing client code is fixed
+        if (routes != null) {
+            routes.forEach(LoadBalancerDescriptionService::validateRoute);
         }
-        if (state.port < MIN_PORT_NUMBER || state.port > MAX_PORT_NUMBER) {
-            throw new IllegalArgumentException(
-                    "Invalid load balancer port number: %d." + state.port);
+    }
+
+    private static void validateRoute(RouteConfiguration route) {
+        AssertUtil.assertNotNull(route, "A route configuration must not be null");
+        AssertUtil.assertNotEmpty(route.protocol, "No protocol provided in route configuration");
+        AssertUtil.assertNotEmpty(route.port, "No port provided in route configuration");
+        AssertUtil.assertNotEmpty(route.instanceProtocol,
+                "No instance protocol provided in route configuration");
+        AssertUtil.assertNotEmpty(route.instancePort,
+                "No instance port provided in route configuration");
+        validatePort(route.port);
+        validatePort(route.instancePort);
+
+        if (route.healthCheckConfiguration != null) {
+            validateHealthCheck(route.healthCheckConfiguration);
         }
-        if (state.instancePort < MIN_PORT_NUMBER || state.instancePort > MAX_PORT_NUMBER) {
-            throw new IllegalArgumentException(
-                    "Invalid instance port number: %d." + state.instancePort);
-        }
+    }
+
+    private static void validateHealthCheck(HealthCheckConfiguration config) {
+        AssertUtil.assertNotEmpty(config.protocol,
+                "No protocol provided in health check configuration");
+        AssertUtil.assertNotEmpty(config.port, "No port provided in health check configuration");
+        validatePort(config.port);
+    }
+
+    private static void validatePort(String port) {
+        int portNumber = Integer.parseInt(port);
+        AssertUtil.assertTrue(portNumber >= MIN_PORT_NUMBER && portNumber <= MAX_PORT_NUMBER,
+                "Invalid port number: %d." + portNumber);
     }
 
     @Override
@@ -322,10 +357,16 @@ public class LoadBalancerDescriptionService extends StatefulService {
         template.endpointLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
                 "my-endpoint");
         template.networkName = "lb-net";
-        template.protocol = "HTTP";
-        template.port = 80;
-        template.instanceProtocol = "HTTP";
-        template.instancePort = 80;
+
+        RouteConfiguration routeConfiguration = new RouteConfiguration();
+        routeConfiguration.protocol = Protocol.HTTP.name();
+        routeConfiguration.port = "80";
+        routeConfiguration.instanceProtocol = Protocol.HTTP.name();
+        routeConfiguration.instancePort = "80";
+        routeConfiguration.healthCheckConfiguration = new HealthCheckConfiguration();
+        routeConfiguration.healthCheckConfiguration.protocol = Protocol.HTTP.name();
+        routeConfiguration.healthCheckConfiguration.port = "80";
+        template.routes = Arrays.asList(routeConfiguration);
 
         return template;
     }

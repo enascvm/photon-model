@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -43,6 +44,8 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants.Endpoin
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -216,13 +219,15 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         state.computeLinks = new HashSet<>();
         state.subnetLinks = new HashSet<>();
         state.subnetLinks.add(createSubnetState(this.subnetId).documentSelfLink);
-        state.protocol = "HTTP";
-        state.port = 80;
-        state.instanceProtocol = "HTTP";
-        state.instancePort = 80;
+        RouteConfiguration route1 = new RouteConfiguration();
+        route1.protocol = Protocol.HTTP.name();
+        route1.port = "80";
+        route1.instanceProtocol = Protocol.HTTP.name();
+        route1.instancePort = "80";
+        state.routes = Arrays.asList(route1);
+        state.internetFacing = Boolean.TRUE;
         state.instanceAdapterReference = UriUtils.buildUri(this.host,
                 AWSLoadBalancerService.SELF_LINK);
-        state.internetFacing = Boolean.TRUE;
 
         return postServiceSynchronously(LoadBalancerService.FACTORY_LINK, state,
                 LoadBalancerState.class);

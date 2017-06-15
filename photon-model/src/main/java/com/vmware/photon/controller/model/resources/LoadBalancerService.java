@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -31,6 +32,8 @@ import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
@@ -98,7 +101,6 @@ public class LoadBalancerService extends StatefulService {
         /**
          * Load balancer protocol.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public String protocol;
@@ -106,7 +108,6 @@ public class LoadBalancerService extends StatefulService {
         /**
          * The port the load balancer is listening on.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public Integer port;
@@ -114,7 +115,6 @@ public class LoadBalancerService extends StatefulService {
         /**
          * The protocol to use for routing traffic to instances.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public String instanceProtocol;
@@ -122,7 +122,6 @@ public class LoadBalancerService extends StatefulService {
         /**
          * The port on which the instances are listening.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Deprecated
         public Integer instancePort;
@@ -171,6 +170,7 @@ public class LoadBalancerService extends StatefulService {
                 targetState.port = this.port;
                 targetState.instanceProtocol = this.instanceProtocol;
                 targetState.instancePort = this.instancePort;
+                targetState.routes = this.routes;
                 targetState.instanceAdapterReference = this.instanceAdapterReference;
                 targetState.internetFacing = this.internetFacing;
                 targetState.address = this.address;
@@ -266,18 +266,24 @@ public class LoadBalancerService extends StatefulService {
     public void handlePatch(Operation patch) {
         LoadBalancerState currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                LoadBalancerState.class, null);
+                LoadBalancerState.class, op -> {
+                    LoadBalancerState patchBody = op.getBody(LoadBalancerState.class);
+                    boolean hasChanged = false;
+
+                    // if routes are passed, they override the current ones
+                    if (patchBody.routes != null) {
+                        hasChanged = true;
+                        currentState.routes = patchBody.routes;
+                    }
+
+                    return Boolean.valueOf(hasChanged);
+                });
     }
 
     private void validateState(LoadBalancerState state) {
         Utils.validateState(getStateDescription(), state);
         PhotonModelUtils.validateRegionId(state);
-        if (state.port < MIN_PORT_NUMBER || state.port > MAX_PORT_NUMBER) {
-            throw new IllegalArgumentException("Invalid load balancer port number.");
-        }
-        if (state.instancePort < MIN_PORT_NUMBER || state.instancePort > MAX_PORT_NUMBER) {
-            throw new IllegalArgumentException("Invalid instance port number.");
-        }
+        LoadBalancerDescriptionService.validateRoutes(state.routes);
     }
 
     @Override
@@ -291,12 +297,18 @@ public class LoadBalancerService extends StatefulService {
         template.name = "load-balancer";
         template.endpointLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
                 "my-endpoint");
-        template.protocol = "HTTP";
-        template.port = 80;
-        template.instanceProtocol = "HTTP";
-        template.instancePort = 80;
         template.internetFacing = Boolean.TRUE;
         template.address = "my-address";
+
+        RouteConfiguration routeConfiguration = new RouteConfiguration();
+        routeConfiguration.protocol = Protocol.HTTP.name();
+        routeConfiguration.port = "80";
+        routeConfiguration.instanceProtocol = Protocol.HTTP.name();
+        routeConfiguration.instancePort = "80";
+        routeConfiguration.healthCheckConfiguration = new HealthCheckConfiguration();
+        routeConfiguration.healthCheckConfiguration.protocol = Protocol.HTTP.name();
+        routeConfiguration.healthCheckConfiguration.port = "80";
+        template.routes = Arrays.asList(routeConfiguration);
 
         return template;
     }
