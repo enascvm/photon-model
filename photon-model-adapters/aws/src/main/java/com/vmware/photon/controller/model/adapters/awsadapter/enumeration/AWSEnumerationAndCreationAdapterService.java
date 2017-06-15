@@ -322,7 +322,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
-            this.context.operation.fail(exception);
+            this.context.error = exception;
+            proceedWithRefresh();
         }
 
     }
@@ -348,7 +349,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            this.context.operation.fail(exception);
+            this.context.error = exception;
+            this.context.refreshSubStage = AWSEnumerationRefreshSubStage.ERROR;
+            this.service.processRefreshSubStages(this.context);
         }
 
         @Override
@@ -680,7 +683,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
     private enum AWSEnumerationRefreshSubStage {
         ZONES,
-        VCP,
+        VPC,
         SECURITY_GROUP,
         COMPUTE,
         ERROR
@@ -874,9 +877,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     private void processRefreshSubStages(EnumerationCreationContext aws) {
         switch (aws.refreshSubStage) {
         case ZONES:
-            collectAvailabilityZones(aws, AWSEnumerationRefreshSubStage.VCP);
+            collectAvailabilityZones(aws, AWSEnumerationRefreshSubStage.VPC);
             break;
-        case VCP:
+        case VPC:
             refreshVPCInformation(aws, AWSEnumerationRefreshSubStage.SECURITY_GROUP);
             break;
         case SECURITY_GROUP:
@@ -976,7 +979,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         logWarning(() -> String.format("Failed to enumerate security groups: %s ",
                                 throwable.getLocalizedMessage()));
                         aws.error = throwable;
-                        aws.refreshSubStage = AWSEnumerationRefreshSubStage.ERROR;
+                        aws.refreshSubStage = next;
                         processRefreshSubStages(aws);
                     }
                     return null;
@@ -1001,17 +1004,17 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         patchNetworkOperation,
                         AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse.class)
                 .thenAccept(networkResponse -> {
-                    logFine(() -> "Successfully enumerated subnet states");
+                    logFine(() -> "Successfully enumerated network states");
                     aws.enumeratedNetworks = networkResponse;
                     aws.refreshSubStage = next;
                     processRefreshSubStages(aws);
                 })
                 .exceptionally(throwable -> {
                     if (throwable != null) {
-                        logWarning(() -> String.format("Failed to enumerate subnets: %s ",
+                        logWarning(() -> String.format("Failed to enumerate network states: %s ",
                                 throwable.getLocalizedMessage()));
                         aws.error = throwable;
-                        aws.refreshSubStage = AWSEnumerationRefreshSubStage.ERROR;
+                        aws.refreshSubStage = next;
                         processRefreshSubStages(aws);
                     }
                     return null;
