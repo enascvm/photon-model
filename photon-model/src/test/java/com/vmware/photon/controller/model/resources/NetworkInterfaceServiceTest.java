@@ -200,10 +200,22 @@ public class NetworkInterfaceServiceTest extends Suite {
         }
 
         @Test
-        public void testHavingAddressAndDescriptionLink() throws Throwable {
+        public void testHavingAddressAndNetworkLink() throws Throwable {
             NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
             startState.address = "10.0.0.1";
             startState.networkLink = "10.0.0.2";
+            postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState,
+                    NetworkInterfaceService.NetworkInterfaceState.class,
+                    null);
+        }
+
+        @Test
+        public void testHavingAddressAndNotSubnetLink() throws Throwable {
+            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
+            startState.address = "10.0.0.1";
+            startState.subnetLink = null;
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
