@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.20-SNAPSHOT
+
 ## 0.6.19
 * Enhanced ResourceOperationSpec with:
   * optional 'schema' element which describes the structure of the payload expected at runtime
