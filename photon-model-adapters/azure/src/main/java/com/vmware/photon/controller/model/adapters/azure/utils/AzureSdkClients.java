@@ -31,12 +31,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AzureSdkClients implements AutoCloseable {
 
-    private final ExecutorService executorService;
     private final AuthCredentialsServiceState authentication;
-
-    // Used to create Azure SDK clients {{
-    private final ApplicationTokenCredentials azureCredentials;
-    // }}
 
     // Azure SDK clients being used {{
     private RestClient restClient;
@@ -53,17 +48,18 @@ public class AzureSdkClients implements AutoCloseable {
             ExecutorService executorService,
             AuthCredentialsServiceState authentication) {
 
-        this.executorService = executorService;
+        ApplicationTokenCredentials azureCredentials = AzureUtils.getAzureConfig(authentication);
+
+        this.restClient = AzureUtils.buildRestClient(azureCredentials, executorService);
+
         this.authentication = authentication;
-
-        this.azureCredentials = AzureUtils.getAzureConfig(authentication);
-
-        this.restClient = AzureUtils.buildRestClient(this.azureCredentials, this.executorService);
     }
 
     public synchronized ComputeManager getComputeManager() {
         if (this.computeManager == null) {
-            this.computeManager = ComputeManager.authenticate(this.restClient, this.authentication.userLink);
+            this.computeManager = ComputeManager.authenticate(
+                    this.restClient,
+                    this.authentication.userLink);
         }
 
         return this.computeManager;
@@ -71,7 +67,7 @@ public class AzureSdkClients implements AutoCloseable {
 
     public synchronized ComputeManagementClientImpl getComputeManagementClientImpl() {
         if (this.computeManagementClient == null) {
-            this.computeManagementClient = new ComputeManagementClientImpl(this.azureCredentials)
+            this.computeManagementClient = new ComputeManagementClientImpl(this.restClient)
                     .withSubscriptionId(this.authentication.userLink);
         }
 
@@ -80,7 +76,7 @@ public class AzureSdkClients implements AutoCloseable {
 
     public synchronized NetworkManagementClientImpl getNetworkManagementClientImpl() {
         if (this.networkManagementClient == null) {
-            this.networkManagementClient = new NetworkManagementClientImpl(this.azureCredentials)
+            this.networkManagementClient = new NetworkManagementClientImpl(this.restClient)
                     .withSubscriptionId(this.authentication.userLink);
         }
 
@@ -89,7 +85,7 @@ public class AzureSdkClients implements AutoCloseable {
 
     public synchronized StorageManagementClientImpl getStorageManagementClientImpl() {
         if (this.storageManagementClient == null) {
-            this.storageManagementClient = new StorageManagementClientImpl(this.azureCredentials)
+            this.storageManagementClient = new StorageManagementClientImpl(this.restClient)
                     .withSubscriptionId(this.authentication.userLink);
         }
 
@@ -98,7 +94,7 @@ public class AzureSdkClients implements AutoCloseable {
 
     public synchronized ResourceManagementClientImpl getResourceManagementClientImpl() {
         if (this.resourceManagementClient == null) {
-            this.resourceManagementClient = new ResourceManagementClientImpl(this.azureCredentials)
+            this.resourceManagementClient = new ResourceManagementClientImpl(this.restClient)
                     .withSubscriptionId(this.authentication.userLink);
         }
 
@@ -107,10 +103,14 @@ public class AzureSdkClients implements AutoCloseable {
 
     @Override
     public void close() {
+        this.computeManager = null;
+
         this.computeManagementClient = null;
         this.resourceManagementClient = null;
         this.networkManagementClient = null;
         this.storageManagementClient = null;
+
         AzureUtils.cleanUpHttpClient(this.restClient.httpClient());
+        this.restClient = null;
     }
 }

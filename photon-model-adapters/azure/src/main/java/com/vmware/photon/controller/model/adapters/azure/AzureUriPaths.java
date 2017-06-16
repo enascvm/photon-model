@@ -20,6 +20,7 @@ import java.util.Map;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * URI definitions for Azure adapter.
@@ -74,6 +75,12 @@ public class AzureUriPaths {
 
     public static final String AZURE_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
             .adapterLink(EndpointType.azure.name());
+
+    public static final String ADAPTER_AZURE = UriUtils.buildUriPath(
+            UriPaths.ADAPTER, EndpointType.azure.name());
+
+    public static final String AZURE_INSTANCE_TYPE_ADAPTER = UriUtils.buildUriPath(ADAPTER_AZURE,
+            "instance-type-adapter");
 
     /**
      * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.

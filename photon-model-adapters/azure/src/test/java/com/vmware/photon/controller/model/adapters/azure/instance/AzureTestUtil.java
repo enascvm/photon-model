@@ -76,11 +76,13 @@ import com.microsoft.azure.management.network.implementation.SubnetInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworkGatewayIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworkGatewayInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
+import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 import com.microsoft.rest.ServiceCallback;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -508,8 +510,8 @@ public class AzureTestUtil {
 
         endpoint.authCredentialsLink = authLink;
 
-        // Skipping region (EndpointConfigRequest.REGION_KEY) should fall back to default region
-        endpoint.endpointProperties = Collections.emptyMap();
+        endpoint.endpointProperties = Collections.singletonMap(
+                EndpointConfigRequest.REGION_KEY, Region.US_WEST.name());
 
         endpoint.tenantLinks = Collections.singletonList(endpointType.name() + "-tenant");
 

@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
 import java.util.Collection;
@@ -32,19 +31,15 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Ignore;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService.ImagesLoadMode;
-import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate;
@@ -57,21 +52,13 @@ import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.TaskOption;
-import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
-public class TestAzureImageEnumerationTask extends BaseModelTest {
+public class TestAzureImageEnumerationTask extends AzureBaseTest {
 
     // Populated from command line props {{
-    public String clientID = "clientID";
-    public String clientKey = "clientKey";
-    public String subscriptionId = "subscriptionId";
-    public String tenantId = "tenantId";
-    public boolean isMock = true;
-
     public boolean enableLongRunning = false;
     // }}
 
@@ -99,17 +86,8 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
     private static final String OS_TYPE_WINDOWS_NAME = "Windows";
     private static final String OS_TYPE_LINUX_NAME = "Linux";
 
-    @Rule
-    public TestName currentTestName = new TestName();
-
-    @Before
-    public final void beforeTest() throws Throwable {
-
-        CommandLineArgumentParser.parseFromProperties(this);
-    }
-
     @After
-    public final void afterTest() throws Throwable {
+    public final void afterImageEnumTest() throws Throwable {
 
         QueryByPages<ImageState> queryAll = new QueryByPages<ImageState>(
                 getHost(),
@@ -539,24 +517,6 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                 taskState.documentSelfLink);
     }
 
-    /**
-     * Create Azure endpoint.
-     */
-    private EndpointState createEndpointState() throws Throwable {
-
-        return AzureTestUtil.createDefaultEndpointState(
-                host, createAuthCredentialsState().documentSelfLink);
-    }
-
-    /**
-     * Create arbitrary endpoint.
-     */
-    private EndpointState createEndpointState(EndpointType endpointType) throws Throwable {
-
-        return AzureTestUtil.createEndpointState(
-                host, createAuthCredentialsState().documentSelfLink, endpointType);
-    }
-
     private ImageState createImageState(EndpointState endpoint, boolean isPublic) throws Throwable {
 
         ImageState image = new ImageState();
@@ -585,16 +545,6 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                 imageToUpdateSelfLink,
                 toUpdate,
                 ImageState.class);
-    }
-
-    private AuthCredentialsServiceState createAuthCredentialsState() throws Throwable {
-
-        return createDefaultAuthCredentials(
-                this.host,
-                this.clientID,
-                this.clientKey,
-                this.subscriptionId,
-                this.tenantId);
     }
 
     private static void setImagesLoadMode(ImagesLoadMode mode) {

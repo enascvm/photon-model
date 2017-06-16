@@ -36,7 +36,6 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.storage.StorageAccountKey;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
-
 import com.microsoft.azure.serializer.AzureJacksonAdapter;
 import com.microsoft.rest.LogLevel;
 import com.microsoft.rest.RestClient;
@@ -427,7 +426,9 @@ public class AzureUtils {
         restClientBuilder.withCredentials(credentials);
         restClientBuilder.withSerializerAdapter(new AzureJacksonAdapter());
         restClientBuilder.withLogLevel(LogLevel.NONE);
-        restClientBuilder.withCallbackExecutor(executorService);
+        if (executorService != null) {
+            restClientBuilder.withCallbackExecutor(executorService);
+        }
         restClientBuilder.withResponseBuilderFactory(new Factory());
 
         return restClientBuilder.build();

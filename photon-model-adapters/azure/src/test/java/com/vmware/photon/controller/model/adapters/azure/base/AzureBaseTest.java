@@ -13,51 +13,69 @@
 
 package com.vmware.photon.controller.model.adapters.azure.base;
 
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
-
+import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
-import com.vmware.photon.controller.model.resources.EndpointService;
-import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.xenon.common.CommandLineArgumentParser;
-import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * Base class for testing azure adapter services
  */
-public class AzureBaseTest extends BaseModelTest {
+public abstract class AzureBaseTest extends BaseModelTest {
 
-    //Azure Credential properties that get injected
+    // Azure Credential properties that get injected
     public String clientID = "clientID";
     public String clientKey = "clientKey";
     public String subscriptionId = "subscriptionId";
     public String tenantId = "tenantId";
     public boolean isMock = true;
+    // }}
 
-    public AuthCredentialsService.AuthCredentialsServiceState authState;
-    public EndpointService.EndpointState endpointState;
+    public AuthCredentialsServiceState authState;
+    public EndpointState endpointState;
 
-    public ResourcePoolService.ResourcePoolState resourcePool;
-    public ComputeService.ComputeStateWithDescription computeStateWithDescription;
+    public ResourcePoolState resourcePool;
+    public ComputeStateWithDescription computeStateWithDescription;
+
+    /**
+     * @see #getAzureSdkClients()
+     */
+    private AzureSdkClients azureSdkClients;
+
+    @Rule
+    public TestName currentTestName = new TestName();
 
     @Before
-    public final void beforeTest() throws Throwable {
+    public void beforeTest() throws Throwable {
 
         CommandLineArgumentParser.parseFromProperties(this);
+
         this.authState = createAuthCredentialsState();
         this.endpointState = createEndpointState(this.authState.documentSelfLink);
-        this.resourcePool = createDefaultResourcePool(getHost());
+        this.resourcePool = AzureTestUtil.createDefaultResourcePool(getHost());
         this.computeStateWithDescription = createComputeHostWithDescription();
+    }
 
+    @After
+    public void afterTest() throws Throwable {
+
+        releaseAzureSdkClients();
     }
 
     @Override
@@ -76,22 +94,67 @@ public class AzureBaseTest extends BaseModelTest {
         getHost().waitForServiceAvailable(AzureAdapters.CONFIG_LINK);
     }
 
-    /**
-     * Create Azure endpoint.
-     */
-    private EndpointService.EndpointState createEndpointState(String authLink) throws Throwable {
+    protected AzureSdkClients getAzureSdkClients() {
+        if (this.isMock) {
+            throw new IllegalStateException("AzureSdkClients is not available in mock mode");
+        }
 
-        return AzureTestUtil.createDefaultEndpointState(
-                host, authLink);
+        if (this.azureSdkClients == null) {
+            this.azureSdkClients = new AzureSdkClients(null /* executorService */, this.authState);
+        }
+
+        return this.azureSdkClients;
+    }
+
+    protected void releaseAzureSdkClients() {
+        if (this.azureSdkClients != null) {
+            this.azureSdkClients.close();
+            this.azureSdkClients = null;
+        }
+    }
+
+    /**
+     * Create EndpointState (of passed type) with auto-created AuthCredentialsServiceState.
+     *
+     * @see AzureTestUtil#createEndpointState(com.vmware.xenon.common.test.VerificationHost, String,
+     *      EndpointType)
+     */
+    protected final EndpointState createEndpointState(EndpointType endpointType) throws Throwable {
+
+        return AzureTestUtil.createEndpointState(
+                getHost(), createAuthCredentialsState().documentSelfLink, endpointType);
+    }
+
+    /**
+     * Create Azure EndpointState with auto-created AuthCredentialsServiceState.
+     *
+     * @see #createEndpointState(String)
+     */
+    protected final EndpointState createEndpointState() throws Throwable {
+
+        return createEndpointState(createAuthCredentialsState().documentSelfLink);
+    }
+
+    /**
+     * Create Azure EndpointState with passed auth link.
+     *
+     * @see AzureTestUtil#createDefaultEndpointState(com.vmware.xenon.common.test.VerificationHost,
+     *      String)
+     */
+    protected final EndpointState createEndpointState(String authLink) throws Throwable {
+
+        return AzureTestUtil.createDefaultEndpointState(getHost(), authLink);
     }
 
     /**
      * Create Azure Auth.
+     *
+     * @see AzureTestUtil#createDefaultAuthCredentials(com.vmware.xenon.common.test.VerificationHost,
+     *      String, String, String, String)
      */
-    private AuthCredentialsService.AuthCredentialsServiceState createAuthCredentialsState() throws
-            Throwable {
+    protected final AuthCredentialsServiceState createAuthCredentialsState() throws Throwable {
 
-        return createDefaultAuthCredentials(
+        return AzureTestUtil.createDefaultAuthCredentials(
                 getHost(),
                 this.clientID,
                 this.clientKey,
@@ -102,13 +165,15 @@ public class AzureBaseTest extends BaseModelTest {
     /**
      * Create ComputeStateWithDescription.
      */
-    private ComputeService.ComputeStateWithDescription createComputeHostWithDescription() throws
-            Throwable {
+    protected ComputeService.ComputeStateWithDescription createComputeHostWithDescription()
+            throws Throwable {
 
-        ComputeService.ComputeState computeHost = createDefaultComputeHost(getHost(),
-                this.resourcePool.documentSelfLink, this.endpointState);
-        ComputeDescriptionService.ComputeDescription computeDescription = getServiceSynchronously
-                (computeHost.descriptionLink, ComputeDescriptionService.ComputeDescription.class);
-        return ComputeService.ComputeStateWithDescription.create(computeDescription, computeHost);
+        ComputeState computeHost = AzureTestUtil.createDefaultComputeHost(
+                getHost(), this.resourcePool.documentSelfLink, this.endpointState);
+
+        ComputeDescription computeDescription = getServiceSynchronously(
+                computeHost.descriptionLink, ComputeDescription.class);
+
+        return ComputeStateWithDescription.create(computeDescription, computeHost);
     }
 }

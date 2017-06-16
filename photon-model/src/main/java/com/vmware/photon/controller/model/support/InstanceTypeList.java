@@ -17,20 +17,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a list of instance types.
- * The content is endpoint specific but the model is the same.
+ * Represents a list of instance types. The content is end-point specific but the model is the same.
  */
 public class InstanceTypeList {
+
     public static class InstanceType {
+
         /**
-         * The internal identification used by the endpoint.
+         * The internal identification used by the end-point.
          */
-        public String id;
+        public final String id;
 
         /**
          * Human readable description of the instance type.
          */
-        public String name;
+        public final String name;
 
         /**
          * Number of CPU cores. {@code null} when not applicable.
