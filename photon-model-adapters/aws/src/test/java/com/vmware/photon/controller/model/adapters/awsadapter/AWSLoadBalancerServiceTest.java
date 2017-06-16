@@ -23,12 +23,16 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersResult;
+import com.amazonaws.services.elasticloadbalancing.model.HealthCheck;
+import com.amazonaws.services.elasticloadbalancing.model.Listener;
+import com.amazonaws.services.elasticloadbalancing.model.ListenerDescription;
 import com.amazonaws.services.elasticloadbalancing.model.LoadBalancerDescription;
 
 import org.junit.After;
@@ -44,6 +48,7 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants.Endpoin
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
@@ -133,8 +138,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
         if (!this.isMock) {
             LoadBalancerDescription awsLoadBalancer = getAwsLoadBalancer(this.lbName);
-            String securityGroupDocumentSelfLink = lb.customProperties.get(AWSLoadBalancerService
-                    .SECURITY_GROUP_DOCUMENT_SELF_LINK);
+            String securityGroupDocumentSelfLink = lb.customProperties
+                    .get(AWSLoadBalancerService.SECURITY_GROUP_DOCUMENT_SELF_LINK);
 
             assertNotNull(securityGroupDocumentSelfLink);
 
@@ -143,11 +148,16 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
             this.sgId = sgs.id;
 
-            SecurityGroup securityGroup = getAwsSecurityGroup(sgs.id);
             assertNotNull(awsLoadBalancer);
             assertEquals(awsLoadBalancer.getDNSName(), lb.address);
             assertEquals("internet-facing", awsLoadBalancer.getScheme());
 
+            List<ListenerDescription> listeners = awsLoadBalancer.getListenerDescriptions();
+            assertEquals(2, listeners.size());
+            verifyListeners(lb.routes, listeners);
+            verifyHealthCheckConfiguration(lb.routes.get(0), awsLoadBalancer.getHealthCheck());
+
+            SecurityGroup securityGroup = getAwsSecurityGroup(sgs.id);
             assertNotNull(securityGroup);
 
             String lbSecGroupId = awsLoadBalancer.getSecurityGroups().stream().findFirst()
@@ -165,6 +175,45 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
         this.lbName = null;
         this.sgId = null;
+    }
+
+    private void verifyListeners(List<RouteConfiguration> routeConfigurations,
+            List<ListenerDescription> listenerDescriptions) {
+
+        routeConfigurations.forEach(route -> {
+            Listener listener = getListenerByPort(Integer.valueOf(route.port),
+                    listenerDescriptions);
+
+            assertEquals(Integer.valueOf(route.port), listener.getLoadBalancerPort());
+            assertEquals(Integer.valueOf(route.instancePort), listener.getInstancePort());
+            assertEquals(route.protocol, listener.getProtocol());
+            assertEquals(route.instanceProtocol, listener.getInstanceProtocol());
+        });
+    }
+
+    private Listener getListenerByPort(Integer port, List<ListenerDescription> descriptions) {
+        ListenerDescription listenerDescription = descriptions.stream()
+                .filter(ld -> ld.getListener().getLoadBalancerPort().equals(port)).findFirst()
+                .orElse(null);
+
+        assertNotNull(listenerDescription);
+        return listenerDescription.getListener();
+    }
+
+    private void verifyHealthCheckConfiguration(RouteConfiguration routeConfiguration,
+            HealthCheck healthCheck) {
+
+        HealthCheckConfiguration healthCheckConfiguration = routeConfiguration.healthCheckConfiguration;
+
+        assertEquals(healthCheckConfiguration.timeoutSeconds, healthCheck.getTimeout());
+        assertEquals(healthCheckConfiguration.healthyThreshold, healthCheck.getHealthyThreshold());
+        assertEquals(healthCheckConfiguration.intervalSeconds, healthCheck.getInterval());
+        assertEquals(healthCheckConfiguration.unhealthyThreshold,
+                healthCheck.getUnhealthyThreshold());
+
+        String target = healthCheckConfiguration.protocol + ":" + healthCheckConfiguration.port
+                + healthCheckConfiguration.urlPath;
+        assertEquals(target, healthCheck.getTarget());
     }
 
     private EndpointState createEndpointState() throws Throwable {
@@ -219,12 +268,28 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         state.computeLinks = new HashSet<>();
         state.subnetLinks = new HashSet<>();
         state.subnetLinks.add(createSubnetState(this.subnetId).documentSelfLink);
+
         RouteConfiguration route1 = new RouteConfiguration();
         route1.protocol = Protocol.HTTP.name();
         route1.port = "80";
         route1.instanceProtocol = Protocol.HTTP.name();
         route1.instancePort = "80";
-        state.routes = Arrays.asList(route1);
+        route1.healthCheckConfiguration = new HealthCheckConfiguration();
+        route1.healthCheckConfiguration.protocol = Protocol.HTTP.name();
+        route1.healthCheckConfiguration.port = "80";
+        route1.healthCheckConfiguration.urlPath = "/test.html";
+        route1.healthCheckConfiguration.intervalSeconds = 60;
+        route1.healthCheckConfiguration.healthyThreshold = 2;
+        route1.healthCheckConfiguration.unhealthyThreshold = 5;
+        route1.healthCheckConfiguration.timeoutSeconds = 5;
+
+        RouteConfiguration route2 = new RouteConfiguration();
+        route2.protocol = Protocol.HTTP.name();
+        route2.port = "8080";
+        route2.instanceProtocol = Protocol.HTTP.name();
+        route2.instancePort = "8080";
+
+        state.routes = Arrays.asList(route1, route2);
         state.internetFacing = Boolean.TRUE;
         state.instanceAdapterReference = UriUtils.buildUri(this.host,
                 AWSLoadBalancerService.SELF_LINK);

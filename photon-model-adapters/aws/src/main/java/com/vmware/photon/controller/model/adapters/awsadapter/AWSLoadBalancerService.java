@@ -17,15 +17,18 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCli
 import static com.vmware.photon.controller.model.resources.SecurityGroupService.FACTORY_LINK;
 
 import java.net.URI;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
+import com.amazonaws.services.elasticloadbalancing.model.ConfigureHealthCheckRequest;
+import com.amazonaws.services.elasticloadbalancing.model.ConfigureHealthCheckResult;
 import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerResult;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerResult;
+import com.amazonaws.services.elasticloadbalancing.model.HealthCheck;
 import com.amazonaws.services.elasticloadbalancing.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.model.Listener;
 import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
@@ -39,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.Protocol;
@@ -210,6 +214,7 @@ public class AWSLoadBalancerService extends StatelessService {
                 execution = execution
                         .thenCompose(this::createSecurityGroup)
                         .thenCompose(this::createLoadBalancer)
+                        .thenCompose(this::configureHealthCheck)
                         .thenCompose(this::updateLoadBalancerState)
                         .thenCompose(this::assignInstances);
             }
@@ -255,11 +260,13 @@ public class AWSLoadBalancerService extends StatelessService {
         state.tenantLinks = context.loadBalancerStateExpanded.tenantLinks;
         state.regionId = context.loadBalancerStateExpanded.regionId;
         state.name = context.loadBalancerStateExpanded.name + "_SG";
-        state.ingress = Collections
-                .singletonList(buildRule(String.valueOf(context.loadBalancerStateExpanded.port)));
+        state.ingress = context.loadBalancerStateExpanded.routes.stream()
+                .map(routeConfiguration -> buildRule(routeConfiguration.port))
+                .collect(Collectors.toList());
 
-        state.egress = Collections.singletonList(
-                buildRule(String.valueOf(context.loadBalancerStateExpanded.instancePort)));
+        state.egress = context.loadBalancerStateExpanded.routes.stream()
+                .map(routeConfiguration -> buildRule(routeConfiguration.instancePort))
+                .collect(Collectors.toList());
 
         Operation operation = Operation.createPost(this, FACTORY_LINK).setBody(state);
 
@@ -335,6 +342,56 @@ public class AWSLoadBalancerService extends StatelessService {
         });
     }
 
+    private DeferredResult<AWSLoadBalancerContext> configureHealthCheck(
+            AWSLoadBalancerContext context) {
+
+        ConfigureHealthCheckRequest request = buildHealthCheckRequest(context);
+
+        if (request == null) {
+            return DeferredResult.completed(context);
+        }
+
+        String message = "Configure a health check to AWS Load Balancer with name ["
+                + context.loadBalancerStateExpanded.name + "].";
+        AWSDeferredResultAsyncHandler<ConfigureHealthCheckRequest, ConfigureHealthCheckResult> handler = new AWSDeferredResultAsyncHandler<ConfigureHealthCheckRequest, ConfigureHealthCheckResult>(
+                this, message) {
+            @Override
+            protected DeferredResult<ConfigureHealthCheckResult> consumeSuccess(
+                    ConfigureHealthCheckRequest request, ConfigureHealthCheckResult result) {
+                return DeferredResult.completed(result);
+            }
+        };
+
+        context.client.configureHealthCheckAsync(request, handler);
+        return handler.toDeferredResult().thenApply(ignore -> context);
+    }
+
+    private ConfigureHealthCheckRequest buildHealthCheckRequest(AWSLoadBalancerContext context) {
+
+        HealthCheckConfiguration healthCheckConfiguration = context.loadBalancerStateExpanded.routes
+                .stream()
+                .filter(config -> config != null && config.healthCheckConfiguration != null)
+                .map(config -> config.healthCheckConfiguration).findFirst().orElse(null);
+
+        if (healthCheckConfiguration == null) {
+            return null;
+        }
+
+        // Construct the target HTTP:80/index.html
+        String target = healthCheckConfiguration.protocol + ":" + healthCheckConfiguration.port
+                + healthCheckConfiguration.urlPath;
+
+        HealthCheck healthCheck = new HealthCheck()
+                .withHealthyThreshold(healthCheckConfiguration.healthyThreshold)
+                .withInterval(healthCheckConfiguration.intervalSeconds).withTarget(target)
+                .withTimeout(healthCheckConfiguration.timeoutSeconds)
+                .withUnhealthyThreshold(healthCheckConfiguration.unhealthyThreshold);
+
+        return new ConfigureHealthCheckRequest()
+                .withLoadBalancerName(context.loadBalancerStateExpanded.name)
+                .withHealthCheck(healthCheck);
+    }
+
     private DeferredResult<AWSLoadBalancerContext> updateLoadBalancerState(
             AWSLoadBalancerContext context) {
         LoadBalancerState loadBalancerState = new LoadBalancerState();
@@ -379,15 +436,10 @@ public class AWSLoadBalancerService extends StatelessService {
     }
 
     private CreateLoadBalancerRequest buildCreationRequest(AWSLoadBalancerContext context) {
-        Listener listener = new Listener()
-                .withProtocol(context.loadBalancerStateExpanded.protocol)
-                .withLoadBalancerPort(context.loadBalancerStateExpanded.port)
-                .withInstanceProtocol(context.loadBalancerStateExpanded.instanceProtocol)
-                .withInstancePort(context.loadBalancerStateExpanded.instancePort);
 
         CreateLoadBalancerRequest request = new CreateLoadBalancerRequest()
                 .withLoadBalancerName(context.loadBalancerStateExpanded.name)
-                .withListeners(Collections.singletonList(listener))
+                .withListeners(buildListeners(context))
                 .withSubnets(context.loadBalancerStateExpanded.subnets.stream()
                         .map(subnet -> subnet.id).collect(Collectors.toList()))
                 .withSecurityGroups(context.securityGroupState.id);
@@ -399,6 +451,16 @@ public class AWSLoadBalancerService extends StatelessService {
         }
 
         return request;
+    }
+
+    private List<Listener> buildListeners(AWSLoadBalancerContext context) {
+        return context.loadBalancerStateExpanded.routes.stream()
+                .map(routeConfiguration -> new Listener()
+                        .withProtocol(routeConfiguration.protocol)
+                        .withLoadBalancerPort(Integer.parseInt(routeConfiguration.port))
+                        .withInstanceProtocol(routeConfiguration.instanceProtocol)
+                        .withInstancePort(Integer.parseInt(routeConfiguration.instancePort)))
+                .collect(Collectors.toList());
     }
 
     private RegisterInstancesWithLoadBalancerRequest buildInstanceRegistrationRequest(
