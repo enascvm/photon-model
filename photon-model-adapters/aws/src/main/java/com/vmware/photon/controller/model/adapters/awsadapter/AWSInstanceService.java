@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DEPENDENCY_VIOLATION_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DEVICE_NAMES;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
@@ -715,7 +716,7 @@ public class AWSInstanceService extends StatelessService {
 
         final String instanceId = aws.child.id;
 
-        if (instanceId == null) {
+        if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
             aws.error = new IllegalStateException("AWS InstanceId not available");
             aws.stage = AWSInstanceStage.ERROR;
             handleAllocation(aws);

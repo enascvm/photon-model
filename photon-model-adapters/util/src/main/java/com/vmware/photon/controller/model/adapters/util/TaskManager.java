@@ -69,7 +69,7 @@ public class TaskManager implements CompletionHandler {
     }
 
     public void patchTaskToFailure(Throwable failure) {
-        patchTaskToFailure(null, failure);
+        patchTaskToFailure(failure != null ? failure.getMessage() : null, failure);
     }
 
     public void patchTaskToFailure(String msg, Throwable failure) {
