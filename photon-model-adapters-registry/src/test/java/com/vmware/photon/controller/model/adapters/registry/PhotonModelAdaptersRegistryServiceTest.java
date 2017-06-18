@@ -178,7 +178,7 @@ public class PhotonModelAdaptersRegistryServiceTest extends BaseAdaptersRegistry
         config.name = name;
         config.documentSelfLink = config.id;
         Map<String, String> customProperties = new HashMap<>();
-        customProperties.put(ICON, name);
+        customProperties.put(ICON, icon);
         config.customProperties = customProperties;
         Map<String, String> endpoints = new HashMap<>();
         for (String key : keys) {
