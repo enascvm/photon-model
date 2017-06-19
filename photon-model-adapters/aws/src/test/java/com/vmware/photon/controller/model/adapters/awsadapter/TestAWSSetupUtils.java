@@ -110,6 +110,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEBS
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndDeletionAdapterService;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSS3StorageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -1839,6 +1840,12 @@ public class TestAWSSetupUtils {
                         .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSEBSStorageEnumerationAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(ebsStorageEnumerationStats));
+        host.log("\n==Total Time Spent in S3 Storage Enumeration Workflow==\n");
+        ServiceStats s3StorageEnumerationStats = host.getServiceState(null, ServiceStats.class,
+                UriUtils
+                        .buildStatsUri(createServiceURI(host, peerURI,
+                                AWSS3StorageEnumerationAdapterService.SELF_LINK)));
+        host.log(Utils.toJsonHtml(s3StorageEnumerationStats));
     }
 
     /**

@@ -28,10 +28,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -45,6 +45,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -134,7 +135,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     @Override
     public void handleStop(Operation op) {
         AWSClientManagerFactory.returnClientManager(this.clientManager,
-                AWSConstants.AwsClientType.EC2);
+                AwsClientType.S3);
         this.executorService.shutdown();
         AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(op);
@@ -220,28 +221,46 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      * Call the listBuckets() method to enumerate S3 buckets.
      * AWS SDK does not have an async method for listing buckets, so we use the synchronous method
      * in a fixed thread pool for S3 enumeration service.
+     * If listBuckets() call fails due to unsupported region, we mark the S3 client invalid,
+     * stop the enumeration flow and patch back to parent.
      */
     private void enumerateS3Buckets(S3StorageEnumerationContext aws) {
         logInfo(() -> String.format("Running creation enumeration in refresh mode for %s",
                 aws.request.original.resourceReference));
 
+        OperationContext operationContext = OperationContext.getOperationContext();
         this.executorService.submit(new Runnable() {
             @Override
             public void run() {
-                    aws.amazonS3Client.listBuckets().forEach(bucket -> {
-                        // Get bucket objects containing owner info and creation time
-                        try {
-                            aws.remoteAWSBuckets.put(bucket.getName(),bucket);
-                        } catch (Exception e) {
-                            logSevere("Exception enumerating S3 buckets: " + e.getMessage());
-                            aws.error = e;
-                            aws.stage = S3StorageEnumerationStages.ERROR;
-                            handleEnumerationRequest(aws);
-                        }
-                    });
+                try {
+                    List<Bucket> bucketList = aws.amazonS3Client.listBuckets();
+                    for (Bucket bucket : bucketList) {
+                        aws.remoteAWSBuckets.put(bucket.getName(), bucket);
+                    }
+                    OperationContext.restoreOperationContext(operationContext);
                     handleReceivedEnumerationData(aws);
+                } catch (Exception e) {
+                    if (e instanceof AmazonS3Exception && ((AmazonS3Exception) e)
+                            .getStatusCode() == Operation.STATUS_CODE_FORBIDDEN) {
+                        markClientInvalid(aws);
+                    } else {
+                        logSevere("Exception enumerating S3 buckets for [region=%s] [ex=%s]",
+                                aws.request.regionId, e.getMessage());
+                    }
+                }
             }
         });
+    }
+
+    /**
+     * Some regions do not support listBuckets() method and return 400. In that case, add the client to
+     * invalid client cache and complete the operation.
+     * @param aws
+     */
+    private void markClientInvalid(S3StorageEnumerationContext aws) {
+        AWSClientManagerFactory.getClientManager(AwsClientType.S3)
+                .markS3ClientInvalid(this, aws.parentAuth, aws.request.regionId);
+        aws.operation.complete();
     }
 
     /**

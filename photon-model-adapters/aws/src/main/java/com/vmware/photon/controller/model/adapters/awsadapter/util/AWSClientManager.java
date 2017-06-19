@@ -297,11 +297,6 @@ public class AWSClientManager {
         this.loadBalancingClientCache.remove(cacheKey);
     }
 
-    public synchronized void markS3ClientInvalid(StatelessService service, String cacheKey) {
-        service.logWarning("Marking S3 client cache entry invalid for key: " + cacheKey);
-        this.invalidS3Clients.put(cacheKey, Utils.getNowMicrosUtc());
-    }
-
     public AmazonS3Client getOrCreateS3Client(AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.S3) {
@@ -324,12 +319,28 @@ public class AWSClientManager {
             amazonS3Client = AWSUtils.getS3Client(credentials,regionId);
             this.s3clientCache.put(cacheKey, amazonS3Client);
         } catch (Exception e) {
-            markS3ClientInvalid(service, cacheKey);
+            markS3ClientInvalid(service, credentials, regionId);
             service.logSevere(e);
             failConsumer.accept(e);
         }
         return amazonS3Client;
     }
+
+    /**
+     * Marks an S3 client as invalid.
+     *
+     * @param service The stateless service for which the operation is being performed.
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     */
+    public synchronized void markS3ClientInvalid(StatelessService service,
+            AuthCredentialsServiceState credentials, String regionId) {
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+        service.logWarning("Marking S3 client cache entry invalid for key: " + cacheKey);
+        this.invalidS3Clients.put(cacheKey, Utils.getNowMicrosUtc());
+        this.s3clientCache.remove(cacheKey);
+    }
+
     /**
      * Checks if a client (via cache key) has been marked as invalid within the last
      * {@link #RETRY_AFTER_INTERVAL_MINUTES} minutes. If a client has been marked before, but
@@ -378,6 +389,11 @@ public class AWSClientManager {
         case EC2:
             this.ec2ClientCache.values().forEach(c -> c.shutdown());
             this.ec2ClientCache.clear();
+            break;
+
+        case S3:
+            this.s3clientCache.values().forEach(c -> c.shutdown());
+            this.s3clientCache.clear();
             break;
 
         case S3_TRANSFER_MANAGER:
