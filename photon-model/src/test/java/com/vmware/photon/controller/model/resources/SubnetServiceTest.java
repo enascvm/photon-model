@@ -114,6 +114,23 @@ public class SubnetServiceTest extends Suite {
         }
 
         @Test
+        public void testInvalidStartState() throws Throwable {
+            SubnetState startState = buildValidStartState();
+            startState.subnetCIDR = null;
+            SubnetState returnState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    startState, SubnetState.class);
+
+            assertNotNull(returnState);
+            assertEquals(returnState.type, NETWORK_SUBTYPE_SUBNET_STATE);
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.name, is(startState.name));
+            assertThat(returnState.subnetCIDR, is(startState.subnetCIDR));
+            assertThat(returnState.tenantLinks.get(0),
+                    is(startState.tenantLinks.get(0)));
+        }
+
+        @Test
         public void testDuplicatePost() throws Throwable {
             SubnetState startState = buildValidStartState();
             SubnetState returnState = postServiceSynchronously(

@@ -129,6 +129,31 @@ public class NetworkServiceTest extends Suite {
         }
 
         @Test
+        public void testInvalidStartState() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState();
+            startState.subnetCIDR = null;
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            assertNotNull(returnState);
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_STATE);
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.name, is(startState.name));
+            assertThat(returnState.subnetCIDR, is(startState.subnetCIDR));
+            assertThat(returnState.tenantLinks.get(0),
+                    is(startState.tenantLinks.get(0)));
+            assertThat(returnState.regionId, is(startState.regionId));
+            assertThat(returnState.authCredentialsLink,
+                    is(startState.authCredentialsLink));
+            assertThat(returnState.resourcePoolLink,
+                    is(startState.resourcePoolLink));
+            assertThat(returnState.instanceAdapterReference,
+                    is(startState.instanceAdapterReference));
+
+        }
+
+        @Test
         public void testDuplicatePost() throws Throwable {
             NetworkService.NetworkState startState = buildValidStartState();
             NetworkService.NetworkState returnState = postServiceSynchronously(

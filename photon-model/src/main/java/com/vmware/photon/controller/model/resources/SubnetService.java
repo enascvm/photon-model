@@ -192,9 +192,9 @@ public class SubnetService extends StatefulService {
 
         Utils.validateState(getStateDescription(), state);
 
-        // do we have a subnet in CIDR notation
-        // creating new SubnetUtils to validate
-        new SubnetUtils(state.subnetCIDR);
+        if (state.subnetCIDR != null) {
+            new SubnetUtils(state.subnetCIDR);
+        }
     }
 
     @Override
