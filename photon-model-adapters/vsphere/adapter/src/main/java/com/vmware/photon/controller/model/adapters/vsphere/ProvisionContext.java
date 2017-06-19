@@ -60,7 +60,7 @@ public class ProvisionContext {
     public ImageState image;
     public ManagedObjectReference templateMoRef;
     public ManagedObjectReference computeMoRef;
-    public String datacenterPath; // target datacenter resolved from the target placement
+    public ManagedObjectReference datacenterMoRef; // target datacenter resolved from the target placement
 
     public List<DiskStateExpanded> disks;
     public List<NetworkInterfaceStateWithDetails> nics;
@@ -280,11 +280,16 @@ public class ProvisionContext {
                     return;
                 }
 
-                ctx.datacenterPath = host.description.regionId;
-                if (ctx.datacenterPath == null) {
+                if (host.description.regionId == null) {
                     Exception error = new IllegalStateException(String.format(
                             "Compute @ %s does not specify a region", placementLink));
                     ctx.fail(error);
+                    return;
+                }
+                try {
+                    ctx.datacenterMoRef = VimUtils.convertStringToMoRef(host.description.regionId);
+                } catch (IllegalArgumentException ex) {
+                    ctx.fail(ex);
                     return;
                 }
 

@@ -23,6 +23,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.PropertyFilterSpec;
 
@@ -41,7 +42,9 @@ public class EnumerationClientTest {
 
         String username = System.getProperty(TestProperties.VC_USERNAME);
         String password = System.getProperty(TestProperties.VC_PASSWORD);
+
         String datacenter = System.getProperty(TestProperties.VC_DATECENTER_ID);
+        ManagedObjectReference datacenterMoRef = VimUtils.convertStringToMoRef(datacenter);
 
         BasicConnection conn = new BasicConnection();
 
@@ -59,7 +62,7 @@ public class EnumerationClientTest {
 
         EnumerationClient client = new EnumerationClient(conn, parent);
 
-        PropertyFilterSpec spec = client.createResourcesFilterSpec(datacenter);
+        PropertyFilterSpec spec = client.createResourcesFilterSpec();
 
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
             for (ObjectContent cont : page) {

@@ -26,11 +26,10 @@ import com.vmware.vim25.ManagedObjectReference;
  * Stores state/configuration/progress for an enumeration task.
  *
  */
-public class EnumerationContext {
+public class EnumerationProgress {
     private final ComputeEnumerateResourceRequest request;
     private final ComputeStateWithDescription parent;
     private final VapiConnection endpoint;
-    private final String datacenterPath;
     private ResourceTracker networkTracker;
     private ResourceTracker datastoreTracker;
     private ResourceTracker hostSystemTracker;
@@ -42,13 +41,11 @@ public class EnumerationContext {
 
     private Phaser vmTracker;
 
-    public EnumerationContext(ComputeEnumerateResourceRequest request,
-            ComputeStateWithDescription parent, VapiConnection endpoint,
-            String datacenterPath) {
+    public EnumerationProgress(ComputeEnumerateResourceRequest request,
+            ComputeStateWithDescription parent, VapiConnection endpoint) {
         this.request = request;
         this.parent = parent;
         this.endpoint = endpoint;
-        this.datacenterPath = datacenterPath;
         this.vmTracker = new Phaser(1);
         this.overlays = new MoRefKeyedMap<>();
     }
@@ -57,16 +54,12 @@ public class EnumerationContext {
         return this.endpoint;
     }
 
-    public String getDatacenterPath() {
-        return this.datacenterPath;
-    }
-
     public ComputeEnumerateResourceRequest getRequest() {
         return this.request;
     }
 
     public String getRegionId() {
-        return this.datacenterPath;
+        return getParent().description.regionId;
     }
 
     public ComputeStateWithDescription getParent() {

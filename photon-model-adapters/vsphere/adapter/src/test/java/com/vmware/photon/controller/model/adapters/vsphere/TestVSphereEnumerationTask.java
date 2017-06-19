@@ -145,24 +145,6 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         }
     }
 
-    @Test
-    public void testRefreshAllRegions() throws Throwable {
-        // Create a resource pool where the VM will be housed
-        this.resourcePool = createResourcePool();
-
-        this.auth = createAuth();
-
-        this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost(this.computeHostDescription);
-
-        this.computeHostDescription.regionId = null;
-        this.host.sendAndWaitExpectSuccess(
-                Operation.createPut(this.host, this.computeHostDescription.documentSelfLink)
-                        .setBody(this.computeHostDescription));
-
-        doRefresh();
-    }
-
     protected void captureFactoryState(String marker)
             throws ExecutionException, InterruptedException, IOException {
         snapshotFactoryState(marker, ComputeService.class);

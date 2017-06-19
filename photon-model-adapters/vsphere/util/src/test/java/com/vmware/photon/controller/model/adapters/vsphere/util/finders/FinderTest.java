@@ -32,28 +32,32 @@ public class FinderTest {
     public static ConnectionRule rule = new ConnectionRule();
 
     private Connection connection;
+    private ManagedObjectReference dc;
 
     @Before
     public void setup() {
         this.connection = rule.get();
+        this.dc = new ManagedObjectReference();
+        this.dc.setType("Datacenter");
+        this.dc.setValue("datacenter-1");
     }
 
     @Test
     public void fullPath()
             throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
-        Finder finder = new Finder(this.connection, "/Datacenters/New Folder/MyDatacenter");
+        Finder finder = new Finder(this.connection, this.dc);
 
         ManagedObjectReference vm = new ManagedObjectReference();
         vm.setType("VirtualMachine");
         vm.setValue("vm-9274");
-        Element ele =  finder.fullPath(vm);
+        Element ele = finder.fullPath(vm);
         System.out.println(ele);
     }
 
     @Test
     public void find()
             throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
-        Finder finder = new Finder(this.connection, "/Datacenters/New Folder/MyDatacenter");
+        Finder finder = new Finder(this.connection, this.dc);
 
         Element rp = finder.defaultResourcePool();
         System.out.println(rp);

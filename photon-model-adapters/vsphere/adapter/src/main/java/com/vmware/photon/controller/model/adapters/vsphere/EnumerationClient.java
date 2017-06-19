@@ -18,7 +18,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import com.vmware.pbm.InvalidArgumentFaultMsg;
 import com.vmware.pbm.PbmFaultFaultMsg;
@@ -32,9 +31,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
@@ -51,26 +47,22 @@ import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.WaitOptions;
 
 /**
+ * A client is bound to a datacenter.
  */
 public class EnumerationClient extends BaseHelper {
     public static final int DEFAULT_FETCH_PAGE_SIZE = 100;
 
-    private final Finder finder;
+    private final ManagedObjectReference datacenter;
 
-    public EnumerationClient(Connection connection, ComputeStateWithDescription parent)
-            throws FinderException, ClientException {
+    public EnumerationClient(Connection connection, ComputeStateWithDescription parent) {
         super(connection);
 
         // the regionId is used as a ref to a vSphere datacenter name
-        String id = parent.description.regionId;
+        this.datacenter = VimUtils.convertStringToMoRef(parent.description.regionId);
+    }
 
-        try {
-            this.finder = new Finder(connection, id);
-        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
-            throw new ClientException(id != null
-                    ? String.format("Error looking for datacenter for id '%s'", id)
-                    : "Error initializing enumeration for all datacenters", e);
-        }
+    public ManagedObjectReference getDatacenter() {
+        return this.datacenter;
     }
 
     private ManagedObjectReference createPropertyCollector() throws RuntimeFaultFaultMsg {
@@ -90,18 +82,6 @@ public class EnumerationClient extends BaseHelper {
         SelectionSpec genericSpec = new SelectionSpec();
         genericSpec.setName(name);
         return genericSpec;
-    }
-
-    public List<String> getDatacenterList() throws ClientException {
-        try {
-            return this.finder.getDatacenter() != null
-                    ? Arrays.asList(this.finder.getDatacenter().path)
-                    : this.finder.datacenterList("*").stream()
-                            .map(e -> e.path)
-                            .collect(Collectors.toList());
-        } catch (InvalidPropertyFaultMsg | FinderException | RuntimeFaultFaultMsg e) {
-            throw new ClientException("Cannot retrieve datacenter paths", e);
-        }
     }
 
     /**
@@ -180,7 +160,6 @@ public class EnumerationClient extends BaseHelper {
         dcToVmf.setName("dcToVmf");
         dcToVmf.getSelectSet().add(getSelectionSpec("VisitFolders"));
 
-
         TraversalSpec dcToNetf = new TraversalSpec();
         dcToNetf.setType(VimNames.TYPE_DATACENTER);
         dcToNetf.setSkip(Boolean.FALSE);
@@ -235,17 +214,9 @@ public class EnumerationClient extends BaseHelper {
         return resultspec;
     }
 
-    public PropertyFilterSpec createVmFilterSpec(String datacenterPath) throws ClientException {
-        Element datacenter;
-        try {
-            datacenter = this.finder.datacenter(datacenterPath);
-        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg | FinderException e) {
-            throw new ClientException(
-                    String.format("Error retrieving datacenter %s", datacenterPath), e);
-        }
-
+    public PropertyFilterSpec createVmFilterSpec(ManagedObjectReference dc) throws ClientException {
         ObjectSpec ospec = new ObjectSpec();
-        ospec.setObj(datacenter.object);
+        ospec.setObj(dc);
         ospec.setSkip(false);
 
         ospec.getSelectSet().addAll(buildFullTraversal());
@@ -276,17 +247,9 @@ public class EnumerationClient extends BaseHelper {
         return filterSpec;
     }
 
-    public PropertyFilterSpec createResourcesFilterSpec(String datacenterPath) throws ClientException {
-        Element datacenter;
-        try {
-            datacenter = this.finder.datacenter(datacenterPath);
-        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg | FinderException e) {
-            throw new ClientException(
-                    String.format("Error retrieving datacenter %s", datacenterPath), e);
-        }
-
+    public PropertyFilterSpec createResourcesFilterSpec() throws ClientException {
         ObjectSpec ospec = new ObjectSpec();
-        ospec.setObj(datacenter.object);
+        ospec.setObj(this.datacenter);
         ospec.setSkip(false);
 
         ospec.getSelectSet().addAll(buildFullTraversal());

@@ -169,6 +169,7 @@ public class InstanceClient extends BaseHelper {
         super(connection);
 
         this.ctx = ctx;
+
         if (ctx.disks != null) {
             this.bootDisk = findBootDisk();
             this.dataDisks = new ArrayList<>(ctx.disks);
@@ -176,14 +177,7 @@ public class InstanceClient extends BaseHelper {
             this.dataDisks.remove(this.bootDisk);
         }
 
-        try {
-            this.finder = new Finder(connection, this.ctx.datacenterPath);
-        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
-            throw new ClientException(
-                    String.format("Error looking for datacenter for id '%s'",
-                            this.ctx.datacenterPath),
-                    e);
-        }
+        this.finder = new Finder(connection, this.ctx.datacenterMoRef);
 
         this.get = new GetMoRef(this.connection);
     }
@@ -1003,7 +997,7 @@ public class InstanceClient extends BaseHelper {
         String destName = makePathToVmdkFile(ds.id, dsDirForDisk);
 
         // all ops are within a datacenter
-        ManagedObjectReference sourceDc = this.finder.datacenter(this.ctx.datacenterPath).object;
+        ManagedObjectReference sourceDc = this.ctx.datacenterMoRef;
         ManagedObjectReference destDc = sourceDc;
 
         Boolean force = true;

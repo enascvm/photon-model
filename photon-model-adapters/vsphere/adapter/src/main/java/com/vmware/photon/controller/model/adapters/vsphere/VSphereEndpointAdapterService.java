@@ -29,10 +29,10 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
@@ -133,11 +133,9 @@ public class VSphereEndpointAdapterService extends StatelessService {
         try {
             // login and session creation
             connection.connect();
-            if (id != null && !id.isEmpty()) {
-                new Finder(connection, id);
-            }
+            new GetMoRef(connection).entityProp(VimUtils.convertStringToMoRef(id), VimNames.PROPERTY_NAME);
             callback.accept(null, null);
-        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg | FinderException e) {
+        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
             ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
             r.statusCode = STATUS_CODE_BAD_REQUEST;
             r.message = String.format("Error looking for datacenter for id '%s'", id);

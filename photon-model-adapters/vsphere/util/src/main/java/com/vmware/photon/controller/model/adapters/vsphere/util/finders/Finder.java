@@ -41,7 +41,7 @@ import com.vmware.vim25.TraversalSpec;
 public class Finder extends Recurser {
     private static final String CHAR_STAR = "*";
     private static final String CHAR_AT = "@";
-    private final Element datacenter;
+    private final ManagedObjectReference datacenter;
 
     private Element networkFolder;
     private Element datastoreFolder;
@@ -51,10 +51,9 @@ public class Finder extends Recurser {
     /**
      * A finder in the optional context of a datacenter.
      */
-    public Finder(Connection connection, String datacenterPath)
-            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+    public Finder(Connection connection, ManagedObjectReference datacenter) {
         super(connection);
-        this.datacenter = datacenterPath != null ? datacenter(datacenterPath) : null;
+        this.datacenter = datacenter;
     }
 
     public static List<String> toParts(String p) {
@@ -182,13 +181,6 @@ public class Finder extends Recurser {
         return null;
     }
 
-    /**
-     * Returns the datacenter this finder is rooted at. Will never return null.
-     */
-    public Element getDatacenter() {
-        return this.datacenter;
-    }
-
     private String getName(ObjectContent cont) throws FinderException {
         for (DynamicProperty dp : cont.getPropSet()) {
             if (dp.getName().equals("name")) {
@@ -232,22 +224,6 @@ public class Finder extends Recurser {
                 .retrieveProperties(this.connection.getServiceContent().getPropertyCollector(),
                         Collections.singletonList(filter));
 
-    }
-
-    public List<Element> managedObjectList(String... path)
-            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        Element root;
-        if (this.datacenter != null) {
-            root = this.datacenter;
-        } else {
-            root = rootElement();
-        }
-
-        if (path.length == 0) {
-            path = new String[] { "." };
-        }
-
-        return find(root, true, path);
     }
 
     public List<Element> datacenterList(String... path)
@@ -421,7 +397,7 @@ public class Finder extends Recurser {
             RuntimeFaultFaultMsg,
             FinderException {
         GetMoRef get = new GetMoRef(this.connection);
-        Map<String, Object> folders = get.entityProps(this.datacenter.object,
+        Map<String, Object> folders = get.entityProps(this.datacenter,
                 new String[] { "vmFolder", "hostFolder", "datastoreFolder", "networkFolder" });
 
         this.vmFolder = fullPath((ManagedObjectReference) folders.get("vmFolder"));

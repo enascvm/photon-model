@@ -127,8 +127,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
 
         try {
             EnumerationClient client = new EnumerationClient(connection, parent);
-            processAllTemplates(request.resourceLink(), request.taskLink(), client,
-                    parent.description.regionId, parent.tenantLinks);
+            processAllTemplates(request.resourceLink(), request.taskLink(), client, parent.tenantLinks);
         } catch (Throwable e) {
             mgr.patchTaskToFailure("Error processing library items", e);
             return;
@@ -151,8 +150,8 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
     }
 
     private void processAllTemplates(String endpointLink, String taskLink, EnumerationClient client,
-            String datacenterId, List<String> tenantLinks) throws ClientException, RuntimeFaultFaultMsg {
-        PropertyFilterSpec spec = client.createVmFilterSpec(datacenterId);
+            List<String> tenantLinks) throws ClientException, RuntimeFaultFaultMsg {
+        PropertyFilterSpec spec = client.createVmFilterSpec(client.getDatacenter());
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
             Phaser phaser = new Phaser(1);
             for (ObjectContent oc : page) {

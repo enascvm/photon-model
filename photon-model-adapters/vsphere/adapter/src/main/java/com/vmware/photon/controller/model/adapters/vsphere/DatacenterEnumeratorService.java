@@ -14,9 +14,9 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.DatacenterLister;
@@ -35,6 +35,7 @@ public class DatacenterEnumeratorService extends StatelessService {
 
     public static class EnumerateDatacentersResponse {
         public List<String> datacenters;
+        public List<String> moRefs;
     }
 
     @Override
@@ -47,10 +48,11 @@ public class DatacenterEnumeratorService extends StatelessService {
         EnumerateDatacentersRequest req = patch.getBody(EnumerateDatacentersRequest.class);
 
         try {
-            List<String> dcs;
+            EnumerateDatacentersResponse res = new EnumerateDatacentersResponse();
 
             if (req.isMock) {
-                dcs = Collections.singletonList("dc-1");
+                res.datacenters = Collections.singletonList("dc-1");
+                res.moRefs = Collections.singletonList("Datacenter:dc-1");
             } else {
                 BasicConnection connection = new BasicConnection();
                 connection.setURI(URI.create("https://" + req.host + "/sdk"));
@@ -60,14 +62,17 @@ public class DatacenterEnumeratorService extends StatelessService {
                 connection.connect();
 
                 DatacenterLister lister = new DatacenterLister(connection);
+                res.moRefs = new ArrayList<>();
+                res.datacenters = new ArrayList<>();
 
-                dcs = lister.listAllDatacenters().stream()
-                        .map(el -> el.path)
-                        .collect(Collectors.toList());
+                lister.listAllDatacenters().stream()
+                        .forEach(el -> {
+                            res.datacenters.add(el.path);
+                            res.moRefs.add(VimUtils.convertMoRefToString(el.object));
+                        });
+
             }
 
-            EnumerateDatacentersResponse res = new EnumerateDatacentersResponse();
-            res.datacenters = dcs;
             patch.setBody(res);
             patch.complete();
         } catch (Exception e) {

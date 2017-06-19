@@ -295,7 +295,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        PropertyFilterSpec spec = client.createResourcesFilterSpec(parent.description.regionId);
+        PropertyFilterSpec spec = client.createResourcesFilterSpec();
 
         try {
             for (UpdateSet updateSet : client.pollForUpdates(spec)) {
@@ -344,12 +344,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         try {
-            for (String datacenterPath : client.getDatacenterList()) {
-                logFine(() -> String.format("Refreshing datacenter %s", datacenterPath));
-                EnumerationContext enumerationContext = new EnumerationContext(request, parent,
-                        vapiConnection, datacenterPath);
-                refreshResourcesOnDatacenter(client, enumerationContext, mgr);
-            }
+            EnumerationProgress enumerationProgress = new EnumerationProgress(request, parent,
+                    vapiConnection);
+            refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
         } catch (ClientException e) {
             logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
         }
@@ -364,7 +361,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         garbageCollectUntouchedComputeResources(request, parent, mgr);
     }
 
-    private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationContext ctx,
+    private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,
             TaskManager mgr) throws ClientException {
         MoRefKeyedMap<NetworkOverlay> networks = new MoRefKeyedMap<>();
         List<HostSystemOverlay> hosts = new ArrayList<>();
@@ -374,7 +371,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
 
         // put results in different buckets by type
-        PropertyFilterSpec spec = client.createResourcesFilterSpec(ctx.getDatacenterPath());
+        PropertyFilterSpec spec = client.createResourcesFilterSpec();
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
                 for (ObjectContent cont : page) {
@@ -513,7 +510,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         long latestAcceptableModification = System.currentTimeMillis()
                 - VM_FERMENTATION_PERIOD_MILLIS;
-        spec = client.createVmFilterSpec(ctx.getDatacenterPath());
+        spec = client.createVmFilterSpec(client.getDatacenter());
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
                 ctx.resetVmTracker();
@@ -646,75 +643,75 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         mgr.patchTaskToFailure(msg, e);
     }
 
-    private void processFoundNetwork(EnumerationContext enumerationContext, NetworkOverlay net,
+    private void processFoundNetwork(EnumerationProgress enumerationProgress, NetworkOverlay net,
             MoRefKeyedMap<NetworkOverlay> allNetworks) {
         if (net.getParentSwitch() != null) {
             // portgroup: create subnet
-            QueryTask task = queryForSubnet(enumerationContext, net);
+            QueryTask task = queryForSubnet(enumerationProgress, net);
             withTaskResults(task, result -> {
                 if (result.documentLinks.isEmpty()) {
-                    createNewSubnet(enumerationContext, net, allNetworks.get(net.getParentSwitch()));
+                    createNewSubnet(enumerationProgress, net, allNetworks.get(net.getParentSwitch()));
                 } else {
                     SubnetState oldDocument = convertOnlyResultToDocument(result, SubnetState.class);
-                    updateSubnet(oldDocument, enumerationContext, net);
+                    updateSubnet(oldDocument, enumerationProgress, net);
                 }
             });
         } else {
             // DVS or opaque network
-            QueryTask task = queryForNetwork(enumerationContext, net.getName());
+            QueryTask task = queryForNetwork(enumerationProgress, net.getName());
             withTaskResults(task, result -> {
                 if (result.documentLinks.isEmpty()) {
-                    createNewNetwork(enumerationContext, net);
+                    createNewNetwork(enumerationProgress, net);
                 } else {
                     NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);
-                    updateNetwork(oldDocument, enumerationContext, net);
+                    updateNetwork(oldDocument, enumerationProgress, net);
                 }
             });
         }
     }
 
-    private void updateSubnet(SubnetState oldDocument, EnumerationContext enumerationContext, NetworkOverlay net) {
-        SubnetState state = makeSubnetStateFromResults(enumerationContext, net);
+    private void updateSubnet(SubnetState oldDocument, EnumerationProgress enumerationProgress, NetworkOverlay net) {
+        SubnetState state = makeSubnetStateFromResults(enumerationProgress, net);
         state.documentSelfLink = oldDocument.documentSelfLink;
         if (oldDocument.tenantLinks == null) {
-            state.tenantLinks = enumerationContext.getTenantLinks();
+            state.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing Subnet(Portgroup) %s", net.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
-                .setCompletion(trackNetwork(enumerationContext, net))
+                .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
     }
 
-    private void createNewSubnet(EnumerationContext enumerationContext, NetworkOverlay net,
+    private void createNewSubnet(EnumerationProgress enumerationProgress, NetworkOverlay net,
             NetworkOverlay parentSwitch) {
-        SubnetState state = makeSubnetStateFromResults(enumerationContext, net);
+        SubnetState state = makeSubnetStateFromResults(enumerationProgress, net);
         state.customProperties.put(DvsProperties.DVS_UUID, parentSwitch.getDvsUuid());
 
-        state.tenantLinks = enumerationContext.getTenantLinks();
+        state.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(this, SubnetService.FACTORY_LINK)
                 .setBody(state)
-                .setCompletion(trackNetwork(enumerationContext, net))
+                .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
 
         logFine(() -> String.format("Found new Subnet(Portgroup) %s", net.getName()));
     }
 
-    private SubnetState makeSubnetStateFromResults(EnumerationContext enumerationContext, NetworkOverlay net) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+    private SubnetState makeSubnetStateFromResults(EnumerationProgress enumerationProgress, NetworkOverlay net) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
 
         SubnetState state = new SubnetState();
 
         state.id = state.name = net.getName();
-        state.endpointLink = enumerationContext.getRequest().endpointLink;
+        state.endpointLink = enumerationProgress.getRequest().endpointLink;
 
         ManagedObjectReference parentSwitch = net.getParentSwitch();
         state.networkLink = buildStableDvsLink(parentSwitch, request.endpointLink);
 
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
         custProp.put(DvsProperties.PORT_GROUP_KEY, net.getPortgroupKey());
@@ -722,7 +719,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return state;
     }
 
-    private QueryTask queryForSubnet(EnumerationContext ctx, NetworkOverlay portgroup) {
+    private QueryTask queryForSubnet(EnumerationProgress ctx, NetworkOverlay portgroup) {
         String dvsLink = buildStableDvsLink(portgroup.getParentSwitch(), ctx.getRequest().endpointLink);
         String moref = VimUtils.convertMoRefToString(portgroup.getId());
 
@@ -739,19 +736,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .build();
     }
 
-    private void updateNetwork(NetworkState oldDocument, EnumerationContext enumerationContext, NetworkOverlay net) {
-        NetworkState networkState = makeNetworkStateFromResults(enumerationContext, net);
+    private void updateNetwork(NetworkState oldDocument, EnumerationProgress enumerationProgress, NetworkOverlay net) {
+        NetworkState networkState = makeNetworkStateFromResults(enumerationProgress, net);
         networkState.documentSelfLink = oldDocument.documentSelfLink;
         networkState.resourcePoolLink = null;
 
         if (oldDocument.tenantLinks == null) {
-            networkState.tenantLinks = enumerationContext.getTenantLinks();
+            networkState.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing Network %s", net.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(networkState)
-                .setCompletion(trackNetwork(enumerationContext, net))
+                .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
 
         if (!VimNames.TYPE_NETWORK.equals(net.getId().getType())) {
@@ -762,12 +759,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.documentSelfLink = UriUtils.buildUriPath(SubnetService.FACTORY_LINK,
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
         subnet.id = subnet.name = net.getName();
-        subnet.endpointLink = enumerationContext.getRequest().endpointLink;
+        subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
         subnet.networkLink = networkState.documentSelfLink;
-        subnet.tenantLinks = enumerationContext.getTenantLinks();
+        subnet.tenantLinks = enumerationProgress.getTenantLinks();
 
         CustomProperties.of(subnet)
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
@@ -776,15 +773,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .sendWith(this);
     }
 
-    private void createNewNetwork(EnumerationContext enumerationContext, NetworkOverlay net) {
-        NetworkState networkState = makeNetworkStateFromResults(enumerationContext, net);
-        networkState.tenantLinks = enumerationContext.getTenantLinks();
+    private void createNewNetwork(EnumerationProgress enumerationProgress, NetworkOverlay net) {
+        NetworkState networkState = makeNetworkStateFromResults(enumerationProgress, net);
+        networkState.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(this, NetworkService.FACTORY_LINK)
                 .setBody(networkState)
                 .setCompletion((o, e) -> {
-                    trackNetwork(enumerationContext, net).handle(o, e);
+                    trackNetwork(enumerationProgress, net).handle(o, e);
                     Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
-                            .setBody(makeNetworkGroup(net, enumerationContext))
+                            .setBody(makeNetworkGroup(net, enumerationProgress))
                             .sendWith(this);
                 })
                 .sendWith(this);
@@ -799,12 +796,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.documentSelfLink = UriUtils.buildUriPath(SubnetService.FACTORY_LINK,
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
         subnet.id = subnet.name = net.getName();
-        subnet.endpointLink = enumerationContext.getRequest().endpointLink;
+        subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
         subnet.networkLink = networkState.documentSelfLink;
-        subnet.tenantLinks = enumerationContext.getTenantLinks();
+        subnet.tenantLinks = enumerationProgress.getTenantLinks();
 
         CustomProperties.of(subnet)
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
@@ -817,18 +814,18 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return o.getBody(ServiceDocument.class).documentSelfLink;
     }
 
-    private CompletionHandler trackDatastore(EnumerationContext enumerationContext,
+    private CompletionHandler trackDatastore(EnumerationProgress enumerationProgress,
             DatastoreOverlay ds) {
         return (o, e) -> {
             if (e == null) {
-                enumerationContext.getDatastoreTracker().track(ds.getId(), getSelfLinkFromOperation(o));
+                enumerationProgress.getDatastoreTracker().track(ds.getId(), getSelfLinkFromOperation(o));
             } else {
-                enumerationContext.getDatastoreTracker().track(ds.getId(), ResourceTracker.ERROR);
+                enumerationProgress.getDatastoreTracker().track(ds.getId(), ResourceTracker.ERROR);
             }
         };
     }
 
-    private CompletionHandler trackStoragePolicy(EnumerationContext enumerationContext,
+    private CompletionHandler trackStoragePolicy(EnumerationProgress enumerationProgress,
             StoragePolicyOverlay sp) {
         return (o, e) -> {
             if (e != null) {
@@ -836,59 +833,59 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         .format("Error in syncing resource group for Storage Policy %s",
                                 sp.getName()));
             }
-            enumerationContext.getStoragePolicyTracker().track();
+            enumerationProgress.getStoragePolicyTracker().track();
         };
     }
 
-    private CompletionHandler trackVm(EnumerationContext enumerationContext) {
+    private CompletionHandler trackVm(EnumerationProgress enumerationProgress) {
         return (o, e) -> {
-            enumerationContext.getVmTracker().arrive();
+            enumerationProgress.getVmTracker().arrive();
         };
     }
 
-    private CompletionHandler trackComputeResource(EnumerationContext enumerationContext,
+    private CompletionHandler trackComputeResource(EnumerationProgress enumerationProgress,
             ComputeResourceOverlay cr) {
         return (o, e) -> {
             if (e == null) {
-                enumerationContext.getComputeResourceTracker().track(cr.getId(), getSelfLinkFromOperation(o));
+                enumerationProgress.getComputeResourceTracker().track(cr.getId(), getSelfLinkFromOperation(o));
             } else {
-                enumerationContext.getComputeResourceTracker().track(cr.getId(), ResourceTracker.ERROR);
+                enumerationProgress.getComputeResourceTracker().track(cr.getId(), ResourceTracker.ERROR);
             }
         };
     }
 
-    private CompletionHandler trackHostSystem(EnumerationContext enumerationContext,
+    private CompletionHandler trackHostSystem(EnumerationProgress enumerationProgress,
             HostSystemOverlay hs) {
         return (o, e) -> {
             if (e == null) {
-                enumerationContext.getHostSystemTracker().track(hs.getId(), getSelfLinkFromOperation(o));
+                enumerationProgress.getHostSystemTracker().track(hs.getId(), getSelfLinkFromOperation(o));
             } else {
-                enumerationContext.getHostSystemTracker().track(hs.getParent(), ResourceTracker.ERROR);
+                enumerationProgress.getHostSystemTracker().track(hs.getParent(), ResourceTracker.ERROR);
             }
         };
     }
 
-    private CompletionHandler trackNetwork(EnumerationContext enumerationContext,
+    private CompletionHandler trackNetwork(EnumerationProgress enumerationProgress,
             NetworkOverlay net) {
         return (o, e) -> {
             if (e == null) {
-                enumerationContext.getNetworkTracker().track(net.getId(), getSelfLinkFromOperation(o));
+                enumerationProgress.getNetworkTracker().track(net.getId(), getSelfLinkFromOperation(o));
             } else {
-                enumerationContext.getNetworkTracker().track(net.getId(), ResourceTracker.ERROR);
+                enumerationProgress.getNetworkTracker().track(net.getId(), ResourceTracker.ERROR);
             }
         };
     }
 
-    private NetworkState makeNetworkStateFromResults(EnumerationContext enumerationContext, NetworkOverlay net) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        ComputeStateWithDescription parent = enumerationContext.getParent();
+    private NetworkState makeNetworkStateFromResults(EnumerationProgress enumerationProgress, NetworkOverlay net) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        ComputeStateWithDescription parent = enumerationProgress.getParent();
 
         NetworkState state = new NetworkState();
 
         state.documentSelfLink = NetworkService.FACTORY_LINK + "/" + this.getHost().nextUUID();
         state.id = state.name = net.getName();
-        state.endpointLink = enumerationContext.getRequest().endpointLink;
-        state.regionId = enumerationContext.getRegionId();
+        state.endpointLink = enumerationProgress.getRequest().endpointLink;
+        state.regionId = enumerationProgress.getRegionId();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
         state.authCredentialsLink = parent.description.authCredentialsLink;
@@ -899,7 +896,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
         if (net.getSummary() instanceof OpaqueNetworkSummary) {
@@ -923,7 +920,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 + VimUtils.buildStableManagedObjectId(ref, endpointLink);
     }
 
-    private QueryTask queryForNetwork(EnumerationContext ctx, String name) {
+    private QueryTask queryForNetwork(EnumerationProgress ctx, String name) {
         URI adapterManagementReference = ctx.getRequest().adapterManagementReference;
         String regionId = ctx.getRegionId();
 
@@ -946,22 +943,22 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * it already present, then update its properties. Process the updates on its compatible
      * datastores.
      */
-    private void processFoundStoragePolicy(EnumerationContext enumerationContext,
+    private void processFoundStoragePolicy(EnumerationProgress enumerationProgress,
             StoragePolicyOverlay sp) {
-        QueryTask task = queryForStoragePolicy(enumerationContext, sp.getProfileId(), sp.getName());
+        QueryTask task = queryForStoragePolicy(enumerationProgress, sp.getProfileId(), sp.getName());
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewStoragePolicy(enumerationContext, sp);
+                createNewStoragePolicy(enumerationProgress, sp);
             } else {
                 ResourceGroupState oldDocument = convertOnlyResultToDocument(result,
                         ResourceGroupState.class);
-                updateStoragePolicy(oldDocument, enumerationContext, sp);
+                updateStoragePolicy(oldDocument, enumerationProgress, sp);
             }
         });
     }
 
-    private QueryTask queryForStoragePolicy(EnumerationContext ctx, String id, String name) {
+    private QueryTask queryForStoragePolicy(EnumerationProgress ctx, String id, String name) {
         Builder builder = Query.Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ID, id)
                 .addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.getRegionId())
@@ -974,49 +971,49 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .build();
     }
 
-    private void createNewStoragePolicy(EnumerationContext enumerationContext,
+    private void createNewStoragePolicy(EnumerationProgress enumerationProgress,
             StoragePolicyOverlay sp) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        String regionId = enumerationContext.getRegionId();
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        String regionId = enumerationProgress.getRegionId();
         ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, regionId);
-        rgState.tenantLinks = enumerationContext.getTenantLinks();
+        rgState.tenantLinks = enumerationProgress.getTenantLinks();
         logFine(() -> String.format("Found new Storage Policy %s", sp.getName()));
         rgState.tagLinks = createStoragePolicyTags(sp.getTags(), rgState.tenantLinks);
 
         Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
                 .setBody(rgState)
                 .setCompletion((o, e) -> {
-                    trackStoragePolicy(enumerationContext, sp).handle(o, e);
+                    trackStoragePolicy(enumerationProgress, sp).handle(o, e);
                     // Update all compatible datastores group link with the self link of this
                     // storage policy
-                    updateDataStoreWithStoragePolicyGroup(enumerationContext, sp,
+                    updateDataStoreWithStoragePolicyGroup(enumerationProgress, sp,
                             o.getBody(ResourceGroupState.class).documentSelfLink);
                 })
                 .sendWith(this);
     }
 
     private void updateStoragePolicy(ResourceGroupState oldDocument,
-            EnumerationContext enumerationContext, StoragePolicyOverlay sp) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        String regionId = enumerationContext.getRegionId();
+            EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        String regionId = enumerationProgress.getRegionId();
 
         ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, regionId);
         rgState.documentSelfLink = oldDocument.documentSelfLink;
 
         if (oldDocument.tenantLinks == null) {
-            rgState.tenantLinks = enumerationContext.getTenantLinks();
+            rgState.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing Storage %s", sp.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), rgState.documentSelfLink))
                 .setBody(rgState)
                 .setCompletion((o, e) -> {
-                    trackStoragePolicy(enumerationContext, sp).handle(o, e);
+                    trackStoragePolicy(enumerationProgress, sp).handle(o, e);
                     if (e == null) {
                         TagsUtil.updateLocalTagStates(this, o.getBody(ResourceState.class), sp.getTags());
                         // Update all compatible datastores group link with the self link of this
                         // storage policy
-                        updateDataStoreWithStoragePolicyGroup(enumerationContext, sp,
+                        updateDataStoreWithStoragePolicyGroup(enumerationProgress, sp,
                                 o.getBody(ResourceGroupState.class).documentSelfLink);
                     }
                 }).sendWith(this);
@@ -1038,7 +1035,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return res;
     }
 
-    private void updateDataStoreWithStoragePolicyGroup(EnumerationContext ctx,
+    private void updateDataStoreWithStoragePolicyGroup(EnumerationProgress ctx,
             StoragePolicyOverlay sp, String selfLink) {
         List<Operation> getOps = new ArrayList<>();
         sp.getDatastoreNames().stream().forEach(name -> {
@@ -1117,65 +1114,65 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
     }
 
-    private void processFoundDatastore(EnumerationContext enumerationContext, DatastoreOverlay ds) {
-        QueryTask task = queryForStorage(enumerationContext, ds.getName(), null);
+    private void processFoundDatastore(EnumerationProgress enumerationProgress, DatastoreOverlay ds) {
+        QueryTask task = queryForStorage(enumerationProgress, ds.getName(), null);
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewStorageDescription(enumerationContext, ds);
+                createNewStorageDescription(enumerationProgress, ds);
             } else {
                 StorageDescription oldDocument = convertOnlyResultToDocument(result,
                         StorageDescription.class);
-                updateStorageDescription(oldDocument, enumerationContext, ds);
+                updateStorageDescription(oldDocument, enumerationProgress, ds);
             }
         });
     }
 
     private void updateStorageDescription(StorageDescription oldDocument,
-            EnumerationContext enumerationContext, DatastoreOverlay ds) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        String regionId = enumerationContext.getRegionId();
+            EnumerationProgress enumerationProgress, DatastoreOverlay ds) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        String regionId = enumerationProgress.getRegionId();
 
         StorageDescription desc = makeStorageFromResults(request, ds, regionId);
         desc.documentSelfLink = oldDocument.documentSelfLink;
         desc.resourcePoolLink = null;
 
         if (oldDocument.tenantLinks == null) {
-            desc.tenantLinks = enumerationContext.getTenantLinks();
+            desc.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing Storage %s", ds.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .setCompletion((o, e) -> {
-                    trackDatastore(enumerationContext, ds).handle(o, e);
+                    trackDatastore(enumerationProgress, ds).handle(o, e);
                     if (e == null) {
-                        updateLocalTags(enumerationContext, ds, o.getBody(ResourceState.class));
+                        updateLocalTags(enumerationProgress, ds, o.getBody(ResourceState.class));
                     }
                 }).sendWith(this);
     }
 
-    private void createNewStorageDescription(EnumerationContext enumerationContext,
+    private void createNewStorageDescription(EnumerationProgress enumerationProgress,
             DatastoreOverlay ds) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        String regionId = enumerationContext.getRegionId();
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        String regionId = enumerationProgress.getRegionId();
         StorageDescription desc = makeStorageFromResults(request, ds, regionId);
-        desc.tenantLinks = enumerationContext.getTenantLinks();
+        desc.tenantLinks = enumerationProgress.getTenantLinks();
         logFine(() -> String.format("Found new Datastore %s", ds.getName()));
-        populateTags(enumerationContext, ds, desc);
+        populateTags(enumerationProgress, ds, desc);
 
         Operation.createPost(this, StorageDescriptionService.FACTORY_LINK)
                 .setBody(desc)
                 .setCompletion((o, e) -> {
-                    trackDatastore(enumerationContext, ds).handle(o, e);
+                    trackDatastore(enumerationProgress, ds).handle(o, e);
                     Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
-                            .setBody(makeStorageGroup(ds, enumerationContext))
+                            .setBody(makeStorageGroup(ds, enumerationProgress))
                             .sendWith(this);
                 })
                 .sendWith(this);
     }
 
-    private ResourceGroupState makeNetworkGroup(NetworkOverlay net, EnumerationContext ctx) {
+    private ResourceGroupState makeNetworkGroup(NetworkOverlay net, EnumerationProgress ctx) {
         ResourceGroupState res = new ResourceGroupState();
         res.id = net.getName();
         res.name = "Hosts connected to network '" + net.getName() + "'";
@@ -1195,7 +1192,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 VimUtils.buildStableManagedObjectId(ref, endpointLink));
     }
 
-    private ResourceGroupState makeStorageGroup(DatastoreOverlay ds, EnumerationContext ctx) {
+    private ResourceGroupState makeStorageGroup(DatastoreOverlay ds, EnumerationProgress ctx) {
         ResourceGroupState res = new ResourceGroupState();
         res.id = ds.getName();
         res.name = "Hosts that can access datastore '" + ds.getName() + "'";
@@ -1225,7 +1222,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return res;
     }
 
-    private QueryTask queryForStorage(EnumerationContext ctx, String name, String groupLink) {
+    private QueryTask queryForStorage(EnumerationProgress ctx, String name, String groupLink) {
         Builder builder = Query.Builder.create()
                 .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
                         ctx.getRequest().adapterManagementReference.toString())
@@ -1252,19 +1249,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * querying for a compute with id equals to moref value of a cluster whose parent is the Compute
      * from the request.
      *
-     * @param enumerationContext
+     * @param enumerationProgress
      * @param cr
      */
-    private void processFoundComputeResource(EnumerationContext enumerationContext, ComputeResourceOverlay cr) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        QueryTask task = queryForCluster(enumerationContext, request.resourceLink(), cr.getId().getValue());
+    private void processFoundComputeResource(EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        QueryTask task = queryForCluster(enumerationProgress, request.resourceLink(), cr.getId().getValue());
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewComputeResource(enumerationContext, cr);
+                createNewComputeResource(enumerationProgress, cr);
             } else {
                 ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                updateCluster(oldDocument, enumerationContext, cr);
+                updateCluster(oldDocument, enumerationProgress, cr);
             }
         });
     }
@@ -1274,13 +1271,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void updateCluster(ComputeState oldDocument,
-            EnumerationContext enumerationContext, ComputeResourceOverlay cr) {
-        ComputeState state = makeComputeResourceFromResults(enumerationContext, cr);
+            EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
+        ComputeState state = makeComputeResourceFromResults(enumerationProgress, cr);
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
 
         if (oldDocument.tenantLinks == null) {
-            state.tenantLinks = enumerationContext.getTenantLinks();
+            state.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing ComputeResource %s", oldDocument.documentSelfLink));
@@ -1288,20 +1285,20 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     if (e == null) {
-                        updateLocalTags(enumerationContext, cr, o.getBody(ResourceState.class));
+                        updateLocalTags(enumerationProgress, cr, o.getBody(ResourceState.class));
                     }
                 })
                 .sendWith(this);
 
-        ComputeDescription desc = makeDescriptionForCluster(enumerationContext, cr);
+        ComputeDescription desc = makeDescriptionForCluster(enumerationProgress, cr);
         desc.documentSelfLink = oldDocument.descriptionLink;
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
-                .setCompletion(trackComputeResource(enumerationContext, cr))
+                .setCompletion(trackComputeResource(enumerationProgress, cr))
                 .sendWith(this);
     }
 
-    private ComputeDescription makeDescriptionForResourcePool(EnumerationContext enumerationContext,
+    private ComputeDescription makeDescriptionForResourcePool(EnumerationProgress enumerationProgress,
             ResourcePoolOverlay rp, String rpSelfLink) {
         ComputeDescription res = new ComputeDescription();
         res.name = rp.getName();
@@ -1312,19 +1309,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         // resource pools CPU is measured in Mhz
         res.cpuCount = 0;
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
-        res.endpointLink = enumerationContext.getRequest().endpointLink;
-        res.instanceAdapterReference = enumerationContext
+        res.endpointLink = enumerationProgress.getRequest().endpointLink;
+        res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
-        res.enumerationAdapterReference = enumerationContext
+        res.enumerationAdapterReference = enumerationProgress
                 .getParent().description.enumerationAdapterReference;
-        res.statsAdapterReference = enumerationContext
+        res.statsAdapterReference = enumerationProgress
                 .getParent().description.statsAdapterReference;
-        res.regionId = enumerationContext.getRegionId();
+        res.regionId = enumerationProgress.getRegionId();
 
         return res;
     }
 
-    private ComputeDescription makeDescriptionForCluster(EnumerationContext enumerationContext,
+    private ComputeDescription makeDescriptionForCluster(EnumerationProgress enumerationProgress,
             ComputeResourceOverlay cr) {
         ComputeDescription res = new ComputeDescription();
         res.name = cr.getName();
@@ -1336,34 +1333,34 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         res.totalMemoryBytes = cr.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
-        res.endpointLink = enumerationContext.getRequest().endpointLink;
-        res.instanceAdapterReference = enumerationContext
+        res.endpointLink = enumerationProgress.getRequest().endpointLink;
+        res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
-        res.enumerationAdapterReference = enumerationContext
+        res.enumerationAdapterReference = enumerationProgress
                 .getParent().description.enumerationAdapterReference;
-        res.statsAdapterReference = enumerationContext
+        res.statsAdapterReference = enumerationProgress
                 .getParent().description.statsAdapterReference;
-        res.regionId = enumerationContext.getRegionId();
+        res.regionId = enumerationProgress.getRegionId();
 
         return res;
     }
 
-    private void createNewComputeResource(EnumerationContext enumerationContext, ComputeResourceOverlay cr) {
-        ComputeDescription desc = makeDescriptionForCluster(enumerationContext, cr);
-        desc.tenantLinks = enumerationContext.getTenantLinks();
+    private void createNewComputeResource(EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
+        ComputeDescription desc = makeDescriptionForCluster(enumerationProgress, cr);
+        desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
                 .sendWith(this);
 
-        ComputeState state = makeComputeResourceFromResults(enumerationContext, cr);
-        state.tenantLinks = enumerationContext.getTenantLinks();
+        ComputeState state = makeComputeResourceFromResults(enumerationProgress, cr);
+        state.tenantLinks = enumerationProgress.getTenantLinks();
         state.descriptionLink = desc.documentSelfLink;
-        populateTags(enumerationContext, cr, state);
+        populateTags(enumerationProgress, cr, state);
 
         logFine(() -> String.format("Found new ComputeResource %s", cr.getId().getValue()));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
-                .setCompletion(trackComputeResource(enumerationContext, cr))
+                .setCompletion(trackComputeResource(enumerationProgress, cr))
                 .sendWith(this);
     }
 
@@ -1483,30 +1480,30 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         };
     }
 
-    private ComputeState makeComputeResourceFromResults(EnumerationContext enumerationContext,
+    private ComputeState makeComputeResourceFromResults(EnumerationProgress enumerationProgress,
             ComputeResourceOverlay cr) {
         ComputeState state = new ComputeState();
         state.id = cr.getId().getValue();
         state.type = ComputeType.VM_HOST;
-        state.endpointLink = enumerationContext.getRequest().endpointLink;
+        state.endpointLink = enumerationProgress.getRequest().endpointLink;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-        state.adapterManagementReference = enumerationContext
+        state.adapterManagementReference = enumerationProgress
                 .getRequest().adapterManagementReference;
-        state.parentLink = enumerationContext.getRequest().resourceLink();
-        state.resourcePoolLink = enumerationContext.getRequest().resourcePoolLink;
-        state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext, cr.getDatastore(), cr.getNetwork());
+        state.parentLink = enumerationProgress.getRequest().resourceLink();
+        state.resourcePoolLink = enumerationProgress.getRequest().resourcePoolLink;
+        state.groupLinks = getConnectedDatastoresAndNetworks(enumerationProgress, cr.getDatastore(), cr.getNetwork());
 
         state.name = cr.getName();
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, cr.getId())
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK,
-                        enumerationContext.getRequest().taskLink())
+                        enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, cr.getId().getType());
         return state;
     }
 
-    private QueryTask queryForCluster(EnumerationContext ctx, String parentComputeLink,
+    private QueryTask queryForCluster(EnumerationProgress ctx, String parentComputeLink,
             String moRefId) {
         Builder builder = Query.Builder.create()
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink)
@@ -1521,110 +1518,110 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     /**
-     * @param enumerationContext
+     * @param enumerationProgress
      * @param hs
      */
-    private void processFoundHostSystem(EnumerationContext enumerationContext, HostSystemOverlay hs) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        QueryTask task = queryForHostSystem(enumerationContext, request.resourceLink(), hs.getId().getValue());
+    private void processFoundHostSystem(EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewHostSystem(enumerationContext, hs);
+                createNewHostSystem(enumerationProgress, hs);
             } else {
                 ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                updateHostSystem(oldDocument, enumerationContext, hs);
+                updateHostSystem(oldDocument, enumerationProgress, hs);
             }
         });
     }
 
-    private void updateHostSystem(ComputeState oldDocument, EnumerationContext enumerationContext,
+    private void updateHostSystem(ComputeState oldDocument, EnumerationProgress enumerationProgress,
             HostSystemOverlay hs) {
-        ComputeState state = makeHostSystemFromResults(enumerationContext, hs);
+        ComputeState state = makeHostSystemFromResults(enumerationProgress, hs);
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
 
         if (oldDocument.tenantLinks == null) {
-            state.tenantLinks = enumerationContext.getTenantLinks();
+            state.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing HostSystem %s", oldDocument.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), state.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
-                    trackHostSystem(enumerationContext, hs).handle(o, e);
+                    trackHostSystem(enumerationProgress, hs).handle(o, e);
                     if (e == null) {
-                        updateLocalTags(enumerationContext, hs, o.getBody(ResourceState.class));
+                        updateLocalTags(enumerationProgress, hs, o.getBody(ResourceState.class));
                     }
                 })
                 .sendWith(this);
 
-        ComputeDescription desc = makeDescriptionForHost(enumerationContext, hs);
+        ComputeDescription desc = makeDescriptionForHost(enumerationProgress, hs);
         desc.documentSelfLink = oldDocument.descriptionLink;
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .sendWith(this);
     }
 
-    private void createNewHostSystem(EnumerationContext enumerationContext, HostSystemOverlay hs) {
-        ComputeDescription desc = makeDescriptionForHost(enumerationContext, hs);
-        desc.tenantLinks = enumerationContext.getTenantLinks();
+    private void createNewHostSystem(EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
+        ComputeDescription desc = makeDescriptionForHost(enumerationProgress, hs);
+        desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
                 .sendWith(this);
 
-        ComputeState state = makeHostSystemFromResults(enumerationContext, hs);
+        ComputeState state = makeHostSystemFromResults(enumerationProgress, hs);
         state.descriptionLink = desc.documentSelfLink;
-        state.tenantLinks = enumerationContext.getTenantLinks();
-        populateTags(enumerationContext, hs, state);
+        state.tenantLinks = enumerationProgress.getTenantLinks();
+        populateTags(enumerationProgress, hs, state);
 
         logFine(() -> String.format("Found new HostSystem %s", hs.getName()));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
-                .setCompletion(trackHostSystem(enumerationContext, hs))
+                .setCompletion(trackHostSystem(enumerationProgress, hs))
                 .sendWith(this);
     }
 
-    private void populateTags(EnumerationContext enumerationContext, AbstractOverlay obj,
+    private void populateTags(EnumerationProgress enumerationProgress, AbstractOverlay obj,
             ResourceState state) {
-        state.tagLinks = retrieveTagLinksAndCreateTagsAsync(enumerationContext.getEndpoint(),
-                obj.getId(), enumerationContext.getTenantLinks());
+        state.tagLinks = retrieveTagLinksAndCreateTagsAsync(enumerationProgress.getEndpoint(),
+                obj.getId(), enumerationProgress.getTenantLinks());
     }
 
-    private ComputeDescription makeDescriptionForHost(EnumerationContext enumerationContext,
+    private ComputeDescription makeDescriptionForHost(EnumerationProgress enumerationProgress,
             HostSystemOverlay hs) {
         ComputeDescription res = new ComputeDescription();
         res.name = hs.getName();
         res.documentSelfLink =
                 buildUriPath(ComputeDescriptionService.FACTORY_LINK, getHost().nextUUID());
         res.cpuCount = hs.getCoreCount();
-        res.endpointLink = enumerationContext.getRequest().endpointLink;
+        res.endpointLink = enumerationProgress.getRequest().endpointLink;
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
-        res.instanceAdapterReference = enumerationContext
+        res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
-        res.enumerationAdapterReference = enumerationContext
+        res.enumerationAdapterReference = enumerationProgress
                 .getParent().description.enumerationAdapterReference;
-        res.statsAdapterReference = enumerationContext
+        res.statsAdapterReference = enumerationProgress
                 .getParent().description.statsAdapterReference;
-        res.regionId = enumerationContext.getRegionId();
+        res.regionId = enumerationProgress.getRegionId();
 
         return res;
     }
 
-    private ComputeState makeHostSystemFromResults(EnumerationContext enumerationContext,
+    private ComputeState makeHostSystemFromResults(EnumerationProgress enumerationProgress,
             HostSystemOverlay hs) {
         ComputeState state = new ComputeState();
         state.type = ComputeType.VM_HOST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-        state.endpointLink = enumerationContext.getRequest().endpointLink;
+        state.endpointLink = enumerationProgress.getRequest().endpointLink;
         state.id = hs.getId().getValue();
-        state.adapterManagementReference = enumerationContext
+        state.adapterManagementReference = enumerationProgress
                 .getRequest().adapterManagementReference;
-        state.parentLink = enumerationContext.getRequest().resourceLink();
-        state.resourcePoolLink = enumerationContext.getRequest().resourcePoolLink;
-        state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext, hs.getDatastore(), hs.getNetwork());
+        state.parentLink = enumerationProgress.getRequest().resourceLink();
+        state.resourcePoolLink = enumerationProgress.getRequest().resourcePoolLink;
+        state.groupLinks = getConnectedDatastoresAndNetworks(enumerationProgress, hs.getDatastore(), hs.getNetwork());
 
         state.name = hs.getName();
         // TODO: retrieve host power state
@@ -1632,12 +1629,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK,
-                        enumerationContext.getRequest().taskLink())
+                        enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, hs.getId().getType());
         return state;
     }
 
-    private Set<String> getConnectedDatastoresAndNetworks(EnumerationContext ctx,
+    private Set<String> getConnectedDatastoresAndNetworks(EnumerationProgress ctx,
             List<ManagedObjectReference> datastores, List<ManagedObjectReference> networks) {
         Set<String> res = new TreeSet<>();
 
@@ -1660,52 +1657,52 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     /**
-     * @param enumerationContext
+     * @param enumerationProgress
      * @param vm
      */
-    private void processFoundVm(EnumerationContext enumerationContext, VmOverlay vm) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        QueryTask task = queryForVm(enumerationContext, request.resourceLink(), vm.getInstanceUuid());
+    private void processFoundVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), vm.getInstanceUuid());
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewVm(enumerationContext, vm);
+                createNewVm(enumerationProgress, vm);
             } else {
                 ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                updateVm(oldDocument, enumerationContext, vm);
+                updateVm(oldDocument, enumerationProgress, vm);
             }
         });
     }
 
-    private void updateVm(ComputeState oldDocument, EnumerationContext enumerationContext,
+    private void updateVm(ComputeState oldDocument, EnumerationProgress enumerationProgress,
             VmOverlay vm) {
-        ComputeState state = makeVmFromResults(enumerationContext, vm);
+        ComputeState state = makeVmFromResults(enumerationProgress, vm);
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
 
         if (oldDocument.tenantLinks == null) {
-            state.tenantLinks = enumerationContext.getTenantLinks();
+            state.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
-                    trackVm(enumerationContext).handle(o, e);
+                    trackVm(enumerationProgress).handle(o, e);
                     if (e == null) {
-                        updateLocalTags(enumerationContext, vm, o.getBody(ResourceState.class));
+                        updateLocalTags(enumerationProgress, vm, o.getBody(ResourceState.class));
                     }
                 })
                 .sendWith(this);
     }
 
-    private void updateLocalTags(EnumerationContext enumerationContext, AbstractOverlay obj,
+    private void updateLocalTags(EnumerationProgress enumerationProgress, AbstractOverlay obj,
             ResourceState patchResponse) {
         List<TagState> tags;
         try {
-            tags = retrieveAttachedTags(enumerationContext.getEndpoint(),
+            tags = retrieveAttachedTags(enumerationProgress.getEndpoint(),
                     obj.getId(),
-                    enumerationContext.getTenantLinks());
+                    enumerationProgress.getTenantLinks());
         } catch (IOException | RpcException e) {
             logWarning("Error updating local tags for %s", patchResponse.documentSelfLink);
             return;
@@ -1719,17 +1716,17 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         TagsUtil.updateLocalTagStates(this, patchResponse, remoteTagMap);
     }
 
-    private void createNewVm(EnumerationContext enumerationContext, VmOverlay vm) {
-        ComputeDescription desc = makeDescriptionForVm(enumerationContext, vm);
-        desc.tenantLinks = enumerationContext.getTenantLinks();
+    private void createNewVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
+        ComputeDescription desc = makeDescriptionForVm(enumerationProgress, vm);
+        desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
                 .sendWith(this);
 
-        ComputeState state = makeVmFromResults(enumerationContext, vm);
+        ComputeState state = makeVmFromResults(enumerationProgress, vm);
         state.descriptionLink = desc.documentSelfLink;
-        state.tenantLinks = enumerationContext.getTenantLinks();
-        populateTags(enumerationContext, vm, state);
+        state.tenantLinks = enumerationProgress.getTenantLinks();
+        populateTags(enumerationProgress, vm, state);
 
         state.networkInterfaceLinks = new ArrayList<>();
         for (VirtualEthernetCard nic : vm.getNics()) {
@@ -1738,7 +1735,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (backing instanceof VirtualEthernetCardNetworkBackingInfo) {
                 VirtualEthernetCardNetworkBackingInfo veth = (VirtualEthernetCardNetworkBackingInfo) backing;
                 NetworkInterfaceState iface = new NetworkInterfaceState();
-                iface.networkLink = enumerationContext.getNetworkTracker()
+                iface.networkLink = enumerationProgress.getNetworkTracker()
                         .getSelfLink(veth.getNetwork());
                 iface.name = nic.getDeviceInfo().getLabel();
                 iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
@@ -1759,65 +1756,65 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
-                .setCompletion(trackVm(enumerationContext))
+                .setCompletion(trackVm(enumerationProgress))
                 .sendWith(this);
     }
 
-    private ComputeDescription makeDescriptionForVm(EnumerationContext enumerationContext,
+    private ComputeDescription makeDescriptionForVm(EnumerationProgress enumerationProgress,
             VmOverlay vm) {
         ComputeDescription res = new ComputeDescription();
         res.name = vm.getName();
-        res.endpointLink = enumerationContext.getRequest().endpointLink;
+        res.endpointLink = enumerationProgress.getRequest().endpointLink;
         res.documentSelfLink =
                 buildUriPath(ComputeDescriptionService.FACTORY_LINK, getHost().nextUUID());
-        res.instanceAdapterReference = enumerationContext
+        res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
-        res.enumerationAdapterReference = enumerationContext
+        res.enumerationAdapterReference = enumerationProgress
                 .getParent().description.enumerationAdapterReference;
-        res.statsAdapterReference = enumerationContext
+        res.statsAdapterReference = enumerationProgress
                 .getParent().description.statsAdapterReference;
-        res.powerAdapterReference = enumerationContext
+        res.powerAdapterReference = enumerationProgress
                 .getParent().description.powerAdapterReference;
 
-        res.regionId = enumerationContext.getRegionId();
+        res.regionId = enumerationProgress.getRegionId();
 
         res.cpuCount = vm.getNumCpu();
         res.totalMemoryBytes = vm.getMemoryBytes();
         return res;
     }
 
-    private void processFoundResourcePool(EnumerationContext enumerationContext, ResourcePoolOverlay rp,
+    private void processFoundResourcePool(EnumerationProgress enumerationProgress, ResourcePoolOverlay rp,
             String ownerName) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         String selfLink = buildStableResourcePoolLink(rp.getId(), request.endpointLink);
 
         Operation.createGet(this, selfLink)
                 .setCompletion((o, e) -> {
                     if (e == null) {
-                        updateResourcePool(enumerationContext, ownerName, selfLink, rp);
+                        updateResourcePool(enumerationProgress, ownerName, selfLink, rp);
                     } else if (e instanceof ServiceNotFoundException) {
-                        createNewResourcePool(enumerationContext, ownerName, selfLink, rp);
+                        createNewResourcePool(enumerationProgress, ownerName, selfLink, rp);
                     } else {
-                        trackResourcePool(enumerationContext, rp).handle(o, e);
+                        trackResourcePool(enumerationProgress, rp).handle(o, e);
                     }
                 })
                 .sendWith(this);
     }
 
-    private void updateResourcePool(EnumerationContext enumerationContext, String ownerName, String selfLink,
+    private void updateResourcePool(EnumerationProgress enumerationProgress, String ownerName, String selfLink,
             ResourcePoolOverlay rp) {
-        ComputeState state = makeResourcePoolFromResults(enumerationContext, rp, selfLink);
+        ComputeState state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink);
         state.name = rp.makeUserFriendlyName(ownerName);
-        state.tenantLinks = enumerationContext.getTenantLinks();
+        state.tenantLinks = enumerationProgress.getTenantLinks();
         state.resourcePoolLink = null;
 
-        ComputeDescription desc = makeDescriptionForResourcePool(enumerationContext, rp, selfLink);
+        ComputeDescription desc = makeDescriptionForResourcePool(enumerationProgress, rp, selfLink);
         state.descriptionLink = desc.documentSelfLink;
 
         logFine(() -> String.format("Refreshed ResourcePool %s", state.name));
         Operation.createPatch(this, selfLink)
                 .setBody(state)
-                .setCompletion(trackResourcePool(enumerationContext, rp))
+                .setCompletion(trackResourcePool(enumerationProgress, rp))
                 .sendWith(this);
 
         Operation.createPatch(this, desc.documentSelfLink)
@@ -1825,20 +1822,20 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .sendWith(this);
     }
 
-    private void createNewResourcePool(EnumerationContext enumerationContext, String ownerName, String selfLink,
+    private void createNewResourcePool(EnumerationProgress enumerationProgress, String ownerName, String selfLink,
             ResourcePoolOverlay rp) {
-        ComputeState state = makeResourcePoolFromResults(enumerationContext, rp, selfLink);
+        ComputeState state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink);
         state.name = rp.makeUserFriendlyName(ownerName);
-        state.tenantLinks = enumerationContext.getTenantLinks();
+        state.tenantLinks = enumerationProgress.getTenantLinks();
 
-        ComputeDescription desc = makeDescriptionForResourcePool(enumerationContext, rp, selfLink);
-        desc.tenantLinks = enumerationContext.getTenantLinks();
+        ComputeDescription desc = makeDescriptionForResourcePool(enumerationProgress, rp, selfLink);
+        desc.tenantLinks = enumerationProgress.getTenantLinks();
         state.descriptionLink = desc.documentSelfLink;
 
         logFine(() -> String.format("Found new ResourcePool %s", state.name));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
-                .setCompletion(trackResourcePool(enumerationContext, rp))
+                .setCompletion(trackResourcePool(enumerationProgress, rp))
                 .sendWith(this);
 
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
@@ -1846,9 +1843,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .sendWith(this);
     }
 
-    private ComputeState makeResourcePoolFromResults(EnumerationContext enumerationContext, ResourcePoolOverlay rp,
+    private ComputeState makeResourcePoolFromResults(EnumerationProgress enumerationProgress, ResourcePoolOverlay rp,
             String selfLink) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
 
         ComputeState state = new ComputeState();
         state.documentSelfLink = selfLink;
@@ -1857,19 +1854,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.type = ComputeType.VM_HOST;
         state.powerState = PowerState.ON;
         state.endpointLink = request.endpointLink;
-        state.parentLink = enumerationContext.getRequest().resourceLink();
+        state.parentLink = enumerationProgress.getRequest().resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
 
         ManagedObjectReference owner = rp.getOwner();
-        AbstractOverlay ov = enumerationContext.getOverlay(owner);
+        AbstractOverlay ov = enumerationProgress.getOverlay(owner);
         if (ov instanceof ComputeResourceOverlay) {
             ComputeResourceOverlay cr = (ComputeResourceOverlay) ov;
-            state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext,
+            state.groupLinks = getConnectedDatastoresAndNetworks(enumerationProgress,
                     cr.getDatastore(), cr.getNetwork());
         } else if (ov instanceof HostSystemOverlay) {
             HostSystemOverlay cr = (HostSystemOverlay) ov;
-            state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext,
+            state.groupLinks = getConnectedDatastoresAndNetworks(enumerationProgress,
                     cr.getDatastore(), cr.getNetwork());
         }
 
@@ -1881,12 +1878,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return state;
     }
 
-    private CompletionHandler trackResourcePool(EnumerationContext enumerationContext, ResourcePoolOverlay rp) {
+    private CompletionHandler trackResourcePool(EnumerationProgress enumerationProgress, ResourcePoolOverlay rp) {
         return (o, e) -> {
             if (e == null) {
-                enumerationContext.getResourcePoolTracker().track(rp.getId(), getSelfLinkFromOperation(o));
+                enumerationProgress.getResourcePoolTracker().track(rp.getId(), getSelfLinkFromOperation(o));
             } else {
-                enumerationContext.getResourcePoolTracker().track(rp.getId(), ResourceTracker.ERROR);
+                enumerationProgress.getResourcePoolTracker().track(rp.getId(), ResourceTracker.ERROR);
             }
         };
     }
@@ -1899,12 +1896,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     /**
      * Make a ComputeState from the request and a vm found in vsphere.
      *
-     * @param enumerationContext
+     * @param enumerationProgress
      * @param vm
      * @return
      */
-    private ComputeState makeVmFromResults(EnumerationContext enumerationContext, VmOverlay vm) {
-        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+    private ComputeState makeVmFromResults(EnumerationProgress enumerationProgress, VmOverlay vm) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
 
         ComputeState state = new ComputeState();
         state.type = ComputeType.VM_GUEST;
@@ -1914,14 +1911,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.parentLink = request.resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
 
-        state.instanceAdapterReference = enumerationContext.getParent()
+        state.instanceAdapterReference = enumerationProgress.getParent()
                 .description.instanceAdapterReference;
-        state.enumerationAdapterReference = enumerationContext.getParent()
+        state.enumerationAdapterReference = enumerationProgress.getParent()
                 .description.enumerationAdapterReference;
-        state.powerAdapterReference = enumerationContext.getParent()
+        state.powerAdapterReference = enumerationProgress.getParent()
                 .description.powerAdapterReference;
 
-        state.regionId = enumerationContext.getRegionId();
+        state.regionId = enumerationProgress.getRegionId();
         state.cpuCount = new Long(vm.getNumCpu());
         state.totalMemoryBytes = vm.getMemoryBytes();
 
@@ -1974,7 +1971,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param instanceUuid
      * @return
      */
-    private QueryTask queryForVm(EnumerationContext ctx, String parentComputeLink,
+    private QueryTask queryForVm(EnumerationProgress ctx, String parentComputeLink,
             String instanceUuid) {
         Builder builder = Query.Builder.create()
                 .addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid)
@@ -1996,7 +1993,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param moRefId
      * @return
      */
-    private QueryTask queryForHostSystem(EnumerationContext ctx, String parentComputeLink, String moRefId) {
+    private QueryTask queryForHostSystem(EnumerationProgress ctx, String parentComputeLink, String moRefId) {
         Builder builder = Query.Builder.create()
                 .addFieldClause(ComputeState.FIELD_NAME_ID, moRefId)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink);
