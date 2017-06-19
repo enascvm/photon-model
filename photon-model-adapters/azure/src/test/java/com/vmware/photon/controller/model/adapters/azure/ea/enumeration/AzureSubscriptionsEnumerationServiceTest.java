@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAME_SEPARATOR;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -34,19 +35,21 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
-import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.azure.ea.enumeration
+        .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources
+        .ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -211,6 +214,47 @@ public class AzureSubscriptionsEnumerationServiceTest {
          * Add a non ea azure subscription now and check if it has cost
          */
         testAddNonEaAzureSubscriptionLater();
+    }
+
+
+    @Test
+    public void testConstructSubscriptionName() {
+        String subzId = "subscriptionId";
+        String accountOwnerId = "account@ownerId.com";
+        String accountName = "Account Name";
+        String subzName = "Subscription Name";
+
+        AzureSubscription subz = new AzureSubscription();
+        subz.entityId = subzId;
+        subz.parentEntityId = accountOwnerId;
+        subz.parentEntityName = accountName;
+        subz.entityName = subzName;
+        String constructedSubzName = AzureUtils.constructSubscriptionName(subz);
+        String correctSubzName = accountName + COMPUTE_NAME_SEPARATOR + subzName;
+        Assert.assertEquals("Subscription name is not correct.", correctSubzName,
+                constructedSubzName);
+
+        // if account name is not available, subscription ID should be displayed
+        subz.parentEntityName = null;
+        correctSubzName = subzId;
+        constructedSubzName = AzureUtils.constructSubscriptionName(subz);
+        Assert.assertEquals("Subscription name is not correct.", correctSubzName,
+                constructedSubzName);
+
+        // if account name is not available, subscription ID should be displayed
+        subz.parentEntityName = " ";
+        correctSubzName = subzId;
+        constructedSubzName = AzureUtils.constructSubscriptionName(subz);
+        Assert.assertEquals("Subscription name is not correct.", correctSubzName,
+                constructedSubzName);
+
+        // if subscription name is not available, subscription ID should be displayed
+        subz.entityName = " ";
+        correctSubzName = subzId;
+        constructedSubzName = AzureUtils.constructSubscriptionName(subz);
+        Assert.assertEquals("Subscription name is not correct.", correctSubzName,
+                constructedSubzName);
+
     }
 
     private void  testAddNonEaAzureSubscriptionLater() throws Throwable {

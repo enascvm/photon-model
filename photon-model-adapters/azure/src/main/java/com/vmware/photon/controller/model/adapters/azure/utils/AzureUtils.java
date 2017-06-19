@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAME_SEPARATOR;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
 import java.net.URI;
@@ -49,12 +50,14 @@ import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceResponseBuilder.Factory;
 
 import okhttp3.OkHttpClient;
+import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext;
+import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -92,8 +95,11 @@ public class AzureUtils {
     private static final String VIRTUAL_MACHINE_ID_FORMAT =
             "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s";
 
-    //azure-subscriptionId
-    private static final String COMPUTES_NAME_FORMAT = "%s-%s";
+    // subscriptionId
+    public static final String COMPUTES_NAME_FORMAT_WITH_ENTITY_ID = "%s";
+    // ownerName-subscriptionName
+    public static final String COMPUTES_NAME_FORMAT_WITH_PARENT_NAME_ENTITY_NAME =
+            "%s" + COMPUTE_NAME_SEPARATOR + "%s";
 
     /**
      * Flag to use azure-mock, will be set in test files. Azure-mock is a tool for testing
@@ -369,12 +375,11 @@ public class AzureUtils {
     }
 
     public static ComputeState constructAzureSubscriptionComputeState(String endpointLink,
-            String descriptionLink, List<String> tenantLinks, String subscriptionId,
+            String descriptionLink, List<String> tenantLinks, String entityName,
             String resourcePoolLink, Map<String, String> customProperties, String name) {
         ComputeState cs = new ComputeState();
         cs.id = UUID.randomUUID().toString();
-        cs.name = name != null ? name :
-                String.format(COMPUTES_NAME_FORMAT, EndpointType.azure.name(), subscriptionId);
+        cs.name = name != null ? name : entityName;
         cs.tenantLinks = tenantLinks;
         cs.endpointLink = endpointLink;
         if (customProperties == null) {
@@ -398,7 +403,7 @@ public class AzureUtils {
         cd.tenantLinks = tenantLinks;
         cd.endpointLink = endpointLink;
         cd.name = name != null ? name :
-                String.format(COMPUTES_NAME_FORMAT, EndpointType.azure.name(), subscriptionId);
+                String.format(COMPUTES_NAME_FORMAT_WITH_ENTITY_ID, subscriptionId);
         cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         cd.id = UUID.randomUUID().toString();
         if (customProperties == null) {
@@ -552,6 +557,27 @@ public class AzureUtils {
                 .forEach(ex -> service.getHost().log(Level.WARNING, String.format("Error: %s",
                         ex.getMessage())));
         parentOp.fail(exs.get(firstKey));
+    }
+
+    /**
+     * The name assigned to the auto-discovered subscription would be as follows:
+     * If the subscription owner's name is available:
+     *     name = ownersName-subscriptionName
+     * Otherwise,
+     *     name = subscriptionGuid
+     * @param subscription the Azure subscription whose name has to be constructed.
+     * @return the name for the Azure subscription.
+     */
+    public static String constructSubscriptionName(AzureSubscription subscription) {
+        if (StringUtils.isNotBlank(subscription.parentEntityName) && StringUtils
+                .isNotBlank(subscription.entityName)) {
+            return String
+                    .format(AzureUtils.COMPUTES_NAME_FORMAT_WITH_PARENT_NAME_ENTITY_NAME,
+                            subscription.parentEntityName, subscription.entityName);
+        } else {
+            return String
+                    .format(AzureUtils.COMPUTES_NAME_FORMAT_WITH_ENTITY_ID, subscription.entityId);
+        }
     }
 
     /**

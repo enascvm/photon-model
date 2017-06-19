@@ -59,6 +59,7 @@ public class AzureConstants {
     //Bearer <apiKey>
     public static final String AZURE_EA_AUTHORIZATION_HEADER_FORMAT = "Bearer %s";
 
+    public static final String COMPUTE_NAME_SEPARATOR = "-";
 
     // Azure Namespace
     public static final String COMPUTE_NAMESPACE = "Microsoft.Compute";

@@ -353,11 +353,11 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                                     return;
                                 }
                                 ComputeDescription cd = o.getBody(ComputeDescription.class);
+                                String csName = AzureUtils.constructSubscriptionName(subscription);
                                 computesToCreate.add(AzureUtils
                                         .constructAzureSubscriptionComputeState(
                                         enumerationContext.parent.endpointLink, cd.documentSelfLink,
-                                        enumerationContext.parent.tenantLinks,
-                                        subscription.entityId,
+                                        enumerationContext.parent.tenantLinks, csName,
                                         enumerationContext.parent.resourcePoolLink,
                                         getPropertiesMap(enumerationContext, subscription,
                                                 true), null));
