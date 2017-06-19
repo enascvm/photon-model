@@ -26,13 +26,40 @@ public class InstanceTypeList {
          * The internal identification used by the endpoint.
          */
         public String id;
+
         /**
          * Human readable description of the instance type.
          */
         public String name;
 
         /**
+         * Number of CPU cores. {@code null} when not applicable.
+         */
+        public Integer cpuCount;
+
+        /**
+         * Total amount of memory (in megabytes). {@code null} when not applicable.
+         */
+        public Integer memoryInMB;
+
+        /**
+         * Size of the boot disk (in megabytes). {@code null} when not applicable.
+         */
+        public Integer bootDiskSizeInMB;
+
+        /**
+         * Size of the data disks (in megabytes). {@code null} when not applicable.
+         */
+        public Integer dataDiskSizeInMB;
+
+        /**
+         * Number of data disks. {@code null} when not applicable.
+         */
+        public Integer dataDiskMaxCount;
+
+        /**
          * Constructs an instance type instance.
+         *
          * @param id
          * @param name
          */
