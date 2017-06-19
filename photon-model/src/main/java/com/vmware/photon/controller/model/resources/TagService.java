@@ -47,13 +47,13 @@ public class TagService extends StatefulService {
         @Documentation(description = "Tag key")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @PropertyOptions(indexing = PropertyIndexingOption.CASE_INSENSITIVE)
+        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
         public String key;
 
         @Documentation(description = "Tag value, empty string used for none (null not accepted)")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @PropertyOptions(indexing = PropertyIndexingOption.CASE_INSENSITIVE)
+        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
         public String value;
 
         @Documentation(description = "A list of tenant links that can access this tag")
