@@ -264,7 +264,7 @@ public class AzureInstanceService extends StatelessService {
      * {@link #handleAllocation(AzureInstanceContext)}.
      */
     private void handleAllocation(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
-        logFine(() -> String.format("Transition to " + nextStage));
+        logFine(() -> "Transition to " + nextStage);
         ctx.stage = nextStage;
         handleAllocation(ctx);
     }
@@ -373,14 +373,14 @@ public class AzureInstanceService extends StatelessService {
                 break;
             case CREATE:
                 // Finally provision the VM
-                createVM(ctx, AzureInstanceStage.GET_PUBLIC_IP_ADDRESS);
+                createVM(ctx, AzureInstanceStage.UPDATE_NETWORK_DETAILS);
                 break;
             case ENABLE_MONITORING:
                 // TODO VSYM-620: Enable monitoring on Azure VMs
                 enableMonitoring(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
                 break;
-            case GET_PUBLIC_IP_ADDRESS:
-                getPublicIpAddress(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
+            case UPDATE_NETWORK_DETAILS:
+                updateNetworkDetails(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
                 break;
             case GET_STORAGE_KEYS:
                 getStorageKeys(ctx, AzureInstanceStage.FINISHED);
@@ -471,9 +471,7 @@ public class AzureInstanceService extends StatelessService {
                                 "Invalid resource group parameter. %s",
                                 body.message());
 
-                        IllegalStateException e = new IllegalStateException(invalidParameterMsg,
-                                exc);
-                        return e;
+                        return new IllegalStateException(invalidParameterMsg, exc);
                     }
                 }
                 return exc;
@@ -781,7 +779,7 @@ public class AzureInstanceService extends StatelessService {
         // Get NICs with not existing subnets
         List<SubnetInner> subnetsToCreate = ctx.nics.stream()
                 .filter(nicCtx -> nicCtx.subnet == null)
-                .map(nicCtx -> newAzureSubnet(nicCtx))
+                .map(this::newAzureSubnet)
                 .collect(Collectors.toList());
 
         if (subnetsToCreate.isEmpty()) {
@@ -1000,9 +998,9 @@ public class AzureInstanceService extends StatelessService {
 
         List<DeferredResult<NetworkSecurityGroupInner>> createSGDR = ctx.nics.stream()
                 .filter(nicCtx -> (
-                // Security Group is requested but no existing security group is mapped.
-                nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
-                        && nicCtx.securityGroup == null))
+                        // Security Group is requested but no existing security group is mapped.
+                        nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
+                                && nicCtx.securityGroup == null))
                 .map(nicCtx -> {
                     SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
                     NetworkSecurityGroupInner nsg = newAzureSecurityGroup(ctx, sgState);
@@ -1174,8 +1172,8 @@ public class AzureInstanceService extends StatelessService {
         sendWithDeferredResult(
                 Operation.createPatch(ctx.computeRequest.resourceReference)
                         .setBody(cs))
-                                .thenApply(op -> ctx)
-                                .whenComplete(thenAllocation(ctx, nextStage));
+                .thenApply(op -> ctx)
+                .whenComplete(thenAllocation(ctx, nextStage));
     }
 
     /**
@@ -1376,85 +1374,111 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * Gets the public IP address from the VM (if exists) and patches the compute state and primary
-     * NIC state.
+     * Update Network related local state details with the actual data from Azure.
+     * This includes:
+     * <ul>
+     * <li>setting the public address to the ComputeState</li>
+     * <li>setting private IP addresses to NetworkInterfaceState objects</li>
+     * </ul>
      */
-    private void getPublicIpAddress(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+    private void updateNetworkDetails(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
+        DeferredResult.completed(ctx)
+                .thenCompose(this::getPublicIPAddress)
+                .thenCompose(this::updateComputeState)
+                .thenCompose(this::updateNicStates)
+                .whenComplete(thenAllocation(ctx, nextStage));
+    }
+
+    private DeferredResult<AzureInstanceContext> getPublicIPAddress(AzureInstanceContext ctx) {
         if (ctx.getPrimaryNic().publicIP == null) {
-            // No public IP address created.
-            handleAllocation(ctx, nextStage);
-            return;
+            // No public IP address created -> do nothing.
+            return DeferredResult.completed(ctx);
         }
 
         NetworkManagementClientImpl client = getNetworkManagementClientImpl(ctx);
+
+        String msg = "Get public IP address for resource group [" + ctx.resourceGroup.name()
+                + "] and name [" + ctx.getPrimaryNic().publicIP.name() + "].";
+
+        AzureDeferredResultServiceCallback<PublicIPAddressInner> callback = new
+                AzureDeferredResultServiceCallback<PublicIPAddressInner>(ctx.service, msg) {
+                    @Override
+                    protected DeferredResult<PublicIPAddressInner> consumeSuccess(
+                            PublicIPAddressInner result) {
+
+                        ctx.getPrimaryNic().publicIP = result;
+                        return DeferredResult.completed(result);
+                    }
+                };
 
         client.publicIPAddresses().getByResourceGroupAsync(
                 ctx.resourceGroup.name(),
                 ctx.getPrimaryNic().publicIP.name(),
                 null /* expand */,
-                new AzureAsyncCallback<PublicIPAddressInner>() {
+                callback);
 
-                    @Override
-                    public void onError(Throwable e) {
-                        handleError(ctx, e);
-                    }
+        return callback.toDeferredResult().thenApply(ignored -> ctx);
+    }
 
-                    @Override
-                    public void onSuccess(PublicIPAddressInner result) {
-                        ctx.getPrimaryNic().publicIP = result;
+    private DeferredResult<AzureInstanceContext> updateComputeState(AzureInstanceContext ctx) {
+        if (ctx.getPrimaryNic().publicIP == null) {
+            // Do nothing.
+            return DeferredResult.completed(ctx);
+        }
 
-                        OperationJoin operationJoin = OperationJoin
-                                .create(patchComputeState(ctx), patchNICState(ctx))
-                                .setCompletion((ops, excs) -> {
-                                    if (excs != null) {
-                                        handleError(ctx, new IllegalStateException(
-                                                "Error patching compute state and primary NIC state with VM Public IP address."));
-                                        return;
-                                    }
-                                    handleAllocation(ctx, nextStage);
-                                });
-                        operationJoin.sendWith(AzureInstanceService.this);
-                    }
+        ComputeState computeState = new ComputeState();
 
-                    private Operation patchComputeState(AzureInstanceContext ctx) {
+        computeState.address = ctx.getPrimaryNic().publicIP.ipAddress();
 
-                        ComputeState computeState = new ComputeState();
+        Operation updateCS = Operation.createPatch(ctx.computeRequest
+                .resourceReference)
+                .setBody(computeState);
 
-                        computeState.address = ctx.getPrimaryNic().publicIP.ipAddress();
-
-                        return Operation.createPatch(ctx.computeRequest.resourceReference)
-                                .setBody(computeState)
-                                .setCompletion((op, exc) -> {
-                                    if (exc == null) {
-                                        logFine(() -> String.format("Patching compute state with VM"
-                                                + " Public IP address [%s]: SUCCESS",
-                                                computeState.address));
-                                    }
-                                });
-
-                    }
-
-                    private Operation patchNICState(AzureInstanceContext ctx) {
-
-                        NetworkInterfaceState primaryNicState = new NetworkInterfaceState();
-
-                        primaryNicState.address = ctx.getPrimaryNic().publicIP.ipAddress();
-
-                        URI primaryNicUri = UriUtils.buildUri(getHost(),
-                                ctx.getPrimaryNic().nicStateWithDesc.documentSelfLink);
-
-                        return Operation.createPatch(primaryNicUri)
-                                .setBody(primaryNicState)
-                                .setCompletion((op, exc) -> {
-                                    if (exc == null) {
-                                        logFine(() -> String.format("Patching primary NIC state"
-                                                + " with VM Public IP address [%s] : SUCCESS",
-                                                primaryNicState.address));
-                                    }
-                                });
-
-                    }
+        return ctx.service
+                .sendWithDeferredResult(updateCS)
+                .thenApply(ignore -> {
+                    logFine(() -> String.format("Patching compute state with VM"
+                                    + " Public IP address [%s]: SUCCESS",
+                            computeState.address));
+                    return ctx;
                 });
+    }
+
+    private DeferredResult<AzureInstanceContext> updateNicStates(AzureInstanceContext ctx) {
+        if (ctx.nics == null || ctx.nics.isEmpty()) {
+            // Do nothing.
+            return DeferredResult.completed(ctx);
+        }
+
+        List<DeferredResult<Void>> updateNICsDR = new ArrayList<>(ctx.nics.size());
+
+        for (AzureNicContext nicCtx : ctx.nics) {
+            if (nicCtx.nic == null) {
+                continue;
+            }
+
+            NetworkInterfaceState nicState = new NetworkInterfaceState();
+            nicState.id = nicCtx.nic.id();
+
+            if (nicCtx.nic.ipConfigurations() != null && !nicCtx.nic.ipConfigurations().isEmpty()) {
+                nicState.address = nicCtx.nic.ipConfigurations().get(0).privateIPAddress();
+            }
+
+            URI nicUri = UriUtils.buildUri(getHost(), nicCtx.nicStateWithDesc.documentSelfLink);
+            Operation updateNic = Operation.createPatch(nicUri).setBody(nicState);
+
+            DeferredResult<Void> updateDR = ctx.service.sendWithDeferredResult(updateNic)
+                    .thenAccept(ignored ->
+                            logFine(() -> String.format(
+                                    "Patching NIC state with name [%s] : SUCCESS",
+                                    nicCtx.nic.name())));
+
+            updateNICsDR.add(updateDR);
+        }
+
+        return DeferredResult.allOf(updateNICsDR)
+                .thenApply(ignored -> ctx);
     }
 
     /**
@@ -1962,7 +1986,7 @@ public class AzureInstanceService extends StatelessService {
 
         private final AzureInstanceContext ctx;
 
-        public StorageAccountProvisioningCallback(AzureInstanceContext ctx, String message) {
+        StorageAccountProvisioningCallback(AzureInstanceContext ctx, String message) {
             super(ctx.service, message);
 
             this.ctx = ctx;

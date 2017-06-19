@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -400,27 +401,26 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 NetworkInterfaceStateWithDescription.buildUri(
                         UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(0))));
 
+        assertNotNull("Primary NIC private IP should be set.", primaryNicState.address);
         if (primaryNicState.description.assignPublicIpAddress == null ||
                 primaryNicState.description.assignPublicIpAddress == Boolean.TRUE) {
             assertNotNull("VM address should be set.", vm.address);
-            assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
+            assertNotEquals("VM address should not be the same as primary NIC private IP.",
+                    vm.address,
+                    primaryNicState.address);
         } else {
             assertNull("VM address should be empty.", vm.address);
-            assertNull("Primary NIC public IP should be set.", primaryNicState.address);
         }
 
         assertNotNull("Primary NIC security group should be set.",
                 primaryNicState.securityGroupLinks != null);
-
-        assertEquals("VM address should be the same as primary NIC public IP.", vm.address,
-                primaryNicState.address);
 
         for (int i = 1; i < vm.networkInterfaceLinks.size(); i++) {
             NetworkInterfaceState nonPrimaryNicState = this.host.getServiceState(null,
                     NetworkInterfaceState.class,
                     UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(i)));
 
-            assertNull("Non-primary NIC" + i + " public IP should not be set.",
+            assertNotNull("Non-primary NIC" + i + " IP should not be set to the privatese ip.",
                     nonPrimaryNicState.address);
             assertNull("Non-primary NIC" + i + " security group should not be set.",
                     nonPrimaryNicState.securityGroupLinks);
