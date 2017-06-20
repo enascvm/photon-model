@@ -100,8 +100,13 @@ public class CustomizationClient extends BaseHelper {
     public void customizeDns(Set<String> dnsServers, Set<String> dnsSearchDomains,
             CustomizationSpec template) {
         CustomizationGlobalIPSettings settings = new CustomizationGlobalIPSettings();
-        settings.getDnsServerList().addAll(dnsServers);
-        settings.getDnsSuffixList().addAll(dnsSearchDomains);
+        if (dnsServers != null) {
+            settings.getDnsServerList().addAll(dnsServers);
+        }
+
+        if (dnsSearchDomains != null) {
+            settings.getDnsSuffixList().addAll(dnsSearchDomains);
+        }
 
         template.setGlobalIPSettings(settings);
     }
