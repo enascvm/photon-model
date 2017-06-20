@@ -17,27 +17,21 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.microsoft.azure.SubResource;
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
-import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 import com.microsoft.azure.management.network.implementation.PublicIPAddressInner;
 import com.microsoft.azure.management.network.implementation.SubnetInner;
 import com.microsoft.azure.management.network.implementation.SubnetsInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
-import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
-import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
-import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
@@ -56,7 +50,8 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  * Context object to store relevant information during different stages.
  */
 public class AzureInstanceContext extends
-        BaseComputeInstanceContext<AzureInstanceContext, AzureInstanceContext.AzureNicContext> {
+        BaseComputeInstanceContext<AzureInstanceContext, AzureInstanceContext.AzureNicContext>
+        implements AutoCloseable {
 
     /**
      * The class encapsulates NIC related data (both Photon Model and Azure model) used during
@@ -81,21 +76,9 @@ public class AzureInstanceContext extends
         public PublicIPAddressInner publicIP;
 
         /**
-         * The public IP address sub resource ID. Maps an ID string with IP address, required by
-         * Azure.
-         */
-        SubResource publicIPSubResource;
-
-        /**
          * The security group this NIC is assigned to. It is created by this service.
          */
         public NetworkSecurityGroupInner securityGroup;
-
-        /**
-         * The security group sub resource ID. Maps an ID string with security group, required by
-         * Azure.
-         */
-        SubResource securityGroupSubResource;
 
         /**
          * The resource group state the security group is member of. Optional.
@@ -109,7 +92,8 @@ public class AzureInstanceContext extends
          */
         public SecurityGroupState securityGroupState() {
             return this.securityGroupStates != null && !this.securityGroupStates.isEmpty()
-                    ? this.securityGroupStates.get(0) : null;
+                    ? this.securityGroupStates.get(0)
+                    : null;
         }
     }
 
@@ -120,25 +104,32 @@ public class AzureInstanceContext extends
     public StorageDescription storageDescription;
     public DiskService.DiskStateExpanded bootDisk;
     public List<DiskService.DiskStateExpanded> childDisks;
+
     public String vmName;
     public String vmId;
 
-    // Azure specific context
-    public ApplicationTokenCredentials credentials;
+    // Azure specific context {{
+    //
+    public AzureSdkClients azureSdkClients;
+
+    // The RG the VM provisioning lands
     public ResourceGroupInner resourceGroup;
-    public StorageAccountInner storage;
 
     public String storageAccountName;
     public String storageAccountRGName;
+    public StorageAccountInner storageAccount;
 
     public ImageSource imageSource;
     public ImageReferenceInner imageReference;
+    // }}
 
-    public ResourceManagementClientImpl resourceManagementClient;
-    public NetworkManagementClientImpl networkManagementClient;
-    public StorageManagementClientImpl storageManagementClient;
-    public ComputeManagementClientImpl computeManagementClient;
-    public RestClient restClient;
+    @Override
+    public void close() {
+        if (this.azureSdkClients != null) {
+            this.azureSdkClients.close();
+            this.azureSdkClients = null;
+        }
+    }
 
     public AzureInstanceContext(AzureInstanceService service,
             ComputeInstanceRequest computeRequest) {
@@ -160,11 +151,19 @@ public class AzureInstanceContext extends
 
     @Override
     protected DeferredResult<AzureInstanceContext> customizeContext(AzureInstanceContext context) {
+
         return DeferredResult.completed(context)
+                .thenCompose(this::getNicNetworkResourceGroupStates)
+                .thenApply(log("getNicNetworkResourceGroupStates"))
+
                 .thenCompose(this::getNicSecurityGroupResourceGroupStates)
                 .thenApply(log("getNicSecurityGroupResourceGroupStates"))
-                .thenCompose(this::getNetworks).thenApply(log("getNetworks"))
-                .thenCompose(this::getSecurityGroups).thenApply(log("getSecurityGroups"));
+
+                .thenCompose(this::getNetworks)
+                .thenApply(log("getNetworks"))
+
+                .thenCompose(this::getSecurityGroups)
+                .thenApply(log("getSecurityGroups"));
     }
 
     /**
@@ -243,8 +242,8 @@ public class AzureInstanceContext extends
             return DeferredResult.completed(context);
         }
 
-        NetworkSecurityGroupsInner azureClient = service()
-                .getNetworkManagementClientImpl(context)
+        NetworkSecurityGroupsInner azureClient = context.azureSdkClients
+                .getNetworkManagementClientImpl()
                 .networkSecurityGroups();
 
         List<DeferredResult<NetworkSecurityGroupInner>> getSecurityGroupDRs = context.nics
@@ -293,6 +292,41 @@ public class AzureInstanceContext extends
     }
 
     /**
+     * Get {@link ResourceGroupState}s of the {@code NetworkState}s the NICs are assigned to. If any
+     * of the RGs is not specified or not found leave the {@link AzureNicContext#networkRGState} as
+     * null and proceed without an exception.
+     */
+    protected DeferredResult<AzureInstanceContext> getNicNetworkResourceGroupStates(
+            AzureInstanceContext context) {
+
+        if (context.nics.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
+        List<DeferredResult<Void>> getStatesDR = context.nics.stream()
+
+                .filter(nicCtx -> nicCtx.networkState != null
+                        && nicCtx.networkState.groupLinks != null
+                        && !nicCtx.networkState.groupLinks.isEmpty())
+
+                .map(nicCtx -> filterRGsByType(context, nicCtx.networkState.groupLinks)
+                        .thenAccept(rgState -> nicCtx.networkRGState = rgState))
+
+                .collect(Collectors.toList());
+
+        return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
+            if (exc != null) {
+                String msg = String.format(
+                        "Error getting ResourceGroup states of NIC Network states for [%s] VM",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
+            }
+            return context;
+        });
+
+    }
+
+    /**
      * Get {@link ResourceGroupState}s of the {@link SecurityGroupState}s the NICs are assigned to.
      * If any of the RGs is not specified or not found leave the
      * {@link AzureNicContext#securityGroupRGState} as null and proceed without an exception.
@@ -304,85 +338,34 @@ public class AzureInstanceContext extends
             return DeferredResult.completed(context);
         }
 
-        List<DeferredResult<Void>> getStatesDR = context.nics
-                .stream()
+        List<DeferredResult<Void>> getStatesDR = context.nics.stream()
+
                 .filter(nicCtx -> nicCtx.securityGroupState() != null
                         && nicCtx.securityGroupState().groupLinks != null
                         && !nicCtx.securityGroupState().groupLinks.isEmpty())
-                .map(nicCtx -> {
-                    DeferredResult<ResourceGroupState> filteredRGStates = queryFirstRGFilterByType(
-                            context, nicCtx.securityGroupState().groupLinks);
 
-                    return filteredRGStates
-                            .thenApply(resourceGroupState -> {
+                .map(nicCtx -> filterRGsByType(
+                        context, nicCtx.securityGroupState().groupLinks)
+                                .thenAccept(rgState -> nicCtx.securityGroupRGState = rgState))
 
-                                nicCtx.securityGroupRGState = resourceGroupState;
-
-                                return (Void) null;
-                            });
-
-                }).collect(Collectors.toList());
+                .collect(Collectors.toList());
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
                 String msg = String.format(
-                        "Error getting ResourceGroup states of NIC Security Group states for "
-                                + "[%s] VM.",
+                        "Error getting ResourceGroup states of NIC Security Group states for  [%s] VM.",
                         context.child.name);
                 throw new IllegalStateException(msg, exc);
             }
             return context;
         });
-    }
-
-    /**
-     * Get {@link ResourceGroupState}s of the {@code NetworkState}s the NICs are assigned to.
-     */
-    @Override
-    protected DeferredResult<AzureInstanceContext> getNicNetworkResourceGroupStates(
-            AzureInstanceContext context) {
-        if (context.nics.isEmpty()) {
-            return DeferredResult.completed(context);
-        }
-
-        List<DeferredResult<Void>> getStatesDR = context.nics
-                .stream()
-                .filter(nicCtx -> nicCtx.networkState != null
-                        && nicCtx.networkState.groupLinks != null
-                        && !nicCtx.networkState.groupLinks.isEmpty())
-                .map(nicCtx -> {
-
-                    DeferredResult<ResourceGroupState> filteredRGStates = queryFirstRGFilterByType(
-                            context, nicCtx.networkState.groupLinks);
-
-                    return filteredRGStates
-                            .thenApply(resourceGroupState -> {
-
-                                nicCtx.networkRGState = resourceGroupState;
-
-                                return (Void) null;
-                            });
-
-                }).collect(Collectors.toList());
-
-        return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
-            if (exc != null) {
-                String msg = String.format(
-                        "Error getting ResourceGroup states of NIC Network states for "
-                                + "[%s] VM.",
-                        context.child.name);
-                throw new IllegalStateException(msg, exc);
-            }
-            return context;
-        });
-
     }
 
     /**
      * Utility method for filtering resource group list by type, and returning the first one, which
      * is of ResourceGroupStateType.AzureResourceGroup type.
      */
-    private DeferredResult<ResourceGroupState> queryFirstRGFilterByType(
+    private DeferredResult<ResourceGroupState> filterRGsByType(
             AzureInstanceContext context, Set<String> groupLinks) {
 
         Query.Builder qBuilder = Query.Builder.create()
@@ -402,7 +385,8 @@ public class AzureInstanceContext extends
                         // only one group is required
                         .setMaxResultsLimit(1);
 
-        return queryByPages.collectDocuments(Collectors.toList())
+        return queryByPages
+                .collectDocuments(Collectors.toList())
                 .thenApply(rgStates -> rgStates.stream().findFirst().orElse(null));
     }
 
@@ -426,4 +410,5 @@ public class AzureInstanceContext extends
 
         return image.diskConfigs.get(0);
     }
+
 }

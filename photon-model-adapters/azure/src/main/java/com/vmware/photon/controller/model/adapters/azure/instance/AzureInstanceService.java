@@ -30,9 +30,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getStorageAccountKeyName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -124,6 +121,7 @@ import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.Azure
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -316,10 +314,9 @@ public class AzureInstanceService extends StatelessService {
         try {
             switch (ctx.stage) {
             case CLIENT:
-                if (ctx.credentials == null) {
-                    ctx.credentials = getAzureConfig(ctx.parentAuth);
+                if (ctx.azureSdkClients == null) {
+                    ctx.azureSdkClients = new AzureSdkClients(this.executorService, ctx.parentAuth);
                 }
-                // now that we have a client lets move onto the next step
                 switch (ctx.computeRequest.requestType) {
                 case CREATE:
                     handleAllocation(ctx, AzureInstanceStage.CHILDAUTH);
@@ -415,7 +412,8 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        SubscriptionClientImpl subscriptionClient = new SubscriptionClientImpl(ctx.credentials);
+        SubscriptionClientImpl subscriptionClient = new SubscriptionClientImpl(
+                ctx.azureSdkClients.credentials);
 
         subscriptionClient.subscriptions().getAsync(
                 ctx.parentAuth.userLink, new ServiceCallback<SubscriptionInner>() {
@@ -557,13 +555,15 @@ public class AzureInstanceService extends StatelessService {
     private void finishWithFailure(AzureInstanceContext ctx) {
         // Report the error back to the caller
         ctx.taskManager.patchTaskToFailure(ctx.error);
-        cleanUpHttpClient(ctx.restClient.httpClient());
+
+        ctx.close();
     }
 
     private void finishWithSuccess(AzureInstanceContext ctx) {
         // Report the success back to the caller
         ctx.taskManager.finishTask();
-        cleanUpHttpClient(ctx.restClient.httpClient());
+
+        ctx.close();
     }
 
     private void createResourceGroup(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -600,13 +600,22 @@ public class AzureInstanceService extends StatelessService {
     private DeferredResult<AzureInstanceContext> resolveStorageAccountForPrivateImage(
             AzureInstanceContext ctx) {
 
-        final String imageOsDiskUri = ctx.imageOsDisk().properties.get(AZURE_OSDISK_BLOB_URI);
+        DiskConfiguration imageOsDisk = ctx.imageOsDisk();
+        if (imageOsDisk == null) {
+            return DeferredResult.failed(new IllegalArgumentException(
+                    "Image OS DiskConfiguration is missing from ImageState"));
+        }
+
+        final String imageOsDiskUri = imageOsDisk.properties.get(AZURE_OSDISK_BLOB_URI);
+        if (imageOsDiskUri == null) {
+            return DeferredResult.failed(new IllegalArgumentException(
+                    "OS DiskConfiguration is missing 'blob URI' property"));
+        }
 
         final Matcher matcher = VHD_URI_PATTERN.matcher(imageOsDiskUri);
-
         if (!matcher.matches()) {
             return DeferredResult.failed(new IllegalArgumentException(
-                    "Invalid VHD URI format of image OS Disk: " + imageOsDiskUri));
+                    "Invalid VHD URI format of image OS DiskConfiguration: " + imageOsDiskUri));
         }
 
         // Override StorageAccount from request with the SA of the private VM image
@@ -944,7 +953,6 @@ public class AzureInstanceService extends StatelessService {
             protected DeferredResult<PublicIPAddressInner> consumeProvisioningSuccess(
                     PublicIPAddressInner publicIP) {
                 nicCtx.publicIP = publicIP;
-                nicCtx.publicIPSubResource = new SubResource().withId(nicCtx.publicIP.id());
 
                 return DeferredResult.completed(publicIP);
             }
@@ -997,25 +1005,26 @@ public class AzureInstanceService extends StatelessService {
         }
 
         List<DeferredResult<NetworkSecurityGroupInner>> createSGDR = ctx.nics.stream()
-                .filter(nicCtx -> (
-                        // Security Group is requested but no existing security group is mapped.
-                        nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
-                                && nicCtx.securityGroup == null))
+
+                // Security Group is requested but no existing security group is mapped.
+                .filter(nicCtx -> nicCtx.securityGroupState() != null
+                        && nicCtx.securityGroup == null)
+
                 .map(nicCtx -> {
-                    SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
+                    SecurityGroupState sgState = nicCtx.securityGroupState();
                     NetworkSecurityGroupInner nsg = newAzureSecurityGroup(ctx, sgState);
                     return createSecurityGroup(ctx, nicCtx, nsg);
                 })
+
                 .collect(Collectors.toList());
 
-        DeferredResult.allOf(createSGDR)
-                .whenComplete((all, exc) -> {
-                    if (exc != null) {
-                        handleError(ctx, exc);
-                        return;
-                    }
-                    handleAllocation(ctx, nextStage);
-                });
+        DeferredResult.allOf(createSGDR).whenComplete((all, exc) -> {
+            if (exc != null) {
+                handleError(ctx, exc);
+            } else {
+                handleAllocation(ctx, nextStage);
+            }
+        });
     }
 
     private NetworkSecurityGroupInner newAzureSecurityGroup(AzureInstanceContext ctx,
@@ -1084,7 +1093,7 @@ public class AzureInstanceService extends StatelessService {
                 ? nicCtx.securityGroupRGState.name
                 : ctx.resourceGroup.name();
 
-        final String msg = "Create Azure Security Group["
+        final String msg = "Create Azure Security Group ["
                 + nsgRGName + "/" + nsgName
                 + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
                 + ctx.vmName
@@ -1097,7 +1106,6 @@ public class AzureInstanceService extends StatelessService {
                     NetworkSecurityGroupInner securityGroup) {
 
                 nicCtx.securityGroup = securityGroup;
-                nicCtx.securityGroupSubResource = new SubResource().withId(securityGroup.id());
 
                 return DeferredResult.completed(securityGroup);
             }
@@ -1137,9 +1145,9 @@ public class AzureInstanceService extends StatelessService {
         // }}
 
         for (AzureNicContext nicCtx : ctx.nics) {
-            final NetworkInterfaceInner nic = newAzureNetworkInterface(ctx, nicCtx);
-
             final String nicName = nicCtx.nicStateWithDesc.name;
+
+            final NetworkInterfaceInner nic = newAzureNetworkInterface(ctx, nicCtx);
 
             String msg = "Creating Azure NIC [" + nicName + "] for [" + ctx.vmName + "] VM";
 
@@ -1187,14 +1195,18 @@ public class AzureInstanceService extends StatelessService {
         ipConfig.withName(generateName(NICCONFIG_NAME_PREFIX));
         ipConfig.withPrivateIPAllocationMethod(IPAllocationMethod.DYNAMIC);
         ipConfig.withSubnet(nicCtx.subnet);
-        ipConfig.withPublicIPAddress(nicCtx.publicIPSubResource);
+        if (nicCtx.publicIP != null) {
+            // Public IP is not auto-assigned so check for existence
+            ipConfig.withPublicIPAddress(new SubResource().withId(nicCtx.publicIP.id()));
+        }
 
         NetworkInterfaceInner nic = new NetworkInterfaceInner();
         nic.withLocation(ctx.resourceGroup.location());
-        List<NetworkInterfaceIPConfigurationInner> ipConfigurationList = new ArrayList<NetworkInterfaceIPConfigurationInner>();
-        ipConfigurationList.add(ipConfig);
-        nic.withIpConfigurations(ipConfigurationList);
-        nic.withNetworkSecurityGroup(nicCtx.securityGroupSubResource);
+        nic.withIpConfigurations(Collections.singletonList(ipConfig));
+        if (nicCtx.securityGroup != null) {
+            // Security group is optional so check for existence
+            nic.withNetworkSecurityGroup(new SubResource().withId(nicCtx.securityGroup.id()));
+        }
 
         return nic;
     }
@@ -1687,51 +1699,19 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private ResourceManagementClientImpl getResourceManagementClientImpl(AzureInstanceContext ctx) {
-        if (ctx.resourceManagementClient == null) {
-            if (ctx.restClient == null) {
-                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
-            }
-            ResourceManagementClientImpl client = new ResourceManagementClientImpl(ctx.restClient)
-                    .withSubscriptionId(ctx.parentAuth.userLink);
-            ctx.resourceManagementClient = client;
-        }
-        return ctx.resourceManagementClient;
+        return ctx.azureSdkClients.getResourceManagementClientImpl();
     }
 
     public NetworkManagementClientImpl getNetworkManagementClientImpl(AzureInstanceContext ctx) {
-        if (ctx.networkManagementClient == null) {
-            if (ctx.restClient == null) {
-                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
-            }
-            NetworkManagementClientImpl client = new NetworkManagementClientImpl(ctx.restClient)
-                    .withSubscriptionId(ctx.parentAuth.userLink);
-            ctx.networkManagementClient = client;
-        }
-        return ctx.networkManagementClient;
+        return ctx.azureSdkClients.getNetworkManagementClientImpl();
     }
 
     private StorageManagementClientImpl getStorageManagementClientImpl(AzureInstanceContext ctx) {
-        if (ctx.storageManagementClient == null) {
-            if (ctx.restClient == null) {
-                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
-            }
-            StorageManagementClientImpl client = new StorageManagementClientImpl(ctx.restClient)
-                    .withSubscriptionId(ctx.parentAuth.userLink);
-            ctx.storageManagementClient = client;
-        }
-        return ctx.storageManagementClient;
+        return ctx.azureSdkClients.getStorageManagementClientImpl();
     }
 
     private ComputeManagementClientImpl getComputeManagementClientImpl(AzureInstanceContext ctx) {
-        if (ctx.computeManagementClient == null) {
-            if (ctx.restClient == null) {
-                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
-            }
-            ComputeManagementClientImpl client = new ComputeManagementClientImpl(ctx.restClient)
-                    .withSubscriptionId(ctx.parentAuth.userLink);
-            ctx.computeManagementClient = client;
-        }
-        return ctx.computeManagementClient;
+        return ctx.azureSdkClients.getComputeManagementClientImpl();
     }
 
     /**
@@ -1917,7 +1897,7 @@ public class AzureInstanceService extends StatelessService {
                     .getPublicConfiguration()
                     .setStorageAccount(storageAccountName);
 
-            ApplicationTokenCredentials credentials = ctx.credentials;
+            ApplicationTokenCredentials credentials = ctx.azureSdkClients.credentials;
 
             URI uri = UriUtils.extendUriWithQuery(
                     UriUtils.buildUri(UriUtils.buildUri(AzureConstants.BASE_URI_FOR_REST),
@@ -2009,7 +1989,7 @@ public class AzureInstanceService extends StatelessService {
         protected DeferredResult<StorageAccountInner> consumeProvisioningSuccess(
                 StorageAccountInner sa) {
 
-            this.ctx.storage = sa;
+            this.ctx.storageAccount = sa;
 
             return createStorageDescription(this.ctx)
                     // Start next op, patch boot disk, in the sequence
@@ -2027,7 +2007,7 @@ public class AzureInstanceService extends StatelessService {
                                                 this.ctx.bootDisk.name)));
                     })
                     // Return processed context with StorageAccount
-                    .thenApply(woid -> this.ctx.storage);
+                    .thenApply(woid -> this.ctx.storageAccount);
         }
 
         /**
@@ -2039,7 +2019,7 @@ public class AzureInstanceService extends StatelessService {
         private DeferredResult<StorageDescription> createStorageDescription(
                 AzureInstanceContext ctx) {
 
-            String msg = "Getting Azure StorageAccountKeys for [" + ctx.storage.name()
+            String msg = "Getting Azure StorageAccountKeys for [" + ctx.storageAccount.name()
                     + "] Storage Account";
 
             AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler = new AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner>(
@@ -2049,7 +2029,7 @@ public class AzureInstanceService extends StatelessService {
                 protected Throwable consumeError(Throwable exc) {
                     return new IllegalStateException(String.format(
                             "Getting Azure StorageAccountKeys for [%s] Storage Account: FAILED. Details: %s",
-                            ctx.storage.name(), exc.getMessage()));
+                            ctx.storageAccount.name(), exc.getMessage()));
                 }
 
                 @Override
@@ -2057,14 +2037,14 @@ public class AzureInstanceService extends StatelessService {
                         StorageAccountListKeysResultInner body) {
                     logFine(() -> String.format(
                             "Getting Azure StorageAccountKeys for [%s] Storage Account: SUCCESS",
-                            ctx.storage.name()));
+                            ctx.storageAccount.name()));
                     return DeferredResult.completed(body);
                 }
             };
 
             getStorageManagementClientImpl(ctx)
                     .storageAccounts()
-                    .listKeysAsync(ctx.storageAccountRGName, ctx.storage.name(), handler);
+                    .listKeysAsync(ctx.storageAccountRGName, ctx.storageAccount.name(), handler);
 
             return handler.toDeferredResult()
                     .thenCompose(keys -> {
@@ -2072,7 +2052,7 @@ public class AzureInstanceService extends StatelessService {
                                 .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
                                 .setBody(AzureUtils.constructStorageDescription(
                                         getHost(), getSelfLink(),
-                                        ctx.storage, ctx, keys))
+                                        ctx.storageAccount, ctx, keys))
                                 .setReferer(getUri());
                         return sendWithDeferredResult(createStorageDescOp,
                                 StorageDescription.class);

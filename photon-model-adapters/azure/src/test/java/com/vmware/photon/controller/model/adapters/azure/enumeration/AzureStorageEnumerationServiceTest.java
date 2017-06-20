@@ -79,7 +79,7 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
         resourceRequest.resourcePoolLink = this.resourcePool.documentSelfLink;
         resourceRequest.resourceReference = UriUtils.buildUri(getHost(), "");
         resourceRequest.isMockRequest = this.isMock;
-        ComputeEnumerateAdapterRequest request = new ComputeEnumerateAdapterRequest(resourceRequest, this.authState, this.computeStateWithDescription);
+        ComputeEnumerateAdapterRequest request = new ComputeEnumerateAdapterRequest(resourceRequest, this.authState, this.computeHost);
 
         //patch synchronously to enumeration service
         patchServiceSynchronously(AzureStorageEnumerationAdapterService.SELF_LINK, request);

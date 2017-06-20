@@ -25,7 +25,6 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -51,7 +50,7 @@ public abstract class AzureBaseTest extends BaseModelTest {
     public EndpointState endpointState;
 
     public ResourcePoolState resourcePool;
-    public ComputeStateWithDescription computeStateWithDescription;
+    public ComputeStateWithDescription computeHost;
 
     /**
      * @see #getAzureSdkClients()
@@ -61,19 +60,30 @@ public abstract class AzureBaseTest extends BaseModelTest {
     @Rule
     public TestName currentTestName = new TestName();
 
+    /**
+     * Mark the method as {@code final} intentionally so descendant classes are enforced to provide
+     * their own {@code @Before} method with different name thus preventing from accidental
+     * override.
+     */
     @Before
-    public void beforeTest() throws Throwable {
+    public final void beforeTest() throws Throwable {
 
+        // Configure from sys props
         CommandLineArgumentParser.parseFromProperties(this);
 
+        // Pre-create shared/required entities
         this.authState = createAuthCredentialsState();
         this.endpointState = createEndpointState(this.authState.documentSelfLink);
         this.resourcePool = AzureTestUtil.createDefaultResourcePool(getHost());
-        this.computeStateWithDescription = createComputeHostWithDescription();
+        this.computeHost = createComputeHostWithDescription();
     }
 
+    /**
+     * Mark the method as {@code final} intentionally so descendant classes are enforced to provide
+     * their own {@code @After} method with different name thus preventing from accidental override.
+     */
     @After
-    public void afterTest() throws Throwable {
+    public final void afterTest() throws Throwable {
 
         releaseAzureSdkClients();
     }
@@ -163,10 +173,9 @@ public abstract class AzureBaseTest extends BaseModelTest {
     }
 
     /**
-     * Create ComputeStateWithDescription.
+     * Create Azure compute host per {@link #resourcePool} and {@link #endpointState}.
      */
-    protected ComputeService.ComputeStateWithDescription createComputeHostWithDescription()
-            throws Throwable {
+    protected ComputeStateWithDescription createComputeHostWithDescription() throws Throwable {
 
         ComputeState computeHost = AzureTestUtil.createDefaultComputeHost(
                 getHost(), this.resourcePool.documentSelfLink, this.endpointState);

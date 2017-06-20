@@ -143,14 +143,17 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
      */
     public final DeferredResult<T> populateContext() {
         return DeferredResult.completed(self())
-                .thenCompose(this::getNicStates).thenApply(log("getNicStates"))
-                .thenCompose(this::getNicSubnetStates).thenApply(log("getNicSubnetStates"))
-                .thenCompose(this::getNicNetworkStates).thenApply(log("getNicNetworkStates"))
-                .thenCompose(this::getNicNetworkResourceGroupStates)
-                .thenApply(log("getNicNetworkResourceGroupStates"))
+                .thenCompose(this::getNicStates)
+                .thenApply(log("getNicStates"))
+                .thenCompose(this::getNicSubnetStates)
+                .thenApply(log("getNicSubnetStates"))
+                .thenCompose(this::getNicNetworkStates)
+                .thenApply(log("getNicNetworkStates"))
                 .thenCompose(this::getNicSecurityGroupStates)
                 .thenApply(log("getNicSecurityGroupStates"))
-                .thenCompose(this::customizeContext).thenApply(log("customizeContext"));
+
+                .thenCompose(this::customizeContext)
+                .thenApply(log("customizeContext"));
     }
 
     /**
@@ -292,47 +295,6 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
             if (exc != null) {
                 String msg = String.format(
                         "Error getting NIC SecurityGroup states for [%s] VM.",
-                        context.child.name);
-                throw new IllegalStateException(msg, exc);
-            }
-            return context;
-        });
-    }
-
-    /**
-     * Get {@link ResourceGroupState}s of the {@link NetworkState}s the NICs are assigned to.
-     */
-    protected DeferredResult<T> getNicNetworkResourceGroupStates(T context) {
-        if (context.nics.isEmpty()) {
-            return DeferredResult.completed(context);
-        }
-
-        List<DeferredResult<Void>> getStatesDR = context.nics
-                .stream()
-                .filter(nicCtx -> nicCtx.networkState.groupLinks != null
-                        && !nicCtx.networkState.groupLinks.isEmpty())
-                .map(nicCtx -> {
-                    String rgLink = nicCtx.networkState.groupLinks.iterator().next();
-
-                    // NOTE: Get first RG Link! If there are more than one link log a warning.
-                    if (nicCtx.networkState.groupLinks.size() > 1) {
-                        context.service.logSevere(
-                                "More than one resource group links are assigned to [%s] NIC's Network state. Get: %s",
-                                nicCtx.networkState.name, rgLink);
-                    }
-
-                    Operation op = Operation.createGet(context.service.getHost(), rgLink);
-
-                    return context.service
-                            .sendWithDeferredResult(op, ResourceGroupState.class)
-                            .thenAccept(rgState -> nicCtx.networkRGState = rgState);
-                })
-                .collect(Collectors.toList());
-
-        return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
-            if (exc != null) {
-                String msg = String.format(
-                        "Error getting ResourceGroup states of NIC Network states for [%s] VM.",
                         context.child.name);
                 throw new IllegalStateException(msg, exc);
             }

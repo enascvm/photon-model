@@ -258,7 +258,7 @@ public class AzureUtils {
     public static StorageDescription constructStorageDescription(ServiceHost host,
             String serviceSelfLink, StorageAccountInner sa,
             AzureInstanceContext ctx, StorageAccountListKeysResultInner keys) {
-        return constructStorageDescription(sa, host, serviceSelfLink, ctx.parent, ctx.storage,
+        return constructStorageDescription(sa, host, serviceSelfLink, ctx.parent, ctx.storageAccount,
                 keys);
     }
 

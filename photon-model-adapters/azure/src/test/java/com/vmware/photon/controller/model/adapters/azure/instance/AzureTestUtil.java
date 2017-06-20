@@ -310,6 +310,7 @@ public class AzureTestUtil {
     public static ResourcePoolState createDefaultResourcePool(
             VerificationHost host)
             throws Throwable {
+
         ResourcePoolState inPool = new ResourcePoolState();
         inPool.name = UUID.randomUUID().toString();
         inPool.id = inPool.name;
@@ -317,82 +318,87 @@ public class AzureTestUtil {
         inPool.minCpuCount = 1L;
         inPool.minMemoryBytes = 1024L;
 
-        ResourcePoolState returnPool = TestUtils.doPost(host, inPool, ResourcePoolState.class,
+        return TestUtils.doPost(host, inPool, ResourcePoolState.class,
                 UriUtils.buildUri(host, ResourcePoolService.FACTORY_LINK));
-
-        return returnPool;
     }
 
     public static VirtualNetworkInner getAzureVirtualNetwork(
-            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
+            NetworkManagementClientImpl networkManagementClient,
+            String resourceGroupName,
             String virtualNetworkName) throws Exception {
-        VirtualNetworkInner response = networkManagementClient
-                .virtualNetworks().getByResourceGroup(resourceGroupName, virtualNetworkName, null);
 
-        return response;
+        return networkManagementClient
+                .virtualNetworks()
+                .getByResourceGroup(resourceGroupName, virtualNetworkName, null);
     }
 
     public static VirtualMachineInner getAzureVirtualMachine(
             ComputeManagementClientImpl computeManagementClient,
-            String resourceGroupName, String vmName) throws Exception {
-        VirtualMachineInner response = computeManagementClient
-                .virtualMachines().getByResourceGroup(resourceGroupName, vmName, null);
+            String resourceGroupName,
+            String vmName) throws Exception {
 
-        return response;
+        return computeManagementClient
+                .virtualMachines()
+                .getByResourceGroup(resourceGroupName, vmName, null);
     }
 
     public static VirtualMachineInner getAzureVirtualMachineWithExtension(
             ComputeManagementClientImpl computeManagementClient,
-            String resourceGroupName, String vmName, InstanceViewTypes expand) throws Exception {
-        VirtualMachineInner response = computeManagementClient
-                .virtualMachines().getByResourceGroup(resourceGroupName, vmName, expand);
+            String resourceGroupName,
+            String vmName,
+            InstanceViewTypes expand) throws Exception {
 
-        return response;
+        return computeManagementClient
+                .virtualMachines()
+                .getByResourceGroup(resourceGroupName, vmName, expand);
     }
 
     public static NetworkSecurityGroupInner getAzureSecurityGroup(
-            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
+            NetworkManagementClientImpl networkManagementClient,
+            String resourceGroupName,
             String securityGroupName) throws Exception {
-        NetworkSecurityGroupInner response = networkManagementClient
+
+        return networkManagementClient
                 .networkSecurityGroups()
                 .getByResourceGroup(resourceGroupName, securityGroupName, null);
-
-        return response;
     }
 
     public static VirtualNetworkInner updateAzureVirtualNetwork(
-            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
-            String virtualNetworkName, VirtualNetworkInner parameters) throws Exception {
-        VirtualNetworkInner response = networkManagementClient
+            NetworkManagementClientImpl networkManagementClient,
+            String resourceGroupName,
+            String virtualNetworkName,
+            VirtualNetworkInner parameters) throws Exception {
+
+        return networkManagementClient
                 .virtualNetworks()
                 .createOrUpdate(resourceGroupName, virtualNetworkName, parameters);
-
-        return response;
     }
 
     public static NetworkSecurityGroupInner updateAzureSecurityGroup(
-            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
-            String networkSecurityGroupName, NetworkSecurityGroupInner parameters)
-            throws Exception {
-        NetworkSecurityGroupInner response = networkManagementClient
+            NetworkManagementClientImpl networkManagementClient,
+            String resourceGroupName,
+            String networkSecurityGroupName,
+            NetworkSecurityGroupInner parameters) throws Exception {
+
+        return networkManagementClient
                 .networkSecurityGroups()
                 .createOrUpdate(resourceGroupName, networkSecurityGroupName, parameters);
-
-        return response;
     }
 
     public static VirtualMachineInner updateAzureVirtualMachine(
-            ComputeManagementClientImpl computeManagementClient, String resourceGroupName,
-            String vmName, VirtualMachineInner parameters) throws Exception {
-        VirtualMachineInner response = computeManagementClient
+            ComputeManagementClientImpl computeManagementClient,
+            String resourceGroupName,
+            String vmName,
+            VirtualMachineInner parameters) throws Exception {
+
+        return computeManagementClient
                 .virtualMachines()
                 .createOrUpdate(resourceGroupName, vmName, parameters);
-
-        return response;
     }
 
     public static int getAzureVMCount(ComputeManagementClientImpl computeManagementClient)
             throws Exception {
+
         List<VirtualMachineInner> response = computeManagementClient
                 .virtualMachines().list();
 
@@ -571,29 +577,33 @@ public class AzureTestUtil {
             AzureNicSpecs nicSpecs, String networkRGLink, ImageSource imageSource)
             throws Throwable {
 
-        ResourceGroupState defaultVmRG = createDefaultResourceGroupState(
-                host, azureVMName, computeHost, endpointState,
+        final String defaultVmRGName = azureVMName;
+
+        final ResourceGroupState defaultVmRG = createDefaultResourceGroupState(
+                host, defaultVmRGName, computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
 
-        String defaultVMRGLink = defaultVmRG.documentSelfLink;
+        final String defaultVmRGLink = defaultVmRG.documentSelfLink;
 
         if (networkRGLink == null) {
             // The RG where the VM is deployed is also used as RG for the Network!
-            networkRGLink = defaultVMRGLink;
+            networkRGLink = defaultVmRGLink;
         }
+        // The RG where the VM is deployed is also used as RG for the SecurityGroup!
+        final String sgRGLink = defaultVmRGLink;
 
         // Create resource group with a different type. It should be filtered out.
         ResourceGroupState azureStorageContainerRG = createDefaultResourceGroupState(
                 host, AZURE_STORAGE_CONTAINER_RG_NAME, computeHost, endpointState,
                 ResourceGroupStateType.AzureStorageContainer);
 
-        Set<String> networkRGLinks = new HashSet<>();
-        networkRGLinks.add(azureStorageContainerRG.documentSelfLink);
+        final Set<String> networkRGLinks = new HashSet<>();
         networkRGLinks.add(networkRGLink);
+        networkRGLinks.add(azureStorageContainerRG.documentSelfLink);
 
-        Set<String> sgRGLinks = new HashSet<>();
+        final Set<String> sgRGLinks = new HashSet<>();
+        sgRGLinks.add(sgRGLink);
         sgRGLinks.add(azureStorageContainerRG.documentSelfLink);
-        sgRGLinks.add(defaultVMRGLink); // place the SG in the VM's RG
 
         AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
         azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
@@ -624,8 +634,6 @@ public class AzureTestUtil {
         azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
                 UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
 
-        List<String> vmDisks = new ArrayList<>();
-
         DiskState rootDisk = new DiskState();
         rootDisk.name = azureVMName + "-boot-disk";
         rootDisk.id = UUID.randomUUID().toString();
@@ -646,17 +654,18 @@ public class AzureTestUtil {
         rootDisk.customProperties = new HashMap<>();
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING.name());
 
-        rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
+        rootDisk.customProperties.put(
+                AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
                 (azureVMName + "sa").replace("-", "").toLowerCase());
-        rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
-                azureVMName);
-        rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
+        rootDisk.customProperties.put(
+                AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                defaultVmRGName);
+        rootDisk.customProperties.put(
+                AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
 
         rootDisk = TestUtils.doPost(host, rootDisk, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
-
-        vmDisks.add(rootDisk.documentSelfLink);
 
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
@@ -674,12 +683,10 @@ public class AzureTestUtil {
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         computeState.descriptionLink = azureVMDesc.documentSelfLink;
         computeState.resourcePoolLink = computeHost.resourcePoolLink;
-        computeState.diskLinks = vmDisks;
+        computeState.diskLinks = Collections.singletonList(rootDisk.documentSelfLink);
         computeState.networkInterfaceLinks = nicLinks;
-        computeState.customProperties = new HashMap<>();
-        computeState.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
-        computeState.groupLinks = new HashSet<>();
-        computeState.groupLinks.add(defaultVMRGLink);
+        computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, defaultVmRGName);
+        computeState.groupLinks = Collections.singleton(defaultVmRGLink);
         computeState.endpointLink = endpointState.documentSelfLink;
         computeState.tenantLinks = endpointState.tenantLinks;
 
@@ -703,10 +710,10 @@ public class AzureTestUtil {
         auth.customProperties = new HashMap<>();
         auth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, randomString(15));
         auth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, randomString(15));
-        auth.documentSelfLink = UUID.randomUUID().toString();
 
-        TestUtils.doPost(host, auth, AuthCredentialsServiceState.class,
+        auth = TestUtils.doPost(host, auth, AuthCredentialsServiceState.class,
                 UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
+
         String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
                 auth.documentSelfLink);
 
@@ -736,11 +743,10 @@ public class AzureTestUtil {
 
         ResourceGroupState rGroupState = new ResourceGroupState();
 
-        rGroupState.id = "testResGroup-" + randomString(4);
         rGroupState.name = resourceGroupName;
+        rGroupState.id = rGroupState.name + randomString(4);
 
-        rGroupState.groupLinks = new HashSet<>();
-        rGroupState.groupLinks.add("testResGroup-" + randomString(4));
+        rGroupState.groupLinks = Collections.singleton(rGroupState.name + randomString(4));
 
         rGroupState.tenantLinks = endpointState.tenantLinks;
 
@@ -855,29 +861,30 @@ public class AzureTestUtil {
                 securityGroupState.endpointLink = endpointSate.documentSelfLink;
                 securityGroupState.tenantLinks = endpointSate.tenantLinks;
                 securityGroupState.groupLinks = sgRGLinks;
-                ArrayList<Rule> ingressRules = new ArrayList<>();
-
-                Rule ssh = new Rule();
-                ssh.name = "ssh-in";
-                ssh.protocol = "tcp";
-                ssh.ipRangeCidr = "0.0.0.0/0";
-                ssh.ports = "22";
-                ingressRules.add(ssh);
-                securityGroupState.ingress = ingressRules;
-
-                ArrayList<Rule> egressRules = new ArrayList<>();
-                Rule out = new Rule();
-                out.name = "out";
-                out.protocol = "tcp";
-                out.ipRangeCidr = "0.0.0.0/0";
-                out.ports = SecurityGroupService.ALL_PORTS;
-                egressRules.add(out);
-                securityGroupState.egress = egressRules;
-
                 securityGroupState.regionId = "regionId";
                 securityGroupState.resourcePoolLink = "/link/to/rp";
                 securityGroupState.instanceAdapterReference = new URI(
                         "http://instanceAdapterReference");
+
+                {
+                    Rule ssh = new Rule();
+                    ssh.name = "ssh-in";
+                    ssh.protocol = "tcp";
+                    ssh.ipRangeCidr = "0.0.0.0/0";
+                    ssh.ports = "22";
+
+                    securityGroupState.ingress = Collections.singletonList(ssh);
+                }
+
+                {
+                    Rule out = new Rule();
+                    out.name = "out";
+                    out.protocol = "tcp";
+                    out.ipRangeCidr = "0.0.0.0/0";
+                    out.ports = SecurityGroupService.ALL_PORTS;
+
+                    securityGroupState.egress = Collections.singletonList(out);
+                }
 
                 securityGroupState = TestUtils.doPost(host, securityGroupState,
                         SecurityGroupState.class,
@@ -908,18 +915,18 @@ public class AzureTestUtil {
             nicState.id = "nic" + i;
             nicState.name = "nic" + i;
             nicState.deviceIndex = nicDescription.deviceIndex;
-
-            if (i == 0) {
-                // Attach security group only on the primary nic.
-                nicState.securityGroupLinks = Collections
-                        .singletonList(securityGroupState.documentSelfLink);
-            }
-
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkLink = subnetState.networkLink;
+
             nicState.tenantLinks = endpointSate.tenantLinks;
             nicState.endpointLink = endpointSate.documentSelfLink;
+
+            if (i == 0) {
+                // Attach security group only on the primary nic.
+                nicState.securityGroupLinks = Collections.singletonList(
+                        securityGroupState.documentSelfLink);
+            }
 
             nicState = TestUtils.doPost(host, nicState,
                     NetworkInterfaceState.class,
@@ -990,7 +997,7 @@ public class AzureTestUtil {
         DiskConfiguration osDiskConfig = new DiskConfiguration();
 
         osDiskConfig.properties = Collections.singletonMap(
-                AzureConstants.AZURE_DISK_BLOB_URI,
+                AzureConstants.AZURE_OSDISK_BLOB_URI,
                 "https://stg4339322451611.blob.core.windows.net/vhds/SourceVMLinuxUnmanagedAPI-os-disk-f57d8371-8f45-4d8e-a8b3-84865aaf3f99.vhd");
 
         bootImage.diskConfigs = Collections.singletonList(osDiskConfig);
