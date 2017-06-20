@@ -1,0 +1,482 @@
+{
+  "instanceTypes": {
+    "t2.nano": {
+      "cpuCount": 1,
+      "memoryInMB": 512,
+      "storageType": "EBS",
+      "networkType": "Low"
+    },
+    "t2.micro": {
+      "cpuCount": 1,
+      "memoryInMB": 1024,
+      "storageType": "EBS",
+      "networkType": "Low to Moderate"
+    },
+    "t2.small": {
+      "cpuCount": 1,
+      "memoryInMB": 2048,
+      "storageType": "EBS",
+      "networkType": "Low to Moderate"
+    },
+    "t2.medium": {
+      "cpuCount": 2,
+      "memoryInMB": 4096,
+      "storageType": "EBS",
+      "networkType": "Low to Moderate"
+    },
+    "t2.large": {
+      "cpuCount": 2,
+      "memoryInMB": 8192,
+      "storageType": "EBS",
+      "networkType": "Low to Moderate"
+    },
+    "t2.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 16384,
+      "storageType": "EBS",
+      "networkType": "Moderate"
+    },
+    "t2.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 32768,
+      "storageType": "EBS",
+      "networkType": "Moderate"
+    },
+    "m4.large": {
+      "cpuCount": 2,
+      "memoryInMB": 8192,
+      "storageType": "EBS",
+      "networkType": "Moderate"
+    },
+    "m4.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 16384,
+      "storageType": "EBS",
+      "networkType": "High"
+    },
+    "m4.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 32768,
+      "storageType": "EBS",
+      "networkType": "High"
+    },
+    "m4.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 65536,
+      "storageType": "EBS",
+      "networkType": "High"
+    },
+    "m4.10xlarge": {
+      "cpuCount": 40,
+      "memoryInMB": 163840,
+      "storageType": "EBS",
+      "networkType": "10 Gigabit"
+    },
+    "m4.16xlarge": {
+      "cpuCount": 64,
+      "memoryInMB": 262144,
+      "storageType": "EBS",
+      "networkType": "20 Gigabit"
+    },
+    "m3.medium": {
+      "cpuCount": 1,
+      "memoryInMB": 3840,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 4096,
+      "dataDiskMaxCount": 1,
+      "networkType": "Moderate"
+    },
+    "m3.large": {
+      "cpuCount": 2,
+      "memoryInMB": 7680,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 32768,
+      "dataDiskMaxCount": 1,
+      "networkType": "Moderate"
+    },
+    "m3.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 15360,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 40960,
+      "dataDiskMaxCount": 2,
+      "networkType": "High"
+    },
+    "m3.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 30720,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 81920,
+      "dataDiskMaxCount": 2,
+      "networkType": "High"
+    },
+    "c4.large": {
+      "cpuCount": 2,
+      "memoryInMB": 3840,
+      "storageType": "EBS",
+      "networkType": "Moderate"
+    },
+    "c4.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 7680,
+      "storageType": "EBS",
+      "networkType": "High"
+    },
+    "c4.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 15360,
+      "storageType": "EBS",
+      "networkType": "High"
+    },
+    "c4.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 30720,
+      "storageType": "EBS",
+      "networkType": "High"
+    },
+    "c4.8xlarge": {
+      "cpuCount": 36,
+      "memoryInMB": 61440,
+      "storageType": "EBS",
+      "networkType": "10 Gigabit"
+    },
+    "c3.large": {
+      "cpuCount": 2,
+      "memoryInMB": 3840,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 16384,
+      "dataDiskMaxCount": 2,
+      "networkType": "Moderate"
+    },
+    "c3.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 7680,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 40960,
+      "dataDiskMaxCount": 2,
+      "networkType": "Moderate"
+    },
+    "c3.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 15360,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 81920,
+      "dataDiskMaxCount": 2,
+      "networkType": "High"
+    },
+    "c3.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 30720,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 163840,
+      "dataDiskMaxCount": 2,
+      "networkType": "High"
+    },
+    "c3.8xlarge": {
+      "cpuCount": 32,
+      "memoryInMB": 61440,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 327680,
+      "dataDiskMaxCount": 2,
+      "networkType": "10 Gigabit"
+    },
+    "p2.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 62464,
+      "storageType": "EBS",
+      "networkType": "High"
+    },
+    "p2.8xlarge": {
+      "cpuCount": 32,
+      "memoryInMB": 499712,
+      "storageType": "EBS",
+      "networkType": "10 Gigabit"
+    },
+    "p2.16xlarge": {
+      "cpuCount": 64,
+      "memoryInMB": 749568,
+      "storageType": "EBS",
+      "networkType": "20 Gigabit"
+    },
+    "g2.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 15360,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 61440,
+      "dataDiskMaxCount": 1,
+      "networkType": "High"
+    },
+    "g2.8xlarge": {
+      "cpuCount": 32,
+      "memoryInMB": 61440,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 122880,
+      "dataDiskMaxCount": 2,
+      "networkType": "High"
+    },
+    "x1.16xlarge": {
+      "cpuCount": 64,
+      "memoryInMB": 999424,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 1966080,
+      "dataDiskMaxCount": 1,
+      "networkType": "10 Gigabit"
+    },
+    "x1.32xlarge": {
+      "cpuCount": 128,
+      "memoryInMB": 1998848,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 1966080,
+      "dataDiskMaxCount": 2,
+      "networkType": "20 Gigabit"
+    },
+    "r4.large": {
+      "cpuCount": 2,
+      "memoryInMB": 15616,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "r4.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 31232,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "r4.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 62464,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "r4.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 124928,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "r4.8xlarge": {
+      "cpuCount": 32,
+      "memoryInMB": 249856,
+      "networkType": "10 Gigabit"
+    },
+    "r4.16xlarge": {
+      "cpuCount": 64,
+      "memoryInMB": 499712,
+      "networkType": "20 Gigabit"
+    },
+    "r3.large": {
+      "cpuCount": 2,
+      "memoryInMB": 15616,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 32768,
+      "dataDiskMaxCount": 1,
+      "networkType": "Moderate"
+    },
+    "r3.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 31232,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 81920,
+      "dataDiskMaxCount": 1,
+      "networkType": "Moderate"
+    },
+    "r3.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 62464,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 163840,
+      "dataDiskMaxCount": 1,
+      "networkType": "High"
+    },
+    "r3.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 124928,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 327680,
+      "dataDiskMaxCount": 1,
+      "networkType": "High"
+    },
+    "r3.8xlarge": {
+      "cpuCount": 32,
+      "memoryInMB": 249856,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 327680,
+      "dataDiskMaxCount": 2,
+      "networkType": "10 Gigabit"
+    },
+    "i3.large": {
+      "cpuCount": 2,
+      "memoryInMB": 15616,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 486400,
+      "dataDiskMaxCount": 1,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "i3.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 31232,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 972800,
+      "dataDiskMaxCount": 1,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "i3.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 62464,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 1945600,
+      "dataDiskMaxCount": 1,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "i3.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 124928,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 1945600,
+      "dataDiskMaxCount": 2,
+      "networkType": "Up to 10 Gigabit"
+    },
+    "i3.8xlarge": {
+      "cpuCount": 32,
+      "memoryInMB": 249856,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 1945600,
+      "dataDiskMaxCount": 4,
+      "networkType": "10 Gigabit"
+    },
+    "i3.16xlarge": {
+      "cpuCount": 64,
+      "memoryInMB": 499712,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 1945600,
+      "dataDiskMaxCount": 8,
+      "networkType": "20 Gigabit"
+    },
+    "d2.xlarge": {
+      "cpuCount": 4,
+      "memoryInMB": 31232,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 2048000,
+      "dataDiskMaxCount": 3,
+      "networkType": "Moderate"
+    },
+    "d2.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 62464,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 2048000,
+      "dataDiskMaxCount": 6,
+      "networkType": "Moderate"
+    },
+    "d2.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 124928,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 2048000,
+      "dataDiskMaxCount": 12,
+      "networkType": "High"
+    },
+    "d2.8xlarge": {
+      "cpuCount": 36,
+      "memoryInMB": 249856,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 2048000,
+      "dataDiskMaxCount": 24,
+      "networkType": "10 Gigabit"
+    },
+    "f1.2xlarge": {
+      "cpuCount": 8,
+      "memoryInMB": 124928,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 491520,
+      "dataDiskMaxCount": 1,
+      "networkType": "High"
+    },
+    "f1.16xlarge": {
+      "cpuCount": 64,
+      "memoryInMB": 999424,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 983040,
+      "dataDiskMaxCount": 4,
+      "networkType": "High"
+    },
+
+
+    "t1.micro": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "m1.small": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "m1.medium": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "m1.large": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "m1.xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "m2.xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "m2.2xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "m2.4xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "cr1.8xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "i2.xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "i2.2xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "i2.4xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "i2.8xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "hi1.4xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "hs1.8xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "c1.medium": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "c1.xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "cc1.4xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "cc2.8xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    },
+    "cg1.4xlarge": {
+      "cpuCount": -1,
+      "memoryInMB": -1
+    }
+  }
+}

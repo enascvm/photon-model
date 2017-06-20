@@ -106,11 +106,36 @@ public class AWSInstanceTypeServiceTest extends BaseModelTest {
 
                         assertNotNull("Instance types should not be null.",
                                 instanceTypes.instanceTypes);
-                        assertEquals(InstanceType.values().length,
-                                instanceTypes.instanceTypes.size());
 
-                        assertNotNull(instanceTypes.instanceTypes.get(0).id);
-                        assertNotNull(instanceTypes.instanceTypes.get(0).name);
+                        instanceTypes.instanceTypes.stream()
+                                .filter(instanceType -> instanceType.id == null
+                                        || instanceType.name == null)
+                                .findFirst()
+                                .ifPresent(instanceType -> fail("Found instance type without id "
+                                        + "or name."));
+
+                        // Validate that all types have cpu and memory extended data set.
+                        instanceTypes.instanceTypes.stream()
+                                .filter(instanceType -> instanceType.cpuCount == null ||
+                                        instanceType.memoryInMB == null)
+                                .findFirst()
+                                .ifPresent(instanceType ->
+                                        fail("Found instance type without extended data present: " +
+                                                instanceType.id));
+
+                        // Check that one of the well known type is present.
+                        InstanceTypeList.InstanceType t2MicroType = instanceTypes.instanceTypes
+                                .stream()
+                                .filter(instanceType -> InstanceType.T2Micro.toString().equals
+                                        (instanceType.id))
+                                .findFirst()
+                                .orElseThrow(() -> new AssertionError("Unable to "
+                                        + "find t2.micro instance type."));
+
+                        assertEquals(1, t2MicroType.cpuCount.intValue());
+                        assertEquals(1024, t2MicroType.memoryInMB.intValue());
+                        assertNotNull(t2MicroType.storageType);
+                        assertNotNull(t2MicroType.networkType);
 
                         ctx.completeIteration();
                     } catch (AssertionError err) {

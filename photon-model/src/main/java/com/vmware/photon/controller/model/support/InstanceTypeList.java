@@ -44,6 +44,12 @@ public class InstanceTypeList {
         public Integer memoryInMB;
 
         /**
+         * The type of storage supported by this instance type.
+         * {@code null} when not applicable.
+         */
+        public String storageType;
+
+        /**
          * Size of the boot disk (in megabytes). {@code null} when not applicable.
          */
         public Integer bootDiskSizeInMB;
@@ -57,6 +63,12 @@ public class InstanceTypeList {
          * Number of data disks. {@code null} when not applicable.
          */
         public Integer dataDiskMaxCount;
+
+        /**
+         * The type of network supported by this instance type.
+         * {@code null} when not applicable.
+         */
+        public String networkType;
 
         /**
          * Constructs an instance type instance.

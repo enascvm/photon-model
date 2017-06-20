@@ -13,7 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import java.io.File;
+import java.net.URL;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -23,9 +26,11 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.support.InstanceTypeList;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Service that returns a list of instance types that are supported by AWS.
@@ -37,6 +42,13 @@ public class AWSInstanceTypeService extends StatelessService {
 
     private static final String URI_PARAM_ENDPOINT = "endpoint";
 
+    private static final String DEFAULT_AWS_INSTANCE_TYPES_FILE = "instanceTypes.json";
+
+    public static final String AWS_INSTANCE_TYPE_DATA_FILE_PROPERTY =
+            "photon-model.adapter.aws.instance.types.file";
+
+    private Map<String, InstanceTypeList.InstanceType> instanceTypeInfo = new HashMap<>();
+
     private static class Context {
         final String endpointLink;
         EndpointState endpointState;
@@ -45,6 +57,14 @@ public class AWSInstanceTypeService extends StatelessService {
         Context(String endpointLink) {
             this.endpointLink = endpointLink;
         }
+    }
+
+    @Override
+    public void handleStart(Operation startPost) {
+        // Immediately complete the operation.
+        super.handleStart(startPost);
+
+        readAdditionalInstanceTypeInfo();
     }
 
     @Override
@@ -65,6 +85,43 @@ public class AWSInstanceTypeService extends StatelessService {
 
                     op.setBodyNoCloning(context.instanceTypes).complete();
                 });
+    }
+
+    private void readAdditionalInstanceTypeInfo() {
+        Operation fileHandler = Operation.createGet(null).setCompletion((op, ex) -> {
+                    if (ex != null) {
+                        logWarning("Unable to load additional AWS instance type data. "
+                                + Utils.toString(ex));
+                        return;
+                    }
+
+                    this.instanceTypeInfo = op.getBody(AWSInstanceTypesInfo.class).instanceTypes;
+                }
+        );
+
+        try {
+            String filePath = getInstanceTypeDataFile();
+            if (filePath == null) {
+                // No external AWS instance type data file is specified. Use the embedded one.
+                URL resource = AWSInstanceTypeService.class.getResource(
+                        DEFAULT_AWS_INSTANCE_TYPES_FILE);
+                if (resource != null) {
+                    filePath = resource.getFile();
+                } else {
+                    this.logWarning("No embedded file with additional AWS instance type data.");
+                }
+            }
+            File jsonPayloadFile = new File(filePath);
+            FileUtils.readFileAndComplete(fileHandler, jsonPayloadFile);
+        } catch (Exception e) {
+            // Ignore errors.
+            logWarning("Unable to load additional AWS instance type data. "
+                    + Utils.toString(e));
+        }
+    }
+
+    private String getInstanceTypeDataFile() {
+        return System.getProperty(AWS_INSTANCE_TYPE_DATA_FILE_PROPERTY);
     }
 
     /**
@@ -94,11 +151,37 @@ public class AWSInstanceTypeService extends StatelessService {
         // Set tenant links as specified in the endpoint.
         context.instanceTypes.tenantLinks = context.endpointState.tenantLinks;
         context.instanceTypes.instanceTypes =
+                // Use AWS SDK InstanceType enum as primary source of instance type data.
                 Arrays.stream(InstanceType.values())
-                        .map(instanceType -> new InstanceTypeList.InstanceType(
-                                instanceType.toString(), instanceType.toString()))
+                        .map(instanceType -> {
+                            InstanceTypeList.InstanceType result =
+                                    new InstanceTypeList.InstanceType(
+                                            instanceType.toString(), instanceType.toString());
+
+                            InstanceTypeList.InstanceType instanceTypeInfo = this.instanceTypeInfo
+                                    .get(instanceType.toString());
+
+                            if (instanceTypeInfo != null) {
+                                // We have additional information -> populate additional fields.
+                                result.cpuCount = instanceTypeInfo.cpuCount;
+                                result.memoryInMB = instanceTypeInfo.memoryInMB;
+                                result.networkType = instanceTypeInfo.networkType;
+                                result.storageType = instanceTypeInfo.storageType;
+                                result.dataDiskMaxCount = instanceTypeInfo.dataDiskMaxCount;
+                                result.dataDiskSizeInMB = instanceTypeInfo.dataDiskSizeInMB;
+                            }
+
+                            return result;
+                        })
+                        // Filter out deprecated types.
+                        .filter(instanceType -> !Integer.valueOf(-1).equals(instanceType.cpuCount))
                         .collect(Collectors.toList());
 
         return DeferredResult.completed(context);
+    }
+
+    // Helper data class to load the additional AWS instance type information into.
+    static class AWSInstanceTypesInfo {
+        Map<String, InstanceTypeList.InstanceType> instanceTypes;
     }
 }
