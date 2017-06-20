@@ -20,6 +20,7 @@ import static com.vmware.xenon.common.UriUtils.buildUri;
 import static com.vmware.xenon.common.UriUtils.buildUriQuery;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.List;
 
 import com.microsoft.azure.management.compute.VirtualMachineSizeTypes;
@@ -30,10 +31,14 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
+import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.support.InstanceTypeList;
 import com.vmware.photon.controller.model.support.InstanceTypeList.InstanceType;
+import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.test.TestContext;
 
 /**
@@ -42,7 +47,7 @@ import com.vmware.xenon.common.test.TestContext;
 public class AzureInstanceTypeServiceTest extends AzureBaseTest {
 
     @Test
-    public void testGetInstanceTypesPositive() throws Throwable {
+    public void testGetInstanceTypes() throws Throwable {
 
         Assume.assumeFalse(this.isMock);
 
@@ -127,8 +132,34 @@ public class AzureInstanceTypeServiceTest extends AzureBaseTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testGetInstanceTypesNoEndpointLink() throws Throwable {
+    public void testGetInstanceTypes_noEndpointLink() throws Throwable {
 
         getServiceSynchronously(AzureInstanceTypeService.SELF_LINK, ServiceDocument.class);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testGetInstanceTypes_invalidEndpoint() throws Throwable {
+
+        EndpointState endpointNoRegion;
+        {
+            endpointNoRegion = new EndpointState();
+            // Copy from original end-point
+            endpointNoRegion.id = this.endpointState.id;
+            endpointNoRegion.name = this.endpointState.name;
+            endpointNoRegion.endpointType = this.endpointState.endpointType;
+            endpointNoRegion.authCredentialsLink = this.endpointState.authCredentialsLink;
+            endpointNoRegion.tenantLinks = this.endpointState.tenantLinks;
+            // Do NOT set REGION
+            endpointNoRegion.endpointProperties = Collections.emptyMap();
+
+            endpointNoRegion = TestUtils.doPost(getHost(), endpointNoRegion, EndpointState.class,
+                    UriUtils.buildUri(getHost(), EndpointService.FACTORY_LINK));
+        }
+
+        URI uri = UriUtils.appendQueryParam(
+                UriUtils.buildUri(AzureInstanceTypeService.SELF_LINK),
+                "endpoint", endpointNoRegion.documentSelfLink);
+
+        getServiceSynchronously(uri.toString(), ServiceDocument.class);
     }
 }

@@ -17,12 +17,12 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.compute.implementation.VirtualMachineSizeInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineSizesInner;
-import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
@@ -88,8 +88,7 @@ public class AzureInstanceTypeService extends StatelessService {
                     .thenApply(state -> {
                         ctx.endpointState = state;
 
-                        ctx.regionId = state.endpointProperties.getOrDefault(
-                                REGION_KEY, Region.US_WEST.name());
+                        ctx.regionId = state.endpointProperties.get(REGION_KEY);
 
                         return ctx;
                     });
@@ -212,8 +211,9 @@ public class AzureInstanceTypeService extends StatelessService {
                     logFine(() -> msg + ": COMPLETED");
                     op.setBodyNoCloning(context.instanceTypesList).complete();
                 } else {
-                    logSevere(() -> msg + ": FAILED with " + Utils.toString(err));
-                    op.fail(err);
+                    Throwable finalErr = err instanceof CompletionException ? err.getCause() : err;
+                    logSevere(() -> msg + ": FAILED with " + Utils.toString(finalErr));
+                    op.fail(finalErr);
                 }
             } finally {
                 context.close();
