@@ -154,6 +154,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
         @Test
         public void testInvalidValues() throws Throwable {
             LoadBalancerDescription missingComputeDescriptionLink = buildValidStartState();
+            LoadBalancerDescription missingRoutes = buildValidStartState();
             LoadBalancerDescription missingProtocol = buildValidStartState();
             LoadBalancerDescription missingPort = buildValidStartState();
             LoadBalancerDescription missingInstanceProtocol = buildValidStartState();
@@ -170,6 +171,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             LoadBalancerDescription noNetworkAndSubnetsSet = buildValidStartState();
 
             missingComputeDescriptionLink.computeDescriptionLink = null;
+            missingRoutes.routes = null;
             missingProtocol.routes.get(0).protocol = null;
             missingPort.routes.get(0).port = null;
             missingInstanceProtocol.routes.get(0).instanceProtocol = null;
@@ -189,7 +191,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             noNetworkAndSubnetsSet.networkName = null;
 
             {
-                LoadBalancerDescription[] states = { missingComputeDescriptionLink,
+                LoadBalancerDescription[] states = { missingComputeDescriptionLink, missingRoutes,
                         missingProtocol, missingPort, missingInstanceProtocol, missingInstancePort,
                         invalidPortNumber, invalidInstancePortNumber, missingHealthProtocol,
                         missingHealthPort, invalidHealthPortNumber, bothNetworkAndSubnetsSet,

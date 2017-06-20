@@ -233,7 +233,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
          * value is replaced by the one given in the patch request (no advanced per-item merging).
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
-        //@UsageOption(option = PropertyUsageOption.REQUIRED)
+        @UsageOption(option = PropertyUsageOption.REQUIRED)
         public List<RouteConfiguration> routes;
 
         /**
@@ -311,7 +311,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
     }
 
     static void validateRoutes(List<RouteConfiguration> routes) {
-        // TODO: 'routes' will be made required when existing client code is fixed
         if (routes != null) {
             routes.forEach(LoadBalancerDescriptionService::validateRoute);
         }

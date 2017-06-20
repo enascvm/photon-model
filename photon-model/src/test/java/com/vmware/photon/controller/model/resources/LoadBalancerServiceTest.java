@@ -157,6 +157,7 @@ public class LoadBalancerServiceTest extends Suite {
             LoadBalancerState missingEndpointLink = buildValidStartState();
             LoadBalancerState missingComputeLinks = buildValidStartState();
             LoadBalancerState missingSubnetLinks = buildValidStartState();
+            LoadBalancerState missingRoutes = buildValidStartState();
             LoadBalancerState missingProtocol = buildValidStartState();
             LoadBalancerState missingPort = buildValidStartState();
             LoadBalancerState missingInstanceProtocol = buildValidStartState();
@@ -173,6 +174,7 @@ public class LoadBalancerServiceTest extends Suite {
             missingEndpointLink.endpointLink = null;
             missingComputeLinks.computeLinks = null;
             missingSubnetLinks.subnetLinks = null;
+            missingRoutes.routes = null;
             missingProtocol.routes.get(0).protocol = null;
             missingPort.routes.get(0).port = null;
             missingInstanceProtocol.routes.get(0).instanceProtocol = null;
@@ -190,9 +192,10 @@ public class LoadBalancerServiceTest extends Suite {
 
             {
                 LoadBalancerState[] states = { missingEndpointLink, missingComputeLinks,
-                        missingSubnetLinks, missingProtocol, missingPort, missingInstanceProtocol,
-                        missingInstancePort, invalidPortNumber, invalidInstancePortNumber,
-                        missingHealthProtocol, missingHealthPort, invalidHealthPortNumber };
+                        missingSubnetLinks, missingRoutes, missingProtocol, missingPort,
+                        missingInstanceProtocol, missingInstancePort, invalidPortNumber,
+                        invalidInstancePortNumber, missingHealthProtocol, missingHealthPort,
+                        invalidHealthPortNumber };
                 for (LoadBalancerState state : states) {
                     postServiceSynchronously(LoadBalancerService.FACTORY_LINK,
                             state, LoadBalancerState.class,

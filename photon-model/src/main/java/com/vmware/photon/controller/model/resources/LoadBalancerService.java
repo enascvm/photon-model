@@ -140,7 +140,7 @@ public class LoadBalancerService extends StatefulService {
          * value is replaced by the one given in the patch request (no advanced per-item merging).
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
-        //@UsageOption(option = PropertyUsageOption.REQUIRED)
+        @UsageOption(option = PropertyUsageOption.REQUIRED)
         public List<RouteConfiguration> routes;
 
         /**
