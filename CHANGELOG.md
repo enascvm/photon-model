@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## 0.6.20-SNAPSHOT
+## 0.6.20
+* Added service to fetch list of instance types supported by AWS.
+* Added support in Azure adapter to provision VM from private image.
+* Removed AWS S3 enumeration.
+* Added multiple listeners and healthcheck configuration in AWS.
 
 ## 0.6.19
 * Enhanced ResourceOperationSpec with:
