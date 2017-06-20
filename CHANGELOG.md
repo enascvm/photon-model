@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.21-SNAPSHOT
+
 ## 0.6.20
 * Added service to fetch list of instance types supported by AWS.
 * Added support in Azure adapter to provision VM from private image.
