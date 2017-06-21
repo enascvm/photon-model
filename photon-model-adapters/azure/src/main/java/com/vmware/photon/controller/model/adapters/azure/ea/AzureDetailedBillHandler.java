@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import com.opencsv.CSVReader;
@@ -79,7 +80,7 @@ public class AzureDetailedBillHandler {
     }
 
     public boolean parseDetailedCsv(CSVReader csvReader, long billProcessedTimeMillis,
-            String currency, BiConsumer<Map<String, AzureSubscription>, Long> dailyStatsConsumer,
+            String currency, Consumer<Map<String, AzureSubscription>> dailyStatsConsumer,
             BiConsumer<Map<String, AzureSubscription>, Long> monthlyStatsConsumer) throws IOException {
         logger.fine("Beginning to parse CSV billFileReader.");
         HeaderColumnNameMappingStrategy<EaDetailedBillElement> strategy =
@@ -93,14 +94,10 @@ public class AzureDetailedBillHandler {
         Map<String, AzureSubscription> monthlyBill = new HashMap<>();
         String[] nextRow;
         Long prevRowEpoch = null;
-        nextRow = getFirstLineToParse(csvReader, billProcessedTimeMillis);
-        if (nextRow == null) {
-            // There are no rows in the bill that should be parsed.
-            monthlyStatsConsumer.accept(monthlyBill, billProcessedTimeMillis);
-            return true;
-        }
+        nextRow = populateSubscriptionCostAndGetFirstLineToProcessServiceStats(csvReader,
+                billProcessedTimeMillis, monthlyBill, currency);
         do {
-            if (nextRow.length != BillHeaders.values().length) {
+            if (nextRow == null || nextRow.length != BillHeaders.values().length) {
                 // Skip any blank or malformed rows
                 continue;
             }
@@ -118,16 +115,17 @@ public class AzureDetailedBillHandler {
                 // This indicates that we have processed all rows belonging to a
                 // corresponding day in the current month's bill.
                 // Consume the batch
-                dailyStatsConsumer.accept(monthlyBill, csvReader.getLinesRead());
+                dailyStatsConsumer.accept(monthlyBill);
                 break;
             }
             prevRowEpoch = curRowEpoch;
         } while ((nextRow = csvReader.readNext()) != null);
-        if (nextRow == null) {
+        if (nextRow == null && monthlyBill.size() > 0) {
             parsingComplete = true;
+            dailyStatsConsumer.accept(monthlyBill);
             monthlyStatsConsumer.accept(monthlyBill, billProcessedTimeMillis);
+            logger.fine("Finished parsing CSV bill.");
         }
-        logger.fine("Finished parsing CSV billFileReader.");
         return parsingComplete;
     }
 
@@ -138,11 +136,15 @@ public class AzureDetailedBillHandler {
      * @param csvReader the reader reading the CSV file.
      * @param billProcessedTimeMillis the time (in milliseconds since epoch) till which the bill
      *                                was parsed in the last run.
+     * @param monthlyBill stores the monthly subscription cost and daily service costs.
+     * @param currency in which the costs are to be stored.
      * @return the first row that should be parsed; null if all rows of the bill have been parsed
      * or if the bill file is empty.
      * @throws IOException while parsing the bill.
      */
-    private String[] getFirstLineToParse(CSVReader csvReader, long billProcessedTimeMillis)
+    private String[] populateSubscriptionCostAndGetFirstLineToProcessServiceStats(
+            CSVReader csvReader, long billProcessedTimeMillis,
+            Map<String, AzureSubscription> monthlyBill, String currency)
             throws IOException {
         String[] nextRow;
         long timeToStartBillProcessing = getTimeToStartBillProcessing(billProcessedTimeMillis);
@@ -161,8 +163,25 @@ public class AzureDetailedBillHandler {
                         String.format("Skipping row since it has been parsed in the last run: %s",
                                 (Arrays.toString(nextRow))));
             }
+            // Since we need the monthly subscription cost, we need to populate
+            // these costs from the beginning of the month and only other costs
+            // (service, resources, etc) are persisted for the 5 days since
+            // the last collection ran.
+            EaDetailedBillElement detailedBillElement = AzureCostStatsServiceHelper
+                    .sanitizeDetailedBillElement(nextRow, currency);
+            populateMonthlySubscriptionCost(monthlyBill, detailedBillElement);
         }
         return nextRow;
+    }
+
+    private void populateMonthlySubscriptionCost(Map<String, AzureSubscription> monthlyBill,
+            EaDetailedBillElement detailedBillElement) {
+        AzureSubscription subscription = monthlyBill.get(detailedBillElement.subscriptionGuid);
+        if (subscription == null) {
+            subscription = createSubscriptionDto(detailedBillElement);
+        }
+        subscription.addCost(detailedBillElement.extendedCost);
+        monthlyBill.put(detailedBillElement.subscriptionGuid, subscription);
     }
 
     /**
@@ -172,36 +191,20 @@ public class AzureDetailedBillHandler {
      * @param billElement the bill row.
      * @param monthlyBill the map with the account ID as the key and the account details
      *                          (containing the service and resource-level costs) as the value.
-     * @return the map with the account ID as the key and the account details (containing
-     *         the service and resource-level costs) as the value.
      */
-    private Map<String, AzureSubscription> segregateSubscriptionServiceResourceCost(
+    private void segregateSubscriptionServiceResourceCost(
             EaDetailedBillElement billElement, Map<String, AzureSubscription> monthlyBill) {
 
         String subscriptionGuid = billElement.subscriptionGuid;
         AzureSubscription subscription = monthlyBill.get(subscriptionGuid);
         if (subscription == null) {
             // New subscription found in the bill.
-            AzureSubscription newSubscription = createSubscriptionDto(billElement);
-            AzureService newService = newSubscription.addToServicesMap(billElement);
-            newService.addToResourcesMap(billElement);
-            monthlyBill.put(subscriptionGuid, newSubscription);
-        } else if (subscription.fetchServiceDetail(billElement.meterCategory) == null) {
-            // New service found.
-            subscription.addCost(billElement.extendedCost);
-            AzureService newService = subscription.addToServicesMap(billElement);
-            newService.addToResourcesMap(billElement);
-            monthlyBill.put(subscriptionGuid, subscription);
-        } else {
-            subscription.addCost(billElement.extendedCost);
-            AzureService service = subscription.fetchServiceDetail(billElement.meterCategory);
-            service.addToDailyCosts(billElement.epochDate, billElement.extendedCost);
-            service.addToResourcesMap(billElement);
-            monthlyBill.put(subscriptionGuid, subscription);
+            subscription = createSubscriptionDto(billElement);
         }
-        logger.fine(() -> String
-                .format("Got %d Azure subscriptions in the bill.", monthlyBill.size()));
-        return monthlyBill;
+        subscription.addCost(billElement.extendedCost);
+        AzureService service = subscription.addToServicesMap(billElement);
+        service.addToResourcesMap(billElement);
+        monthlyBill.put(subscriptionGuid, subscription);
     }
 
     private AzureSubscription createSubscriptionDto(

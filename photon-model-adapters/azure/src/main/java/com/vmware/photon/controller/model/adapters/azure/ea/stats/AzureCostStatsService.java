@@ -753,9 +753,9 @@ public class AzureCostStatsService extends StatelessService {
     /**
      * Consumes the daily bill rows and creates stats
      */
-    private BiConsumer<Map<String, AzureSubscription>, Long> getDailyStatsConsumer(
+    private Consumer<Map<String, AzureSubscription>> getDailyStatsConsumer(
             Context context, Stages next) {
-        return (newMonthlyBillBatch, noOfLinesRead) -> {
+        return (newMonthlyBillBatch) -> {
             List<AzureSubscription> newSubscriptions = getNewSubscriptions(
                     newMonthlyBillBatch, context.allSubscriptionsCost);
             populateMonthlySubscriptionCost(context, newMonthlyBillBatch);
@@ -1441,7 +1441,7 @@ public class AzureCostStatsService extends StatelessService {
             }
         } catch (Exception ex) {
             logWarning(() -> String
-                    .format("Unable to clean-up file: %s", context.billFile.getParentFile()));
+                    .format("Unable to clean-up file: %s %s", context.billFile.getParentFile(), Utils.toString(ex)));
         }
     }
 

@@ -79,6 +79,7 @@ public class AzureSubscription extends AzureEntity {
         if (serviceDetails == null) {
             serviceDetails = createServiceDetailDto(detailedBillElement);
         } else {
+            serviceDetails.addToResourcesMap(detailedBillElement);
             serviceDetails.addToDailyCosts(detailedBillElement.epochDate,
                     detailedBillElement.extendedCost);
         }
