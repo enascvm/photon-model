@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -79,9 +79,6 @@ import com.microsoft.azure.management.compute.implementation.VirtualMachineImage
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.AddressSpace;
 import com.microsoft.azure.management.network.IPAllocationMethod;
-import com.microsoft.azure.management.network.SecurityRuleAccess;
-import com.microsoft.azure.management.network.SecurityRuleDirection;
-import com.microsoft.azure.management.network.SecurityRuleProtocol;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
@@ -90,7 +87,6 @@ import com.microsoft.azure.management.network.implementation.NetworkSecurityGrou
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 import com.microsoft.azure.management.network.implementation.PublicIPAddressInner;
 import com.microsoft.azure.management.network.implementation.PublicIPAddressesInner;
-import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
 import com.microsoft.azure.management.network.implementation.SubnetInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworksInner;
@@ -122,6 +118,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommission
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -136,9 +133,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
-import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
@@ -1004,6 +999,9 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
+        NetworkSecurityGroupsInner azureClient = getNetworkManagementClientImpl(ctx)
+                .networkSecurityGroups();
+
         List<DeferredResult<NetworkSecurityGroupInner>> createSGDR = ctx.nics.stream()
 
                 // Security Group is requested but no existing security group is mapped.
@@ -1011,9 +1009,24 @@ public class AzureInstanceService extends StatelessService {
                         && nicCtx.securityGroup == null)
 
                 .map(nicCtx -> {
-                    SecurityGroupState sgState = nicCtx.securityGroupState();
-                    NetworkSecurityGroupInner nsg = newAzureSecurityGroup(ctx, sgState);
-                    return createSecurityGroup(ctx, nicCtx, nsg);
+                    SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
+
+                    String rgName = nicCtx.securityGroupRGState != null
+                            ? nicCtx.securityGroupRGState.name
+                            : ctx.resourceGroup.name();
+
+                    String msg = "Create Azure Security Group ["
+                            + rgName + "/" + sgState.name
+                            + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
+                            + ctx.vmName
+                            + "] VM";
+
+                    return AzureSecurityGroupUtils.createSecurityGroup(this, azureClient,
+                            sgState, rgName, ctx.resourceGroup.location(), msg)
+                            .thenApply(sg -> {
+                                nicCtx.securityGroup = sg;
+                                return sg;
+                            });
                 })
 
                 .collect(Collectors.toList());
@@ -1025,110 +1038,6 @@ public class AzureInstanceService extends StatelessService {
                 handleAllocation(ctx, nextStage);
             }
         });
-    }
-
-    private NetworkSecurityGroupInner newAzureSecurityGroup(AzureInstanceContext ctx,
-            SecurityGroupState sg) {
-
-        if (sg == null) {
-            throw new IllegalStateException("SecurityGroup state should not be null.");
-        }
-
-        List<SecurityRuleInner> securityRules = new ArrayList<>();
-        final AtomicInteger priority = new AtomicInteger(1000);
-        if (sg.ingress != null) {
-            sg.ingress.forEach(rule -> securityRules.add(newAzureSecurityRule(rule,
-                    SecurityRuleDirection.INBOUND, priority.getAndIncrement())));
-        }
-
-        priority.set(1000);
-        if (sg.egress != null) {
-            sg.egress.forEach(rule -> securityRules.add(newAzureSecurityRule(rule,
-                    SecurityRuleDirection.OUTBOUND, priority.getAndIncrement())));
-        }
-
-        NetworkSecurityGroupInner nsg = new NetworkSecurityGroupInner();
-        nsg.withLocation(ctx.resourceGroup.location());
-        nsg.withSecurityRules(securityRules);
-
-        return nsg;
-    }
-
-    private SecurityRuleInner newAzureSecurityRule(Rule rule, SecurityRuleDirection direction,
-            int priority) {
-        SecurityRuleInner sr = new SecurityRuleInner();
-        sr.withPriority(priority);
-        sr.withAccess(SecurityRuleAccess.ALLOW);
-        sr.withDirection(direction);
-        if (SecurityRuleDirection.INBOUND.equals(direction)) {
-            sr.withSourceAddressPrefix(rule.ipRangeCidr);
-            sr.withDestinationAddressPrefix(SecurityGroupService.ANY);
-
-            sr.withSourcePortRange(rule.ports);
-            sr.withDestinationPortRange(SecurityGroupService.ANY);
-        } else {
-            sr.withSourceAddressPrefix(SecurityGroupService.ANY);
-            sr.withDestinationAddressPrefix(rule.ipRangeCidr);
-
-            sr.withSourcePortRange(SecurityGroupService.ANY);
-            sr.withDestinationPortRange(rule.ports);
-        }
-        sr.withName(rule.name);
-        sr.withProtocol(SecurityRuleProtocol.ASTERISK);
-
-        return sr;
-    }
-
-    private DeferredResult<NetworkSecurityGroupInner> createSecurityGroup(
-            AzureInstanceContext ctx,
-            AzureNicContext nicCtx,
-            NetworkSecurityGroupInner securityGroupToCreate) {
-
-        NetworkSecurityGroupsInner azureClient = getNetworkManagementClientImpl(ctx)
-                .networkSecurityGroups();
-
-        final String nsgName = nicCtx.securityGroupState().name;
-
-        final String nsgRGName = nicCtx.securityGroupRGState != null
-                ? nicCtx.securityGroupRGState.name
-                : ctx.resourceGroup.name();
-
-        final String msg = "Create Azure Security Group ["
-                + nsgRGName + "/" + nsgName
-                + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
-                + ctx.vmName
-                + "] VM";
-
-        AzureProvisioningCallback<NetworkSecurityGroupInner> handler = new AzureProvisioningCallback<NetworkSecurityGroupInner>(
-                this, msg) {
-            @Override
-            protected DeferredResult<NetworkSecurityGroupInner> consumeProvisioningSuccess(
-                    NetworkSecurityGroupInner securityGroup) {
-
-                nicCtx.securityGroup = securityGroup;
-
-                return DeferredResult.completed(securityGroup);
-            }
-
-            @Override
-            protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<NetworkSecurityGroupInner> checkProvisioningStateCallback) {
-                return () -> azureClient.getByResourceGroupAsync(
-                        nsgRGName,
-                        nsgName,
-                        null /* expand */,
-                        checkProvisioningStateCallback);
-            }
-
-            @Override
-            protected String getProvisioningState(NetworkSecurityGroupInner body) {
-                return body.provisioningState();
-            }
-        };
-
-        azureClient.createOrUpdateAsync(nsgRGName, nsgName, securityGroupToCreate, handler);
-
-        return handler.toDeferredResult();
     }
 
     private void createNICs(AzureInstanceContext ctx, AzureInstanceStage nextStage) {

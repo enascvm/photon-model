@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -73,7 +73,8 @@ import com.vmware.xenon.common.UriUtils;
 public class TestAzureProvisionTask extends AzureBaseTest {
 
     // Every test in addition might change it.
-    private static String azureVMName = generateName("testProv-");
+    private static String azureVMName = generateName("test-");
+    // }}
 
     public boolean skipStats = true;
 
@@ -189,8 +190,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
      * It duplicates {@link #testProvision()} and just points to an external/shared Network.
      */
     @Test
-    @Ignore("Since azure build timeouts due to the time consuming provision-decomission VM executed"
-            + "by the tests. So far we sacrifice this test.")
+    @Ignore("Since azure build timeouts due to the time consuming provision-decommission VM "
+            + "executed by the tests. So far we sacrifice this test.")
     public void testProvisionVMUsingSharedNetwork() throws Throwable {
 
         // The test is only suitable for real (non-mocking env).
@@ -223,7 +224,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         // END of prepare phase.
 
         // In this scenario mark the VM name (and its corresponding RG) with "-withSharedNW"
-        String vmName = azureVMName + "-withSharedNW";
+        String vmName = azureVMName + "-SharedNW";
 
         // create a Azure VM compute resource
         this.vmState = createDefaultVMResource(getHost(), vmName,
@@ -345,7 +346,6 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         // Ensure that from the list of provided network resource groups,
         // and security group resource groups, the one with the correct type has been chosen.
-        // For network, and sg, the correct RG is the default one named over the azureVMName.
         // Verifying the resources can be obtained from this RG, ensures they have been placed
         // correctly.
         NetworkManagementClientImpl networkClient = getAzureSdkClients()
@@ -357,14 +357,14 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 networkClient, vmRGName, AzureTestUtil.AZURE_NETWORK_NAME);
 
         assertNotNull("Azure virtual network object '" + vmRGName + "/"
-                + AzureTestUtil.AZURE_NETWORK_NAME + "' is not found.",
+                        + AzureTestUtil.AZURE_NETWORK_NAME + "' is not found.",
                 provisionedNetwork);
 
         NetworkSecurityGroupInner provisionedSG = AzureTestUtil.getAzureSecurityGroup(
                 networkClient, vmRGName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME);
 
         assertNotNull("Azure security group object '" + vmRGName + "/"
-                + AzureTestUtil.AZURE_SECURITY_GROUP_NAME + "' is not found.",
+                        + AzureTestUtil.AZURE_SECURITY_GROUP_NAME + "' is not found.",
                 provisionedSG);
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -24,12 +24,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -43,16 +45,22 @@ import com.microsoft.rest.ServiceResponseBuilder.Factory;
 
 import okhttp3.OkHttpClient;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
@@ -63,6 +71,7 @@ import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * Utility methods.
@@ -464,4 +473,34 @@ public class AzureUtils {
                         ex.getMessage())));
         parentOp.fail(exs.get(firstKey));
     }
+
+    /**
+     * Utility method for filtering resource group list by type, and returning the first one, which
+     * is of ResourceGroupStateType.AzureResourceGroup type.
+     */
+    public static DeferredResult<ResourceGroupState> filterRGsByType(ServiceHost serviceHost,
+            Set<String> groupLinks, String endpointLink, List<String> tenantLinks) {
+
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(ResourceGroupState.class)
+                .addInClause(ResourceState.FIELD_NAME_SELF_LINK, groupLinks)
+                .addCompositeFieldClause(
+                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        ComputeProperties.RESOURCE_TYPE_KEY,
+                        ResourceGroupStateType.AzureResourceGroup.name());
+
+        QueryStrategy<ResourceGroupState> queryByPages = new QueryTop<>(
+                serviceHost,
+                qBuilder.build(),
+                ResourceGroupState.class,
+                tenantLinks,
+                endpointLink)
+                // only one group is required
+                .setMaxResultsLimit(1);
+
+        return queryByPages
+                .collectDocuments(Collectors.toList())
+                .thenApply(rgStates -> rgStates.stream().findFirst().orElse(null));
+    }
+
 }

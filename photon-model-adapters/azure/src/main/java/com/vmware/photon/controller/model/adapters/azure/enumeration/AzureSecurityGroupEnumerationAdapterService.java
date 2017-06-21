@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.adapters.azure.AzureUriPaths.AZURE_FIREWALL_ADAPTER;
+import static com.vmware.photon.controller.model.adapters.azure.AzureUriPaths.AZURE_SECURITY_GROUP_ADAPTER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_NETWORK_SECURITY_GROUP_URI;
@@ -183,9 +183,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 holder.localState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
                 holder.localState.resourcePoolLink = this.request.original.resourcePoolLink;
 
-                // TODO: AzureFirewallService currently doesn't exist.
                 holder.localState.instanceAdapterReference = UriUtils
-                        .buildUri(this.service.getHost(), AZURE_FIREWALL_ADAPTER);
+                        .buildUri(this.service.getHost(), AZURE_SECURITY_GROUP_ADAPTER);
             }
 
             // Fields explicitly affected by Azure

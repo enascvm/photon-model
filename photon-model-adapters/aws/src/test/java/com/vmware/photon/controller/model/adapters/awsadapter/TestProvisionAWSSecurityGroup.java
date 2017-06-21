@@ -350,7 +350,6 @@ public class TestProvisionAWSSecurityGroup {
         securityGroup.egress = getGlobalSSHRule();
         securityGroup.egress.get(0).ipRangeCidr = this.vpc.getCidrBlock();
         securityGroup.authCredentialsLink = creds.documentSelfLink;
-        securityGroup.authCredentialsLink = creds.documentSelfLink;
         securityGroup.resourcePoolLink = pool.documentSelfLink;
         securityGroup.regionId = this.region;
         securityGroup.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,

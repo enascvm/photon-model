@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
@@ -27,24 +26,20 @@ import com.microsoft.azure.management.network.implementation.SubnetsInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 
-import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
-import com.vmware.photon.controller.model.query.QueryStrategy;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
-import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
-import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * Context object to store relevant information during different stages.
@@ -254,28 +249,18 @@ public class AzureInstanceContext extends
                 .map(nicCtx -> {
                     String sgName = nicCtx.securityGroupState().name;
 
-                    String msg = "Getting Azure Security Group["
+                    String msg = "Getting Azure Security Group ["
                             + nicCtx.securityGroupRGState.name + "/" + sgName
                             + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
                             + context.vmName
                             + "] VM";
 
-                    AzureDeferredResultServiceCallback<NetworkSecurityGroupInner> handler = new AzureDeferredResultServiceCallback<NetworkSecurityGroupInner>(
-                            service(), msg) {
-                        @Override
-                        protected DeferredResult<NetworkSecurityGroupInner> consumeSuccess(
-                                NetworkSecurityGroupInner securityGroup) {
-                            nicCtx.securityGroup = securityGroup;
-                            return DeferredResult.completed(securityGroup);
-                        }
-                    };
-                    azureClient.getByResourceGroupAsync(
-                            nicCtx.securityGroupRGState.name,
-                            sgName,
-                            null /* expand */,
-                            handler);
-
-                    return handler.toDeferredResult();
+                    return AzureSecurityGroupUtils.getSecurityGroup(service(), azureClient,
+                            nicCtx.securityGroupRGState.name, sgName, msg)
+                            .thenApply(sg -> {
+                                nicCtx.securityGroup = sg;
+                                return sg;
+                            });
                 })
                 .collect(Collectors.toList());
 
@@ -309,7 +294,9 @@ public class AzureInstanceContext extends
                         && nicCtx.networkState.groupLinks != null
                         && !nicCtx.networkState.groupLinks.isEmpty())
 
-                .map(nicCtx -> filterRGsByType(context, nicCtx.networkState.groupLinks)
+                .map(nicCtx -> AzureUtils.filterRGsByType(service().getHost(),
+                        nicCtx.networkState.groupLinks, context.child.endpointLink,
+                        context.childAuth.tenantLinks)
                         .thenAccept(rgState -> nicCtx.networkRGState = rgState))
 
                 .collect(Collectors.toList());
@@ -344,9 +331,10 @@ public class AzureInstanceContext extends
                         && nicCtx.securityGroupState().groupLinks != null
                         && !nicCtx.securityGroupState().groupLinks.isEmpty())
 
-                .map(nicCtx -> filterRGsByType(
-                        context, nicCtx.securityGroupState().groupLinks)
-                                .thenAccept(rgState -> nicCtx.securityGroupRGState = rgState))
+                .map(nicCtx -> AzureUtils.filterRGsByType(service().getHost(),
+                        nicCtx.securityGroupState().groupLinks, context.child.endpointLink,
+                        context.childAuth.tenantLinks)
+                        .thenAccept(rgState -> nicCtx.securityGroupRGState = rgState))
 
                 .collect(Collectors.toList());
 
@@ -359,35 +347,6 @@ public class AzureInstanceContext extends
             }
             return context;
         });
-    }
-
-    /**
-     * Utility method for filtering resource group list by type, and returning the first one, which
-     * is of ResourceGroupStateType.AzureResourceGroup type.
-     */
-    private DeferredResult<ResourceGroupState> filterRGsByType(
-            AzureInstanceContext context, Set<String> groupLinks) {
-
-        Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(ResourceGroupState.class)
-                .addInClause(ResourceState.FIELD_NAME_SELF_LINK, groupLinks)
-                .addCompositeFieldClause(
-                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.RESOURCE_TYPE_KEY,
-                        ResourceGroupStateType.AzureResourceGroup.name());
-
-        QueryStrategy<ResourceGroupState> queryByPages = new QueryTop<>(
-                service().getHost(),
-                qBuilder.build(),
-                ResourceGroupState.class,
-                context.childAuth.tenantLinks,
-                context.child.endpointLink)
-                        // only one group is required
-                        .setMaxResultsLimit(1);
-
-        return queryByPages
-                .collectDocuments(Collectors.toList())
-                .thenApply(rgStates -> rgStates.stream().findFirst().orElse(null));
     }
 
     /**

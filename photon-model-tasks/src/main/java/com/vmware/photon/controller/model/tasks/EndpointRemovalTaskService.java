@@ -92,7 +92,6 @@ public class EndpointRemovalTaskService
             Utils.buildKind(SecurityGroupState.class),
             Utils.buildKind(SubnetState.class),
             Utils.buildKind(StorageDescription.class),
-            Utils.buildKind(ResourceGroupState.class),
             Utils.buildKind(ImageState.class)
     );
 
@@ -132,6 +131,11 @@ public class EndpointRemovalTaskService
          * Delete associated resource pools
          */
         DELETE_RELATED_RESOURCE_POOLS,
+
+        /**
+         * Delete associated resource groups
+         */
+        DELETE_RELATED_RESOURCE_GROUPS,
 
         FINISHED,
         FAILED
@@ -248,7 +252,13 @@ public class EndpointRemovalTaskService
             deleteAssociatedDocuments(currentState, RESOURCE_TYPES_TO_DELETE, SubStage.DELETE_RELATED_RESOURCE_POOLS);
             break;
         case DELETE_RELATED_RESOURCE_POOLS:
-            deleteAssociatedDocuments(currentState, Arrays.asList(Utils.buildKind(ResourcePoolState.class)), SubStage.FINISHED);
+            deleteAssociatedDocuments(currentState, Arrays.asList(Utils.buildKind(ResourcePoolState.class)), SubStage.DELETE_RELATED_RESOURCE_GROUPS);
+            break;
+        case DELETE_RELATED_RESOURCE_GROUPS:
+            /* this needs to happen last, as there may be dependencies between resource groups
+            and other document types (e.g., security groups, resource pools) */
+            deleteAssociatedDocuments(currentState,
+                    Arrays.asList(Utils.buildKind(ResourceGroupState.class)), SubStage.FINISHED);
             break;
         case FAILED:
             break;

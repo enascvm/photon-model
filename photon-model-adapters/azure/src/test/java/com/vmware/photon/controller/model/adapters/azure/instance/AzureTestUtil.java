@@ -1356,4 +1356,29 @@ public class AzureTestUtil {
 
         return metricNames;
     }
+
+    public static SecurityGroupState getSecurityGroupState(VerificationHost host,
+            String  securityGroupLink) throws Throwable {
+        Operation response = new Operation();
+        getSecurityGroupState(host, securityGroupLink, response);
+        return response.getBody(SecurityGroupState.class);
+    }
+
+    private static void getSecurityGroupState(VerificationHost host,
+            String securityGroupLink, Operation response) throws Throwable {
+
+        host.testStart(1);
+        URI securityGroupURI = UriUtils.buildUri(host, securityGroupLink);
+        Operation startGet = Operation.createGet(securityGroupURI)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        host.failIteration(e);
+                        return;
+                    }
+                    response.setBody(o.getBody(SecurityGroupState.class));
+                    host.completeIteration();
+                });
+        host.send(startGet);
+        host.testWait();
+    }
 }
