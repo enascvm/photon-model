@@ -94,7 +94,6 @@ public class LoadBalancerService extends StatefulService {
          * availability zones, and have nothing to do with the subnets the cluster instances are
          * attached to.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Set<String> subnetLinks;
 
