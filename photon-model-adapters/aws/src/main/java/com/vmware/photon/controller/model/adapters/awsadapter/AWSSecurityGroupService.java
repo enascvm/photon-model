@@ -160,6 +160,10 @@ public class AWSSecurityGroupService extends StatelessService {
     }
 
     private DeferredResult<AWSSecurityGroupContext> getAWSClient(AWSSecurityGroupContext context) {
+        if (context.request.isMockRequest) {
+            return DeferredResult.completed(context);
+        }
+
         DeferredResult<AWSSecurityGroupContext> r = new DeferredResult<>();
         context.client = new AWSSecurityGroupClient(this,
                 this.clientManager.getOrCreateEC2Client(context.credentials,

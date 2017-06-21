@@ -169,6 +169,10 @@ public class AWSSubnetService extends StatelessService {
     }
 
     private DeferredResult<AWSSubnetContext> getAWSClient(AWSSubnetContext context) {
+        if (context.request.isMockRequest) {
+            return DeferredResult.completed(context);
+        }
+
         DeferredResult<AWSSubnetContext> r = new DeferredResult<>();
         context.client = new AWSNetworkClient(this,
                 this.clientManager.getOrCreateEC2Client(
