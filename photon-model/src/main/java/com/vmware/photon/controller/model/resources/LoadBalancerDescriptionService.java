@@ -192,34 +192,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
         public Set<String> subnetLinks;
 
         /**
-         * Load balancer protocol.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public String protocol;
-
-        /**
-         * The port the load balancer is listening on.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public Integer port;
-
-        /**
-         * The protocol to use for routing traffic to instances.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public String instanceProtocol;
-
-        /**
-         * The port on which the instances are listening.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public Integer instancePort;
-
-        /**
          * Internet-facing load balancer or an internal load balancer
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)

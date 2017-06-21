@@ -99,34 +99,6 @@ public class LoadBalancerService extends StatefulService {
         public Set<String> subnetLinks;
 
         /**
-         * Load balancer protocol.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public String protocol;
-
-        /**
-         * The port the load balancer is listening on.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public Integer port;
-
-        /**
-         * The protocol to use for routing traffic to instances.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public String instanceProtocol;
-
-        /**
-         * The port on which the instances are listening.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Deprecated
-        public Integer instancePort;
-
-        /**
          * Internet-facing load balancer or an internal load balancer
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_19)
@@ -166,10 +138,6 @@ public class LoadBalancerService extends StatefulService {
                 targetState.regionId = this.regionId;
                 targetState.computeLinks = this.computeLinks;
                 targetState.subnetLinks = this.subnetLinks;
-                targetState.protocol = this.protocol;
-                targetState.port = this.port;
-                targetState.instanceProtocol = this.instanceProtocol;
-                targetState.instancePort = this.instancePort;
                 targetState.routes = this.routes;
                 targetState.instanceAdapterReference = this.instanceAdapterReference;
                 targetState.internetFacing = this.internetFacing;
