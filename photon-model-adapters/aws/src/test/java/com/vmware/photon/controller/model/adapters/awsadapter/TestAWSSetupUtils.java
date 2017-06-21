@@ -302,7 +302,7 @@ public class TestAWSSetupUtils {
 
         NicSpec nicSpec = NicSpec.create()
                 .withSubnetSpec(subnets.get(0))
-                .withStaticIpAssignment();
+                .withDynamicIpAssignment();
 
         SINGLE_NIC_SPEC = new AwsNicSpecs(network, Collections.singletonList(nicSpec));
     }
@@ -457,7 +457,7 @@ public class TestAWSSetupUtils {
 
             NicSpec nicSpec = NicSpec.create()
                     .withSubnetSpec(subnets.get(0))
-                    .withStaticIpAssignment();
+                    .withDynamicIpAssignment();
 
             awsTestContext.put(NIC_SPECS_KEY, new AwsNicSpecs(network, Collections.singletonList(nicSpec)));
         }
@@ -1103,17 +1103,9 @@ public class TestAWSSetupUtils {
                 nicDescription.id = "nicDesc" + i;
                 nicDescription.name = "nicDesc" + i;
                 nicDescription.deviceIndex = i;
-                nicDescription.assignment = IpAssignment.DYNAMIC;
-
+                nicDescription.assignment = nicSpec.getIpAssignment();
                 nicDescription.tenantLinks = endpointState.tenantLinks;
                 nicDescription.endpointLink = endpointState.documentSelfLink;
-
-                if (i == 0) {
-                    // Set static ip only to default (device index=0) NIC
-                    nicDescription.assignment = nicSpec.getIpAssignment();
-                    nicDescription.address = nicSpec.staticIp();
-
-                }
 
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
@@ -1139,14 +1131,6 @@ public class TestAWSSetupUtils {
 
             nicState.securityGroupLinks = new ArrayList<>();
             nicState.securityGroupLinks.add(existingSecurityGroupState.documentSelfLink);
-
-            if (i == 0) {
-                // Set static ip only to default (device index=0) NIC
-                nicState.address = nicSpec.staticIp();
-                // To prevent java.lang.IllegalArgumentException: both networkLink and IP cannot be
-                // set
-                nicState.networkLink = null;
-            }
 
             if (addNewSecurityGroup) {
                 // Create security group state for a new security group
