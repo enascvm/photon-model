@@ -34,12 +34,14 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -301,6 +303,22 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
     }
 
     /**
+     * By default return
+     * {@code this.endpointState.endpointProperties.get(EndpointConfigRequest.REGION_KEY)} which
+     * might be {@code null}. Descendants might override to provide specific region in case
+     * REGION_KEY property is not specified.
+     */
+    public String getEndpointRegion() {
+        AssertUtil.assertNotNull(
+                this.endpointState,
+                "endpointState should have been initialized by getEndpointState()");
+
+        return this.endpointState.endpointProperties != null
+                ? this.endpointState.endpointProperties.get(EndpointConfigRequest.REGION_KEY)
+                : null;
+    }
+
+    /**
      * Resolve {@code AuthCredentialsServiceState end-point auth} from {@link #endpointState} and
      * set it to {@link #endpointAuthState}.
      */
@@ -399,6 +417,11 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 .addKindFieldClause(context.localStateClass)
                 // Add remote resources IDs
                 .addInClause(ResourceState.FIELD_NAME_ID, remoteIds);
+
+        if (getEndpointRegion() != null) {
+            // Limit documents within end-point region
+            qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, getEndpointRegion());
+        }
 
         // Delegate to descendants to any doc specific criteria
         customizeLocalStatesQuery(qBuilder);
@@ -500,6 +523,11 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         if (currentState == null) {
             // Create case
 
+            if (localState.regionId == null) {
+                // By default populate REGION_ID, if not already set by descendant
+                localState.regionId = getEndpointRegion();
+            }
+
             if (isApplyInfraFields()) {
                 // By default populate TENANT_LINKS
                 localState.tenantLinks = this.endpointState.tenantLinks;
@@ -514,24 +542,26 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
             localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         }
 
-        DeferredResult<Set<String>> tagsDR = TagsUtil.createOrUpdateTagStates(
+        DeferredResult<Set<String>> tagLinksDR = TagsUtil.createOrUpdateTagStates(
                 this.service,
                 localState,
                 currentState,
                 localStateHolder.remoteTags);
 
-        return tagsDR
-                .thenCompose(tagsSet -> {
-                    localState.tagLinks = tagsSet;
-                    localStateOp.setBody(localState);
-                    return DeferredResult.completed(localStateOp);
+        return tagLinksDR
+                .thenApply(tagLinks -> {
+                    localState.tagLinks = tagLinks;
+
+                    localStateOp.setBodyNoCloning(localState);
+
+                    return localStateOp;
                 })
-                .thenCompose(uodatedLocalStateOp -> this.service.sendWithDeferredResult(uodatedLocalStateOp)
+                .thenCompose(this.service::sendWithDeferredResult)
                 .whenComplete((ignoreOp, exc) -> {
                     String msg = "%s local %s(id=%s) to match remote resources";
                     if (exc != null) {
                         this.service.logWarning(
-                                () -> String.format(msg + ": ERROR - %s",
+                                () -> String.format(msg + ": FAILED with %s",
                                         localStateOp.getAction(),
                                         localState.getClass().getSimpleName(),
                                         localState.id,
@@ -543,7 +573,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                                         localState.getClass().getSimpleName(),
                                         localState.id));
                     }
-                }));
+                });
     }
 
     /**
@@ -571,10 +601,16 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 () -> String.format(msg, context.localStateClass.getSimpleName(), "STARTING"));
 
         Query.Builder qBuilder = Query.Builder.create()
+                // Add documents' class
                 .addKindFieldClause(context.localStateClass)
                 .addRangeClause(
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
                         createLessThanRange(context.enumStartTimeInMicros));
+
+        if (getEndpointRegion() != null) {
+            // Limit documents within end-point region
+            qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, getEndpointRegion());
+        }
 
         if (!this.enumExternalResourcesIds.isEmpty() &&
                 this.enumExternalResourcesIds.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {

@@ -34,6 +34,7 @@ import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -138,17 +139,15 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
 
         Assume.assumeFalse(this.isMock);
 
-        EndpointState endpointState = createEndpointState();
-
-        kickOffImageEnumeration(endpointState, PRIVATE, AZURE_ALL_IMAGES_FILTER);
+        kickOffImageEnumeration(this.endpointState, PRIVATE, AZURE_ALL_IMAGES_FILTER);
 
         // Validate at least 1 image state is CREATED
         QueryTop<ImageState> queryAll = new QueryTop<ImageState>(
                 getHost(),
                 Builder.create().addKindFieldClause(ImageState.class).build(),
                 ImageState.class,
-                endpointState.tenantLinks,
-                endpointState.documentSelfLink);
+                this.endpointState.tenantLinks,
+                this.endpointState.documentSelfLink);
 
         List<ImageState> images = QueryByPages.waitToComplete(
                 queryAll.collectDocuments(Collectors.toList()));
@@ -171,9 +170,9 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         Assert.assertNull("Private image must NOT have endpointType set.",
                 image.endpointType);
         Assert.assertEquals("Private image must have endpointLink set.",
-                endpointState.documentSelfLink, image.endpointLink);
+                this.endpointState.documentSelfLink, image.endpointLink);
         Assert.assertEquals("Private image must have tenantLinks set.",
-                endpointState.tenantLinks, image.tenantLinks);
+                this.endpointState.tenantLinks, image.tenantLinks);
 
         Assert.assertTrue("Image.id is invalid", image.id.endsWith(PRIVATE_IMAGE_NAME));
         Assert.assertEquals("Image.name is invalid", PRIVATE_IMAGE_NAME, image.name);
@@ -206,8 +205,6 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
     public void testPublicImageEnumeration_singleAndDefaults() throws Throwable {
 
         // Important: MUST share same Endpoint between the two enum runs.
-        final EndpointState endpointState = createEndpointState();
-
         ServiceDocumentQueryResult imagesAfterFirstEnum = null;
         ImageState imageAfterFirstEnum = null;
 
@@ -225,7 +222,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                     "=== First enumeration should create a single '%s' image",
                     AZURE_SINGLE_IMAGE_FILTER);
 
-            kickOffImageEnumeration(endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
+            kickOffImageEnumeration(this.endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Validate 1 image state is CREATED (in addition of 11 default)
@@ -264,7 +261,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 updateImageState(imageAfterFirstEnum.documentSelfLink);
             }
 
-            kickOffImageEnumeration(endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
+            kickOffImageEnumeration(this.endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Validate 1 image state is UPDATED (and the local update above is overridden)
@@ -299,7 +296,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         setImagesLoadMode(ImagesLoadMode.STANDARD);
 
         try {
-            kickOffImageEnumeration(createEndpointState(), PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
+            kickOffImageEnumeration(this.endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
 
             queryDocumentsAndAssertExpectedCount(getHost(), 1, ImageService.FACTORY_LINK,
                     EXACT_COUNT);
@@ -319,28 +316,35 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         setImagesLoadMode(ImagesLoadMode.STANDARD);
 
         try {
-            // Pre-create public and private image in different endpoint {{
-            // Those images should not be touched by this image enum.
+            // Those images should not be touched by this image enum. {{
+            //
+            // Pre-create public and private image in different end-point
             EndpointState vSphereEndpointState = createEndpointState(EndpointType.vsphere);
-            ImageState vSpherePublicImageState = createImageState(vSphereEndpointState, PUBLIC);
-            ImageState vSpherePrivateImageState = createImageState(vSphereEndpointState, PRIVATE);
+            ImageState publicImageState_diffEP = createImageState(vSphereEndpointState, true,
+                    PUBLIC);
+            ImageState privateImageState_diffEP = createImageState(vSphereEndpointState, true,
+                    PRIVATE);
+
+            // Pre-create public and private image in same end-point but different region
+            ImageState publicImageState_diffRegion = createImageState(this.endpointState, false,
+                    PUBLIC);
+            ImageState privateImageState_diffRegion = createImageState(this.endpointState, false,
+                    PRIVATE);
             // }}
 
-            EndpointState endpointState = createEndpointState();
-
             // Create one stale image that should be deleted by this enumeration
-            ImageState staleImageState = createImageState(endpointState, PUBLIC);
+            ImageState staleImageState = createImageState(this.endpointState, true, PUBLIC);
 
-            // Validate the 3 image states are preCREATED: 1 stale and 2 vSphere
-            int preCreatedCount = 1 + 2;
+            // Validate 5 image states are preCREATED: 1 stale and 2 vSphere and 2 diff region
+            final int preCreatedCount = 1 + 2 + 2;
             queryDocumentsAndAssertExpectedCount(
                     getHost(), preCreatedCount, ImageService.FACTORY_LINK, EXACT_COUNT);
 
             // Under TESTING
-            kickOffImageEnumeration(endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
+            kickOffImageEnumeration(this.endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
 
-            // Validate 1 image state is CREATED and the 2 vSphere are UNtouched
-            int postEnumCount = 1 + 2;
+            // Validate 1 image state is CREATED and the 2 vSphere and 2 diff region are UNtouched
+            final int postEnumCount = 1 + 2 + 2;
             ServiceDocumentQueryResult imagesAfterEnum = queryDocumentsAndAssertExpectedCount(
                     getHost(),
                     postEnumCount,
@@ -354,10 +358,18 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
             // Validate vSphere images are untouched
             Assert.assertTrue("Private images from other endpoints should not have been deleted.",
                     imagesAfterEnum.documentLinks
-                            .contains(vSpherePrivateImageState.documentSelfLink));
+                            .contains(privateImageState_diffEP.documentSelfLink));
             Assert.assertTrue("Public images from other endpoints should not have been deleted.",
                     imagesAfterEnum.documentLinks
-                            .contains(vSpherePublicImageState.documentSelfLink));
+                            .contains(publicImageState_diffEP.documentSelfLink));
+
+            Assert.assertTrue(
+                    "Private images from same endpoints but different region should not have been deleted.",
+                    imagesAfterEnum.documentLinks
+                            .contains(privateImageState_diffRegion.documentSelfLink));
+            Assert.assertTrue("Public images from other endpoints should not have been deleted.",
+                    imagesAfterEnum.documentLinks
+                            .contains(publicImageState_diffRegion.documentSelfLink));
         } finally {
             setImagesLoadMode(ImagesLoadMode.ALL);
         }
@@ -369,7 +381,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         Assume.assumeFalse(this.isMock);
 
         ImageEnumerationTaskState task = kickOffImageEnumeration(
-                createEndpointState(), PUBLIC, AZURE_DEFAULT_IMAGES_FILTER);
+                this.endpointState, PUBLIC, AZURE_DEFAULT_IMAGES_FILTER);
 
         // Validate 11 image states are created.
         assertDefaultImages(task);
@@ -384,7 +396,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
 
         try {
             ImageEnumerationTaskState task = kickOffImageEnumeration(
-                    createEndpointState(), PUBLIC, AZURE_ALL_IMAGES_FILTER);
+                    this.endpointState, PUBLIC, AZURE_ALL_IMAGES_FILTER);
 
             assertDefaultImages(task);
         } finally {
@@ -443,7 +455,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(2));
 
         ImageEnumerationTaskState task = kickOffImageEnumeration(
-                createEndpointState(), PUBLIC, AZURE_MULTI_IMAGES_FILTER);
+                this.endpointState, PUBLIC, AZURE_MULTI_IMAGES_FILTER);
 
         // Validate at least 200+ image states are created.
 
@@ -470,8 +482,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         // This test takes about 30 mins!
         getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(40));
 
-        ImageEnumerationTaskState task = kickOffImageEnumeration(createEndpointState(), PUBLIC,
-                null);
+        ImageEnumerationTaskState task = kickOffImageEnumeration(this.endpointState, PUBLIC, null);
 
         // Validate at least 4.5K image states are created
 
@@ -490,15 +501,15 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
     }
 
     private ImageEnumerationTaskState kickOffImageEnumeration(
-            EndpointState endpointState, boolean isPublic, String filter) throws Throwable {
+            EndpointState endpoint, boolean isPublic, String filter) throws Throwable {
 
         ImageEnumerationTaskState taskState = new ImageEnumerationTaskState();
 
         if (isPublic == PUBLIC) {
-            taskState.endpointType = endpointState.endpointType;
+            taskState.endpointType = endpoint.endpointType;
         } else {
-            taskState.endpointLink = endpointState.documentSelfLink;
-            taskState.tenantLinks = endpointState.tenantLinks;
+            taskState.endpointLink = endpoint.documentSelfLink;
+            taskState.tenantLinks = endpoint.tenantLinks;
         }
         taskState.filter = filter;
         taskState.options = this.isMock
@@ -517,7 +528,18 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 taskState.documentSelfLink);
     }
 
-    private ImageState createImageState(EndpointState endpoint, boolean isPublic) throws Throwable {
+    /**
+     * @param endpoint
+     *            the end-point of the image to create
+     * @param epRegion
+     *            a flag indicating whether to create the image in the region of the end-point or in
+     *            a different region
+     * @param isPublic
+     *            a flag indicating whether to create public or private image
+     * @return the actual image created
+     */
+    private ImageState createImageState(EndpointState endpoint, boolean epRegion, boolean isPublic)
+            throws Throwable {
 
         ImageState image = new ImageState();
 
@@ -529,6 +551,10 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         }
 
         image.id = "dummy-" + this.currentTestName.getMethodName();
+
+        image.regionId = epRegion
+                ? endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY)
+                : endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY) + "_diff";
 
         return postServiceSynchronously(
                 ImageService.FACTORY_LINK,

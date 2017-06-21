@@ -753,21 +753,29 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void createNetworkTagStates(NetworkEnumContext context, NetworkEnumStages next) {
         logFine("Create or update Tag States for discovered Networks with the actual state in Azure.");
 
-        if (context.virtualNetworks.size() == 0 && context.subnets.size() == 0) {
-            logFine("No tags found to create.");
+        if (context.virtualNetworks.isEmpty()) {
+            logFine("No vNet tags found to create.");
             handleSubStage(context, next);
             return;
         }
 
         // POST each of the tags. If a tag exists it won't be created again. We don't want the name
         // tags, so filter them out
-        List<Operation> operations = context.virtualNetworks.values()
-                .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
-                .flatMap(vm -> vm.tags.entrySet().stream())
-                .map(entry -> newExternalTagState(entry.getKey(), entry.getValue(),
+        List<Operation> operations = context.virtualNetworks.values().stream()
+
+                .filter(vNet -> vNet.tags != null && !vNet.tags.isEmpty())
+
+                .flatMap(vNet -> vNet.tags.entrySet().stream())
+
+                .map(vNetTagEntry -> newExternalTagState(
+                        vNetTagEntry.getKey(),
+                        vNetTagEntry.getValue(),
                         context.parentCompute.tenantLinks))
-                .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
-                        .setBody(tagState))
+
+                .map(vNetTagState -> Operation
+                        .createPost(this, TagService.FACTORY_LINK)
+                        .setBody(vNetTagState))
+
                 .collect(Collectors.toList());
 
         if (operations.isEmpty()) {
@@ -776,10 +784,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             OperationJoin.create(operations).setCompletion((ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
                     handleError(context, exs.values().iterator().next());
-                    return;
+                } else {
+                    handleSubStage(context, next);
                 }
-
-                handleSubStage(context, next);
             }).sendWith(this);
         }
     }

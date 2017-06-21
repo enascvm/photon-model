@@ -184,8 +184,9 @@ public class AWSEnumerationAdapterService extends StatelessService {
         if (context.parent.description.regionId != null) {
             context.regions.add(context.parent.description.regionId);
         } else {
-            context.regions.addAll(Arrays.asList(
-                    Regions.values()).stream().map(r-> r.getName()).collect(Collectors.toList()));
+            context.regions.addAll(Arrays.stream(Regions.values())
+                    .map(Regions::getName)
+                    .collect(Collectors.toList()));
         }
         context.stage = next;
         handleEnumerationRequest(context);

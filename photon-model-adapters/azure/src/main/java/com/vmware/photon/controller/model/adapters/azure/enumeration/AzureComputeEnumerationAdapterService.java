@@ -200,7 +200,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Constrain every query with endpointLink and tenantLinks, if presented.
      */
     private static void addScopeCriteria(Query.Builder qBuilder,
-            Class<? extends ResourceState> stateClass, EnumerationContext ctx) {
+            Class<? extends ResourceState> stateClass,
+            EnumerationContext ctx) {
+
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria

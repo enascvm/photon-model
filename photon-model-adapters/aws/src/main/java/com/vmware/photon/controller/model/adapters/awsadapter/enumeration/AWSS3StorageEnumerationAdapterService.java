@@ -625,12 +625,15 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
+     * Constrain every query with endpointLink/region and tenantLinks, if presented.
      */
     private static void addScopeCriteria(
             Query.Builder qBuilder,
             Class<? extends ResourceState> stateClass,
             S3StorageEnumerationContext ctx) {
+
+        // Add REGION criteria
+        qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.request.regionId);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria

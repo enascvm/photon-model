@@ -48,6 +48,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -458,7 +459,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
             if (!document.documentSelfLink.equals(computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()
-                    .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
+                            .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
                 this.enumeratedComputeLink = document.documentSelfLink;
                 break;
             }
@@ -511,40 +512,43 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     // Add tags, that later should be discovered as part of first enumeration cycle.
     private void tagAzureResources() throws Exception {
 
-        // tag v-Net
-        VirtualNetworkInner vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
-                azureVMName,
-                NIC_SPEC.network.name);
+        // tag vNet
+        {
+            VirtualNetworkInner netUpdate = getAzureVirtualNetwork(this.networkManagementClient,
+                    azureVMName,
+                    NIC_SPEC.network.name);
 
-        Map<String, String> vmNetwTags = new HashMap<>();
-        vmNetwTags.put(NETWORK_TAG_KEY_PREFIX + azureVMName, NETWORK_TAG_VALUE);
-        vmNetwUpdate.withTags(vmNetwTags);
+            netUpdate.withTags(Collections.singletonMap(
+                    NETWORK_TAG_KEY_PREFIX + azureVMName, NETWORK_TAG_VALUE));
 
-        updateAzureVirtualNetwork(this.networkManagementClient, azureVMName,
-                NIC_SPEC.network.name, vmNetwUpdate);
+            updateAzureVirtualNetwork(this.networkManagementClient, azureVMName,
+                    NIC_SPEC.network.name, netUpdate);
+        }
 
         // tag VM
-        VirtualMachineInner vmUpdate = getAzureVirtualMachine(
-                this.computeManagementClient, azureVMName, azureVMName);
+        {
+            VirtualMachineInner vmUpdate = getAzureVirtualMachine(
+                    this.computeManagementClient, azureVMName, azureVMName);
 
-        Map<String, String> vmTags = new HashMap<>();
-        vmTags.put(VM_TAG_KEY_PREFIX + azureVMName, VM_TAG_VALUE);
-        vmUpdate.withTags(vmTags);
+            vmUpdate.withTags(Collections.singletonMap(
+                    VM_TAG_KEY_PREFIX + azureVMName, VM_TAG_VALUE));
 
-        updateAzureVirtualMachine(this.computeManagementClient, azureVMName,
-                azureVMName, vmUpdate);
+            updateAzureVirtualMachine(this.computeManagementClient, azureVMName,
+                    azureVMName, vmUpdate);
+        }
 
         // tag Security Group
-        NetworkSecurityGroupInner sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
-                azureVMName, AZURE_SECURITY_GROUP_NAME);
+        {
+            NetworkSecurityGroupInner sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
+                    azureVMName, AZURE_SECURITY_GROUP_NAME);
 
-        Map<String, String> sgTags = new HashMap<>();
-        sgTags.put(SG_TAG_KEY_PREFIX + azureVMName, SG_TAG_VALUE);
-        sgUpdate.withTags(sgTags);
-        sgUpdate.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+            sgUpdate.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+            sgUpdate.withTags(Collections.singletonMap(
+                    SG_TAG_KEY_PREFIX + azureVMName, SG_TAG_VALUE));
 
-        updateAzureSecurityGroup(this.networkManagementClient, azureVMName,
-                AZURE_SECURITY_GROUP_NAME, sgUpdate);
+            updateAzureSecurityGroup(this.networkManagementClient, azureVMName,
+                    AZURE_SECURITY_GROUP_NAME, sgUpdate);
+        }
     }
 
     // create stale resource states for deletion
@@ -598,11 +602,11 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
 
         QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
-                this.host,
+                getHost(),
                 qBuilder.build(),
                 TagState.class,
                 null)
-                .setMaxResultsLimit(expectedTags.size() + 1);
+                        .setMaxResultsLimit(expectedTags.size() + 1);
 
         List<TagState> tagStates = waitToComplete(
                 queryLocalTags.collectDocuments(Collectors.toList()));
@@ -875,7 +879,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                             assertNotNull("SubnetState custom properties are null.",
                                     subnetState.customProperties);
                             assertEquals("Gateway SubnetState is not marked currectly with "
-                                            + "infrastructure use custom property.",
+                                    + "infrastructure use custom property.",
                                     Boolean.TRUE.toString(),
                                     subnetState.customProperties.get(
                                             ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME));

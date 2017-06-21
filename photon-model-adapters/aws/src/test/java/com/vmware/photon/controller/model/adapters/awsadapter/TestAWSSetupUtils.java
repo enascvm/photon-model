@@ -802,6 +802,8 @@ public class TestAWSSetupUtils {
         awsComputeHost.descriptionLink = awsComputeHostDesc.documentSelfLink;
         awsComputeHost.tagLinks = tagLinks;
         awsComputeHost.resourcePoolLink = endpointState.resourcePoolLink;
+
+        awsComputeHost.regionId = regionId;
         awsComputeHost.endpointLink = endpointState.documentSelfLink;
         awsComputeHost.tenantLinks = endpointState.tenantLinks;
 
@@ -925,9 +927,11 @@ public class TestAWSSetupUtils {
 
         ImageState bootImage;
         {
+            // Create PUBLIC image state
             bootImage = new ImageState();
             bootImage.id = imageId;
             bootImage.endpointType = endpointState.endpointType;
+            bootImage.regionId = regionId;
 
             bootImage = TestUtils.doPost(host, bootImage, ImageState.class,
                     UriUtils.buildUri(host, ImageService.FACTORY_LINK));
@@ -954,9 +958,9 @@ public class TestAWSSetupUtils {
         rootDisk.customProperties.put(VOLUME_TYPE,"io1");
         rootDisk.customProperties.put(IOPS,"500");
 
-
-        rootDisk.tenantLinks = endpointState.tenantLinks;
+        rootDisk.regionId = regionId;
         rootDisk.endpointLink = endpointState.documentSelfLink;
+        rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk = TestUtils.doPost(host, rootDisk,
                 DiskService.DiskState.class,
@@ -990,8 +994,9 @@ public class TestAWSSetupUtils {
             resource.diskLinks = vmDisks;
             resource.tagLinks = tagLinks;
 
-            resource.tenantLinks = endpointState.tenantLinks;
+            resource.regionId = awsVMDesc.regionId;
             resource.endpointLink = endpointState.documentSelfLink;
+            resource.tenantLinks = endpointState.tenantLinks;
         }
 
         return TestUtils.doPost(host, resource,
@@ -1025,8 +1030,9 @@ public class TestAWSSetupUtils {
                 disk.customProperties.put(DISK_IOPS, additionalDiskConfigs.get(i)[2]);
             }
 
-            disk.tenantLinks = endpointState.tenantLinks;
+            disk.regionId = regionId;
             disk.endpointLink = endpointState.documentSelfLink;
+            disk.tenantLinks = endpointState.tenantLinks;
 
             disk.encrypted = (i == 0) ? true : null;
 
@@ -1057,13 +1063,14 @@ public class TestAWSSetupUtils {
             networkState.name = nicSpecs.network.name;
             networkState.subnetCIDR = nicSpecs.network.cidr;
             networkState.authCredentialsLink = endpointState.authCredentialsLink;
-            networkState.tenantLinks = endpointState.tenantLinks;
-            networkState.endpointLink = endpointState.documentSelfLink;
             networkState.resourcePoolLink = computeHost.resourcePoolLink;
-            networkState.regionId = regionId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     AWSUriPaths.AWS_NETWORK_ADAPTER);
-            networkState.customProperties = new HashMap<>();
+
+            networkState.regionId = regionId;
+            networkState.endpointLink = endpointState.documentSelfLink;
+            networkState.tenantLinks = endpointState.tenantLinks;
+
             networkState = TestUtils.doPost(host, networkState,
                     NetworkState.class,
                     UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
@@ -1085,8 +1092,9 @@ public class TestAWSSetupUtils {
                 subnetState.zoneId = nicSpecs.nicSpecs.get(i).subnetSpec.zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
 
-                subnetState.tenantLinks = endpointState.tenantLinks;
+                subnetState.regionId = regionId;
                 subnetState.endpointLink = endpointState.documentSelfLink;
+                subnetState.tenantLinks = endpointState.tenantLinks;
 
                 subnetState = TestUtils.doPost(host, subnetState,
                         SubnetState.class,
@@ -1105,8 +1113,10 @@ public class TestAWSSetupUtils {
                 nicDescription.name = "nicDesc" + i;
                 nicDescription.deviceIndex = i;
                 nicDescription.assignment = nicSpec.getIpAssignment();
-                nicDescription.tenantLinks = endpointState.tenantLinks;
+
+                nicDescription.regionId = regionId;
                 nicDescription.endpointLink = endpointState.documentSelfLink;
+                nicDescription.tenantLinks = endpointState.tenantLinks;
 
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
@@ -1127,8 +1137,9 @@ public class TestAWSSetupUtils {
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
 
-            nicState.tenantLinks = endpointState.tenantLinks;
+            nicState.regionId = regionId;
             nicState.endpointLink = endpointState.documentSelfLink;
+            nicState.tenantLinks = endpointState.tenantLinks;
 
             nicState.securityGroupLinks = new ArrayList<>();
             nicState.securityGroupLinks.add(existingSecurityGroupState.documentSelfLink);
@@ -1164,8 +1175,10 @@ public class TestAWSSetupUtils {
             securityGroupState.name = AWS_NEW_GROUP_PREFIX + securityGroupState.id;
         }
         securityGroupState.authCredentialsLink = endpointState.authCredentialsLink;
-        securityGroupState.tenantLinks = endpointState.tenantLinks;
+
+        securityGroupState.regionId = regionId;
         securityGroupState.endpointLink = endpointState.documentSelfLink;
+        securityGroupState.tenantLinks = endpointState.tenantLinks;
 
         Rule ssh = new Rule();
         ssh.name = "ssh";

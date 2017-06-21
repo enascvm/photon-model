@@ -79,7 +79,7 @@ public class TagsUtil {
             Map<String, String> remoteTagsMap) {
 
         if (remoteTagsMap == null || remoteTagsMap.isEmpty()) {
-            return DeferredResult.completed((Set<String>) null);
+            return DeferredResult.completed(Collections.emptySet());
         }
 
         String msg = "Create local TagStates (for %s.name=%s) to match %d remote tags: %s";

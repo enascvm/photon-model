@@ -15,8 +15,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static java.util.Collections.singletonList;
 
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
-
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -187,8 +185,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         AzureSdkClients azureClient;
 
-        String regionId;
-
         AzureImagesLoader azureImagesLoader;
 
         TaskManager taskManager;
@@ -229,8 +225,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             return DeferredResult.completed(context)
                     .thenCompose(this::getImageEnumTaskState)
-                    .thenCompose(ctx -> super.getEndpointState(ctx))
-                    .thenApply(this::getEndpointRegion);
+                    .thenCompose(ctx -> super.getEndpointState(ctx));
         }
 
         /**
@@ -250,15 +245,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
                         return context;
                     });
-        }
-
-        private AzureImageEnumerationContext getEndpointRegion(
-                AzureImageEnumerationContext context) {
-
-            context.regionId = context.endpointState.endpointProperties.getOrDefault(
-                    REGION_KEY, "westus");
-
-            return context;
         }
 
         /**
@@ -370,8 +356,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             if (existingImageState == null) {
                 // Create flow
-                holder.localState.regionId = this.regionId;
-
                 if (this.request.requestType == ImageEnumerateRequestType.PUBLIC) {
                     holder.localState.endpointType = this.endpointState.endpointType;
                 }
@@ -393,9 +377,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         /**
          * <ul>
-         * <li>During PUBLIC image enum explicitly set {@code imageType}.</li>
-         * <li>During PRIVATE image enum setting of {@code tenantLinks} and {@code endpointType} (by
+         * <li>During PUBLIC image enum explicitly set {@code endpointType}.</li>
+         * <li>During PRIVATE image enum setting of {@code tenantLinks} and {@code endpointLink} (by
          * default logic) is enough.</li>
+         * <li>During BOTH image enum explicitly set {@code regionId}.</li>
          * </ul>
          */
         @Override
@@ -900,7 +885,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             if (publisherFilter.name().isEmpty()) {
                 // Get ALL publishers
                 List<VirtualMachineImageResourceInner> publishers = this.imagesOp
-                        .listPublishers(this.ctx.regionId);
+                        .listPublishers(this.ctx.getEndpointRegion());
 
                 this.publishersIt = publishers.iterator();
 
@@ -924,7 +909,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             if (offerFilter.name().isEmpty()) {
                 // Get ALL offers
                 List<VirtualMachineImageResourceInner> offers = this.imagesOp.listOffers(
-                        this.ctx.regionId,
+                        this.ctx.getEndpointRegion(),
                         this.currentPublisher.name());
 
                 this.offersIt = offers.iterator();
@@ -952,7 +937,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             if (skuFilter.name().isEmpty()) {
                 // Get ALL skus
                 List<VirtualMachineImageResourceInner> skus = this.imagesOp.listSkus(
-                        this.ctx.regionId,
+                        this.ctx.getEndpointRegion(),
                         this.currentPublisher.name(),
                         this.currentOffer.name());
 
@@ -980,7 +965,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             if (versionFilter.name().isEmpty()) {
                 // Get ALL versions
                 List<VirtualMachineImageResourceInner> versions = this.imagesOp.list(
-                        this.ctx.regionId,
+                        this.ctx.getEndpointRegion(),
                         this.currentPublisher.name(),
                         this.currentOffer.name(),
                         this.currentSku.name(),
@@ -1010,7 +995,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 throws CloudException, IOException {
 
             VirtualMachineImageInner image = this.imagesOp.get(
-                    this.ctx.regionId,
+                    this.ctx.getEndpointRegion(),
                     this.currentPublisher.name(),
                     this.currentOffer.name(),
                     this.currentSku.name(),

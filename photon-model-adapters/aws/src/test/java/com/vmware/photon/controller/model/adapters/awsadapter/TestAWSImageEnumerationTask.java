@@ -38,6 +38,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService.PartitionedIterator;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -196,20 +197,25 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         Assume.assumeFalse(this.isMock);
 
-        // Pre-create public and private image in different endpoint {{
-        // Those images should not be touched by this image enum.
-        EndpointState azureEndpointState = createDummyEndpointState(EndpointType.azure);
-        ImageState azurePublicImageState = createImageState(azureEndpointState, PUBLIC);
-        ImageState azurePrivateImageState = createImageState(azureEndpointState, PRIVATE);
-        // }}
-
         EndpointState endpointState = createEndpointState();
 
+        // Those images should not be touched by this image enum. {{
+        //
+        // Pre-create public and private image in different end-point
+        EndpointState azureEndpointState = createDummyEndpointState(EndpointType.azure);
+        ImageState publicImageState_diffEP = createImageState(azureEndpointState, true, PUBLIC);
+        ImageState privateImageState_diffEP = createImageState(azureEndpointState, true, PRIVATE);
+
+        // Pre-create public and private image in same end-point but different region
+        ImageState publicImageState_diffRegion = createImageState(endpointState, false, PUBLIC);
+        ImageState privateImageState_diffRegion = createImageState(endpointState, false, PRIVATE);
+        // }}
+
         // Create one stale image that should be deleted by this enumeration
-        ImageState staleImageState = createImageState(endpointState, isPublic);
+        ImageState staleImageState = createImageState(endpointState, true, isPublic);
 
         // Validate the 3 image states are preCREATED: 1 stale and 2 vSphere
-        int preCreatedCount = 1 + 2;
+        int preCreatedCount = 1 + 2 + 2;
         queryDocumentsAndAssertExpectedCount(
                 getHost(), preCreatedCount, ImageService.FACTORY_LINK, EXACT_COUNT);
 
@@ -217,7 +223,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         kickOffImageEnumeration(endpointState, isPublic, imageFilter);
 
         // Validate 1 image state is CREATED and the 2 vSphere are UNtouched
-        int postEnumCount = 1 + 2;
+        int postEnumCount = 1 + 2 + 2;
         ServiceDocumentQueryResult imagesAfterEnum = queryDocumentsAndAssertExpectedCount(
                 getHost(),
                 postEnumCount,
@@ -231,10 +237,18 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         // Validate vSphere images are untouched
         Assert.assertTrue("Private images from other endpoints should not have been deleted.",
                 imagesAfterEnum.documentLinks
-                        .contains(azurePrivateImageState.documentSelfLink));
+                        .contains(privateImageState_diffEP.documentSelfLink));
         Assert.assertTrue("Public images from other endpoints should not have been deleted.",
                 imagesAfterEnum.documentLinks
-                        .contains(azurePublicImageState.documentSelfLink));
+                        .contains(publicImageState_diffEP.documentSelfLink));
+
+        Assert.assertTrue(
+                "Private images from same endpoints but different region should not have been deleted.",
+                imagesAfterEnum.documentLinks
+                        .contains(privateImageState_diffRegion.documentSelfLink));
+        Assert.assertTrue("Public images from other endpoints should not have been deleted.",
+                imagesAfterEnum.documentLinks
+                        .contains(publicImageState_diffRegion.documentSelfLink));
     }
 
     @Test
@@ -273,8 +287,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 Assert.assertNull("Public image must NOT have tenantLinks set.",
                         imageAfterFirstEnum.tenantLinks);
 
-                Assert.assertNotNull("Disk configurations should not be null", imageAfterFirstEnum
-                        .diskConfigs);
+                Assert.assertNotNull("Disk configurations should not be null",
+                        imageAfterFirstEnum.diskConfigs);
 
                 Assert.assertTrue("There should be at least one disk configuration for boot disk",
                         imageAfterFirstEnum.diskConfigs.size() > 0);
@@ -314,8 +328,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 Assert.assertTrue("Image name is not updated correctly after second enum.",
                         !imageAfterSecondEnum.name.contains("OVERRIDE"));
 
-                Assert.assertNotNull("Disk configurations should not be null", imageAfterSecondEnum
-                        .diskConfigs);
+                Assert.assertNotNull("Disk configurations should not be null",
+                        imageAfterSecondEnum.diskConfigs);
 
                 Assert.assertTrue("There should be at least one disk configuration for boot disk",
                         imageAfterSecondEnum.diskConfigs.size() > 0);
@@ -450,7 +464,18 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 taskState.documentSelfLink);
     }
 
-    private ImageState createImageState(EndpointState endpoint, boolean isPublic) throws Throwable {
+    /**
+     * @param endpoint
+     *            the end-point of the image to create
+     * @param epRegion
+     *            a flag indicating whether to create the image in the region of the end-point or in
+     *            a different region
+     * @param isPublic
+     *            a flag indicating whether to create public or private image
+     * @return the actual image created
+     */
+    private ImageState createImageState(EndpointState endpoint, boolean epRegion, boolean isPublic)
+            throws Throwable {
 
         ImageState image = new ImageState();
 
@@ -462,6 +487,10 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         }
 
         image.id = "dummy-" + this.currentTestName.getMethodName();
+
+        image.regionId = epRegion
+                ? endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY)
+                : endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY) + "_diff";
 
         return postServiceSynchronously(
                 ImageService.FACTORY_LINK,
@@ -497,7 +526,6 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
             endpoint.endpointProperties = new HashMap<>();
             endpoint.endpointProperties.put(PRIVATE_KEY_KEY, this.secretKey);
             endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, this.accessKey);
-            // IMPORTANT: Private image enum does exist/work only in US_EAST_1!
             endpoint.endpointProperties.put(REGION_KEY, Regions.US_EAST_1.getName());
         }
 
@@ -523,6 +551,9 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         endpoint.endpointType = endpointType.name();
         endpoint.id = endpointType.name() + "-id";
         endpoint.name = endpointType.name() + "-name";
+
+        endpoint.endpointProperties = new HashMap<>();
+        endpoint.endpointProperties.put(REGION_KEY, endpointType.name() + "-region");
 
         return TestUtils.doPost(host, endpoint, EndpointState.class,
                 UriUtils.buildUri(host, EndpointService.FACTORY_LINK));

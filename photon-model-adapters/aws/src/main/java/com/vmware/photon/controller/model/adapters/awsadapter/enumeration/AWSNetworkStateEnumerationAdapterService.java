@@ -281,7 +281,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                     AWSNetworkStateCreationStage.DELETE_STALE_RESOURCE_STATES));
             break;
         case DELETE_STALE_RESOURCE_STATES:
-            deleteStaleSubnetStates(context)
+            DeferredResult.completed(context)
+                .thenCompose(this::deleteStaleSubnetStates)
                 .thenCompose(this::deleteStaleNetworkStates)
                 .whenComplete(thenNetworkStateChanges(context, AWSNetworkStateCreationStage.SIGNAL_COMPLETION));
             break;
@@ -367,14 +368,18 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     private void getLocalNetworkStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
+
         if (context.vpcs.isEmpty()) {
             handleNetworkStateChanges(context, next);
             return;
         }
+
         QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
-                context.vpcs.keySet(), context.request.request.endpointLink,
+                context.vpcs.keySet(),
+                context.request.request.endpointLink,
                 context.request.regionId,
                 context.request.tenantLinks);
+
         // create the query to find resources
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
@@ -419,13 +424,15 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     private void getLocalSubnetStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
+
         if (context.subnets.isEmpty()) {
             handleNetworkStateChanges(context, next);
             return;
         }
 
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
-                context.subnets.keySet(), context.request.request.endpointLink,
+                context.subnets.keySet(),
+                context.request.request.endpointLink,
                 context.request.regionId,
                 context.request.tenantLinks);
 
@@ -723,8 +730,10 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         return deleteStaleLocalStates(context, SubnetState.class, context.awsSubnets.keySet());
     }
 
-    private DeferredResult<AWSNetworkStateCreationContext> deleteStaleLocalStates(AWSNetworkStateCreationContext context,
-            Class<? extends ResourceState> localStateClass, Set<String> remoteResourcesKeys) {
+    private DeferredResult<AWSNetworkStateCreationContext> deleteStaleLocalStates(
+            AWSNetworkStateCreationContext context,
+            Class<? extends ResourceState> localStateClass,
+            Set<String> remoteResourcesKeys) {
 
         final String msg = "Delete %ss that no longer exist in the endpoint: %s";
 
@@ -733,11 +742,18 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(localStateClass)
-                .addFieldClause("lifecycleState",
-                        LifecycleState.PROVISIONING.toString(), Occurance.MUST_NOT_OCCUR)
+                .addFieldClause(
+                        "lifecycleState",
+                        LifecycleState.PROVISIONING.toString(),
+                        Occurance.MUST_NOT_OCCUR)
                 .addRangeClause(
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
                         createLessThanRange(context.enumStartTimeInMicros));
+
+        if (context.request.regionId != null) {
+            // Delete resources only in this End-point region
+            qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, context.request.regionId);
+        }
 
         if (!remoteResourcesKeys.isEmpty() &&
                 remoteResourcesKeys.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {
@@ -749,7 +765,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         }
 
         QueryStrategy<? extends ResourceState> queryLocalStates = new QueryByPages<>(
-                this.getHost(),
+                getHost(),
                 qBuilder.build(),
                 localStateClass,
                 context.request.tenantLinks,

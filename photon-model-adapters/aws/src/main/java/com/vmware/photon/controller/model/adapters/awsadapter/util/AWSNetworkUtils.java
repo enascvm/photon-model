@@ -149,34 +149,30 @@ public class AWSNetworkUtils {
             String endpointLink,
             String regionId,
             List<String> tenantLinks) {
-        Query query = Query.Builder.create()
+
+        Query.Builder queryBuilder = Query.Builder.create()
                 .addKindFieldClause(stateClass)
-                .addInClause(ResourceState.FIELD_NAME_ID, stateIds)
-                .build();
+                .addInClause(ResourceState.FIELD_NAME_ID, stateIds);
 
         if (endpointLink != null && !endpointLink.isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK, endpointLink)
-                    .build());
+            queryBuilder.addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, endpointLink);
         }
 
         if (regionId != null) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId).build());
+            queryBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, regionId);
         }
 
         if (tenantLinks != null && !tenantLinks.isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, tenantLinks)
-                    .build());
+            queryBuilder.addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, tenantLinks);
         }
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setQuery(query)
+                .setQuery(queryBuilder.build())
                 .setResultLimit(AWS_NETWORK_QUERY_RESULT_LIMIT)
                 .build();
+
         queryTask.tenantLinks = tenantLinks;
 
         return queryTask;

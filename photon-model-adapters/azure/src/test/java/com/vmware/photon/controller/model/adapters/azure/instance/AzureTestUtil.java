@@ -508,6 +508,13 @@ public class AzureTestUtil {
             EndpointType endpointType)
             throws Throwable {
 
+        return createEndpointState(host, authLink, endpointType, Region.US_WEST.name());
+    }
+
+    public static EndpointState createEndpointState(VerificationHost host, String authLink,
+            EndpointType endpointType, String region)
+            throws Throwable {
+
         EndpointState endpoint = new EndpointState();
 
         endpoint.endpointType = endpointType.name();
@@ -516,8 +523,10 @@ public class AzureTestUtil {
 
         endpoint.authCredentialsLink = authLink;
 
-        endpoint.endpointProperties = Collections.singletonMap(
-                EndpointConfigRequest.REGION_KEY, Region.US_WEST.name());
+        if (region != null) {
+            endpoint.endpointProperties = Collections.singletonMap(
+                    EndpointConfigRequest.REGION_KEY, region);
+        }
 
         endpoint.tenantLinks = Collections.singletonList(endpointType.name() + "-tenant");
 

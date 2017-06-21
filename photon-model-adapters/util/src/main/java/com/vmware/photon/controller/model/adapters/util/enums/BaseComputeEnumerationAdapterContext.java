@@ -83,4 +83,13 @@ public abstract class BaseComputeEnumerationAdapterContext<T extends BaseCompute
         this.operation = operation;
     }
 
+    /**
+     * Return the region explicitly specified in the request: {@code this.request.regionId}. Might
+     * be {@code null}
+     */
+    @Override
+    public String getEndpointRegion() {
+        return this.request.regionId;
+    }
+
 }

@@ -725,8 +725,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
-                    .addFieldClause(DiskState.FIELD_NAME_REGION_ID,
-                            this.context.request.regionId)
                     .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE,
                             STORAGE_TYPE_EBS)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
@@ -873,6 +871,9 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             Query.Builder qBuilder,
             Class<? extends ResourceState> stateClass,
             EBSStorageEnumerationContext ctx) {
+
+        // Add REGION criteria
+        qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.request.regionId);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria

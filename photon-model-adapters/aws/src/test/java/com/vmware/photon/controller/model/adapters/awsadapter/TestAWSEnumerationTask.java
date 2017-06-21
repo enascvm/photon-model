@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -80,7 +81,6 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Tag;
-
 import com.amazonaws.services.s3.AmazonS3Client;
 
 import io.netty.util.internal.StringUtil;
@@ -287,7 +287,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
-        this.host.setTimeoutSeconds(this.timeoutSeconds);
         // Overriding the page size to test the pagination logic with limited instances on AWS.
         // This is a functional test
         // so the latency numbers maybe higher from this test due to low page size.
@@ -430,7 +429,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         queryDocumentsAndAssertExpectedCount(this.host,
                 count2, DiskService.FACTORY_LINK, false);
 
-
         // Validate that the document for the deleted S3 bucket is deleted after enumeration.
         validateS3Enumeration(ZERO);
     }
@@ -448,7 +446,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ComputeState vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 TestAWSSetupUtils.class, zoneId, regionId, null, this.singleNicSpec);
 
-        this.host.setTimeoutSeconds(this.timeoutSeconds);
         // Overriding the page size to test the pagination logic with limited instances on AWS.
         // This is a functional test
         // so the latency numbers maybe higher from this test due to low page size.
@@ -513,7 +510,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
-        this.host.setTimeoutSeconds(this.timeoutSeconds);
         // Overriding the page size to test the pagination logic with limited instances on AWS.
         // This is a functional test
         // so the latency numbers maybe higher from this test due to low page size.
@@ -846,8 +842,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return null;
         }
 
-        this.host.log("Running test: " + this.currentTestName.getMethodName());
-
         ComputeState taggedComputeState = getComputeByAWSId(this.host, computeState.id);
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
@@ -964,7 +958,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             } catch (Throwable e) {
                 // do nothing, expected is the resource not to be found
             }
-            assertTrue("Stale subnet state should have been deleted.", resourceState == null);
+            assertNull("Stale subnet state should have been deleted.", resourceState);
         }
     }
 

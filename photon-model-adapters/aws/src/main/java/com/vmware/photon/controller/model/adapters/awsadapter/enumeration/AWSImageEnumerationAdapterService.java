@@ -13,23 +13,21 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.DeviceType;
+import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Tag;
@@ -45,6 +43,7 @@ import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EndpointEnumerationProcess;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -105,8 +104,6 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         AmazonEC2AsyncClient awsClient;
 
-        String regionId;
-
         PartitionedIterator<Image> awsImages;
 
         TaskManager taskManager;
@@ -141,8 +138,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             return DeferredResult.completed(context)
                     .thenCompose(this::getImageEnumTaskState)
-                    .thenCompose(ctx -> super.getEndpointState(ctx))
-                    .thenApply(this::getEndpointRegion);
+                    .thenCompose(ctx -> super.getEndpointState(ctx));
         }
 
         /**
@@ -160,26 +156,6 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                         context.imageEnumTaskState = state;
                         return context;
                     });
-        }
-
-        private AWSImageEnumerationContext getEndpointRegion(AWSImageEnumerationContext context) {
-
-            String regionId = context.endpointState.endpointProperties.getOrDefault(
-                    REGION_KEY, Regions.DEFAULT_REGION.getName());
-
-            Regions awsRegion;
-            try {
-                awsRegion = Regions.fromName(regionId);
-            } catch (IllegalArgumentException exc) {
-                awsRegion = Regions.DEFAULT_REGION;
-
-                context.service.logWarning("Unsupported AWS region: %s. Fallback to default: %s",
-                        regionId, awsRegion.getName());
-            }
-
-            context.regionId = awsRegion.getName();
-
-            return context;
         }
 
         /**
@@ -200,7 +176,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             context.awsClient = ((AWSImageEnumerationAdapterService) context.service).clientManager
                     .getOrCreateEC2Client(
                             context.endpointAuthState,
-                            context.regionId,
+                            context.getEndpointRegion(),
                             context.service,
                             t -> r.fail(t));
             if (context.awsClient != null) {
@@ -292,8 +268,6 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             if (existingImageState == null) {
                 // Create flow
-                holder.localState.regionId = this.regionId;
-
                 if (this.request.requestType == ImageEnumerateRequestType.PUBLIC) {
                     holder.localState.endpointType = this.endpointState.endpointType;
                 }
@@ -310,20 +284,23 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             if (DeviceType.Ebs == DeviceType.fromValue(remoteImage.getRootDeviceType())) {
                 for (BlockDeviceMapping blockDeviceMapping : remoteImage.getBlockDeviceMappings()) {
                     // blockDeviceMapping can be with noDevice
-                    if (blockDeviceMapping.getEbs() != null) {
-                        ImageState.DiskConfiguration diskConfig = new ImageState.DiskConfiguration();
+                    EbsBlockDevice ebs = blockDeviceMapping.getEbs();
+                    if (ebs != null) {
+                        DiskConfiguration diskConfig = new DiskConfiguration();
                         diskConfig.id = blockDeviceMapping.getDeviceName();
-                        diskConfig.capacityMBytes = blockDeviceMapping.getEbs().getVolumeSize()
-                                * 1024;
-                        diskConfig.encrypted = blockDeviceMapping.getEbs().getEncrypted();
+                        diskConfig.encrypted = ebs.getEncrypted();
                         diskConfig.persistent = true;
-                        diskConfig.properties = new HashMap<>();
-                        diskConfig.properties
-                                .put(VOLUME_TYPE, blockDeviceMapping.getEbs().getVolumeType());
+                        if (ebs.getVolumeSize() != null) {
+                            diskConfig.capacityMBytes = ebs.getVolumeSize() * 1024;
+                        }
+                        diskConfig.properties = Collections.singletonMap(
+                                VOLUME_TYPE, ebs.getVolumeType());
+
                         holder.localState.diskConfigs.add(diskConfig);
                     }
                 }
             }
+
             for (Tag remoteImageTag : remoteImage.getTags()) {
                 holder.remoteTags.put(remoteImageTag.getKey(), remoteImageTag.getValue());
             }

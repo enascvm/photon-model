@@ -109,16 +109,12 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
     private static class SecurityGroupEnumContext extends
             BaseComputeEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState, SecurityGroup> {
 
-        private String regionId;
-
         public AmazonEC2AsyncClient amazonEC2Client;
 
         public SecurityGroupEnumContext(StatelessService service,
                 ComputeEnumerateAdapterRequest request, Operation op) {
 
             super(service, request, op, SecurityGroupState.class, FACTORY_LINK);
-
-            this.regionId = request.regionId;
         }
 
         @Override
@@ -163,8 +159,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                     this.request.parentCompute.documentSelfLink);
-            qBuilder.addFieldClause(
-                    SecurityGroupState.FIELD_NAME_REGION_ID, this.request.regionId);
         }
 
         @Override
@@ -179,7 +173,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
 
             if (existingLocalResourceState == null) {
                 stateHolder.localState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
-                stateHolder.localState.regionId = this.regionId;
                 stateHolder.localState.resourcePoolLink = this.request.parentCompute.resourcePoolLink;
                 stateHolder.localState.instanceAdapterReference = AdapterUriUtil
                         .buildAdapterUri(this.service.getHost(),
@@ -199,6 +192,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 stateHolder.localState.egress.add(generateSecurityRuleFromAWSIpPermission(
                         ipPermission, Rule.Access.Deny));
             }
+
             stateHolder.localState.customProperties = new HashMap<>();
             stateHolder.localState.customProperties.put(
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
@@ -207,7 +201,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     AWSConstants.AWS_VPC_ID, remoteResource.getVpcId());
 
             if (remoteResource.getTags() != null) {
-
                 for (Tag awsSGTag : remoteResource.getTags()) {
                     if (!awsSGTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
                         stateHolder.remoteTags.put(awsSGTag.getKey(), awsSGTag.getValue());
@@ -227,8 +220,10 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             EnumerationStages next) {
         if (context.amazonEC2Client == null) {
             context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
-                    context.request.parentAuth, context.regionId,
-                    this, (t) -> handleError(context, t));
+                    context.request.parentAuth,
+                    context.getEndpointRegion(),
+                    this,
+                    (t) -> handleError(context, t));
             if (context.amazonEC2Client == null) {
                 return;
             }
