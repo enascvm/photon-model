@@ -59,8 +59,6 @@ import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
-import org.apache.commons.collections.ListUtils;
-
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
@@ -469,12 +467,11 @@ public class AWSInstanceService extends StatelessService {
         return usedDeviceNames;
     }
 
-    @SuppressWarnings("unchecked")
     private List<BlockDeviceMapping> createAdditionalDiskMappings(AWSInstanceContext aws,
             List<String> usedDeviceNames) {
         List<BlockDeviceMapping> additionalDiskMappings = new ArrayList<>();
         if (!aws.dataDisks.isEmpty()) {
-            List<String> availableDiskNames = ListUtils.subtract(AWS_DEVICE_NAMES, usedDeviceNames);
+            List<String> availableDiskNames = getAvailableDeviceNames(usedDeviceNames);
             for (DiskState diskState : aws.dataDisks) {
                 if (diskState.capacityMBytes > 0 && !availableDiskNames.isEmpty()) {
                     BlockDeviceMapping blockDeviceMapping = new BlockDeviceMapping();
@@ -514,6 +511,18 @@ public class AWSInstanceService extends StatelessService {
             }
         }
         return additionalDiskMappings;
+    }
+
+    private List<String> getAvailableDeviceNames(List<String> usedDevicePaths) {
+        List<String> availableDevicePaths = new ArrayList<>();
+        for (String usedDevicePath : usedDevicePaths) {
+            for (String availablePath : AWS_DEVICE_NAMES) {
+                if (!usedDevicePath.contains(availablePath)) {
+                    availableDevicePaths.add(availablePath);
+                }
+            }
+        }
+        return availableDevicePaths;
     }
 
     private class AWSCreationHandler
