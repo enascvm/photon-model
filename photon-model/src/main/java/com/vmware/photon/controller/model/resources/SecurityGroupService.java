@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -33,6 +34,7 @@ import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
@@ -293,6 +295,9 @@ public class SecurityGroupService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        // enable metadata indexing
+        td.documentDescription.documentIndexingOptions =
+                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
         ServiceUtils.setRetentionLimit(td);
         SecurityGroupState template = (SecurityGroupState) td;
         template.id = UUID.randomUUID().toString();

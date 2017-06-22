@@ -168,6 +168,7 @@ public class AWSNetworkUtils {
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.INDEXED_METADATA)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(queryBuilder.build())
                 .setResultLimit(AWS_NETWORK_QUERY_RESULT_LIMIT)

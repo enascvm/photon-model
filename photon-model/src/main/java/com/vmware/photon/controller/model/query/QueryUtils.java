@@ -104,6 +104,9 @@ public class QueryUtils {
      *            The query task.
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
+        if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
+            queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
+        }
         return startQueryTask(service, queryTask, null);
     }
 

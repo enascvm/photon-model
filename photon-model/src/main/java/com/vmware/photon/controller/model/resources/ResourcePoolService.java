@@ -21,6 +21,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState.ResourcePoolProperty;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
@@ -243,6 +244,9 @@ public class ResourcePoolService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument template = super.getDocumentTemplate();
+        // enable metadata indexing
+        template.documentDescription.documentIndexingOptions =
+                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
         ServiceUtils.setRetentionLimit(template);
         return template;
     }

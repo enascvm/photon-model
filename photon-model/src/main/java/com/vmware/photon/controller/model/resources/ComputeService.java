@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.resources;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
 
 import java.net.URI;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -33,6 +34,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -510,6 +512,9 @@ public class ComputeService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        // enable metadata indexing
+        td.documentDescription.documentIndexingOptions =
+                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
         ServiceUtils.setRetentionLimit(td);
 
         ComputeState template = (ComputeState) td;
