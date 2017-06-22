@@ -60,12 +60,13 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         /**
          * The static IP of the interface. Optional.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL })
         public String address;
 
         /**
          * IP assignment type the use. By default dynamic s used.
          */
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL })
         public IpAssignment assignment;
 
         /**

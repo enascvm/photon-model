@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
@@ -41,7 +42,10 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -93,6 +97,7 @@ import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComput
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.GatewaySpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource.Type;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -191,6 +196,7 @@ public class AzureTestUtil {
     public static final AzureNicSpecs DEFAULT_NIC_SPEC;
     public static final AzureNicSpecs SHARED_NETWORK_NIC_SPEC;
     public static final AzureNicSpecs NO_PUBLIC_IP_NIC_SPEC;
+    public static final AzureNicSpecs PRIVATE_IP_NIC_SPEC;
 
     // Boot disk size of 32 GBs. We can only increase size of OS Disk. The Image used already has 30
     // GB size.
@@ -212,14 +218,33 @@ public class AzureTestUtil {
     private static final String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
 
     static {
-        DEFAULT_NIC_SPEC = initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
-                true /* assignPublicIpAddress */);
+        DEFAULT_NIC_SPEC = createDefaultNicSpec();
 
-        NO_PUBLIC_IP_NIC_SPEC = initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
-                false /* assignPublicIpAddress */);
+        NO_PUBLIC_IP_NIC_SPEC = createNoPublicIpNicSpec();
 
-        SHARED_NETWORK_NIC_SPEC = initializeNicSpecs(null /* prefix */ , true /* assignGateway */,
-                true /* assignPublicIpAddress */);
+        SHARED_NETWORK_NIC_SPEC = createSharedNetworkNicSpec();
+
+        PRIVATE_IP_NIC_SPEC = createPrivateIpNicSpec();
+    }
+
+    private static AzureNicSpecs createDefaultNicSpec() {
+        return initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
+                true /* assignPublicIpAddress */, false /* assignPrivateIpAddress */);
+    }
+
+    private static AzureNicSpecs createNoPublicIpNicSpec() {
+        return initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
+                false /* assignPublicIpAddress */, false /* assignPrivateIpAddress */);
+    }
+
+    private static AzureNicSpecs createSharedNetworkNicSpec() {
+        return initializeNicSpecs(null /* prefix */ , true /* assignGateway */,
+                true /* assignPublicIpAddress */, false /* assignPrivateIpAddress */);
+    }
+
+    private static AzureNicSpecs createPrivateIpNicSpec() {
+        return initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
+                true /* assignPublicIpAddress */, true /* assignPrivateIpAddress */);
     }
 
     public static final CachingTypes DEFAULT_OS_DISK_CACHING = CachingTypes.NONE;
@@ -237,6 +262,92 @@ public class AzureTestUtil {
                 this.name = name;
                 this.cidr = cidr;
                 this.zoneId = zoneId;
+            }
+        }
+
+        public static class NicSpec {
+
+            private IpAssignment ipAssignment;
+            private NetSpec subnetSpec;
+            private String staticIp;
+
+            public static NicSpec createDynamic(NetSpec subnetSpec) {
+                return new NicSpec()
+                        .withSubnetSpec(subnetSpec)
+                        .withDynamicIpAssignment();
+            }
+
+            public static NicSpec createStatic(NetSpec subnetSpec) {
+                return new NicSpec()
+                        .withSubnetSpec(subnetSpec)
+                        .withStaticIpAssignment();
+            }
+
+            private NicSpec withSubnetSpec(NetSpec subnetSpec) {
+                this.subnetSpec = subnetSpec;
+                return this;
+            }
+
+            private NicSpec withStaticIpAssignment() {
+
+                if (this.subnetSpec == null) {
+                    throw new IllegalArgumentException("'subnetSpec' can not be empty!");
+                }
+
+                this.ipAssignment = IpAssignment.STATIC;
+
+                try {
+                    this.staticIp = generateBaseOnCIDR();
+                } catch (UnknownHostException e) {
+                    throw new IllegalArgumentException(e);
+                }
+                return this;
+            }
+
+            private NicSpec withDynamicIpAssignment() {
+                this.ipAssignment = IpAssignment.DYNAMIC;
+                return this;
+            }
+
+            public String ip() {
+                return this.staticIp;
+            }
+
+            public IpAssignment getIpAssignment() {
+                return this.ipAssignment;
+            }
+
+            public NetSpec geSubnetSpec() {
+                return this.subnetSpec;
+            }
+
+            private String generateBaseOnCIDR() throws UnknownHostException {
+                assertNotNull(this.subnetSpec.cidr);
+                String[] startingIpAndRange = this.subnetSpec.cidr.split("/");
+                assertEquals(2, startingIpAndRange.length);
+                String startingIp = startingIpAndRange[0];
+                String range = startingIpAndRange[1];
+                String staticIp = generateIp(startingIp, range);
+                return staticIp;
+            }
+
+            private String generateIp(String startingIp, String range) throws UnknownHostException {
+                Random r = new Random();
+                int startingIpAsInt = ByteBuffer
+                        .wrap(InetAddress.getByName(startingIp).getAddress())
+                        .getInt();
+
+                int min = 3;
+                int max = Integer.valueOf(range);
+                // To prevent Address 172.31.48.0 is in subnet's reserved address range
+                int nextSubnetIpAsInt = startingIpAsInt | (r.nextInt((max - 1) - (min + 1)) + min);
+                return InetAddress
+                        .getByAddress(ByteBuffer.allocate(4).putInt(nextSubnetIpAsInt).array())
+                        .getHostAddress();
+            }
+
+            private NicSpec() {
+                // Leave the initialization to createDynamic() & createStatic(...) methods.
             }
         }
 
@@ -271,21 +382,21 @@ public class AzureTestUtil {
         }
 
         public final NetSpec network;
-        public final List<NetSpec> subnets;
+        public final List<NicSpec> nicSpecs;
         public final GatewaySpec gateway;
         public final boolean assignPublicIpAddress;
 
-        public AzureNicSpecs(NetSpec network, List<NetSpec> subnets, GatewaySpec gateway,
-                boolean assignPublicIpAddress) {
+        public AzureNicSpecs(NetSpec network, GatewaySpec gateway,
+                List<NicSpec> nicSpecs, boolean assignPublicIpAddress) {
             this.network = network;
-            this.subnets = subnets;
+            this.nicSpecs = nicSpecs;
             this.gateway = gateway;
             this.assignPublicIpAddress = assignPublicIpAddress;
         }
     }
 
     public static AzureNicSpecs initializeNicSpecs(String prefix, boolean assignGateway,
-            boolean assignPublicIpAddress) {
+            boolean assignPublicIpAddress, boolean assignPrivateIpAddress) {
         String networkName = (prefix != null ? prefix + "-" : "") + AZURE_NETWORK_NAME;
         NetSpec network = new NetSpec(
                 networkName,
@@ -311,7 +422,19 @@ public class AzureTestUtil {
                 VirtualNetworkGatewayType.VPN,
                 VpnType.ROUTE_BASED) : null;
 
-        return new AzureNicSpecs(network, subnets, gateway, assignPublicIpAddress);
+        List<NicSpec> nicSpecs = new ArrayList<>();
+
+        for (int i = 0; i < subnets.size(); i++) {
+            NicSpec nicSpec = null;
+            if (i == 0 && assignPrivateIpAddress) {
+                nicSpec = NicSpec.createStatic(subnets.get(i));
+            } else {
+                nicSpec = NicSpec.createDynamic(subnets.get(i));
+            }
+            nicSpecs.add(nicSpec);
+        }
+
+        return new AzureNicSpecs(network, gateway, nicSpecs, assignPublicIpAddress);
     }
 
     public static ResourcePoolState createDefaultResourcePool(
@@ -880,21 +1003,21 @@ public class AzureTestUtil {
             ComputeState computeHost, EndpointState endpointSate,
             Set<String> networkRGLinks,
             Set<String> sgRGLinks,
-            AzureNicSpecs nicSpecs) throws Throwable {
+            AzureNicSpecs azureNicSpecs) throws Throwable {
 
         // Create network state.
         NetworkState networkState;
         {
             networkState = new NetworkState();
-            networkState.id = nicSpecs.network.name;
-            networkState.name = nicSpecs.network.name;
-            networkState.subnetCIDR = nicSpecs.network.cidr;
+            networkState.id = azureNicSpecs.network.name;
+            networkState.name = azureNicSpecs.network.name;
+            networkState.subnetCIDR = azureNicSpecs.network.cidr;
             networkState.authCredentialsLink = endpointSate.authCredentialsLink;
             networkState.endpointLink = endpointSate.documentSelfLink;
             networkState.tenantLinks = endpointSate.tenantLinks;
             networkState.resourcePoolLink = computeHost.resourcePoolLink;
             networkState.groupLinks = networkRGLinks;
-            networkState.regionId = nicSpecs.network.zoneId;
+            networkState.regionId = azureNicSpecs.network.zoneId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     DEFAULT_INSTANCE_ADAPTER_REFERENCE);
 
@@ -906,17 +1029,19 @@ public class AzureTestUtil {
         // Create NIC states.
         List<NetworkInterfaceState> nics = new ArrayList<>();
 
-        for (int i = 0; i < nicSpecs.subnets.size(); i++) {
+        for (int i = 0; i < azureNicSpecs.nicSpecs.size(); i++) {
+
+            NicSpec nicSpec = azureNicSpecs.nicSpecs.get(i);
 
             // Create subnet state per NIC.
             SubnetState subnetState;
             {
                 subnetState = new SubnetState();
 
-                subnetState.id = nicSpecs.subnets.get(i).name;
-                subnetState.name = nicSpecs.subnets.get(i).name;
-                subnetState.subnetCIDR = nicSpecs.subnets.get(i).cidr;
-                subnetState.zoneId = nicSpecs.subnets.get(i).zoneId;
+                subnetState.id = azureNicSpecs.nicSpecs.get(i).subnetSpec.name;
+                subnetState.name = azureNicSpecs.nicSpecs.get(i).subnetSpec.name;
+                subnetState.subnetCIDR = azureNicSpecs.nicSpecs.get(i).subnetSpec.cidr;
+                subnetState.zoneId = azureNicSpecs.nicSpecs.get(i).subnetSpec.zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
                 subnetState.endpointLink = endpointSate.documentSelfLink;
                 subnetState.tenantLinks = endpointSate.tenantLinks;
@@ -973,11 +1098,12 @@ public class AzureTestUtil {
                 nicDescription.id = "nicDesc" + i;
                 nicDescription.name = "nicDesc" + i;
                 nicDescription.deviceIndex = i;
-                nicDescription.assignment = IpAssignment.DYNAMIC;
-                nicDescription.assignPublicIpAddress = nicSpecs.assignPublicIpAddress;
-
+                nicDescription.assignPublicIpAddress = azureNicSpecs.assignPublicIpAddress;
                 nicDescription.tenantLinks = endpointSate.tenantLinks;
                 nicDescription.endpointLink = endpointSate.documentSelfLink;
+                nicDescription.assignment = nicSpec.getIpAssignment();
+                // if staticIp is null, it will be assigned automatically by DHCP.
+                nicDescription.address = nicSpec.ip();
 
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
@@ -992,9 +1118,15 @@ public class AzureTestUtil {
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkLink = subnetState.networkLink;
-
             nicState.tenantLinks = endpointSate.tenantLinks;
             nicState.endpointLink = endpointSate.documentSelfLink;
+            if (nicSpec.getIpAssignment() == IpAssignment.STATIC) {
+                // There is a rule in:
+                // \photon-model\photon-model\src\main\java\com\vmware\photon\controller\model\resources\NetworkInterfaceService.java::validateState()
+                // // which will throws java.lang.IllegalArgumentException: both networkLink and IP
+                // cannot be set
+                nicState.networkLink = null;
+            }
 
             if (i == 0) {
                 // Attach security group only on the primary nic.
@@ -1083,24 +1215,24 @@ public class AzureTestUtil {
     }
 
     private static void createAzureVirtualNetwork(String resourceGroupName,
-            AzureNicSpecs nicSpecs,
+            AzureNicSpecs azureNicSpecs,
             NetworkManagementClientImpl networkManagementClient) throws Exception {
 
         try {
             VirtualNetworkInner vNet = new VirtualNetworkInner();
-            vNet.withLocation(nicSpecs.network.zoneId);
+            vNet.withLocation(azureNicSpecs.network.zoneId);
 
             AddressSpace addressSpace = new AddressSpace();
             addressSpace.withAddressPrefixes(
-                    Collections.singletonList(nicSpecs.network.cidr));
+                    Collections.singletonList(azureNicSpecs.network.cidr));
             vNet.withAddressSpace(addressSpace);
 
             List<SubnetInner> subnetList = new ArrayList<>();
 
-            for (int i = 0; i < nicSpecs.subnets.size(); i++) {
+            for (int i = 0; i < azureNicSpecs.nicSpecs.size(); i++) {
                 SubnetInner subnet = new SubnetInner();
-                subnet.withName(nicSpecs.subnets.get(i).name);
-                subnet.withAddressPrefix(nicSpecs.subnets.get(i).cidr);
+                subnet.withName(azureNicSpecs.nicSpecs.get(i).subnetSpec.name);
+                subnet.withAddressPrefix(azureNicSpecs.nicSpecs.get(i).subnetSpec.cidr);
 
                 subnetList.add(subnet);
             }
@@ -1108,9 +1240,9 @@ public class AzureTestUtil {
             vNet.withSubnets(subnetList);
 
             networkManagementClient.virtualNetworks().createOrUpdate(
-                    resourceGroupName, nicSpecs.network.name, vNet);
+                    resourceGroupName, azureNicSpecs.network.name, vNet);
 
-            addAzureGatewayToVirtualNetwork(resourceGroupName, nicSpecs, networkManagementClient);
+            addAzureGatewayToVirtualNetwork(resourceGroupName, azureNicSpecs, networkManagementClient);
 
         } catch (CloudException ex) {
             /*

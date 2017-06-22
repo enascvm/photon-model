@@ -134,6 +134,8 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
@@ -1104,13 +1106,22 @@ public class AzureInstanceService extends StatelessService {
             AzureInstanceContext ctx,
             AzureNicContext nicCtx) {
 
+        NetworkInterfaceDescription description = nicCtx.nicStateWithDesc.description;
+
         NetworkInterfaceIPConfigurationInner ipConfig = new NetworkInterfaceIPConfigurationInner();
         ipConfig.withName(generateName(NICCONFIG_NAME_PREFIX));
-        ipConfig.withPrivateIPAllocationMethod(IPAllocationMethod.DYNAMIC);
         ipConfig.withSubnet(nicCtx.subnet);
+
         if (nicCtx.publicIP != null) {
             // Public IP is not auto-assigned so check for existence
             ipConfig.withPublicIPAddress(new SubResource().withId(nicCtx.publicIP.id()));
+        }
+
+        ipConfig.withPrivateIPAllocationMethod(
+                new IPAllocationMethod(description.assignment.name()));
+        if (description.assignment == IpAssignment.STATIC) {
+            ipConfig.withPrivateIPAddress(description.address);
+
         }
 
         NetworkInterfaceInner nic = new NetworkInterfaceInner();

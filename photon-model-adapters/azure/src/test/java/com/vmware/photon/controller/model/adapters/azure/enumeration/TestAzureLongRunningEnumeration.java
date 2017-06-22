@@ -76,7 +76,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
-import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryStrategy;
@@ -237,7 +237,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         for (int i = 0; i < numOfVMsToTest; i++) {
             String azureName = generateName(azureVMNamePrefix);
             azureVMNames.add(azureName);
-            nicSpecs.add(initializeNicSpecs(azureName, false, true));
+            nicSpecs.add(initializeNicSpecs(azureName, false, true, false));
         }
 
         try {
@@ -816,8 +816,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             assertResourceExists(this.host, NetworkService.FACTORY_LINK, nicSpecs.get(i).network.name,
                     true);
 
-            for (NetSpec subnet : nicSpecs.get(i).subnets) {
-                assertResourceExists(this.host, SubnetService.FACTORY_LINK, subnet.name, true);
+            for (NicSpec nicSpec : nicSpecs.get(i).nicSpecs ) {
+                assertResourceExists(this.host, SubnetService.FACTORY_LINK, nicSpec.geSubnetSpec().name, true);
             }
 
             assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK, azureVMNames.get(i), true);

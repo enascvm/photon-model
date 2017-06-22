@@ -23,6 +23,7 @@ import static org.junit.Assert.fail;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NO_PUBLIC_IP_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.PRIVATE_IP_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
@@ -32,6 +33,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -58,9 +60,12 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -128,7 +133,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertVmNetworksConfiguration();
+        assertVmNetworksConfiguration(DEFAULT_NIC_SPEC);
 
         assertConfigurationOfDisks(0);
 
@@ -204,7 +209,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertVmNetworksConfiguration();
+        assertVmNetworksConfiguration(NO_PUBLIC_IP_NIC_SPEC);
     }
 
     /**
@@ -258,7 +263,24 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertVmNetworksConfiguration();
+        assertVmNetworksConfiguration(DEFAULT_NIC_SPEC);
+    }
+
+    /**
+     * Creates a Azure instance via a provision task.
+     */
+    @Test
+    @Ignore("This test does an additional VM provisioning that will cause the total preflight "
+            + "time to exceed the limit and timeout the preflight. Only for manual execution.")
+    public void testProvisionWitPrivateIP() throws Throwable {
+
+        // create a Azure VM compute resource.
+        this.vmState = createDefaultVMResource(this.host, azureVMName,
+                computeHost, endpointState, PRIVATE_IP_NIC_SPEC);
+
+        kickOffProvisionTask();
+
+        assertVmNetworksConfiguration(PRIVATE_IP_NIC_SPEC);
     }
 
     // kick off a provision task to do the actual VM creation
@@ -323,7 +345,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 .setReferer(getHost().getUri()));
     }
 
-    private void assertVmNetworksConfiguration() throws Throwable {
+    private void assertVmNetworksConfiguration(AzureNicSpecs azureNicSpec) throws Throwable {
 
         // This assert is only suitable for real (non-mocking env).
         if (this.isMock) {
@@ -341,6 +363,9 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 NetworkInterfaceStateWithDescription.class,
                 NetworkInterfaceStateWithDescription.buildUri(
                         UriUtils.buildUri(getHost(), vm.networkInterfaceLinks.get(0))));
+
+        // In case that private ip is set explicitly.
+        assertStaticPrivateIPAddress(azureNicSpec, primaryNicState.address);
 
         assertNotNull("Primary NIC private IP should be set.", primaryNicState.address);
         if (primaryNicState.description.assignPublicIpAddress == null ||
@@ -500,6 +525,18 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         } catch (Throwable t) {
             fail("Unable to verify Storage Description documents");
             t.printStackTrace();
+        }
+    }
+
+    private void assertStaticPrivateIPAddress(AzureNicSpecs azureNicSpec, String privateIp) {
+        if (azureNicSpec != null) {
+            Optional<NicSpec> nicWithStaticIp = azureNicSpec.nicSpecs.stream()
+                    .filter(nic -> nic.getIpAssignment() == IpAssignment.STATIC)
+                    .findFirst();
+            if (nicWithStaticIp.isPresent()) {
+                // This is handled by testProvisionWithPrivateIp()
+                assertEquals(privateIp, nicWithStaticIp.get().ip());
+            }
         }
     }
 }
