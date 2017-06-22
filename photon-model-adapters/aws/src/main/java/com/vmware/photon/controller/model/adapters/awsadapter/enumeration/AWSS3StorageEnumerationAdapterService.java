@@ -208,6 +208,14 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             S3StorageEnumerationStages next) {
         aws.amazonS3Client = this.clientManager.getOrCreateS3Client
                 (aws.parentAuth, aws.request.regionId,this,t -> aws.error = t);
+
+        // If S3 client obtained is invalid complete the operation.
+        if (this.clientManager.isS3ClientInvalid(aws.parentAuth, aws.request.regionId)) {
+            aws.operation.complete();
+            aws.subStage = S3StorageEnumerationSubStage.ENUMERATION_STOP;
+            handleReceivedEnumerationData(aws);
+        }
+
         if (aws.error != null) {
             aws.stage = S3StorageEnumerationStages.ERROR;
             handleEnumerationRequest(aws);
@@ -246,6 +254,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     } else {
                         logSevere("Exception enumerating S3 buckets for [region=%s] [ex=%s]",
                                 aws.request.regionId, e.getMessage());
+                        aws.error = e;
+                        aws.stage = S3StorageEnumerationStages.ERROR;
+                        handleEnumerationRequest(aws);
                     }
                 }
             }
@@ -261,6 +272,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         AWSClientManagerFactory.getClientManager(AwsClientType.S3)
                 .markS3ClientInvalid(this, aws.parentAuth, aws.request.regionId);
         aws.operation.complete();
+        aws.subStage = S3StorageEnumerationSubStage.ENUMERATION_STOP;
+        handleReceivedEnumerationData(aws);
     }
 
     /**

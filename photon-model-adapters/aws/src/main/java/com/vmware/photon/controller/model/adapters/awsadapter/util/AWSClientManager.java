@@ -305,11 +305,6 @@ public class AWSClientManager {
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
 
-        if (isInvalidClient(this.invalidS3Clients, cacheKey)) {
-            failConsumer.accept(new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
-            return null;
-        }
-
         AmazonS3Client amazonS3Client = null;
 
         if (this.s3clientCache.containsKey(cacheKey)) {
@@ -339,6 +334,19 @@ public class AWSClientManager {
         service.logWarning("Marking S3 client cache entry invalid for key: " + cacheKey);
         this.invalidS3Clients.put(cacheKey, Utils.getNowMicrosUtc());
         this.s3clientCache.remove(cacheKey);
+    }
+
+    /**
+     * Checks if an S3 client has been marked as invalid.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @return true if the S3 client is marked as invalid, false otherwise.
+     */
+    public synchronized boolean isS3ClientInvalid(AuthCredentialsServiceState credentials,
+            String regionId) {
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+        return isInvalidClient(this.invalidS3Clients, cacheKey);
     }
 
     /**
