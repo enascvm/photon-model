@@ -74,6 +74,11 @@ public class PowerStateClient extends BaseHelper {
             return;
         }
 
+        if (currentState == PowerState.SUSPEND && targetState == PowerState.OFF) {
+            // In SUSPENDED state only "Power.Off" and "Power.On" operations are valid, "Power.Off" corresponds to HardPowerOff
+            hardPowerOff(vm);
+        }
+
         if (currentState == PowerState.ON && targetState == PowerState.OFF) {
             if (transition == PowerTransition.SOFT) {
                 softPowerOff(vm, politenessDeadlineMicros);
