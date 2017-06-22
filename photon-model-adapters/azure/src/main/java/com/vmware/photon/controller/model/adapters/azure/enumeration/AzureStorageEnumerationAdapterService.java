@@ -1510,6 +1510,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.COUNT)
+                .addOption(QueryOption.INDEXED_METADATA)
                 .setQuery(query)
                 .build();
 

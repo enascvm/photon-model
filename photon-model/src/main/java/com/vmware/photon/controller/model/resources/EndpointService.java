@@ -18,6 +18,7 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.REQUIRED;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
+import java.util.EnumSet;
 import java.util.Map;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
@@ -29,6 +30,7 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
@@ -135,6 +137,9 @@ public class EndpointService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument template = super.getDocumentTemplate();
+        // enable metadata indexing
+        template.documentDescription.documentIndexingOptions =
+                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
         ServiceUtils.setRetentionLimit(template);
         return template;
     }

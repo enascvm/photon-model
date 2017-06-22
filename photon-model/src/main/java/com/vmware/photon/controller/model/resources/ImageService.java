@@ -18,6 +18,7 @@ import static java.util.Collections.singletonList;
 
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +30,7 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -206,6 +208,9 @@ public class ImageService extends StatefulService {
     public ImageState getDocumentTemplate() {
 
         ImageState image = (ImageState) super.getDocumentTemplate();
+        // enable metadata indexing
+        image.documentDescription.documentIndexingOptions =
+                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
         ServiceUtils.setRetentionLimit(image);
 
         image.id = "endpoint-specific-image-id";
