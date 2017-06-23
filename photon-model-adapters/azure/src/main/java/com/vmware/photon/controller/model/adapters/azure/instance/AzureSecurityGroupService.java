@@ -56,12 +56,11 @@ public class AzureSecurityGroupService extends StatelessService {
      * Security group request context.
      */
     private static class AzureSecurityGroupContext extends
-            BaseAdapterContext<AzureSecurityGroupContext> {
+            BaseAdapterContext<AzureSecurityGroupContext> implements AutoCloseable {
 
         final SecurityGroupInstanceRequest securityGroupRequest;
 
         AzureSdkClients azureSdkClients;
-        NetworkSecurityGroupsInner azureSecurityGroupClient;
 
         SecurityGroupState securityGroupState;
         ResourceGroupState securityGroupRGState;
@@ -83,6 +82,7 @@ public class AzureSecurityGroupService extends StatelessService {
                     context.securityGroupState.authCredentialsLink);
         }
 
+        @Override
         public void close() {
             if (this.azureSdkClients != null) {
                 this.azureSdkClients.close();
@@ -236,6 +236,9 @@ public class AzureSecurityGroupService extends StatelessService {
                 context.networkState.groupLinks, context.networkState.endpointLink,
                 context.networkState.tenantLinks)
                 .thenApply(resourceGroupState -> {
+                    AssertUtil.assertNotNull(resourceGroupState, "Unable to identify a "
+                            + "suitable resource group for security group [" +
+                            context.securityGroupState.name + "]");
                     context.networkRGState = resourceGroupState;
                     // add link to this resource group to the security group (if it doesn't exist)
                     // this is necessary in order for this security group to be placed in the right
@@ -296,8 +299,6 @@ public class AzureSecurityGroupService extends StatelessService {
 
         if (ctx.azureSdkClients == null) {
             ctx.azureSdkClients = new AzureSdkClients(this.executorService, ctx.parentAuth);
-            ctx.azureSecurityGroupClient = ctx.azureSdkClients.getNetworkManagementClientImpl()
-                    .networkSecurityGroups();
         }
 
         return DeferredResult.completed(ctx);
@@ -312,8 +313,11 @@ public class AzureSecurityGroupService extends StatelessService {
         final String msg = "Creating Azure Security Group [" + context.securityGroupState.name
                 + "] in resource group [" + rgName + "].";
 
+        NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
+                .getNetworkManagementClientImpl().networkSecurityGroups();
+
         return AzureSecurityGroupUtils.createSecurityGroup(this,
-                context.azureSecurityGroupClient,
+                azureSecurityGroupClient,
                 context.securityGroupState, rgName,
                 context.securityGroupState.regionId, msg)
                 .thenApply(sg -> {
@@ -333,6 +337,9 @@ public class AzureSecurityGroupService extends StatelessService {
         final String msg = "Deleting Azure Security Group [" + securityGroupName
                 + "] in resource group [" + rgName + "].";
 
+        NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
+                .getNetworkManagementClientImpl().networkSecurityGroups();
+
         AzureDeferredResultServiceCallback<Void> handler =
                 new AzureDeferredResultServiceCallback<Void>(this, msg) {
                     @Override
@@ -340,7 +347,7 @@ public class AzureSecurityGroupService extends StatelessService {
                         return DeferredResult.completed(null);
                     }
                 };
-        context.azureSecurityGroupClient.deleteAsync(rgName, securityGroupName, handler);
+        azureSecurityGroupClient.deleteAsync(rgName, securityGroupName, handler);
         return handler.toDeferredResult()
                 .thenApply(ignore -> context);
     }

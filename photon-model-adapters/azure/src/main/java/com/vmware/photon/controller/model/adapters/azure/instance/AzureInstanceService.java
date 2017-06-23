@@ -1009,7 +1009,7 @@ public class AzureInstanceService extends StatelessService {
                         && nicCtx.securityGroup == null)
 
                 .map(nicCtx -> {
-                    SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
+                    SecurityGroupState sgState = nicCtx.securityGroupState();
 
                     String rgName = nicCtx.securityGroupRGState != null
                             ? nicCtx.securityGroupRGState.name

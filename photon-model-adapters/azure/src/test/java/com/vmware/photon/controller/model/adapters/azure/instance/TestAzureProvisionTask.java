@@ -74,7 +74,6 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
     // Every test in addition might change it.
     private static String azureVMName = generateName("test-");
-    // }}
 
     public boolean skipStats = true;
 
