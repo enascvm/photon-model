@@ -133,7 +133,10 @@ public class VSphereEndpointAdapterService extends StatelessService {
         try {
             // login and session creation
             connection.connect();
-            new GetMoRef(connection).entityProp(VimUtils.convertStringToMoRef(id), VimNames.PROPERTY_NAME);
+            if (id != null && !id.isEmpty()) {
+                // if a datacenter is configured also validate moref is OK
+                new GetMoRef(connection).entityProp(VimUtils.convertStringToMoRef(id), VimNames.PROPERTY_NAME);
+            }
             callback.accept(null, null);
         } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
             ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
