@@ -37,6 +37,14 @@ public class TagCache {
         return this.cache.computeIfAbsent(id, valueProvider);
     }
 
+    public TagState getAndPutIfAbsent(String id, TagState tagState) {
+        TagState result = this.cache.putIfAbsent(id, tagState);
+        if (result == null) {
+            result = tagState;
+        }
+        return result;
+    }
+
     public TagState get(String id) {
         return this.cache.get(id);
     }

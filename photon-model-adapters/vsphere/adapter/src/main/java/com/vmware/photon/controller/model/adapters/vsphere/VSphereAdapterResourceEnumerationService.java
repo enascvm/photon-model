@@ -82,7 +82,6 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.vim25.ManagedObjectReference;
@@ -1410,9 +1409,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             tenantLinks) {
         List<TagState> tagStates = new ArrayList<>();
         tags.entrySet().stream().forEach(t -> {
-            TagState cached = this.tagCache.get(t.getKey());
-            if (cached == null) {
-                TagState tag = newTagBuilder(t.getKey(), t.getValue(), tenantLinks);
+            TagState cached = this.tagCache
+                    .getAndPutIfAbsent(t.getKey(), newTagBuilder(t.getKey(), t.getValue()));
+            if (cached != null) {
+                TagState tag = TagsUtil.newExternalTagState(cached.key, cached.value, tenantLinks);
                 tagStates.add(tag);
             }
         });
@@ -1420,13 +1420,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return createTagsAsync(tagStates);
     }
 
-    private TagState newTagBuilder(String key, String value, List<String> tenantLinks) {
+    private TagState newTagBuilder(String key, String value) {
         final TagState tagState = new TagState();
 
         tagState.key = key;
         tagState.value = value;
-        tagState.tenantLinks = tenantLinks;
-        tagState.documentSelfLink = TagFactoryService.generateSelfLink(tagState);
 
         return tagState;
     }

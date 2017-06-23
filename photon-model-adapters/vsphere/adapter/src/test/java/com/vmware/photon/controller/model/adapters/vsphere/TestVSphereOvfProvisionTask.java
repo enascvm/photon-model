@@ -211,6 +211,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
             // provision
             ProvisionComputeTaskState outTask = createProvisionTask(vm);
             awaitTaskEnd(outTask);
+            vm = getComputeState(vm);
 
             snapshotFactoryState("ovf", ComputeService.class);
             if (!isMock() && withAdditionalDisks) {

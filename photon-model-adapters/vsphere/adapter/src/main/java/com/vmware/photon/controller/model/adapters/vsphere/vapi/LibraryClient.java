@@ -20,6 +20,8 @@ import java.util.Map;
 
 import org.apache.http.client.HttpClient;
 import org.codehaus.jackson.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.VirtualDiskType;
@@ -27,6 +29,7 @@ import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 
 public class LibraryClient extends VapiClient {
     private final String sessionId;
+    private static final Logger logger = LoggerFactory.getLogger(LibraryClient.class.getName());
 
     LibraryClient(URI uri, HttpClient client, String sessionId) {
         super(uri, client);
@@ -99,6 +102,8 @@ public class LibraryClient extends VapiClient {
                 .putObject(K_OPERATION_INPUT)
                 .put("library_item_id", itemId);
         RpcResponse resp = rpc(call);
+        logger.error("Cannot load library item %s : %s", itemId, resp.error != null ? resp.error
+                .asText() : "");
         throwIfError("Cannot load library item " + itemId, resp);
 
         ObjectNode result = resp.result;
@@ -138,6 +143,8 @@ public class LibraryClient extends VapiClient {
         opInput.put("target", target);
 
         RpcResponse resp = rpc(call);
+        logger.error("Cannot deploy library item %s : %s", itemId, resp.error != null ? resp.error
+                .asText() : "");
         throwIfError("Cannot deploy library item " + itemId, resp);
 
         ObjectNode result = resp.result;
@@ -160,12 +167,14 @@ public class LibraryClient extends VapiClient {
                 .putObject("com.vmware.vcenter.ovf.library_item.resource_pool_deployment_spec");
         t.put("accept_all_EULA", true);
 
+        // Only one of datastore / policy can be set. Not both. If datastore is present that will
+        // be given preference
         if (datastore != null) {
             t.putObject("default_datastore_id").put(K_OPTIONAL, datastore.getValue());
-        }
-        if (pbmSpec != null) {
+        } else if (pbmSpec != null) {
             t.putObject("storage_profile_id").put(K_OPTIONAL, pbmSpec.getProfileId());
         }
+
         if (diskType != null) {
             t.putObject("storage_provisioning").put(K_OPTIONAL, diskType.value());
         }

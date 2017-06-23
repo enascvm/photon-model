@@ -133,7 +133,9 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         } else {
                             state = client.createInstance();
                             // attach disks, collecting side effects
-                            patchDisks = createDiskPatch(ctx.disks);
+                            if (!client.isOvfDeploy()) {
+                                patchDisks = createDiskPatch(ctx.disks);
+                            }
                         }
 
                         if (state == null) {
@@ -189,7 +191,9 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             finishTask = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
                         }
 
-                        if (ctx.templateMoRef != null || ctx.image != null) {
+                        // TODO Remove this line once the existing disks and new disks are handled
+                        // properly.
+                        if (ctx.templateMoRef != null || ctx.image != null || client.isOvfDeploy()) {
                             addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
                         }
 
@@ -197,8 +201,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         Operation patchResource = createComputeResourcePatch(state,
                                 ctx.computeReference);
 
-                        OperationSequence seq = OperationSequence
-                                .create(patchResource);
+                        OperationSequence seq = OperationSequence.create(patchResource);
 
                         if (patchDisks != null) {
                             seq = seq.next(patchDisks);
@@ -270,6 +273,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
         };
     }
 
+    // TODO This method needs refactoring as it loses the original configuration of the disks
+    // This should be called only for additional disks to get the details from the VM.
     private void addDiskLinksAfterClone(ComputeState state, List<VirtualDisk> disks,
             ProvisionContext ctx) {
         if (state.diskLinks == null) {

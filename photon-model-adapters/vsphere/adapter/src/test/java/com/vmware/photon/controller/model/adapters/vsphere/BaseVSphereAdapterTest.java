@@ -82,6 +82,7 @@ import com.vmware.photon.controller.model.security.service.SslTrustCertificateSe
 import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.security.util.CertificateUtil;
+import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -157,7 +158,7 @@ public class BaseVSphereAdapterTest {
         this.host.waitForServiceAvailable(ExampleService.FACTORY_LINK);
 
         // TODO: VSYM-992 - improve test/fix arbitrary timeout
-        // must be at least 10min as default timeout to get an IP is 10min
+        // must be at least 15min as default timeout to get an IP is 10min
         this.host.setTimeoutSeconds(15 * 60);
 
         try {
@@ -704,27 +705,33 @@ public class BaseVSphereAdapterTest {
     }
 
     protected String createNic(String name, String networkLink) throws Throwable {
+        // Create Subnet
+        this.subnet = new SubnetState();
+        this.subnet.networkLink = networkLink;
+        this.subnet.endpointLink =  "/some/endpoint/link";
+        this.subnet.lifecycleState = LifecycleState.READY;
+        this.subnet.id = this.subnet.name = this.networkId;
+        ManagedObjectReference ref = new ManagedObjectReference();
+        ref.setValue("network-4127");
+        ref.setType(VimNames.TYPE_NETWORK);
+        CustomProperties.of(this.subnet)
+                .put(CustomProperties.TYPE, VimNames.TYPE_NETWORK)
+                .put(CustomProperties.MOREF, ref);
+        this.subnet = TestUtils.doPost(this.host, this.subnet,
+                SubnetState.class,
+                UriUtils.buildUri(this.host, SubnetService.FACTORY_LINK));
+
+        this.nicDescription = new NetworkInterfaceDescription();
+        this.nicDescription.assignment = NetworkInterfaceDescriptionService.IpAssignment.DYNAMIC;
+        this.nicDescription = TestUtils.doPost(this.host, this.nicDescription,
+                NetworkInterfaceDescription.class,
+                UriUtils.buildUri(this.host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+        this.nicDescription.subnetLink = this.subnet.documentSelfLink;
+
         NetworkInterfaceState nic = new NetworkInterfaceState();
         nic.name = name;
-        nic.networkLink = networkLink;
-
-        if (this.nicDescription != null) {
-            String subnetLink = null;
-            if (this.subnet != null) {
-                this.subnet.networkLink = networkLink;
-                this.subnet = TestUtils.doPost(this.host, this.subnet,
-                        SubnetState.class,
-                        UriUtils.buildUri(this.host, SubnetService.FACTORY_LINK));
-                subnetLink = this.subnet.documentSelfLink;
-                nic.subnetLink = this.subnet.documentSelfLink;
-            }
-
-            this.nicDescription.subnetLink = subnetLink;
-            this.nicDescription = TestUtils.doPost(this.host, this.nicDescription,
-                    NetworkInterfaceDescription.class,
-                    UriUtils.buildUri(this.host, NetworkInterfaceDescriptionService.FACTORY_LINK));
-            nic.networkInterfaceDescriptionLink = this.nicDescription.documentSelfLink;
-        }
+        nic.subnetLink = this.subnet.documentSelfLink;
+        nic.networkInterfaceDescriptionLink = this.nicDescription.documentSelfLink;
 
         nic = TestUtils.doPost(this.host, nic,
                 NetworkInterfaceState.class,
@@ -775,6 +782,7 @@ public class BaseVSphereAdapterTest {
                 capacityMBytes, customProperties);
         diskState.groupLinks = new HashSet<>();
         diskState.groupLinks.add(createResourceGroupState().documentSelfLink);
+        diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }

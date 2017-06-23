@@ -283,7 +283,7 @@ public class InstanceClient extends BaseHelper {
     private ManagedObjectReference cloneVm(ManagedObjectReference template) throws Exception {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
-        ManagedObjectReference datastore = getDatastore();
+        ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
         ManagedObjectReference resourcePool = getResourcePool();
 
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
@@ -362,6 +362,13 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
+     * Returns true if it is ovf based deployment. Else false.
+     */
+    public boolean isOvfDeploy() {
+        return getOvfUri() != null;
+    }
+
+    /**
      * Does provisioning and return a patchable state to patch the resource.
      *
      * @return
@@ -434,7 +441,6 @@ public class InstanceClient extends BaseHelper {
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference ds = getDataStoreForDisk(this.bootDisk, pbmSpec);
         ManagedObjectReference resourcePool = getResourcePool();
-        ManagedObjectReference defaultDs = getDatastore();
 
         String vmName = "pmt-" + deployer.getRetriever().hash(ovfUri);
 
@@ -453,7 +459,7 @@ public class InstanceClient extends BaseHelper {
                     List<OvfNetworkMapping> networks = mapNetworks(parser.extractNetworks(ovfDoc),
                             ovfDoc, this.ctx.nics);
                     vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, networks,
-                            defaultDs, Collections.emptyList(), config, resourcePool);
+                            ds, Collections.emptyList(), config, resourcePool);
 
                     logger.info("Removing NICs from deployed template: {} ({})", vmName,
                             vm.getValue());
@@ -708,8 +714,8 @@ public class InstanceClient extends BaseHelper {
                 newDisks.add(hdd);
             } else {
                 // get customization spec for boot disk if it is not linked clone
-                if (diskMoveOption != VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING
-                        && toKb(this.bootDisk.capacityMBytes) > vd.getCapacityInKB()) {
+                if (toKb(this.bootDisk.capacityMBytes) > vd.getCapacityInKB()) {
+                    diskMoveOption = VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING;
                     customizeBootDisk = true;
                 }
             }
@@ -824,10 +830,6 @@ public class InstanceClient extends BaseHelper {
      */
     public void attachDisks(List<DiskStateExpanded> diskStates, boolean customizeBootDisk) throws
             Exception {
-        if (getOvfUri() != null) {
-            return;
-        }
-
         if (this.vm == null) {
             throw new IllegalStateException("Cannot attach diskStates if VM is not created");
         }
@@ -1351,7 +1353,8 @@ public class InstanceClient extends BaseHelper {
      */
     private ManagedObjectReference createVm() throws Exception {
         ManagedObjectReference folder = getVmFolder();
-        ManagedObjectReference datastore = getDatastore();
+        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
+        ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
         ManagedObjectReference resourcePool = getResourcePool();
         ManagedObjectReference host = getHost();
 
@@ -1970,7 +1973,7 @@ public class InstanceClient extends BaseHelper {
                 getResourcePool(), mapping, getDiskProvisioningType(this.bootDisk));
 
         if (!result.get("succeeded").asBoolean()) {
-            throw new Exception("error deploying from library");
+            throw new Exception("Error deploying from library");
         }
 
         ManagedObjectReference ref = new ManagedObjectReference();
