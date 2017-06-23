@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -69,7 +70,7 @@ public class NetworkInterfaceServiceTest extends Suite {
         networkInterfaceState.name = NetworkInterfaceServiceTest.class.getSimpleName();
         networkInterfaceState.address = "9.9.9.9";
         networkInterfaceState.securityGroupLinks = Collections.singletonList
-                ("/resources/firewall/fw9");
+                ("/resources/security-groups/1");
         networkInterfaceState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
         networkInterfaceState.subnetLink = "/resources/subnet/subnet9";
 
@@ -123,11 +124,11 @@ public class NetworkInterfaceServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
-            NetworkInterfaceService.NetworkInterfaceState returnState = postServiceSynchronously(
+            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class);
+                    NetworkInterfaceState.class);
 
             assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
             assertNotNull(returnState);
@@ -137,11 +138,11 @@ public class NetworkInterfaceServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
-            NetworkInterfaceService.NetworkInterfaceState returnState = postServiceSynchronously(
+            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class);
+                    NetworkInterfaceState.class);
 
             assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
             assertNotNull(returnState);
@@ -149,18 +150,18 @@ public class NetworkInterfaceServiceTest extends Suite {
             returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class);
+                    NetworkInterfaceState.class);
         }
 
         @Test
         public void testMissingId() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState();
             startState.id = null;
 
-            NetworkInterfaceService.NetworkInterfaceState returnState = postServiceSynchronously(
+            NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class);
+                    NetworkInterfaceState.class);
 
             assertNotNull(returnState);
             assertNotNull(returnState.id);
@@ -171,55 +172,55 @@ public class NetworkInterfaceServiceTest extends Suite {
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     null,
-                    NetworkInterfaceService.NetworkInterfaceState.class,
+                    NetworkInterfaceState.class,
                     IllegalArgumentException.class);
         }
 
         @Test
         public void testInvalidAddress() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState();
             startState.address = "bad-ip-address";
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class,
+                    NetworkInterfaceState.class,
                     IllegalArgumentException.class);
         }
 
         @Test
         public void testMissingAddressAndDescriptionLink() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState();
             startState.address = null;
             startState.networkLink = null;
             startState.subnetLink = null;
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class,
+                    NetworkInterfaceState.class,
                     IllegalArgumentException.class);
         }
 
         @Test
         public void testHavingAddressAndNetworkLink() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState();
             startState.address = "10.0.0.1";
             startState.networkLink = "10.0.0.2";
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class,
+                    NetworkInterfaceState.class,
                     null);
         }
 
         @Test
         public void testHavingAddressAndNotSubnetLink() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState();
             startState.address = "10.0.0.1";
             startState.subnetLink = null;
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class,
+                    NetworkInterfaceState.class,
                     IllegalArgumentException.class);
         }
     }
@@ -292,14 +293,13 @@ public class NetworkInterfaceServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test
         public void testPatch() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState();
 
-            NetworkInterfaceService.NetworkInterfaceState returnState = postServiceSynchronously(
+            NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
-                    startState,
-                    NetworkInterfaceService.NetworkInterfaceState.class);
+                    startState, NetworkInterfaceState.class);
 
-            NetworkInterfaceService.NetworkInterfaceState patchState = new NetworkInterfaceService.NetworkInterfaceState();
+            NetworkInterfaceState patchState = new NetworkInterfaceState();
             patchState.address = "10.0.0.1";
             patchState.networkLink = "10.0.0.4";
             patchState.tenantLinks = new ArrayList<>();
@@ -309,13 +309,49 @@ public class NetworkInterfaceServiceTest extends Suite {
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink,
-                    NetworkInterfaceService.NetworkInterfaceState.class);
+                    returnState.documentSelfLink, NetworkInterfaceState.class);
 
             assertThat(returnState.address, is(patchState.address));
             assertThat(returnState.networkLink, is(startState.networkLink));
             assertEquals(returnState.tenantLinks, patchState.tenantLinks);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
+            assertEquals(returnState.securityGroupLinks.size(), 1);
+        }
+
+        @Test
+        public void testPatchDuplicateSecurityGroup() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState();
+
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+
+            NetworkInterfaceState patchState = new NetworkInterfaceState();
+            patchState.address = "10.0.0.1";
+            patchState.networkLink = "10.0.0.4";
+            patchState.tenantLinks = new ArrayList<>();
+            patchState.tenantLinks.add("tenant-linkA");
+            patchState.groupLinks = new HashSet<>();
+
+            patchState.securityGroupLinks = new ArrayList<>();
+            // patch duplicate security group
+            patchState.securityGroupLinks.add("/resources/security-groups/1");
+            // patch unique security group
+            patchState.securityGroupLinks.add("/resources/security-groups/2");
+            patchState.groupLinks.add("group1");
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink, NetworkInterfaceState.class);
+
+            assertThat(returnState.address, is(patchState.address));
+            assertThat(returnState.networkLink, is(startState.networkLink));
+            assertEquals(returnState.tenantLinks, patchState.tenantLinks);
+            assertEquals(returnState.groupLinks, patchState.groupLinks);
+
+            assertEquals(returnState.securityGroupLinks.size(), 2);
+            assertThat(returnState.securityGroupLinks, hasItem("/resources/security-groups/1"));
+            assertThat(returnState.securityGroupLinks, hasItem("/resources/security-groups/2"));
         }
     }
 
@@ -325,17 +361,17 @@ public class NetworkInterfaceServiceTest extends Suite {
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            NetworkInterfaceService.NetworkInterfaceState nic = buildValidStartState();
+            NetworkInterfaceState nic = buildValidStartState();
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             nic.tenantLinks = new ArrayList<>();
             nic.tenantLinks.add(UriUtils.buildUriPath(tenantUri.getPath(),
                     "tenantA"));
-            NetworkInterfaceService.NetworkInterfaceState startState = postServiceSynchronously(
+            NetworkInterfaceState startState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK, nic,
-                    NetworkInterfaceService.NetworkInterfaceState.class);
+                    NetworkInterfaceState.class);
 
             String kind = Utils
-                    .buildKind(NetworkInterfaceService.NetworkInterfaceState.class);
+                    .buildKind(NetworkInterfaceState.class);
             String propertyName = QueryTask.QuerySpecification
                     .buildCollectionItemName(ResourceState.FIELD_NAME_TENANT_LINKS);
 

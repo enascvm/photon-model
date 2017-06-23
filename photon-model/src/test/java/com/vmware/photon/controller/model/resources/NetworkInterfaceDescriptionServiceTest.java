@@ -14,12 +14,15 @@
 package com.vmware.photon.controller.model.resources;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.UUID;
 
 import org.junit.Before;
@@ -59,7 +62,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
         nd.address = "8.8.8.8";
         nd.assignment = IpAssignment.STATIC;
-        nd.securityGroupLinks = Collections.singletonList("/resources/firewall/fw8");
+        nd.securityGroupLinks = Collections.singletonList("/resources/security-groups/1");
         nd.networkLink = "/resources/network/net8";
         nd.subnetLink = "/resources/subnet/subnet8";
 
@@ -169,12 +172,51 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
             returnState.endpointLink = "/modified";
 
-            returnState = patchServiceSynchronously(
+            patchServiceSynchronously(
                     returnState.documentSelfLink,
                     returnState,
                     NetworkInterfaceDescription.class);
 
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink, NetworkInterfaceDescription.class);
+
             assertEquals(endpointLink, returnState.endpointLink);
+        }
+
+        @Test
+        public void testPatchDuplicateSecurityGroup() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState();
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState, NetworkInterfaceDescription.class);
+
+            NetworkInterfaceDescription patchState = new NetworkInterfaceDescription();
+            patchState.address = "10.0.0.1";
+            patchState.networkLink = "10.0.0.4";
+            patchState.tenantLinks = new ArrayList<>();
+            patchState.tenantLinks.add("tenant-linkA");
+            patchState.groupLinks = new HashSet<>();
+
+            patchState.securityGroupLinks = new ArrayList<>();
+            // patch duplicate security group
+            patchState.securityGroupLinks.add("/resources/security-groups/1");
+            // patch unique security group
+            patchState.securityGroupLinks.add("/resources/security-groups/2");
+            patchState.groupLinks.add("group1");
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink, NetworkInterfaceDescription.class);
+
+            assertThat(returnState.address, is(patchState.address));
+            assertThat(returnState.networkLink, is(startState.networkLink));
+            assertEquals(returnState.tenantLinks, patchState.tenantLinks);
+            assertEquals(returnState.groupLinks, patchState.groupLinks);
+
+            assertEquals(returnState.securityGroupLinks.size(), 2);
+            assertThat(returnState.securityGroupLinks, hasItem("/resources/security-groups/1"));
+            assertThat(returnState.securityGroupLinks, hasItem("/resources/security-groups/2"));
         }
     }
 }

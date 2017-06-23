@@ -60,6 +60,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         /**
          * The static IP of the interface. Optional.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String address;
 
         /**
@@ -82,8 +83,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         @Deprecated
         public List<String> firewallLinks;
 
-        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
-                PropertyUsageOption.LINKS })
+        @PropertyOptions(usage = PropertyUsageOption.LINKS)
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
         public List<String> securityGroupLinks;
 
@@ -153,6 +153,19 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
                     if (patchBody.endpointLink != null && currentState.endpointLink == null) {
                         currentState.endpointLink = patchBody.endpointLink;
                         hasStateChanged = true;
+                    }
+                    if (patchBody.securityGroupLinks != null) {
+                        if (currentState.securityGroupLinks == null) {
+                            currentState.securityGroupLinks = patchBody.securityGroupLinks;
+                            hasStateChanged = true;
+                        } else {
+                            for (String link : patchBody.securityGroupLinks) {
+                                if (!currentState.securityGroupLinks.contains(link)) {
+                                    currentState.securityGroupLinks.add(link);
+                                    hasStateChanged = true;
+                                }
+                            }
+                        }
                     }
                     return hasStateChanged;
                 });
