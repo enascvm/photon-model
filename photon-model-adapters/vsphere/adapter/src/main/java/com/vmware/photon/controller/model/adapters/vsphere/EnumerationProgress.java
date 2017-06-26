@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Phaser;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
@@ -27,6 +28,7 @@ import com.vmware.vim25.ManagedObjectReference;
  *
  */
 public class EnumerationProgress {
+    private final Set<String> resourceLinks;
     private final ComputeEnumerateResourceRequest request;
     private final ComputeStateWithDescription parent;
     private final VapiConnection endpoint;
@@ -41,13 +43,18 @@ public class EnumerationProgress {
 
     private Phaser vmTracker;
 
-    public EnumerationProgress(ComputeEnumerateResourceRequest request,
+    public EnumerationProgress(Set<String> resourceLinks, ComputeEnumerateResourceRequest request,
             ComputeStateWithDescription parent, VapiConnection endpoint) {
+        this.resourceLinks = resourceLinks;
         this.request = request;
         this.parent = parent;
         this.endpoint = endpoint;
         this.vmTracker = new Phaser(1);
         this.overlays = new MoRefKeyedMap<>();
+    }
+
+    public Set<String> getResourceLinks() {
+        return this.resourceLinks;
     }
 
     public VapiConnection getEndpoint() {
@@ -132,5 +139,11 @@ public class EnumerationProgress {
 
     public void track(AbstractOverlay overlay) {
         this.overlays.put(overlay.getId(), overlay);
+    }
+
+    public void touchResource(String selfLink) {
+        if (selfLink != null) {
+            this.resourceLinks.remove(selfLink);
+        }
     }
 }

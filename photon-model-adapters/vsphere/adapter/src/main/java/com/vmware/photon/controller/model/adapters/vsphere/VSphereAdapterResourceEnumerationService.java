@@ -18,7 +18,6 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -31,6 +30,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
@@ -92,6 +92,7 @@ import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationContext;
@@ -107,7 +108,6 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -169,7 +169,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         op.setStatusCode(Operation.STATUS_CODE_CREATED);
         op.complete();
 
-        TaskManager mgr = new TaskManager(this, request.taskReference,request.resourceLink());
+        TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
 
         if (request.isMockRequest) {
             // just finish the mock request
@@ -194,28 +194,30 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
+        collectAllEndpointResources(request, parent.documentSelfLink).thenAccept(resourceLinks -> {
+            VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
 
-        pool.submit(this, parent.adapterManagementReference,
-                parent.description.authCredentialsLink,
-                (connection, e) -> {
-                    if (e != null) {
-                        String msg = String.format("Cannot establish connection to %s",
-                                parent.adapterManagementReference);
-                        logWarning(msg);
-                        mgr.patchTaskToFailure(msg, e);
-                    } else {
-                        if (request.enumerationAction == EnumerationAction.REFRESH) {
-                            refreshResourcesOnce(request, connection, parent, mgr);
-                        } else if (request.enumerationAction == EnumerationAction.START) {
-                            startEnumerationProcess(
-                                    connection.createUnmanagedCopy(),
-                                    parent,
-                                    request,
-                                    mgr);
+            pool.submit(this, parent.adapterManagementReference,
+                    parent.description.authCredentialsLink,
+                    (connection, e) -> {
+                        if (e != null) {
+                            String msg = String.format("Cannot establish connection to %s",
+                                    parent.adapterManagementReference);
+                            logWarning(msg);
+                            mgr.patchTaskToFailure(msg, e);
+                        } else {
+                            if (request.enumerationAction == EnumerationAction.REFRESH) {
+                                refreshResourcesOnce(resourceLinks, request, connection, parent, mgr);
+                            } else if (request.enumerationAction == EnumerationAction.START) {
+                                startEnumerationProcess(
+                                        connection.createUnmanagedCopy(),
+                                        parent,
+                                        request,
+                                        mgr);
+                            }
                         }
-                    }
-                });
+                    });
+        });
     }
 
     private void endEnumerationProcess(ComputeStateWithDescription parent, TaskManager mgr) {
@@ -229,6 +231,61 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         mgr.patchTask(TaskStage.FINISHED);
+    }
+
+    private DeferredResult<Set<String>> collectAllEndpointResources(ComputeEnumerateResourceRequest req,
+            String parentLink) {
+        Query.Builder builder = Query.Builder.create()
+                .addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, req.endpointLink)
+                .addFieldClause(ServiceDocument.FIELD_NAME_KIND, Utils.buildKind(ComputeDescription.class),
+                        Occurance.MUST_NOT_OCCUR)
+                .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK, parentLink, Occurance.MUST_NOT_OCCUR);
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
+                .build();
+
+        DeferredResult<Set<String>> res = new DeferredResult<>();
+        Set<String> links = new ConcurrentSkipListSet<>();
+
+        QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
+            if (e != null) {
+                res.complete(new HashSet<>());
+                return;
+            }
+
+            if (result.results.nextPageLink == null) {
+                res.complete(links);
+                return;
+            }
+
+            Operation.createGet(UriUtils.buildUri(getHost(), result.results.nextPageLink))
+                    .setCompletion(makeCompletion(links, res))
+                    .sendWith(this);
+        });
+
+        return res;
+    }
+
+    private CompletionHandler makeCompletion(Set<String> imageLinks, DeferredResult<Set<String>> res) {
+        return (o, e) -> {
+            if (e != null) {
+                res.complete(imageLinks);
+                return;
+            }
+
+            QueryTask qt = o.getBody(QueryTask.class);
+            imageLinks.addAll(qt.results.documentLinks);
+
+            if (qt.results.nextPageLink == null) {
+                res.complete(imageLinks);
+            } else {
+                Operation.createGet(UriUtils.buildUri(getHost(), qt.results.nextPageLink))
+                        .setCompletion(makeCompletion(imageLinks, res))
+                        .sendWith(this);
+            }
+        };
     }
 
     private void startEnumerationProcess(
@@ -313,13 +370,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     /**
      * This method executes in a thread managed by {@link VSphereIOThreadPoolAllocator}
      *
+     * @param resourceLinks
      * @param request
      * @param connection
      * @param parent
      * @param mgr
      */
     private void refreshResourcesOnce(
-            ComputeEnumerateResourceRequest request,
+            Set<String> resourceLinks, ComputeEnumerateResourceRequest request,
             Connection connection,
             ComputeStateWithDescription parent,
             TaskManager mgr) {
@@ -342,9 +400,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
+        EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
+                parent,vapiConnection);
+
         try {
-            EnumerationProgress enumerationProgress = new EnumerationProgress(request, parent,
-                    vapiConnection);
             refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
         } catch (ClientException e) {
             logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
@@ -357,7 +416,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     Utils.toString(e)));
         }
 
-        garbageCollectUntouchedComputeResources(request, parent, mgr);
+        garbageCollectUntouchedComputeResources(request, enumerationProgress, mgr);
     }
 
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,
@@ -482,7 +541,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         // exclude all root resource pools
-        for (Iterator<ResourcePoolOverlay> it = resourcePools.iterator(); it.hasNext();) {
+        for (Iterator<ResourcePoolOverlay> it = resourcePools.iterator(); it.hasNext(); ) {
             ResourcePoolOverlay rp = it.next();
             if (!VimNames.TYPE_RESOURCE_POOL.equals(rp.getParent().getType())) {
                 // no need to collect the root resource pool
@@ -563,68 +622,32 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void garbageCollectUntouchedComputeResources(ComputeEnumerateResourceRequest request,
-            ComputeStateWithDescription parent, TaskManager mgr) {
-        // find all computes of the parent which are NOT enumerated by this task AND are enumerated
-        // at least once.
+            EnumerationProgress progress, TaskManager mgr) {
+        if (progress.getResourceLinks().isEmpty()) {
+            mgr.patchTask(TaskStage.FINISHED);
+            return;
+        }
 
-        String enumerateByFieldName = QuerySpecification
-                .buildCompositeFieldName(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        CustomProperties.ENUMERATED_BY_TASK_LINK);
-
-        Builder builder = Query.Builder.create()
-                .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, request.resourceLink())
-                .addFieldClause(enumerateByFieldName, request.taskLink(), Occurance.MUST_NOT_OCCUR)
-                .addFieldClause(enumerateByFieldName, "", MatchType.PREFIX)
-                .addInClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE,
-                        Arrays.asList(LifecycleState.PROVISIONING.toString(),
-                                LifecycleState.RETIRED.toString()),
-                        Occurance.MUST_NOT_OCCUR);
-
-        QueryUtils.addEndpointLink(builder, ComputeState.class, request.endpointLink);
-        QueryUtils.addTenantLinks(builder, parent.tenantLinks);
-
-        // fetch compute resources with their links
-        QueryTask task = QueryTask.Builder.createDirectTask()
-                .addLinkTerm(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS)
-                .addLinkTerm(ComputeState.FIELD_NAME_DISK_LINKS)
-                .addOption(QueryOption.SELECT_LINKS)
-                .setQuery(builder.build())
-                .build();
-
-        // TODO: add query pagination
-        QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
-            if (e != null) {
-                // it's too harsh to fail the task because of failed GC, next time it may pass
-                logSevere(e);
-                mgr.patchTask(TaskStage.FINISHED);
-                return;
+        if (!request.preserveMissing) {
+            // delete dependent resources without waiting for response
+            for (String diskOrNicLink : progress.getResourceLinks()) {
+                Operation.createDelete(this, diskOrNicLink)
+                        .sendWith(this);
             }
+            mgr.patchTask(TaskStage.FINISHED);
+            return;
+        }
 
-            if (result.results.documentLinks == null || result.results.documentLinks.isEmpty()) {
-                mgr.patchTask(TaskStage.FINISHED);
-                return;
-            }
+        Stream<Operation> gcOps = progress.getResourceLinks().stream()
+                .map(link -> createResourceRemovalOperation(request.preserveMissing, link));
 
-            if (!request.preserveMissing) {
-                // delete dependent resources without waiting for response
-                for (String diskOrNicLink : result.results.selectedLinks) {
-                    Operation.createDelete(this, diskOrNicLink)
-                            .sendWith(this);
-                }
-            }
-
-            Stream<Operation> gcOps = result.results.documentLinks.stream()
-                    .map(link -> createComputeRemovalOp(request.preserveMissing, link));
-
-            OperationJoin.create(gcOps)
-                    .setCompletion((os, es) -> mgr.patchTask(TaskStage.FINISHED))
-                    .sendWith(this);
-        });
+        OperationJoin.create(gcOps)
+                .setCompletion((os, es) -> mgr.patchTask(TaskStage.FINISHED))
+                .sendWith(this);
     }
 
-    private Operation createComputeRemovalOp(boolean preserveMissing, String computeLink) {
-        if (preserveMissing) {
+    private Operation createResourceRemovalOperation(boolean preserveMissing, String computeLink) {
+        if (preserveMissing && computeLink.startsWith(ComputeService.FACTORY_LINK)) {
             ComputeState body = new ComputeState();
             body.lifecycleState = LifecycleState.RETIRED;
             // set powerState for consistency with other adapters
@@ -710,7 +733,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
         custProp.put(DvsProperties.PORT_GROUP_KEY, net.getPortgroupKey());
@@ -754,6 +776,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
+        // represent a Network also as a subnet
         SubnetState subnet = new SubnetState();
         subnet.documentSelfLink = UriUtils.buildUriPath(SubnetService.FACTORY_LINK,
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
@@ -761,9 +784,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
         subnet.networkLink = networkState.documentSelfLink;
         subnet.tenantLinks = enumerationProgress.getTenantLinks();
+        enumerationProgress.touchResource(subnet.documentSelfLink);
 
         CustomProperties.of(subnet)
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
@@ -800,7 +823,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.tenantLinks = enumerationProgress.getTenantLinks();
 
         CustomProperties.of(subnet)
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
@@ -816,6 +838,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private CompletionHandler trackDatastore(EnumerationProgress enumerationProgress,
             DatastoreOverlay ds) {
         return (o, e) -> {
+            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             if (e == null) {
                 enumerationProgress.getDatastoreTracker().track(ds.getId(), getSelfLinkFromOperation(o));
             } else {
@@ -827,6 +850,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private CompletionHandler trackStoragePolicy(EnumerationProgress enumerationProgress,
             StoragePolicyOverlay sp) {
         return (o, e) -> {
+            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             if (e != null) {
                 logFine(() -> String
                         .format("Error in syncing resource group for Storage Policy %s",
@@ -838,6 +862,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private CompletionHandler trackVm(EnumerationProgress enumerationProgress) {
         return (o, e) -> {
+            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             enumerationProgress.getVmTracker().arrive();
         };
     }
@@ -845,6 +870,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private CompletionHandler trackComputeResource(EnumerationProgress enumerationProgress,
             ComputeResourceOverlay cr) {
         return (o, e) -> {
+            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             if (e == null) {
                 enumerationProgress.getComputeResourceTracker().track(cr.getId(), getSelfLinkFromOperation(o));
             } else {
@@ -856,6 +882,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private CompletionHandler trackHostSystem(EnumerationProgress enumerationProgress,
             HostSystemOverlay hs) {
         return (o, e) -> {
+            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             if (e == null) {
                 enumerationProgress.getHostSystemTracker().track(hs.getId(), getSelfLinkFromOperation(o));
             } else {
@@ -867,6 +894,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private CompletionHandler trackNetwork(EnumerationProgress enumerationProgress,
             NetworkOverlay net) {
         return (o, e) -> {
+            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             if (e == null) {
                 enumerationProgress.getNetworkTracker().track(net.getId(), getSelfLinkFromOperation(o));
             } else {
@@ -895,7 +923,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
         if (net.getSummary() instanceof OpaqueNetworkSummary) {
@@ -1028,8 +1055,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
                 .put(ComputeProperties.RESOURCE_TYPE_KEY, sp.getType())
-                .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, request.endpointLink)
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink());
+                .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, request.endpointLink);
 
         return res;
     }
@@ -1188,7 +1214,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return UriUtils.buildUriPath(
                 ResourceGroupService.FACTORY_LINK,
                 prefix + "-" +
-                VimUtils.buildStableManagedObjectId(ref, endpointLink));
+                        VimUtils.buildStableManagedObjectId(ref, endpointLink));
     }
 
     private ResourceGroupState makeStorageGroup(DatastoreOverlay ds, EnumerationProgress ctx) {
@@ -1215,8 +1241,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.capacityBytes = ds.getCapacityBytes();
         res.regionId = regionId;
         CustomProperties.of(res)
-                .put(CustomProperties.MOREF, ds.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink());
+                .put(CustomProperties.MOREF, ds.getId());
 
         return res;
     }
@@ -1283,6 +1308,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
+                    trackComputeResource(enumerationProgress, cr).handle(o, e);
                     if (e == null) {
                         updateLocalTags(enumerationProgress, cr, o.getBody(ResourceState.class));
                     }
@@ -1293,7 +1319,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         desc.documentSelfLink = oldDocument.descriptionLink;
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
-                .setCompletion(trackComputeResource(enumerationProgress, cr))
                 .sendWith(this);
     }
 
@@ -1495,8 +1520,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, cr.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK,
-                        enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, cr.getId().getType());
         return state;
     }
@@ -1626,8 +1649,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK,
-                        enumerationProgress.getRequest().taskLink())
                 .put(CustomProperties.TYPE, hs.getId().getType());
         return state;
     }
@@ -1868,16 +1889,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     cr.getDatastore(), cr.getNetwork());
         }
 
-
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, rp.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink())
                 .put(CustomProperties.TYPE, VimNames.TYPE_RESOURCE_POOL);
         return state;
     }
 
     private CompletionHandler trackResourcePool(EnumerationProgress enumerationProgress, ResourcePoolOverlay rp) {
         return (o, e) -> {
+            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             if (e == null) {
                 enumerationProgress.getResourcePoolTracker().track(rp.getId(), getSelfLinkFromOperation(o));
             } else {
@@ -1930,7 +1950,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
         return state;
     }

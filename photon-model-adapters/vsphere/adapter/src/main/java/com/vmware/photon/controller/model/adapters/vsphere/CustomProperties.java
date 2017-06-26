@@ -63,11 +63,6 @@ public class CustomProperties {
      */
     public static final String GUEST_ID = "__guestId";
 
-    /**
-     * During enumeration, this custom property is set to point to the enumeration Task.
-     */
-    public static final String ENUMERATED_BY_TASK_LINK = "__enumTaskLink";
-
     public static final String IMAGE_LIBRARY_ID = "__libraryId";
 
     /**

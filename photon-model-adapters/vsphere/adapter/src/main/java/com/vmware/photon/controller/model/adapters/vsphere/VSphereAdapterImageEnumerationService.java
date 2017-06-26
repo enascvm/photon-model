@@ -15,7 +15,10 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.Phaser;
 
 import org.codehaus.jackson.node.ObjectNode;
@@ -30,7 +33,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.query.QueryUtils;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
@@ -38,17 +40,15 @@ import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 
 /**
  */
@@ -96,38 +96,37 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
     }
 
     private void thenWithParentState(ImageEnumerateRequest request,
-            ComputeStateWithDescription parent,
-            TaskManager mgr) {
+            ComputeStateWithDescription parent, TaskManager mgr) {
 
-        VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
-
-        pool.submit(this, parent.adapterManagementReference,
-                parent.description.authCredentialsLink,
-                (connection, e) -> {
-                    if (e != null) {
-                        String msg = String.format("Cannot establish connection to %s",
-                                parent.adapterManagementReference);
-                        logWarning(msg);
-                        mgr.patchTaskToFailure(msg, e);
-                    } else {
-                        if (request.enumerationAction == EnumerationAction.REFRESH) {
-                            refreshResourcesOnce(request, parent, connection, mgr);
+        collectAllEndpointImages(request).thenAccept(oldImages -> {
+            VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
+            pool.submit(this, parent.adapterManagementReference,
+                    parent.description.authCredentialsLink, (connection, e) -> {
+                        if (e != null) {
+                            String msg = String.format("Cannot establish connection to %s",
+                                    parent.adapterManagementReference);
+                            logWarning(msg);
+                            mgr.patchTaskToFailure(msg, e);
                         } else {
-                            mgr.patchTaskToFailure(
-                                    new IllegalArgumentException("Only REFRESH supported"));
+                            if (request.enumerationAction == EnumerationAction.REFRESH) {
+                                refreshResourcesOnce(oldImages, request, parent, connection, mgr);
+                            } else {
+                                mgr.patchTaskToFailure(
+                                        new IllegalArgumentException("Only REFRESH supported"));
+                            }
                         }
-                    }
-                });
+                    });
+        });
     }
 
-    private void refreshResourcesOnce(ImageEnumerateRequest request,
+    private void refreshResourcesOnce(Set<String> oldImages, ImageEnumerateRequest request,
             ComputeStateWithDescription parent,
             Connection connection,
             TaskManager mgr) {
 
         try {
             EnumerationClient client = new EnumerationClient(connection, parent);
-            processAllTemplates(request.resourceLink(), request.taskLink(), client, parent.tenantLinks);
+            processAllTemplates(oldImages, request.resourceLink(), request.taskLink(), client, parent.tenantLinks);
         } catch (Throwable e) {
             mgr.patchTaskToFailure("Error processing library items", e);
             return;
@@ -137,7 +136,8 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             VapiConnection vapi = VapiConnection.createFromVimConnection(connection);
             vapi.login();
             LibraryClient libraryClient = vapi.newLibraryClient();
-            processAllLibraries(request.resourceLink(), request.taskLink(), libraryClient, parent.tenantLinks);
+            processAllLibraries(oldImages, request.resourceLink(), request.taskLink(), libraryClient,
+                    parent.tenantLinks);
 
             mgr.patchTask(TaskStage.FINISHED);
         } catch (Throwable t) {
@@ -146,10 +146,11 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         }
 
         // garbage collection runs async
-        garbageCollectImages(request);
+        garbageCollectUntouchedImages(oldImages);
     }
 
-    private void processAllTemplates(String endpointLink, String taskLink, EnumerationClient client,
+    private void processAllTemplates(Set<String> oldImages, String endpointLink, String taskLink,
+            EnumerationClient client,
             List<String> tenantLinks) throws ClientException, RuntimeFaultFaultMsg {
         PropertyFilterSpec spec = client.createVmFilterSpec(client.getDatacenter());
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
@@ -168,10 +169,10 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
                 state.endpointLink = endpointLink;
                 state.tenantLinks = tenantLinks;
-                CustomProperties.of(state)
-                        .put(CustomProperties.ENUMERATED_BY_TASK_LINK, taskLink);
 
+                oldImages.remove(state.documentSelfLink);
                 phaser.register();
+
                 Operation.createPost(this, ImageService.FACTORY_LINK)
                         .setBody(state)
                         .setCompletion((o, e) -> phaser.arrive())
@@ -195,43 +196,66 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         return res;
     }
 
-    private void garbageCollectImages(ImageEnumerateRequest req) {
-        String enumerateByFieldName = QuerySpecification
-                .buildCompositeFieldName(ImageState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        CustomProperties.ENUMERATED_BY_TASK_LINK);
-
+    private DeferredResult<Set<String>> collectAllEndpointImages(ImageEnumerateRequest req) {
         Builder builder = Query.Builder.create()
                 .addKindFieldClause(ImageState.class)
-                .addFieldClause(ImageState.FIELD_NAME_ENDPOINT_LINK, req.resourceLink())
-                .addFieldClause(enumerateByFieldName, req.taskLink(), Occurance.MUST_NOT_OCCUR)
-                .addFieldClause(enumerateByFieldName, "", MatchType.PREFIX);
+                .addFieldClause(ImageState.FIELD_NAME_ENDPOINT_LINK, req.resourceLink());
 
-        // fetch compute resources with their links
         QueryTask task = QueryTask.Builder.createDirectTask()
-                .addLinkTerm(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS)
-                .addLinkTerm(ComputeState.FIELD_NAME_DISK_LINKS)
-                .addOption(QueryOption.SELECT_LINKS)
                 .setQuery(builder.build())
+                .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
                 .build();
+
+        DeferredResult<Set<String>> res = new DeferredResult<>();
+        Set<String> imageLinks = new ConcurrentSkipListSet<>();
 
         QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
             if (e != null) {
-                logSevere(e);
+                res.complete(new HashSet<>());
                 return;
             }
 
-            if (result.results.documentLinks == null || result.results.documentLinks.isEmpty()) {
+            if (result.results.nextPageLink == null) {
+                res.complete(imageLinks);
                 return;
             }
 
-            for (String link : result.results.documentLinks) {
-                Operation.createDelete(this, link)
+            Operation.createGet(UriUtils.buildUri(getHost(), result.results.nextPageLink))
+                    .setCompletion(makeCompletion(imageLinks, res))
+                    .sendWith(this);
+        });
+
+        return res;
+    }
+
+    private CompletionHandler makeCompletion(Set<String> imageLinks, DeferredResult<Set<String>> res) {
+        return (o, e) -> {
+            if (e != null) {
+                res.complete(imageLinks);
+                return;
+            }
+
+            QueryTask qt = o.getBody(QueryTask.class);
+            imageLinks.addAll(qt.results.documentLinks);
+
+            if (qt.results.nextPageLink == null) {
+                res.complete(imageLinks);
+            } else {
+                Operation.createGet(UriUtils.buildUri(getHost(), qt.results.nextPageLink))
+                        .setCompletion(makeCompletion(imageLinks, res))
                         .sendWith(this);
             }
+        };
+    }
+
+    private void garbageCollectUntouchedImages(Set<String> untouchedImages) {
+        untouchedImages.forEach(link -> {
+            Operation.createDelete(UriUtils.buildUri(getHost(), link))
+                    .sendWith(this);
         });
     }
 
-    private void processAllLibraries(String endpointLink, String taskLink,
+    private void processAllLibraries(Set<String> oldImages, String endpointLink, String taskLink,
             LibraryClient libraryClient, List<String> tenantLinks)
             throws IOException, RpcException {
         Phaser phaser = new Phaser(1);
@@ -251,10 +275,10 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
                 state.endpointLink = endpointLink;
                 state.tenantLinks = tenantLinks;
-                CustomProperties.of(state)
-                        .put(CustomProperties.ENUMERATED_BY_TASK_LINK, taskLink);
 
+                oldImages.remove(state.documentSelfLink);
                 phaser.register();
+
                 Operation.createPost(this, ImageService.FACTORY_LINK)
                         .setBody(state)
                         .setCompletion((o, e) -> phaser.arrive())

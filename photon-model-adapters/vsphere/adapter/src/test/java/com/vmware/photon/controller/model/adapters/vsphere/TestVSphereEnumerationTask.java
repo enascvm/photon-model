@@ -85,6 +85,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
             ComputeState vm = findRandomVm();
             vm.documentSelfLink = null;
             vm.id = "fake-vm-" + vm.id;
+            vm.documentSelfLink = null;
 
             vm = TestUtils.doPost(this.host, vm,
                     ComputeState.class,
