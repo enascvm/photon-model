@@ -40,6 +40,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -118,7 +119,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_STORAGE_ENUMERATION_ADAPTER;
     private static final String VHD_EXTENSION = ".vhd";
-    public static final int B_TO_MB_FACTOR = 1024 * 1024;
+    private static final int B_TO_MB_FACTOR = 1024 * 1024;
     private static final int MAX_RESOURCES_TO_QUERY = Integer
             .getInteger(UriPaths.PROPERTY_PREFIX
                     + "enum.max.resources.query.on.delete", 950);
@@ -235,9 +236,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      * Creates the storage description states in the local document store based on the storage
      * accounts received from the remote endpoint.
      *
-     * @param context
-     *            The local service context that has all the information needed to create the
-     *            additional description states in the local system.
+     * @param context The local service context that has all the information needed to create the
+     *                additional description states in the local system.
      */
     private void handleEnumeration(StorageEnumContext context) {
         switch (context.stage) {
@@ -319,7 +319,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             updateStorageDescriptions(context, StorageEnumStages.CREATE_STORAGE_DESCRIPTIONS);
             break;
         case CREATE_STORAGE_DESCRIPTIONS:
-            createStorageDescriptions(context, StorageEnumStages.PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS);
+            createStorageDescriptions(context,
+                    StorageEnumStages.PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS);
             break;
         case PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS:
             patchAdditionalFields(context, StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS);
@@ -409,7 +410,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 Operation.MEDIA_TYPE_APPLICATION_JSON);
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + context.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
+                    AUTH_HEADER_BEARER_PREFIX + context.credentials
+                            .getToken(AZURE_CORE_MANAGEMENT_URI));
         } catch (Exception ex) {
             this.handleError(context, ex);
             return;
@@ -493,7 +495,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 qBuilder.build(),
                 StorageDescription.class, context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                .setMaxPageSize(getQueryResultLimit());
 
         queryLocalStates.collectDocuments(Collectors.toList()).whenComplete((sds, ex) -> {
             if (ex != null) {
@@ -511,7 +513,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         if (!context.storageConnectionStrings.containsKey(sd.id)) {
                             return loadStorageAuth(context, sd);
                         } else {
-                            return DeferredResult.<AuthCredentialsServiceState> completed(null);
+                            return DeferredResult.<AuthCredentialsServiceState>completed(null);
                         }
                     }).collect(Collectors.toList());
 
@@ -646,7 +648,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 })
                 .thenApply(auth -> {
                     StorageDescription storageDesc = AzureUtils.constructStorageDescription(
-                            context.parentCompute, context.request, storageAccount, auth.documentSelfLink);
+                            context.parentCompute, context.request, storageAccount,
+                            auth.documentSelfLink);
                     return storageDesc;
                 })
                 .thenCompose(sd -> sendWithDeferredResult(Operation
@@ -658,7 +661,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                         "Unable to store storage description for storage account:[%s], reason: %s",
                                         storageAccount.name, Utils.toJsonHtml(e));
                             } else {
-                                StorageDescription storageDescription = o.getBody(StorageDescription.class);
+                                StorageDescription storageDescription = o
+                                        .getBody(StorageDescription.class);
                                 context.storageDescriptionsForPatching.put(storageDescription.id,
                                         storageDescription);
                             }
@@ -714,7 +718,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 new AzureDeferredResultServiceCallback<StorageAccountInner>(
                         this, "Load storage account view:" + storageName) {
                     @Override
-                    protected DeferredResult<StorageAccountInner> consumeSuccess(StorageAccountInner sa) {
+                    protected DeferredResult<StorageAccountInner> consumeSuccess(
+                            StorageAccountInner sa) {
                         logFine(() -> String
                                 .format("Retrieved instance view for storage account [%s].",
                                         storageName));
@@ -757,7 +762,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 StorageDescription.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                .setMaxPageSize(getQueryResultLimit());
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
         queryLocalStates.queryDocuments(sd -> {
@@ -817,38 +822,54 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                 ResultContinuation nextContainerResults = null;
                 do {
-                    ResultSegment<CloudBlobContainer> contSegment = blobClient
-                            .listContainersSegmented(null,
-                                    ContainerListingDetails.NONE,
-                                    getQueryResultLimit(), nextContainerResults, null,
-                                    null);
+                    try {
+                        ResultSegment<CloudBlobContainer> contSegment = blobClient
+                                .listContainersSegmented(null,
+                                        ContainerListingDetails.NONE,
+                                        getQueryResultLimit(), nextContainerResults, null,
+                                        null);
 
-                    nextContainerResults = contSegment.getContinuationToken();
-                    for (CloudBlobContainer container : contSegment.getResults()) {
-                        String uri = container.getUri().toString();
-                        context.containerIds.add(uri);
-                        context.storageContainers.put(uri, container);
-                        ResultContinuation nextBlobResults = null;
-                        do {
-                            ResultSegment<ListBlobItem> blobsSegment = container
-                                    .listBlobsSegmented(
-                                            null, false,
-                                            EnumSet.noneOf(BlobListingDetails.class),
-                                            getQueryResultLimit(), nextBlobResults, null,
-                                            null);
-                            nextBlobResults = blobsSegment.getContinuationToken();
-                            for (ListBlobItem blobItem : blobsSegment.getResults()) {
-                                String blobId = blobItem.getUri().toString();
-                                context.storageBlobs.put(blobId, blobItem);
-                                // populate mapping of blob uri and storage account for all storage
-                                // accounts as new disks can be added to already existing blobs
-                                StorageAccount blobStorageAccount = context.storageAccountMap.get(id);
-                                if (blobStorageAccount != null) {
-                                    context.storageAccountBlobUriMap.put(blobId, blobStorageAccount);
+                        nextContainerResults = contSegment.getContinuationToken();
+                        for (CloudBlobContainer container : contSegment.getResults()) {
+                            String uri = container.getUri().toString();
+                            context.containerIds.add(uri);
+                            context.storageContainers.put(uri, container);
+                            ResultContinuation nextBlobResults = null;
+                            do {
+                                ResultSegment<ListBlobItem> blobsSegment = container
+                                        .listBlobsSegmented(
+                                                null, false,
+                                                EnumSet.noneOf(BlobListingDetails.class),
+                                                getQueryResultLimit(), nextBlobResults, null,
+                                                null);
+                                nextBlobResults = blobsSegment.getContinuationToken();
+                                for (ListBlobItem blobItem : blobsSegment.getResults()) {
+                                    String blobId = blobItem.getUri().toString();
+                                    context.storageBlobs.put(blobId, blobItem);
+                                    // populate mapping of blob uri and storage account for all storage
+                                    // accounts as new disks can be added to already existing blobs
+                                    StorageAccount blobStorageAccount = context.storageAccountMap
+                                            .get(id);
+                                    if (blobStorageAccount != null) {
+                                        context.storageAccountBlobUriMap
+                                                .put(blobId, blobStorageAccount);
+                                    }
+                                    context.blobIds.add(blobId);
                                 }
-                                context.blobIds.add(blobId);
-                            }
-                        } while (nextBlobResults != null);
+                            } while (nextBlobResults != null);
+                        }
+                    } catch (StorageException err) {
+                        if (err.getCause() instanceof UnknownHostException) {
+                            String msg = "Probably trying to process a storage account that was "
+                                    + "just deleted. Skipping it and continue with the next "
+                                    + "storage account. Storage account id: [" + id + "], "
+                                    + "storage account connection string: ["
+                                    + storageConnectionString + "]. Error: %s";
+
+                            logInfo(msg, Utils.toString(err));
+                        } else {
+                            throw err;
+                        }
                     }
                 } while (nextContainerResults != null);
                 logFine(() -> String.format("Processing %d storage containers",
@@ -908,7 +929,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 ResourceGroupState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                .setMaxPageSize(getQueryResultLimit());
 
         queryLocalStates.queryDocuments(rg -> {
             if (context.resourceGroupStates.containsKey(rg.id)) {
@@ -966,7 +987,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 StorageDescription.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxResultsLimit(getQueryResultLimit());
+                .setMaxResultsLimit(getQueryResultLimit());
 
         return queryLocalStates
                 .collectLinks(Collectors.toSet())
@@ -1115,7 +1136,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 ResourceGroupState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                .setMaxPageSize(getQueryResultLimit());
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
         queryLocalStates.queryDocuments(rg -> {
@@ -1190,7 +1211,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .buildCompositeFieldName(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AZURE_STORAGE_TYPE);
 
-        qBuilder.addInClause(blobProperty, Arrays.asList(AZURE_STORAGE_BLOBS,AZURE_STORAGE_DISKS));
+        qBuilder.addInClause(blobProperty, Arrays.asList(AZURE_STORAGE_BLOBS, AZURE_STORAGE_DISKS));
 
         QueryStrategy<DiskState> queryLocalStates = new QueryByPages<>(
                 getHost(),
@@ -1198,7 +1219,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 DiskState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                .setMaxPageSize(getQueryResultLimit());
 
         // Delete stale resources.
         queryLocalStates.queryDocuments(ds -> {
@@ -1267,7 +1288,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     ResourceGroupState.class,
                     context.parentCompute.tenantLinks,
                     context.request.endpointLink)
-                            .setMaxResultsLimit(getQueryResultLimit());
+                    .setMaxResultsLimit(getQueryResultLimit());
 
             return queryLocalStates.collectLinks(Collectors.toSet())
                     .thenCompose(rgLinks -> {
@@ -1277,8 +1298,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         if (rgLinks.size() > 0) {
                             containerLink = rgLinks.iterator().next();
                             if (rgLinks.size() > 1) {
-                                logWarning(() -> String.format("Found multiple instances of the same"
-                                        + " resource group %s", containerId));
+                                logWarning(
+                                        () -> String.format("Found multiple instances of the same"
+                                                + " resource group %s", containerId));
                             }
 
                             if (oldDiskState != null) {
@@ -1385,7 +1407,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             diskState.documentSelfLink = oldDiskState.documentSelfLink;
             diskState.regionId = oldDiskState.regionId;
         } else {
-            StorageAccount storageAccount = context.storageAccountBlobUriMap.get(blob.getUri().toString());
+            StorageAccount storageAccount = context.storageAccountBlobUriMap
+                    .get(blob.getUri().toString());
             diskState.id = blob.getUri().toString();
             diskState.documentSelfLink = UUID.randomUUID().toString();
             if (storageAccount != null) {
@@ -1452,7 +1475,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 DiskState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                .setMaxPageSize(getQueryResultLimit());
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
 
@@ -1493,39 +1516,40 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         context.request.buildUri(ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                         .setBody(queryTask),
                 QueryTask.class)
-                        .thenCompose(result -> {
-                            if (result.results != null && result.results.documentCount != 0) {
-                                logFine(() -> String.format(
-                                        "Won't delete disk state %s, as it is attached to machine",
-                                        diskState.documentSelfLink));
-                                return DeferredResult.completed(new Operation());
-                            }
-                            logFine(() -> String.format("Deleting disk state %s",
-                                    diskState.documentSelfLink));
-                            return sendWithDeferredResult(
-                                    Operation.createDelete(
-                                            context.request.buildUri(diskState.documentSelfLink)))
-                                                    .whenComplete((o, e) -> {
+                .thenCompose(result -> {
+                    if (result.results != null && result.results.documentCount != 0) {
+                        logFine(() -> String.format(
+                                "Won't delete disk state %s, as it is attached to machine",
+                                diskState.documentSelfLink));
+                        return DeferredResult.completed(new Operation());
+                    }
+                    logFine(() -> String.format("Deleting disk state %s",
+                            diskState.documentSelfLink));
+                    return sendWithDeferredResult(
+                            Operation.createDelete(
+                                    context.request.buildUri(diskState.documentSelfLink)))
+                            .whenComplete((o, e) -> {
 
-                                                        final String message = "Delete disk state stale %s state";
-                                                        if (e != null) {
-                                                            logWarning(message + ": ERROR - %s",
-                                                                    diskState.documentSelfLink,
-                                                                    Utils.toString(e));
-                                                        } else {
-                                                            logFine(message + ": SUCCESS",
-                                                                    diskState.documentSelfLink);
-                                                        }
-                                                    });
-                        });
+                                final String message = "Delete disk state stale %s state";
+                                if (e != null) {
+                                    logWarning(message + ": ERROR - %s",
+                                            diskState.documentSelfLink,
+                                            Utils.toString(e));
+                                } else {
+                                    logFine(message + ": SUCCESS",
+                                            diskState.documentSelfLink);
+                                }
+                            });
+                });
     }
 
     private Azure getAzureClient(StorageEnumContext context) {
         if (context.azure == null) {
             if (context.restClient == null) {
-                context.restClient = buildRestClient(context.credentials,this.executorService);
+                context.restClient = buildRestClient(context.credentials, this.executorService);
             }
-            context.azure = Azure.authenticate(context.restClient, context.parentAuth.customProperties.get(AZURE_TENANT_ID))
+            context.azure = Azure.authenticate(context.restClient,
+                    context.parentAuth.customProperties.get(AZURE_TENANT_ID))
                     .withSubscription(context.parentAuth.userLink);
         }
         return context.azure;
@@ -1551,14 +1575,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                     }
                                 }),
                 AuthCredentialsServiceState.class)
-                        .thenApply(auth -> {
-                            String connectionString = String.format(STORAGE_CONNECTION_STRING,
-                                    storageDesc.name,
-                                    auth.customProperties.get(AZURE_STORAGE_ACCOUNT_KEY1));
+                .thenApply(auth -> {
+                    String connectionString = String.format(STORAGE_CONNECTION_STRING,
+                            storageDesc.name,
+                            auth.customProperties.get(AZURE_STORAGE_ACCOUNT_KEY1));
 
-                            context.storageConnectionStrings.put(storageDesc.id, connectionString);
-                            return auth;
-                        });
+                    context.storageConnectionStrings.put(storageDesc.id, connectionString);
+                    return auth;
+                });
 
     }
 
