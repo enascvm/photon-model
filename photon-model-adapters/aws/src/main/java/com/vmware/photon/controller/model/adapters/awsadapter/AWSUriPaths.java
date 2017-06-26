@@ -69,6 +69,8 @@ public class AWSUriPaths {
             + "/network-state-creation-adapter";
     public static final String AWS_SECURITY_GROUP_ENUMERATION_ADAPTER = PROVISIONING_AWS
             + "/security-group-enumeration-adapter";
+    public static final String AWS_LOAD_BALANCER_ENUMERATION_ADAPTER = PROVISIONING_AWS
+            + "/load-balancer-enumeration-adapter";
     public static final String AWS_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER

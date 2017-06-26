@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
@@ -101,6 +102,13 @@ import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 import com.amazonaws.services.ec2.model.Volume;
 import com.amazonaws.services.ec2.model.Vpc;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
+import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerResult;
+import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.model.Listener;
+import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerResult;
 
 import org.joda.time.LocalDateTime;
 import org.junit.Assert;
@@ -129,6 +137,8 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.LoadBalancerService;
+import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -226,6 +236,8 @@ public class TestAWSSetupUtils {
     public static final String SNAPSHOT_ID_ATTRIBUTE = "snapshot-id";
     public static final String VOLUME_STATUS_AVAILABLE = "available";
     public static final String SNAPSHOT_STATUS_COMPLETE = "completed";
+
+    public static final String LOAD_BALANCER_NAME_PREFIX = "pm-test-";
 
     /**
      * Return two-NIC spec where first NIC should be assigned to 'secondary' subnet and second NIC
@@ -1643,6 +1655,63 @@ public class TestAWSSetupUtils {
         return result.getReservation().getInstances().get(0).getInstanceId();
     }
 
+    public static String provisionAWSLoadBalancerWithEC2Client(VerificationHost host,
+            AmazonElasticLoadBalancingAsyncClient client,
+            String name, String subnetId, String securityGroupId, List<String> instanceIds) {
+
+        if (name == null) {
+            name = LOAD_BALANCER_NAME_PREFIX + System.currentTimeMillis();
+        }
+
+        Listener defaultListener = new Listener().withInstancePort(80)
+                .withInstanceProtocol("HTTP")
+                .withLoadBalancerPort(80)
+                .withProtocol("HTTP");
+
+        CreateLoadBalancerRequest request = new CreateLoadBalancerRequest()
+                .withLoadBalancerName(name)
+                .withSubnets(Collections.singletonList(subnetId))
+                .withSecurityGroups(Collections.singleton(securityGroupId))
+                .withListeners(Collections.singleton(defaultListener));
+
+        CreateLoadBalancerResult result = null;
+        try {
+            result = client.createLoadBalancer(request);
+        } catch (Exception e) {
+            host.log(Level.SEVERE, "Error encountered in provisioning load balancer on AWS: %s",
+                    Utils.toString(e));
+        }
+        assertNotNull(result);
+        assertNotNull(result.getDNSName());
+
+        if (instanceIds != null) {
+            registerAWSInstancesToLoadBalancer(host, client, name, instanceIds);
+        }
+
+        return name;
+    }
+
+    private static void registerAWSInstancesToLoadBalancer(VerificationHost host,
+            AmazonElasticLoadBalancingAsyncClient client, String name, List<String> instanceIds) {
+        RegisterInstancesWithLoadBalancerRequest registerRequest = new RegisterInstancesWithLoadBalancerRequest()
+                .withLoadBalancerName(name)
+                .withInstances(instanceIds.stream()
+                        .map(com.amazonaws.services.elasticloadbalancing.model.Instance::new)
+                        .collect(Collectors.toList())
+                );
+
+        RegisterInstancesWithLoadBalancerResult result = null;
+        try {
+            result = client.registerInstancesWithLoadBalancer(registerRequest);
+        } catch (Exception e) {
+            host.log(Level.SEVERE, "Error registering instances with load balancer %s",
+                    Utils.toString(e));
+        }
+
+        assertNotNull(result);
+        assertFalse(result.getInstances().isEmpty());
+    }
+
     /**
      * Checks if the required number of instanceIds have been returned from AWS for the requested
      * number of resources to be provisioned.
@@ -1935,6 +2004,20 @@ public class TestAWSSetupUtils {
         client.terminateInstancesAsync(termRequest, terminateHandler);
         waitForInstancesToBeTerminated(client, host, instanceIdsToDelete);
 
+    }
+
+    public static void deleteLBsUsingLBClient(AmazonElasticLoadBalancingAsyncClient client,
+            VerificationHost host,
+            String lbName) throws Throwable {
+
+        DeleteLoadBalancerRequest deleteLoadBalancerRequest = new DeleteLoadBalancerRequest()
+                .withLoadBalancerName(lbName);
+        try {
+            client.deleteLoadBalancer(deleteLoadBalancerRequest);
+        } catch (Exception e) {
+            host.log(Level.SEVERE, "Error encountered in deleting load balancer on AWS: %s",
+                    Utils.toString(e));
+        }
     }
 
     public static void waitForInstancesToBeTerminated(AmazonEC2AsyncClient client,
@@ -2291,6 +2374,26 @@ public class TestAWSSetupUtils {
             return null;
         }
         return Utils.fromJson(result.documents.values().iterator().next(), NetworkInterfaceState.class);
+    }
+
+    /**
+     * Lookup a Load Balancer by aws Id
+     */
+    public static LoadBalancerState getLoadBalancerByAWSId(VerificationHost host, String awsId)
+            throws Throwable {
+
+        URI lbURI = UriUtils.buildUri(host, LoadBalancerService.FACTORY_LINK);
+        lbURI = UriUtils.buildExpandLinksQueryUri(lbURI);
+        lbURI = UriUtils.appendQueryParam(lbURI, "$filter",
+                String.format("id eq %s", awsId));
+
+        Operation op = host.waitForResponse(Operation.createGet(lbURI));
+        ServiceDocumentQueryResult result = op.getBody(ServiceDocumentQueryResult.class);
+        assertNotNull(result);
+        assertNotNull(result.documents);
+        assertEquals(1, result.documents.size());
+
+        return Utils.fromJson(result.documents.values().iterator().next(), LoadBalancerState.class);
     }
 
     public static SecurityGroup getSecurityGroupsIdUsingEC2Client(AmazonEC2AsyncClient client, String awsGroupId) {

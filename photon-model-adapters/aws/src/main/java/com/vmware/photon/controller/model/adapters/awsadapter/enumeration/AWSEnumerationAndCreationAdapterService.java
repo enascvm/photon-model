@@ -45,6 +45,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionEnumerationAdapterService.AWSComputeDescriptionCreationState;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSComputeStateCreationRequest;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSLoadBalancerEnumerationAdapterService.AWSLoadBalancerEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSSecurityGroupEnumerationAdapterService.AWSSecurityGroupEnumerationResponse;
@@ -229,8 +230,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                 if (exs != null) {
                                     this.service
                                             .logSevere(() -> String.format("Error creating a"
-                                                    + " compute descriptions for "
-                                                    + "discovered AvailabilityZone: %s",
+                                                            + " compute descriptions for "
+                                                            + "discovered AvailabilityZone: %s",
                                                     Utils.toString(exs)));
                                     this.context.operation.fail(exs.values().iterator().next());
                                     return;
@@ -261,7 +262,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .setCompletion((ops, exs) -> {
                         if (exs != null) {
                             this.service.logSevere(() -> String.format("Error creating a compute"
-                                    + " states for discovered AvailabilityZone: %s",
+                                            + " states for discovered AvailabilityZone: %s",
                                     Utils.toString(exs)));
                             this.context.operation.fail(exs.values().iterator().next());
                             return;
@@ -339,12 +340,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
         private AWSEnumerationAndCreationAdapterService service;
         private EnumerationCreationContext context;
+        private AWSEnumerationRefreshSubStage nextRefreshSubStage;
         private OperationContext opContext;
 
         private AWSEnumerationAsyncHandler(AWSEnumerationAndCreationAdapterService service,
-                EnumerationCreationContext context) {
+                EnumerationCreationContext context, AWSEnumerationRefreshSubStage
+                nextRefreshSubStage) {
             this.service = service;
             this.context = context;
+            this.nextRefreshSubStage = nextRefreshSubStage;
             this.opContext = OperationContext.getOperationContext();
         }
 
@@ -383,7 +387,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 if (this.context.nextToken != null) {
                     this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
                 } else {
-                    this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                    this.context.subStage = AWSComputeEnumerationCreationSubStage.NEXT_REFRESH_SUB_STAGE;
                 }
             }
             handleReceivedEnumerationData();
@@ -415,7 +419,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                             AWSComputeEnumerationCreationSubStage.CREATE_COMPUTE_STATES);
                 } else {
                     if (this.context.nextToken == null) {
-                        this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                        this.context.subStage = AWSComputeEnumerationCreationSubStage.NEXT_REFRESH_SUB_STAGE;
                     } else {
                         this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
                     }
@@ -425,7 +429,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             case CREATE_COMPUTE_STATES:
                 AWSComputeEnumerationCreationSubStage next;
                 if (this.context.nextToken == null) {
-                    next = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                    next = AWSComputeEnumerationCreationSubStage.NEXT_REFRESH_SUB_STAGE;
                 } else {
                     next = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
                 }
@@ -435,8 +439,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 getNextPageFromEnumerationAdapter(
                         AWSComputeEnumerationCreationSubStage.QUERY_LOCAL_RESOURCES);
                 break;
-            case ENUMERATION_STOP:
-                signalStopToEnumerationAdapter();
+            case NEXT_REFRESH_SUB_STAGE:
+                processNextRefreshSubStage();
                 break;
             default:
                 Throwable t = new Exception("Unknown AWS enumeration sub stage");
@@ -458,7 +462,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     lcsm -> {
                         if (this.context.nextToken == null) {
                             this.service.logFine(() -> "Completed enumeration");
-                            this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                            this.context.subStage = AWSComputeEnumerationCreationSubStage.NEXT_REFRESH_SUB_STAGE;
                         } else {
                             this.service.logFine(() -> "No remote resources found, proceeding to"
                                     + " next page");
@@ -633,12 +637,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         }
 
         /**
-         * Signals Enumeration Stop to the AWS enumeration adapter. The AWS enumeration adapter will
-         * in turn patch the parent task to indicate completion.
+         * Process the next refresh sub stage after the compute enumeration
          */
-        private void signalStopToEnumerationAdapter() {
-            this.context.request.original.enumerationAction = EnumerationAction.STOP;
-            this.service.handleEnumerationRequest(this.context);
+        private void processNextRefreshSubStage() {
+            this.context.refreshSubStage = this.nextRefreshSubStage;
+            this.service.processRefreshSubStages(this.context);
         }
 
         /**
@@ -680,7 +683,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         CREATE_COMPUTE_DESCRIPTIONS,
         CREATE_COMPUTE_STATES,
         GET_NEXT_PAGE,
-        ENUMERATION_STOP
+        NEXT_REFRESH_SUB_STAGE
     }
 
     private enum AWSEnumerationRefreshSubStage {
@@ -688,6 +691,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         VPC,
         SECURITY_GROUP,
         COMPUTE,
+        LOAD_BALANCER,
+        ENUMERATION_STOP,
         ERROR
     }
 
@@ -829,13 +834,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 new AWSNetworkStateEnumerationAdapterService());
         this.getHost().startService(postAWSSecurityGroupStateService,
                 new AWSSecurityGroupEnumerationAdapterService());
+        this.getHost().startService(new AWSLoadBalancerEnumerationAdapterService());
 
         AdapterUtils.registerForServiceAvailability(getHost(),
                 operation -> startPost.complete(), startPost::fail,
                 AWSComputeDescriptionEnumerationAdapterService.SELF_LINK,
                 AWSComputeStateCreationAdapterService.SELF_LINK,
                 AWSNetworkStateEnumerationAdapterService.SELF_LINK,
-                AWSSecurityGroupEnumerationAdapterService.SELF_LINK);
+                AWSSecurityGroupEnumerationAdapterService.SELF_LINK,
+                AWSLoadBalancerEnumerationAdapterService.SELF_LINK);
     }
 
     /**
@@ -892,17 +899,13 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             refreshSecurityGroupInformation(aws, AWSEnumerationRefreshSubStage.COMPUTE);
             break;
         case COMPUTE:
-            if (aws.pageNo == 1) {
-                logFine(() -> String.format("Running creation enumeration in refresh mode for %s",
-                        aws.parentCompute.description.environmentName));
-            }
-            logFine(() -> String.format("Processing page %d ", aws.pageNo));
-            aws.pageNo++;
-            if (aws.describeInstancesRequest == null) {
-                createAWSRequestAndAsyncHandler(aws);
-            }
-            aws.amazonEC2Client.describeInstancesAsync(aws.describeInstancesRequest,
-                    aws.resultHandler);
+            refreshComputes(aws, AWSEnumerationRefreshSubStage.LOAD_BALANCER);
+            break;
+        case LOAD_BALANCER:
+            refreshLoadBalancerInformation(aws, AWSEnumerationRefreshSubStage.ENUMERATION_STOP);
+            break;
+        case ENUMERATION_STOP:
+            signalStopToEnumerationAdapter(aws);
             break;
         case ERROR:
             aws.operation.fail(aws.error);
@@ -915,6 +918,21 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             break;
         }
 
+    }
+
+    private void refreshComputes(EnumerationCreationContext aws, AWSEnumerationRefreshSubStage
+            next) {
+        if (aws.pageNo == 1) {
+            logFine(() -> String.format("Running creation enumeration in refresh mode for %s",
+                    aws.parentCompute.description.environmentName));
+        }
+        logFine(() -> String.format("Processing page %d ", aws.pageNo));
+        aws.pageNo++;
+        if (aws.describeInstancesRequest == null) {
+            createAWSRequestAndAsyncHandler(aws, next);
+        }
+        aws.amazonEC2Client.describeInstancesAsync(aws.describeInstancesRequest,
+                aws.resultHandler);
     }
 
     /**
@@ -951,14 +969,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      * responses received from AWS. It sets the nextToken value in the request object sent to AWS
      * for getting the next page of results from AWS.
      */
-    private void createAWSRequestAndAsyncHandler(EnumerationCreationContext aws) {
+    private void createAWSRequestAndAsyncHandler(EnumerationCreationContext aws,
+            AWSEnumerationRefreshSubStage next) {
         DescribeInstancesRequest request = new DescribeInstancesRequest();
         Filter runningInstanceFilter = getAWSNonTerminatedInstancesFilter();
         request.getFilters().add(runningInstanceFilter);
         request.setMaxResults(getQueryPageSize());
         request.setNextToken(aws.nextToken);
         aws.describeInstancesRequest = request;
-        aws.resultHandler = new AWSEnumerationAsyncHandler(this, aws);
+        aws.resultHandler = new AWSEnumerationAsyncHandler(this, aws, next);
     }
 
     private void refreshSecurityGroupInformation(EnumerationCreationContext aws,
@@ -1027,6 +1046,36 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 });
     }
 
+    private void refreshLoadBalancerInformation(EnumerationCreationContext aws,
+            AWSEnumerationRefreshSubStage next) {
+        AWSLoadBalancerEnumerationRequest awsLoadBalancerEnumerationRequest = new AWSLoadBalancerEnumerationRequest();
+        awsLoadBalancerEnumerationRequest.computeRequest = aws.request;
+        awsLoadBalancerEnumerationRequest.enumeratedNetworks = aws.enumeratedNetworks;
+        awsLoadBalancerEnumerationRequest.enumeratedSecurityGroups = aws.enumeratedSecurityGroups;
+
+        Operation patchLoadBalancerOperation = Operation
+                .createPatch(this, AWSLoadBalancerEnumerationAdapterService.SELF_LINK)
+                .setBody(awsLoadBalancerEnumerationRequest)
+                .setReferer(UriUtils.buildUri(getHost().getPublicUri(), getSelfLink()));
+
+        this.getHost()
+                .sendWithDeferredResult(
+                        patchLoadBalancerOperation)
+                .thenAccept(ignore -> {
+                    logFine(() -> "Successfully enumerated load balancer states");
+                    aws.refreshSubStage = next;
+                    processRefreshSubStages(aws);
+                })
+                .exceptionally(throwable -> {
+                    logWarning("Failed to enumerate load balancer states: %s ",
+                            throwable.getLocalizedMessage());
+                    aws.error = throwable;
+                    aws.refreshSubStage = next;
+                    processRefreshSubStages(aws);
+                    return null;
+                });
+    }
+
     private void collectAvailabilityZones(EnumerationCreationContext aws,
             AWSEnumerationRefreshSubStage next) {
         DescribeAvailabilityZonesRequest azRequest = new DescribeAvailabilityZonesRequest();
@@ -1035,4 +1084,13 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         aws.amazonEC2Client.describeAvailabilityZonesAsync(azRequest, asyncHandler);
     }
 
+    /**
+     * Signals Enumeration Stop to the AWS enumeration adapter. The AWS enumeration adapter will
+     * in turn patch the parent task to indicate completion.
+     */
+    private void signalStopToEnumerationAdapter(EnumerationCreationContext aws) {
+        aws.request.original.enumerationAction = EnumerationAction.STOP;
+        handleEnumerationRequest(aws);
+
+    }
 }

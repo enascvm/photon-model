@@ -39,6 +39,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createNICDirectlyWithEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteLBsUsingLBClient;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteNICDirectlyWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
@@ -47,9 +48,11 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResourcesPreserveMissing;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getInternalTagsByType;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getLoadBalancerByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getNICByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSEBSVMWithEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSLoadBalancerWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
@@ -64,6 +67,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getSubnetStates;
+import static com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSLoadBalancerEnumerationAdapterService.ENABLE_LOAD_BALANCER_PROPERTY;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryAllFactoryResources;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
@@ -87,6 +91,7 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
 import com.amazonaws.services.s3.model.TagSet;
@@ -116,6 +121,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.LifecycleStat
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
+import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -200,14 +207,19 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public static final String SECONDARY_SUBNET_TAG = "secondarySubnetTag";
     public static final String SECONDARY_DISK_TAG = "secondaryDiskTag";
 
+    public static final Boolean ENABLE_LOAD_BALANCER_ENUMERATION = Boolean.getBoolean
+            (ENABLE_LOAD_BALANCER_PROPERTY);
+
     private ComputeState computeHost;
     private EndpointState endpointState;
 
     private List<String> instancesToCleanUp = new ArrayList<>();
     private String bucketToBeDeleted;
     private String nicToCleanUp = null;
+    private String lbToCleanUp;
     private AmazonEC2AsyncClient client;
     private AmazonS3Client s3Client;
+    private AmazonElasticLoadBalancingAsyncClient lbClient;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
 
@@ -244,6 +256,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         creds.privateKeyId = this.accessKey;
         this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor());
         this.s3Client = AWSUtils.getS3Client(creds, TestAWSSetupUtils.regionId);
+
+        if (ENABLE_LOAD_BALANCER_ENUMERATION) {
+            this.lbClient = AWSUtils.getLoadBalancingAsyncClient(creds, TestAWSSetupUtils.regionId,
+                    getExecutor());
+        }
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
@@ -286,6 +303,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
         this.s3Client.shutdown();
+        if (ENABLE_LOAD_BALANCER_ENUMERATION) {
+            tearDownAwsLoadBalancer();
+            this.lbClient.shutdown();
+        }
         setAwsClientMockInfo(false, null);
     }
 
@@ -318,6 +339,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         queryDocumentsAndAssertExpectedCount(this.host, count2,
                 ComputeDescriptionService.FACTORY_LINK, false);
 
+        if (ENABLE_LOAD_BALANCER_ENUMERATION) {
+            this.lbToCleanUp = provisionAWSLoadBalancerWithEC2Client(this.host, this.lbClient, null,
+                    this.subnetId, this.securityGroupId, Collections.singletonList(vmState.id));
+        }
+
         // CREATION directly on AWS
         List<String> instanceIdsToDeleteFirstTime = provisionAWSVMWithEC2Client(this.client,
                 this.host, count4, T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
@@ -345,6 +371,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         validateS3Enumeration(count1, count3);
         // Validate S3 tag state count.
         validateS3TagStatesCreated();
+
+        if (ENABLE_LOAD_BALANCER_ENUMERATION) {
+            // Validate Load Balancer State
+            validateLoadBalancerState(this.lbToCleanUp, vmState.documentSelfLink);
+        }
 
         // Remove a tag from test S3 bucket.
         tags.clear();
@@ -1024,6 +1055,24 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertTrue(queryTaskResponse.results.documentLinks.size() == 0);
     }
 
+    private void validateLoadBalancerState(String lbName, String computeLink) throws Throwable {
+        LoadBalancerState loadBalancerState = getLoadBalancerByAWSId(this.host, lbName);
+
+        assertEquals(count1, loadBalancerState.computeLinks.size());
+        assertEquals(count1, loadBalancerState.securityGroupLinks.size());
+        assertEquals(count1, loadBalancerState.subnetLinks.size());
+        assertEquals(computeLink, loadBalancerState.computeLinks.iterator().next());
+        assertNotNull(loadBalancerState.routes);
+        assertEquals(count1, loadBalancerState.routes.size());
+
+        RouteConfiguration route = loadBalancerState.routes.iterator().next();
+        assertNotNull(route.healthCheckConfiguration);
+        assertEquals("80", route.port);
+        assertEquals("80", route.instancePort);
+        assertEquals("HTTP", route.instanceProtocol);
+        assertEquals("HTTP", route.protocol);
+    }
+
     /**
      * Verifies if the tag information exists for a given resource. And that private and public IP
      * addresses are mapped to separate NICs.Also, checks that the compute description mapping is
@@ -1265,6 +1314,20 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             // just log and move on
             this.host.log(Level.WARNING, "Exception deleting VMs - %s, instance ids - %s",
                     deleteEx.getMessage(), this.instancesToCleanUp);
+        }
+    }
+
+    private void tearDownAwsLoadBalancer() {
+        try {
+            this.host.log("Deleting %s load balancer created from the test ",
+                    this.lbToCleanUp);
+            if (this.lbToCleanUp != null) {
+                deleteLBsUsingLBClient(this.lbClient, this.host, this.lbToCleanUp);
+            }
+        } catch (Throwable deleteEx) {
+            // just log and move on
+            this.host.log(Level.WARNING, "Exception deleting LB - %s, lb name - %s",
+                    deleteEx.getMessage(), this.lbToCleanUp);
         }
     }
 
