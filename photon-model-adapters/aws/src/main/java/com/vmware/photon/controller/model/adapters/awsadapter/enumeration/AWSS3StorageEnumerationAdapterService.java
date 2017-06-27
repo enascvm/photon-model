@@ -245,7 +245,13 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     for (Bucket bucket : bucketList) {
                         aws.remoteAWSBuckets.put(bucket.getName(), bucket);
                     }
+
                     OperationContext.restoreOperationContext(operationContext);
+
+                    if (aws.remoteAWSBuckets.isEmpty()) {
+                        aws.subStage = S3StorageEnumerationSubStage.DELETE_DISKS;
+                    }
+
                     handleReceivedEnumerationData(aws);
                 } catch (Exception e) {
                     if (e instanceof AmazonS3Exception && ((AmazonS3Exception) e)
@@ -459,6 +465,13 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             aws.subStage = next;
             handleReceivedEnumerationData(aws);
         };
+
+        if (aws.enumerationOperations.isEmpty()) {
+            aws.subStage = next;
+            handleReceivedEnumerationData(aws);
+            return;
+        }
+
         OperationJoin joinOp = OperationJoin.create(aws.enumerationOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(this.getHost());

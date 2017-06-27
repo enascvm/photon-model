@@ -74,6 +74,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -158,7 +159,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String TEST_CASE_DELETE_VM = "Delete VM ";
     private static final String TEST_CASE_DELETE_VMS = "Delete multiple VMs ";
     private static final String TEST_CASE_MOCK_MODE = "Mock Mode ";
-    private static final String TEST_BUCKET_NAME = "enumtest-bucket";
+    private static final String TEST_BUCKET_NAME = "enumtest-bucket-" + UUID.randomUUID().toString();
     private static final int DEFAULT_TEST_PAGE_SIZE = 5;
     private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     private static final String VM_NAME = "TestAWSEnumerationTask-create";

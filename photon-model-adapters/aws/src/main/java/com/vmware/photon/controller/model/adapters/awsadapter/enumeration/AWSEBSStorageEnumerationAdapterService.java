@@ -563,6 +563,13 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
             };
+
+            if (this.context.enumerationOperations.isEmpty()) {
+                this.context.subStage = next;
+                handleReceivedEnumerationData();
+                return;
+            }
+
             OperationJoin joinOp = OperationJoin.create(this.context.enumerationOperations);
             joinOp.setCompletion(joinCompletion);
             joinOp.sendWith(this.service.getHost());
