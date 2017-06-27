@@ -45,6 +45,8 @@ public class AzureSecurityGroupUtils {
             SecurityGroupState securityGroupState, String resourceGroupName,
             String location, String msg) {
 
+        service.logInfo(() -> msg);
+
         final String sgName = securityGroupState.name;
 
         AzureProvisioningCallback<NetworkSecurityGroupInner> handler =
@@ -81,6 +83,8 @@ public class AzureSecurityGroupUtils {
     public static DeferredResult<NetworkSecurityGroupInner> getSecurityGroup(
             StatelessService service, NetworkSecurityGroupsInner azureClient,
             String resourceGroupName, String securityGroupName, String msg) {
+
+        service.logInfo(() -> msg);
 
         AzureDeferredResultServiceCallback<NetworkSecurityGroupInner> handler =
                 new AzureDeferredResultServiceCallback<NetworkSecurityGroupInner>(service, msg) {

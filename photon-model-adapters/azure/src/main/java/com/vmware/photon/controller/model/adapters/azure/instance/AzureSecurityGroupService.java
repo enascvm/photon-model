@@ -19,6 +19,7 @@ import java.net.URI;
 import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 
@@ -31,7 +32,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
-import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -40,10 +41,7 @@ import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Adapter to create/delete a security group on Azure.
@@ -196,6 +194,8 @@ public class AzureSecurityGroupService extends StatelessService {
         String networkStateId = context.securityGroupRequest.customProperties.get(NETWORK_STATE_ID_PROP_NAME);
         AssertUtil.assertNotNull(networkStateId,
                 "context.request.customProperties doesn't contain the network state id.");
+        AssertUtil.assertNotNull(context.securityGroupState.endpointLink,
+                "context.securityGroupState.endpointLink is null.");
 
         // use the network state id to find the resource groups associated to the network being
         // isolated by this security group
@@ -203,21 +203,20 @@ public class AzureSecurityGroupService extends StatelessService {
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_ID, networkStateId)
                 .build();
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(query)
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(1)
-                .build();
 
-        return QueryUtils.startQueryTask(this, queryTask)
-                .thenApply(qrt -> {
-                    AssertUtil.assertTrue(qrt.results.documents.values().size() == 1,
-                            "Network state with id [" + networkStateId +
-                                    "] was not uniquely identified");
-                    context.networkState = Utils
-                            .fromJson(qrt.results.documents.values().iterator().next(),
-                                    NetworkState.class);
+        QueryTop<NetworkState> queryNetworkStates = new QueryTop<>(
+                this.getHost(),
+                query,
+                NetworkState.class,
+                context.securityGroupState.tenantLinks,
+                context.securityGroupState.endpointLink);
+        queryNetworkStates.setMaxResultsLimit(1);
+
+        return queryNetworkStates.collectDocuments(Collectors.toList())
+                .thenApply(networkStates -> {
+                    AssertUtil.assertNotNull(networkStates, "Network state with id [" +
+                            networkStateId + "] was not found.");
+                    context.networkState = networkStates.get(0);
                     return context;
                 });
     }
