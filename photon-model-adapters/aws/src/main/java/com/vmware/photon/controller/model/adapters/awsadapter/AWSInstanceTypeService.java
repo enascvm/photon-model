@@ -14,13 +14,14 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import java.io.File;
-import java.net.URL;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.InstanceType;
+import org.apache.commons.io.IOUtils;
 
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.support.InstanceTypeList;
@@ -103,16 +104,19 @@ public class AWSInstanceTypeService extends StatelessService {
             String filePath = getInstanceTypeDataFile();
             if (filePath == null) {
                 // No external AWS instance type data file is specified. Use the embedded one.
-                URL resource = AWSInstanceTypeService.class.getResource(
+                InputStream stream =  AWSInstanceTypeService.class.getResourceAsStream(
                         DEFAULT_AWS_INSTANCE_TYPES_FILE);
-                if (resource != null) {
-                    filePath = resource.getFile();
+                if (stream != null) {
+                    String fileContent = IOUtils.toString(stream);
+                    this.instanceTypeInfo = Utils.fromJson(fileContent,
+                            AWSInstanceTypesInfo.class).instanceTypes;
                 } else {
                     this.logWarning("No embedded file with additional AWS instance type data.");
                 }
+            } else {
+                File jsonPayloadFile = new File(filePath);
+                FileUtils.readFileAndComplete(fileHandler, jsonPayloadFile);
             }
-            File jsonPayloadFile = new File(filePath);
-            FileUtils.readFileAndComplete(fileHandler, jsonPayloadFile);
         } catch (Exception e) {
             // Ignore errors.
             logWarning("Unable to load additional AWS instance type data. "
