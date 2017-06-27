@@ -93,6 +93,7 @@ public class AWSConstants {
             + AWSConstants.class.getSimpleName() + ".THREAD_POOL_CACHE_INITIAL_SIZE";
     public static int THREAD_POOL_CACHE_INITIAL_SIZE = Integer.getInteger(
             PROPERTY_NAME_CLIENT_CACHE_INITIAL_SIZE, 5);
+    public static final Integer MAX_IOPS_PER_GB = 50;
 
     // AWS Metric related Constants
     public static final String CPU_UTILIZATION = "CPUUtilization";

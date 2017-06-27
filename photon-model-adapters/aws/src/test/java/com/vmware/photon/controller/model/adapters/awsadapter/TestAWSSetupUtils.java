@@ -1008,7 +1008,7 @@ public class TestAWSSetupUtils {
             EndpointState endpointState) throws Throwable {
         List<String[]> additionalDiskConfigs = new ArrayList<>();
         String[] disk1properties = { "ebs", "gp2" };
-        String[] disk2properties = { "ebs", "io1", "600" };
+        String[] disk2properties = { "ebs", "io1", "900" };
         additionalDiskConfigs.add(disk1properties);
         additionalDiskConfigs.add(disk2properties);
 

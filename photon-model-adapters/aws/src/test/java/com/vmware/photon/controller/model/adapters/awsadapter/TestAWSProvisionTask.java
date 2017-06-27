@@ -676,9 +676,10 @@ public class TestAWSProvisionTask {
                     volume.getEncrypted());
 
             if (diskState.customProperties.containsKey(DISK_IOPS)) {
-                assertEquals("Additional disk speed in diskstate is not same as the speed of the"
-                                + " volume in aws",
-                        Integer.parseInt(diskState.customProperties.get(DISK_IOPS)),
+                int requestedIops = Integer.parseInt(diskState.customProperties.get(DISK_IOPS));
+                int MAX_SUPPORTED_IOPS = (int) (diskState.capacityMBytes / 1024) * 50;
+                int provisionedIops = Math.min(requestedIops, MAX_SUPPORTED_IOPS);
+                assertEquals("Disk speeds are not matching", provisionedIops,
                         volume.getIops().intValue());
             }
         }

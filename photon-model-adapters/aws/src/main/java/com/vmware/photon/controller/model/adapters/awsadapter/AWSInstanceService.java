@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
@@ -476,18 +477,29 @@ public class AWSInstanceService extends StatelessService {
                 if (diskState.capacityMBytes > 0 && !availableDiskNames.isEmpty()) {
                     BlockDeviceMapping blockDeviceMapping = new BlockDeviceMapping();
                     EbsBlockDevice ebsBlockDevice = new EbsBlockDevice();
-                    ebsBlockDevice.setVolumeSize((int) diskState.capacityMBytes / 1024);
+                    int diskSize = (int) diskState.capacityMBytes / 1024;
+                    ebsBlockDevice.setVolumeSize(diskSize);
 
                     //If no volume type is specified standard type of volume is provisioned.
-                    if (diskState.customProperties != null && diskState.customProperties
-                            .containsKey(VOLUME_TYPE)) {
-                        ebsBlockDevice.setVolumeType(diskState.customProperties.get(VOLUME_TYPE));
-                    }
+                    if (diskState.customProperties != null) {
+                        if (diskState.customProperties.containsKey(VOLUME_TYPE)) {
+                            ebsBlockDevice
+                                    .setVolumeType(diskState.customProperties.get(VOLUME_TYPE));
+                        }
 
-                    if (diskState.customProperties != null &&
-                            diskState.customProperties.containsKey(DISK_IOPS)) {
-                        ebsBlockDevice.setIops(
-                                Integer.parseInt(diskState.customProperties.get(DISK_IOPS)));
+                        if (diskState.customProperties.containsKey(DISK_IOPS)) {
+                            int diskIops = Integer.parseInt(
+                                    diskState.customProperties.get(DISK_IOPS));
+                            if (diskIops > diskSize * MAX_IOPS_PER_GB) {
+                                String info = String.format("[AWSInstanceService] Requested iops"
+                                        + "(%s) exceeds the maximum supported value for %sGiB"
+                                        + " additional disk. attemps to provision the disk with "
+                                        + "%siops", diskIops, diskSize, diskSize * MAX_IOPS_PER_GB);
+                                this.logInfo(() -> info);
+                                diskIops = diskSize * MAX_IOPS_PER_GB;
+                            }
+                            ebsBlockDevice.setIops(diskIops);
+                        }
                     }
 
                     diskState.encrypted = diskState.encrypted == null ? false : diskState.encrypted;
