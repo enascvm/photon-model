@@ -186,8 +186,16 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
             assertEquals(Integer.valueOf(route.port), listener.getLoadBalancerPort());
             assertEquals(Integer.valueOf(route.instancePort), listener.getInstancePort());
-            assertEquals(route.protocol, listener.getProtocol());
-            assertEquals(route.instanceProtocol, listener.getInstanceProtocol());
+
+            // Load Balancer https protocol is translated to tcp
+            if (Protocol.HTTPS.name().equalsIgnoreCase(route.protocol)) {
+                assertEquals(Protocol.TCP.name(), listener.getProtocol());
+                assertEquals(Protocol.TCP.name(), listener.getInstanceProtocol());
+            } else {
+                assertEquals(route.protocol, listener.getProtocol());
+                assertEquals(route.instanceProtocol, listener.getInstanceProtocol());
+            }
+
         });
     }
 
@@ -284,10 +292,10 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         route1.healthCheckConfiguration.timeoutSeconds = 5;
 
         RouteConfiguration route2 = new RouteConfiguration();
-        route2.protocol = Protocol.HTTP.name();
-        route2.port = "8080";
-        route2.instanceProtocol = Protocol.HTTP.name();
-        route2.instancePort = "8080";
+        route2.protocol = Protocol.HTTPS.name();
+        route2.port = "443";
+        route2.instanceProtocol = Protocol.HTTPS.name();
+        route2.instancePort = "443";
 
         state.routes = Arrays.asList(route1, route2);
         state.internetFacing = Boolean.TRUE;

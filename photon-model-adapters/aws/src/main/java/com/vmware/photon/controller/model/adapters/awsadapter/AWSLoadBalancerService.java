@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
@@ -454,13 +455,25 @@ public class AWSLoadBalancerService extends StatelessService {
     }
 
     private List<Listener> buildListeners(AWSLoadBalancerContext context) {
-        return context.loadBalancerStateExpanded.routes.stream()
-                .map(routeConfiguration -> new Listener()
-                        .withProtocol(routeConfiguration.protocol)
-                        .withLoadBalancerPort(Integer.parseInt(routeConfiguration.port))
-                        .withInstanceProtocol(routeConfiguration.instanceProtocol)
-                        .withInstancePort(Integer.parseInt(routeConfiguration.instancePort)))
-                .collect(Collectors.toList());
+        return context.loadBalancerStateExpanded.routes.stream().map(routeConfiguration -> {
+            Listener listener = new Listener()
+                    .withLoadBalancerPort(Integer.parseInt(routeConfiguration.port))
+                    .withInstancePort(Integer.parseInt(routeConfiguration.instancePort));
+
+            // Convert HTTPS protocol on the load balancer to TCP thus the load balancer will act
+            // as a SSL Pass-through. Set the instance protocol to be TCP as well as both protocols
+            // must be on the same layer
+            if (LoadBalancerDescription.Protocol.HTTPS.name()
+                    .equalsIgnoreCase(routeConfiguration.protocol)) {
+                listener.setProtocol(LoadBalancerDescription.Protocol.TCP.name());
+                listener.setInstanceProtocol(LoadBalancerDescription.Protocol.TCP.name());
+            } else {
+                listener.setProtocol(routeConfiguration.protocol);
+                listener.setInstanceProtocol(routeConfiguration.instanceProtocol);
+            }
+
+            return listener;
+        }).collect(Collectors.toList());
     }
 
     private RegisterInstancesWithLoadBalancerRequest buildInstanceRegistrationRequest(
