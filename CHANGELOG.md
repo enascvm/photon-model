@@ -1,6 +1,11 @@
 # CHANGELOG
 
-## 0.6.21-SNAPSHOT
+## 0.6.21
+
+* Mark regionId and creationTime fields as sortable.
+* Added HTTPS listener support for AWS.
+* [Azure] Added SecurityGroupInstanceAdapterService.
+* Removed deprecated fields from LoadBalancerState.
 
 ## 0.6.20
 * Added service to fetch list of instance types supported by AWS.
