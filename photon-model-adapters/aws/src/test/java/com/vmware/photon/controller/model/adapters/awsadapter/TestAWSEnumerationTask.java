@@ -21,6 +21,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_instance;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
@@ -45,6 +46,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResourcesPreserveMissing;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getInternalTagsByType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getNICByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSEBSVMWithEC2Client;
@@ -328,8 +330,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // service and the one directly provisioned on EC2, there is no Compute description
         // linking of discovered resources to user defined compute descriptions. So a new system
         // generated compute description will be created for "t2.micro"
-        queryDocumentsAndAssertExpectedCount(this.host,
-                count4,
+        queryDocumentsAndAssertExpectedCount(this.host, count4,
                 ComputeDescriptionService.FACTORY_LINK, false);
         queryDocumentsAndAssertExpectedCount(this.host,
                 count7, ComputeService.FACTORY_LINK, false);
@@ -401,11 +402,23 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // One additional compute state and no additional compute description should be
         // created. 1) compute host CD 2) t2.nano-system generated 3) t2.micro-system generated
         // 4) t2.micro-created from test code.
-        queryDocumentsAndAssertExpectedCount(this.host,
-                count4,
+        queryDocumentsAndAssertExpectedCount(this.host, count4,
                 ComputeDescriptionService.FACTORY_LINK, false);
-        queryDocumentsAndAssertExpectedCount(this.host,
+        ServiceDocumentQueryResult computesResult1 = queryDocumentsAndAssertExpectedCount(this.host,
                 count8, ComputeService.FACTORY_LINK, false);
+        // validate the internal tag tor type=ec2_instance is set
+        // query for the existing internal tag state for type=ec2_instance.
+        // There should be only one internal tag.
+        ServiceDocumentQueryResult tagsResult = getInternalTagsByType(this.host, ec2_instance.toString());
+        assertEquals(count1, tagsResult.documentLinks.size());
+        String tagLink = tagsResult.documentLinks.get(0);
+        for (Map.Entry<String, Object> resourceMap : computesResult1.documents.entrySet()) {
+            ComputeState compute = Utils
+                    .fromJson(resourceMap.getValue(), ComputeState.class);
+            if (!compute.type.equals(ComputeType.ZONE) && !compute.type.equals(ComputeType.VM_HOST)) {
+                assertTrue(compute.tagLinks.contains(tagLink));
+            }
+        }
         queryDocumentsAndAssertExpectedCount(this.host,
                 count8, DiskService.FACTORY_LINK, false);
 
@@ -415,21 +428,48 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_DELETE_VMS);
         // Counts should go down. 5 compute states and 5 disk states.
-        queryDocumentsAndAssertExpectedCount(this.host,
+        ServiceDocumentQueryResult computesResult2 = queryDocumentsAndAssertExpectedCount(this.host,
                 count3, ComputeService.FACTORY_LINK, false);
         queryDocumentsAndAssertExpectedCount(this.host,
                 count3, DiskService.FACTORY_LINK, false);
+
+        // validate the internal tag tor type=ec2_instance is set
+        // query for the existing internal tag state for type=ec2_instance.
+        // There should be only one internal tag.
+        tagsResult = getInternalTagsByType(this.host, ec2_instance.toString());
+        assertEquals(count1, tagsResult.documentLinks.size());
+        tagLink = tagsResult.documentLinks.get(0);
+        for (Map.Entry<String, Object> resourceMap : computesResult2.documents.entrySet()) {
+            ComputeState compute = Utils
+                    .fromJson(resourceMap.getValue(), ComputeState.class);
+            if (!compute.type.equals(ComputeType.ZONE) && !compute.type.equals(ComputeType.VM_HOST)) {
+                assertTrue(compute.tagLinks.contains(tagLink));
+            }
+        }
 
         // Delete 1 VMs spawned above of type T2_Micro
         deleteVMsUsingEC2Client(this.client, this.host, instanceIdsToDeleteSecondTime);
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_DELETE_VM);
         // Compute state and disk state count should go down by 1
-        queryDocumentsAndAssertExpectedCount(this.host,
+        ServiceDocumentQueryResult computesResult3 = queryDocumentsAndAssertExpectedCount(this.host,
                 count2, ComputeService.FACTORY_LINK, false);
         queryDocumentsAndAssertExpectedCount(this.host,
                 count2, DiskService.FACTORY_LINK, false);
 
+        // validate the internal tag tor type=ec2_instance is set
+        // query for the existing internal tag state for type=ec2_instance.
+        // There should be only one internal tag.
+        tagsResult = getInternalTagsByType(this.host, ec2_instance.toString());
+        assertEquals(count1, tagsResult.documentLinks.size());
+        tagLink = tagsResult.documentLinks.get(0);
+        for (Map.Entry<String, Object> resourceMap : computesResult3.documents.entrySet()) {
+            ComputeState compute = Utils
+                    .fromJson(resourceMap.getValue(), ComputeState.class);
+            if (!compute.type.equals(ComputeType.ZONE) && !compute.type.equals(ComputeType.VM_HOST)) {
+                assertTrue(compute.tagLinks.contains(tagLink));
+            }
+        }
         // Validate that the document for the deleted S3 bucket is deleted after enumeration.
         validateS3Enumeration(ZERO);
     }

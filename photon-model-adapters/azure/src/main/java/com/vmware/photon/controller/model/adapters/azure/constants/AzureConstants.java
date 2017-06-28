@@ -221,4 +221,23 @@ public class AzureConstants {
     public static int getQueryResultLimit() {
         return QUERY_RESULT_LIMIT;
     }
+
+    public static enum AzureResourceType {
+        azure_vm("azure_vm"),
+        azure_vhd("azure_vhd"),
+        azure_blob("azure_blob"),
+        azure_vnet("azure_vnet"),
+        azure_subnet("azure_subnet"),
+        azure_net_interface("azure_net_interface");
+
+        private final String value;
+
+        private AzureResourceType(String value) {
+            this.value = value;
+        }
+
+        public String toString() {
+            return this.value;
+        }
+    }
 }

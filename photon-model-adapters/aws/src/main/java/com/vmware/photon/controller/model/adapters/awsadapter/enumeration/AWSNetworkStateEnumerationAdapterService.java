@@ -25,7 +25,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNet
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapVPCToNetworkState;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
-import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
@@ -515,7 +515,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         // tags, so filter them out
         List<Operation> operations = allNetworkAndSubnetsTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> newExternalTagState(t.getKey(), t.getValue(),
+                .map(t -> newTagState(t.getKey(), t.getValue(), true,
                         context.request.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))

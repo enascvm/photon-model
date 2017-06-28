@@ -90,7 +90,7 @@ public class TagsUtil {
                         remoteTagsMap.size(), "STARTING"));
 
         List<DeferredResult<TagState>> localTagStatesDRs = remoteTagsMap.entrySet().stream()
-                .map(tagEntry -> newExternalTagState(tagEntry.getKey(), tagEntry.getValue(),
+                .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(), true,
                         localState.tenantLinks))
                 .map(tagState -> Operation
                         .createPost(service, TagService.FACTORY_LINK)
@@ -137,9 +137,7 @@ public class TagsUtil {
             remoteTagStates = new HashMap<>();
         } else {
             remoteTagStates = remoteTagsMap.entrySet().stream()
-                    .map(tagEntry -> newExternalTagState(
-                            tagEntry.getKey(),
-                            tagEntry.getValue(),
+                    .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(), true,
                             localState.tenantLinks))
                     .collect(Collectors.toMap(
                             tagState -> tagState.documentSelfLink,
@@ -255,7 +253,7 @@ public class TagsUtil {
 
         // we have already made sure that the tags exist and we can build their links ourselves
         resourceState.tagLinks = tags.entrySet().stream()
-                .map(t -> newExternalTagState(t.getKey(), t.getValue(), resourceState.tenantLinks))
+                .map(t -> newTagState(t.getKey(), t.getValue(), true, resourceState.tenantLinks))
                 .map(TagFactoryService::generateSelfLink)
                 .collect(Collectors.toSet());
     }
@@ -267,13 +265,13 @@ public class TagsUtil {
      * as "local" are not maintained in sync with the tags on the cloud. They are used by the local
      * user to mark local resource states.
      */
-    public static TagState newExternalTagState(String key, String value, List<String> tenantLinks) {
+    public static TagState newTagState(String key, String value, Boolean isExternal, List<String> tenantLinks) {
 
         final TagState tagState = new TagState();
 
         tagState.key = key == null ? "" : key;
         tagState.value = value == null ? "" : value;
-        tagState.external = true;
+        tagState.external = isExternal;
 
         tagState.tenantLinks = tenantLinks;
 

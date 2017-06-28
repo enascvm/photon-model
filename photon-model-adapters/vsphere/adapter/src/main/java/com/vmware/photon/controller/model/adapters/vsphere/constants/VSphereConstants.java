@@ -24,4 +24,18 @@ public class VSphereConstants {
     public static final String VSPHERE_SNAPSHOT_MEMORY = "snapshotMemory";
     public static final String VSPHERE_SNAPSHOT_REQUEST_TYPE = "requestType";
 
+    public static enum VSphereResourceType {
+        vsphere_vm("vsphere_vm");
+
+        private final String value;
+
+        private VSphereResourceType(String value) {
+            this.value = value;
+        }
+
+        public String toString() {
+            return this.value;
+        }
+    }
+
 }

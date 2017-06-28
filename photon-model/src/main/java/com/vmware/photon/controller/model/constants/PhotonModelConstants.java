@@ -149,4 +149,7 @@ public class PhotonModelConstants {
     public static final String AUTO_DISCOVERED_ENTITY = "autoDiscovered";
 
     public static final String IS_RESOURCE_AUTO_DISCOVERY_ENABLED = "isAutoDiscoveryEnabled";
+
+    // constant for tag with key = type
+    public static final String TAG_KEY_TYPE = "type";
 }

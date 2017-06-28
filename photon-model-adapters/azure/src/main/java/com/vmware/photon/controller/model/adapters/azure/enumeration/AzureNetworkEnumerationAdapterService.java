@@ -20,7 +20,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
-import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 
@@ -766,9 +766,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
                 .flatMap(vNet -> vNet.tags.entrySet().stream())
 
-                .map(vNetTagEntry -> newExternalTagState(
-                        vNetTagEntry.getKey(),
-                        vNetTagEntry.getValue(),
+                .map(vNetTagEntry -> newTagState(vNetTagEntry.getKey(), vNetTagEntry.getValue(), true,
                         context.parentCompute.tenantLinks))
 
                 .map(vNetTagState -> Operation

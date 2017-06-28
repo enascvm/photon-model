@@ -18,7 +18,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.UriUtils.URI_PATH_CHAR;
 
@@ -44,10 +44,12 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
@@ -104,9 +106,11 @@ public class AWSEnumerationUtils {
     }
 
     /**
-     * Get all the compute descriptions already in the system that correspond to virtual machine and filter by This query is primarily used during instance discovery to find compute descriptions that exist in the system
+     * Get all the compute descriptions already in the system that correspond to virtual machine and filter by.
+     * This query is primarily used during instance discovery to find compute descriptions that exist in the system
      * to match the instances received from AWS.
-     * The query filters out compute descriptions that represent compute hosts and also checks for other conditions as below:
+     * The query filters out compute descriptions that represent compute hosts and also checks for other conditions
+     * as below:
      * - Environment name(AWS),
      * - id (instance type),
      * - ZoneId(placement).
@@ -165,13 +169,39 @@ public class AWSEnumerationUtils {
     }
 
     /**
+     *
+     * Get internal tagState used for maintaining cloud specific type.
+     * The only filter we can apply to this query is the resourceType (i.e., ec2_instance, ec2_vpc, etc.)
+     */
+    public static QueryTask getInternalTypeTagQuery(String resourceType, List<String> tenantLinks) {
+        Query query = Query.Builder.create()
+                .addKindFieldClause(TagState.class)
+                .addFieldClause(TagState.FIELD_NAME_KEY,
+                        PhotonModelConstants.TAG_KEY_TYPE)
+                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, false)
+                .addFieldClause(TagState.FIELD_NAME_VALUE, resourceType)
+                .build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(getQueryResultLimit())
+                .build();
+
+        queryTask.documentSelfLink = UUID.randomUUID().toString();
+        queryTask.tenantLinks = tenantLinks;
+
+        return queryTask;
+    }
+
+    /**
      * Maps the instance discovered on AWS to a local compute state that will be persisted.
      */
     public static ComputeState mapInstanceToComputeState(ServiceHost host, Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
             String endpointLink,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
-            String regionId, String zoneId,
-            List<String> tenantLinks) {
+            Set<String> internalTagLinks, String regionId, String zoneId, List<String> tenantLinks) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
@@ -217,7 +247,7 @@ public class AWSEnumerationUtils {
             // we have already made sure that the tags exist and we can build their links ourselves
             computeState.tagLinks = instance.getTags().stream()
                     .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                    .map(t -> newExternalTagState(t.getKey(), t.getValue(), tenantLinks))
+                    .map(t -> newTagState(t.getKey(), t.getValue(), true, tenantLinks))
                     .map(TagFactoryService::generateSelfLink)
                     .collect(Collectors.toSet());
 
@@ -232,6 +262,16 @@ public class AWSEnumerationUtils {
             String nameTag = getTagValue(instance.getTags(), AWS_TAG_NAME);
             if (nameTag != null && !nameTag.equals(EMPTY_STRING)) {
                 computeState.name = nameTag;
+            }
+        }
+
+        // append internal tagLinks to any existing ones
+        if (internalTagLinks != null && !internalTagLinks.isEmpty()) {
+            if (computeState.tagLinks != null && !computeState.tagLinks.isEmpty()) {
+                computeState.tagLinks.addAll(internalTagLinks);
+            } else {
+                computeState.tagLinks = new HashSet<>();
+                computeState.tagLinks.addAll(internalTagLinks);
             }
         }
 

@@ -25,7 +25,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
-import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
@@ -635,7 +635,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .values()
                 .stream().filter(vm -> vm.getTags() != null && !vm.getTags().isEmpty())
                 .flatMap(vm -> vm.getTags().entrySet().stream())
-                .map(entry -> newExternalTagState(entry.getKey(), entry.getValue(),
+                .map(entry -> newTagState(entry.getKey(), entry.getValue(), true,
                         context.parentCompute.tenantLinks))
                 .map(tagState -> sendWithDeferredResult(Operation
                         .createPost(context.request.buildUri(TagService.FACTORY_LINK))

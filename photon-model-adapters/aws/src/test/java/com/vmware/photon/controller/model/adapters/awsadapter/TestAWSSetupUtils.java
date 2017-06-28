@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
@@ -140,6 +141,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -2444,5 +2446,28 @@ public class TestAWSSetupUtils {
             metrics.add(String.format(PhotonModelConstants.SERVICE_OTHER_COST, s));
         }
         return metrics;
+    }
+
+    public static ServiceDocumentQueryResult getInternalTagsByType (VerificationHost host, String type) {
+        Query query = Query.Builder.create()
+                .addKindFieldClause(TagService.TagState.class)
+                .addFieldClause(TagService.TagState.FIELD_NAME_KEY,
+                        PhotonModelConstants.TAG_KEY_TYPE)
+                .addFieldClause(TagService.TagState.FIELD_NAME_EXTERNAL, false)
+                .addFieldClause(TagService.TagState.FIELD_NAME_VALUE, type)
+                .build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QuerySpecification.QueryOption.TOP_RESULTS)
+                .setResultLimit(getQueryResultLimit())
+                .build();
+
+        queryTask.documentSelfLink = UUID.randomUUID().toString();
+
+        host.createQueryTaskService(queryTask, false, true, queryTask, null);
+        ServiceDocumentQueryResult results = queryTask.results;
+        return  results;
     }
 }

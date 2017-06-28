@@ -235,4 +235,23 @@ public class AWSConstants {
             "/dev/sdl"
     );
 
+    public static enum AWSResourceType {
+        ec2_instance("ec2_instance"),
+        ebs_block("ebs_block"),
+        s3_bucket("s3_bucket"),
+        ec2_vpc("ec2_vpc"),
+        ec2_subnet("ec2_subnet"),
+        ec2_net_interface("ec2_net_interface");
+
+        private final String value;
+
+        private AWSResourceType(String value) {
+            this.value = value;
+        }
+
+        public String toString() {
+            return this.value;
+        }
+    }
+
 }

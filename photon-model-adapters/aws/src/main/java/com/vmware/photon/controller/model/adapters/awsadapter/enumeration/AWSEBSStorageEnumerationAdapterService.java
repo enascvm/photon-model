@@ -479,7 +479,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
 
                 operations = this.context.volumeTagsToBeCreated.stream()
                         .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                        .map(t -> TagsUtil.newExternalTagState(t.getKey(), t.getValue(),
+                        .map(t -> TagsUtil.newTagState(t.getKey(), t.getValue(), true,
                                 this.context.parentCompute.tenantLinks))
                         .map(tagState -> Operation.createPost(this.service, TagService.FACTORY_LINK)
                                 .setBody(tagState)

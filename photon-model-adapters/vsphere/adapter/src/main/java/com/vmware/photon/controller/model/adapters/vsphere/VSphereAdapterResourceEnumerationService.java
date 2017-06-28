@@ -1444,7 +1444,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         for (String id : tagIds) {
             TagState cached = this.tagCache.get(id, newTagRetriever(taggingClient));
             if (cached != null) {
-                TagState tag = TagsUtil.newExternalTagState(cached.key, cached.value, tenantLinks);
+                TagState tag = TagsUtil.newTagState(cached.key, cached.value, true, tenantLinks);
                 res.add(tag);
             }
         }
