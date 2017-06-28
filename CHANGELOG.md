@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.22-SNAPSHOT
+
+
 ## 0.6.21
 
 * Mark regionId and creationTime fields as sortable.
