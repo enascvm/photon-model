@@ -102,8 +102,7 @@ public class LibraryClient extends VapiClient {
                 .putObject(K_OPERATION_INPUT)
                 .put("library_item_id", itemId);
         RpcResponse resp = rpc(call);
-        logger.error("Cannot load library item %s : %s", itemId, resp.error != null ? resp.error
-                .asText() : "");
+        logger.info("Loading library item {} : {}", itemId, resp.error != null ? resp.error : "");
         throwIfError("Cannot load library item " + itemId, resp);
 
         ObjectNode result = resp.result;
@@ -143,8 +142,8 @@ public class LibraryClient extends VapiClient {
         opInput.put("target", target);
 
         RpcResponse resp = rpc(call);
-        logger.error("Cannot deploy library item %s : %s", itemId, resp.error != null ? resp.error
-                .asText() : "");
+        logger.info("Deploying library item {} : {}", itemId, resp.error != null ? resp.error : "");
+
         throwIfError("Cannot deploy library item " + itemId, resp);
 
         ObjectNode result = resp.result;

@@ -330,7 +330,7 @@ public class InstanceClient extends BaseHelper {
         } else if (CLONE_STRATEGY_LINKED.equals(strategy)) {
             return VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
         } else {
-            logger.warn("Unknown clone strategy {}, defaulting to MOVE_CHILD_MOST_DISK_BACKING");
+            logger.warn("Unknown clone strategy {}, defaulting to MOVE_CHILD_MOST_DISK_BACKING", strategy);
             return VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
         }
     }
