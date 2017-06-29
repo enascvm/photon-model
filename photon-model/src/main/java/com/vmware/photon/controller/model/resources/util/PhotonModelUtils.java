@@ -17,7 +17,11 @@ import static java.util.Collections.singletonMap;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -132,5 +136,33 @@ public class PhotonModelUtils {
         if (resourceState.regionId == null) {
             throw (new IllegalArgumentException("regionId is required"));
         }
+    }
+
+    /**
+     * Merges two lists of strings, filtering duplicate elements from the second one (the patch).
+     * Also keeping track if change of source list has been modified.
+     * @param source The source list (can be null).
+     * @param patch The patch list. If null, the @source will be the result.
+     * @return Returns a pair. The left part is the merged list and the right one is the boolean
+     * value, indicating if the changes to @source is modified.
+     */
+    public static Pair<List<String>, Boolean> mergeLists(List<String> source, List<String> patch) {
+        if (patch == null) {
+            return new ImmutablePair<>(source, Boolean.FALSE);
+        }
+        boolean hasChanged = false;
+        List<String> result = source;
+        if (result == null) {
+            result = patch;
+            hasChanged = true;
+        } else {
+            for (String newValue : patch) {
+                if (!result.contains(newValue)) {
+                    result.add(newValue);
+                    hasChanged = true;
+                }
+            }
+        }
+        return new ImmutablePair<>(result, Boolean.valueOf(hasChanged));
     }
 }

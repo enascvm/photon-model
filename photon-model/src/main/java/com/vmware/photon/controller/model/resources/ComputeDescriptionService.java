@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+import org.apache.commons.lang3.tuple.Pair;
 
 import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.ServiceUtils;
@@ -29,6 +30,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -86,7 +88,7 @@ public class ComputeDescriptionService extends StatefulService {
         /**
          * List of Network interfaces descriptions to attach to this compute.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(usage = PropertyUsageOption.LINKS)
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_1)
         public List<String> networkInterfaceDescLinks;
 
@@ -94,8 +96,8 @@ public class ComputeDescriptionService extends StatefulService {
          * Disks descrptions associated with this compute instance.
          */
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @PropertyOptions(usage = PropertyUsageOption.LINKS)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public List<String> diskDescLinks;
 
         /**
@@ -380,20 +382,25 @@ public class ComputeDescriptionService extends StatefulService {
                         currentState.regionId = patchBody.regionId;
                     }
 
-                    // make sure the supportChildren list only contains unique values
-                    if (patchBody.supportedChildren != null) {
-                        if (currentState.supportedChildren == null) {
-                            currentState.supportedChildren = patchBody.supportedChildren;
-                            hasChanged = true;
-                        } else {
-                            for (String newSupportedChild : patchBody.supportedChildren) {
-                                if (!currentState.supportedChildren.contains(newSupportedChild)) {
-                                    currentState.supportedChildren.add(newSupportedChild);
-                                    hasChanged = true;
-                                }
-                            }
-                        }
-                    }
+                    // make sure the supportChildren is patched with new values only
+                    Pair<List<String>, Boolean> supportedChildrenMergeResult =
+                            PhotonModelUtils.mergeLists(currentState.supportedChildren, patchBody
+                                    .supportedChildren);
+                    currentState.supportedChildren = supportedChildrenMergeResult.getLeft();
+                    hasChanged = hasChanged || supportedChildrenMergeResult.getRight();
+
+                    // make sure the diskDescLinks  is patched with new values only
+                    Pair<List<String>, Boolean> diskDescLinksMergeResult =
+                            PhotonModelUtils.mergeLists(currentState.diskDescLinks, patchBody.diskDescLinks);
+                    currentState.diskDescLinks = diskDescLinksMergeResult.getLeft();
+                    hasChanged = hasChanged || diskDescLinksMergeResult.getRight();
+
+                    // make sure the networkInterfaceDescLinks is patched with new values only
+                    Pair<List<String>, Boolean> networkInterfaceDescLinksMergeResult =
+                            PhotonModelUtils.mergeLists(
+                                    currentState.networkInterfaceDescLinks, patchBody.networkInterfaceDescLinks);
+                    currentState.networkInterfaceDescLinks = networkInterfaceDescLinksMergeResult.getLeft();
+                    hasChanged = hasChanged || networkInterfaceDescLinksMergeResult.getRight();
 
                     return Boolean.valueOf(hasChanged);
                 });
@@ -428,7 +435,6 @@ public class ComputeDescriptionService extends StatefulService {
             children.add(type.name());
         }
         template.supportedChildren = children;
-
         template.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         template.cpuCount = 2;
         template.gpuCount = 1;

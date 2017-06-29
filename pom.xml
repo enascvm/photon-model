@@ -101,6 +101,7 @@
     <jacoco.version>0.7.9</jacoco.version>
     <!-- Bouncy Castle -->
     <bouncycastle.version>1.57</bouncycastle.version>
+    <apache.commons.lang.version>3.4</apache.commons.lang.version>
   </properties>
 
   <distributionManagement>

@@ -22,7 +22,7 @@ import java.util.UUID;
 import java.util.function.Function;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
-
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.ServiceUtils;
@@ -30,6 +30,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -476,19 +477,12 @@ public class ComputeService extends StatefulService {
                 hasStateChanged = true;
             }
 
-            if (patchBody.diskLinks != null) {
-                if (currentState.diskLinks == null) {
-                    currentState.diskLinks = patchBody.diskLinks;
-                    hasStateChanged = true;
-                } else {
-                    for (String link : patchBody.diskLinks) {
-                        if (!currentState.diskLinks.contains(link)) {
-                            currentState.diskLinks.add(link);
-                            hasStateChanged = true;
-                        }
-                    }
-                }
-            }
+            // make sure the diskLinks is patched with new values only
+            Pair<List<String>, Boolean> diskLinksMergeResult =
+                    PhotonModelUtils.mergeLists(
+                            currentState.diskLinks, patchBody.diskLinks);
+            currentState.diskLinks = diskLinksMergeResult.getLeft();
+            hasStateChanged = hasStateChanged || diskLinksMergeResult.getRight();
 
             if (patchBody.creationTimeMicros != null && currentState.creationTimeMicros == null &&
                     currentState.creationTimeMicros != patchBody.creationTimeMicros) {
@@ -496,19 +490,12 @@ public class ComputeService extends StatefulService {
                 hasStateChanged = true;
             }
 
-            if (patchBody.networkInterfaceLinks != null) {
-                if (currentState.networkInterfaceLinks == null) {
-                    currentState.networkInterfaceLinks = patchBody.networkInterfaceLinks;
-                    hasStateChanged = true;
-                } else {
-                    for (String link : patchBody.networkInterfaceLinks) {
-                        if (!currentState.networkInterfaceLinks.contains(link)) {
-                            currentState.networkInterfaceLinks.add(link);
-                            hasStateChanged = true;
-                        }
-                    }
-                }
-            }
+            // make sure the networkInterfaceLinks is patched with new values only
+            Pair<List<String>, Boolean> networkInterfaceLinksMergeResult =
+                    PhotonModelUtils.mergeLists(
+                            currentState.networkInterfaceLinks, patchBody.networkInterfaceLinks);
+            currentState.networkInterfaceLinks = networkInterfaceLinksMergeResult.getLeft();
+            hasStateChanged = hasStateChanged || networkInterfaceLinksMergeResult.getRight();
 
             if (patchBody.regionId != null && currentState.regionId == null) {
                 hasStateChanged = true;
