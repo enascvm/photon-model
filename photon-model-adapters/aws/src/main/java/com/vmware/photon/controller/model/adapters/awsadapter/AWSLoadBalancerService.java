@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCli
 import static com.vmware.photon.controller.model.resources.SecurityGroupService.FACTORY_LINK;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,6 +29,10 @@ import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerReque
 import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerResult;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerResult;
+import com.amazonaws.services.elasticloadbalancing.model.DeregisterInstancesFromLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.model.DeregisterInstancesFromLoadBalancerResult;
+import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
+import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersResult;
 import com.amazonaws.services.elasticloadbalancing.model.HealthCheck;
 import com.amazonaws.services.elasticloadbalancing.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.model.Listener;
@@ -60,8 +65,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AWSLoadBalancerService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_LOAD_BALANCER_ADAPTER;
-    public static final String SECURITY_GROUP_DOCUMENT_SELF_LINK =
-            "awsSecurityGroupDocumentSelfLink";
+    public static final String SECURITY_GROUP_DOCUMENT_SELF_LINK = "awsSecurityGroupDocumentSelfLink";
 
     /**
      * Load balancer request context.
@@ -73,6 +77,15 @@ public class AWSLoadBalancerService extends StatelessService {
         LoadBalancerStateExpanded loadBalancerStateExpanded;
         AuthCredentialsServiceState credentials;
         String loadBalancerAddress;
+
+        // Instances registered with the AWS load balancer
+        List<Instance> registeredInstances;
+        // Instances to be registered in the load balancer based on the instances that are defined
+        // in the LB state and are missing from the AWS load balancer
+        List<String> instanceIdsToRegister;
+        // Instances to be deregistered from the load balancer based on the instances that are defined
+        // in the AWS load balancer and are missing from the LB state
+        List<String> instanceIdsToDeregister;
 
         AmazonElasticLoadBalancingAsyncClient client;
 
@@ -217,6 +230,16 @@ public class AWSLoadBalancerService extends StatelessService {
                         .thenCompose(this::createLoadBalancer)
                         .thenCompose(this::configureHealthCheck)
                         .thenCompose(this::updateLoadBalancerState)
+                        .thenCompose(this::assignInstances);
+            }
+
+            return execution;
+
+        case UPDATE:
+            if (context.request.isMockRequest) {
+                this.logFine("Mock request to update an AWS load balancer processed.");
+            } else {
+                execution = execution.thenCompose(this::getAWSLoadBalancer)
                         .thenCompose(this::assignInstances);
             }
 
@@ -408,10 +431,75 @@ public class AWSLoadBalancerService extends StatelessService {
         return this.sendWithDeferredResult(op).thenApply(ignore -> context);
     }
 
-    private DeferredResult<AWSLoadBalancerContext> assignInstances(AWSLoadBalancerContext context) {
+    private DeferredResult<AWSLoadBalancerContext> getAWSLoadBalancer(
+            AWSLoadBalancerContext context) {
+        DescribeLoadBalancersRequest describeRequest = new DescribeLoadBalancersRequest()
+                .withLoadBalancerNames(context.loadBalancerStateExpanded.name);
 
+        String message =
+                "Describing AWS load balancer [" + context.loadBalancerStateExpanded.name + "].";
+        AWSDeferredResultAsyncHandler<DescribeLoadBalancersRequest, DescribeLoadBalancersResult> handler = new AWSDeferredResultAsyncHandler<DescribeLoadBalancersRequest, DescribeLoadBalancersResult>(
+                this, message) {
+            @Override
+            protected DeferredResult<DescribeLoadBalancersResult> consumeSuccess(
+                    DescribeLoadBalancersRequest request, DescribeLoadBalancersResult result) {
+                return DeferredResult.completed(result);
+            }
+        };
+
+        context.client.describeLoadBalancersAsync(describeRequest, handler);
+
+        return handler.toDeferredResult().thenCompose(result -> {
+
+            List<com.amazonaws.services.elasticloadbalancing.model.LoadBalancerDescription> lbs = result
+                    .getLoadBalancerDescriptions();
+
+            if (lbs != null && !lbs.isEmpty() && lbs.size() == 1) {
+                context.registeredInstances = lbs.iterator().next().getInstances();
+                return DeferredResult.completed(context);
+            }
+
+            return DeferredResult.failed(new IllegalStateException(
+                    "Unable to describe load balancer with name '"
+                            + context.loadBalancerStateExpanded.name + "' for update"));
+        });
+    }
+
+    private DeferredResult<AWSLoadBalancerContext> assignInstances(AWSLoadBalancerContext context) {
+        // If the registered instances are null this is a newly provisioned load balancer
+        // so add all instances from the load balancer state to the registration request
+        if (context.registeredInstances == null) {
+            context.instanceIdsToRegister = context.loadBalancerStateExpanded.computes.stream()
+                    .map(computeState -> computeState.id)
+                    .collect(Collectors.toList());
+
+            context.instanceIdsToDeregister = Collections.emptyList();
+        } else {
+            context.instanceIdsToRegister = context.loadBalancerStateExpanded.computes.stream()
+                    .map(computeState -> computeState.id)
+                    .filter(csId -> context.registeredInstances.stream()
+                            .noneMatch(i -> i.getInstanceId().equals(csId))
+                    )
+                    .collect(Collectors.toList());
+
+            context.instanceIdsToDeregister = context.registeredInstances.stream()
+                    .map(Instance::getInstanceId)
+                    .filter(instanceId -> context.loadBalancerStateExpanded.computes.stream()
+                            .noneMatch(computeState -> computeState.id.equals(instanceId))
+                    )
+                    .collect(Collectors.toList());
+        }
+
+        return DeferredResult.completed(context)
+                .thenCompose(this::registerInstances)
+                .thenCompose(this::deregisterInstances);
+
+    }
+
+    private DeferredResult<AWSLoadBalancerContext> registerInstances(
+            AWSLoadBalancerContext context) {
         // Do not try to assign instances if there aren't any
-        if (context.loadBalancerStateExpanded.computes.isEmpty()) {
+        if (context.instanceIdsToRegister.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
@@ -419,7 +507,7 @@ public class AWSLoadBalancerService extends StatelessService {
                 context);
 
         String message = "Registering instances to AWS Load Balancer with name ["
-                + context.loadBalancerStateExpanded.name + "].";
+                + context.loadBalancerStateExpanded.name + "]";
         AWSDeferredResultAsyncHandler<RegisterInstancesWithLoadBalancerRequest, RegisterInstancesWithLoadBalancerResult> handler =
                 new AWSDeferredResultAsyncHandler<RegisterInstancesWithLoadBalancerRequest,
                         RegisterInstancesWithLoadBalancerResult>(this, message) {
@@ -432,8 +520,38 @@ public class AWSLoadBalancerService extends StatelessService {
                 };
 
         context.client.registerInstancesWithLoadBalancerAsync(request, handler);
+
         return handler.toDeferredResult()
                 .thenApply(ignore -> context);
+    }
+
+    private DeferredResult<AWSLoadBalancerContext> deregisterInstances(
+            AWSLoadBalancerContext context) {
+        // Do not try to deregister instances if there aren't any
+        if (context.instanceIdsToDeregister.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
+        DeregisterInstancesFromLoadBalancerRequest request = buildInstanceDeregistrationRequest(
+                context);
+
+        String message = "Deregistering instances to AWS Load Balancer with name ["
+                + context.loadBalancerStateExpanded.name + "]";
+
+        AWSDeferredResultAsyncHandler<DeregisterInstancesFromLoadBalancerRequest, DeregisterInstancesFromLoadBalancerResult> handler =
+                new AWSDeferredResultAsyncHandler<DeregisterInstancesFromLoadBalancerRequest, DeregisterInstancesFromLoadBalancerResult>(
+                        this, message) {
+                    @Override
+                    protected DeferredResult<DeregisterInstancesFromLoadBalancerResult> consumeSuccess(
+                            DeregisterInstancesFromLoadBalancerRequest request,
+                            DeregisterInstancesFromLoadBalancerResult result) {
+                        return DeferredResult.completed(result);
+                    }
+                };
+
+        context.client.deregisterInstancesFromLoadBalancerAsync(request, handler);
+
+        return handler.toDeferredResult().thenApply(ignore -> context);
     }
 
     private CreateLoadBalancerRequest buildCreationRequest(AWSLoadBalancerContext context) {
@@ -442,7 +560,9 @@ public class AWSLoadBalancerService extends StatelessService {
                 .withLoadBalancerName(context.loadBalancerStateExpanded.name)
                 .withListeners(buildListeners(context))
                 .withSubnets(context.loadBalancerStateExpanded.subnets.stream()
-                        .map(subnet -> subnet.id).collect(Collectors.toList()))
+                        .map(subnet -> subnet.id)
+                        .collect(Collectors.toList())
+                )
                 .withSecurityGroups(context.securityGroupState.id);
 
         // Set scheme to Internet-facing if specified. By default, an internal load balancer is
@@ -478,13 +598,24 @@ public class AWSLoadBalancerService extends StatelessService {
 
     private RegisterInstancesWithLoadBalancerRequest buildInstanceRegistrationRequest(
             AWSLoadBalancerContext context) {
-        RegisterInstancesWithLoadBalancerRequest request =
-                new RegisterInstancesWithLoadBalancerRequest();
 
-        return request.withLoadBalancerName(context.loadBalancerStateExpanded.name)
-                .withInstances(context.loadBalancerStateExpanded.computes.stream()
-                        .map(compute -> new Instance(compute.id))
-                        .collect(Collectors.toList()));
+        return new RegisterInstancesWithLoadBalancerRequest()
+                .withLoadBalancerName(context.loadBalancerStateExpanded.name)
+                .withInstances(context.instanceIdsToRegister.stream()
+                        .map(Instance::new)
+                        .collect(Collectors.toList())
+                );
+    }
+
+    private DeregisterInstancesFromLoadBalancerRequest buildInstanceDeregistrationRequest(
+            AWSLoadBalancerContext context) {
+
+        return new DeregisterInstancesFromLoadBalancerRequest()
+                .withLoadBalancerName(context.loadBalancerStateExpanded.name)
+                .withInstances(context.instanceIdsToDeregister.stream()
+                        .map(Instance::new)
+                        .collect(Collectors.toList())
+                );
     }
 
     private DeferredResult<AWSLoadBalancerContext> deleteLoadBalancer(

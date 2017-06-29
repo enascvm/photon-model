@@ -21,7 +21,7 @@ public class LoadBalancerInstanceRequest extends ResourceRequest {
      * Type of an instance request.
      */
     public enum InstanceRequestType {
-        CREATE, DELETE
+        CREATE, UPDATE, DELETE
     }
 
     /**

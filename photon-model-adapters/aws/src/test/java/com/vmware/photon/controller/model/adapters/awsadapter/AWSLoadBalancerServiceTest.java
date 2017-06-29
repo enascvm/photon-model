@@ -17,14 +17,19 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_LINUX_AMI;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
+import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
@@ -46,6 +51,10 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGr
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
@@ -83,8 +92,12 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
     private String lbName;
     private String sgId;
+    private ComputeState cs1;
+    private ComputeState cs2;
+    private List<String> instancesToCleanUp = new ArrayList<>();
 
     private EndpointState endpointState;
+    private AmazonEC2AsyncClient ec2client;
 
     @Before
     public void setUp() throws Throwable {
@@ -100,9 +113,11 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
             creds.privateKey = this.secretKey;
             creds.privateKeyId = this.accessKey;
-            this.client = AWSUtils.getLoadBalancingAsyncClient(creds, this.regionId,
-                    TestUtils.getExecutor());
-            this.securityGroupClient  = new AWSSecurityGroupClient(
+            this.client = AWSUtils
+                    .getLoadBalancingAsyncClient(creds, this.regionId, TestUtils.getExecutor());
+            this.ec2client = AWSUtils
+                    .getAsyncClient(creds, this.regionId, getExecutor());
+            this.securityGroupClient = new AWSSecurityGroupClient(
                     AWSUtils.getAsyncClient(creds, this.regionId, getExecutor()));
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
@@ -111,6 +126,20 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
             this.endpointState = createEndpointState();
 
+            String vm1 = "vm1";
+            String vm2 = "vm2";
+
+            if (!this.isMock) {
+                vm1 = provisionAWSVMWithEC2Client(this.host, this.ec2client, EC2_LINUX_AMI,
+                        this.subnetId, null);
+                this.instancesToCleanUp.add(vm1);
+                vm2 = provisionAWSVMWithEC2Client(this.host, this.ec2client, EC2_LINUX_AMI,
+                        this.subnetId, null);
+                this.instancesToCleanUp.add(vm2);
+            }
+            this.cs1 = createComputeState(vm1);
+            this.cs2 = createComputeState(vm2);
+
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
             throw new Exception(e);
@@ -118,19 +147,24 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws Throwable {
         if (this.lbName != null) {
             deleteAwsLoadBalancer(this.lbName);
         }
         if (this.sgId != null) {
             deleteAwsSecurityGroup(this.sgId);
         }
+        if (!this.instancesToCleanUp.isEmpty()) {
+            deleteVMsUsingEC2Client(this.ec2client, this.host, this.instancesToCleanUp);
+        }
     }
 
     @Test
-    public void testCreateDeleteLoadBalancer() throws Throwable {
+    public void testCreateUpdateDeleteLoadBalancer() throws Throwable {
         this.lbName = generateLbName();
         LoadBalancerState lb = createLoadBalancerState(this.lbName);
+
+        // Provision load balancer
         kickOffLoadBalancerProvision(InstanceRequestType.CREATE, lb.documentSelfLink,
                 TaskStage.FINISHED);
 
@@ -151,6 +185,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             assertNotNull(awsLoadBalancer);
             assertEquals(awsLoadBalancer.getDNSName(), lb.address);
             assertEquals("internet-facing", awsLoadBalancer.getScheme());
+            assertEquals(1, awsLoadBalancer.getInstances().size());
 
             List<ListenerDescription> listeners = awsLoadBalancer.getListenerDescriptions();
             assertEquals(2, listeners.size());
@@ -163,6 +198,37 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             String lbSecGroupId = awsLoadBalancer.getSecurityGroups().stream().findFirst()
                     .orElse(null);
             assertEquals(securityGroup.getGroupId(), lbSecGroupId);
+
+        }
+
+        // Update load balancer from 1 machines to 2 to simulate scale-out
+        if (!this.isMock) {
+            lb.computeLinks = new HashSet<>(
+                    Arrays.asList(this.cs1.documentSelfLink, this.cs2.documentSelfLink));
+            lb = postServiceSynchronously(lb.documentSelfLink, lb, LoadBalancerState.class);
+        }
+
+        kickOffLoadBalancerProvision(InstanceRequestType.UPDATE, lb.documentSelfLink,
+                TaskStage.FINISHED);
+
+        if (!this.isMock) {
+            LoadBalancerDescription awsLoadBalancer = getAwsLoadBalancer(this.lbName);
+
+            assertNotNull(awsLoadBalancer);
+            assertEquals(2, awsLoadBalancer.getInstances().size());
+
+
+            // Update load balancer from 2 machines to 1 to simulate scale-in
+            lb.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
+            lb = postServiceSynchronously(lb.documentSelfLink, lb, LoadBalancerState.class);
+
+            kickOffLoadBalancerProvision(InstanceRequestType.UPDATE, lb.documentSelfLink,
+                    TaskStage.FINISHED);
+
+            awsLoadBalancer = getAwsLoadBalancer(this.lbName);
+
+            assertNotNull(awsLoadBalancer);
+            assertEquals(1, awsLoadBalancer.getInstances().size());
         }
 
         kickOffLoadBalancerProvision(InstanceRequestType.DELETE, lb.documentSelfLink,
@@ -236,9 +302,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         endpoint.authCredentialsLink = createAuthCredentialsState().documentSelfLink;
         endpoint.resourcePoolLink = "dummy";
 
-        return postServiceSynchronously(
-                EndpointService.FACTORY_LINK,
-                endpoint,
+        return postServiceSynchronously(EndpointService.FACTORY_LINK, endpoint,
                 EndpointState.class);
     }
 
@@ -249,9 +313,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
 
-        return postServiceSynchronously(
-                AuthCredentialsService.FACTORY_LINK,
-                creds,
+        return postServiceSynchronously(AuthCredentialsService.FACTORY_LINK, creds,
                 AuthCredentialsServiceState.class);
     }
 
@@ -264,8 +326,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         subnetState.subnetCIDR = "10.10.10.10/24";
         subnetState.tenantLinks = this.endpointState.tenantLinks;
 
-        return postServiceSynchronously(SubnetService.FACTORY_LINK, subnetState,
-              SubnetState.class);
+        return postServiceSynchronously(SubnetService.FACTORY_LINK, subnetState, SubnetState.class);
     }
 
     private LoadBalancerState createLoadBalancerState(String name) throws Throwable {
@@ -273,7 +334,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         state.name = name;
         state.endpointLink = this.endpointState.documentSelfLink;
         state.regionId = this.regionId;
-        state.computeLinks = new HashSet<>();
+        state.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
         state.subnetLinks = new HashSet<>();
         state.subnetLinks.add(createSubnetState(this.subnetId).documentSelfLink);
 
@@ -299,8 +360,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
         state.routes = Arrays.asList(route1, route2);
         state.internetFacing = Boolean.TRUE;
-        state.instanceAdapterReference = UriUtils.buildUri(this.host,
-                AWSLoadBalancerService.SELF_LINK);
+        state.instanceAdapterReference = UriUtils
+                .buildUri(this.host, AWSLoadBalancerService.SELF_LINK);
 
         return postServiceSynchronously(LoadBalancerService.FACTORY_LINK, state,
                 LoadBalancerState.class);
@@ -308,6 +369,21 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
     private static String generateLbName() {
         return TEST_LOAD_BALANCER_NAME_PREFIX + System.currentTimeMillis();
+    }
+
+    private ComputeState createComputeState(String id) throws Throwable {
+        ComputeDescription computeDescription = new ComputeDescription();
+        computeDescription.id = id;
+
+        computeDescription = postServiceSynchronously(ComputeDescriptionService.FACTORY_LINK,
+                computeDescription, ComputeDescription.class);
+
+        ComputeState computeState = new ComputeState();
+        computeState.descriptionLink = computeDescription.documentSelfLink;
+        computeState.id = id;
+
+        return postServiceSynchronously(ComputeService.FACTORY_LINK, computeState,
+                ComputeState.class);
     }
 
     private ProvisionLoadBalancerTaskState kickOffLoadBalancerProvision(
@@ -319,10 +395,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         taskState.isMockRequest = this.isMock;
 
         // Start/Post load balancer provisioning task
-        taskState = postServiceSynchronously(
-                ProvisionLoadBalancerTaskService.FACTORY_LINK,
-                taskState,
-                ProvisionLoadBalancerTaskState.class);
+        taskState = postServiceSynchronously(ProvisionLoadBalancerTaskService.FACTORY_LINK,
+                taskState, ProvisionLoadBalancerTaskState.class);
 
         // Wait for the task to complete
         taskState = waitForFinishedTask(ProvisionLoadBalancerTaskState.class,
@@ -344,8 +418,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
                     e.toString());
         }
 
-        Collection<LoadBalancerDescription> lbs = describeResult != null
-                ? describeResult.getLoadBalancerDescriptions() : null;
+        Collection<LoadBalancerDescription> lbs =
+                describeResult != null ? describeResult.getLoadBalancerDescriptions() : null;
         if (lbs == null || lbs.isEmpty()) {
             return null;
         }
@@ -373,8 +447,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         try {
             return this.securityGroupClient.getSecurityGroupById(id);
         } catch (Exception e) {
-            this.host.log("Exception describing security group with id '%s': %s", id,
-                    e.toString());
+            this.host.log("Exception describing security group with id '%s': %s", id, e.toString());
         }
         return null;
     }
