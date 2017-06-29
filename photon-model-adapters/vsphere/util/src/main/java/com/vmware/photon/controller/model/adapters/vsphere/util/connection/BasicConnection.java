@@ -55,7 +55,7 @@ public class BasicConnection implements Connection {
     public static final String SERVICE_INSTANCE = "ServiceInstance";
     private static final String PBM_SERVICE_INSTANCE_TYPE = "PbmServiceInstance";
     private static final String REQUEST_TIMEOUT = "com.sun.xml.internal.ws.request.timeout";
-    private VimService vimService;
+    private static VimService VIM_SERVICE;
     private VimPortType vimPort;
     private PbmService pbmService;
     private PbmPortType pbmPort;
@@ -99,7 +99,12 @@ public class BasicConnection implements Connection {
 
     @Override
     public VimService getVimService() {
-        return this.vimService;
+        synchronized (BasicConnection.class) {
+            if (VIM_SERVICE == null) {
+                VIM_SERVICE = new VimService();
+            }
+        }
+        return this.VIM_SERVICE;
     }
 
     @Override
@@ -192,8 +197,7 @@ public class BasicConnection implements Connection {
     private void _connect()
             throws RuntimeFaultFaultMsg, InvalidLocaleFaultMsg, InvalidLoginFaultMsg,
             com.vmware.pbm.RuntimeFaultFaultMsg {
-        this.vimService = new VimService();
-        this.vimPort = this.vimService.getVimPort();
+        this.vimPort = getVimService().getVimPort();
         BindingProvider bindingProvider = getBindingsProvider();
         updateBindingProvider(bindingProvider, this.uri.toString());
 
@@ -282,7 +286,6 @@ public class BasicConnection implements Connection {
             this.userSession = null;
             this.serviceContent = null;
             this.vimPort = null;
-            this.vimService = null;
             this.pbmPort = null;
             this.pbmService = null;
         }
