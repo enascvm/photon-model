@@ -112,8 +112,7 @@ public class ResourceState extends ServiceDocument {
      */
     @UsageOption(option = PropertyUsageOption.OPTIONAL)
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_17)
-    @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE,
-            PropertyIndexingOption.SORT })
+    @PropertyOptions(indexing = { PropertyIndexingOption.SORT })
     public String regionId;
 
     public void copyTo(ResourceState target) {
