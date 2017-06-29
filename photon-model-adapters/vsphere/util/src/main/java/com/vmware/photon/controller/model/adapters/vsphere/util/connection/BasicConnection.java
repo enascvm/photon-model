@@ -282,12 +282,20 @@ public class BasicConnection implements Connection {
                     "failed to close properly: " + e.getMessage() + " : " + cause
                             .getMessage(), cause);
         } finally {
-            // A connection is very memory intensive, I'm helping the garbage collector here
             this.userSession = null;
             this.serviceContent = null;
             this.vimPort = null;
             this.pbmPort = null;
             this.pbmService = null;
+        }
+    }
+
+    @Override
+    public void closeQuietly() {
+        try {
+            close();
+        } catch (Exception ignore) {
+
         }
     }
 

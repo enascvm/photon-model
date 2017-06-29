@@ -55,6 +55,8 @@ public interface Connection {
 
     void close();
 
+    void closeQuietly();
+
     URI getURI();
 
     /**

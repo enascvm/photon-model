@@ -47,6 +47,7 @@ public class DatacenterEnumeratorService extends StatelessService {
 
         EnumerateDatacentersRequest req = patch.getBody(EnumerateDatacentersRequest.class);
 
+        BasicConnection connection = new BasicConnection();
         try {
             EnumerateDatacentersResponse res = new EnumerateDatacentersResponse();
 
@@ -54,7 +55,6 @@ public class DatacenterEnumeratorService extends StatelessService {
                 res.datacenters = Collections.singletonList("dc-1");
                 res.moRefs = Collections.singletonList("Datacenter:dc-1");
             } else {
-                BasicConnection connection = new BasicConnection();
                 connection.setURI(URI.create("https://" + req.host + "/sdk"));
                 connection.setUsername(req.username);
                 connection.setPassword(req.password);
@@ -77,6 +77,8 @@ public class DatacenterEnumeratorService extends StatelessService {
             patch.complete();
         } catch (Exception e) {
             patch.fail(e);
+        } finally {
+            connection.closeQuietly();
         }
     }
 }
