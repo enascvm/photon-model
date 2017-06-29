@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -197,6 +198,20 @@ public class AWSEnumerationAdapterService extends StatelessService {
      */
     public void kickOffEnumerationWorkFlows(EnumerationContext context, AWSEnumerationStages next) {
         List<List<Operation>> enumOperations = new ArrayList<>();
+
+        ComputeEnumerateAdapterRequest awsS3EnumerationRequest =
+                new ComputeEnumerateAdapterRequest(
+                        context.request, context.parentAuth,
+                        context.parent, Regions.DEFAULT_REGION.getName());
+
+        Operation patchAWSS3StorageAdapterService = Operation
+                .createPatch(this,
+                        AWSS3StorageEnumerationAdapterService.SELF_LINK)
+                .setBody(awsS3EnumerationRequest)
+                .setReferer(getHost().getUri());
+
+        enumOperations.add(Collections.singletonList(patchAWSS3StorageAdapterService));
+
         for (String regionId : context.regions) {
             List<Operation> enumOperationsForRegion = new ArrayList<>();
             ComputeEnumerateAdapterRequest awsEnumerationRequest =
@@ -221,16 +236,9 @@ public class AWSEnumerationAdapterService extends StatelessService {
                     .setBody(awsEnumerationRequest)
                     .setReferer(getHost().getUri());
 
-            Operation patchAWSS3StorageAdapterService = Operation
-                    .createPatch(this,
-                            AWSS3StorageEnumerationAdapterService.SELF_LINK)
-                    .setBody(awsEnumerationRequest)
-                    .setReferer(getHost().getUri());
-
             enumOperationsForRegion.add(patchAWSCreationAdapterService);
             enumOperationsForRegion.add(patchAWSDeletionAdapterService);
             enumOperationsForRegion.add(patchAWSEBSStorageAdapterService);
-            enumOperationsForRegion.add(patchAWSS3StorageAdapterService);
             enumOperations.add(enumOperationsForRegion);
         }
 

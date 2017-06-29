@@ -485,7 +485,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         diskState.id = bucket.getName();
         diskState.name = bucket.getName();
         diskState.storageType = STORAGE_TYPE_S3;
-        diskState.regionId = aws.request.regionId;
         diskState.authCredentialsLink = aws.parentAuth.documentSelfLink;
         diskState.resourcePoolLink = aws.request.original.resourcePoolLink;
         diskState.endpointLink = aws.request.original.endpointLink;
@@ -645,8 +644,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             Class<? extends ResourceState> stateClass,
             S3StorageEnumerationContext ctx) {
 
-        // Add REGION criteria
-        qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.request.regionId);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria
