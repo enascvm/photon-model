@@ -69,15 +69,10 @@ public class ResourceState extends ServiceDocument {
 
     /**
      * Custom property bag that can be used to store resource specific properties.
-     *
-     * TODO: Add PropertyIndexingOption.SORT when available. This property cannot be added alongside
-     * PropertyIndexingOption.FIXED_ITEM_NAME as it causes an indexing issue. See
-     * @see <a href="https://www.pivotaltracker.com/story/show/144880451">https://www.pivotaltracker.com/story/show/144880451</a>
-     * for more information.
      */
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.EXPAND,
-            PropertyIndexingOption.FIXED_ITEM_NAME })
+            PropertyIndexingOption.FIXED_ITEM_NAME, PropertyIndexingOption.SORT })
     public Map<String, String> customProperties;
 
     /**
