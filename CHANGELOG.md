@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.23-SNAPSHOT
+
+
 ## 0.6.22
 
 * [AWS] Added S3 enumeration support.
