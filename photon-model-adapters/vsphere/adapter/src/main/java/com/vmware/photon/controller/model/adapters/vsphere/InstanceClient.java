@@ -44,8 +44,7 @@ import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
-import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
-import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
+import com.vmware.photon.controller.model.adapters.vsphere.network.NetworkDeviceBackingFactory;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfParser;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfRetriever;
@@ -72,7 +71,6 @@ import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.DatastoreHostMount;
-import com.vmware.vim25.DistributedVirtualSwitchPortConnection;
 import com.vmware.vim25.DuplicateName;
 import com.vmware.vim25.FileAlreadyExists;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
@@ -93,6 +91,7 @@ import com.vmware.vim25.VirtualCdrom;
 import com.vmware.vim25.VirtualCdromAtapiBackingInfo;
 import com.vmware.vim25.VirtualCdromIsoBackingInfo;
 import com.vmware.vim25.VirtualDevice;
+import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualDeviceConfigSpec;
 import com.vmware.vim25.VirtualDeviceConfigSpecFileOperation;
 import com.vmware.vim25.VirtualDeviceConfigSpecOperation;
@@ -104,10 +103,7 @@ import com.vmware.vim25.VirtualDiskSpec;
 import com.vmware.vim25.VirtualDiskType;
 import com.vmware.vim25.VirtualE1000;
 import com.vmware.vim25.VirtualEthernetCard;
-import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardMacType;
-import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
-import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
 import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualFloppyDeviceBackingInfo;
 import com.vmware.vim25.VirtualFloppyImageBackingInfo;
@@ -1705,49 +1701,23 @@ public class InstanceClient extends BaseHelper {
         nic.setKey(-1);
         nic.setControllerKey(controllerKey);
 
-        if (nicWithDetails.subnet != null) {
-            // check if it is portgroup
-            CustomProperties props = CustomProperties.of(nicWithDetails.subnet);
-            if (!io.netty.util.internal.StringUtil
-                    .isNullOrEmpty(props.getString(DvsProperties.DVS_UUID))) {
-                DistributedVirtualSwitchPortConnection port = new DistributedVirtualSwitchPortConnection();
-                port.setSwitchUuid(props.getString(DvsProperties.DVS_UUID));
-                port.setPortgroupKey(props.getString(DvsProperties.PORT_GROUP_KEY));
+        // Currently the network backing information is stored in both places subnet and network
+        // If it were to exist at one state object, then it would reduce complexity further.
+        // Question: Is it acceptable for querying subnet first and network later? Or the order
+        // should be reversed?
 
-                VirtualEthernetCardDistributedVirtualPortBackingInfo backing = new VirtualEthernetCardDistributedVirtualPortBackingInfo();
-                backing.setPort(port);
-                nic.setBacking(backing);
-            } else {
-                if (VimNames.TYPE_NETWORK.equals(props.getString(CustomProperties.TYPE))) {
-                    // standard network passed as subnet
-                    VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();
-                    backing.setDeviceName(nicWithDetails.subnet.name);
-                    nic.setBacking(backing);
-                } else {
-                    // NSX-T logical switch
-                    VirtualEthernetCardOpaqueNetworkBackingInfo backing = new VirtualEthernetCardOpaqueNetworkBackingInfo();
-                    backing.setOpaqueNetworkId(nicWithDetails.subnet.id);
-                    backing.setOpaqueNetworkType(NsxProperties.NSX_LOGICAL_SWITCH);
-                    nic.setBacking(backing);
-                }
-            }
-        } else {
-            // either network or OpaqueNetwork
-            CustomProperties custProp = CustomProperties.of(nicWithDetails.network);
-            if (VimNames.TYPE_OPAQUE_NETWORK
-                    .equals(custProp.getString(CustomProperties.TYPE, null))) {
-                // opaque network
-                VirtualEthernetCardOpaqueNetworkBackingInfo backing = new VirtualEthernetCardOpaqueNetworkBackingInfo();
-                backing.setOpaqueNetworkId(custProp.getString(NsxProperties.OPAQUE_NET_ID));
-                backing.setOpaqueNetworkType(custProp.getString(NsxProperties.OPAQUE_NET_TYPE));
-                nic.setBacking(backing);
-            } else {
-                // network
-                VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();
-                backing.setDeviceName(nicWithDetails.network.name);
-                nic.setBacking(backing);
-            }
+        QueryConfigTargetRequest queryConfigTargetRequest = new
+                QueryConfigTargetRequest(this.get, getVimPort(), this.ctx.computeMoRef);
+
+        VirtualDeviceBackingInfo deviceBackingInfo = NetworkDeviceBackingFactory
+                .getNetworkDeviceBackingInfo(nicWithDetails.subnet, queryConfigTargetRequest);
+
+        if (deviceBackingInfo == null) {
+            deviceBackingInfo = NetworkDeviceBackingFactory
+                    .getNetworkDeviceBackingInfo(nicWithDetails.network, queryConfigTargetRequest);
         }
+
+        nic.setBacking(deviceBackingInfo);
 
         return nic;
     }
