@@ -1,7 +1,12 @@
 # CHANGELOG
 
-## 0.6.22-SNAPSHOT
+## 0.6.22
 
+* [AWS] Added S3 enumeration support.
+* Assign 'regionId' for computes of type 'Zone'.
+* Fixed ComputeDescription's disk and network links, not to be duplicated on patch.
+* Removed case insensitive indexing option from regionId.
+* Enabled 'SORT' on ResourceState customProperties.
 
 ## 0.6.21
 
