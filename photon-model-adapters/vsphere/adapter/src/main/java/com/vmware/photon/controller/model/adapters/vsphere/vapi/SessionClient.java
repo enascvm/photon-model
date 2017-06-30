@@ -41,6 +41,10 @@ public class SessionClient extends VapiClient {
         RpcResponse resp = rpc(call);
         throwIfError("Error creating session", resp);
 
+        if (resp.result.get("output") == null) {
+            throw new RpcException("Login to server failed for unknown reason.");
+        }
+
         return resp.result.get("output").get("SECRET").asText();
     }
 

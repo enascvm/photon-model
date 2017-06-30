@@ -13,22 +13,48 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertEquals;
+
+import java.util.List;
+
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.vim25.VirtualDisk;
 
-public class TestVSphereLibraryProvisionTask extends TestVSphereLibraryProvisionTaskBase {
+/**
+ * Test cases for provisioning through library item with disks.
+ */
+public class TestVSphereLibraryProvisionTaskWithStorage extends TestVSphereLibraryProvisionTaskBase {
 
     @Test
-    public void deployFromLibrary() throws Throwable {
-        ComputeState vm = provisionVMAndGetState();
+    public void deployFromLibraryWithAdditionalDisks() throws Throwable {
+        ComputeService.ComputeState vm = provisionVMAndGetState(true, true);
         try {
             if (vm == null) {
                 return;
             }
+            // Verify that the disk is resized
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            List<VirtualDisk> virtualDisks = fetchAllVirtualDisks(vm, get);
+            assertEquals(3, virtualDisks.size());
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
 
+    @Test
+    public void deployFromLibraryWithStoragePolicy() throws Throwable {
+        ComputeService.ComputeState vm = provisionVMAndGetState(true, false);
+        try {
+            if (vm == null) {
+                return;
+            }
             // Verify that the disk is resized
             BasicConnection connection = createConnection();
             GetMoRef get = new GetMoRef(connection);

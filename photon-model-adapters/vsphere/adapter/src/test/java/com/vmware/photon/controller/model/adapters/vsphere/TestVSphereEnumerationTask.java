@@ -103,24 +103,16 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
             op = this.host.waitForResponse(op);
             assertEquals(Operation.STATUS_CODE_NOT_FOUND, op.getStatusCode());
         }
+
+        verifyDatastoreAndStoragePolicy();
     }
 
-    @Test
-    public void testStorageEnumeration() throws Throwable {
-        this.resourcePool = createResourcePool();
-
-        this.auth = createAuth();
-
-        this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost(this.computeHostDescription);
-
-        doRefresh();
-
+    private void verifyDatastoreAndStoragePolicy() throws Throwable {
         if (!isMock()) {
             // Query for storage description
             withTaskResults(queryForDatastore(), result -> {
                 if (result.documentLinks.isEmpty()) {
-                    assertTrue(!result.documentLinks.isEmpty());
+                    assertTrue("Could not enumerate datastores", !result.documentLinks.isEmpty());
                 } else {
                     StorageDescriptionService.StorageDescription sd = Utils
                             .fromJson(result.documents.get(result.documentLinks.get(0)),
@@ -132,7 +124,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
             // Query for storage policy resource group
             withTaskResults(queryForStoragePolicy(), result -> {
                 if (result.documentLinks.isEmpty()) {
-                    assertTrue(!result.documentLinks.isEmpty());
+                    assertTrue("Could not enumerate storage policy", !result.documentLinks.isEmpty());
                 } else {
                     ResourceGroupService.ResourceGroupState rg = Utils
                             .fromJson(result.documents.get(result.documentLinks.get(0)),

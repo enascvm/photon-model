@@ -66,10 +66,12 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpande
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.vim25.ArrayOfDatastoreHostMount;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
+import com.vmware.vim25.DatastoreHostMount;
 import com.vmware.vim25.DistributedVirtualSwitchPortConnection;
 import com.vmware.vim25.DuplicateName;
 import com.vmware.vim25.FileAlreadyExists;
@@ -284,7 +286,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool();
+        ManagedObjectReference resourcePool = getResourcePool(datastore);
 
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
         relocSpec.setDatastore(datastore);
@@ -412,7 +414,8 @@ public class InstanceClient extends BaseHelper {
         }
 
         if (result == null) {
-            if (this.bootDisk != null && this.bootDisk.sourceImageReference != null) {
+            if (this.bootDisk != null && this.bootDisk.sourceImageReference != null
+                    && this.bootDisk.sourceImageReference.getScheme() != null) {
                 if (this.bootDisk.sourceImageReference.getScheme().startsWith("http")) {
                     result = this.bootDisk.sourceImageReference.toString();
                 }
@@ -440,7 +443,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference ds = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool();
+        ManagedObjectReference resourcePool = getResourcePool(ds);
 
         String vmName = "pmt-" + deployer.getRetriever().hash(ovfUri);
 
@@ -1355,7 +1358,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool();
+        ManagedObjectReference resourcePool = getResourcePool(datastore);
         ManagedObjectReference host = getHost();
 
         String datastoreName = this.get.entityProp(datastore, "name");
@@ -1916,10 +1919,28 @@ public class InstanceClient extends BaseHelper {
         return this.get.entityProp(target, VimPath.res_datastore);
     }
 
-    private ManagedObjectReference getResourcePool()
+    private ManagedObjectReference getResourcePool(ManagedObjectReference datastoreForDisk)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         if (this.resourcePool != null) {
             return this.resourcePool;
+        }
+
+        // This would happen only when there is datastore specified for boot disk, in that case
+        // even the resource pool should be picked from the host which mounts this datastore.
+        if (this.datastore == null && datastoreForDisk != null) {
+            ArrayOfDatastoreHostMount dsHosts = this.get.entityProp(datastoreForDisk, VimPath.res_host);
+            if (dsHosts != null && dsHosts.getDatastoreHostMount() != null) {
+                DatastoreHostMount dsHost = dsHosts.getDatastoreHostMount().stream()
+                        .filter(hostMount -> hostMount.getMountInfo() != null && hostMount.getMountInfo()
+                                .isAccessible())
+                        .findFirst().orElse(null);
+                if (dsHost != null) {
+                    ManagedObjectReference parentCompute = this.get.entityProp(dsHost.getKey(),
+                            VimPath.host_parent);
+                    this.resourcePool = this.get.entityProp(parentCompute, VimPath.res_resourcePool);
+                    return this.resourcePool;
+                }
+            }
         }
 
         if (VimNames.TYPE_HOST.equals(this.ctx.computeMoRef.getType())) {
@@ -1927,10 +1948,14 @@ public class InstanceClient extends BaseHelper {
             ManagedObjectReference parentCompute = this.get.entityProp(this.ctx.computeMoRef,
                     VimPath.host_parent);
             this.resourcePool = this.get.entityProp(parentCompute, VimPath.res_resourcePool);
-        } else if (VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(this.ctx.computeMoRef.getType()) ||
-                VimNames.TYPE_COMPUTE_RESOURCE.equals(this.ctx.computeMoRef.getType())) {
+        } else if (
+                VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(this.ctx.computeMoRef.getType())
+                        ||
+                        VimNames.TYPE_COMPUTE_RESOURCE
+                                .equals(this.ctx.computeMoRef.getType())) {
             // place in the root resource pool of a cluster
-            this.resourcePool = this.get.entityProp(this.ctx.computeMoRef, VimPath.res_resourcePool);
+            this.resourcePool = this.get
+                    .entityProp(this.ctx.computeMoRef, VimPath.res_resourcePool);
         } else if (VimNames.TYPE_RESOURCE_POOL.equals(this.ctx.computeMoRef.getType())) {
             // place in the resource pool itself
             this.resourcePool = this.ctx.computeMoRef;
@@ -1965,12 +1990,12 @@ public class InstanceClient extends BaseHelper {
         LibraryClient client = vapi.newLibraryClient();
 
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
+        ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
 
         Map<String, String> mapping = new HashMap<>();
         ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
-                getDataStoreForDisk(this.bootDisk, pbmSpec),
-                pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
-                getResourcePool(), mapping, getDiskProvisioningType(this.bootDisk));
+                datastore, pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
+                getResourcePool(datastore), mapping, getDiskProvisioningType(this.bootDisk));
 
         if (!result.get("succeeded").asBoolean()) {
             throw new Exception("Error deploying from library");
