@@ -35,6 +35,7 @@ public class VSphereAdapters {
             VSphereAdapterStatsService.SELF_LINK,
             OvfImporterService.SELF_LINK,
             DatacenterEnumeratorService.SELF_LINK,
+            VsphereResourceCleanerService.SELF_LINK,
             VSphereEndpointAdapterService.SELF_LINK,
             DvsNetworkService.SELF_LINK,
             VSphereAdapterImageEnumerationService.SELF_LINK,
@@ -57,6 +58,7 @@ public class VSphereAdapters {
         host.startService(new VSphereAdapterStatsService());
         host.startService(new OvfImporterService());
         host.startService(new DatacenterEnumeratorService());
+        host.startService(new VsphereResourceCleanerService());
         host.startService(new VSphereEndpointAdapterService());
         host.startService(new DvsNetworkService());
         host.startService(new VSphereAdapterImageEnumerationService());

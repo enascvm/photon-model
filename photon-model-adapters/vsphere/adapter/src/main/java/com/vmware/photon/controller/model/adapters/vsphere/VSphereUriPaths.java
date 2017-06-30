@@ -40,6 +40,7 @@ public class VSphereUriPaths {
     public static final String STATS_SERVICE = PROVISIONING + "/stats-adapter";
     public static final String ENDPOINT_CONFIG_ADAPTER = PROVISIONING + "/endpoint-config-adapter";
     public static final String DVS_NETWORK_SERVICE = PROVISIONING + "/dvs-network-adapter";
+    public static final String RESOURCE_CLEANER = PROVISIONING + "/resource-cleaner";
 
     /**
      * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.

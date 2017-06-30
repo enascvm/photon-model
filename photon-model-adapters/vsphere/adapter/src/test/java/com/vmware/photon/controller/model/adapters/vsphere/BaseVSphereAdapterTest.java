@@ -392,7 +392,8 @@ public class BaseVSphereAdapterTest {
             return true;
         });
         TestContext ctx2 = this.host.testCreate(1);
-        Operation rebootOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+        Operation rebootOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
                 .setBody(rebootVMRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> {
@@ -440,7 +441,8 @@ public class BaseVSphereAdapterTest {
             return true;
         });
         TestContext ctx2 = this.host.testCreate(1);
-        Operation suspendOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+        Operation suspendOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
                 .setBody(suspendVMRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> {
@@ -458,7 +460,7 @@ public class BaseVSphereAdapterTest {
         this.host.waitFor("Suspend request failed", () -> {
             cstate[0] = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, computeState.documentSelfLink));
-            if ( cstate[0].powerState.equals(ComputeService.PowerState.SUSPEND)) {
+            if (cstate[0].powerState.equals(ComputeService.PowerState.SUSPEND)) {
                 return true;
             } else {
                 return false;
@@ -488,7 +490,8 @@ public class BaseVSphereAdapterTest {
             return true;
         });
         TestContext ctx2 = this.host.testCreate(1);
-        Operation shutdownOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+        Operation shutdownOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
                 .setBody(shutdownGuestRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> {
@@ -536,7 +539,8 @@ public class BaseVSphereAdapterTest {
             return true;
         });
         TestContext ctx2 = this.host.testCreate(1);
-        Operation resetOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+        Operation resetOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
                 .setBody(resetVMRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> {
@@ -563,7 +567,8 @@ public class BaseVSphereAdapterTest {
         assertEquals(ComputeService.PowerState.ON, cState[0].powerState);
     }
 
-    private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink, String taskLink) {
+    private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink,
+            String taskLink) {
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
         resourceOperationRequest.operation = operation;
         resourceOperationRequest.isMockRequest = isMock();
@@ -574,7 +579,7 @@ public class BaseVSphereAdapterTest {
     }
 
     private void createTaskResultListener(VerificationHost host, String taskLink,
-                                          Function<Operation, Boolean> h) {
+            Function<Operation, Boolean> h) {
         StatelessService service = new StatelessService() {
             @Override
             public void handleRequest(Operation update) {
@@ -644,16 +649,27 @@ public class BaseVSphereAdapterTest {
     }
 
     protected void enumerateComputes(ComputeState computeHost) throws Throwable {
+        enumerateComputes(computeHost, null);
+    }
+
+    protected void enumerateComputes(ComputeState computeHost,
+            EnumSet<TaskOption> options) throws Throwable {
         ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
         task.adapterManagementReference = computeHost.adapterManagementReference;
 
-        if (isMock()) {
-            task.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
         task.enumerationAction = EnumerationAction.REFRESH;
         task.parentComputeLink = computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;
         task.endpointLink = "/some/endpoint/link";
+        task.options = options;
+
+        if (isMock()) {
+            if (task.options == null) {
+                task.options = EnumSet.of(TaskOption.IS_MOCK);
+            } else {
+                task.options.add(TaskOption.IS_MOCK);
+            }
+        }
 
         ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
                 task,
@@ -708,7 +724,7 @@ public class BaseVSphereAdapterTest {
         // Create Subnet
         this.subnet = new SubnetState();
         this.subnet.networkLink = networkLink;
-        this.subnet.endpointLink =  "/some/endpoint/link";
+        this.subnet.endpointLink = "/some/endpoint/link";
         this.subnet.lifecycleState = LifecycleState.READY;
         this.subnet.id = this.subnet.name = this.networkId;
         ManagedObjectReference ref = new ManagedObjectReference();
@@ -799,7 +815,6 @@ public class BaseVSphereAdapterTest {
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
-
 
     protected HashMap<String, String> buildCustomProperties() {
         HashMap<String, String> customProperties = new HashMap<>();

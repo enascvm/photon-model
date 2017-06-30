@@ -53,6 +53,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
+import com.vmware.photon.controller.model.adapters.vsphere.VsphereResourceCleanerService.ResourceCleanRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.tagging.TagCache;
@@ -69,7 +70,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -401,7 +401,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
-                parent,vapiConnection);
+                parent, vapiConnection);
 
         try {
             refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
@@ -630,33 +630,29 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         if (!request.preserveMissing) {
             // delete dependent resources without waiting for response
-            for (String diskOrNicLink : progress.getResourceLinks()) {
-                Operation.createDelete(this, diskOrNicLink)
+            for (String resourceLink : progress.getResourceLinks()) {
+                Operation.createDelete(this, resourceLink)
                         .sendWith(this);
             }
             mgr.patchTask(TaskStage.FINISHED);
             return;
         }
 
-        Stream<Operation> gcOps = progress.getResourceLinks().stream()
-                .map(link -> createResourceRemovalOperation(request.preserveMissing, link));
+        List<Operation> deleteOps = new ArrayList<>();
+        for (String resourceLink : progress.getResourceLinks()) {
+            if (resourceLink.startsWith(ComputeService.FACTORY_LINK)) {
+                ResourceCleanRequest patch = new ResourceCleanRequest();
+                patch.resourceLink = resourceLink;
+                deleteOps.add(Operation.createPatch(this, VSphereUriPaths.RESOURCE_CLEANER)
+                        .setBody(patch));
+            } else {
+                deleteOps.add(Operation.createDelete(this, resourceLink));
+            }
+        }
 
-        OperationJoin.create(gcOps)
+        OperationJoin.create(deleteOps)
                 .setCompletion((os, es) -> mgr.patchTask(TaskStage.FINISHED))
                 .sendWith(this);
-    }
-
-    private Operation createResourceRemovalOperation(boolean preserveMissing, String computeLink) {
-        if (preserveMissing && computeLink.startsWith(ComputeService.FACTORY_LINK)) {
-            ComputeState body = new ComputeState();
-            body.lifecycleState = LifecycleState.RETIRED;
-            // set powerState for consistency with other adapters
-            body.powerState = PowerState.OFF;
-            return Operation.createPatch(this, computeLink)
-                    .setBody(body);
-        } else {
-            return Operation.createDelete(this, computeLink);
-        }
     }
 
     private void threadInterrupted(TaskManager mgr, InterruptedException e) {

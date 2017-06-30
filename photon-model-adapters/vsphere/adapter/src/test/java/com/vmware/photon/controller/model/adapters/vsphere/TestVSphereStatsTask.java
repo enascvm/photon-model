@@ -82,7 +82,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
     }
 
     private void doRefresh() throws Throwable {
-        enumerateComputes(this.computeHost);
+        enumerateComputes(this.computeHost, null);
     }
 
     /**

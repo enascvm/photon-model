@@ -19,6 +19,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -33,6 +34,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
@@ -41,6 +44,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -68,7 +72,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
 
-        doRefresh();
+        refreshAndRetire();
 
         if (!isMock()) {
             ComputeState vm = findRandomVm();
@@ -80,9 +84,14 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         captureFactoryState("initial");
 
         String aComputeLink = null;
+        String anUsedHostLink = null;
+        String anUnusedHostLink = null;
+
         if (!isMock()) {
             // clone a random compute and save it under different id
-            ComputeState vm = findRandomVm();
+            ComputeState randVm = findRandomVm();
+
+            ComputeState vm = Utils.clone(randVm);
             vm.documentSelfLink = null;
             vm.id = "fake-vm-" + vm.id;
             vm.documentSelfLink = null;
@@ -91,17 +100,70 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                     ComputeState.class,
                     UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
             aComputeLink = vm.documentSelfLink;
+
+            ComputeState randomHost = findRandomHost();
+
+            {
+                ComputeState host = Utils.clone(randomHost);
+                host.documentSelfLink = null;
+                host.powerState = PowerState.ON;
+                host.id = "fake-host-" + host.id;
+                host.documentSelfLink = null;
+
+                host = TestUtils.doPost(this.host, host,
+                        ComputeState.class,
+                        UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+                anUsedHostLink = host.documentSelfLink;
+
+                ComputeState update = new ComputeState();
+                update.customProperties = new HashMap<>();
+                update.customProperties.put(ComputeProperties.PLACEMENT_LINK, host.documentSelfLink);
+
+                TestUtils.doPatch(this.host, update, ComputeState.class,
+                        UriUtils.buildUri(this.host, randVm.documentSelfLink));
+            }
+
+            {
+                ComputeState host = Utils.clone(randomHost);
+                host.documentSelfLink = null;
+                host.powerState = PowerState.ON;
+                host.id = "fake-host-unused" + host.id;
+                host.documentSelfLink = null;
+                host = TestUtils.doPost(this.host, host,
+                        ComputeState.class,
+                        UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+                anUnusedHostLink = host.documentSelfLink;
+            }
+
         }
         // do a second refresh to test update path
-        doRefresh();
+        refreshAndRetire();
 
         captureFactoryState("updated");
 
         if (aComputeLink != null) {
-            // the second enumeration must have deleted the fake vm
+            // the second enumeration marked the fake vm as retired
             Operation op = Operation.createGet(this.host, aComputeLink);
             op = this.host.waitForResponse(op);
-            assertEquals(Operation.STATUS_CODE_NOT_FOUND, op.getStatusCode());
+            ComputeState compute = op.getBody(ComputeState.class);
+            assertEquals(compute.lifecycleState, LifecycleState.RETIRED);
+            assertEquals(PowerState.OFF, compute.powerState);
+        }
+
+        if (anUsedHostLink != null) {
+            // the second enumeration marked the fake vm as retired
+            Operation op = Operation.createGet(this.host, anUsedHostLink);
+            op = this.host.waitForResponse(op);
+            ComputeState compute = op.getBody(ComputeState.class);
+            assertEquals(compute.lifecycleState, LifecycleState.RETIRED);
+            assertEquals(PowerState.OFF, compute.powerState);
+        }
+
+        if (anUnusedHostLink != null) {
+            // the unsused host is wiped out unconditionally
+            Operation op = Operation.createGet(this.host, anUnusedHostLink);
+            op = this.host.waitForResponse(op);
+            assertEquals(op.getStatusCode(), 404);
         }
 
         verifyDatastoreAndStoragePolicy();
@@ -154,7 +216,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private ComputeState findRandomVm()
             throws InterruptedException, TimeoutException, ExecutionException {
         Query q = Query.Builder.create()
-                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE, VimNames.TYPE_VM)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE,
+                        VimNames.TYPE_VM)
                 .addKindFieldClause(ComputeState.class)
                 .build();
 
@@ -173,8 +236,31 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         return Utils.fromJson(firstResult, ComputeState.class);
     }
 
-    private void doRefresh() throws Throwable {
-        enumerateComputes(this.computeHost);
+    private ComputeState findRandomHost()
+            throws InterruptedException, TimeoutException, ExecutionException {
+        Query q = Query.Builder.create()
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE,
+                        VimNames.TYPE_HOST)
+                .addKindFieldClause(ComputeState.class)
+                .build();
+
+        QueryTask qt = QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
+
+        Operation op = Operation
+                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                .setBody(qt);
+
+        QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
+
+        Object firstResult = result.results.documents.values().iterator().next();
+        return Utils.fromJson(firstResult, ComputeState.class);
+    }
+
+    private void refreshAndRetire() throws Throwable {
+        enumerateComputes(this.computeHost, EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES));
     }
 
     private QueryTask queryForDatastore() {
@@ -183,7 +269,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                         getAdapterManagementReference())
                 .addFieldClause(StorageDescriptionService.StorageDescription
                         .FIELD_NAME_REGION_ID, this.datacenterId)
-                .addCaseInsensitiveFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_NAME, getDataStoreName(),
+                .addCaseInsensitiveFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_NAME,
+                        getDataStoreName(),
                         QueryTask.QueryTerm.MatchType.TERM, Query.Occurance.MUST_OCCUR);
         QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
                 this.computeHost.endpointLink);
