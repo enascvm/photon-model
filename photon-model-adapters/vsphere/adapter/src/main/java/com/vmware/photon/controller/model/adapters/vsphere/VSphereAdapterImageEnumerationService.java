@@ -132,8 +132,8 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             return;
         }
 
+        VapiConnection vapi = VapiConnection.createFromVimConnection(connection);
         try {
-            VapiConnection vapi = VapiConnection.createFromVimConnection(connection);
             vapi.login();
             LibraryClient libraryClient = vapi.newLibraryClient();
             processAllLibraries(oldImages, request.resourceLink(), request.taskLink(), libraryClient,
@@ -143,6 +143,8 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         } catch (Throwable t) {
             mgr.patchTaskToFailure("Error processing library items", t);
             return;
+        } finally {
+            vapi.close();
         }
 
         // garbage collection runs async

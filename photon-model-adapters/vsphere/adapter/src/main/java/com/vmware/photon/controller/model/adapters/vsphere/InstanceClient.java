@@ -1987,38 +1987,42 @@ public class InstanceClient extends BaseHelper {
     public ComputeState createInstanceFromLibraryItem(ImageState image) throws Exception {
         VapiConnection vapi = VapiConnection.createFromVimConnection(this.connection);
         vapi.login();
-        LibraryClient client = vapi.newLibraryClient();
+        try {
+            LibraryClient client = vapi.newLibraryClient();
 
-        List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
-        ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
+            List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
+            ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
 
-        Map<String, String> mapping = new HashMap<>();
-        ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
-                datastore, pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
-                getResourcePool(datastore), mapping, getDiskProvisioningType(this.bootDisk));
+            Map<String, String> mapping = new HashMap<>();
+            ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
+                    datastore, pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
+                    getResourcePool(datastore), mapping, getDiskProvisioningType(this.bootDisk));
 
-        if (!result.get("succeeded").asBoolean()) {
-            throw new Exception("Error deploying from library");
+            if (!result.get("succeeded").asBoolean()) {
+                throw new Exception("Error deploying from library");
+            }
+
+            ManagedObjectReference ref = new ManagedObjectReference();
+            ref.setType(VimNames.TYPE_VM);
+            ref.setValue(VapiClient.getString(result,
+                    "resource_id",
+                    VapiClient.K_OPTIONAL,
+                    VapiClient.K_STRUCTURE,
+                    "com.vmware.vcenter.ovf.library_item.deployable_identity",
+                    "id"));
+
+            this.vm = ref;
+
+            customizeAfterClone();
+
+            ComputeState state = new ComputeState();
+            state.resourcePoolLink = VimUtils
+                    .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
+
+            return state;
+        } finally {
+            vapi.close();
         }
-
-        ManagedObjectReference ref = new ManagedObjectReference();
-        ref.setType(VimNames.TYPE_VM);
-        ref.setValue(VapiClient.getString(result,
-                "resource_id",
-                VapiClient.K_OPTIONAL,
-                VapiClient.K_STRUCTURE,
-                "com.vmware.vcenter.ovf.library_item.deployable_identity",
-                "id"));
-
-        this.vm = ref;
-
-        customizeAfterClone();
-
-        ComputeState state = new ComputeState();
-        state.resourcePoolLink = VimUtils
-                .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
-
-        return state;
     }
 
     private Lock getLock(String key) {
