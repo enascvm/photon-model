@@ -287,6 +287,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.endpointLink = this.context.request.original.endpointLink;
             computeState.descriptionLink = cd.documentSelfLink;
             computeState.type = ComputeType.ZONE;
+            computeState.regionId = cd.regionId;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
 
             computeState.powerState = PowerState.ON;
@@ -309,6 +310,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.id = z.getZoneName();
             cd.zoneId = z.getZoneName();
             cd.name = z.getZoneName();
+            cd.regionId = z.getRegionName();
             cd.endpointLink = this.context.request.original.endpointLink;
             // Book keeping information about the creation of the compute description in the system.
             if (cd.customProperties == null) {

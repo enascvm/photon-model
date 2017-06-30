@@ -325,6 +325,8 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
                     .fromJson(resourceMap.getValue(), ComputeState.class);
 
             if (state.type == ComputeType.VM_HOST) {
+                // regionId should be null
+                assertNull(state.regionId);
                 resourceMetric = getResourceMetrics(resourceMap.getKey(),
                         PhotonModelConstants.ESTIMATED_CHARGES);
 
@@ -341,6 +343,8 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
                 vmHosts++;
                 resourcesWithEstChargesMetricCount++;
             } else if (state.type == ComputeType.VM_GUEST) {
+                // regionId should not be null
+                assertNotNull(state.regionId);
                 long micros = this.currentTimeMicros - state.creationTimeMicros;
                 resourceMetric = getResourceMetrics(resourceMap.getKey(),
                         PhotonModelConstants.ESTIMATED_CHARGES);
@@ -362,6 +366,8 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
                 vmGuests++;
                 resourcesWithNoEstChargesMetricCount++;
             } else if (state.type == ComputeType.ZONE) {
+                // regionId should not be null
+                assertNotNull(state.regionId);
                 resourceMetric = getResourceMetrics(resourceMap.getKey(),
                         PhotonModelConstants.ESTIMATED_CHARGES);
                 // EstimatedCharges metric will not be available for ZONE
