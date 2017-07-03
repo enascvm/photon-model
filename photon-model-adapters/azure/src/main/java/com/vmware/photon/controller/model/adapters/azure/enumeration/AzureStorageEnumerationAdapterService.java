@@ -158,6 +158,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         // stores mapping of StorageAccount id and its StorageAccount
         Map<String, StorageAccount> storageAccountMap = new ConcurrentHashMap<>();
 
+        // Azure API call statistics
+        int apiStorageAccountsCount;
+        int apiListStorageAccounts;
+        int apiListStorageContainers;
+        int apiListBlobs;
+
         List<String> blobIds = new ArrayList<>();
         Map<String, DiskState> diskStates = new ConcurrentHashMap<>();
         // Azure clients
@@ -286,6 +292,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         case FINISHED:
             logInfo(() -> String.format("Azure storage enumeration finished for %s",
                     getEnumKey(context)));
+            logStatsInformation(context);
             cleanUpHttpClient(context.restClient.httpClient());
             context.operation.complete();
             break;
@@ -428,6 +435,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             op.complete();
 
             List<StorageAccount> storageAccounts = results.value;
+            context.apiStorageAccountsCount += results.value.size();
 
             // If there are no storage accounts in Azure move to storage account cleanup.
             if (storageAccounts == null || storageAccounts.size() == 0) {
@@ -455,6 +463,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             handleSubStage(context);
         });
         sendRequest(operation);
+        context.apiListStorageAccounts++;
     }
 
     /**
@@ -829,6 +838,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                         getQueryResultLimit(), nextContainerResults, null,
                                         null);
 
+                        context.apiListStorageContainers++;
+
                         nextContainerResults = contSegment.getContinuationToken();
                         for (CloudBlobContainer container : contSegment.getResults()) {
                             String uri = container.getUri().toString();
@@ -842,6 +853,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                                 EnumSet.noneOf(BlobListingDetails.class),
                                                 getQueryResultLimit(), nextBlobResults, null,
                                                 null);
+                                context.apiListBlobs++;
+
                                 nextBlobResults = blobsSegment.getContinuationToken();
                                 for (ListBlobItem blobItem : blobsSegment.getResults()) {
                                     String blobId = blobItem.getUri().toString();
@@ -1595,4 +1608,21 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         return uri.substring(0, p);
     }
 
+    // Log Azure API usage statistics.
+    private void logStatsInformation(StorageEnumContext context) {
+        logInfo(() -> String.format(
+                "Azure Storage Enumeration API usage:\n"
+                        + "Storage accounts count: %s\n"
+                        + "List Storage Accounts: %s calls\n"
+                        + "List Containers: %s calls\n"
+                        + "List Blobs: %s calls\n"
+                        + "Total calls performed: %s calls.",
+                context.apiStorageAccountsCount,
+                context.apiListStorageAccounts,
+                context.apiListStorageContainers,
+                context.apiListBlobs,
+                context.apiListStorageAccounts + context.apiListStorageContainers +
+                        context.apiListBlobs
+        ));
+    }
 }
