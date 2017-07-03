@@ -191,8 +191,6 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
 
             holder.localState.groupLinks = Collections.singleton(rgDocumentSelfLink);
             holder.localState.name = networkSecurityGroup.name;
-            // NOTE: this should be removed (and come from parent EEP)
-            // once Azure enum is region specific
             holder.localState.regionId = networkSecurityGroup.location;
 
             // Add tags

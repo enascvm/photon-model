@@ -45,7 +45,7 @@ public class AWSInstanceTypeService extends StatelessService {
 
     private static final String DEFAULT_AWS_INSTANCE_TYPES_FILE = "instanceTypes.json";
 
-    public static final String AWS_INSTANCE_TYPE_DATA_FILE_PROPERTY =
+    private static final String AWS_INSTANCE_TYPE_DATA_FILE_PROPERTY =
             "photon-model.adapter.aws.instance.types.file";
 
     private Map<String, InstanceTypeList.InstanceType> instanceTypeInfo = new HashMap<>();
@@ -89,22 +89,11 @@ public class AWSInstanceTypeService extends StatelessService {
     }
 
     private void readAdditionalInstanceTypeInfo() {
-        Operation fileHandler = Operation.createGet(null).setCompletion((op, ex) -> {
-                    if (ex != null) {
-                        logWarning("Unable to load additional AWS instance type data. "
-                                + Utils.toString(ex));
-                        return;
-                    }
-
-                    this.instanceTypeInfo = op.getBody(AWSInstanceTypesInfo.class).instanceTypes;
-                }
-        );
-
         try {
             String filePath = getInstanceTypeDataFile();
             if (filePath == null) {
                 // No external AWS instance type data file is specified. Use the embedded one.
-                InputStream stream =  AWSInstanceTypeService.class.getResourceAsStream(
+                InputStream stream = AWSInstanceTypeService.class.getResourceAsStream(
                         DEFAULT_AWS_INSTANCE_TYPES_FILE);
                 if (stream != null) {
                     String fileContent = IOUtils.toString(stream);
@@ -115,6 +104,18 @@ public class AWSInstanceTypeService extends StatelessService {
                 }
             } else {
                 File jsonPayloadFile = new File(filePath);
+
+                Operation fileHandler = Operation.createGet(null).setCompletion((op, ex) -> {
+                            if (ex != null) {
+                                logWarning("Unable to load additional AWS instance type data. "
+                                        + Utils.toString(ex));
+                                return;
+                            }
+
+                            this.instanceTypeInfo = op.getBody(AWSInstanceTypesInfo.class).instanceTypes;
+                        }
+                );
+
                 FileUtils.readFileAndComplete(fileHandler, jsonPayloadFile);
             }
         } catch (Exception e) {
