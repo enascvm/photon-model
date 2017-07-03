@@ -18,6 +18,7 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -237,9 +238,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             String parentLink) {
         Query.Builder builder = Query.Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, req.endpointLink)
-                .addFieldClause(ServiceDocument.FIELD_NAME_KIND, Utils.buildKind(ComputeDescription.class),
-                        Occurance.MUST_NOT_OCCUR)
-                .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK, parentLink, Occurance.MUST_NOT_OCCUR);
+                .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK, parentLink, Occurance.MUST_NOT_OCCUR)
+                .addInClause(ServiceDocument.FIELD_NAME_KIND, Arrays.asList(
+                        Utils.buildKind(ComputeState.class),
+                        Utils.buildKind(NetworkState.class),
+                        Utils.buildKind(StorageDescription.class),
+                        Utils.buildKind(SubnetState.class)));
 
         QueryTask task = QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
