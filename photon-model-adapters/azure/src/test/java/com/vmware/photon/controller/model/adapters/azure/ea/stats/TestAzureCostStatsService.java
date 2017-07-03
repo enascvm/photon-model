@@ -20,6 +20,7 @@ import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buil
 import java.util.EnumSet;
 import java.util.HashMap;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -78,6 +79,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
     }
 
     @Test
+    @Ignore("VSYM-7696")
     public void testAzureCostStatsServiceEndToEnd() throws Throwable {
         if (this.isMock) {
             return;
