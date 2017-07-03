@@ -49,8 +49,10 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     /**
      * Constructs {@link AzureDeferredResultServiceCallback}.
      *
-     * @param service The service that is talking with Azure.
-     * @param message Informational message that describes the Service to Azure interaction.
+     * @param service
+     *            The service that is talking with Azure.
+     * @param message
+     *            Informational message that describes the Service to Azure interaction.
      */
     public AzureDeferredResultServiceCallback(StatelessService service, String message) {
         super(service);
@@ -105,7 +107,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
         } catch (Throwable t) {
             if (this.service != null) {
                 this.service.logWarning(() -> String
-                        .format("%s: FAILED. Details: %s", this.message, Utils.toString(t)));
+                        .format("%s: FAILED with %s", this.message, Utils.toString(t)));
             }
             toDeferredResult().fail(t);
             return;
@@ -122,9 +124,8 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
             toDeferredResult().complete(null);
         } else {
             if (this.service != null) {
-                this.service.logWarning(() -> String
-                        .format("%s: FAILED. Details: %s", this.message,
-                                Utils.toString(consumedError)));
+                this.service.logWarning(() -> String.format("%s: FAILED with %s",
+                        this.message, Utils.toString(consumedError)));
             }
             toDeferredResult().fail(consumedError);
         }
@@ -134,7 +135,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     protected final void onSuccess(RES result) {
         DeferredResult<RES> consumeSuccess;
         if (this.service != null) {
-            this.service.logFine(() -> String.format("%s : SUCCESS", this.message));
+            this.service.logFine(() -> String.format("%s: SUCCESS", this.message));
         }
         try {
             // First delegate to descendants to process result

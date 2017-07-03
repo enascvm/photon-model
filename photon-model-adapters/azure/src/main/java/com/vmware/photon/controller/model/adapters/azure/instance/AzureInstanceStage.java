@@ -112,7 +112,7 @@ public enum AzureInstanceStage {
     /**
      * Stage to get public IP address.
      */
-    UPDATE_NETWORK_DETAILS,
+    UPDATE_COMPUTE_STATE_DETAILS,
 
     /**
      * Stage to get storage account keys.

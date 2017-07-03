@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
@@ -97,11 +98,17 @@ public class AzureInstanceContext extends
     public AuthCredentialsServiceState childAuth;
 
     public StorageDescription storageDescription;
-    public DiskService.DiskStateExpanded bootDisk;
-    public List<DiskService.DiskStateExpanded> childDisks;
+    public DiskService.DiskStateExpanded bootDiskState;
+    public List<DiskService.DiskStateExpanded> dataDiskStates;
 
     public String vmName;
     public String vmId;
+
+    /**
+     * Holds a ref to provisioned Azure VM. Used by post-provisioning stages to update ComputeState
+     * and related states (such as Disk, NICs, etc).
+     */
+    VirtualMachineInner provisionedVm;
 
     // Azure specific context {{
     //

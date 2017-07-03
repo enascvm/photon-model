@@ -35,7 +35,6 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
-
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
@@ -369,14 +368,14 @@ public class AzureInstanceService extends StatelessService {
                 break;
             case CREATE:
                 // Finally provision the VM
-                createVM(ctx, AzureInstanceStage.UPDATE_NETWORK_DETAILS);
+                createVM(ctx, AzureInstanceStage.UPDATE_COMPUTE_STATE_DETAILS);
                 break;
             case ENABLE_MONITORING:
                 // TODO VSYM-620: Enable monitoring on Azure VMs
                 enableMonitoring(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
                 break;
-            case UPDATE_NETWORK_DETAILS:
-                updateNetworkDetails(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
+            case UPDATE_COMPUTE_STATE_DETAILS:
+                updateComputeStateDetails(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
                 break;
             case GET_STORAGE_KEYS:
                 getStorageKeys(ctx, AzureInstanceStage.FINISHED);
@@ -690,13 +689,14 @@ public class AzureInstanceService extends StatelessService {
         }
 
         // null check in-case storage description is not set
-        if (ctx.bootDisk.storageDescription != null) {
-            ctx.storageAccountName = ctx.bootDisk.storageDescription.name;
+        if (ctx.bootDiskState.storageDescription != null) {
+            ctx.storageAccountName = ctx.bootDiskState.storageDescription.name;
         } else {
-            ctx.storageAccountName = ctx.bootDisk.customProperties.get(AZURE_STORAGE_ACCOUNT_NAME);
+            ctx.storageAccountName = ctx.bootDiskState.customProperties
+                    .get(AZURE_STORAGE_ACCOUNT_NAME);
         }
 
-        ctx.storageAccountRGName = ctx.bootDisk.customProperties
+        ctx.storageAccountRGName = ctx.bootDiskState.customProperties
                 .getOrDefault(AZURE_STORAGE_ACCOUNT_RG_NAME, AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME);
 
         if (ctx.storageAccountName == null) {
@@ -1093,8 +1093,8 @@ public class AzureInstanceService extends StatelessService {
         sendWithDeferredResult(
                 Operation.createPatch(ctx.computeRequest.resourceReference)
                         .setBody(cs))
-                .thenApply(op -> ctx)
-                .whenComplete(thenAllocation(ctx, nextStage));
+                                .thenApply(op -> ctx)
+                                .whenComplete(thenAllocation(ctx, nextStage));
     }
 
     /**
@@ -1133,7 +1133,7 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        DiskState bootDisk = ctx.bootDisk;
+        DiskState bootDisk = ctx.bootDiskState;
         if (bootDisk == null) {
             handleError(ctx, new IllegalStateException("Azure bootDisk not specified"));
             return;
@@ -1150,8 +1150,7 @@ public class AzureInstanceService extends StatelessService {
 
         // Set OS profile.
         OSProfile osProfile = new OSProfile();
-        String vmName = ctx.vmName;
-        osProfile.withComputerName(vmName);
+        osProfile.withComputerName(ctx.vmName);
         if (ctx.childAuth != null) {
             osProfile.withAdminUsername(ctx.childAuth.userEmail);
             osProfile.withAdminPassword(EncryptionUtils.decrypt(ctx.childAuth.privateKey));
@@ -1177,37 +1176,7 @@ public class AzureInstanceService extends StatelessService {
 
         // Set storage profile.
         // Create destination OS VHD
-        OSDisk osDisk = new OSDisk();
-        osDisk.withName(vmName);
-        osDisk.withVhd(new VirtualHardDisk().withUri(getVHDUriForOSDisk(vmName,
-                ctx.storageAccountName)));
-        // We don't support Attach option which allows to use a specialized disk to create the
-        // virtual machine.
-        osDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
-
-        if (bootDisk.customProperties != null &&
-                bootDisk.customProperties.get(AZURE_OSDISK_CACHING) != null) {
-
-            osDisk.withCaching(CachingTypes.fromString(
-                    bootDisk.customProperties.get(AZURE_OSDISK_CACHING)));
-        } else {
-            // Recommended default caching for OS disk
-            osDisk.withCaching(CachingTypes.NONE);
-        }
-
-        if (ctx.bootDisk.capacityMBytes > 31744
-                && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) {
-            // In case custom boot disk size is set then use that
-            // value. If value more than maximum allowed then proceed with default size.
-
-            // Converting MBs to GBs and casting as int
-            int diskSizeInGB = (int) ctx.bootDisk.capacityMBytes / 1024;
-            osDisk.withDiskSizeGB(diskSizeInGB);
-        } else {
-            logInfo(() -> String.format(
-                    "Proceeding with Default OS Disk Size defined by VHD %s",
-                    getVHDUriForOSDisk(vmName, ctx.storageAccountName)));
-        }
+        final OSDisk osDisk = newAzureOsDisk(ctx);
 
         final StorageProfile storageProfile = new StorageProfile();
 
@@ -1222,20 +1191,19 @@ public class AzureInstanceService extends StatelessService {
 
             final ImageState privateImage = ctx.imageSource.asImageState();
 
+            // In case of PRIVATE images do EXTRA OSDisk configuration
+
             // Image OS type
             osDisk.withOsType(OperatingSystemTypes.fromString(privateImage.osFamily));
 
-            final DiskConfiguration osDiskConfig = ctx.imageOsDisk();
-
             // Ref to OS disk (VHD) of the image
             osDisk.withImage(new VirtualHardDisk().withUri(
-                    osDiskConfig.properties.get(AZURE_OSDISK_BLOB_URI)));
+                    ctx.imageOsDisk().properties.get(AZURE_OSDISK_BLOB_URI)));
         }
 
-        List<DataDisk> dataDisks = getDataDisks(ctx);
-
         storageProfile.withOsDisk(osDisk);
-        storageProfile.withDataDisks(dataDisks);
+        storageProfile.withDataDisks(newAzureDataDisks(ctx));
+
         request.withStorageProfile(storageProfile);
 
         // Set network profile {{
@@ -1252,21 +1220,24 @@ public class AzureInstanceService extends StatelessService {
         }
         request.withNetworkProfile(networkProfile);
 
-        logFine(() -> String.format("Creating virtual machine with name [%s]", vmName));
+        logFine(() -> String.format("Creating virtual machine with name [%s]", ctx.vmName));
 
         getComputeManagementClientImpl(ctx).virtualMachines().createOrUpdateAsync(
-                ctx.resourceGroup.name(), vmName, request,
+                ctx.resourceGroup.name(), ctx.vmName, request,
                 new AzureAsyncCallback<VirtualMachineInner>() {
                     @Override
                     public void onError(Throwable e) {
                         handleCloudError(
-                                String.format("Provisioning VM %s: FAILED. Details:", vmName), ctx,
+                                String.format("Provisioning VM %s: FAILED. Details:", ctx.vmName),
+                                ctx,
                                 COMPUTE_NAMESPACE, e);
                     }
 
                     @Override
                     public void onSuccess(VirtualMachineInner result) {
                         logFine(() -> String.format("Successfully created vm [%s]", result.name()));
+
+                        ctx.provisionedVm = result;
 
                         ComputeState cs = new ComputeState();
                         // Azure for some case changes the case of the vm id.
@@ -1282,8 +1253,7 @@ public class AzureInstanceService extends StatelessService {
                         }
                         cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.name());
 
-                        Operation.CompletionHandler completionHandler = (ox,
-                                exc) -> {
+                        Operation.CompletionHandler completionHandler = (ox, exc) -> {
                             if (exc != null) {
                                 handleError(ctx, exc);
                                 return;
@@ -1293,52 +1263,99 @@ public class AzureInstanceService extends StatelessService {
 
                         sendRequest(
                                 Operation.createPatch(ctx.computeRequest.resourceReference)
-                                        .setBody(cs).setCompletion(completionHandler)
-                                        .setReferer(getHost().getUri()));
+                                        .setBody(cs)
+                                        .setCompletion(completionHandler));
                     }
                 });
     }
 
     /**
-     * returns additional data disks for Azure VM
-     * @param ctx
-     * @return
+     * Converts Photon model boot DiskState to underlying Azure OSDisk model.
      */
-    private List<DataDisk> getDataDisks(AzureInstanceContext ctx) {
-        int i = 0;
-        List<DataDisk> dataDisks = new ArrayList<>();
-        for (DiskState diskState : ctx.childDisks) {
-            DataDisk dataDisk =   new DataDisk();
-            dataDisk.withName(diskState.name);
-            dataDisk.withDiskSizeGB((int) diskState.capacityMBytes / 1024);
-            dataDisk.withCaching(
-                    CachingTypes.fromString(diskState.customProperties.getOrDefault(
-                            AZURE_DATA_DISK_CACHING, CachingTypes.READ_WRITE.toString())));
-            dataDisk.withCreateOption(DiskCreateOptionTypes.EMPTY);
-            dataDisk.withLun(i);
-            VirtualHardDisk vhdData = new VirtualHardDisk();
-            vhdData.withUri(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, i));
-            dataDisk.withVhd(vhdData);
-            dataDisks.add(dataDisk) ;
-            i++;
+    private OSDisk newAzureOsDisk(AzureInstanceContext ctx) {
+
+        final OSDisk azureOsDisk = new OSDisk();
+
+        azureOsDisk.withName(ctx.bootDiskState.name);
+        azureOsDisk.withVhd(getVHDUriForOSDisk(ctx.vmName, ctx.storageAccountName));
+
+        // We don't support Attach option which allows to use a specialized disk to create the
+        // virtual machine.
+        azureOsDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
+
+        if (ctx.bootDiskState.customProperties != null &&
+                ctx.bootDiskState.customProperties.get(AZURE_OSDISK_CACHING) != null) {
+
+            azureOsDisk.withCaching(CachingTypes.fromString(
+                    ctx.bootDiskState.customProperties.get(AZURE_OSDISK_CACHING)));
+        } else {
+            // Recommended default caching for OS disk
+            azureOsDisk.withCaching(CachingTypes.NONE);
         }
-        return dataDisks;
+
+        if (ctx.bootDiskState.capacityMBytes > 31744
+                && ctx.bootDiskState.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) {
+            // In case custom boot disk size is set then use that
+            // value. If value more than maximum allowed then proceed with default size.
+
+            // Converting MBs to GBs and casting as int
+            int diskSizeInGB = (int) ctx.bootDiskState.capacityMBytes / 1024;
+            azureOsDisk.withDiskSizeGB(diskSizeInGB);
+        } else {
+            logInfo(() -> String.format(
+                    "Proceeding with Default OS Disk Size defined by VHD %s",
+                    azureOsDisk.vhd().uri()));
+        }
+
+        return azureOsDisk;
     }
 
     /**
-     * Update Network related local state details with the actual data from Azure.
-     * This includes:
+     * Converts Photon model data DiskState to underlying Azure DataDisk model.
+     */
+    private List<DataDisk> newAzureDataDisks(AzureInstanceContext ctx) {
+
+        int lunIndex = 0;
+
+        final List<DataDisk> azureDataDisks = new ArrayList<>();
+
+        for (DiskState diskState : ctx.dataDiskStates) {
+
+            final DataDisk dataDisk = new DataDisk();
+
+            dataDisk.withName(diskState.name);
+            dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
+            dataDisk.withCreateOption(DiskCreateOptionTypes.EMPTY);
+            dataDisk.withDiskSizeGB((int) diskState.capacityMBytes / 1024);
+            dataDisk.withCaching(CachingTypes.fromString(
+                    diskState.customProperties.getOrDefault(
+                            AZURE_DATA_DISK_CACHING,
+                            CachingTypes.READ_WRITE.toString())));
+            dataDisk.withLun(lunIndex);
+
+            azureDataDisks.add(dataDisk);
+
+            lunIndex++;
+        }
+
+        return azureDataDisks;
+    }
+
+    /**
+     * Update Compute related local state details with the actual data from Azure. This includes:
      * <ul>
      * <li>setting the public address to the ComputeState</li>
      * <li>setting private IP addresses to NetworkInterfaceState objects</li>
+     * <li>setting VHD URI to DiskState objects</li>
      * </ul>
      */
-    private void updateNetworkDetails(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+    private void updateComputeStateDetails(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
 
         DeferredResult.completed(ctx)
                 .thenCompose(this::getPublicIPAddress)
                 .thenCompose(this::updateComputeState)
                 .thenCompose(this::updateNicStates)
+                .thenCompose(this::updateDiskStates)
                 .whenComplete(thenAllocation(ctx, nextStage));
     }
 
@@ -1353,16 +1370,16 @@ public class AzureInstanceService extends StatelessService {
         String msg = "Get public IP address for resource group [" + ctx.resourceGroup.name()
                 + "] and name [" + ctx.getPrimaryNic().publicIP.name() + "].";
 
-        AzureDeferredResultServiceCallback<PublicIPAddressInner> callback = new
-                AzureDeferredResultServiceCallback<PublicIPAddressInner>(ctx.service, msg) {
-                    @Override
-                    protected DeferredResult<PublicIPAddressInner> consumeSuccess(
-                            PublicIPAddressInner result) {
+        AzureDeferredResultServiceCallback<PublicIPAddressInner> callback = new AzureDeferredResultServiceCallback<PublicIPAddressInner>(
+                ctx.service, msg) {
+            @Override
+            protected DeferredResult<PublicIPAddressInner> consumeSuccess(
+                    PublicIPAddressInner result) {
 
-                        ctx.getPrimaryNic().publicIP = result;
-                        return DeferredResult.completed(result);
-                    }
-                };
+                ctx.getPrimaryNic().publicIP = result;
+                return DeferredResult.completed(result);
+            }
+        };
 
         client.publicIPAddresses().getByResourceGroupAsync(
                 ctx.resourceGroup.name(),
@@ -1373,6 +1390,9 @@ public class AzureInstanceService extends StatelessService {
         return callback.toDeferredResult().thenApply(ignored -> ctx);
     }
 
+    /**
+     * Update {@code computeState.address} with Public IP, if presented.
+     */
     private DeferredResult<AzureInstanceContext> updateComputeState(AzureInstanceContext ctx) {
         if (ctx.getPrimaryNic().publicIP == null) {
             // Do nothing.
@@ -1383,20 +1403,22 @@ public class AzureInstanceService extends StatelessService {
 
         computeState.address = ctx.getPrimaryNic().publicIP.ipAddress();
 
-        Operation updateCS = Operation.createPatch(ctx.computeRequest
-                .resourceReference)
+        Operation updateCS = Operation.createPatch(ctx.computeRequest.resourceReference)
                 .setBody(computeState);
 
         return ctx.service
                 .sendWithDeferredResult(updateCS)
                 .thenApply(ignore -> {
-                    logFine(() -> String.format("Patching compute state with VM"
-                                    + " Public IP address [%s]: SUCCESS",
-                            computeState.address));
+                    logFine(() -> String.format(
+                            "Updating Compute state [%s] with Public IP [%s]: SUCCESS",
+                            ctx.vmName, computeState.address));
                     return ctx;
                 });
     }
 
+    /**
+     * Update {@code computeState.nicState[i].address} with Azure NICs' private IP.
+     */
     private DeferredResult<AzureInstanceContext> updateNicStates(AzureInstanceContext ctx) {
         if (ctx.nics == null || ctx.nics.isEmpty()) {
             // Do nothing.
@@ -1410,27 +1432,105 @@ public class AzureInstanceService extends StatelessService {
                 continue;
             }
 
-            NetworkInterfaceState nicState = new NetworkInterfaceState();
-            nicState.id = nicCtx.nic.id();
+            final NetworkInterfaceState nicStateToUpdate = new NetworkInterfaceState();
+            nicStateToUpdate.id = nicCtx.nic.id();
+            nicStateToUpdate.documentSelfLink = nicCtx.nicStateWithDesc.documentSelfLink;
 
             if (nicCtx.nic.ipConfigurations() != null && !nicCtx.nic.ipConfigurations().isEmpty()) {
-                nicState.address = nicCtx.nic.ipConfigurations().get(0).privateIPAddress();
+                nicStateToUpdate.address = nicCtx.nic.ipConfigurations().get(0).privateIPAddress();
             }
 
-            URI nicUri = UriUtils.buildUri(getHost(), nicCtx.nicStateWithDesc.documentSelfLink);
-            Operation updateNic = Operation.createPatch(nicUri).setBody(nicState);
+            Operation updateNicOp = Operation
+                    .createPatch(ctx.service, nicStateToUpdate.documentSelfLink)
+                    .setBody(nicStateToUpdate);
 
-            DeferredResult<Void> updateDR = ctx.service.sendWithDeferredResult(updateNic)
-                    .thenAccept(ignored ->
-                            logFine(() -> String.format(
-                                    "Patching NIC state with name [%s] : SUCCESS",
-                                    nicCtx.nic.name())));
+            DeferredResult<Void> updateNicDR = ctx.service.sendWithDeferredResult(updateNicOp)
+                    .thenAccept(ignored -> logFine(() -> String.format(
+                            "Updating NIC state [%s] with Private IP [%s]: SUCCESS",
+                            nicCtx.nic.name(), nicStateToUpdate.address)));
 
-            updateNICsDR.add(updateDR);
+            updateNICsDR.add(updateNicDR);
         }
 
-        return DeferredResult.allOf(updateNICsDR)
-                .thenApply(ignored -> ctx);
+        return DeferredResult.allOf(updateNICsDR).thenApply(ignored -> ctx);
+    }
+
+    /**
+     * Update {@code computeState.diskState[i].id} with Azure Disks' VHD URI.
+     */
+    private DeferredResult<AzureInstanceContext> updateDiskStates(AzureInstanceContext ctx) {
+
+        if (ctx.provisionedVm == null) {
+            // Do nothing.
+            return DeferredResult.completed(ctx);
+        }
+
+        List<DeferredResult<Operation>> updateDiskStateDRs = new ArrayList<>();
+
+        // Update boot DiskState with Azure osDisk VHD URI
+        {
+            final OSDisk azureOsDisk = ctx.provisionedVm.storageProfile().osDisk();
+
+            final DiskState diskStateToUpdate = new DiskState();
+            diskStateToUpdate.documentSelfLink = ctx.bootDiskState.documentSelfLink;
+            // The actual value being updated
+            diskStateToUpdate.id = azureOsDisk.vhd().uri();
+
+            Operation updateDiskState = Operation
+                    .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
+                    .setBody(diskStateToUpdate);
+
+            DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)
+                    .whenComplete((op, exc) -> {
+                        if (exc != null) {
+                            logSevere(() -> String.format(
+                                    "Updating boot DiskState [%s] with VHD URI [%s]: FAILED with %s",
+                                    ctx.bootDiskState.name, diskStateToUpdate.id,
+                                    Utils.toString(exc)));
+                        } else {
+                            logFine(() -> String.format(
+                                    "Updating boot DiskState [%s] with VHD URI [%s]: SUCCESS",
+                                    ctx.bootDiskState.name, diskStateToUpdate.id));
+                        }
+                    });
+
+            updateDiskStateDRs.add(updateDR);
+        }
+
+        for (DataDisk azureDataDisk : ctx.provisionedVm.storageProfile().dataDisks()) {
+
+            // Find corresponding DiskState by name
+            DiskState dataDiskState = ctx.dataDiskStates.stream()
+                    .filter(dS -> azureDataDisk.name().equals(dS.name))
+                    .findFirst()
+                    .get();
+
+            final DiskState diskStateToUpdate = new DiskState();
+            diskStateToUpdate.documentSelfLink = dataDiskState.documentSelfLink;
+            // The actual value being updated
+            diskStateToUpdate.id = azureDataDisk.vhd().uri();
+
+            Operation updateDiskState = Operation
+                    .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
+                    .setBody(diskStateToUpdate);
+
+            DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)
+                    .whenComplete((op, exc) -> {
+                        if (exc != null) {
+                            logSevere(() -> String.format(
+                                    "Updating data DiskState [%s] with VHD URI [%s]: FAILED with %s",
+                                    dataDiskState.name, diskStateToUpdate.id, Utils.toString(exc)));
+                        } else {
+                            logFine(() -> String.format(
+                                    "Updating data DiskState [%s] with VHD URI [%s]: SUCCESS",
+                                    dataDiskState.name, diskStateToUpdate.id));
+                        }
+                    });
+
+            updateDiskStateDRs.add(updateDR);
+        }
+
+        return DeferredResult.allOf(updateDiskStateDRs).thenApply(ignored -> ctx);
     }
 
     /**
@@ -1488,14 +1588,21 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private static String getVHDUriForOSDisk(String vmName, String storageAccountName) {
+    private static VirtualHardDisk getVHDUriForOSDisk(String vmName, String storageAccountName) {
+
         String vhdName = vmName + BOOT_DISK_SUFFIX;
-        return String.format(VHD_URI_FORMAT, storageAccountName, vhdName);
+
+        return new VirtualHardDisk().withUri(
+                String.format(VHD_URI_FORMAT, storageAccountName, vhdName));
     }
 
-    private static String getVHDUriForDataDisk(String vmName, String storageAccountName, int num) {
-        String vhdNameData = vmName + DATA_DISK_SUFFIX + "-" + num;
-        return String.format(VHD_URI_FORMAT, storageAccountName, vhdNameData);
+    private static VirtualHardDisk getVHDUriForDataDisk(String vmName, String storageAccountName,
+            int num) {
+
+        String vhdName = vmName + DATA_DISK_SUFFIX + "-" + num;
+
+        return new VirtualHardDisk().withUri(
+                String.format(VHD_URI_FORMAT, storageAccountName, vhdName));
     }
 
     private ImageReferenceInner getImageReference(String imageId) {
@@ -1684,26 +1791,26 @@ public class AzureInstanceService extends StatelessService {
                                 return;
                             }
 
-                            ctx.childDisks = new ArrayList<>();
+                            ctx.dataDiskStates = new ArrayList<>();
                             for (Operation op : ops.values()) {
                                 DiskService.DiskStateExpanded disk = op
                                         .getBody(DiskService.DiskStateExpanded.class);
 
                                 // We treat the first disk in the boot order as the boot disk.
                                 if (disk.bootOrder == 1) {
-                                    if (ctx.bootDisk != null) {
+                                    if (ctx.bootDiskState != null) {
                                         handleError(ctx, new IllegalStateException(
                                                 "Only 1 boot disk is allowed"));
                                         return;
                                     }
 
-                                    ctx.bootDisk = disk;
+                                    ctx.bootDiskState = disk;
                                 } else {
-                                    ctx.childDisks.add(disk);
+                                    ctx.dataDiskStates.add(disk);
                                 }
                             }
 
-                            if (ctx.bootDisk == null) {
+                            if (ctx.bootDiskState == null) {
                                 handleError(ctx,
                                         new IllegalStateException("Boot disk is required"));
                                 return;
@@ -1719,7 +1826,7 @@ public class AzureInstanceService extends StatelessService {
      */
     private DeferredResult<AzureInstanceContext> getImageSource(AzureInstanceContext ctx) {
 
-        return ctx.getImageSource(ctx.bootDisk)
+        return ctx.getImageSource(ctx.bootDiskState)
 
                 .thenApply(imageSource -> {
                     ctx.imageSource = imageSource;
@@ -1941,16 +2048,16 @@ public class AzureInstanceService extends StatelessService {
                     // Start next op, patch boot disk, in the sequence
                     .thenCompose(woid -> {
                         URI uri = this.ctx.computeRequest.buildUri(
-                                this.ctx.bootDisk.documentSelfLink);
+                                this.ctx.bootDiskState.documentSelfLink);
 
                         Operation patchBootDiskOp = Operation
                                 .createPatch(uri)
-                                .setBody(this.ctx.bootDisk);
+                                .setBody(this.ctx.bootDiskState);
 
                         return this.ctx.service.sendWithDeferredResult(patchBootDiskOp)
                                 .thenRun(() -> this.ctx.service.logFine(
                                         () -> String.format("Updating boot disk [%s]: SUCCESS",
-                                                this.ctx.bootDisk.name)));
+                                                this.ctx.bootDiskState.name)));
                     })
                     // Return processed context with StorageAccount
                     .thenApply(woid -> this.ctx.storageAccount);
@@ -1973,17 +2080,16 @@ public class AzureInstanceService extends StatelessService {
 
                 @Override
                 protected Throwable consumeError(Throwable exc) {
-                    return new IllegalStateException(String.format(
-                            "Getting Azure StorageAccountKeys for [%s] Storage Account: FAILED. Details: %s",
-                            ctx.storageAccount.name(), exc.getMessage()));
+                    return new IllegalStateException(msg + ": FAILED with " + exc.getMessage(),
+                            exc);
                 }
 
                 @Override
                 protected DeferredResult<StorageAccountListKeysResultInner> consumeSuccess(
                         StorageAccountListKeysResultInner body) {
-                    logFine(() -> String.format(
-                            "Getting Azure StorageAccountKeys for [%s] Storage Account: SUCCESS",
-                            ctx.storageAccount.name()));
+
+                    logFine(() -> String.format(msg + ": SUCCESS"));
+
                     return DeferredResult.completed(body);
                 }
             };
@@ -2005,7 +2111,7 @@ public class AzureInstanceService extends StatelessService {
                     })
                     .thenCompose(storageDescription -> {
                         ctx.storageDescription = storageDescription;
-                        ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
+                        ctx.bootDiskState.storageDescriptionLink = storageDescription.documentSelfLink;
 
                         return DeferredResult.completed(ctx.storageDescription);
                     });
