@@ -45,40 +45,42 @@ public class DatacenterEnumeratorService extends StatelessService {
             return;
         }
 
-        EnumerateDatacentersRequest req = patch.getBody(EnumerateDatacentersRequest.class);
+        VSphereIOThreadPoolAllocator.getPool(this).submit(() -> {
+            EnumerateDatacentersRequest req = patch.getBody(EnumerateDatacentersRequest.class);
 
-        BasicConnection connection = new BasicConnection();
-        try {
-            EnumerateDatacentersResponse res = new EnumerateDatacentersResponse();
+            BasicConnection connection = new BasicConnection();
+            try {
+                EnumerateDatacentersResponse res = new EnumerateDatacentersResponse();
 
-            if (req.isMock) {
-                res.datacenters = Collections.singletonList("dc-1");
-                res.moRefs = Collections.singletonList("Datacenter:dc-1");
-            } else {
-                connection.setURI(URI.create("https://" + req.host + "/sdk"));
-                connection.setUsername(req.username);
-                connection.setPassword(req.password);
-                connection.setIgnoreSslErrors(true);
-                connection.connect();
+                if (req.isMock) {
+                    res.datacenters = Collections.singletonList("dc-1");
+                    res.moRefs = Collections.singletonList("Datacenter:dc-1");
+                } else {
+                    connection.setURI(URI.create("https://" + req.host + "/sdk"));
+                    connection.setUsername(req.username);
+                    connection.setPassword(req.password);
+                    connection.setIgnoreSslErrors(true);
+                    connection.connect();
 
-                DatacenterLister lister = new DatacenterLister(connection);
-                res.moRefs = new ArrayList<>();
-                res.datacenters = new ArrayList<>();
+                    DatacenterLister lister = new DatacenterLister(connection);
+                    res.moRefs = new ArrayList<>();
+                    res.datacenters = new ArrayList<>();
 
-                lister.listAllDatacenters().stream()
-                        .forEach(el -> {
-                            res.datacenters.add(el.path);
-                            res.moRefs.add(VimUtils.convertMoRefToString(el.object));
-                        });
+                    lister.listAllDatacenters().stream()
+                            .forEach(el -> {
+                                res.datacenters.add(el.path);
+                                res.moRefs.add(VimUtils.convertMoRefToString(el.object));
+                            });
 
+                }
+
+                patch.setBody(res);
+                patch.complete();
+            } catch (Exception e) {
+                patch.fail(e);
+            } finally {
+                connection.closeQuietly();
             }
-
-            patch.setBody(res);
-            patch.complete();
-        } catch (Exception e) {
-            patch.fail(e);
-        } finally {
-            connection.closeQuietly();
-        }
+        });
     }
 }
