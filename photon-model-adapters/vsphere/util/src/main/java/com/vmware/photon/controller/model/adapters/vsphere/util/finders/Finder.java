@@ -41,6 +41,8 @@ import com.vmware.vim25.TraversalSpec;
 public class Finder extends Recurser {
     private static final String CHAR_STAR = "*";
     private static final String CHAR_AT = "@";
+    private static final String CHAR_HASH = "#";
+    private static final String CHAR_COLON = ":";
     private final ManagedObjectReference datacenter;
 
     private Element networkFolder;
@@ -58,9 +60,11 @@ public class Finder extends Recurser {
 
     public static List<String> toParts(String p) {
         p = p.replace(CHAR_STAR, CHAR_AT);
+        p = p.replace(CHAR_COLON, CHAR_HASH);
         p = Paths.get(p).normalize().toString();
         p = p.replace('\\', '/');
         p = p.replace(CHAR_AT, CHAR_STAR);
+        p = p.replace(CHAR_HASH, CHAR_COLON);
         if (p.equals("/")) {
             return Collections.emptyList();
         }
