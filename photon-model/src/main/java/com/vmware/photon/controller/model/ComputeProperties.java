@@ -80,6 +80,12 @@ public class ComputeProperties {
      */
     public static final String LINKED_ENDPOINT_PROP_NAME = "linkedEndpointLink";
 
+    /**
+     * A key for the custom properties in compute which stores flag as whether a snapshot exists
+     * for the given compute.
+     */
+    public static final String CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS = "__hasSnapshot";
+
     public enum OSType {
         WINDOWS, LINUX;
     }

@@ -15,8 +15,11 @@ package com.vmware.photon.controller.model.resources;
 
 import java.util.UUID;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -47,6 +50,21 @@ public class SnapshotService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String computeLink;
+
+        /**
+         * Parent snapshot link for this snapshot.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_23)
+        public String parentLink;
+
+        /**
+         * Identify this snapshot as the current state for Compute. At a given point amongst all
+         * the snapshots for a Compute only one at max may have this flag set.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_23)
+        public Boolean isCurrent;
     }
 
     public SnapshotService() {
