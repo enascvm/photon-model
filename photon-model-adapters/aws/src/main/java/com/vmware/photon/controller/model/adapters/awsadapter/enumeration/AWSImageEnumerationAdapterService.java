@@ -237,17 +237,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             String msg = "Enumerating AWS images by " + request;
 
             // ALL AWS images are returned with a single call, NO pagination!
-            AWSDeferredResultAsyncHandler<DescribeImagesRequest, DescribeImagesResult> handler = new AWSDeferredResultAsyncHandler<DescribeImagesRequest, DescribeImagesResult>(
-                    this.service, msg) {
-
-                @Override
-                protected DeferredResult<DescribeImagesResult> consumeSuccess(
-                        DescribeImagesRequest req, DescribeImagesResult res) {
-
-                    return DeferredResult.completed(res);
-                }
-            };
-
+            AWSDeferredResultAsyncHandler<DescribeImagesRequest, DescribeImagesResult> handler =
+                    new AWSDeferredResultAsyncHandler<>(this.service, msg);
             this.awsClient.describeImagesAsync(request, handler);
 
             return handler.toDeferredResult().thenApply(imagesResult -> {

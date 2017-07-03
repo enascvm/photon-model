@@ -863,13 +863,6 @@ public class AWSInstanceService extends StatelessService {
                     AWSInstanceService.this, msg) {
 
                 @Override
-                protected DeferredResult<DeleteSubnetResult> consumeSuccess(
-                        DeleteSubnetRequest request,
-                        DeleteSubnetResult result) {
-                    return DeferredResult.completed(result);
-                }
-
-                @Override
                 protected Exception consumeError(Exception exception) {
                     if (exception instanceof AmazonEC2Exception) {
                         AmazonEC2Exception amazonExc = (AmazonEC2Exception) exception;

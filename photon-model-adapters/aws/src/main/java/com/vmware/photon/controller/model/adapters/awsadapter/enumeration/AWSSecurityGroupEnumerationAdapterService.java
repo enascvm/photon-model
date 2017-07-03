@@ -127,16 +127,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     + "]";
 
             AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult> asyncHandler =
-                    new AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult>(
-                    this.service, msg) {
-
-                @Override
-                protected DeferredResult<DescribeSecurityGroupsResult> consumeSuccess(
-                        DescribeSecurityGroupsRequest request,
-                        DescribeSecurityGroupsResult result) {
-                    return DeferredResult.completed(result);
-                }
-            };
+                    new AWSDeferredResultAsyncHandler<>(this.service, msg);
             this.amazonEC2Client.describeSecurityGroupsAsync(securityGroupsRequest, asyncHandler);
 
             return asyncHandler.toDeferredResult().thenCompose((securityGroupsResult) -> {

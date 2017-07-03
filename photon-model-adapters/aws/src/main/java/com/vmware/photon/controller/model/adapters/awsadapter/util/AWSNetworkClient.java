@@ -149,15 +149,7 @@ public class AWSNetworkClient {
                 + "] for vpc id [" + vpcId + "].";
 
         AWSDeferredResultAsyncHandler<CreateSubnetRequest, CreateSubnetResult> handler = new
-                AWSDeferredResultAsyncHandler<CreateSubnetRequest, CreateSubnetResult>(this.service,
-                        message) {
-                    @Override
-                    protected DeferredResult<CreateSubnetResult> consumeSuccess(
-                            CreateSubnetRequest request,
-                            CreateSubnetResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                AWSDeferredResultAsyncHandler<>(this.service, message);
         this.client.createSubnetAsync(req, handler);
         return handler.toDeferredResult()
                 .thenApply(CreateSubnetResult::getSubnet);
@@ -173,16 +165,10 @@ public class AWSNetworkClient {
         String message = "Name tag AWS resource with id [" + resourceId + "] with name ["
                 + name + "].";
         AWSDeferredResultAsyncHandler<CreateTagsRequest, CreateTagsResult> handler =
-                new AWSDeferredResultAsyncHandler<CreateTagsRequest, CreateTagsResult>(this.service,
-                        message) {
-                    @Override
-                    protected DeferredResult<CreateTagsResult> consumeSuccess(
-                            CreateTagsRequest request,
-                            CreateTagsResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                new AWSDeferredResultAsyncHandler<>(this.service, message);
+
         this.client.createTagsAsync(request, handler);
+
         return handler.toDeferredResult()
                 .thenApply(result -> (Void) null);
     }
@@ -202,15 +188,10 @@ public class AWSNetworkClient {
         String message = "Delete AWS Subnet with id [" + subnetId + "].";
 
         AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult> handler = new
-                AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult>(this.service,
-                        message) {
-                    @Override
-                    protected DeferredResult<DeleteSubnetResult> consumeSuccess(DeleteSubnetRequest
-                            request, DeleteSubnetResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+
         this.client.deleteSubnetAsync(req, handler);
+
         return handler.toDeferredResult()
                 .thenApply(result -> (Void) null);
     }

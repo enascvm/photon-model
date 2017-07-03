@@ -102,16 +102,10 @@ public class AWSSecurityGroupClient {
                 + "] on VPC [" + vpcId + "].";
 
         AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult>
-                handler = new AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest,
-                CreateSecurityGroupResult>(this.service, message) {
-                    @Override
-                    protected DeferredResult<CreateSecurityGroupResult> consumeSuccess(
-                            CreateSecurityGroupRequest request,
-                            CreateSecurityGroupResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                handler = new AWSDeferredResultAsyncHandler<>(this.service, message);
+
         this.client.createSecurityGroupAsync(req, handler);
+
         return handler.toDeferredResult()
                 .thenApply(CreateSecurityGroupResult::getGroupId);
     }
@@ -187,12 +181,6 @@ public class AWSSecurityGroupClient {
                     AuthorizeSecurityGroupIngressResult>
                     handler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest,
                     AuthorizeSecurityGroupIngressResult>(this.service, message) {
-                        @Override
-                        protected DeferredResult<AuthorizeSecurityGroupIngressResult>
-                                consumeSuccess(AuthorizeSecurityGroupIngressRequest request,
-                                AuthorizeSecurityGroupIngressResult result) {
-                                    return DeferredResult.completed(result);
-                                }
 
                         @Override
                         protected Exception consumeError(Exception e) {
@@ -247,12 +235,6 @@ public class AWSSecurityGroupClient {
                     RevokeSecurityGroupIngressResult>
                     handler = new AWSDeferredResultAsyncHandler<RevokeSecurityGroupIngressRequest,
                     RevokeSecurityGroupIngressResult>(this.service, message) {
-                        @Override
-                        protected DeferredResult<RevokeSecurityGroupIngressResult> consumeSuccess(
-                                RevokeSecurityGroupIngressRequest request,
-                                RevokeSecurityGroupIngressResult result) {
-                            return DeferredResult.completed(result);
-                        }
 
                         @Override
                         protected Exception consumeError(Exception e) {
@@ -299,12 +281,6 @@ public class AWSSecurityGroupClient {
                     AuthorizeSecurityGroupEgressResult>
                     handler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest,
                     AuthorizeSecurityGroupEgressResult>(this.service, message) {
-                        @Override
-                        protected DeferredResult<AuthorizeSecurityGroupEgressResult> consumeSuccess(
-                                AuthorizeSecurityGroupEgressRequest request,
-                                AuthorizeSecurityGroupEgressResult result) {
-                            return DeferredResult.completed(result);
-                        }
 
                         @Override
                         protected Exception consumeError(Exception e) {
@@ -341,12 +317,6 @@ public class AWSSecurityGroupClient {
                     RevokeSecurityGroupEgressResult>
                     handler = new AWSDeferredResultAsyncHandler<RevokeSecurityGroupEgressRequest,
                     RevokeSecurityGroupEgressResult>(this.service, message) {
-                        @Override
-                        protected DeferredResult<RevokeSecurityGroupEgressResult> consumeSuccess(
-                                RevokeSecurityGroupEgressRequest request,
-                                RevokeSecurityGroupEgressResult result) {
-                            return DeferredResult.completed(result);
-                        }
 
                         @Override
                         protected Exception consumeError(Exception e) {
@@ -378,15 +348,10 @@ public class AWSSecurityGroupClient {
         String message = "Delete AWS Security Group with id [" + securityGroupId + "].";
 
         AWSDeferredResultAsyncHandler<DeleteSecurityGroupRequest, DeleteSecurityGroupResult>
-                handler = new AWSDeferredResultAsyncHandler<DeleteSecurityGroupRequest,
-                DeleteSecurityGroupResult>(this.service, message) {
-                    @Override
-                    protected DeferredResult<DeleteSecurityGroupResult> consumeSuccess(
-                            DeleteSecurityGroupRequest request, DeleteSecurityGroupResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                handler = new AWSDeferredResultAsyncHandler<>(this.service, message);
+
         this.client.deleteSecurityGroupAsync(req, handler);
+
         return handler.toDeferredResult()
                 .thenApply(result -> (Void) null);
     }
@@ -436,19 +401,11 @@ public class AWSSecurityGroupClient {
                 + "] VM";
 
         AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult>
-                asyncHandler = new AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest,
-                DescribeSecurityGroupsResult>(this.service, msg) {
-                    @Override
-                    protected DeferredResult<DescribeSecurityGroupsResult> consumeSuccess(
-                            DescribeSecurityGroupsRequest request,
-                            DescribeSecurityGroupsResult result) {
-                            return DeferredResult.completed(result);
-                    }
-                };
+                handler = new AWSDeferredResultAsyncHandler<>(this.service, msg);
 
-        this.client.describeSecurityGroupsAsync(req, asyncHandler);
+        this.client.describeSecurityGroupsAsync(req, handler);
 
-        return asyncHandler.toDeferredResult();
+        return handler.toDeferredResult();
 
     }
 

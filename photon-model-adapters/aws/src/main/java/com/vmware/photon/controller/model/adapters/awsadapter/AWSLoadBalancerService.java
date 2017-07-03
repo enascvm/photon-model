@@ -349,17 +349,10 @@ public class AWSLoadBalancerService extends StatelessService {
         String message = "Create a new AWS Load Balancer with name ["
                 + context.loadBalancerStateExpanded.name + "].";
         AWSDeferredResultAsyncHandler<CreateLoadBalancerRequest, CreateLoadBalancerResult> handler =
-                new AWSDeferredResultAsyncHandler<CreateLoadBalancerRequest,
-                        CreateLoadBalancerResult>(this, message) {
-                    @Override
-                    protected DeferredResult<CreateLoadBalancerResult> consumeSuccess(
-                            CreateLoadBalancerRequest request,
-                            CreateLoadBalancerResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                new AWSDeferredResultAsyncHandler<>(this, message);
 
         context.client.createLoadBalancerAsync(request, handler);
+
         return handler.toDeferredResult().thenApply(result -> {
             context.loadBalancerAddress = result.getDNSName();
             return context;
@@ -377,16 +370,11 @@ public class AWSLoadBalancerService extends StatelessService {
 
         String message = "Configure a health check to AWS Load Balancer with name ["
                 + context.loadBalancerStateExpanded.name + "].";
-        AWSDeferredResultAsyncHandler<ConfigureHealthCheckRequest, ConfigureHealthCheckResult> handler = new AWSDeferredResultAsyncHandler<ConfigureHealthCheckRequest, ConfigureHealthCheckResult>(
-                this, message) {
-            @Override
-            protected DeferredResult<ConfigureHealthCheckResult> consumeSuccess(
-                    ConfigureHealthCheckRequest request, ConfigureHealthCheckResult result) {
-                return DeferredResult.completed(result);
-            }
-        };
+        AWSDeferredResultAsyncHandler<ConfigureHealthCheckRequest, ConfigureHealthCheckResult> handler =
+                new AWSDeferredResultAsyncHandler<>(this, message);
 
         context.client.configureHealthCheckAsync(request, handler);
+
         return handler.toDeferredResult().thenApply(ignore -> context);
     }
 
@@ -438,14 +426,8 @@ public class AWSLoadBalancerService extends StatelessService {
 
         String message =
                 "Describing AWS load balancer [" + context.loadBalancerStateExpanded.name + "].";
-        AWSDeferredResultAsyncHandler<DescribeLoadBalancersRequest, DescribeLoadBalancersResult> handler = new AWSDeferredResultAsyncHandler<DescribeLoadBalancersRequest, DescribeLoadBalancersResult>(
-                this, message) {
-            @Override
-            protected DeferredResult<DescribeLoadBalancersResult> consumeSuccess(
-                    DescribeLoadBalancersRequest request, DescribeLoadBalancersResult result) {
-                return DeferredResult.completed(result);
-            }
-        };
+        AWSDeferredResultAsyncHandler<DescribeLoadBalancersRequest, DescribeLoadBalancersResult> handler =
+                new AWSDeferredResultAsyncHandler<>(this, message);
 
         context.client.describeLoadBalancersAsync(describeRequest, handler);
 
@@ -509,15 +491,7 @@ public class AWSLoadBalancerService extends StatelessService {
         String message = "Registering instances to AWS Load Balancer with name ["
                 + context.loadBalancerStateExpanded.name + "]";
         AWSDeferredResultAsyncHandler<RegisterInstancesWithLoadBalancerRequest, RegisterInstancesWithLoadBalancerResult> handler =
-                new AWSDeferredResultAsyncHandler<RegisterInstancesWithLoadBalancerRequest,
-                        RegisterInstancesWithLoadBalancerResult>(this, message) {
-                    @Override
-                    protected DeferredResult<RegisterInstancesWithLoadBalancerResult> consumeSuccess(
-                            RegisterInstancesWithLoadBalancerRequest request,
-                            RegisterInstancesWithLoadBalancerResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                new AWSDeferredResultAsyncHandler<>(this, message);
 
         context.client.registerInstancesWithLoadBalancerAsync(request, handler);
 
@@ -539,15 +513,7 @@ public class AWSLoadBalancerService extends StatelessService {
                 + context.loadBalancerStateExpanded.name + "]";
 
         AWSDeferredResultAsyncHandler<DeregisterInstancesFromLoadBalancerRequest, DeregisterInstancesFromLoadBalancerResult> handler =
-                new AWSDeferredResultAsyncHandler<DeregisterInstancesFromLoadBalancerRequest, DeregisterInstancesFromLoadBalancerResult>(
-                        this, message) {
-                    @Override
-                    protected DeferredResult<DeregisterInstancesFromLoadBalancerResult> consumeSuccess(
-                            DeregisterInstancesFromLoadBalancerRequest request,
-                            DeregisterInstancesFromLoadBalancerResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                new AWSDeferredResultAsyncHandler<>(this, message);
 
         context.client.deregisterInstancesFromLoadBalancerAsync(request, handler);
 
@@ -624,20 +590,13 @@ public class AWSLoadBalancerService extends StatelessService {
                 .withLoadBalancerName(context.loadBalancerStateExpanded.name);
 
         String message = "Delete AWS Load Balancer with name ["
-                + context.loadBalancerStateExpanded.name + "].";
+                + context.loadBalancerStateExpanded.name + "]";
         AWSDeferredResultAsyncHandler<DeleteLoadBalancerRequest, DeleteLoadBalancerResult> handler =
-                new AWSDeferredResultAsyncHandler<DeleteLoadBalancerRequest,
-                        DeleteLoadBalancerResult>(this, message) {
-                    @Override
-                    protected DeferredResult<DeleteLoadBalancerResult> consumeSuccess(
-                            DeleteLoadBalancerRequest request, DeleteLoadBalancerResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+                new AWSDeferredResultAsyncHandler<>(this, message);
 
         context.client.deleteLoadBalancerAsync(request, handler);
-        return handler.toDeferredResult()
-                .thenApply(ignore -> context);
+
+        return handler.toDeferredResult().thenApply(ignore -> context);
     }
 
     private DeferredResult<AWSLoadBalancerContext> deleteLoadBalancerState(
