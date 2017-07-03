@@ -289,8 +289,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             ctx.operation.complete();
             break;
         case ERROR:
-            logWarning(() -> String.format("Azure compute enumeration error for %s",
-                    ctx.request.getEnumKey()));
+            logWarning(() -> String
+                    .format("Azure compute enumeration error for %s, Failed due to %s",
+                            ctx.request.getEnumKey(), Utils.toString(ctx.error)));
             cleanUpHttpClient(ctx.restClient.httpClient());
             ctx.operation.fail(ctx.error);
             break;
@@ -367,10 +368,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             ComputeEnumerationSubStages next) {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
+            // if exception occurs at one of the sub stages, don't error out and leave enumeration
+            // incomplete, instead move to the next sub stage.
             if (exc != null) {
-                context.stage = EnumerationStages.ERROR;
-                handleEnumeration(context);
-                return;
+                logWarning("Resource enumeration failed at stage %s with exception %s",
+                        context.stage, Utils.toString(exc));
             }
             context.subStage = next;
             handleSubStage(context);
@@ -611,8 +613,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         queryLocalStates.queryDocuments(c -> {
             ctx.computeStates.put(c.id, c);
-        })
-                .whenComplete(thenHandleSubStage(ctx, next));
+        }).whenComplete(thenHandleSubStage(ctx, next));
     }
 
     /**
@@ -1011,149 +1012,168 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .collect(Collectors.toList());
 
         DeferredResult.allOf(remoteNics)
-                .thenCompose(rnics -> {
-                    return loadSubnets(ctx, rnics)
-                            .thenCompose(subnetPerNicId -> doCreateOrUpdateNics(ctx, subnetPerNicId,
-                                    rnics));
-                }).whenComplete(thenHandleSubStage(ctx, next));
+                .thenCompose(rnics -> loadSubnets(ctx, rnics)
+                        .thenCompose(subnetPerNicId -> doCreateOrUpdateNics(ctx, subnetPerNicId,
+                                rnics)))
+                .whenComplete(thenHandleSubStage(ctx, next));
 
     }
 
+    /**
+     * Manages creating and updating Network Interfaces resources based on network interfaces
+     * associated with virtual machines.
+     */
     private DeferredResult<List<NetworkInterfaceState>> doCreateOrUpdateNics(EnumerationContext ctx,
             Map<String, String> subnetPerNicId,
-            List<Pair<NetworkInterfaceInner, String>> rnics) {
-        Map<String, Pair<NetworkInterfaceInner, String>> remoteStates = rnics.stream()
+            List<Pair<NetworkInterfaceInner, String>> remoteNics) {
+
+        Map<String, Pair<NetworkInterfaceInner, String>> remoteStates = remoteNics.stream()
+                .filter(p -> p.getLeft() != null)
                 .collect(Collectors.toMap(p -> p.getLeft().id(), p -> p));
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkInterfaceState.class)
-                .addInClause(NetworkInterfaceState.FIELD_NAME_ID,
-                        rnics.stream().map(p -> p.getLeft().id()).collect(Collectors.toList()));
+                .addInClause(NetworkInterfaceState.FIELD_NAME_ID, remoteStates.keySet());
 
         QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(),
-                NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
-                ctx.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
+                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
 
-        return queryLocalStates
-                .collectDocuments(Collectors.toList())
-                .thenCompose(lnics -> {
-                    List<DeferredResult<NetworkInterfaceState>> ops = new java.util.ArrayList<>();
-                    lnics.stream().forEach(nic -> {
-                        Pair<NetworkInterfaceInner, String> pair = remoteStates.remove(nic.id);
-                        NetworkInterfaceInner rnic = pair.getLeft();
+        return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
+                localNics -> requestCreateUpdateNic(localNics, remoteStates, ctx, subnetPerNicId));
+    }
 
-                        nic.name = rnic.name();
-                        nic.subnetLink = subnetPerNicId.get(rnic.id());
+    /**
+     * Serves request for creating and updating Network Interfaces resources
+     */
+    private DeferredResult<List<NetworkInterfaceState>> requestCreateUpdateNic(
+            List<NetworkInterfaceState> localNics,
+            Map<String, Pair<NetworkInterfaceInner, String>> remoteStates, EnumerationContext ctx,
+            Map<String, String> subnetPerNicId) {
+        List<DeferredResult<NetworkInterfaceState>> ops = new ArrayList<>();
 
-                        NicMetadata nicMeta = new NicMetadata();
-                        nicMeta.state = nic;
-                        nicMeta.macAddress = rnic.macAddress();
+        // execute update existing NICs followed by creating new NICs. Update needs to be performed
+        // before creating new NICs as NICs present in 'localNics' will be removed from 'remoteStates'
+        // while updating local NICs.
 
-                        List<NetworkInterfaceIPConfigurationInner> ipConfigurations = rnic
-                                .ipConfigurations();
-                        if (ipConfigurations != null && !ipConfigurations.isEmpty()) {
-                            NetworkInterfaceIPConfigurationInner nicIPConf = ipConfigurations.get(0);
-                            nic.address = nicIPConf.privateIPAddress();
-                            if (nicIPConf.publicIPAddress() == null) {
-                                nicMeta.publicIp = null;
-                                nicMeta.publicDnsName = null;
-                                addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
-                            } else {
-                                // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
-                                // It is available as a SubResource, We use the SubResource ID of IP address from
-                                // NetworkInterfaceIPConfigurationInner to obtain the IP address.
-                                Azure azure = getAzureClient(ctx);
-                                azure.publicIPAddresses().getByIdAsync(nicIPConf.publicIPAddress().id())
-                                        .subscribe(new Action1<PublicIPAddress>() {
-                                            @Override
-                                            public void call(PublicIPAddress publicIPAddress) {
-                                                nicMeta.publicIp = publicIPAddress.ipAddress();
-                                                if (publicIPAddress.inner().dnsSettings() != null) {
-                                                    nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
-                                                } else {
-                                                    nicMeta.publicDnsName = null;
-                                                }
-                                                addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
-                                            }
-                                        });
-                            }
-                        } else {
-                            addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
+        // update network interfaces identified as 'localNics'. Here 'remoteStates' includes newly
+        // identified nics + local nics.
+        updateNic(localNics, remoteStates, ctx, subnetPerNicId, ops);
+        // create new network interfaces identified as 'remoteStates'. Here, 'remoteStates' includes
+        // ONLY newly identified nics.
+        createNic(remoteStates, ctx, subnetPerNicId, ops);
+
+        return DeferredResult.allOf(ops);
+    }
+
+    private void updateNic(List<NetworkInterfaceState> localNics,
+            Map<String, Pair<NetworkInterfaceInner, String>> remoteStates, EnumerationContext ctx,
+            Map<String, String> subnetPerNicId, List<DeferredResult<NetworkInterfaceState>> ops) {
+
+        localNics.stream().forEach(nic -> {
+            // fetch and remove local NIC present in 'remoteStates' so that only new NICs are left
+            // present before we move forward to create new NICs.
+            Pair<NetworkInterfaceInner, String> pair = remoteStates.remove(nic.id);
+            NetworkInterfaceInner remoteNic = pair.getLeft();
+            processCreateUpdateNicRequest(nic, remoteNic, ctx, ops, subnetPerNicId, false);
+        });
+    }
+
+    private void createNic(Map<String, Pair<NetworkInterfaceInner, String>> remoteStates,
+            EnumerationContext ctx,
+            Map<String, String> subnetPerNicId, List<DeferredResult<NetworkInterfaceState>> ops) {
+        remoteStates.values().stream().forEach(p -> {
+            NetworkInterfaceInner remoteNic = p.getLeft();
+            NetworkInterfaceState state = new NetworkInterfaceState();
+            processCreateUpdateNicRequest(state, remoteNic, ctx, ops, subnetPerNicId, true);
+        });
+    }
+
+    /**
+     * Processes request for creating and updating Network interface resources.
+     */
+    private void processCreateUpdateNicRequest(NetworkInterfaceState nic,
+            NetworkInterfaceInner remoteNic, EnumerationContext ctx,
+            List<DeferredResult<NetworkInterfaceState>> ops, Map<String, String> subnetPerNicId,
+            boolean isCreate) {
+        nic.name = remoteNic.name();
+        nic.subnetLink = subnetPerNicId.get(remoteNic.id());
+
+        NicMetadata nicMeta = new NicMetadata();
+        nicMeta.state = nic;
+        nicMeta.macAddress = remoteNic.macAddress();
+
+        // If its a POST request, assign NetworkInterfaceInner ID
+        // else will default to original ID for PATCH requests
+        if (isCreate) {
+            nic.id = remoteNic.id();
+            nic.endpointLink = ctx.request.endpointLink;
+            nic.tenantLinks = ctx.parentCompute.tenantLinks;
+            nic.regionId = remoteNic.location();
+        }
+
+        List<NetworkInterfaceIPConfigurationInner> ipConfigurations = remoteNic.ipConfigurations();
+        if (ipConfigurations == null || ipConfigurations.isEmpty()) {
+            executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta, isCreate);
+            return;
+        }
+        NetworkInterfaceIPConfigurationInner nicIPConf = ipConfigurations.get(0);
+        nic.address = nicIPConf.privateIPAddress();
+        if (nicIPConf.publicIPAddress() == null) {
+            executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta, isCreate);
+            return;
+        }
+        // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
+        // It is available as a SubResource, We use the SubResource ID of IP address from
+        // NetworkInterfaceIPConfigurationInner to obtain the IP address.
+        Azure azure = getAzureClient(ctx);
+        azure.publicIPAddresses()
+                .getByIdAsync(nicIPConf.publicIPAddress().id())
+                .subscribe(new Action1<PublicIPAddress>() {
+                    @Override
+                    public void call(PublicIPAddress publicIPAddress) {
+                        nicMeta.publicIp = publicIPAddress.ipAddress();
+                        if (publicIPAddress.inner().dnsSettings() != null) {
+                            nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
                         }
-                    });
-
-                    remoteStates.values().stream().forEach(p -> {
-                        NetworkInterfaceInner rnic = p.getLeft();
-                        NetworkInterfaceState state = new NetworkInterfaceState();
-                        state.id = rnic.id();
-                        state.name = rnic.name();
-                        state.subnetLink = subnetPerNicId.get(rnic.id());
-                        state.endpointLink = ctx.request.endpointLink;
-                        state.tenantLinks = ctx.parentCompute.tenantLinks;
-                        state.regionId = rnic.location();
-
-                        NicMetadata nicMeta = new NicMetadata();
-                        nicMeta.macAddress = rnic.macAddress();
-
-                        List<NetworkInterfaceIPConfigurationInner> ipConfigurations = rnic
-                                .ipConfigurations();
-                        if (ipConfigurations != null && !ipConfigurations.isEmpty()) {
-                            NetworkInterfaceIPConfigurationInner nicIPConf = ipConfigurations.get(0);
-                            state.address = nicIPConf.privateIPAddress();
-                            if (nicIPConf.publicIPAddress() == null) {
-                                nicMeta.publicIp = null;
-                                nicMeta.publicDnsName = null;
-                                addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
-                            } else {
-                                // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
-                                // It is available as a SubResource, We use the SubResource ID of IP address from
-                                // NetworkInterfaceIPConfigurationInner to obtain the IP address.
-                                Azure azure = getAzureClient(ctx);
-                                azure.publicIPAddresses().getByIdAsync(nicIPConf.publicIPAddress().id())
-                                        .subscribe(new Action1<PublicIPAddress>() {
-                                            @Override
-                                            public void call(PublicIPAddress publicIPAddress) {
-                                                nicMeta.publicIp = publicIPAddress.ipAddress();
-                                                if (publicIPAddress.inner().dnsSettings() != null) {
-                                                    nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
-                                                } else {
-                                                    nicMeta.publicDnsName = null;
-                                                }
-                                                addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
-                                            }
-                                        });
-                            }
-                        } else {
-                            addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
-                        }
-                    });
-                    return DeferredResult.allOf(ops);
+                        executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta, isCreate);
+                    }
                 });
     }
 
-    private void addPatchToNetworkIntefaceService(EnumerationContext ctx, List<DeferredResult<NetworkInterfaceState>> ops,
-                                               NetworkInterfaceState nic, NetworkInterfaceInner rnic,
-                                               NicMetadata nicMeta) {
+    private void executeNicCreateUpdateRequest(NetworkInterfaceState nic,
+            NetworkInterfaceInner remoteNic, EnumerationContext ctx,
+            List<DeferredResult<NetworkInterfaceState>> ops, NicMetadata nicMeta,
+            boolean isCreate) {
+        if (isCreate) {
+            // perform POST request
+            addPostToNetworkInterfaceService(ctx, ops, nic, remoteNic, nicMeta);
+        } else {
+            // perform PATCH request
+            addPatchToNetworkInterfaceService(ctx, ops, nic, remoteNic, nicMeta);
+        }
+    }
+
+    private void addPatchToNetworkInterfaceService(EnumerationContext ctx,
+            List<DeferredResult<NetworkInterfaceState>> ops, NetworkInterfaceState nic,
+            NetworkInterfaceInner remoteNic, NicMetadata nicMeta) {
         ops.add(sendWithDeferredResult(Operation
                 .createPatch(ctx.request.buildUri(nic.documentSelfLink))
                 .setBody(nic), NetworkInterfaceState.class)
-                .thenApply(r -> {
-                    ctx.networkInterfaceIds.put(rnic.id(), nicMeta);
-                    return r;
+                .thenApply(nicState -> {
+                    ctx.networkInterfaceIds.put(remoteNic.id(), nicMeta);
+                    return nicState;
                 }));
     }
 
-    private void addPostToNetworkInterfaceService(EnumerationContext ctx, List<DeferredResult<NetworkInterfaceState>> ops,
-                                               NetworkInterfaceState state, NetworkInterfaceInner rnic,
-                                               NicMetadata nicMeta) {
+    private void addPostToNetworkInterfaceService(EnumerationContext ctx,
+            List<DeferredResult<NetworkInterfaceState>> ops, NetworkInterfaceState state,
+            NetworkInterfaceInner remoteNic, NicMetadata nicMeta) {
         ops.add(sendWithDeferredResult(Operation
-                .createPost(
-                        ctx.request.buildUri(NetworkInterfaceService.FACTORY_LINK))
+                .createPost(ctx.request.buildUri(NetworkInterfaceService.FACTORY_LINK))
                 .setBody(state), NetworkInterfaceState.class)
                 .thenApply(nic -> {
                     nicMeta.state = nic;
-                    ctx.networkInterfaceIds.put(rnic.id(), nicMeta);
+                    ctx.networkInterfaceIds.put(remoteNic.id(), nicMeta);
                     return nic;
                 }));
     }
@@ -1161,10 +1181,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private DeferredResult<Pair<NetworkInterfaceInner, String>> loadRemoteNic(
             Pair<NetworkInterfaceReferenceInner, String> pair, NetworkInterfacesInner netOps) {
         AzureDeferredResultServiceCallback<NetworkInterfaceInner> handler = new AzureDeferredResultServiceCallback<NetworkInterfaceInner>(
-                this, "Load Nic:" + pair.getLeft().id()) {
+                this, "Load Nic: " + pair.getLeft().id()) {
             @Override
             protected DeferredResult<NetworkInterfaceInner> consumeSuccess(
                     NetworkInterfaceInner nic) {
+                if (nic == null) {
+                    logWarning("Failed to get information for nic: %s", pair.getLeft().id());
+                }
                 return DeferredResult.completed(nic);
             }
         };
@@ -1183,13 +1206,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private DeferredResult<Map<String, String>> loadSubnets(EnumerationContext ctx,
-            List<Pair<NetworkInterfaceInner, String>> rnics) {
-        Map<String, List<Pair<NetworkInterfaceInner, String>>> nicsPerSubnet = rnics.stream()
-                .filter(p -> p.getLeft().ipConfigurations() != null && !p.getLeft()
-                        .ipConfigurations().isEmpty())
-                .filter(p -> p.getLeft().ipConfigurations().get(0).subnet() != null)
-                .collect(java.util.stream.Collectors.groupingBy(
-                        p -> p.getLeft().ipConfigurations().get(0).subnet().id()));
+            List<Pair<NetworkInterfaceInner, String>> remoteNics) {
+
+        Map<String, List<Pair<NetworkInterfaceInner, String>>> nicsPerSubnet = remoteNics.stream()
+                .filter(p -> p.getLeft() != null &&
+                        p.getLeft().ipConfigurations() != null &&
+                        !p.getLeft().ipConfigurations().isEmpty() &&
+                        p.getLeft().ipConfigurations().get(0).subnet() != null)
+                .collect(java.util.stream.Collectors
+                        .groupingBy(p -> p.getLeft().ipConfigurations().get(0).subnet().id()));
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
@@ -1197,18 +1222,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         nicsPerSubnet.keySet().stream().collect(Collectors.toList()));
 
         QueryByPages<SubnetState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(),
-                SubnetState.class, ctx.parentCompute.tenantLinks,
-                ctx.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                qBuilder.build(), SubnetState.class, ctx.parentCompute.tenantLinks,
+                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
         Map<String, String> subnetLinkPerNicId = new HashMap<>();
-        return queryLocalStates
-                .queryDocuments(subnet -> {
-                    nicsPerSubnet.get(subnet.id).forEach(p -> subnetLinkPerNicId
-                            .put(p.getLeft().id(), subnet.documentSelfLink));
-                }).thenApply(ignore -> {
-                    return subnetLinkPerNicId;
-                });
+
+        return queryLocalStates.queryDocuments(subnet ->
+                nicsPerSubnet.get(subnet.id).forEach(p -> subnetLinkPerNicId
+                        .put(p.getLeft().id(), subnet.documentSelfLink)))
+                .thenApply(ignore -> subnetLinkPerNicId);
     }
 
     /**
