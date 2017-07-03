@@ -30,6 +30,13 @@ import com.vmware.xenon.common.UriUtils;
 public class AWSVolumeTypeDiscoveryService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_VOLUME_TYPE_ENUMERATION_ADAPTER_SERVICE;
 
+    public static class VolumeTypeList {
+        /**
+         * List of multiple volumeTypes.
+         */
+        public List<String> volumeTypes = new ArrayList<>();
+    }
+
     @Override
     public void handleGet(Operation get) {
         Map<String, String> params = UriUtils.parseUriQueryParams(get.getUri());
@@ -43,11 +50,12 @@ public class AWSVolumeTypeDiscoveryService extends StatelessService {
             return;
         }
 
-        List<String> volumeTypes = new ArrayList<>();
+        VolumeTypeList volumeTypeList = new VolumeTypeList();
         for (VolumeType volumeType : VolumeType.values()) {
-            volumeTypes.add(volumeType.toString());
+            volumeTypeList.volumeTypes.add(volumeType.toString());
         }
-        get.setBody(volumeTypes);
+
+        get.setBody(volumeTypeList);
         get.complete();
     }
 }
