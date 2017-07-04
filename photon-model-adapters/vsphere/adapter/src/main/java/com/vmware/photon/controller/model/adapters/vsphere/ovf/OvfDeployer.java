@@ -34,7 +34,6 @@ import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
@@ -63,7 +62,7 @@ public class OvfDeployer extends BaseHelper {
     public static final String TRANSPORT_ISO = "iso";
     private OvfRetriever ovfRetriever;
 
-    public OvfDeployer(Connection connection) throws ClientException, FinderException {
+    public OvfDeployer(Connection connection) throws FinderException {
         super(connection);
 
         CloseableHttpClient client = OvfRetriever.newInsecureClient();

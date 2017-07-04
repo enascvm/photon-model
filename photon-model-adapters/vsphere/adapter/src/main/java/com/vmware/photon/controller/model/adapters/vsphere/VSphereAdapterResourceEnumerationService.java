@@ -53,7 +53,6 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
-import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.VsphereResourceCleanerService.ResourceCleanRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
@@ -409,7 +408,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         try {
             refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
-        } catch (ClientException e) {
+        } catch (Exception e) {
             logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
         }
 
@@ -424,7 +423,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,
-            TaskManager mgr) throws ClientException {
+            TaskManager mgr) {
         MoRefKeyedMap<NetworkOverlay> networks = new MoRefKeyedMap<>();
         List<HostSystemOverlay> hosts = new ArrayList<>();
         List<DatastoreOverlay> datastores = new ArrayList<>();

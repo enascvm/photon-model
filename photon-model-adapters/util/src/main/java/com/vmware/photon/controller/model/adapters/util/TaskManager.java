@@ -78,14 +78,14 @@ public class TaskManager implements CompletionHandler {
                     failure.getMessage());
             return;
         }
-        log(Level.WARNING, "Patching task %s to failure: %s", this.taskReference,
-                failure.getMessage());
+        log(Level.WARNING, "Patching task %s to failure: %s %s", this.taskReference,
+                failure.getMessage(), Utils.toString(failure));
         createFailurePatch(msg, failure).sendWith(this.service);
     }
 
     private Operation createFailurePatch(String msg, Throwable failure) {
         ResourceOperationResponse body = ResourceOperationResponse.fail(this.resourceLink, failure);
-        body.failureMessage = msg;
+        body.failureMessage = failure.getClass().getName() + ": " + msg;
 
         return Operation
                 .createPatch(this.taskReference)

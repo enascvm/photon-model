@@ -26,7 +26,6 @@ import org.codehaus.jackson.node.ObjectNode;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
-import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.LibraryClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
@@ -152,8 +151,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
     }
 
     private void processAllTemplates(Set<String> oldImages, String endpointLink, String taskLink,
-            EnumerationClient client,
-            List<String> tenantLinks) throws ClientException, RuntimeFaultFaultMsg {
+            EnumerationClient client, List<String> tenantLinks) throws RuntimeFaultFaultMsg {
         PropertyFilterSpec spec = client.createVmFilterSpec(client.getDatacenter());
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
             Phaser phaser = new Phaser(1);

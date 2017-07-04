@@ -162,8 +162,7 @@ public class InstanceClient extends BaseHelper {
     private ManagedObjectReference resourcePool;
     private ManagedObjectReference host;
 
-    public InstanceClient(Connection connection, ProvisionContext ctx)
-            throws ClientException, FinderException {
+    public InstanceClient(Connection connection, ProvisionContext ctx) throws FinderException {
         super(connection);
 
         this.ctx = ctx;
@@ -1997,21 +1996,5 @@ public class InstanceClient extends BaseHelper {
 
     private Lock getLock(String key) {
         return lockPerUri.computeIfAbsent(key, u -> new ReentrantLock());
-    }
-
-    public static class ClientException extends Exception {
-        private static final long serialVersionUID = 1L;
-
-        public ClientException(String message, Throwable cause) {
-            super(message, cause);
-        }
-
-        public ClientException(Throwable cause) {
-            super(cause);
-        }
-
-        public ClientException(String message) {
-            super(message);
-        }
     }
 }

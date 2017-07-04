@@ -26,7 +26,6 @@ import com.vmware.pbm.PbmProfile;
 import com.vmware.pbm.PbmProfileId;
 import com.vmware.pbm.PbmProfileResourceType;
 import com.vmware.pbm.PbmProfileResourceTypeEnum;
-import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
@@ -214,7 +213,7 @@ public class EnumerationClient extends BaseHelper {
         return resultspec;
     }
 
-    public PropertyFilterSpec createVmFilterSpec(ManagedObjectReference dc) throws ClientException {
+    public PropertyFilterSpec createVmFilterSpec(ManagedObjectReference dc) {
         ObjectSpec ospec = new ObjectSpec();
         ospec.setObj(dc);
         ospec.setSkip(false);
@@ -247,7 +246,7 @@ public class EnumerationClient extends BaseHelper {
         return filterSpec;
     }
 
-    public PropertyFilterSpec createResourcesFilterSpec() throws ClientException {
+    public PropertyFilterSpec createResourcesFilterSpec() {
         ObjectSpec ospec = new ObjectSpec();
         ospec.setObj(this.datacenter);
         ospec.setSkip(false);
