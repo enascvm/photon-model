@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -239,8 +242,9 @@ public class AWSCsvBillParser {
             } else {
                 if (millisForBillHour != null) {
                     serviceDetail.addToDirectCosts(millisForBillHour, resourceCost);
-                    //currently we need only EC2 instance details
-                    if (resourceId.startsWith("i-")) {
+                    //currently we need only EC2 instances,volumes and s3 buckets
+                    if (resourceId.startsWith(AWS_INSTANCE_ID_PREFIX) || resourceId.startsWith(AWS_VOLUME_ID_PREFIX)
+                            || AwsServices.S3.getName().equalsIgnoreCase(serviceName)) {
                         AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(rowMap, serviceDetail,
                                 resourceId);
                         resourceDetail.addToDirectCosts(millisForBillHour, resourceCost);

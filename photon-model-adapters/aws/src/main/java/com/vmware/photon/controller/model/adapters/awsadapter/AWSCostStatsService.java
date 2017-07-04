@@ -18,6 +18,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
         .AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ACCOUNT_ID_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_LINKED_ACCOUNT_IDS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_EBS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_S3;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -68,6 +70,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSMis
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser.AwsServices;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -75,10 +78,13 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
@@ -127,6 +133,10 @@ public class AWSCostStatsService extends StatelessService {
         CREATE_MISSING_RESOURCES_COMPUTES, FINISH
     }
 
+    protected enum AWSCostStatsCreationSubStage {
+        QUERY_INSTANCES, QUERY_VOLUMES
+    }
+
     public AWSCostStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
         this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.S3_TRANSFER_MANAGER);
@@ -140,10 +150,11 @@ public class AWSCostStatsService extends StatelessService {
         protected TransferManager s3Client;
         protected List<String> ignorableInvoiceCharge;
         protected AWSCostStatsCreationStages stage;
+        protected AWSCostStatsCreationSubStage subStage;
 
         // This map is one to many because an AWS instance will have different compute links if the same account
         // is added by different users.
-        protected Map<String, List<String>> awsInstanceLinksById;
+        protected Map<String, Set<String>> awsResourceLinksById;
         // This map is one to many because a distinct compute state will be present for each region of an AWS account.
         protected Map<String, List<ComputeState>> awsAccountIdToComputeStates;
         protected OperationContext opContext;
@@ -159,7 +170,7 @@ public class AWSCostStatsService extends StatelessService {
             this.statsRequest = statsRequest;
             this.stage = AWSCostStatsCreationStages.ACCOUNT_DETAILS;
             this.ignorableInvoiceCharge = new ArrayList<>();
-            this.awsInstanceLinksById = new ConcurrentHashMap<>();
+            this.awsResourceLinksById = new ConcurrentHashMap<>();
             this.awsAccountIdToComputeStates = new ConcurrentHashMap<>();
             this.statsResponse = new ComputeStatsResponse();
             this.statsResponse.statsList = new ArrayList<>();
@@ -220,7 +231,21 @@ public class AWSCostStatsService extends StatelessService {
                 queryMarkers(statsData, AWSCostStatsCreationStages.QUERY_LOCAL_RESOURCES);
                 break;
             case QUERY_LOCAL_RESOURCES:
-                queryInstances(statsData, AWSCostStatsCreationStages.DOWNLOAD_PARSE_CREATE_STATS);
+                if (statsData.subStage == null) {
+                    statsData.subStage = AWSCostStatsCreationSubStage.QUERY_INSTANCES;
+                }
+                switch (statsData.subStage) {
+                case QUERY_INSTANCES:
+                    queryInstances(statsData, AWSCostStatsCreationStages.QUERY_LOCAL_RESOURCES,
+                            AWSCostStatsCreationSubStage.QUERY_VOLUMES);
+                    break;
+                case QUERY_VOLUMES:
+                    queryVolumes(statsData, AWSCostStatsCreationStages.DOWNLOAD_PARSE_CREATE_STATS, null);
+                    break;
+                default:
+                    getFailureConsumer(statsData).accept(new Exception("Unknown AwsCostStatsCreation subStage"));
+                    break;
+                }
                 break;
             case DOWNLOAD_PARSE_CREATE_STATS:
                 scheduleDownload(statsData, AWSCostStatsCreationStages.CREATE_MISSING_RESOURCES_COMPUTES);
@@ -321,7 +346,7 @@ public class AWSCostStatsService extends StatelessService {
                     context.stage = AWSCostStatsCreationStages.QUERY_LINKED_ACCOUNTS;
                     context.isSecondPass = true;
                     context.billMonthToDownload = null;
-                    context.awsInstanceLinksById.clear();
+                    context.awsResourceLinksById.clear();
                     handleCostStatsCreationRequest(context);
                 });
         sendRequest(op);
@@ -526,12 +551,13 @@ public class AWSCostStatsService extends StatelessService {
                 .setBody(accountState));
     }
 
-    protected void queryInstances(AWSCostStatsCreationContext statsData,
-            AWSCostStatsCreationStages next) {
+    protected void queryInstances(AWSCostStatsCreationContext statsData, AWSCostStatsCreationStages nextStage,
+            AWSCostStatsCreationSubStage nextSubStage) {
 
         List<String> linkedAccountsLinks = statsData.awsAccountIdToComputeStates.values()
                 .stream().flatMap(List::stream) // flatten collection of lists to single list
-                .map(e -> e.documentSelfLink).collect(Collectors.toList()); // extract document self links of all accounts
+                .map(e -> e.documentSelfLink)
+                .collect(Collectors.toList()); // extract document self links of all accounts
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
@@ -540,57 +566,48 @@ public class AWSCostStatsService extends StatelessService {
                 .addInClause(ComputeState.FIELD_NAME_PARENT_LINK, linkedAccountsLinks,
                         Occurance.MUST_OCCUR)
                 .build();
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(query)
-                .setResultLimit(AWSConstants.getQueryResultLimit())
-                .build();
-        queryTask.tenantLinks = statsData.computeDesc.tenantLinks;
-        queryTask.documentSelfLink = UUID.randomUUID().toString();
-        QueryUtils.startQueryTask(this, queryTask,
-                ServiceTypeCluster.DISCOVERY_SERVICE).whenComplete((qrt, e) -> {
-                    if (e != null) {
-                        getFailureConsumer(statsData).accept(e);
-                        return;
-                    }
-                    populateAwsInstances(qrt.results.nextPageLink, statsData, next);
-                });
+
+        populateAwsResources(query, statsData, nextStage, nextSubStage);
     }
 
-    private void populateAwsInstances(String nextPageLink, AWSCostStatsCreationContext context,
-            AWSCostStatsCreationStages next) {
-        if (nextPageLink == null) {
-            context.stage = next;
+    protected void queryVolumes(AWSCostStatsCreationContext statsData, AWSCostStatsCreationStages nextStage,
+            AWSCostStatsCreationSubStage nextSubStage) {
+
+        Set<String> endpointLinks = statsData.awsAccountIdToComputeStates.values()
+                .stream().flatMap(List::stream) // flatten collection of lists to single list
+                .map(e -> e.endpointLink).collect(Collectors.toSet()); // extract endpointLinks of all accounts
+
+        List<String> supportedStorageTypes = Arrays.asList(STORAGE_TYPE_EBS, STORAGE_TYPE_S3);
+        Query query = Query.Builder.create()
+                .addKindFieldClause(DiskState.class)
+                .addInClause(DiskState.FIELD_NAME_ENDPOINT_LINK, endpointLinks, Occurance.MUST_OCCUR)
+                .addInClause(DiskState.FIELD_NAME_STORAGE_TYPE, supportedStorageTypes)
+                .build();
+
+        populateAwsResources(query, statsData, nextStage, nextSubStage);
+    }
+
+    private void populateAwsResources(Query query, AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages nextStage, AWSCostStatsCreationSubStage nextSubStage) {
+        QueryByPages<ResourceState> queryResources = new QueryByPages<>(getHost(), query, ResourceState.class,
+                context.computeDesc.tenantLinks);
+        queryResources.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        queryResources.queryDocuments(getAwsResourceConsumer(context)).whenComplete((v, t) -> {
+            if (t != null) {
+                getFailureConsumer(context).accept(t);
+                return;
+            }
+            context.stage = nextStage;
+            context.subStage = nextSubStage;
             handleCostStatsCreationRequest(context);
-        } else {
-            Operation.createGet(UriUtils.extendUri(getInventoryServiceUri(),
-                    nextPageLink)).setCompletion((o, ex) -> {
-                        if (ex != null) {
-                            getFailureConsumer(context).accept(ex);
-                            return;
-                        }
-                        QueryTask queryTask = o.getBody(QueryTask.class);
-                        Map<String, List<ComputeState>> instancesById =
-                                queryTask.results.documents.values()
-                                .stream()
-                                .map(s -> Utils.fromJson(s, ComputeState.class))
-                                .collect(Collectors.groupingBy(c -> c.id));
-                        Map<String, List<String>> instanceLinksById = instancesById.entrySet()
-                                .stream()
-                                .collect(Collectors.toMap(Entry::getKey,
-                                        e -> e.getValue().stream().map(cs -> cs.documentSelfLink)
-                                                .collect(Collectors.toList())));
-                        instanceLinksById.forEach(
-                                (k, v) -> context.awsInstanceLinksById.merge(k, v,
-                                        (list1, list2) -> {
-                                            list1.addAll(list2);
-                                            return list1;
-                                        }));
-                        logFine(() -> String.format("Found %d instances in current page",
-                                queryTask.results.documentCount));
-                        populateAwsInstances(queryTask.results.nextPageLink, context, next);
-                    }).sendWith(this);
-        }
+        });
+    }
+
+    private Consumer<ResourceState> getAwsResourceConsumer(AWSCostStatsCreationContext context) {
+        return (resource) -> {
+            Set<String> links = context.awsResourceLinksById.computeIfAbsent(resource.id, (k) -> new HashSet<>());
+            links.add(resource.documentSelfLink);
+        };
     }
 
     protected void queryMarkers(AWSCostStatsCreationContext context, AWSCostStatsCreationStages next) {
@@ -715,11 +732,10 @@ public class AWSCostStatsService extends StatelessService {
 
     protected void createResourceStatsForAccount(AWSCostStatsCreationContext statsData,
             AwsAccountDetailDto awsAccountDetailDto) {
-        // create resource stats for only live EC2 instances that exist in system
         Map<String, AwsServiceDetailDto> serviceDetails = awsAccountDetailDto.serviceDetailsMap;
+        List<AwsServices> supportedServices = Arrays.asList(AwsServices.EC2, AwsServices.S3);
         for (String service : serviceDetails.keySet()) {
-            if (!service.equalsIgnoreCase(AWSCsvBillParser.AwsServices.EC2.getName())) {
-                // Instance Costs are present only with EC2 service.
+            if (!supportedServices.contains(AwsServices.getByName(service))) {
                 continue;
             }
             Map<String, AwsResourceDetailDto> resourceDetailsMap = serviceDetails.get(service).resourceDetailsMap;
@@ -732,10 +748,10 @@ public class AWSCostStatsService extends StatelessService {
                 if ((resourceDetails == null) || (resourceDetails.directCosts == null)) {
                     continue;
                 }
-                List<String> computeStateLinks = statsData.awsInstanceLinksById
-                        .getOrDefault(resourceId, Collections.emptyList());
-                for (String resourceComputeStateLink : computeStateLinks) {
-                    ComputeStats resourceStats = createStatsForResource(resourceComputeStateLink, resourceDetails);
+                Set<String> resourceLinks = statsData.awsResourceLinksById
+                        .getOrDefault(resourceId, Collections.emptySet());
+                for (String resourceStateLink : resourceLinks) {
+                    ComputeStats resourceStats = createStatsForResource(resourceStateLink, resourceDetails);
                     statsData.statsResponse.statsList.add(resourceStats);
                 }
             }
@@ -951,11 +967,11 @@ public class AWSCostStatsService extends StatelessService {
         }
     }
 
-    private ComputeStats createStatsForResource(String resourceComputeLink, AwsResourceDetailDto resourceDetails) {
+    private ComputeStats createStatsForResource(String resourceLink, AwsResourceDetailDto resourceDetails) {
 
         ComputeStats resourceStats = new ComputeStats();
         resourceStats.statValues = new ConcurrentSkipListMap<>();
-        resourceStats.computeLink = resourceComputeLink;
+        resourceStats.computeLink = resourceLink;
         List<ServiceStat> resourceServiceStats = new ArrayList<>();
         String normalizedStatKeyValue = AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.COST);
         for (Entry<Long, Double> cost : resourceDetails.directCosts.entrySet()) {
@@ -975,7 +991,7 @@ public class AWSCostStatsService extends StatelessService {
             reservedInstanceStats.add(resourceStat);
         }
         logFine(() -> String.format("Reserved Instances stats count for %s is %d",
-                resourceComputeLink, reservedInstanceStats.size()));
+                resourceLink, reservedInstanceStats.size()));
         if (reservedInstanceStats.size() > 0) {
             resourceStats.statValues.put(normalizedReservedInstanceStatKey, reservedInstanceStats);
         }

@@ -109,6 +109,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         context.accountsMarkersMap.put(TestAWSCostAdapterService.account2Id,
                 getMockMarkerMetrics(TestAWSCostAdapterService.account2SelfLink));
         context.stage = next;
+        context.subStage = AWSCostStatsCreationSubStage.QUERY_INSTANCES;
         handleCostStatsCreationRequest(context);
     }
 
@@ -163,17 +164,24 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
     @Override
     protected void queryInstances(AWSCostStatsCreationContext statsData,
-            AWSCostStatsCreationStages next) {
+            AWSCostStatsCreationStages nextStage, AWSCostStatsCreationSubStage nextSubStage) {
         //inserting all mock data required
         ComputeState instance1 = new ComputeState();
         instance1.documentSelfLink = INSTANCE_1_SELF_LINK;
-        statsData.awsInstanceLinksById
-                .put("i-2320dc97", Collections.singletonList(INSTANCE_1_SELF_LINK));
+        statsData.awsResourceLinksById.put("i-2320dc97", Collections.singleton(INSTANCE_1_SELF_LINK));
         ComputeState instance2 = new ComputeState();
         instance2.documentSelfLink = INSTANCE_2_SELF_LINK;
-        statsData.awsInstanceLinksById
-                .put("i-69d52add", Collections.singletonList(INSTANCE_2_SELF_LINK));
-        statsData.stage = next;
+        statsData.awsResourceLinksById.put("i-69d52add", Collections.singleton(INSTANCE_2_SELF_LINK));
+        statsData.stage = nextStage;
+        statsData.subStage = nextSubStage;
+        handleCostStatsCreationRequest(statsData);
+    }
+
+    @Override
+    protected void queryVolumes(AWSCostStatsCreationContext statsData, AWSCostStatsCreationStages nextStage,
+            AWSCostStatsCreationSubStage nextSubStage) {
+        statsData.stage = nextStage;
+        statsData.subStage = nextSubStage;
         handleCostStatsCreationRequest(statsData);
     }
 
