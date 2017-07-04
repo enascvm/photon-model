@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCli
 import static com.vmware.photon.controller.model.resources.SecurityGroupService.FACTORY_LINK;
 
 import java.net.URI;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +52,7 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.Protocol;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
@@ -65,7 +67,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AWSLoadBalancerService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_LOAD_BALANCER_ADAPTER;
-    public static final String SECURITY_GROUP_DOCUMENT_SELF_LINK = "awsSecurityGroupDocumentSelfLink";
 
     /**
      * Load balancer request context.
@@ -90,7 +91,8 @@ public class AWSLoadBalancerService extends StatelessService {
         AmazonElasticLoadBalancingAsyncClient client;
 
         TaskManager taskManager;
-        SecurityGroupState securityGroupState;
+        List<SecurityGroupState> securityGroupStates;
+        SecurityGroupState provisionedSecurityGroupState;
 
         AWSLoadBalancerContext(StatelessService service, LoadBalancerInstanceRequest request) {
             this.request = request;
@@ -199,18 +201,21 @@ public class AWSLoadBalancerService extends StatelessService {
     private DeferredResult<AWSLoadBalancerContext> getSecurityGroupState(
             AWSLoadBalancerContext context) {
 
-        if (context.loadBalancerStateExpanded.customProperties == null ||
-                context.loadBalancerStateExpanded.customProperties
-                        .get(SECURITY_GROUP_DOCUMENT_SELF_LINK) == null) {
+        if (context.loadBalancerStateExpanded.securityGroupLinks == null ||
+                context.loadBalancerStateExpanded.securityGroupLinks.isEmpty()) {
             return DeferredResult.completed(context);
         }
-        String sgDocumentSelfLink = context.loadBalancerStateExpanded.customProperties.get
-                (SECURITY_GROUP_DOCUMENT_SELF_LINK);
 
-        URI uri = context.request.buildUri(sgDocumentSelfLink);
-        return this.sendWithDeferredResult(Operation.createGet(uri), SecurityGroupState.class)
-                .thenApply(securityGroupState -> {
-                    context.securityGroupState = securityGroupState;
+        List<DeferredResult<SecurityGroupState>> securityGroupDRs =
+                context.loadBalancerStateExpanded.securityGroupLinks.stream()
+                        .map(context.request::buildUri)
+                        .map(uri -> sendWithDeferredResult(Operation.createGet(uri),
+                                SecurityGroupState.class))
+                        .collect(Collectors.toList());
+
+        return DeferredResult.allOf(securityGroupDRs)
+                .thenApply(securityGroupStates -> {
+                    context.securityGroupStates = securityGroupStates;
                     return context;
                 });
     }
@@ -222,8 +227,10 @@ public class AWSLoadBalancerService extends StatelessService {
         switch (context.request.requestType) {
         case CREATE:
             if (context.request.isMockRequest) {
-                // no need to go the end-point; just generate AWS Load Balancer Id.
-                // TODO
+                // no need to go the end-point; just populate an dummy LB address
+                context.loadBalancerAddress = "lb-mock-address.com";
+                execution = execution
+                        .thenCompose(this::updateLoadBalancerState);
             } else {
                 execution = execution
                         .thenCompose(this::createSecurityGroup)
@@ -237,7 +244,8 @@ public class AWSLoadBalancerService extends StatelessService {
 
         case UPDATE:
             if (context.request.isMockRequest) {
-                this.logFine("Mock request to update an AWS load balancer processed.");
+                this.logFine("Mock request to update an AWS load balancer ["
+                        + context.loadBalancerStateExpanded.name + "] processed.");
             } else {
                 execution = execution.thenCompose(this::getAWSLoadBalancer)
                         .thenCompose(this::assignInstances);
@@ -247,8 +255,9 @@ public class AWSLoadBalancerService extends StatelessService {
 
         case DELETE:
             if (context.request.isMockRequest) {
-                // no need to go to the end-point (TODO: add ID to the log message)
-                this.logFine("Mock request to delete an AWS load balancer processed.");
+                // no need to go to the end-point
+                this.logFine("Mock request to delete an AWS load balancer ["
+                        + context.loadBalancerStateExpanded.name + "] processed.");
             } else {
                 execution = execution
                         .thenCompose(this::deleteLoadBalancer)
@@ -256,6 +265,7 @@ public class AWSLoadBalancerService extends StatelessService {
             }
 
             return execution.thenCompose(this::deleteLoadBalancerState);
+
         default:
             IllegalStateException ex = new IllegalStateException("Unsupported request type");
             return DeferredResult.failed(ex);
@@ -264,6 +274,11 @@ public class AWSLoadBalancerService extends StatelessService {
 
     private DeferredResult<AWSLoadBalancerContext> createSecurityGroup(
             AWSLoadBalancerContext context) {
+        if (context.loadBalancerStateExpanded.securityGroupLinks != null
+                && !context.loadBalancerStateExpanded.securityGroupLinks.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
         return DeferredResult.completed(context)
                 .thenCompose(this::createSecurityGroupState)
                 .thenCompose(this::provisionSecurityGroup);
@@ -296,7 +311,7 @@ public class AWSLoadBalancerService extends StatelessService {
 
         return this.sendWithDeferredResult(operation, SecurityGroupState.class)
                 .thenApply(securityGroupState -> {
-                    context.securityGroupState = securityGroupState;
+                    context.provisionedSecurityGroupState = securityGroupState;
                     return context;
                 });
     }
@@ -330,14 +345,14 @@ public class AWSLoadBalancerService extends StatelessService {
             AWSLoadBalancerContext context) {
 
         SecurityGroupInstanceRequest req = buildSecurityGroupInstanceRequest(context
-                .securityGroupState, InstanceRequestType.CREATE, context.request);
+                .provisionedSecurityGroupState, InstanceRequestType.CREATE, context.request);
 
         Operation operation = Operation.createPatch(this,
                 AWSSecurityGroupService.SELF_LINK)
                 .setBody(req);
         return sendWithDeferredResult(operation, SecurityGroupState.class)
                 .thenApply(sgs -> {
-                    context.securityGroupState = sgs;
+                    context.provisionedSecurityGroupState = sgs;
                     return context;
                 });
     }
@@ -408,9 +423,10 @@ public class AWSLoadBalancerService extends StatelessService {
             AWSLoadBalancerContext context) {
         LoadBalancerState loadBalancerState = new LoadBalancerState();
         loadBalancerState.address = context.loadBalancerAddress;
-        loadBalancerState.customProperties = new HashMap<>();
-        loadBalancerState.customProperties.put(SECURITY_GROUP_DOCUMENT_SELF_LINK,
-                context.securityGroupState.documentSelfLink);
+        if (context.provisionedSecurityGroupState != null) {
+            loadBalancerState.securityGroupLinks = Collections
+                    .singleton(context.provisionedSecurityGroupState.documentSelfLink);
+        }
 
         Operation op = Operation
                 .createPatch(this, context.loadBalancerStateExpanded.documentSelfLink);
@@ -521,6 +537,9 @@ public class AWSLoadBalancerService extends StatelessService {
     }
 
     private CreateLoadBalancerRequest buildCreationRequest(AWSLoadBalancerContext context) {
+        Collection<SecurityGroupState> securityGroupsToUse = context.securityGroupStates != null
+                ? context.securityGroupStates
+                        : Collections.singleton(context.provisionedSecurityGroupState);
 
         CreateLoadBalancerRequest request = new CreateLoadBalancerRequest()
                 .withLoadBalancerName(context.loadBalancerStateExpanded.name)
@@ -529,7 +548,8 @@ public class AWSLoadBalancerService extends StatelessService {
                         .map(subnet -> subnet.id)
                         .collect(Collectors.toList())
                 )
-                .withSecurityGroups(context.securityGroupState.id);
+                .withSecurityGroups(
+                        securityGroupsToUse.stream().map(sg -> sg.id).collect(Collectors.toList()));
 
         // Set scheme to Internet-facing if specified. By default, an internal load balancer is
         // created
@@ -610,20 +630,30 @@ public class AWSLoadBalancerService extends StatelessService {
 
     private DeferredResult<AWSLoadBalancerContext> deleteSecurityGroup(
             AWSLoadBalancerContext context) {
-        SecurityGroupInstanceRequest req = buildSecurityGroupInstanceRequest(context
-                .securityGroupState, InstanceRequestType.DELETE, context.request);
+        List<SecurityGroupState> infrastructureSecurityGroups =
+                context.securityGroupStates.stream()
+                        .filter(this::isInfrastructureResource)
+                        .collect(Collectors.toList());
+        if (infrastructureSecurityGroups.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
 
-        Operation operation = Operation.createPatch(this,
-                AWSSecurityGroupService.SELF_LINK)
-                .setBody(req);
-        return sendWithDeferredResult(operation, SecurityGroupState.class)
-                .exceptionally(th -> {
+        List<DeferredResult<Operation>> deletionDRs = infrastructureSecurityGroups.stream()
+                .map(sg -> buildSecurityGroupInstanceRequest(sg, InstanceRequestType.DELETE,
+                        context.request))
+                .map(req -> Operation.createPatch(this, AWSSecurityGroupService.SELF_LINK)
+                        .setBody(req))
+                .map(op -> sendWithDeferredResult(op).exceptionally(th -> {
                     // Delete requests should not fail, only log the problem.
-                    this.logWarning("Unable to delete Security Group {}", context
-                            .securityGroupState.name);
-                    this.logFine(th.getMessage());
+                    this.logWarning("Unable to delete security group: %s", th.getMessage());
                     return null;
-                })
-                .thenApply(ignore -> context);
+                })).collect(Collectors.toList());
+
+        return DeferredResult.allOf(deletionDRs).thenApply(ignore -> context);
+    }
+
+    private boolean isInfrastructureResource(ResourceState resource) {
+        return resource.customProperties != null && Boolean.TRUE.toString().equals(
+                resource.customProperties.get(ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME));
     }
 }

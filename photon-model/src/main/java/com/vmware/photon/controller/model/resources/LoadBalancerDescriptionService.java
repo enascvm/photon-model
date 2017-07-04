@@ -25,6 +25,7 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
@@ -46,10 +47,12 @@ public class LoadBalancerDescriptionService extends StatefulService {
     public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
     public static final String FIELD_NAME_COMPUTE_DESCRIPTION_LINK = "computeDescriptionLink";
     public static final String FIELD_NAME_SUBNET_LINKS = "subnetLinks";
-    public static final String FIELD_NAME_PROTOCOL = "protocol";
-    public static final String FIELD_NAME_PORT = "port";
-    public static final String FIELD_NAME_INSTANCE_PROTOCOL = "instanceProtocol";
-    public static final String FIELD_NAME_INSTANCE_PORT = "instancePort";
+    public static final String FIELD_NAME_SECURITY_GROUP_LINKS = "securityGroupLinks";
+    public static final String FIELD_NAME_ROUTES = "routes";
+    public static final String FIELD_NAME_ROUTES_PROTOCOL = "protocol";
+    public static final String FIELD_NAME_ROUTES_PORT = "port";
+    public static final String FIELD_NAME_ROUTES_INSTANCE_PROTOCOL = "instanceProtocol";
+    public static final String FIELD_NAME_ROUTES_INSTANCE_PORT = "instancePort";
     public static final String FIELD_NAME_INTERNET_FACING = "internetFacing";
 
     public static final int MIN_PORT_NUMBER = 1;
@@ -190,6 +193,13 @@ public class LoadBalancerDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Set<String> subnetLinks;
+
+        /**
+         * Optional list of security groups to apply on the load balancer.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_23)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Set<String> securityGroupLinks;
 
         /**
          * Internet-facing load balancer or an internal load balancer

@@ -171,10 +171,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         lb = getServiceSynchronously(lb.documentSelfLink, LoadBalancerState.class);
 
         if (!this.isMock) {
-            LoadBalancerDescription awsLoadBalancer = getAwsLoadBalancer(this.lbName);
-            String securityGroupDocumentSelfLink = lb.customProperties
-                    .get(AWSLoadBalancerService.SECURITY_GROUP_DOCUMENT_SELF_LINK);
-
+            assertNotNull(lb.securityGroupLinks);
+            String securityGroupDocumentSelfLink = lb.securityGroupLinks.iterator().next();
             assertNotNull(securityGroupDocumentSelfLink);
 
             SecurityGroupState sgs = getServiceSynchronously(securityGroupDocumentSelfLink,
@@ -182,6 +180,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
             this.sgId = sgs.id;
 
+            LoadBalancerDescription awsLoadBalancer = getAwsLoadBalancer(this.lbName);
             assertNotNull(awsLoadBalancer);
             assertEquals(awsLoadBalancer.getDNSName(), lb.address);
             assertEquals("internet-facing", awsLoadBalancer.getScheme());
