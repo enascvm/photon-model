@@ -148,6 +148,7 @@ public class AzureCostStatsService extends StatelessService {
         CREATE_UPDATE_MISSING_COMPUTE_STATES,
         SET_LINKED_ACCOUNTS_CUSTOM_PROPERTY,
         QUERY_LINKED_SUBSCRIPTIONS,
+        CREATE_MONTHLY_STATS_AND_POST,
         CREATE_DAILY_STATS_AND_POST
     }
 
@@ -181,6 +182,8 @@ public class AzureCostStatsService extends StatelessService {
         private ComputeStatsResponse statsResponse = new ComputeStatsResponse();
         private Map<String, ComputeState> subscriptionGuidToComputeState = new ConcurrentHashMap<>();
         private TaskManager taskManager;
+        // billParsingCompleteTimeMillis is populated once the entire bill is parsed
+        private long billParsingCompleteTimeMillis = 0;
 
         Context(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -268,7 +271,10 @@ public class AzureCostStatsService extends StatelessService {
                 queryLinkedSubscriptions(context, Stages.CREATE_DAILY_STATS_AND_POST);
                 break;
             case CREATE_DAILY_STATS_AND_POST:
-                createStats(context, Stages.PARSE_DETAILED_BILL);
+                createStats(context);
+                break;
+            case CREATE_MONTHLY_STATS_AND_POST:
+                createMonthlyStats(context, Stages.PARSE_DETAILED_BILL);
                 break;
             default:
                 logSevere(() -> String.format("Unknown Azure Cost Stats stage %s ",
@@ -648,8 +654,7 @@ public class AzureCostStatsService extends StatelessService {
             }
             boolean parsingComplete = billHandler
                     .parseDetailedCsv(context.csvReader, context.billProcessedTimeMillis,
-                            context.currency, getDailyStatsConsumer(context, next),
-                            getMonthlyStatsConsumer(context));
+                            context.currency, getDailyStatsConsumer(context, next));
             if (parsingComplete) {
                 cleanUp(context);
             }
@@ -753,9 +758,13 @@ public class AzureCostStatsService extends StatelessService {
     /**
      * Consumes the daily bill rows and creates stats
      */
-    private Consumer<Map<String, AzureSubscription>> getDailyStatsConsumer(
+    private BiConsumer<Map<String, AzureSubscription>, Long>  getDailyStatsConsumer(
             Context context, Stages next) {
-        return (newMonthlyBillBatch) -> {
+        return (newMonthlyBillBatch, parsingCompleteTimeMillis) -> {
+            if (parsingCompleteTimeMillis != null) {
+                // This means bill parsing is complete
+                context.billParsingCompleteTimeMillis = parsingCompleteTimeMillis;
+            }
             List<AzureSubscription> newSubscriptions = getNewSubscriptions(
                     newMonthlyBillBatch, context.allSubscriptionsCost);
             populateMonthlySubscriptionCost(context, newMonthlyBillBatch);
@@ -812,7 +821,7 @@ public class AzureCostStatsService extends StatelessService {
                 .collect(Collectors.toList());
     }
 
-    private void createStats(Context context, Stages next) {
+    private void createStats(Context context) {
         context.monthlyBillBatch.values().forEach(subscription -> {
             subscription.getServices().values()
                     .forEach(service -> createServiceStatsForSubscription(context, subscription));
@@ -822,26 +831,29 @@ public class AzureCostStatsService extends StatelessService {
             return;
         }
         postStats(context, false);
-        context.stage = next;
+        // Check if the entire bill is parsed
+        if (context.billParsingCompleteTimeMillis > 0) {
+            context.stage = Stages.CREATE_MONTHLY_STATS_AND_POST;
+        } else {
+            context.stage = Stages.PARSE_DETAILED_BILL;
+        }
         handleRequest(context);
     }
 
-    private BiConsumer<Map<String, AzureSubscription>, Long> getMonthlyStatsConsumer(
-            Context context) {
-        return (azureSubscriptions, billProcessedTimeMillis) -> {
-            context.billProcessedTimeMillis = billProcessedTimeMillis;
-            context.allSubscriptionsCost.values()
-                    .forEach(subscription -> createAzureSubscriptionStats(context, subscription));
-            List<ComputeStats> eaAccountStats = createEaAccountStats(
-                    context.eaAccountCost, context.computeHostDesc,
-                    billProcessedTimeMillis, context.auth.privateKey);
-            if (eaAccountStats.size() == 0) {
-                return;
-            }
+    private void createMonthlyStats(Context context, Stages next) {
+        context.billProcessedTimeMillis = context.billParsingCompleteTimeMillis;
+        context.allSubscriptionsCost.values()
+                .forEach(subscription -> createAzureSubscriptionStats(context, subscription));
+        List<ComputeStats> eaAccountStats = createEaAccountStats(
+                context.eaAccountCost, context.computeHostDesc,
+                context.billParsingCompleteTimeMillis, context.auth.privateKey);
+        if (eaAccountStats.size() > 0) {
             context.statsResponse.statsList.addAll(eaAccountStats);
             postStats(context, true);
             logInfo(() -> "Finished collecting cost stats.");
-        };
+        }
+        context.stage = next;
+        handleRequest(context);
     }
 
     // Create Azure account stats

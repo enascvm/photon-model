@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import com.opencsv.CSVReader;
@@ -80,8 +79,8 @@ public class AzureDetailedBillHandler {
     }
 
     public boolean parseDetailedCsv(CSVReader csvReader, long billProcessedTimeMillis,
-            String currency, Consumer<Map<String, AzureSubscription>> dailyStatsConsumer,
-            BiConsumer<Map<String, AzureSubscription>, Long> monthlyStatsConsumer) throws IOException {
+            String currency, BiConsumer<Map<String, AzureSubscription>, Long> dailyStatsConsumer)
+            throws IOException {
         logger.fine("Beginning to parse CSV billFileReader.");
         HeaderColumnNameMappingStrategy<EaDetailedBillElement> strategy =
                 new HeaderColumnNameMappingStrategy<>();
@@ -115,15 +114,14 @@ public class AzureDetailedBillHandler {
                 // This indicates that we have processed all rows belonging to a
                 // corresponding day in the current month's bill.
                 // Consume the batch
-                dailyStatsConsumer.accept(monthlyBill);
+                dailyStatsConsumer.accept(monthlyBill, null);
                 break;
             }
             prevRowEpoch = curRowEpoch;
         } while ((nextRow = csvReader.readNext()) != null);
         if (nextRow == null && monthlyBill.size() > 0) {
             parsingComplete = true;
-            dailyStatsConsumer.accept(monthlyBill);
-            monthlyStatsConsumer.accept(monthlyBill, billProcessedTimeMillis);
+            dailyStatsConsumer.accept(monthlyBill, billProcessedTimeMillis);
             logger.fine("Finished parsing CSV bill.");
         }
         return parsingComplete;
