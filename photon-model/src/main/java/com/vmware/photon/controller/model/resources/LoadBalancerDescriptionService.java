@@ -25,7 +25,6 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
-import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
@@ -199,7 +198,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_23)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public Set<String> securityGroupLinks;
+        public List<String> securityGroupLinks;
 
         /**
          * Internet-facing load balancer or an internal load balancer
@@ -279,6 +278,20 @@ public class LoadBalancerDescriptionService extends StatefulService {
                     if (patchBody.routes != null) {
                         hasChanged = true;
                         currentState.routes = patchBody.routes;
+                    }
+
+                    if (patchBody.securityGroupLinks != null) {
+                        if (currentState.securityGroupLinks == null) {
+                            currentState.securityGroupLinks = patchBody.securityGroupLinks;
+                            hasChanged = true;
+                        } else {
+                            for (String link : patchBody.securityGroupLinks) {
+                                if (!currentState.securityGroupLinks.contains(link)) {
+                                    currentState.securityGroupLinks.add(link);
+                                    hasChanged = true;
+                                }
+                            }
+                        }
                     }
 
                     return Boolean.valueOf(hasChanged);

@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCli
 import static com.vmware.photon.controller.model.resources.SecurityGroupService.FACTORY_LINK;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -424,8 +425,8 @@ public class AWSLoadBalancerService extends StatelessService {
         LoadBalancerState loadBalancerState = new LoadBalancerState();
         loadBalancerState.address = context.loadBalancerAddress;
         if (context.provisionedSecurityGroupState != null) {
-            loadBalancerState.securityGroupLinks = Collections
-                    .singleton(context.provisionedSecurityGroupState.documentSelfLink);
+            loadBalancerState.securityGroupLinks = Arrays
+                    .asList(context.provisionedSecurityGroupState.documentSelfLink);
         }
 
         Operation op = Operation
