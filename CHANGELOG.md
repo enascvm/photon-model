@@ -1,7 +1,9 @@
 # CHANGELOG
 
-## 0.6.23-SNAPSHOT
-
+## 0.6.23
+* Added support to set custom IP address for Azure VM.
+* Added support to update LB configuration for AWS.
+* Added support to retrieve hostName for VC vms.
 
 ## 0.6.22
 
