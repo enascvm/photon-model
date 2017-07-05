@@ -158,7 +158,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                 CustomizationClient cc = new CustomizationClient(connection,
                                         ctx.child, vmOverlay.getGuestId());
                                 CustomizationSpec template = new CustomizationSpec();
-                                cc.customizeNic(vmOverlay.getPrimaryMac(), desc, subnet, template);
+                                cc.customizeNic(vmOverlay.getPrimaryMac(), ctx.child.hostName, desc, subnet, template);
                                 cc.customizeDns(subnet.dnsServerAddresses, subnet.dnsSearchDomains,
                                         template);
                                 ManagedObjectReference task = cc

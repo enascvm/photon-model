@@ -153,6 +153,10 @@ public class VmOverlay extends AbstractOverlay {
         return null;
     }
 
+    public String getHostName() {
+        return (String) getOrDefault(VimPath.vm_guest_hostName, null);
+    }
+
     public List<String> getAllIps() {
         ArrayOfGuestNicInfo arr = (ArrayOfGuestNicInfo) getOrDefault(VimPath.vm_guest_net, null);
         if (arr == null) {

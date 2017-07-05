@@ -1936,9 +1936,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .description.powerAdapterReference;
 
         state.regionId = enumerationProgress.getRegionId();
-        state.cpuCount = new Long(vm.getNumCpu());
+        state.cpuCount = (long) vm.getNumCpu();
         state.totalMemoryBytes = vm.getMemoryBytes();
 
+        state.hostName = vm.getHostName();
         state.powerState = vm.getPowerState();
         state.primaryMAC = vm.getPrimaryMac();
         if (!vm.isTemplate()) {

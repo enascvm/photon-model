@@ -58,7 +58,8 @@ public class CustomizationClient extends BaseHelper {
         return connection.getVimPort().customizeVMTask(vm, spec);
     }
 
-    public void customizeNic(String macAddress, NetworkInterfaceDescription config, SubnetState subnetState, CustomizationSpec template) {
+    public void customizeNic(String macAddress, String hostName, NetworkInterfaceDescription config,
+            SubnetState subnetState, CustomizationSpec template) {
         // remove existing mapping
         template.getNicSettingMap().removeIf(x -> Objects.equals(x.getMacAddress(), macAddress));
 
@@ -82,7 +83,10 @@ public class CustomizationClient extends BaseHelper {
             identity.setDomain(subnetState.domain);
 
             CustomizationFixedName name = new CustomizationFixedName();
-            name.setName(makeHostName(UriUtils.getLastPathSegment(this.state.documentSelfLink)));
+            if (hostName == null || hostName.isEmpty()) {
+                hostName = makeHostName(UriUtils.getLastPathSegment(this.state.documentSelfLink));
+            }
+            name.setName(hostName);
             identity.setHostName(name);
 
             template.setOptions(new CustomizationLinuxOptions());
