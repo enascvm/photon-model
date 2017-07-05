@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
@@ -819,6 +820,7 @@ public class BaseVSphereAdapterTest {
     protected HashMap<String, String> buildCustomProperties() {
         HashMap<String, String> customProperties = new HashMap<>();
 
+        customProperties.put(DISK_MODE_PERSISTENT, "true");
         customProperties.put(PROVISION_TYPE, VirtualDiskType.THIN.value());
         customProperties.put(SHARES_LEVEL, SharesLevel.HIGH.value());
         customProperties.put(LIMIT_IOPS, "100");

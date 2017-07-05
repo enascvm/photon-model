@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_INDEPENDENT;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
@@ -1739,24 +1740,25 @@ public class InstanceClient extends BaseHelper {
      * Disk mode is determined based on the disk state properties.
      */
     private String getDiskMode(DiskStateExpanded diskState) {
+        if (diskState.customProperties == null) {
+            return VirtualDiskMode.PERSISTENT.value();
+        }
+
         boolean isIndependent = false;
-        if (diskState.customProperties != null
-                && diskState.customProperties.get(DISK_MODE_INDEPENDENT) != null) {
+        if (diskState.customProperties.get(DISK_MODE_INDEPENDENT) != null) {
             isIndependent = Boolean.valueOf(diskState.customProperties.get(DISK_MODE_INDEPENDENT));
         }
-        if (diskState.persistent == null) {
-            return isIndependent ?
-                    VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
-                    VirtualDiskMode.PERSISTENT.value();
-        } else {
-            return diskState.persistent ?
-                    (isIndependent ?
-                            VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
-                            VirtualDiskMode.PERSISTENT.value()) :
-                    (isIndependent ?
-                            VirtualDiskMode.INDEPENDENT_NONPERSISTENT.value() :
-                            VirtualDiskMode.NONPERSISTENT.value());
+        boolean isPersistent = true;
+        if (diskState.customProperties.get(DISK_MODE_PERSISTENT) != null) {
+            isPersistent = Boolean.valueOf(diskState.customProperties.get(DISK_MODE_PERSISTENT));
         }
+        return isPersistent ?
+                (isIndependent ?
+                        VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
+                        VirtualDiskMode.PERSISTENT.value()) :
+                (isIndependent ?
+                        VirtualDiskMode.INDEPENDENT_NONPERSISTENT.value() :
+                        VirtualDiskMode.NONPERSISTENT.value());
     }
 
     private VirtualDiskType getDiskProvisioningType(DiskStateExpanded diskState) throws

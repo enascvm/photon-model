@@ -72,6 +72,7 @@ public class CustomProperties {
     public static final String TARGET_LINK = "__targetLink";
 
     // Storage Related constants
+    public static final String DISK_MODE_PERSISTENT = "persistent";
     /**
      * Disk mode of the disk to be independent of snapshots or not.
      */
