@@ -83,6 +83,11 @@ public class IPAddressAllocationTaskService extends
 
          // IP ranges from which IP address is allocated.
         public List<String> subnetRangeLinks;
+
+        /**
+         * Connected resource that is associated with IP address(es)
+         */
+        public String connectedResourceLink;
     }
 
     /**
@@ -135,6 +140,14 @@ public class IPAddressAllocationTaskService extends
         @ServiceDocument.PropertyOptions(usage = {
                 ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL})
         public List<String> ipAddressLinks;
+
+        /**
+         * Connected resource that is associated with IP address(es)
+         */
+        @ServiceDocument.Documentation(description = "The connected resource associated with IP address(es).")
+        @ServiceDocument.PropertyOptions(usage = {
+                ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT})
+        public String connectedResourceLink;
 
         /**
          * For allocation, set by the task with the IP addresses being allocated.
@@ -226,11 +239,11 @@ public class IPAddressAllocationTaskService extends
             break;
         case FINISHED:
             logInfo(() -> "Task is complete");
-            sendCallbackResponse(this, currentState);
+            sendCallbackResponse(currentState);
             break;
         case FAILED:
             logInfo(() -> "Task failed");
-            sendCallbackResponse(this, currentState);
+            sendCallbackResponse(currentState);
             break;
         default:
             break;
@@ -679,20 +692,26 @@ public class IPAddressAllocationTaskService extends
         return UriUtils.getLastPathSegment(subnetRangeSelfLink) + ID_SEPARATOR + ipAddress;
     }
 
-    private static void sendCallbackResponse(IPAddressAllocationTaskService service, IPAddressAllocationTaskState state) {
+    private void sendCallbackResponse(IPAddressAllocationTaskState state) {
         IPAddressAllocationTaskResult result;
         if (state.taskInfo.stage == TaskState.TaskStage.FAILED) {
-            result = new IPAddressAllocationTaskResult(TaskState.TaskStage.FAILED,
-                    IPAddressAllocationTaskState.SubStage.FAILED, state.taskInfo.failure);
+            result = new IPAddressAllocationTaskResult(state.serviceTaskCallback.getFailedResponse(state.taskInfo.failure).taskInfo.stage,
+                    state.serviceTaskCallback.getFailedResponse(state.taskInfo.failure).taskSubStage, state.taskInfo.failure);
         } else {
-            result = new IPAddressAllocationTaskResult(TaskState.TaskStage.FINISHED,
-                    IPAddressAllocationTaskState.SubStage.FINISHED, null);
+            result = new IPAddressAllocationTaskResult(state.serviceTaskCallback.getFinishedResponse().taskInfo.stage,
+                    state.serviceTaskCallback.getFinishedResponse().taskSubStage, null);
         }
 
         result.ipAddresses = state.ipAddresses;
         result.ipAddressLinks = state.ipAddressLinks;
         result.subnetRangeLinks = state.subnetRangeLinks;
-        service.sendRequest(Operation.createPatch(state.serviceTaskCallback.serviceURI).setBody(result));
+        result.connectedResourceLink = state.connectedResourceLink;
+
+        logInfo(String.format("Allocated IP addresses [%s] for resource [%s]",
+                result.ipAddresses != null ?
+                String.join(",", result.ipAddresses) : "", result.connectedResourceLink));
+
+        sendRequest(Operation.createPatch(state.serviceTaskCallback.serviceURI).setBody(result));
     }
 }
 

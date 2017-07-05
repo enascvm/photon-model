@@ -35,6 +35,7 @@ public class PhotonModelTaskServices {
             ResourceRemovalTaskService.FACTORY_LINK,
             ProvisionComputeTaskService.FACTORY_LINK,
             ProvisionNetworkTaskService.FACTORY_LINK,
+            IPAddressAllocationTaskService.FACTORY_LINK,
             ProvisionSubnetTaskService.FACTORY_LINK,
             ProvisionLoadBalancerTaskService.FACTORY_LINK,
             SnapshotTaskService.FACTORY_LINK,
@@ -66,6 +67,8 @@ public class PhotonModelTaskServices {
                 () -> TaskFactoryService.create(ProvisionComputeTaskService.class));
         host.startFactory(ProvisionNetworkTaskService.class,
                 () -> TaskFactoryService.create(ProvisionNetworkTaskService.class));
+        host.startFactory(IPAddressAllocationTaskService.class,
+                () -> TaskFactoryService.create(IPAddressAllocationTaskService.class));
         host.startFactory(ProvisionSubnetTaskService.class,
                 () -> TaskFactoryService.create(ProvisionSubnetTaskService.class));
         host.startFactory(ProvisionLoadBalancerTaskService.class,
