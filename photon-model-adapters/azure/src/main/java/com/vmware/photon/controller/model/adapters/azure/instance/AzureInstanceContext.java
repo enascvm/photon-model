@@ -119,6 +119,7 @@ public class AzureInstanceContext extends
 
     public String storageAccountName;
     public String storageAccountRGName;
+    public boolean createResourceGroupForStorageAccount;
     public StorageAccountInner storageAccount;
 
     public ImageSource imageSource;

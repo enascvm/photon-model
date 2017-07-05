@@ -580,8 +580,8 @@ public class AzureInstanceService extends StatelessService {
                 resourceGroupName,
                 resourceGroup,
                 new TransitionToCallback<ResourceGroupInner>(ctx, nextStage, msg) {
-                    @Override
-                    CompletionStage<ResourceGroupInner> handleSuccess(ResourceGroupInner rg) {
+                    @Override CompletionStage<ResourceGroupInner> handleSuccess(
+                            ResourceGroupInner rg) {
                         this.ctx.resourceGroup = rg;
                         return CompletableFuture.completedFuture(rg);
                     }
@@ -690,12 +690,18 @@ public class AzureInstanceService extends StatelessService {
                     .thenCompose(this::resolveStorageAccountForPrivateImage);
         }
 
-        // null check in-case storage description is not set
+        // Check if storage Description is set. If so we are reusing an existing storage account.
+        // No need to create or use ctx.storageAccountRGName or ctx.storageAccountName
         if (ctx.bootDiskState.storageDescription != null) {
-            ctx.storageAccountName = ctx.bootDiskState.storageDescription.name;
+
+            //set flag in context that we are reusing existing storage account
+            ctx.createResourceGroupForStorageAccount = false;
+            return DeferredResult.completed(ctx);
+
         } else {
             ctx.storageAccountName = ctx.bootDiskState.customProperties
                     .get(AZURE_STORAGE_ACCOUNT_NAME);
+            ctx.createResourceGroupForStorageAccount = true;
         }
 
         ctx.storageAccountRGName = ctx.bootDiskState.customProperties
@@ -760,6 +766,10 @@ public class AzureInstanceService extends StatelessService {
 
     private DeferredResult<AzureInstanceContext> createStorageAccount(AzureInstanceContext ctx) {
 
+        if (!ctx.createResourceGroupForStorageAccount) {
+            //no need to create a storage account
+            return DeferredResult.completed(ctx);
+        }
         String msg = "Create/Update Azure Storage Account [" + ctx.storageAccountName + "] for ["
                 + ctx.vmName + "] VM";
 
@@ -1095,8 +1105,8 @@ public class AzureInstanceService extends StatelessService {
         sendWithDeferredResult(
                 Operation.createPatch(ctx.computeRequest.resourceReference)
                         .setBody(cs))
-                                .thenApply(op -> ctx)
-                                .whenComplete(thenAllocation(ctx, nextStage));
+                .thenApply(op -> ctx)
+                .whenComplete(thenAllocation(ctx, nextStage));
     }
 
     /**
@@ -1144,7 +1154,7 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        DiskState bootDisk = ctx.bootDiskState;
+        DiskService.DiskStateExpanded bootDisk = ctx.bootDiskState;
         if (bootDisk == null) {
             handleError(ctx, new IllegalStateException("Azure bootDisk not specified"));
             return;
@@ -1288,7 +1298,13 @@ public class AzureInstanceService extends StatelessService {
         final OSDisk azureOsDisk = new OSDisk();
 
         azureOsDisk.withName(ctx.bootDiskState.name);
-        azureOsDisk.withVhd(getVHDUriForOSDisk(ctx.vmName, ctx.storageAccountName));
+
+        if (!ctx.createResourceGroupForStorageAccount) {
+            azureOsDisk.withVhd(getVHDUriForOSDisk(ctx.vmName, ctx.bootDiskState
+                    .storageDescription.name));
+        } else {
+            azureOsDisk.withVhd(getVHDUriForOSDisk(ctx.vmName, ctx.storageAccountName));
+        }
 
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
@@ -1330,12 +1346,18 @@ public class AzureInstanceService extends StatelessService {
 
         final List<DataDisk> azureDataDisks = new ArrayList<>();
 
-        for (DiskState diskState : ctx.dataDiskStates) {
+        for (DiskService.DiskStateExpanded diskState : ctx.dataDiskStates) {
 
             final DataDisk dataDisk = new DataDisk();
 
             dataDisk.withName(diskState.name);
-            dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
+            if (!ctx.createResourceGroupForStorageAccount) {
+                dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
+                        lunIndex));
+            } else {
+                dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
+            }
+
             dataDisk.withCreateOption(DiskCreateOptionTypes.EMPTY);
             dataDisk.withDiskSizeGB((int) diskState.capacityMBytes / 1024);
             dataDisk.withCaching(CachingTypes.fromString(
@@ -1548,6 +1570,13 @@ public class AzureInstanceService extends StatelessService {
      * Gets the storage keys from azure and patches the credential state.
      */
     private void getStorageKeys(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
+        if (!ctx.createResourceGroupForStorageAccount) {
+              // no need to get keys as no new storage description was created
+            handleAllocation(ctx, nextStage);
+            return;
+        }
+
         StorageManagementClientImpl client = getStorageManagementClientImpl(ctx);
 
         client.storageAccounts().listKeysAsync(ctx.storageAccountRGName,
