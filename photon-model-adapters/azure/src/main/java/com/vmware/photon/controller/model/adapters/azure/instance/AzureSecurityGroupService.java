@@ -170,7 +170,9 @@ public class AzureSecurityGroupService extends StatelessService {
 
         return AzureUtils.filterRGsByType(getHost(),
                 context.securityGroupState.groupLinks, context.securityGroupState.endpointLink,
-                context.securityGroupState.tenantLinks)
+                /* ignore tenantLinks for this query; group link and endpoint link (which is
+                implicitly tenanted) should be sufficient to uniquely identify the resource group */
+                null)
                 .thenApply(resourceGroupState -> {
                     context.securityGroupRGState = resourceGroupState;
                     return context;
@@ -208,7 +210,9 @@ public class AzureSecurityGroupService extends StatelessService {
                 this.getHost(),
                 query,
                 NetworkState.class,
-                context.securityGroupState.tenantLinks,
+                /* ignore tenantLinks for this query; network id and endpoint link (which is
+                implicitly tenanted) should be sufficient to uniquely identify the network */
+                null,
                 context.securityGroupState.endpointLink);
         queryNetworkStates.setMaxResultsLimit(1);
 
