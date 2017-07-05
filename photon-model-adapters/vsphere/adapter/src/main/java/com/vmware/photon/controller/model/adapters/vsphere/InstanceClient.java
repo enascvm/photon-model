@@ -566,7 +566,6 @@ public class InstanceClient extends BaseHelper {
                     spec.getProfile().add(sp);
                 });
             }
-            spec.setDatastore(datastore);
             spec.setFolder(vmFolder);
             spec.setDiskMoveType(
                     VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING

@@ -483,10 +483,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 }
             }
         } catch (Exception e) {
-            String msg = "Error processing Storage policy";
+            // vSphere throws exception even if there are no storage policies found on the server.
+            // Hence we can just log the message and continue, as with the datastore selection
+            // still provisioning can proceed. Not marking the task to failure here.
+            String msg = "Error processing Storage policy ";
             logWarning(() -> msg + ": " + e.toString());
-            mgr.patchTaskToFailure(msg, e);
-            return;
         }
 
         // process results in topological order
@@ -511,17 +512,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         // Process found storage policy, it is related to datastore. Hence process it after
         // datastore processing is complete.
-        ctx.expectStoragePolicyCount(storagePolicies.size());
-        for (StoragePolicyOverlay sp : storagePolicies) {
-            processFoundStoragePolicy(ctx, sp);
-        }
+        if (storagePolicies.size() > 0) {
+            ctx.expectStoragePolicyCount(storagePolicies.size());
+            for (StoragePolicyOverlay sp : storagePolicies) {
+                processFoundStoragePolicy(ctx, sp);
+            }
 
-        // checkpoint for storage policy
-        try {
-            ctx.getStoragePolicyTracker().await();
-        } catch (InterruptedException e) {
-            threadInterrupted(mgr, e);
-            return;
+            // checkpoint for storage policy
+            try {
+                ctx.getStoragePolicyTracker().await();
+            } catch (InterruptedException e) {
+                threadInterrupted(mgr, e);
+                return;
+            }
         }
 
         // exclude hosts part of a cluster
