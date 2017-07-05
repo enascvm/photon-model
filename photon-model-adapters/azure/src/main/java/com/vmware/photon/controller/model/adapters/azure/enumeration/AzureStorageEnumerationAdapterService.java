@@ -1220,11 +1220,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             .collect(Collectors.toSet()));
         }
 
-        String blobProperty = QuerySpecification
-                .buildCompositeFieldName(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AZURE_STORAGE_TYPE);
-
-        qBuilder.addInClause(blobProperty, Arrays.asList(AZURE_STORAGE_BLOBS, AZURE_STORAGE_DISKS));
+        qBuilder.addInClause(AZURE_STORAGE_TYPE,
+                Arrays.asList(AZURE_STORAGE_BLOBS, AZURE_STORAGE_DISKS));
 
         QueryStrategy<DiskState> queryLocalStates = new QueryByPages<>(
                 getHost(),
