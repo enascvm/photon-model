@@ -23,6 +23,7 @@ import com.amazonaws.regions.Regions;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -199,18 +200,18 @@ public class AWSEnumerationAdapterService extends StatelessService {
     public void kickOffEnumerationWorkFlows(EnumerationContext context, AWSEnumerationStages next) {
         List<List<Operation>> enumOperations = new ArrayList<>();
 
-        ComputeEnumerateAdapterRequest awsS3EnumerationRequest =
-                new ComputeEnumerateAdapterRequest(
-                        context.request, context.parentAuth,
-                        context.parent, Regions.DEFAULT_REGION.getName());
+        if (!AWSUtils.isAwsClientMock()) {
+            ComputeEnumerateAdapterRequest awsS3EnumerationRequest = new
+                    ComputeEnumerateAdapterRequest(context.request, context.parentAuth,
+                    context.parent, Regions.DEFAULT_REGION.getName());
 
-        Operation patchAWSS3StorageAdapterService = Operation
-                .createPatch(this,
-                        AWSS3StorageEnumerationAdapterService.SELF_LINK)
-                .setBody(awsS3EnumerationRequest)
-                .setReferer(getHost().getUri());
+            Operation patchAWSS3StorageAdapterService = Operation
+                    .createPatch(this,AWSS3StorageEnumerationAdapterService.SELF_LINK)
+                    .setBody(awsS3EnumerationRequest)
+                    .setReferer(getHost().getUri());
 
-        enumOperations.add(Collections.singletonList(patchAWSS3StorageAdapterService));
+            enumOperations.add(Collections.singletonList(patchAWSS3StorageAdapterService));
+        }
 
         for (String regionId : context.regions) {
             List<Operation> enumOperationsForRegion = new ArrayList<>();

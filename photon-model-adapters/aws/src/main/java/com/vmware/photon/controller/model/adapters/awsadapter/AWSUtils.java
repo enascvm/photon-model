@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MOCK_HOST_SYSTEM_PROPERTY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_PENDING;
@@ -183,7 +184,7 @@ public class AWSUtils {
     }
 
     public static boolean isAwsClientMock() {
-        return System.getProperty("awsMockHost") == null ? IS_AWS_CLIENT_MOCK : true;
+        return System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY) == null ? IS_AWS_CLIENT_MOCK : true;
     }
 
     public static void setAwsClientMock(boolean isAwsClientMock) {
@@ -191,8 +192,8 @@ public class AWSUtils {
     }
 
     private static String getAWSMockHost() {
-        return System.getProperty("awsMockHost") == null ? awsMockHost
-                : System.getProperty("awsMockHost");
+        return System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY) == null ? awsMockHost
+                : System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY);
 
     }
 
