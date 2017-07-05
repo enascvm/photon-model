@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.TaskState;
@@ -197,7 +197,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
         }
         logFine(() -> String.format("Starting to create snapshot using sub task %s", subTaskLink));
 
-        SnapshotRequest sr = new SnapshotRequest();
+        ResourceOperationRequest sr = new ResourceOperationRequest();
         sr.resourceReference = UriUtils.buildUri(getHost(),
                 updatedState.snapshotLink);
         sr.taskReference = UriUtils.buildUri(getHost(), subTaskLink);

@@ -99,4 +99,19 @@ public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryP
             }
         }
     }
+
+    @Test
+    public void deployFromLibraryAndCreateSnapshot() throws Throwable {
+        ComputeService.ComputeState vm = provisionVMAndGetState();
+        try {
+            if (vm == null) {
+                return;
+            }
+            createSnapshotAndWait(vm);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
 }

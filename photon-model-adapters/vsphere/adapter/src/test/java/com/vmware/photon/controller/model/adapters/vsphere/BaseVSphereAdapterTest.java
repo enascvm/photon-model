@@ -35,6 +35,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -45,6 +46,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestName;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -52,6 +54,7 @@ import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
@@ -540,8 +543,7 @@ public class BaseVSphereAdapterTest {
             return true;
         });
         TestContext ctx2 = this.host.testCreate(1);
-        Operation resetOp = Operation
-                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+        Operation resetOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
                 .setBody(resetVMRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> {
@@ -568,6 +570,55 @@ public class BaseVSphereAdapterTest {
         assertEquals(ComputeService.PowerState.ON, cState[0].powerState);
     }
 
+    protected void createSnapshotAndWait(ComputeState vm) throws Throwable {
+
+        String taskLink = UUID.randomUUID().toString();
+
+        ResourceOperationRequest snapshotRequest = getSnapshotRequest("CreateSnapshot", vm.documentSelfLink, taskLink);
+
+        TestContext ctx = this.host.testCreate(1);
+        createTaskResultListener(this.host, taskLink, (u) -> {
+            if (u.getAction() != Service.Action.PATCH) {
+                return false;
+            }
+            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
+            if (TaskState.isFailed(response.taskInfo)) {
+                ctx.failIteration(
+                        new IllegalStateException(response.taskInfo.failure.message));
+            } else {
+                ctx.completeIteration();
+            }
+            return true;
+        });
+
+        TestContext ctx2 = this.host.testCreate(1);
+        Operation createSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
+                .setBody(snapshotRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        ctx2.failIteration(e);
+                        return;
+                    }
+                    ctx2.completeIteration();
+                });
+        this.host.send(createSnapshotOp);
+        ctx2.await();
+
+        ComputeState[] cState = new ComputeState[1];
+        this.host.waitFor("Create snapshot request failed", () -> {
+            cState[0] = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, vm.documentSelfLink));
+
+            if (cState[0].customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS) != null &&
+                    cState[0].customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS).equalsIgnoreCase("true")) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+    }
+
     private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink,
             String taskLink) {
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
@@ -580,7 +631,7 @@ public class BaseVSphereAdapterTest {
     }
 
     private void createTaskResultListener(VerificationHost host, String taskLink,
-            Function<Operation, Boolean> h) {
+                                          Function<Operation, Boolean> h) {
         StatelessService service = new StatelessService() {
             @Override
             public void handleRequest(Operation update) {
@@ -816,6 +867,7 @@ public class BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
 
+
     protected HashMap<String, String> buildCustomProperties() {
         HashMap<String, String> customProperties = new HashMap<>();
 
@@ -901,5 +953,19 @@ public class BaseVSphereAdapterTest {
 
         res.customProperties = customProperties;
         return res;
+    }
+
+    private ResourceOperationRequest getSnapshotRequest(String operation, String documentSelfLink,
+                                               String taskLink) {
+        Map<String, String> payload = new HashMap<>();
+        payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, "CREATE");
+        payload.put(VSphereConstants.VSPHERE_SNAPSHOT_MEMORY, "false");
+        ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
+        resourceOperationRequest.operation = operation;
+        resourceOperationRequest.isMockRequest = isMock();
+        resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, documentSelfLink);
+        resourceOperationRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
+        resourceOperationRequest.payload = payload;
+        return resourceOperationRequest;
     }
 }

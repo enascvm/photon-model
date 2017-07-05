@@ -31,8 +31,8 @@ import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
-import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -365,7 +365,7 @@ public class MockAdapter {
 
             switch (op.getAction()) {
             case PATCH:
-                SnapshotRequest request = op.getBody(SnapshotRequest.class);
+                ResourceOperationRequest request = op.getBody(ResourceOperationRequest.class);
                 @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
@@ -396,7 +396,7 @@ public class MockAdapter {
             }
             switch (op.getAction()) {
             case PATCH:
-                SnapshotRequest request = op.getBody(SnapshotRequest.class);
+                ResourceOperationRequest request = op.getBody(ResourceOperationRequest.class);
                 @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = createFailedTaskInfo();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -11,10 +11,17 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapterapi;
+package com.vmware.photon.controller.model.adapters.vsphere.constants;
 
 /**
- * Request to the snapshot service.
+ * Constants to be used across vSphere adapter
  */
-public class SnapshotRequest extends ResourceRequest {
+public class VSphereConstants {
+
+    // snapshot related constants
+    public static final String VSPHERE_SNAPSHOT_NAME = "name";
+    public static final String VSPHERE_SNAPSHOT_DESCRIPTION = "description";
+    public static final String VSPHERE_SNAPSHOT_MEMORY = "snapshotMemory";
+    public static final String VSPHERE_SNAPSHOT_REQUEST_TYPE = "requestType";
+
 }

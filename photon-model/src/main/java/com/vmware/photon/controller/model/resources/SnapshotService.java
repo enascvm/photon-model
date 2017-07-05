@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
@@ -38,6 +39,10 @@ public class SnapshotService extends StatefulService {
      */
     public static class SnapshotState extends ResourceState {
 
+        public static final String FIELD_NAME_PARENT_LINK = "parentLink";
+        public static final String FIELD_NAME_COMPUTE_LINK = "computeLink";
+        public static final String FIELD_NAME_IS_CURRENT = "isCurrent";
+
         /**
          * Description of this snapshot.
          */
@@ -49,6 +54,7 @@ public class SnapshotService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(indexing = {ServiceDocumentDescription.PropertyIndexingOption.EXPAND})
         public String computeLink;
 
         /**
@@ -64,6 +70,7 @@ public class SnapshotService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_23)
+        @PropertyOptions(indexing = {ServiceDocumentDescription.PropertyIndexingOption.EXPAND})
         public Boolean isCurrent;
     }
 
@@ -125,5 +132,22 @@ public class SnapshotService extends StatefulService {
         template.name = "snapshot01";
         template.description = "";
         return template;
+    }
+
+    public enum SnapshotRequestType {
+        CREATE,
+        DELETE,
+        REVERT;
+
+        public static SnapshotRequestType fromString(String name) {
+            SnapshotRequestType result = null;
+            for (SnapshotRequestType type: SnapshotRequestType.values()) {
+                if (type.name().equalsIgnoreCase(name)) {
+                    result = type;
+                    return result;
+                }
+            }
+            return result;
+        }
     }
 }

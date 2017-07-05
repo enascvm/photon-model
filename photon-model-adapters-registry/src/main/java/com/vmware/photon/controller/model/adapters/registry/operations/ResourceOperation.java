@@ -27,7 +27,9 @@ public enum ResourceOperation {
 
     SHUTDOWN("Shutdown", "Shutdown", "Shutdown guest OS of Compute Resource"),
 
-    RESET("Reset", "Reset", "Reset Compute Resource");
+    RESET("Reset", "Reset", "Reset Compute Resource"),
+
+    CREATE_SNAPSHOT("CreateSnapshot", "Create Snapshot", "Create Snapshot Operation");
 
     public final String operation;
 
