@@ -13,20 +13,32 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static com.vmware.photon.controller.model.resources.SubnetRangeService.SubnetRangeState.FIELD_NAME_SUBNET_LINK;
+
+import java.net.URI;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.SubnetValidator;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.StatefulService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * Represents a range of IP addresses, assigned statically or by DHCP.
@@ -57,7 +69,7 @@ public class SubnetRangeService extends StatefulService {
         /**
          * Start IP address.
          */
-        @Documentation(description = "Start ip address of the range")
+        @Documentation(description = "Start IP address of the range")
         @PropertyOptions(usage = {
                 ServiceDocumentDescription.PropertyUsageOption.REQUIRED,
                 ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL
@@ -75,7 +87,7 @@ public class SubnetRangeService extends StatefulService {
         public String endIPAddress;
 
         /**
-         * Whether the start and end ip address is IPv4 or IPv6.
+         * Whether the start and end IP address is IPv4 or IPv6.
          * Default value IPv4.
          */
         @Documentation(description = "IP address version: IPv4 or IPv6. Default: IPv4")
@@ -86,7 +98,7 @@ public class SubnetRangeService extends StatefulService {
         public IPVersion ipVersion;
 
         /**
-         * Whether this ip range is managed by a DHCP server or static allocation.
+         * Whether this IP range is managed by a DHCP server or static allocation.
          * If not set, default to false.
          */
         @Documentation(description = "Indication if the range is managed by DHCP. Default: false.")
@@ -109,7 +121,8 @@ public class SubnetRangeService extends StatefulService {
          * DNS domain of the subnet range.
          * May override the SubnetState values.
          */
-        @PropertyOptions(usage = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(
+                usage = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String domain;
 
         /**
@@ -143,48 +156,45 @@ public class SubnetRangeService extends StatefulService {
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
     }
 
+    /**
+     * Comes in here for a http post for a new document
+     */
     @Override
-    public void handleStart(Operation start) {
+    public void handleCreate(Operation create) {
         try {
-            processInput(start);
-            start.complete();
+
+            SubnetRangeState subnetRangeState = getOperationBody(create);
+            validateAll(subnetRangeState)
+                    .whenCompleteNotify(create);
         } catch (Throwable t) {
-            start.fail(t);
+            create.fail(t);
         }
     }
 
+    /**
+     * Comes in here for a http put on an existing doc
+     */
     @Override
     public void handlePut(Operation put) {
         try {
-            SubnetRangeState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Exception e) {
-            this.logSevere(String.format("SubnetRangeService: failed to perform put [%s]",
-                    e.getMessage()));
-            put.fail(e);
+            SubnetRangeState subnetRangeState = getOperationBody(put);
+
+            validateAll(subnetRangeState)
+                    .thenAccept((ignored) -> setState(put, subnetRangeState))
+                    .whenCompleteNotify(put);
+        } catch (Throwable t) {
+            put.fail(t);
         }
     }
 
-    @Override
-    public void handlePost(Operation post) {
-        try {
-            SubnetRangeState returnState = processInput(post);
-            setState(post, returnState);
-            post.complete();
-        } catch (Exception e) {
-            this.logSevere(String.format("SubnetRangeService: failed to perform post [%s]",
-                    e.getMessage()));
-            post.fail(e);
-        }
-    }
-
+    /**
+     * Comes in here for a http patch on an existing doc
+     * For patch only the values being changed are sent.
+     * getState() method fills in the missing values from the existing doc.
+     */
     @Override
     public void handlePatch(Operation patch) {
-        if (!patch.hasBody()) {
-            patch.fail(new IllegalArgumentException("Patch body is required"));
-            return;
-        }
+        checkHasBody(patch);
 
         try {
             SubnetRangeState currentState = getState(patch);
@@ -198,12 +208,13 @@ public class SubnetRangeService extends StatefulService {
             boolean hasStateChanged = mergeResult.contains(Utils.MergeResult.STATE_CHANGED);
 
             if (hasStateChanged) {
-                validateState(currentState);
-                setState(patch, currentState);
+                validateAll(currentState)
+                        .thenAccept((ignored) -> setState(patch, currentState))
+                        .whenCompleteNotify(patch);
             } else {
                 patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+                patch.complete();
             }
-            patch.complete();
 
         } catch (Exception e) {
             this.logSevere(String.format("SubnetRangeService: failed to perform patch [%s]",
@@ -225,17 +236,61 @@ public class SubnetRangeService extends StatefulService {
     }
 
     /**
-     * @param op operation
-     * @return a valid SubnetRangeState
-     * @throws IllegalArgumentException if input invalid
+     * Do all validations on the ip address before the data is committed.
+     * In case of any validation error an exception is raised.
+     *
+     * @param subnetRangeState
+     * @return A deferred result with no data. The return just means no exception was raised
+     * hence its okay to proceed.
      */
-    private SubnetRangeState processInput(Operation op) {
-        if (!op.hasBody()) {
-            throw (new IllegalArgumentException("body is required"));
+    private DeferredResult<Void> validateAll(SubnetRangeState subnetRangeState) {
+
+        validateState(subnetRangeState);
+
+        return DeferredResult
+                .allOf(
+                        validateIps(subnetRangeState),
+                        validateNoRangeOverlap(subnetRangeState)
+                );
+    }
+
+    /**
+     * Returns a Deferred result if start IP address and end IP address are within the network
+     * specfied  by the subnet CIDR. If not an exception is raised in the method this calls.
+     *
+     * @param subnetRangeState The subnet state that is being validated.
+     * @return a deferred result, that has no data. This method returning just validates the data.
+     */
+    private DeferredResult<Void> validateIps(SubnetRangeState subnetRangeState) {
+        if (subnetRangeState.subnetLink != null) {
+            return getSubnetState(subnetRangeState.subnetLink)
+                    .thenAccept((op) -> {
+                        SubnetState subnetState = op.getBody(SubnetState.class);
+                        validateIpInRange(subnetRangeState, subnetState);
+                    });
         }
-        SubnetRangeState state = op.getBody(SubnetRangeState.class);
-        validateState(state);
-        return state;
+        return DeferredResult.completed(null);
+    }
+
+    /**
+     * Returns a Deferred result if there is no overlap of the current ip range with the pre
+     * existing ip ranges. Else exception is raised (in the method this calls).
+     *
+     * @param subnetRangeState
+     * @return A deferred result which indicates there was no range overlap.
+     */
+    private DeferredResult<Void> validateNoRangeOverlap(SubnetRangeState subnetRangeState) {
+        if (subnetRangeState.subnetLink != null) {
+            return getSubnetRangesInSubnet(subnetRangeState.subnetLink)
+                    .thenAccept((subnetRangeList) -> {
+                        validateIpsOutsideDefinedRanges(
+                                subnetRangeState.documentSelfLink,
+                                subnetRangeState.startIPAddress,
+                                subnetRangeState.endIPAddress,
+                                subnetRangeList);
+                    });
+        }
+        return DeferredResult.completed(null);
     }
 
     /**
@@ -246,19 +301,172 @@ public class SubnetRangeService extends StatefulService {
      *
      * @param state SubnetRangeState to validate
      */
-    // TODO validate against subnet mask and default gateway in SubnetState
     private void validateState(SubnetRangeState state) {
         Utils.validateState(getStateDescription(), state);
 
-        AssertUtil.assertTrue(
-                SubnetValidator.isValidIPAddress(state.startIPAddress, state.ipVersion),
-                "Invalid start IP address: " + state.startIPAddress);
-        AssertUtil.assertTrue(
-                SubnetValidator.isValidIPAddress(state.endIPAddress, state.ipVersion),
-                "Invalid end IP address: " + state.endIPAddress);
-        AssertUtil.assertTrue(!SubnetValidator
-                        .isStartIPGreaterThanEndIP(state.startIPAddress, state.endIPAddress,
-                                state.ipVersion),
-                "Subnet range is invalid. Start IP address must be less than end IP address");
+        if (!SubnetValidator.isValidIPAddress(state.startIPAddress, state.ipVersion)) {
+            throw new LocalizableValidationException(
+                    String.format("Invalid start IP address: %s",
+                            state.startIPAddress),
+                    "subnet.range.ip.invalid.start",
+                    state.startIPAddress);
+        }
+
+        if (!SubnetValidator.isValidIPAddress(state.endIPAddress, state.ipVersion)) {
+            throw new LocalizableValidationException(
+                    String.format("Invalid end IP address: %s",
+                            state.endIPAddress),
+                    "subnet.range.ip.invalid.start",
+                    state.endIPAddress);
+        }
+
+        if (SubnetValidator
+                .isStartIPGreaterThanEndIP(state.startIPAddress, state.endIPAddress,
+                        state.ipVersion)) {
+            throw new LocalizableValidationException(
+                    "Subnet range is invalid. Start IP address must be smaller than end IP address",
+                    "subnet.range.ip.start.must.be.smaller");
+
+        }
+    }
+
+    /**
+     * Validate that the start and end IP addresses are inside the network specified by the CIDR.
+     * If it's outside, an exception is raised.
+     *
+     * @param subnetRangeState The subnetRange state. This contains the start and end ip address
+     *                         that was specified in the ip address range.
+     * @param subnetstate      The subnet state contains the CIDR from which the valid network address
+     *                         is identified.
+     */
+    private void validateIpInRange(SubnetRangeState subnetRangeState, SubnetState subnetstate) {
+
+        if (!SubnetValidator
+                .isIpInValidRange(
+                        subnetRangeState.startIPAddress,
+                        subnetstate.subnetCIDR,
+                        subnetRangeState.ipVersion)) {
+            throw new LocalizableValidationException(
+                    String.format("Start IP address %s is invalid. It lies outside the "
+                                    + "IP range specified by the CIDR: %s",
+                            subnetRangeState.startIPAddress,
+                            subnetstate.subnetCIDR),
+                    "subnet.range.ip.outside.range.start",
+                    subnetRangeState.startIPAddress,
+                    subnetstate.subnetCIDR);
+        }
+
+        if (!SubnetValidator
+                .isIpInValidRange(
+                        subnetRangeState.endIPAddress,
+                        subnetstate.subnetCIDR,
+                        subnetRangeState.ipVersion)) {
+            throw new LocalizableValidationException(
+                    String.format("End IP address %s is invalid. It lies outside the "
+                                    + "IP range specified by the CIDR: %s",
+                            subnetRangeState.endIPAddress,
+                            subnetstate.subnetCIDR),
+                    "subnet.range.ip.outside.range.start",
+                    subnetRangeState.endIPAddress,
+                    subnetstate.subnetCIDR);
+        }
+    }
+
+    /**
+     * We don't want ip ranges to overlap. So we check the newly created ip range,
+     * with the pre existing ip ranges and make sure there is no over lap.
+     * If there is an overlap, raise exception.
+     *
+     * @param documentSelfLink  The self link of the subnetrange document being modified
+     *                          This is empty if its a create.
+     * @param startIp           The start ip provided for this subnet range
+     * @param endIp             The end ip for this subnet range
+     * @param subnetRangeStates This is a list of all the pre-existing subnet states. We check
+     *                          for overlap against these.
+     */
+    private void validateIpsOutsideDefinedRanges(String documentSelfLink, String startIp,
+            String endIp,
+            List<SubnetRangeState>
+                    subnetRangeStates) {
+        String ipUnderTest;
+
+        for (SubnetRangeState subnetRangeState : subnetRangeStates) {
+            String selfLink = subnetRangeState.documentSelfLink;
+
+            //For create self link is empty. Check against all pre existing subnet ranges
+            //For updates or patches, don't check against self
+            if (selfLink == null || !selfLink.equals(documentSelfLink)) {
+
+                String ipBegin = subnetRangeState.startIPAddress;
+                String ipEnd = subnetRangeState.endIPAddress;
+                IPVersion ipVersion = subnetRangeState.ipVersion;
+
+                ipUnderTest = startIp;
+                throwExceptionIfIpOverlap(ipBegin, ipEnd, ipVersion, ipUnderTest);
+
+                ipUnderTest = endIp;
+                throwExceptionIfIpOverlap(ipBegin, ipEnd, ipVersion, ipUnderTest);
+            }
+
+        }
+    }
+
+    private void throwExceptionIfIpOverlap(String ipBegin, String ipEnd, IPVersion ipVersion,
+            String ipUnderTest) {
+        if (SubnetValidator.isIpInBetween(ipBegin, ipEnd, ipVersion,
+                ipUnderTest
+        )) {
+            throw new LocalizableValidationException(
+                    String.format("The submitted IP address range overlaps with a "
+                                    + "previously defined IP address range: %s-%s ",
+                            ipBegin, ipEnd),
+                    "subnet.range.ip.overlap", ipBegin, ipEnd);
+        }
+
+    }
+
+    /**
+     * Fetch subnet state by document link.
+     *
+     * @param link Document link for the subnet service
+     * @return A deferred result of an operation, that has the subnet state
+     */
+    private <T> DeferredResult<Operation> getSubnetState(String link) {
+        AssertUtil.assertNotEmpty(link, "Cannot fetch subnet details with an empty subnet link");
+        URI uri = UriUtils.buildUri(getHost(), link);
+        return sendWithDeferredResult(Operation.createGet(uri));
+    }
+
+    /**
+     * Fetch all pre existing subnet ranges
+     *
+     * @param subnetLink
+     * @return A deferred result that contains a list of pre-existing subnet ranges
+     */
+    private DeferredResult<List<SubnetRangeState>> getSubnetRangesInSubnet(String subnetLink) {
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(SubnetRangeState.class)
+                .addFieldClause(FIELD_NAME_SUBNET_LINK, subnetLink);
+
+        QueryTop<SubnetRangeState> queryTop = new QueryUtils.QueryTop<>(
+                this.getHost(),
+                qBuilder.build(),
+                SubnetRangeState.class,
+                null
+        );
+
+        return queryTop.collectDocuments(Collectors.toList());
+    }
+
+    private SubnetRangeState getOperationBody(Operation operation) {
+        checkHasBody(operation);
+        SubnetRangeState subnetRangeState = operation.getBody(SubnetRangeState.class);
+        return subnetRangeState;
+    }
+
+    private void checkHasBody(Operation operation) {
+        if (!operation.hasBody()) {
+            operation.fail(new IllegalArgumentException("body is required"));
+        }
     }
 }

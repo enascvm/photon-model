@@ -33,6 +33,7 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.support.IPVersion;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -184,7 +185,7 @@ public class IPAddressServiceTest extends Suite {
                             IPAddressService.IPAddressState.class);
                     assertThat("exception expected for invalid post", false);
                 } catch (Exception e) {
-                    assertThat("exception expected for invalid post", e instanceof IllegalArgumentException);
+                    assertThat("exception expected for invalid post", e instanceof LocalizableValidationException);
                 }
             }
         }
@@ -202,8 +203,28 @@ public class IPAddressServiceTest extends Suite {
                     IPAddressService.IPAddressState.class);
             invalidIp.ipAddress = "abc.1.1.1";
 
+            IPAddressService.IPAddressState invalidIp2 = buildValidStartState();
+            invalidIp2 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp2,
+                    IPAddressService.IPAddressState.class);
+            invalidIp2.ipAddress = "1.1.1";
+
+            IPAddressService.IPAddressState invalidIp3 = buildValidStartState();
+            invalidIp3 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp3,
+                    IPAddressService.IPAddressState.class);
+            invalidIp3.ipAddress = "1.1.1.1.1";
+
+            IPAddressService.IPAddressState invalidIp4 = buildValidStartState();
+            invalidIp4 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp4,
+                    IPAddressService.IPAddressState.class);
+            invalidIp4.ipAddress = "257.1.1.1";
+
+            IPAddressService.IPAddressState invalidIp5 = buildValidStartState();
+            invalidIp5 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp5,
+                    IPAddressService.IPAddressState.class);
+            invalidIp5.ipAddress = "-1.1.1.1";
+
             IPAddressService.IPAddressState[] states = {
-                    missingIp, invalidIp
+                    missingIp, invalidIp, invalidIp2, invalidIp3, invalidIp4, invalidIp5
             };
 
             for (IPAddressService.IPAddressState state : states) {
@@ -212,7 +233,7 @@ public class IPAddressServiceTest extends Suite {
                     putServiceSynchronously(state.documentSelfLink, state);
                     assertThat("exception expected for invalid put", false);
                 } catch (Exception e) {
-                    assertThat("exception expected for invalid put", e instanceof IllegalArgumentException);
+                    assertThat("exception expected for invalid put", e instanceof LocalizableValidationException);
                 }
             }
         }

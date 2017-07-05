@@ -231,6 +231,8 @@ public class IPAddressAllocationTaskServiceTest extends Suite{
             IPAddressAllocationTaskState allocationTask1 = createIpAddressAllocationTask(this.subnetState.documentSelfLink);
             IPAddressAllocationTaskState allocationTask2 = createIpAddressAllocationTask(this.subnetState.documentSelfLink);
 
+            // postServicesSynchronously waits until post is completed, but not the task itself.
+            // performTask waits until the task is completed, hence it was not used.
             IPAddressAllocationTaskState startedAllocationTask1 = postServiceSynchronously(
                     IPAddressAllocationTaskService.FACTORY_LINK,
                     allocationTask1, IPAddressAllocationTaskState.class);
@@ -289,14 +291,14 @@ public class IPAddressAllocationTaskServiceTest extends Suite{
 
         @Test
         public void testAllocationTaskServiceWithOneRangeExhausted() throws Throwable {
-            SubnetRangeService.SubnetRangeState secondSubnetRange = buildSubnetRangeState("1.2.4.5", "1.2.4.6", IPVersion.IPv4);
-            secondSubnetRange.documentSelfLink = UUID.randomUUID().toString();
+            SubnetRangeService.SubnetRangeState secondSubnetRange = buildSubnetRangeState
+                    ("1.2.3.1", "1.2.3.2", IPVersion.IPv4);
             secondSubnetRange = postServiceSynchronously(SubnetRangeService.FACTORY_LINK,
                     secondSubnetRange, SubnetRangeService.SubnetRangeState.class);
 
             HashMap<String, String> expectedIpToRangeMap = new HashMap<>();
-            expectedIpToRangeMap.put("1.2.4.5", secondSubnetRange.documentSelfLink);
-            expectedIpToRangeMap.put("1.2.4.6", secondSubnetRange.documentSelfLink);
+            expectedIpToRangeMap.put("1.2.3.1", secondSubnetRange.documentSelfLink);
+            expectedIpToRangeMap.put("1.2.3.2", secondSubnetRange.documentSelfLink);
             expectedIpToRangeMap.put(startIpInRange, this.subnetRangeState.documentSelfLink);
             expectedIpToRangeMap.put(endIpInRange, this.subnetRangeState.documentSelfLink);
 
@@ -482,13 +484,11 @@ public class IPAddressAllocationTaskServiceTest extends Suite{
         private SubnetService.SubnetState createSubnetState()
                 throws Throwable {
             this.subnetState = new SubnetService.SubnetState();
-            this.subnetState.documentSelfLink = "test-subnet-" + UUID.randomUUID().toString();
-            this.subnetState.subnetCIDR = "10.10.10.10/24";
+            this.subnetState.subnetCIDR = "1.2.3.0/24";
             this.subnetState.networkLink = UriUtils.buildUriPath(NetworkService.FACTORY_LINK,  UUID.randomUUID().toString());
             this.subnetState.tenantLinks = new ArrayList<String>();
             this.subnetState.tagLinks = new HashSet<>();
             this.subnetState.gatewayAddress = gatewayIp;
-            this.subnetState.documentSelfLink = UUID.randomUUID().toString();
             this.subnetState = postServiceSynchronously(SubnetService.FACTORY_LINK, this.subnetState, SubnetService.SubnetState.class);
 
             return this.subnetState;

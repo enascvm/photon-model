@@ -23,12 +23,12 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.SubnetValidator;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
-
 
 /**
  * Represents a statically assigned ip address from a pre-defined subnet range.
@@ -60,10 +60,11 @@ public class IPAddressService extends StatefulService {
              * This method validates the status transitions.
              *
              * @param currentStatus current IPAddressStatus
-             * @param newStatus IPAddressStatus to transition to
+             * @param newStatus     IPAddressStatus to transition to
              * @return true if the transition is valid
              */
-            static boolean isValidTransition(IPAddressStatus currentStatus, IPAddressStatus newStatus) {
+            static boolean isValidTransition(IPAddressStatus currentStatus,
+                    IPAddressStatus newStatus) {
                 return (currentStatus != null && currentStatus.equals(newStatus) ||
                         (AVAILABLE.equals(currentStatus) && ALLOCATED.equals(newStatus)) ||
                         (ALLOCATED.equals(currentStatus) && RELEASED.equals(newStatus)) ||
@@ -88,7 +89,8 @@ public class IPAddressService extends StatefulService {
         @Documentation(description = "Link to the network interface.")
         @PropertyOptions(usage = {
                 ServiceDocumentDescription.PropertyUsageOption.OPTIONAL,
-                ServiceDocumentDescription.PropertyUsageOption.LINK })
+                ServiceDocumentDescription.PropertyUsageOption.LINK
+                })
         public String networkInterfaceLink;
 
         /**
@@ -182,8 +184,10 @@ public class IPAddressService extends StatefulService {
                     boolean hasChanged = false;
 
                     // Verify valid status changes
-                    if (patchState.ipAddressStatus != null && patchState.ipAddressStatus != currentState.ipAddressStatus) {
-                        validateIPAddressStatusTransition(currentState.ipAddressStatus, patchState.ipAddressStatus);
+                    if (patchState.ipAddressStatus != null
+                            && patchState.ipAddressStatus != currentState.ipAddressStatus) {
+                        validateIPAddressStatusTransition(currentState.ipAddressStatus,
+                                patchState.ipAddressStatus);
                         hasChanged = true;
                     }
 
@@ -235,20 +239,23 @@ public class IPAddressService extends StatefulService {
         if (state.ipAddressStatus == null) {
             state.ipAddressStatus = DEFAULT_STATUS;
         }
-        AssertUtil.assertTrue(
-                SubnetValidator.isValidIPAddress(state.ipAddress, state.ipVersion),
-                "Invalid IP address: " + state.ipAddress);
+
+        if (!SubnetValidator.isValidIPAddress(state.ipAddress, state.ipVersion)) {
+            throw new LocalizableValidationException(String.format("Invalid IP address: %s",
+                    state.ipAddress),
+                    "ip.address.invalid", state.ipAddress);
+        }
 
         logFine("Completed validation of IPAddressState: " + state);
     }
 
     /**
-     *
      * @param currentStatus current IP address status
      * @param desiredStatus requested IP address status
      * @throws IllegalArgumentException if an invalid transition
      */
-    private void validateIPAddressStatusTransition(IPAddressState.IPAddressStatus currentStatus, IPAddressState.IPAddressStatus desiredStatus) {
+    private void validateIPAddressStatusTransition(IPAddressState.IPAddressStatus currentStatus,
+            IPAddressState.IPAddressStatus desiredStatus) {
         AssertUtil.assertTrue(IPAddressState.IPAddressStatus
                         .isValidTransition(currentStatus, desiredStatus),
                 String.format("Invalid IP address status transition from [%s] to [%s]",

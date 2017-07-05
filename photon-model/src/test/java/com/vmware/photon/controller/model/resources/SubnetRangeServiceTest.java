@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.UUID;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -32,8 +33,11 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.IPVersion;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -45,18 +49,20 @@ import com.vmware.xenon.services.common.TenantService;
 @RunWith(SubnetRangeServiceTest.class)
 @Suite.SuiteClasses({
         SubnetRangeServiceTest.ConstructorTest.class,
-        SubnetRangeServiceTest.HandleStartTest.class,
+        SubnetRangeServiceTest.HandleCreateTest.class,
         SubnetRangeServiceTest.HandlePatchTest.class,
         SubnetRangeServiceTest.QueryTest.class
         })
 
 public class SubnetRangeServiceTest extends Suite {
 
-    public SubnetRangeServiceTest(Class<?> klass, RunnerBuilder builder)  throws InitializationError {
+    public SubnetRangeServiceTest(Class<?> klass, RunnerBuilder builder)
+            throws InitializationError {
         super(klass, builder);
     }
 
-    private static SubnetRangeService.SubnetRangeState buildValidStartState() {
+    private static SubnetRangeService.SubnetRangeState buildValidSubnetRangeState(
+            SubnetState subnetState) {
         SubnetRangeService.SubnetRangeState subnetRangeState = new SubnetRangeService.SubnetRangeState();
         subnetRangeState.id = UUID.randomUUID().toString();
         subnetRangeState.name = "test-range-1";
@@ -65,21 +71,33 @@ public class SubnetRangeServiceTest extends Suite {
         subnetRangeState.ipVersion = IPVersion.IPv4;
         subnetRangeState.isDHCP = false;
         subnetRangeState.dnsServerAddresses = new HashSet();
-        subnetRangeState.dnsServerAddresses.add("dnsServer1.vmware.com");
-        subnetRangeState.dnsServerAddresses.add("dnsServer2.vmwew.com");
+        subnetRangeState.dnsServerAddresses.add("dnsServer1.corp.local");
+        subnetRangeState.dnsServerAddresses.add("dnsServer2.corp.local");
         subnetRangeState.domain = "vmware.com";
-        subnetRangeState.subnetLink = SubnetService.FACTORY_LINK + "/mySubnet";
+        subnetRangeState.subnetLink = subnetState.documentSelfLink;
         subnetRangeState.tenantLinks = new ArrayList<>();
         subnetRangeState.tenantLinks.add("tenant-linkA");
 
         return subnetRangeState;
     }
 
+    private static SubnetService.SubnetState buildValidSubnetState() {
+        SubnetService.SubnetState subnetState = new SubnetState();
+        subnetState.subnetCIDR = "192.130.120.0/24";
+        subnetState.networkLink = UriUtils
+                .buildUriPath(NetworkService.FACTORY_LINK, UUID.randomUUID().toString());
+        subnetState.tenantLinks = new ArrayList<String>();
+        subnetState.tagLinks = new HashSet<>();
+        subnetState.gatewayAddress = "192.130.120.1";
+
+        return subnetState;
+    }
+
     /**
      * This class implements tests for the constructor.
      */
     public static class ConstructorTest {
-        private SubnetRangeService SubnetRangeService = new SubnetRangeService();
+        private SubnetRangeService SubnetRangeService;
 
         @Before
         public void setupTest() {
@@ -101,17 +119,24 @@ public class SubnetRangeServiceTest extends Suite {
     /**
      * This class implements tests for the handleStart method.
      */
-    public static class HandleStartTest extends BaseModelTest {
+    public static class HandleCreateTest extends BaseModelTest {
 
         @Before
         public void setUp() throws Throwable {
             super.setUp();
+            this.getHost().startFactory(new SubnetService());
             this.getHost().startFactory(new SubnetRangeService());
         }
 
         @Test
         public void testValidStartState() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
             SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
                     SubnetRangeService.FACTORY_LINK,
                     startState, SubnetRangeService.SubnetRangeState.class);
@@ -131,8 +156,16 @@ public class SubnetRangeServiceTest extends Suite {
 
         @Test(expected = IllegalArgumentException.class)
         public void testMissingRequiredFieldsOnPut() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
-            SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(SubnetRangeService.FACTORY_LINK,
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
+            SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
+                    SubnetRangeService.FACTORY_LINK,
                     startState,
                     SubnetRangeService.SubnetRangeState.class);
             returnState.startIPAddress = null;
@@ -142,28 +175,53 @@ public class SubnetRangeServiceTest extends Suite {
 
         @Test
         public void testValidPut() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
-            SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(SubnetRangeService.FACTORY_LINK,
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
+            SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
+                    SubnetRangeService.FACTORY_LINK,
                     startState,
                     SubnetRangeService.SubnetRangeState.class);
             returnState.isDHCP = true;
+            returnState.startIPAddress = "192.130.120.150";
             returnState.endIPAddress = "192.130.120.200";
             returnState.domain = "cnn.com";
 
             putServiceSynchronously(returnState.documentSelfLink, returnState);
 
             // Verify values
-            SubnetRangeService.SubnetRangeState afterPutState = getServiceSynchronously(returnState.documentSelfLink,
+            SubnetRangeService.SubnetRangeState afterPutState = getServiceSynchronously(
+                    returnState.documentSelfLink,
                     SubnetRangeService.SubnetRangeState.class);
 
             assertEquals(returnState.isDHCP, afterPutState.isDHCP);
+            assertEquals(returnState.startIPAddress, afterPutState.startIPAddress);
             assertEquals(returnState.endIPAddress, afterPutState.endIPAddress);
             assertEquals(returnState.domain, afterPutState.domain);
         }
 
         @Test(expected = IllegalArgumentException.class)
         public void testMissingRequiredFieldsOnPost() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
             startState.startIPAddress = null;
             postServiceSynchronously(SubnetRangeService.FACTORY_LINK, startState,
                     SubnetRangeService.SubnetRangeState.class);
@@ -171,8 +229,20 @@ public class SubnetRangeServiceTest extends Suite {
         }
 
         @Test
+        @Ignore //Duplicate posts wont work because of newly added range overlap check
         public void testDuplicatePost() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
             SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
                     SubnetRangeService.FACTORY_LINK,
                     startState, SubnetRangeService.SubnetRangeState.class);
@@ -188,16 +258,29 @@ public class SubnetRangeServiceTest extends Suite {
         @Test
         public void testInvalidValuesOnPost() throws Throwable {
 
-            SubnetRangeService.SubnetRangeState missingStartIP = buildValidStartState();
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState missingStartIP = buildValidSubnetRangeState(
+                    subnetState);
             missingStartIP.startIPAddress = "";
 
-            SubnetRangeService.SubnetRangeState invalidStartIP = buildValidStartState();
+            SubnetRangeService.SubnetRangeState invalidStartIP = buildValidSubnetRangeState(
+                    subnetState);
             invalidStartIP.startIPAddress = "abc.1.1.1";
 
-            SubnetRangeService.SubnetRangeState missingEndIP = buildValidStartState();
+            SubnetRangeService.SubnetRangeState missingEndIP = buildValidSubnetRangeState(
+                    subnetState);
             missingEndIP.endIPAddress = "";
 
-            SubnetRangeService.SubnetRangeState invalidEndIP = buildValidStartState();
+            SubnetRangeService.SubnetRangeState invalidEndIP = buildValidSubnetRangeState(
+                    subnetState);
             invalidEndIP.endIPAddress = "abc.1.1.1";
 
             SubnetRangeService.SubnetRangeState[] states = {
@@ -210,10 +293,94 @@ public class SubnetRangeServiceTest extends Suite {
                             SubnetRangeService.SubnetRangeState.class);
                     assertThat("exception expected", false);
                 } catch (Exception e) {
-                    assertThat("exception expected", e instanceof IllegalArgumentException);
+                    assertThat("exception expected",
+                            e instanceof LocalizableValidationException);
                 }
             }
         }
+
+        @Test(expected = LocalizableValidationException.class)
+        public void testIpOutOfCidr() throws Throwable {
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+            subnetState.subnetCIDR = "1.2.3.0/24";
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState subnetRangeState = buildValidSubnetRangeState(
+                    subnetState);
+
+            postServiceSynchronously(
+                    SubnetRangeService.FACTORY_LINK,
+                    subnetRangeState, SubnetRangeService.SubnetRangeState.class);
+        }
+
+        @Test(expected = ServiceNotFoundException.class)
+        public void testInvalidSubnetLink() throws Throwable {
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState subnetRangeState = buildValidSubnetRangeState(
+                    subnetState);
+            subnetRangeState.subnetLink = "doesNotExist";
+
+            postServiceSynchronously(
+                    SubnetRangeService.FACTORY_LINK,
+                    subnetRangeState, SubnetRangeService.SubnetRangeState.class);
+        }
+
+        @Test
+        public void testNullSubnetLink() throws Throwable {
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState subnetRangeState = buildValidSubnetRangeState(
+                    subnetState);
+            subnetRangeState.subnetLink = null;
+
+            postServiceSynchronously(
+                    SubnetRangeService.FACTORY_LINK,
+                    subnetRangeState, SubnetRangeService.SubnetRangeState.class);
+        }
+
+        @Test(expected = LocalizableValidationException.class)
+        public void testRangeOverlap() throws Throwable {
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
+
+            //Post same range twice. It should throw an exception due to iprange overlap
+            postServiceSynchronously(SubnetRangeService.FACTORY_LINK, startState,
+                    SubnetRangeService.SubnetRangeState.class);
+            postServiceSynchronously(SubnetRangeService.FACTORY_LINK, startState,
+                    SubnetRangeService.SubnetRangeState.class);
+
+        }
+
     }
 
     /**
@@ -225,11 +392,23 @@ public class SubnetRangeServiceTest extends Suite {
         public void setUp() throws Throwable {
             super.setUp();
             this.getHost().startFactory(new SubnetRangeService());
+            this.getHost().startFactory(new SubnetService());
         }
 
         @Test
         public void testPatch() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
 
             SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
                     SubnetRangeService.FACTORY_LINK,
@@ -237,7 +416,7 @@ public class SubnetRangeServiceTest extends Suite {
 
             // Patch 2 values
             SubnetRangeService.SubnetRangeState patchState = new SubnetRangeService.SubnetRangeState();
-            patchState.startIPAddress = "192.130.120.120";
+            patchState.startIPAddress = "192.130.120.100";
             patchState.isDHCP = true;
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
@@ -253,7 +432,18 @@ public class SubnetRangeServiceTest extends Suite {
 
         @Test
         public void testPatchNoChange() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
 
             SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
                     SubnetRangeService.FACTORY_LINK,
@@ -266,7 +456,8 @@ public class SubnetRangeServiceTest extends Suite {
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             // Verify no change
-            SubnetRangeService.SubnetRangeState afterPatchState = getServiceSynchronously(returnState.documentSelfLink,
+            SubnetRangeService.SubnetRangeState afterPatchState = getServiceSynchronously(
+                    returnState.documentSelfLink,
                     SubnetRangeService.SubnetRangeState.class);
             assertEquals(patchState.startIPAddress, afterPatchState.startIPAddress);
             assertEquals(startState.documentVersion, afterPatchState.documentVersion);
@@ -274,7 +465,18 @@ public class SubnetRangeServiceTest extends Suite {
 
         @Test
         public void testPatchSingleAssignmentProperty() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
 
             SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
                     SubnetRangeService.FACTORY_LINK,
@@ -287,16 +489,27 @@ public class SubnetRangeServiceTest extends Suite {
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             // Verify no change
-            SubnetRangeService.SubnetRangeState afterPatchState = getServiceSynchronously(returnState.documentSelfLink,
+            SubnetRangeService.SubnetRangeState afterPatchState = getServiceSynchronously(
+                    returnState.documentSelfLink,
                     SubnetRangeService.SubnetRangeState.class);
 
             assertEquals(startState.subnetLink, afterPatchState.subnetLink);
             assertEquals(startState.documentVersion, afterPatchState.documentVersion);
         }
 
-        @Test(expected = IllegalArgumentException.class)
+        @Test(expected = LocalizableValidationException.class)
         public void testInvalidPatch() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
 
             SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
                     SubnetRangeService.FACTORY_LINK,
@@ -307,7 +520,7 @@ public class SubnetRangeServiceTest extends Suite {
             patchState.startIPAddress = "192.130.140.120";
 
             patchServiceSynchronously(returnState.documentSelfLink,
-                        patchState);
+                    patchState);
             assertThat("Should have failed", false);
         }
 
@@ -320,7 +533,18 @@ public class SubnetRangeServiceTest extends Suite {
          */
         @Test
         public void testListPatch() throws Throwable {
-            SubnetRangeService.SubnetRangeState startState = buildValidStartState();
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
 
             SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
                     SubnetRangeService.FACTORY_LINK,
@@ -360,7 +584,16 @@ public class SubnetRangeServiceTest extends Suite {
 
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            SubnetRangeService.SubnetRangeState subnetRangeState = buildValidStartState();
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState subnetRangeState = buildValidSubnetRangeState(
+                    subnetState);
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             subnetRangeState.tenantLinks = new ArrayList<>();
             subnetRangeState.tenantLinks.add(UriUtils.buildUriPath(
@@ -390,10 +623,21 @@ public class SubnetRangeServiceTest extends Suite {
         @Test
         public void testSubnetLinksQuery() throws Throwable {
 
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+            subnetState.subnetCIDR = "10.10.0.0/16";
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
             // populate data
             String[] ipPrefixes = { "10.10.10.", "10.10.20.", "10.10.30." };
             for (String ipPrefix : ipPrefixes) {
-                SubnetRangeService.SubnetRangeState subnetRangeState = buildValidStartState();
+                SubnetRangeService.SubnetRangeState subnetRangeState = buildValidSubnetRangeState(
+                        subnetState);
                 subnetRangeState.startIPAddress = ipPrefix + "1";
                 subnetRangeState.endIPAddress = ipPrefix + "100";
                 subnetRangeState.ipVersion = IPVersion.IPv4;
@@ -405,12 +649,14 @@ public class SubnetRangeServiceTest extends Suite {
 
             String kind = Utils.buildKind(SubnetRangeService.SubnetRangeState.class);
             String propertyName = SubnetRangeService.SubnetRangeState.FIELD_NAME_SUBNET_LINK;
+            String subnetDocumentLink = subnetState.documentSelfLink;
 
             QueryTask q = createDirectQueryTask(kind, propertyName,
-                    SubnetService.FACTORY_LINK + "/mySubnet");
+                    subnetDocumentLink);
             q = querySynchronously(q);
             assertNotNull(q.results.documentLinks);
             assertThat(q.results.documentCount, is(3L));
         }
+
     }
 }

@@ -14,9 +14,12 @@
 package com.vmware.photon.controller.model.util;
 
 import io.netty.util.internal.StringUtil;
+
+import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.support.IPVersion;
+import com.vmware.xenon.common.LocalizableValidationException;
 
 /**
  * Helper class for subnet range and IP address validations.
@@ -31,7 +34,10 @@ public class SubnetValidator {
      * @param ipVersion IPv4 or IPv6
      */
     public static boolean isValidIPAddress(String ipAddress, IPVersion ipVersion) {
-        AssertUtil.assertTrue(!StringUtil.isNullOrEmpty(ipAddress), "IP address must be specified");
+        if (StringUtil.isNullOrEmpty(ipAddress)) {
+            throw new LocalizableValidationException("IP address must be specified",
+                    "model.subnet.ip.must.be.specified");
+        }
         switch (ipVersion) {
         case IPv6:
             return InetAddressValidator.getInstance().isValidInet6Address(ipAddress);
@@ -57,7 +63,8 @@ public class SubnetValidator {
         if (startAddress != null && endAddress != null) {
             if (IPVersion.IPv4.equals(ipVersion)) {
                 try {
-                    isStartIPGreaterThanEndIP = (IpHelper.ipStringToLong(startAddress) - IpHelper.ipStringToLong(endAddress)) > 0;
+                    isStartIPGreaterThanEndIP = (IpHelper.ipStringToLong(startAddress) - IpHelper
+                            .ipStringToLong(endAddress)) > 0;
                 } catch (IllegalArgumentException e) {
                 }
             } else {
@@ -66,5 +73,68 @@ public class SubnetValidator {
             }
         }
         return isStartIPGreaterThanEndIP;
+    }
+
+    /**
+     * If the ip is in the same network as the cidr, it returns true
+     *
+     * @param ipAddress The ip address under test
+     * @param cidr      The cidr that defines the expected network address
+     * @param ipVersion
+     * @return
+     */
+    public static boolean isIpInValidRange(String ipAddress,
+            String cidr, IPVersion ipVersion) {
+
+        if (!IPVersion.IPv4.equals(ipVersion)) {
+            throw new UnsupportedOperationException(
+                    "Support for IPv6 IP address is not yet implemented");
+        }
+
+        SubnetUtils utils = new SubnetUtils(cidr);
+
+        if (!utils.getInfo().getAddress().equals(utils.getInfo().getNetworkAddress())) {
+            String err = String.format("Invalid CIDR: %s. Host identifier of the"
+                    + " CIDR contains non zero bits.", cidr);
+            throw new RuntimeException(err);
+        }
+
+        return utils.getInfo().isInRange(ipAddress);
+
+    }
+
+    /**
+     * Returns true if the ip lies between the start and end address.
+     * Or if the ip is equal to either start or end address.
+     *
+     * @param startAddress The starting ip address of the range.
+     * @param endAddress   The ending ip address of the range.
+     * @param ipVersion    ip version  IPv4 or IPv6.
+     * @param ipAddress    the ip address that we want to check if falls in the range.
+     * @return
+     */
+    public static boolean isIpInBetween(String startAddress,
+            String endAddress,
+            IPVersion ipVersion,
+            String ipAddress) {
+        if (!IPVersion.IPv4.equals(ipVersion)) {
+            throw new UnsupportedOperationException(
+                    "Support for IPv6 IP address is not yet implemented");
+        }
+
+        boolean isIpGreaterThanStart = false;
+        boolean isIpLessThanEnd = false;
+
+        if ((IpHelper.ipStringToLong(endAddress) - IpHelper.ipStringToLong(ipAddress))
+                >= 0) {
+            isIpLessThanEnd = true;
+        }
+
+        if ((IpHelper.ipStringToLong(ipAddress) - IpHelper.ipStringToLong(startAddress))
+                >= 0) {
+            isIpGreaterThanStart = true;
+        }
+
+        return (isIpGreaterThanStart && isIpLessThanEnd) ;
     }
 }
