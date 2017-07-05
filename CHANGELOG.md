@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.24-SNAPSHOT
+
 ## 0.6.23
 * Added support to set custom IP address for Azure VM.
 * Added support to update LB configuration for AWS.
