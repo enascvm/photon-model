@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 import static com.vmware.photon.controller.model.resources.SecurityGroupService.FACTORY_LINK;
+import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
 
 import java.net.URI;
 import java.util.Arrays;
@@ -53,10 +54,12 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.Protocol;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -93,6 +96,8 @@ public class AWSLoadBalancerService extends StatelessService {
 
         TaskManager taskManager;
         List<SecurityGroupState> securityGroupStates;
+
+        String vpcId;
         SecurityGroupState provisionedSecurityGroupState;
 
         AWSLoadBalancerContext(StatelessService service, LoadBalancerInstanceRequest request) {
@@ -204,6 +209,7 @@ public class AWSLoadBalancerService extends StatelessService {
 
         if (context.loadBalancerStateExpanded.securityGroupLinks == null ||
                 context.loadBalancerStateExpanded.securityGroupLinks.isEmpty()) {
+            context.securityGroupStates = Collections.emptyList();
             return DeferredResult.completed(context);
         }
 
@@ -281,8 +287,27 @@ public class AWSLoadBalancerService extends StatelessService {
         }
 
         return DeferredResult.completed(context)
+                .thenCompose(this::populateVpcIdFromSubnet)
                 .thenCompose(this::createSecurityGroupState)
                 .thenCompose(this::provisionSecurityGroup);
+    }
+
+    private DeferredResult<AWSLoadBalancerContext> populateVpcIdFromSubnet(
+            AWSLoadBalancerContext context) {
+        SubnetState subnetState = context.loadBalancerStateExpanded.subnets.stream().findFirst()
+                .orElse(null);
+
+        if (subnetState == null) {
+            return DeferredResult.completed(context);
+        }
+
+        Operation get = Operation.createGet(UriUtils.buildUri(getHost(), subnetState.networkLink));
+
+        return this.sendWithDeferredResult(get, NetworkState.class)
+                .thenApply(networkState -> {
+                    context.vpcId = networkState.id;
+                    return context;
+                });
     }
 
     private DeferredResult<AWSLoadBalancerContext> createSecurityGroupState(
@@ -330,14 +355,16 @@ public class AWSLoadBalancerService extends StatelessService {
 
     private SecurityGroupInstanceRequest buildSecurityGroupInstanceRequest(SecurityGroupState
             securityGroupState, InstanceRequestType type,
-            LoadBalancerInstanceRequest request) {
+            AWSLoadBalancerContext context) {
         SecurityGroupInstanceRequest req = new SecurityGroupInstanceRequest();
         req.requestType = type;
         req.resourceReference = UriUtils.buildUri(this.getHost(),
                 securityGroupState.documentSelfLink);
         req.authCredentialsLink = securityGroupState.authCredentialsLink;
         req.resourcePoolLink = securityGroupState.resourcePoolLink;
-        req.isMockRequest = request.isMockRequest;
+        req.isMockRequest = context.request.isMockRequest;
+        req.customProperties = new HashMap<>();
+        req.customProperties.put(NETWORK_STATE_ID_PROP_NAME, context.vpcId);
 
         return req;
     }
@@ -345,8 +372,9 @@ public class AWSLoadBalancerService extends StatelessService {
     private DeferredResult<AWSLoadBalancerContext> provisionSecurityGroup(
             AWSLoadBalancerContext context) {
 
-        SecurityGroupInstanceRequest req = buildSecurityGroupInstanceRequest(context
-                .provisionedSecurityGroupState, InstanceRequestType.CREATE, context.request);
+        SecurityGroupInstanceRequest req = buildSecurityGroupInstanceRequest(
+                context.provisionedSecurityGroupState,
+                InstanceRequestType.CREATE, context);
 
         Operation operation = Operation.createPatch(this,
                 AWSSecurityGroupService.SELF_LINK)
@@ -540,7 +568,7 @@ public class AWSLoadBalancerService extends StatelessService {
     private CreateLoadBalancerRequest buildCreationRequest(AWSLoadBalancerContext context) {
         Collection<SecurityGroupState> securityGroupsToUse = context.securityGroupStates != null
                 ? context.securityGroupStates
-                        : Collections.singleton(context.provisionedSecurityGroupState);
+                : Collections.singleton(context.provisionedSecurityGroupState);
 
         CreateLoadBalancerRequest request = new CreateLoadBalancerRequest()
                 .withLoadBalancerName(context.loadBalancerStateExpanded.name)
@@ -641,7 +669,7 @@ public class AWSLoadBalancerService extends StatelessService {
 
         List<DeferredResult<Operation>> deletionDRs = infrastructureSecurityGroups.stream()
                 .map(sg -> buildSecurityGroupInstanceRequest(sg, InstanceRequestType.DELETE,
-                        context.request))
+                        context))
                 .map(req -> Operation.createPatch(this, AWSSecurityGroupService.SELF_LINK)
                         .setBody(req))
                 .map(op -> sendWithDeferredResult(op).exceptionally(th -> {

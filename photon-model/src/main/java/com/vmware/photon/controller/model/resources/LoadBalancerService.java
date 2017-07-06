@@ -151,6 +151,7 @@ public class LoadBalancerService extends StatefulService {
                 targetState.instanceAdapterReference = this.instanceAdapterReference;
                 targetState.internetFacing = this.internetFacing;
                 targetState.address = this.address;
+                targetState.securityGroupLinks = this.securityGroupLinks;
             }
         }
     }

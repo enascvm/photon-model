@@ -62,6 +62,8 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -85,6 +87,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
     public String accessKey = "blas123";
     public String regionId = TestAWSSetupUtils.regionId;
     public String subnetId = "subnet123";
+    public String vpcId = "vpc123";
     private int timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
     public boolean isMock = true;
     private AmazonElasticLoadBalancingAsyncClient client;
@@ -216,7 +219,6 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             assertNotNull(awsLoadBalancer);
             assertEquals(2, awsLoadBalancer.getInstances().size());
 
-
             // Update load balancer from 2 machines to 1 to simulate scale-in
             lb.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
             lb = postServiceSynchronously(lb.documentSelfLink, lb, LoadBalancerState.class);
@@ -300,6 +302,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         endpoint.tenantLinks = Collections.singletonList(endpointType + "Tenant");
         endpoint.authCredentialsLink = createAuthCredentialsState().documentSelfLink;
         endpoint.resourcePoolLink = "dummy";
+        endpoint.regionId = this.regionId;
 
         return postServiceSynchronously(EndpointService.FACTORY_LINK, endpoint,
                 EndpointState.class);
@@ -316,12 +319,27 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
                 AuthCredentialsServiceState.class);
     }
 
-    private SubnetState createSubnetState(String name) throws Throwable {
+    private NetworkState createNetworkState(String id) throws Throwable {
+        NetworkState networkState = new NetworkState();
+        networkState.name = id;
+        networkState.id = id;
+        networkState.endpointLink = this.endpointState.documentSelfLink;
+        networkState.tenantLinks = this.endpointState.tenantLinks;
+        networkState.instanceAdapterReference = UriUtils
+                .buildUri(this.host, AWSNetworkService.SELF_LINK);
+        networkState.resourcePoolLink = this.endpointState.resourcePoolLink;
+        networkState.regionId = this.endpointState.regionId;
+
+        return postServiceSynchronously(NetworkService.FACTORY_LINK, networkState,
+                NetworkState.class);
+    }
+
+    private SubnetState createSubnetState(String id, String networkLink) throws Throwable {
         SubnetState subnetState = new SubnetState();
-        subnetState.name = name;
-        subnetState.id = name;
+        subnetState.name = id;
+        subnetState.id = id;
         subnetState.endpointLink = this.endpointState.documentSelfLink;
-        subnetState.networkLink = "dummy";
+        subnetState.networkLink = networkLink;
         subnetState.subnetCIDR = "10.10.10.10/24";
         subnetState.tenantLinks = this.endpointState.tenantLinks;
 
@@ -335,7 +353,9 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         state.regionId = this.regionId;
         state.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
         state.subnetLinks = new HashSet<>();
-        state.subnetLinks.add(createSubnetState(this.subnetId).documentSelfLink);
+        state.subnetLinks.add(
+                createSubnetState(this.subnetId,
+                        createNetworkState(this.vpcId).documentSelfLink).documentSelfLink);
 
         RouteConfiguration route1 = new RouteConfiguration();
         route1.protocol = Protocol.HTTP.name();
