@@ -25,6 +25,7 @@ import java.util.function.BiConsumer;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
@@ -71,7 +72,7 @@ public class AzureEaEndpointAdapterService extends StatelessService {
         return (c, r) -> {
             c.type = ComputeType.VM_HOST;
             c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-            c.adapterManagementReference = UriUtils.buildUri(AzureConstants.AZURE_EA_BASE_URI);
+            c.adapterManagementReference = UriUtils.buildUri(AzureUtils.getAzureEaBaseUri());
             addEntryToCustomProperties(c, PhotonModelConstants.CLOUD_ACCOUNT_ID,
                     r.getRequired(PRIVATE_KEYID_KEY));
         };

@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -23,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureStorageClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 
 import java.net.URI;
@@ -63,6 +63,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -247,7 +248,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                 Operation.MEDIA_TYPE_APPLICATION_JSON);
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
+                    AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken(AzureUtils.getAzureBaseUri()));
         } catch (Exception ex) {
             this.handleError(statsData, ex);
             return;
@@ -317,8 +318,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                                 result.keys().get(0).value());
 
                                 try {
-                                    CloudStorageAccount storageAccount = CloudStorageAccount
-                                            .parse(storageConnectionString);
+                                    CloudStorageAccount storageAccount = getAzureStorageClient(storageConnectionString);
                                     CloudBlobClient blobClient = storageAccount
                                             .createCloudBlobClient();
                                     ResultContinuation nextContainerResults = null;

@@ -14,12 +14,15 @@
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_EA_BASE_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_MOCK_HOST_SYSTEM_PROPERTY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +42,8 @@ import com.microsoft.azure.management.storage.StorageAccountKey;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
 import com.microsoft.azure.serializer.AzureJacksonAdapter;
+import com.microsoft.azure.storage.CloudStorageAccount;
+import com.microsoft.azure.storage.StorageCredentials;
 import com.microsoft.rest.LogLevel;
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceResponseBuilder.Factory;
@@ -88,6 +93,17 @@ public class AzureUtils {
 
     //azure-subscriptionId
     private static final String COMPUTES_NAME_FORMAT = "%s-%s";
+
+    /**
+     * Flag to use azure-mock, will be set in test files. Azure-mock is a tool for testing
+     * Azure services in a mock environment.
+     **/
+    private static boolean IS_AZURE_CLIENT_MOCK = false;
+
+    /**
+     * Mock Host and port http://<ip-address>:<port> of aws-mock, will be set in test files.
+     */
+    private static String azureMockHost = null;
 
     /**
      * Strategy to control period between retry attempts.
@@ -163,20 +179,6 @@ public class AzureUtils {
             this.delayMillis *= 2;
             return next;
         }
-    }
-
-    /**
-     * Configures authentication credential for Azure.
-     */
-    public static ApplicationTokenCredentials getAzureConfig(
-            AuthCredentialsServiceState parentAuth) {
-
-        String clientId = parentAuth.privateKeyId;
-        String clientKey = EncryptionUtils.decrypt(parentAuth.privateKey);
-        String tenantId = parentAuth.customProperties.get(AzureConstants.AZURE_TENANT_ID);
-
-        return new ApplicationTokenCredentials(clientId, tenantId, clientKey,
-                AzureEnvironment.AZURE);
     }
 
     /**
@@ -422,6 +424,82 @@ public class AzureUtils {
         return AZURE_STORAGE_ACCOUNT_KEY + Integer.toString(count);
     }
 
+    public static void setAzureMockHost (String mockHost) {
+        azureMockHost = mockHost;
+    }
+
+    public static boolean isAzureClientMock() {
+        return System.getProperty(AZURE_MOCK_HOST_SYSTEM_PROPERTY) == null ? IS_AZURE_CLIENT_MOCK : true;
+    }
+
+    public static void setAzureClientMock(boolean isAzureClientMock) {
+        IS_AZURE_CLIENT_MOCK = isAzureClientMock;
+    }
+
+    /**
+     * If either azureMockHost or the system property for mock host is set then return it, otherwise return
+     * real Azure base URI.
+     */
+    public static String getAzureBaseUri() {
+        if (System.getProperty(AZURE_MOCK_HOST_SYSTEM_PROPERTY) == null && azureMockHost == null) {
+            return AZURE_CORE_MANAGEMENT_URI;
+        }
+
+        return System.getProperty(AZURE_MOCK_HOST_SYSTEM_PROPERTY) == null ? azureMockHost
+                : System.getProperty(AZURE_MOCK_HOST_SYSTEM_PROPERTY);
+
+    }
+
+    /**
+     * If either azureMockHost or the system property for mock host is set then return it, otherwise return
+     * real Azure EA base URI.
+     */
+    public static String getAzureEaBaseUri() {
+        if (System.getProperty(AZURE_MOCK_HOST_SYSTEM_PROPERTY) == null && azureMockHost == null) {
+            return AZURE_EA_BASE_URI;
+        }
+
+        return System.getProperty(AZURE_MOCK_HOST_SYSTEM_PROPERTY) == null ? azureMockHost
+                : System.getProperty(AZURE_MOCK_HOST_SYSTEM_PROPERTY);
+    }
+
+    /**
+     * Gets the Azure storage SDK client.
+     */
+    public static CloudStorageAccount getAzureStorageClient(String connectionString) throws Exception {
+        if (AzureUtils.isAzureClientMock()) {
+            URI blobServiceUri = UriUtils.buildUri(AzureUtils.getAzureBaseUri() + "blob-storage-service");
+            URI queueServiceUri = UriUtils.buildUri(AzureUtils.getAzureBaseUri() + "queue-storage-service");
+            URI tableServiceUri = UriUtils.buildUri(AzureUtils.getAzureBaseUri() + "table-storage-service");
+            URI fileServiceUri = UriUtils.buildUri(AzureUtils.getAzureBaseUri() + "file-storage-service");
+
+            return new CloudStorageAccount(StorageCredentials.tryParseCredentials(connectionString), blobServiceUri,
+                    queueServiceUri, tableServiceUri, fileServiceUri);
+        } else {
+            return CloudStorageAccount.parse(connectionString);
+        }
+    }
+
+    /**
+     * Configures authentication credential for Azure.
+     */
+    public static ApplicationTokenCredentials getAzureConfig(
+            AuthCredentialsServiceState parentAuth) {
+
+        String clientId = parentAuth.privateKeyId;
+        String clientKey = EncryptionUtils.decrypt(parentAuth.privateKey);
+        String tenantId = parentAuth.customProperties.get(AzureConstants.AZURE_TENANT_ID);
+
+        AzureEnvironment azureEnvironment = AzureEnvironment.AZURE;
+
+        if (AzureUtils.isAzureClientMock()) {
+            azureEnvironment.endpoints().put(AzureEnvironment.Endpoint.ACTIVE_DIRECTORY.toString(),
+                    AzureUtils.getAzureBaseUri());
+        }
+
+        return new ApplicationTokenCredentials(clientId, tenantId, clientKey, azureEnvironment);
+    }
+
     /**
      * Create Azure RestClient with specified executor and credentials.
      * @param credentials Azure credentials
@@ -431,7 +509,7 @@ public class AzureUtils {
     public static RestClient buildRestClient(ApplicationTokenCredentials credentials, ExecutorService executorService) {
         RestClient.Builder restClientBuilder = new RestClient.Builder();
 
-        restClientBuilder.withBaseUrl(AZURE_CORE_MANAGEMENT_URI);
+        restClientBuilder.withBaseUrl(AzureUtils.getAzureBaseUri());
         restClientBuilder.withCredentials(credentials);
         restClientBuilder.withSerializerAdapter(new AzureJacksonAdapter());
         restClientBuilder.withLogLevel(LogLevel.NONE);

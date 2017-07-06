@@ -21,7 +21,6 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTHORIZATION_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_PROVISIONING_PERMISSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_PERMISSIONS_URI;
@@ -263,7 +262,7 @@ public class AzureEndpointAdapterService extends StatelessService {
 
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + getAzureConfig(credentials).getToken(AZURE_CORE_MANAGEMENT_URI));
+                    AUTH_HEADER_BEARER_PREFIX + getAzureConfig(credentials).getToken(AzureUtils.getAzureBaseUri()));
         } catch (IOException e) {
             return DeferredResult.failed(e);
         }

@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.AzureUriPaths.AZURE_SECURITY_GROUP_ADAPTER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_NETWORK_SECURITY_GROUP_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -112,7 +111,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     Operation.MEDIA_TYPE_APPLICATION_JSON);
             try {
                 operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                        AUTH_HEADER_BEARER_PREFIX + this.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
+                        AUTH_HEADER_BEARER_PREFIX + this.credentials.getToken(AzureUtils.getAzureBaseUri()));
             } catch (Exception ex) {
                 return DeferredResult.failed(ex);
             }

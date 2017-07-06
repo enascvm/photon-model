@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DATA_DISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_BLOB_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
@@ -1993,7 +1992,7 @@ public class AzureInstanceService extends StatelessService {
             ApplicationTokenCredentials credentials = ctx.azureSdkClients.credentials;
 
             URI uri = UriUtils.extendUriWithQuery(
-                    UriUtils.buildUri(UriUtils.buildUri(AzureConstants.BASE_URI_FOR_REST),
+                    UriUtils.buildUri(UriUtils.buildUri(AzureUtils.getAzureBaseUri()),
                             azureInstanceId, AzureConstants.DIAGNOSTIC_SETTING_ENDPOINT,
                             AzureConstants.DIAGNOSTIC_SETTING_AGENT),
                     AzureConstants.QUERY_PARAM_API_VERSION,
@@ -2008,7 +2007,7 @@ public class AzureInstanceService extends StatelessService {
             try {
                 operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
                         AzureConstants.AUTH_HEADER_BEARER_PREFIX
-                                + credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
+                                + credentials.getToken(AzureUtils.getAzureBaseUri()));
             } catch (Exception ex) {
                 handleError(ctx, ex);
                 return;

@@ -98,6 +98,7 @@ import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumer
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.GatewaySpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource.Type;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -1586,5 +1587,11 @@ public class AzureTestUtil {
                 });
         host.send(startGet);
         host.testWait();
+    }
+
+    public static void setAzureClientMockInfo(boolean isAwsClientMock,
+            String awsMockEndpointReference) {
+        AzureUtils.setAzureClientMock(isAwsClientMock);
+        AzureUtils.setAzureMockHost(awsMockEndpointReference);
     }
 }

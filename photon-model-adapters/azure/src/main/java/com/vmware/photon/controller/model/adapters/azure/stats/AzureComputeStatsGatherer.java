@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
 
 import java.io.IOException;
@@ -261,7 +260,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
     private void getMetricDefinitions(AzureStatsDataHolder statsData)
             throws URISyntaxException, IOException {
         String azureInstanceId = statsData.computeDesc.id;
-        URI uri = UriUtils.buildUri(new URI(AzureConstants.BASE_URI_FOR_REST), azureInstanceId,
+        URI uri = UriUtils.buildUri(new URI(AzureUtils.getAzureBaseUri()), azureInstanceId,
                 AzureConstants.METRIC_DEFINITIONS_ENDPOINT);
         // Adding a filter to avoid huge data flow on the network
         /*
@@ -275,7 +274,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
         Operation operation = Operation.createGet(uri);
         operation.addRequestHeader(Operation.ACCEPT_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
         operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                AzureConstants.AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
+                AzureConstants.AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken(AzureUtils.getAzureBaseUri()));
         operation.setCompletion((op, ex) -> {
             if (ex != null) {
                 statsData.taskManager.patchTaskToFailure(ex);
@@ -419,8 +418,8 @@ public class AzureComputeStatsGatherer extends StatelessService {
                 AzureMetricResponse response = new AzureMetricResponse();
                 try {
                     // Create the table client required to make calls to the table
-                    CloudStorageAccount cloudStorageAccount = CloudStorageAccount
-                            .parse(request.getStorageConnectionString());
+                    CloudStorageAccount cloudStorageAccount = AzureUtils
+                            .getAzureStorageClient(request.getStorageConnectionString());
                     CloudTableClient tableClient = cloudStorageAccount.createCloudTableClient();
 
                     // Get the table reference using the table name

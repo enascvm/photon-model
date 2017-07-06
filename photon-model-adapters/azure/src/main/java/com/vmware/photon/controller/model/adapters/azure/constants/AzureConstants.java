@@ -14,12 +14,15 @@
 package com.vmware.photon.controller.model.adapters.azure.constants;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.resources.DiskService;
 
 /**
  * Azure related constants.
  */
 public class AzureConstants {
+    public static final String AZURE_MOCK_HOST_SYSTEM_PROPERTY = "azureMockHost";
+
     public static final String AZURE_CORE_MANAGEMENT_URI = "https://management.azure.com/";
     public static final String AZURE_TENANT_ID = "azureTenantId";
     public static final String AZURE_RESOURCE_GROUP_NAME = "azureResourceGroupName";
@@ -50,7 +53,7 @@ public class AzureConstants {
     public static final String AZURE_ACCOUNT_OWNER_EMAIL_ID = "accountOwnerEmailId";
     public static final String AZURE_ACCOUNT_OWNER_NAME = "accountOwnerName";
     public static final String AZURE_EA_BASE_URI = "https://ea.azure.com";
-    public static final String AZURE_EA_USAGE_REPORTS_URI = AZURE_EA_BASE_URI
+    public static final String AZURE_EA_USAGE_REPORTS_URI = AzureUtils.getAzureEaBaseUri()
             + "/rest/{enrollmentNumber}/usage-reports";
     //Bearer <apiKey>
     public static final String AZURE_EA_AUTHORIZATION_HEADER_FORMAT = "Bearer %s";
@@ -100,7 +103,6 @@ public class AzureConstants {
 
     // Monitoring Constants
     public static final String DIAGNOSTIC_SETTINGS_JSON_FILE_NAME = "diagnosticSettings.json";
-    public static final String BASE_URI_FOR_REST = "https://management.azure.com";
     public static final String DIAGNOSTIC_SETTING_AGENT = "agent";
     public static final String DIAGNOSTIC_SETTING_API_VERSION = "2014-04-01";
     public static final String DIAGNOSTIC_SETTING_ENDPOINT = "diagnosticSettings";
@@ -145,7 +147,7 @@ public class AzureConstants {
 
     //Storage accounts REST constants
     public static final String STORAGE_ACCOUNT_REST_API_VERSION = "2016-01-01";
-    public static final String LIST_STORAGE_ACCOUNTS = BASE_URI_FOR_REST
+    public static final String LIST_STORAGE_ACCOUNTS = AzureUtils.getAzureBaseUri()
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Storage/storageAccounts";
 
     public static final String UNIT_COST = "USD";
@@ -165,16 +167,16 @@ public class AzureConstants {
 
     // Virtual Network REST constants
     public static final String NETWORK_REST_API_VERSION = "2015-06-15";
-    public static final String LIST_VIRTUAL_NETWORKS_URI = BASE_URI_FOR_REST
+    public static final String LIST_VIRTUAL_NETWORKS_URI = AzureUtils.getAzureBaseUri()
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualnetworks";
 
     // Network Security Groups
-    public static final String LIST_NETWORK_SECURITY_GROUP_URI = BASE_URI_FOR_REST
+    public static final String LIST_NETWORK_SECURITY_GROUP_URI = AzureUtils.getAzureBaseUri()
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/networkSecurityGroups";
 
     // Resource Group REST constants
     public static final String RESOURCE_GROUP_REST_API_VERSION = "2015-11-01";
-    public static final String LIST_RESOURCE_GROUPS_URI = BASE_URI_FOR_REST
+    public static final String LIST_RESOURCE_GROUPS_URI = AzureUtils.getAzureBaseUri()
             + "/subscriptions/{subscriptionId}/resourcegroups";
 
     // Azure network properties
@@ -182,7 +184,7 @@ public class AzureConstants {
 
     // Provider REST constants
     public static final String PROVIDER_REST_API_VERSION = "2016-07-01";
-    public static final String PROVIDER_URI = BASE_URI_FOR_REST
+    public static final String PROVIDER_URI = AzureUtils.getAzureBaseUri()
             + "/subscriptions/{subscriptionId}/providers/{resourceProviderNamespace}";
     public static final String PROVIDER_PERMISSIONS_URI = PROVIDER_URI + "/permissions";
 

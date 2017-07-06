@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_BLOBS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINERS;
@@ -418,7 +417,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
                     AUTH_HEADER_BEARER_PREFIX + context.credentials
-                            .getToken(AZURE_CORE_MANAGEMENT_URI));
+                            .getToken(AzureUtils.getAzureBaseUri()));
         } catch (Exception ex) {
             this.handleError(context, ex);
             return;
