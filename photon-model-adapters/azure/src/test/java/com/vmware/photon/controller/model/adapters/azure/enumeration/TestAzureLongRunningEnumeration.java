@@ -46,6 +46,7 @@ import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createS
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +90,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -96,6 +98,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -210,13 +213,18 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
     public static String azureVMNamePrefix = "az-lrt-";
 
-    private static final String RESOURCE_GROUP = "resourceGroup";
-    private static final String DISK_STATE = "diskState";
-    private static final String COMPUTE_STATE = "computeState";
-    private static final String STORAGE_DESC = "storageDesc";
-    private static final String NETWORK_STATE = "networkState";
-    private static final String NETWORK_INTERFACE_STATE = "networkInterfaceState";
-    private static final String SUBNET_STATE = "subnetState";
+    private static final List<Class> resourcesList = new ArrayList<>(
+            Arrays.asList(ResourceGroupState.class,
+                    ComputeState.class,
+                    ComputeDescription.class,
+                    DiskState.class,
+                    StorageDescription.class,
+                    NetworkState.class,
+                    NetworkInterfaceState.class,
+                    NetworkInterfaceDescription.class,
+                    SubnetState.class,
+                    TagState.class,
+                    SecurityGroupState.class));
 
     private Map<String, Long> resourcesCountAfterFirstEnumeration = new HashMap<>();
     private Map<String, Long> resourcesCountAfterMultipleEnumerations = new HashMap<>();
@@ -521,7 +529,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             ComputeState later = azLrtComputeStatesEnd.get(azureVmName);
 
             // Validate number of document version changes are less than number of enumerations ran.
-            Assert.assertTrue(later.documentVersion - original.documentVersion <
+            assertTrue(later.documentVersion - original.documentVersion <
                     this.numOfEnumerationsRan);
         }
 
@@ -653,39 +661,18 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
      */
     private void generateResourcesCounts() {
         if (this.numOfEnumerationsRan == 1) {
-            this.resourcesCountAfterFirstEnumeration
-                    .put(RESOURCE_GROUP, getDocumentCount(ResourceGroupState.class));
-            this.resourcesCountAfterFirstEnumeration
-                    .put(DISK_STATE, getDocumentCount(DiskState.class));
-            this.resourcesCountAfterFirstEnumeration
-                    .put(COMPUTE_STATE, getDocumentCount(ComputeState.class));
-            this.resourcesCountAfterFirstEnumeration
-                    .put(STORAGE_DESC, getDocumentCount(StorageDescription.class));
-            this.resourcesCountAfterFirstEnumeration
-                    .put(NETWORK_STATE, getDocumentCount(NetworkState.class));
-            this.resourcesCountAfterFirstEnumeration
-                    .put(NETWORK_INTERFACE_STATE, getDocumentCount(NetworkInterfaceState.class));
-            this.resourcesCountAfterFirstEnumeration
-                    .put(SUBNET_STATE, getDocumentCount(SubnetState.class));
+            for (Class resource : resourcesList) {
+                this.resourcesCountAfterFirstEnumeration
+                        .put(resource.toString(), getDocumentCount(resource));
+            }
 
             // populate error delta margin for resources.
             populateResourceDelta();
-
         } else {
-            this.resourcesCountAfterMultipleEnumerations
-                    .put(RESOURCE_GROUP, getDocumentCount(ResourceGroupState.class));
-            this.resourcesCountAfterMultipleEnumerations
-                    .put(DISK_STATE, getDocumentCount(DiskState.class));
-            this.resourcesCountAfterMultipleEnumerations
-                    .put(COMPUTE_STATE, getDocumentCount(ComputeState.class));
-            this.resourcesCountAfterMultipleEnumerations
-                    .put(STORAGE_DESC, getDocumentCount(StorageDescription.class));
-            this.resourcesCountAfterMultipleEnumerations
-                    .put(NETWORK_STATE, getDocumentCount(NetworkState.class));
-            this.resourcesCountAfterMultipleEnumerations
-                    .put(NETWORK_INTERFACE_STATE, getDocumentCount(NetworkInterfaceState.class));
-            this.resourcesCountAfterMultipleEnumerations
-                    .put(SUBNET_STATE, getDocumentCount(SubnetState.class));
+            for (Class resource : resourcesList) {
+                this.resourcesCountAfterMultipleEnumerations
+                        .put(resource.toString(), getDocumentCount(resource));
+            }
         }
     }
 
@@ -696,29 +683,11 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         if (this.numOfEnumerationsRan > 1) {
             this.host.log(Level.INFO, "Verifying Resources counts...");
 
-            assertTrue((this.resourcesCountAfterFirstEnumeration.get(RESOURCE_GROUP)
-                    + this.resourceDeltaMap.get(RESOURCE_GROUP))
-                    >= this.resourcesCountAfterMultipleEnumerations.get(RESOURCE_GROUP));
-            assertTrue((this.resourcesCountAfterFirstEnumeration.get(DISK_STATE)
-                    + this.resourceDeltaMap.get(DISK_STATE))
-                    >= this.resourcesCountAfterMultipleEnumerations.get(DISK_STATE));
-            assertTrue((this.resourcesCountAfterFirstEnumeration.get(COMPUTE_STATE)
-                    + this.resourceDeltaMap.get(COMPUTE_STATE))
-                    >= this.resourcesCountAfterMultipleEnumerations.get(COMPUTE_STATE));
-            assertTrue((this.resourcesCountAfterFirstEnumeration.get(STORAGE_DESC)
-                    + this.resourceDeltaMap.get(STORAGE_DESC))
-                    >= this.resourcesCountAfterMultipleEnumerations.get(STORAGE_DESC));
-            assertTrue((this.resourcesCountAfterFirstEnumeration.get(NETWORK_STATE)
-                    + this.resourceDeltaMap.get(NETWORK_STATE))
-                    >= this.resourcesCountAfterMultipleEnumerations.get(NETWORK_STATE));
-            assertTrue((this.resourcesCountAfterFirstEnumeration.get(NETWORK_INTERFACE_STATE)
-                    + this.resourceDeltaMap.get(NETWORK_INTERFACE_STATE))
-                    >= this.resourcesCountAfterMultipleEnumerations
-                    .get(NETWORK_INTERFACE_STATE));
-            assertTrue((this.resourcesCountAfterFirstEnumeration.get(SUBNET_STATE)
-                    + this.resourceDeltaMap.get(SUBNET_STATE))
-                    >= this.resourcesCountAfterMultipleEnumerations.get(SUBNET_STATE));
-
+            for (Class resource : resourcesList) {
+                assertTrue((this.resourcesCountAfterFirstEnumeration.get(resource.toString())
+                        + this.resourceDeltaMap.get(resource.toString()))
+                        >= this.resourcesCountAfterMultipleEnumerations.get(resource.toString()));
+            }
             this.resourceCountAssertError = false;
             this.host.log(Level.INFO, "Resources count assertions successful.");
         }
@@ -728,27 +697,11 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
      * Populate delta error margin for resources counts.
      */
     private void populateResourceDelta() {
-        this.resourceDeltaMap.put(RESOURCE_GROUP, Math.ceil(
-                this.resourcesCountAfterFirstEnumeration.get(RESOURCE_GROUP) * this.resourceDeltaValue
-                        / 100));
-        this.resourceDeltaMap.put(DISK_STATE, Math.ceil(
-                this.resourcesCountAfterFirstEnumeration.get(DISK_STATE) * this.resourceDeltaValue
-                        / 100));
-        this.resourceDeltaMap.put(COMPUTE_STATE, Math.ceil(
-                this.resourcesCountAfterFirstEnumeration.get(COMPUTE_STATE) * this.resourceDeltaValue
-                        / 100));
-        this.resourceDeltaMap.put(STORAGE_DESC, Math.ceil(
-                this.resourcesCountAfterFirstEnumeration.get(STORAGE_DESC) * this.resourceDeltaValue
-                        / 100));
-        this.resourceDeltaMap.put(NETWORK_STATE, Math.ceil(
-                this.resourcesCountAfterFirstEnumeration.get(NETWORK_STATE) * this.resourceDeltaValue
-                        / 100));
-        this.resourceDeltaMap.put(NETWORK_INTERFACE_STATE, Math.ceil(
-                this.resourcesCountAfterFirstEnumeration.get(NETWORK_INTERFACE_STATE)
-                        * this.resourceDeltaValue / 100));
-        this.resourceDeltaMap.put(SUBNET_STATE, Math.ceil(
-                this.resourcesCountAfterFirstEnumeration.get(SUBNET_STATE) * this.resourceDeltaValue
-                        / 100));
+        for (Class resource : resourcesList) {
+            this.resourceDeltaMap.put(resource.toString(), Math.ceil(
+                    this.resourcesCountAfterFirstEnumeration.get(resource.toString()) *
+                            this.resourceDeltaValue / 100));
+        }
     }
 
     /**
@@ -1017,7 +970,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     private long getDocumentCount(Class <? extends ServiceDocument> T) {
         QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
                 .addKindFieldClause(T);
-        //.addFieldClause("documentSelfLink", "/resources/groups/", QueryTask.QueryTerm.MatchType.PREFIX);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.COUNT)

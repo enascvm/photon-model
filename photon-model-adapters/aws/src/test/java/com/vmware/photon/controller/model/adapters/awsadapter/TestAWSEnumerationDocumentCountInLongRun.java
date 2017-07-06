@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -31,6 +34,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.g
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,13 +54,20 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
@@ -134,6 +145,28 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private String subnetId;
     private String securityGroupId;
 
+    private int numOfEnumerationsRan = 0;
+
+    private static final List<Class> resourcesList = new ArrayList<>(
+            Arrays.asList(ResourceGroupState.class,
+                    ComputeState.class,
+                    ComputeDescription.class,
+                    DiskState.class,
+                    StorageDescription.class,
+                    NetworkState.class,
+                    NetworkInterfaceState.class,
+                    NetworkInterfaceDescription.class,
+                    SubnetState.class,
+                    TagState.class,
+                    SecurityGroupState.class));
+
+    private Map<String, Long> resourcesCountAfterFirstEnumeration = new HashMap<>();
+    private Map<String, Long> resourcesCountAfterMultipleEnumerations = new HashMap<>();
+    private Map<String, Double> resourceDeltaMap = new HashMap<>();
+    public long resourceDeltaValue = 10;
+
+    private boolean resourceCountAssertError = true;
+
     @Rule
     public TestName currentTestName = new TestName();
 
@@ -141,16 +174,16 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
 
-        this.instancesToCleanUp = new ArrayList<String>();
-        this.computeStateLinks = new HashSet<String>();
-        this.resourcePoolLinks = new HashSet<String>();
-        this.networkInterfaceLinks = new HashSet<String>();
-        this.securityGroupLinks = new HashSet<String>();
-        this.subnetLinks = new HashSet<String>();
-        this.resourcePoolIds = new HashSet<String>();
-        this.networkInterfaceIds = new HashSet<String>();
-        this.securityGroupIds = new HashSet<String>();
-        this.subnetIds = new HashSet<String>();
+        this.instancesToCleanUp = new ArrayList<>();
+        this.computeStateLinks = new HashSet<>();
+        this.resourcePoolLinks = new HashSet<>();
+        this.networkInterfaceLinks = new HashSet<>();
+        this.securityGroupLinks = new HashSet<>();
+        this.subnetLinks = new HashSet<>();
+        this.resourcePoolIds = new HashSet<>();
+        this.networkInterfaceIds = new HashSet<>();
+        this.securityGroupIds = new HashSet<>();
+        this.subnetIds = new HashSet<>();
 
         setAwsClientMockInfo(this.isAwsClientMock, this.awsMockEndpointReference);
         // create credentials
@@ -244,6 +277,16 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             return true;
         });
 
+        this.host.waitFor("Timeout while waiting for last enumeration to clear out.", () -> {
+            TimeUnit.MINUTES.sleep(1);
+            return true;
+        });
+
+        if (this.resourceCountAssertError) {
+            this.host.log(Level.SEVERE, "Resource count assertions failed.");
+            fail("Resource count assertions failed.");
+        }
+
         // Store document links and ids for enumerated resources to obtain expected number of documents
         // and actual number of documents.
         storeDocumentLinksAndIds(this.instanceIds);
@@ -271,7 +314,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     }
 
     /**
-     * Periodically runs enumeration and logs node stats.
+     * Periodically runs enumeration, verifies resources counts and logs node stats.
      */
     private void runEnumerationAndLogNodeStatsPeriodically() {
         this.host.getScheduledExecutor().scheduleAtFixedRate(() -> {
@@ -279,13 +322,82 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                 this.host.log(Level.INFO, "Running enumeration...");
                 enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                         TEST_CASE_INITIAL);
+                this.numOfEnumerationsRan++;
 
                 // Print node CPU Utilization and Memory usages
                 logNodeStats(this.host.getServiceStats(this.nodeStatsUri));
             } catch (Throwable e) {
                 this.host.log(Level.WARNING, "Error running enumeration in test" + e.getMessage());
             }
+            // perform check on resource counts after each enumeration
+            generateResourcesCounts();
+            // assert check on resources count after first and last enumeration.
+            verifyResourcesCount();
         }, 0, this.enumerationFrequencyInMinutes, TimeUnit.MINUTES);
+    }
+
+    /**
+     * Fetch the document count for resources
+     */
+    private void generateResourcesCounts() {
+        if (this.numOfEnumerationsRan == 1) {
+            for (Class resource : resourcesList) {
+                this.resourcesCountAfterFirstEnumeration
+                        .put(resource.toString(), getDocumentCount(resource));
+            }
+
+            // populate error delta margin for resources.
+            populateResourceDelta();
+        } else {
+            for (Class resource : resourcesList) {
+                this.resourcesCountAfterMultipleEnumerations
+                        .put(resource.toString(), getDocumentCount(resource));
+            }
+        }
+    }
+
+    /**
+     * Populate delta error margin for resources counts.
+     */
+    private void populateResourceDelta() {
+        for (Class resource : resourcesList) {
+            this.resourceDeltaMap.put(resource.toString(), Math.ceil(
+                    this.resourcesCountAfterFirstEnumeration.get(resource.toString()) *
+                            this.resourceDeltaValue / 100));
+        }
+    }
+
+    /**
+     * Returns the count of resource documents for given Resource type.
+     */
+    private long getDocumentCount(Class <? extends ServiceDocument> T) {
+        QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(T);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.COUNT)
+                .setQuery(qBuilder.build())
+                .build();
+
+        this.host.createQueryTaskService(queryTask, false, true, queryTask, null);
+        return queryTask.results.documentCount;
+    }
+
+    /**
+     * Verify document count of resources after first enumeration and later enumerations.
+     */
+    private void verifyResourcesCount() {
+        if (this.numOfEnumerationsRan > 1) {
+            this.host.log(Level.INFO, "Verifying Resources counts...");
+
+            for (Class resource : resourcesList) {
+                assertTrue((this.resourcesCountAfterFirstEnumeration.get(resource.toString())
+                        + this.resourceDeltaMap.get(resource.toString()))
+                        >= this.resourcesCountAfterMultipleEnumerations.get(resource.toString()));
+            }
+            this.resourceCountAssertError = false;
+            this.host.log(Level.INFO, "Resources count assertions successful.");
+        }
     }
 
     /**
