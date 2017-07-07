@@ -180,7 +180,8 @@ public class AzureCostStatsService extends StatelessService {
         protected Stages stage = Stages.GET_COMPUTE_HOST;
         private ComputeStatsRequest statsRequest;
         private ComputeStatsResponse statsResponse = new ComputeStatsResponse();
-        private Map<String, ComputeState> subscriptionGuidToComputeState = new ConcurrentHashMap<>();
+        private Map<String, List<ComputeState>> subscriptionGuidToComputeState =
+                new ConcurrentHashMap<>();
         private TaskManager taskManager;
         // billParsingCompleteTimeMillis is populated once the entire bill is parsed
         private long billParsingCompleteTimeMillis = 0;
@@ -698,8 +699,10 @@ public class AzureCostStatsService extends StatelessService {
                 .filter(subscriptionGuid -> subscriptionGuid != null && !subscriptionGuid.isEmpty())
                 .map(subscriptionGuid -> createQueryForComputeStatesBySubscription(context,
                         subscriptionGuid,
-                        (subscriptionComputeState) -> context.subscriptionGuidToComputeState
-                                .put(subscriptionGuid, subscriptionComputeState)))
+                        (subscriptionComputeStates) -> {
+                            context.subscriptionGuidToComputeState
+                                    .put(subscriptionGuid, subscriptionComputeStates);
+                        }))
                 .collect(Collectors.toList());
         joinOpSendRequest(context, queryOps, next);
     }
@@ -712,7 +715,7 @@ public class AzureCostStatsService extends StatelessService {
      * @return operation object representing the query
      */
     private Operation createQueryForComputeStatesBySubscription(Context context,
-            String subscriptionGuid, Consumer<ComputeState> queryResultConsumer) {
+            String subscriptionGuid, Consumer<List<ComputeState>> queryResultConsumer) {
         QueryTask.Query azureSubscriptionsQuery = QueryTask.Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
@@ -722,6 +725,8 @@ public class AzureCostStatsService extends StatelessService {
                         PhotonModelConstants.CLOUD_ACCOUNT_ID, subscriptionGuid)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE,
                         ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST)
+                .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
+                        context.computeHostDesc.tenantLinks)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
@@ -751,7 +756,7 @@ public class AzureCostStatsService extends StatelessService {
                     if (subscriptionComputeState == null || subscriptionComputeState.size() == 0) {
                         return;
                     }
-                    queryResultConsumer.accept(subscriptionComputeState.get(0));
+                    queryResultConsumer.accept(subscriptionComputeState);
                 });
     }
 
@@ -858,21 +863,22 @@ public class AzureCostStatsService extends StatelessService {
 
     // Create Azure account stats
     private void createAzureSubscriptionStats(Context context, AzureSubscription subscription) {
-        Consumer<ComputeState> subscriptionStatsProcessor = (subscriptionComputeState) -> {
-            String costStatName = AzureStatsNormalizer
-                    .getNormalizedStatKeyValue(AzureCostConstants.COST);
-            String costUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
+        Consumer<List<ComputeState>> subscriptionStatsProcessor = (subscriptionComputeStates) -> {
+            subscriptionComputeStates.forEach(subscriptionComputeState -> {
+                String costStatName = AzureStatsNormalizer
+                        .getNormalizedStatKeyValue(AzureCostConstants.COST);
+                String costUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
 
-            ComputeStats subscriptionStats = new ComputeStats();
-            subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
-            subscriptionStats.statValues = new ConcurrentSkipListMap<>();
-            ServiceStat azureAccountStat = AzureCostStatsServiceHelper
-                    .createServiceStat(costStatName, subscription.getCost(), costUnit,
-                            context.billProcessedTimeMillis);
-            subscriptionStats.statValues
-                    .put(costStatName, Collections.singletonList(azureAccountStat));
-            context.statsResponse.statsList.add(subscriptionStats);
-
+                ComputeStats subscriptionStats = new ComputeStats();
+                subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
+                subscriptionStats.statValues = new ConcurrentSkipListMap<>();
+                ServiceStat azureAccountStat = AzureCostStatsServiceHelper
+                        .createServiceStat(costStatName, subscription.getCost(), costUnit,
+                                context.billProcessedTimeMillis);
+                subscriptionStats.statValues
+                        .put(costStatName, Collections.singletonList(azureAccountStat));
+                context.statsResponse.statsList.add(subscriptionStats);
+            });
         };
         processSubscriptionStats(context, subscription, subscriptionStatsProcessor);
     }
@@ -1052,8 +1058,8 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private void processSubscriptionStats(Context context,
-            AzureSubscription subscription, Consumer<ComputeState> processor) {
-        ComputeState subscriptionComputeState = context.subscriptionGuidToComputeState
+            AzureSubscription subscription, Consumer<List<ComputeState>> processor) {
+        List<ComputeState> subscriptionComputeState = context.subscriptionGuidToComputeState
                 .getOrDefault(subscription.entityId, null);
         if (subscriptionComputeState == null) {
             logWarning(() -> String.format("Could not find compute state for Azure subscription "
@@ -1066,18 +1072,20 @@ public class AzureCostStatsService extends StatelessService {
 
     private void createServiceStatsForSubscription(Context context,
             AzureSubscription subscription) {
-        Consumer<ComputeState> serviceStatsProcessor = (subscriptionComputeState) -> {
-            ComputeStats subscriptionStats = new ComputeStats();
-            subscriptionStats.statValues = new ConcurrentHashMap<>();
-            subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
-            for (AzureService service : subscription.getServices().values()) {
-                Map<String, List<ServiceStat>> statsForAzureService = createStatsForAzureService(
-                        service);
-                subscriptionStats.statValues.putAll(statsForAzureService);
-            }
-            if (!subscriptionStats.statValues.isEmpty()) {
-                context.statsResponse.statsList.add(subscriptionStats);
-            }
+        Consumer<List<ComputeState>> serviceStatsProcessor = (subscriptionComputeStates) -> {
+            subscriptionComputeStates.forEach(subscriptionComputeState -> {
+                ComputeStats subscriptionStats = new ComputeStats();
+                subscriptionStats.statValues = new ConcurrentHashMap<>();
+                subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
+                for (AzureService service : subscription.getServices().values()) {
+                    Map<String, List<ServiceStat>> statsForAzureService = createStatsForAzureService(
+                            service);
+                    subscriptionStats.statValues.putAll(statsForAzureService);
+                }
+                if (!subscriptionStats.statValues.isEmpty()) {
+                    context.statsResponse.statsList.add(subscriptionStats);
+                }
+            });
         };
         processSubscriptionStats(context, subscription, serviceStatsProcessor);
     }
