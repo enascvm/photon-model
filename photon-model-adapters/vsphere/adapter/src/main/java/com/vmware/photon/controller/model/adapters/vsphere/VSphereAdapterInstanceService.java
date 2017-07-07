@@ -33,7 +33,6 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.CustomizationSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -151,14 +150,14 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                         for (NetworkInterfaceStateWithDetails nic : ctx.nics) {
                             // request guest customization while vm of powered off
-                            NetworkInterfaceDescription desc = nic.description;
+
                             SubnetState subnet = nic.subnet;
-                            if (subnet != null && desc != null
-                                    && desc.assignment == IpAssignment.STATIC) {
+                            if (subnet != null && nic.description != null
+                                    && nic.description.assignment == IpAssignment.STATIC) {
                                 CustomizationClient cc = new CustomizationClient(connection,
                                         ctx.child, vmOverlay.getGuestId());
                                 CustomizationSpec template = new CustomizationSpec();
-                                cc.customizeNic(vmOverlay.getPrimaryMac(), ctx.child.hostName, desc, subnet, template);
+                                cc.customizeNic(vmOverlay.getPrimaryMac(), ctx.child.hostName, nic.address, subnet, template);
                                 cc.customizeDns(subnet.dnsServerAddresses, subnet.dnsSearchDomains,
                                         template);
                                 ManagedObjectReference task = cc

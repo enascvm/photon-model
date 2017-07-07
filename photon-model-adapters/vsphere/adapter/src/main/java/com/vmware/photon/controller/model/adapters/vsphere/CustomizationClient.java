@@ -22,7 +22,6 @@ import org.apache.commons.net.util.SubnetUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.CustomizationAdapterMapping;
 import com.vmware.vim25.CustomizationFaultFaultMsg;
@@ -58,7 +57,7 @@ public class CustomizationClient extends BaseHelper {
         return connection.getVimPort().customizeVMTask(vm, spec);
     }
 
-    public void customizeNic(String macAddress, String hostName, NetworkInterfaceDescription config,
+    public void customizeNic(String macAddress, String hostName, String address,
             SubnetState subnetState, CustomizationSpec template) {
         // remove existing mapping
         template.getNicSettingMap().removeIf(x -> Objects.equals(x.getMacAddress(), macAddress));
@@ -72,7 +71,7 @@ public class CustomizationClient extends BaseHelper {
         adapter.getGateway().add(subnetState.gatewayAddress);
         adapter.setDnsDomain(subnetState.domain);
         CustomizationFixedIp ipGen = new CustomizationFixedIp();
-        ipGen.setIpAddress(config.address);
+        ipGen.setIpAddress(address);
         adapter.setIp(ipGen);
 
         template.getNicSettingMap().add(mapping);
