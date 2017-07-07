@@ -23,7 +23,7 @@ import java.util.Map;
  */
 public class FetchDataRequest {
     public enum RequestType {
-        EndpointType, ResourceOperation, ResourceDetails
+        EndpointType, Endpoint, ResourceOperation, ResourceDetails
     }
 
     /**
