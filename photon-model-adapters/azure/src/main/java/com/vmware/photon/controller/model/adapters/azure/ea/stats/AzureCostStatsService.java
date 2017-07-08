@@ -196,6 +196,20 @@ public class AzureCostStatsService extends StatelessService {
         Double monthlyEaAccountUsageCost;
         Double monthlyEaAccountMarketplaceCost;
         Double monthlyEaAccountSeparatelyBilledCost;
+
+        public Double getTotalCost() {
+            Double totalCost = 0.0d;
+            if (this.monthlyEaAccountUsageCost != null) {
+                totalCost += this.monthlyEaAccountUsageCost;
+            }
+            if (this.monthlyEaAccountMarketplaceCost != null) {
+                totalCost += this.monthlyEaAccountMarketplaceCost;
+            }
+            if (this.monthlyEaAccountSeparatelyBilledCost != null) {
+                totalCost += this.monthlyEaAccountSeparatelyBilledCost;
+            }
+            return totalCost;
+        }
     }
 
     @Override
@@ -543,7 +557,7 @@ public class AzureCostStatsService extends StatelessService {
     private void downloadDetailedBill(Context context, Stages next) {
         EaAccountCost eaAccountCost = context.eaAccountCost
                 .get(AzureCostStatsServiceHelper.getFirstDayOfCurrentMonth());
-        if (eaAccountCost != null) {
+        if (eaAccountCost != null && eaAccountCost.monthlyEaAccountUsageCost != null) {
             Double collectedCurrentMonthEaUsageCost = eaAccountCost.monthlyEaAccountUsageCost;
             if (collectedCurrentMonthEaUsageCost.equals(context.storedCurrentMonthEaUsageCost)) {
                 logInfo(() -> "Microsoft Azure hasn't updated the bill since the last run."
@@ -945,10 +959,7 @@ public class AzureCostStatsService extends StatelessService {
         for (Entry<LocalDate, EaAccountCost> accountCostEntry : monthlyEaAccountCost.entrySet()) {
             LocalDate month = accountCostEntry.getKey();
             EaAccountCost accountCost = accountCostEntry.getValue();
-            double totalCost = accountCost.monthlyEaAccountUsageCost
-                    + accountCost.monthlyEaAccountMarketplaceCost
-                    + accountCost.monthlyEaAccountSeparatelyBilledCost;
-            monthlyTotalCost.put(month, totalCost);
+            monthlyTotalCost.put(month, accountCost.getTotalCost());
         }
         return monthlyTotalCost;
     }
@@ -1468,8 +1479,9 @@ public class AzureCostStatsService extends StatelessService {
     private void handleError(Context context, Stages next, Throwable throwable,
             boolean shouldGoToNextStage) {
         try {
-            if (AzureCostStatsServiceHelper.isCurrentMonth(context.billMonthToDownload)
-                    || next == null) {
+            if (next == null ||
+                    (next.equals(Stages.PARSE_DETAILED_BILL)  &&
+                            AzureCostStatsServiceHelper.isCurrentMonth(context.billMonthToDownload))) {
                 cleanUp(context);
                 if (throwable != null) {
                     logSevere(() -> String.format("Failed at stage %s with the exception: %s",

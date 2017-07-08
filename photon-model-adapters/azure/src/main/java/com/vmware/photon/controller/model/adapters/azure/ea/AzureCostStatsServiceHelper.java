@@ -229,7 +229,7 @@ public interface AzureCostStatsServiceHelper {
             String currencyUnit, Long timestamp) {
         ServiceStats.ServiceStat stat = new ServiceStats.ServiceStat();
         stat.name = serviceResourceCostMetric;
-        stat.latestValue = value.doubleValue();
+        stat.latestValue = value != null ? value.doubleValue() : 0.0d;
         stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp);
         stat.unit = currencyUnit;
         return stat;
