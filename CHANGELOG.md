@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.25-SNAPSHOT
+
 ## 0.6.24
 * Added services to allocate and deallocate IP addresses.
 * Added support for 'Endpoint' request type for profile UI.
