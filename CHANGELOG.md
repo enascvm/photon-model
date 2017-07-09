@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.6.24-SNAPSHOT
+## 0.6.24
+* Added services to allocate and deallocate IP addresses.
+* Added support for 'Endpoint' request type for profile UI.
 
 ## 0.6.23
 * Added support to set custom IP address for Azure VM.
