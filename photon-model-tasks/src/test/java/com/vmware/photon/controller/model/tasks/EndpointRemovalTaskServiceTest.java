@@ -50,6 +50,8 @@ import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.RouterService;
+import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
@@ -266,6 +268,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         createDiskState(test, endpointLink, tenantLinks);
         createPrivateImageState(test, endpointLink, tenantLinks);
         createNetworkState(test, endpointLink, tenantLinks);
+        createRouterState(test, endpointLink, tenantLinks);
         createAuthCredentials(test, endpointLink, tenantLinks);
     }
 
@@ -301,6 +304,17 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         image.tenantLinks = tenantLinks;
         image.endpointLink = endpointLink;
         test.postServiceSynchronously(ImageService.FACTORY_LINK, image, ImageState.class);
+    }
+
+    private static void createRouterState(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        RouterState router = new RouterState();
+        router.name = "router";
+        router.tenantLinks = tenantLinks;
+        router.endpointLink = endpointLink;
+        router.type = "type";
+
+        test.postServiceSynchronously(RouterService.FACTORY_LINK, router, RouterState.class);
     }
 
     private static void createNetworkState(BaseModelTest test, String endpointLink,
