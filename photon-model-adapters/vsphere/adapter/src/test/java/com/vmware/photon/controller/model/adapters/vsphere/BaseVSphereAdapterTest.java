@@ -799,7 +799,6 @@ public class BaseVSphereAdapterTest {
                 capacityMBytes, customProperties);
         diskState.groupLinks = new HashSet<>();
         diskState.groupLinks.add(createResourceGroupState().documentSelfLink);
-        diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }

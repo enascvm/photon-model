@@ -196,8 +196,8 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
         if (bootDiskSelfLink != null) {
             computeState.diskLinks.add(bootDiskSelfLink);
         } else {
-            computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, 1, getDiskUri(),
-                    HDD_DISK_SIZE, diskCustomization ? buildCustomProperties() : null).documentSelfLink);
+            computeState.diskLinks.add(createDiskWithStoragePolicy("boot", DiskService.DiskType.HDD, 1,
+                    getDiskUri(), HDD_DISK_SIZE, diskCustomization ? buildCustomProperties() : null).documentSelfLink);
         }
         computeState.diskLinks.add(createDisk("A", DiskService.DiskType.FLOPPY, 2, null, FLOPPY_DISK_SIZE, null)
                 .documentSelfLink);

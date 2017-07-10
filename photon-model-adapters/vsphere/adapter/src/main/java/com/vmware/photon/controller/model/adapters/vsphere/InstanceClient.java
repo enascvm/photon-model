@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
+import com.vmware.pbm.PbmProfileId;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NetworkDeviceBackingFactory;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
@@ -282,7 +283,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool(datastore);
+        ManagedObjectReference resourcePool = getResourcePool(datastore, pbmSpec);
 
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
         relocSpec.setDatastore(datastore);
@@ -324,7 +325,7 @@ public class InstanceClient extends BaseHelper {
         String strategy = CustomProperties.of(this.ctx.child).getString(CustomProperties.CLONE_STRATEGY);
 
         if (CLONE_STRATEGY_FULL.equals(strategy)) {
-            return VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING;
+            return VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING;
         } else if (CLONE_STRATEGY_LINKED.equals(strategy)) {
             return VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
         } else {
@@ -439,7 +440,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference ds = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool(ds);
+        ManagedObjectReference resourcePool = getResourcePool(ds, pbmSpec);
 
         String vmName = "pmt-" + deployer.getRetriever().hash(ovfUri);
 
@@ -569,7 +570,7 @@ public class InstanceClient extends BaseHelper {
             }
             spec.setFolder(vmFolder);
             spec.setDiskMoveType(
-                    VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING
+                    VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING
                             .value());
 
             VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
@@ -713,7 +714,8 @@ public class InstanceClient extends BaseHelper {
             } else {
                 // get customization spec for boot disk if it is not linked clone
                 if (toKb(this.bootDisk.capacityMBytes) > vd.getCapacityInKB()) {
-                    diskMoveOption = VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING;
+                    diskMoveOption = VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING;
+                    logger.warn("Changing clone strategy to MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING, as there is disk resize requested");
                     customizeBootDisk = true;
                 }
             }
@@ -1353,9 +1355,14 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool(datastore);
+        ManagedObjectReference resourcePool = getResourcePool(datastore, pbmSpec);
         ManagedObjectReference host = getHost();
 
+        // If datastore for disk is null, if storage policy is configured pick the compatible
+        // datastore from that.
+        if (datastore == null) {
+            datastore = getDatastoreFromStoragePolicy(pbmSpec);
+        }
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);
 
@@ -1752,13 +1759,11 @@ public class InstanceClient extends BaseHelper {
         if (diskState.customProperties.get(DISK_MODE_PERSISTENT) != null) {
             isPersistent = Boolean.valueOf(diskState.customProperties.get(DISK_MODE_PERSISTENT));
         }
-        return isPersistent ?
-                (isIndependent ?
+        return isIndependent ?
+                (isPersistent ?
                         VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
-                        VirtualDiskMode.PERSISTENT.value()) :
-                (isIndependent ?
-                        VirtualDiskMode.INDEPENDENT_NONPERSISTENT.value() :
-                        VirtualDiskMode.NONPERSISTENT.value());
+                        VirtualDiskMode.INDEPENDENT_NONPERSISTENT.value()) :
+                VirtualDiskMode.PERSISTENT.value();
     }
 
     private VirtualDiskType getDiskProvisioningType(DiskStateExpanded diskState) throws
@@ -1799,6 +1804,34 @@ public class InstanceClient extends BaseHelper {
             return allocationInfo;
         }
         return null;
+    }
+
+    /**
+     * Get one of the datastore compatible with storage policy, if nonthing is available fall
+     * back to the default datastore.
+     */
+    private ManagedObjectReference getDatastoreFromStoragePolicy(List<VirtualMachineDefinedProfileSpec> pbmSpec)
+            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (pbmSpec != null) {
+            for (VirtualMachineDefinedProfileSpec sp : pbmSpec) {
+                try {
+                    PbmProfileId pbmProfileId = new PbmProfileId();
+                    pbmProfileId.setUniqueId(sp.getProfileId());
+                    List<String> datastoreNames = ClientUtils.getDatastores(this.connection,
+                            pbmProfileId);
+                    String dsName = datastoreNames.stream().findFirst().orElse(null);
+                    if (dsName != null) {
+                        ManagedObjectReference dsFromSp = new ManagedObjectReference();
+                        dsFromSp.setType(VimNames.TYPE_DATASTORE);
+                        dsFromSp.setValue(dsName);
+                        return dsFromSp;
+                    }
+                } catch (Exception runtimeFaultFaultMsg) {
+                    // Just ignore. No need to log, as there are alternative paths.
+                }
+            }
+        }
+        return getDatastore();
     }
 
     /**
@@ -1849,11 +1882,6 @@ public class InstanceClient extends BaseHelper {
 
     /**
      * Finds the datastore to use for the VM from the ComputeState.description.datastoreId.
-     *
-     * @return
-     * @throws RuntimeFaultFaultMsg
-     * @throws InvalidPropertyFaultMsg
-     * @throws FinderException
      */
     private ManagedObjectReference getDatastore()
             throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException {
@@ -1889,7 +1917,8 @@ public class InstanceClient extends BaseHelper {
         return this.get.entityProp(target, VimPath.res_datastore);
     }
 
-    private ManagedObjectReference getResourcePool(ManagedObjectReference datastoreForDisk)
+    private ManagedObjectReference getResourcePool(ManagedObjectReference datastoreForDisk,
+            List<VirtualMachineDefinedProfileSpec> pbmSpec)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         if (this.resourcePool != null) {
             return this.resourcePool;
@@ -1897,20 +1926,9 @@ public class InstanceClient extends BaseHelper {
 
         // This would happen only when there is datastore specified for boot disk, in that case
         // even the resource pool should be picked from the host which mounts this datastore.
-        if (this.datastore == null && datastoreForDisk != null) {
-            ArrayOfDatastoreHostMount dsHosts = this.get.entityProp(datastoreForDisk, VimPath.res_host);
-            if (dsHosts != null && dsHosts.getDatastoreHostMount() != null) {
-                DatastoreHostMount dsHost = dsHosts.getDatastoreHostMount().stream()
-                        .filter(hostMount -> hostMount.getMountInfo() != null && hostMount.getMountInfo()
-                                .isAccessible())
-                        .findFirst().orElse(null);
-                if (dsHost != null) {
-                    ManagedObjectReference parentCompute = this.get.entityProp(dsHost.getKey(),
-                            VimPath.host_parent);
-                    this.resourcePool = this.get.entityProp(parentCompute, VimPath.res_resourcePool);
-                    return this.resourcePool;
-                }
-            }
+        this.resourcePool = getResourcePoolBasedOnDatastoreOrStoragePolicy(datastoreForDisk, pbmSpec);
+        if (this.resourcePool != null) {
+            return this.resourcePool;
         }
 
         if (VimNames.TYPE_HOST.equals(this.ctx.computeMoRef.getType())) {
@@ -1935,6 +1953,63 @@ public class InstanceClient extends BaseHelper {
         }
 
         return this.resourcePool;
+    }
+
+    // TODO This code could be removed if the TYPE_HOST is properly filtered in the upper
+    // layer itself.
+    private ManagedObjectReference getResourcePoolBasedOnDatastoreOrStoragePolicy(
+            ManagedObjectReference datastoreForDisk, List<VirtualMachineDefinedProfileSpec> pbmSpec)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (this.datastore != null) {
+            return null;
+        }
+        // Then pick from one of the compatible datastore
+        if (datastoreForDisk == null && pbmSpec != null) {
+            for (VirtualMachineDefinedProfileSpec sp : pbmSpec) {
+                try {
+                    PbmProfileId pbmProfileId = new PbmProfileId();
+                    pbmProfileId.setUniqueId(sp.getProfileId());
+                    List<String> datastoreNames = ClientUtils.getDatastores(this.connection,
+                            pbmProfileId);
+                    for (String dsName : datastoreNames) {
+                        ManagedObjectReference dsFromSp = new ManagedObjectReference();
+                        dsFromSp.setType(VimNames.TYPE_DATASTORE);
+                        dsFromSp.setValue(dsName);
+                        ManagedObjectReference rsPool = getResourcePoolForDatastore(dsFromSp);
+                        if (rsPool != null) {
+                            return rsPool;
+                        }
+                    }
+                } catch (Exception runtimeFaultFaultMsg) {
+                    // Just ignore. No need to log, as there are alternative paths.
+                }
+            }
+        }
+        return getResourcePoolForDatastore(datastoreForDisk);
+    }
+
+    /**
+     * Get resource pool based on the datastore chosen to place the VM
+     */
+    private ManagedObjectReference getResourcePoolForDatastore(ManagedObjectReference datastoreForDisk)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (datastoreForDisk == null) {
+            return null;
+        }
+
+        ArrayOfDatastoreHostMount dsHosts = this.get.entityProp(datastoreForDisk, VimPath.res_host);
+        if (dsHosts != null && dsHosts.getDatastoreHostMount() != null) {
+            DatastoreHostMount dsHost = dsHosts.getDatastoreHostMount().stream()
+                    .filter(hostMount -> hostMount.getMountInfo() != null && hostMount.getMountInfo()
+                            .isAccessible())
+                    .findFirst().orElse(null);
+            if (dsHost != null) {
+                ManagedObjectReference parentCompute = this.get.entityProp(dsHost.getKey(),
+                        VimPath.host_parent);
+                return this.get.entityProp(parentCompute, VimPath.res_resourcePool);
+            }
+        }
+        return null;
     }
 
     private ManagedObjectReference getHost()
@@ -1966,7 +2041,7 @@ public class InstanceClient extends BaseHelper {
             Map<String, String> mapping = new HashMap<>();
             ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
                     datastore, pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
-                    getResourcePool(datastore), mapping, getDiskProvisioningType(this.bootDisk));
+                    getResourcePool(datastore, pbmSpec), mapping, getDiskProvisioningType(this.bootDisk));
 
             if (!result.get("succeeded").asBoolean()) {
                 throw new Exception("Error deploying from library");

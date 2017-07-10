@@ -1006,7 +1006,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, regionId);
         rgState.tenantLinks = enumerationProgress.getTenantLinks();
         logFine(() -> String.format("Found new Storage Policy %s", sp.getName()));
-        rgState.tagLinks = createStoragePolicyTags(sp.getTags(), rgState.tenantLinks);
 
         Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
                 .setBody(rgState)
@@ -1038,7 +1037,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion((o, e) -> {
                     trackStoragePolicy(enumerationProgress, sp).handle(o, e);
                     if (e == null) {
-                        TagsUtil.updateLocalTagStates(this, o.getBody(ResourceState.class), sp.getTags());
                         // Update all compatible datastores group link with the self link of this
                         // storage policy
                         updateDataStoreWithStoragePolicyGroup(enumerationProgress, sp,
@@ -1427,33 +1425,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return tags.stream()
                 .map(s -> s.documentSelfLink)
                 .collect(Collectors.toSet());
-    }
-
-    /**
-     * Create storage policy tags
-     */
-    private Set<String> createStoragePolicyTags(Map<String, String> tags, List<String>
-            tenantLinks) {
-        List<TagState> tagStates = new ArrayList<>();
-        tags.entrySet().stream().forEach(t -> {
-            TagState cached = this.tagCache
-                    .getAndPutIfAbsent(t.getKey(), newTagBuilder(t.getKey(), t.getValue()));
-            if (cached != null) {
-                TagState tag = TagsUtil.newExternalTagState(cached.key, cached.value, tenantLinks);
-                tagStates.add(tag);
-            }
-        });
-
-        return createTagsAsync(tagStates);
-    }
-
-    private TagState newTagBuilder(String key, String value) {
-        final TagState tagState = new TagState();
-
-        tagState.key = key;
-        tagState.value = value;
-
-        return tagState;
     }
 
     /**

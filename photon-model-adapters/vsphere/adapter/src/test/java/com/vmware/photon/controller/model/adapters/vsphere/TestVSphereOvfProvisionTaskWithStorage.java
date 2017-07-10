@@ -36,7 +36,7 @@ public class TestVSphereOvfProvisionTaskWithStorage extends TestVSphereOvfProvis
 
     @Test
     public void deployOvfWithAdditionalDisks() throws Throwable {
-        deployOvf(false, true, null);
+        deployOvf(true, true, null);
     }
 
     @Test

@@ -21,7 +21,6 @@ import java.util.List;
 
 import com.vmware.pbm.InvalidArgumentFaultMsg;
 import com.vmware.pbm.PbmFaultFaultMsg;
-import com.vmware.pbm.PbmPlacementHub;
 import com.vmware.pbm.PbmProfile;
 import com.vmware.pbm.PbmProfileId;
 import com.vmware.pbm.PbmProfileResourceType;
@@ -372,15 +371,7 @@ public class EnumerationClient extends BaseHelper {
      */
     public List<String> getDatastores(PbmProfileId pbmProfileId)
             throws com.vmware.pbm.RuntimeFaultFaultMsg, PbmFaultFaultMsg {
-        List<PbmPlacementHub> hubs = this.connection.getPbmPort().pbmQueryMatchingHub(
-                this.connection.getPbmServiceInstanceContent().getPlacementSolver(), null,
-                pbmProfileId);
-        List<String> dataStoreNames = new ArrayList<>();
-        if (hubs != null && !hubs.isEmpty()) {
-            hubs.stream().filter(hub -> hub.getHubType().equals(VimNames.TYPE_DATASTORE))
-                    .forEach(hub -> dataStoreNames.add(hub.getHubId()));
-        }
-        return dataStoreNames;
+        return ClientUtils.getDatastores(this.connection, pbmProfileId);
     }
 
     private void destroyCollectorQuietly(ManagedObjectReference pc) {

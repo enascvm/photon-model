@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 
 import com.vmware.pbm.PbmCapabilityDiscreteSet;
 import com.vmware.pbm.PbmCapabilityProfile;
@@ -28,9 +29,10 @@ import com.vmware.xenon.common.Utils;
  */
 public class StoragePolicyOverlay {
 
+    private static final String RULE_SET = "ruleSet";
     private PbmCapabilityProfile pbmProfile;
     private Map<String, String> capabilities = new HashMap<>();
-    private Map<String, String> tags = new HashMap<>();
+    private StringJoiner tags = new StringJoiner(",");
     private List<String> datastoreNames;
 
     protected StoragePolicyOverlay(PbmProfile pbmProfile, List<String> dataStoreNames) {
@@ -59,8 +61,8 @@ public class StoragePolicyOverlay {
         return this.capabilities;
     }
 
-    public Map<String, String> getTags() {
-        return this.tags;
+    public String getTags() {
+        return this.tags.toString();
     }
 
     public List<String> getDatastoreNames() {
@@ -79,10 +81,10 @@ public class StoragePolicyOverlay {
                             if (capability.getId().getNamespace().contains("tag")) {
                                 PbmCapabilityDiscreteSet tagSet =
                                         (PbmCapabilityDiscreteSet) prop.getValue();
-                                tagSet.getValues().stream().forEach(tag -> {
-                                    this.tags.put(capability.getId().getId(),
-                                            String.valueOf(tag));
-                                });
+                                tagSet.getValues().stream().forEach(tag ->
+                                        this.tags.add(String
+                                                .format("%s:%s", capability.getId().getId(),
+                                                        String.valueOf(tag))));
                             } else {
                                 this.capabilities.put(capability.getId().getId(),
                                         Utils.toJson(prop.getValue()));
@@ -91,6 +93,10 @@ public class StoragePolicyOverlay {
                     });
                 });
             });
+            // If there are tags, then push them as well into the capabilities
+            if (!getTags().isEmpty()) {
+                this.capabilities.put(RULE_SET, getTags());
+            }
         }
     }
 }
