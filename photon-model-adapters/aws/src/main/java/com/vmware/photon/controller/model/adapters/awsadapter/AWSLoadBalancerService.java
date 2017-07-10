@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.resources.SecurityGroupService.
 import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
 
 import java.net.URI;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -81,7 +80,6 @@ public class AWSLoadBalancerService extends StatelessService {
 
         LoadBalancerStateExpanded loadBalancerStateExpanded;
         AuthCredentialsServiceState credentials;
-        String loadBalancerAddress;
 
         // Instances registered with the AWS load balancer
         List<Instance> registeredInstances;
@@ -235,11 +233,12 @@ public class AWSLoadBalancerService extends StatelessService {
         case CREATE:
             if (context.request.isMockRequest) {
                 // no need to go the end-point; just populate an dummy LB address
-                context.loadBalancerAddress = "lb-mock-address.com";
+                context.loadBalancerStateExpanded.address = "lb-mock-address.com";
                 execution = execution
                         .thenCompose(this::updateLoadBalancerState);
             } else {
                 execution = execution
+                        .thenCompose(this::stripDownInvalidCharactersFromLoadBalancerName)
                         .thenCompose(this::createSecurityGroup)
                         .thenCompose(this::createLoadBalancer)
                         .thenCompose(this::configureHealthCheck)
@@ -277,6 +276,19 @@ public class AWSLoadBalancerService extends StatelessService {
             IllegalStateException ex = new IllegalStateException("Unsupported request type");
             return DeferredResult.failed(ex);
         }
+    }
+
+    /**
+     * Strips the name of invalid characters. In AWS Load Balancer name should contain only
+     * characters or digits or dash
+     */
+    private DeferredResult<AWSLoadBalancerContext> stripDownInvalidCharactersFromLoadBalancerName(
+            AWSLoadBalancerContext context) {
+
+        context.loadBalancerStateExpanded.name = context.loadBalancerStateExpanded.name.replaceAll
+                ("[^a-zA-Z0-9-]","");
+
+        return DeferredResult.completed(context);
     }
 
     private DeferredResult<AWSLoadBalancerContext> createSecurityGroup(
@@ -398,7 +410,7 @@ public class AWSLoadBalancerService extends StatelessService {
         context.client.createLoadBalancerAsync(request, handler);
 
         return handler.toDeferredResult().thenApply(result -> {
-            context.loadBalancerAddress = result.getDNSName();
+            context.loadBalancerStateExpanded.address = result.getDNSName();
             return context;
         });
     }
@@ -451,10 +463,11 @@ public class AWSLoadBalancerService extends StatelessService {
     private DeferredResult<AWSLoadBalancerContext> updateLoadBalancerState(
             AWSLoadBalancerContext context) {
         LoadBalancerState loadBalancerState = new LoadBalancerState();
-        loadBalancerState.address = context.loadBalancerAddress;
+        loadBalancerState.address = context.loadBalancerStateExpanded.address;
+        loadBalancerState.name = context.loadBalancerStateExpanded.name;
         if (context.provisionedSecurityGroupState != null) {
-            loadBalancerState.securityGroupLinks = Arrays
-                    .asList(context.provisionedSecurityGroupState.documentSelfLink);
+            loadBalancerState.securityGroupLinks = Collections
+                    .singletonList(context.provisionedSecurityGroupState.documentSelfLink);
         }
 
         Operation op = Operation
@@ -567,6 +580,7 @@ public class AWSLoadBalancerService extends StatelessService {
 
     private CreateLoadBalancerRequest buildCreationRequest(AWSLoadBalancerContext context) {
         Collection<SecurityGroupState> securityGroupsToUse = context.securityGroupStates != null
+                && !context.securityGroupStates.isEmpty()
                 ? context.securityGroupStates
                 : Collections.singleton(context.provisionedSecurityGroupState);
 

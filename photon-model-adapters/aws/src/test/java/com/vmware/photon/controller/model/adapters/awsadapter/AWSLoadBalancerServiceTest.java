@@ -154,17 +154,17 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         if (this.lbName != null) {
             deleteAwsLoadBalancer(this.lbName);
         }
-        if (this.sgId != null) {
-            deleteAwsSecurityGroup(this.sgId);
-        }
         if (!this.instancesToCleanUp.isEmpty()) {
             deleteVMsUsingEC2Client(this.ec2client, this.host, this.instancesToCleanUp);
+        }
+        if (this.sgId != null) {
+            deleteAwsSecurityGroup(this.sgId);
         }
     }
 
     @Test
     public void testCreateUpdateDeleteLoadBalancer() throws Throwable {
-        this.lbName = generateLbName();
+        this.lbName = generateLbName() + "_;.,/"; // add some invalid characters to the name
         LoadBalancerState lb = createLoadBalancerState(this.lbName);
 
         // Provision load balancer
@@ -172,7 +172,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
                 TaskStage.FINISHED);
 
         lb = getServiceSynchronously(lb.documentSelfLink, LoadBalancerState.class);
-
+        this.lbName = lb.name;
         if (!this.isMock) {
             assertNotNull(lb.securityGroupLinks);
             String securityGroupDocumentSelfLink = lb.securityGroupLinks.iterator().next();
