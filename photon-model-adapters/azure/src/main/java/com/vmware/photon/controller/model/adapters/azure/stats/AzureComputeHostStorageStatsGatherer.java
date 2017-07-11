@@ -14,14 +14,11 @@
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureStorageClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 
@@ -63,7 +60,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -129,12 +126,20 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
 
         public Throwable error;
 
+        private AzureSdkClients azureClients;
+
         public AzureStorageStatsDataHolder(Operation op) {
             this.statsResponse = new ComputeStatsResponse.ComputeStats();
             // create a thread safe map to hold stats values for resource
             this.statsResponse.statValues = new ConcurrentSkipListMap<>();
             this.azureStorageStatsOperation = op;
             this.stage = StorageMetricsStages.GET_COMPUTE_HOST;
+        }
+
+        void close() {
+            if (this.azureClients != null) {
+                this.azureClients.close();
+            }
         }
     }
 
@@ -167,16 +172,17 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
             getParentAuth(dataHolder, StorageMetricsStages.GET_CLIENT);
             break;
         case GET_CLIENT:
-            if (dataHolder.credentials == null) {
-                try {
-                    dataHolder.credentials = getAzureConfig(dataHolder.parentAuth);
-                } catch (Throwable e) {
-                    logSevere(e);
-                    dataHolder.error = e;
-                    dataHolder.stage = StorageMetricsStages.ERROR;
-                    handleStorageMetricDiscovery(dataHolder);
-                    return;
+            try {
+                if (dataHolder.azureClients == null) {
+                    dataHolder.azureClients = new AzureSdkClients(this.executorService,
+                            dataHolder.parentAuth);
                 }
+            } catch (Throwable e) {
+                logSevere(e);
+                dataHolder.error = e;
+                dataHolder.stage = StorageMetricsStages.ERROR;
+                handleStorageMetricDiscovery(dataHolder);
+                return;
             }
             dataHolder.stage = StorageMetricsStages.GET_STORAGE_ACCOUNTS;
             handleStorageMetricDiscovery(dataHolder);
@@ -190,13 +196,13 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
         case FINISHED:
             dataHolder.azureStorageStatsOperation.setBody(dataHolder.statsResponse);
             dataHolder.azureStorageStatsOperation.complete();
-            cleanUpHttpClient(dataHolder.restClient.httpClient());
+            dataHolder.close();
             logInfo(() -> String.format("Storage utilization stats collection complete for compute"
                     + " host %s", dataHolder.computeHostDesc.id));
             break;
         case ERROR:
             dataHolder.azureStorageStatsOperation.fail(dataHolder.error);
-            cleanUpHttpClient(dataHolder.restClient.httpClient());
+            dataHolder.close();
             logWarning(() -> String.format("Storage utilization stats collection failed for compute"
                     + " host %s", dataHolder.computeHostDesc.id));
             break;
@@ -206,7 +212,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
 
     private void getComputeHost(AzureStorageStatsDataHolder statsData, StorageMetricsStages next) {
         Consumer<Operation> onSuccess = (op) -> {
-            statsData.computeHostDesc = op.getBody(ComputeService.ComputeStateWithDescription.class);
+            statsData.computeHostDesc = op
+                    .getBody(ComputeService.ComputeStateWithDescription.class);
             statsData.stage = next;
             handleStorageMetricDiscovery(statsData);
         };
@@ -248,7 +255,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                 Operation.MEDIA_TYPE_APPLICATION_JSON);
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken(AzureUtils.getAzureBaseUri()));
+                    AUTH_HEADER_BEARER_PREFIX +
+                            statsData.azureClients.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
         } catch (Exception ex) {
             this.handleError(statsData, ex);
             return;
@@ -293,13 +301,13 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
             String metricName = PhotonModelConstants.STORAGE_USED_BYTES;
             List<ServiceStats.ServiceStat> statDatapoints = new ArrayList<>();
 
-            Azure azureClient = getAzureClient(statsData);
             AtomicInteger accountsCount = new AtomicInteger(statsData.storageAccounts.size());
             final List<Throwable> exs = new ArrayList<>();
             for (Map.Entry<String, StorageAccount> account : statsData.storageAccounts
                     .entrySet()) {
                 String resourceGroupName = getResourceGroupName(account.getValue().id);
-                azureClient.storageAccounts().inner().listKeysAsync(resourceGroupName,
+                statsData.azureClients.getAzureClient()
+                        .storageAccounts().inner().listKeysAsync(resourceGroupName,
                         account.getValue().name, new AzureAsyncCallback<StorageAccountListKeysResultInner>() {
                             @Override
                             public void onError(Throwable e) {
@@ -434,18 +442,6 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                         });
             }
         });
-    }
-
-    private Azure getAzureClient(AzureStorageStatsDataHolder dataholder) {
-        if (dataholder.azureClient == null) {
-            if (dataholder.restClient == null) {
-                dataholder.restClient = buildRestClient(dataholder.credentials, this.executorService);
-            }
-            dataholder.azureClient = Azure.authenticate(dataholder.restClient,
-                    dataholder.parentAuth.customProperties.get(AZURE_TENANT_ID))
-                    .withSubscription(dataholder.parentAuth.userLink);
-        }
-        return dataholder.azureClient;
     }
 
     private void handleError(AzureStorageStatsDataHolder dataHolder, Throwable e) {

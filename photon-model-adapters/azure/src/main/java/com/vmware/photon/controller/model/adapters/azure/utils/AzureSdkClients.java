@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.utils;
 import java.util.concurrent.ExecutorService;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
+import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.implementation.ComputeManager;
 import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
@@ -37,6 +38,7 @@ public class AzureSdkClients implements AutoCloseable {
     // Azure SDK clients being used {{
     private RestClient restClient;
 
+    private Azure azureClient;
     private ComputeManager computeManager;
 
     private ComputeManagementClientImpl computeManagementClient;
@@ -54,6 +56,14 @@ public class AzureSdkClients implements AutoCloseable {
         this.credentials = AzureUtils.getAzureConfig(authentication);
 
         this.restClient = AzureUtils.buildRestClient(this.credentials, executorService);
+    }
+
+    public synchronized Azure getAzureClient() {
+        if (this.azureClient == null) {
+            this.azureClient = Azure.authenticate(this.restClient, this.credentials.domain())
+                    .withSubscription(this.authState.userLink);
+        }
+        return this.azureClient;
     }
 
     public synchronized ComputeManager getComputeManager() {
@@ -105,6 +115,7 @@ public class AzureSdkClients implements AutoCloseable {
     @Override
     public void close() {
         this.computeManager = null;
+        this.azureClient = null;
 
         this.computeManagementClient = null;
         this.resourceManagementClient = null;
