@@ -1020,8 +1020,10 @@ public class InstanceClient extends BaseHelper {
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
         backing.setDiskMode(getDiskMode(ds));
         VirtualDiskType provisionType = getDiskProvisioningType(ds);
-        backing.setThinProvisioned(provisionType == VirtualDiskType.THIN);
-        backing.setEagerlyScrub(provisionType == VirtualDiskType.EAGER_ZEROED_THICK);
+        if (provisionType != null) {
+            backing.setThinProvisioned(provisionType == VirtualDiskType.THIN);
+            backing.setEagerlyScrub(provisionType == VirtualDiskType.EAGER_ZEROED_THICK);
+        }
         backing.setFileName(destName);
         backing.setDatastore(getDataStoreForDisk(ds, pbmSpec));
 
@@ -1217,8 +1219,10 @@ public class InstanceClient extends BaseHelper {
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
         backing.setDiskMode(getDiskMode(ds));
         VirtualDiskType provisionType = getDiskProvisioningType(ds);
-        backing.setThinProvisioned(provisionType == VirtualDiskType.THIN);
-        backing.setEagerlyScrub(provisionType == VirtualDiskType.EAGER_ZEROED_THICK);
+        if (provisionType != null) {
+            backing.setThinProvisioned(provisionType == VirtualDiskType.THIN);
+            backing.setEagerlyScrub(provisionType == VirtualDiskType.EAGER_ZEROED_THICK);
+        }
         backing.setFileName(diskName);
         backing.setDatastore(datastore);
 
@@ -1768,40 +1772,53 @@ public class InstanceClient extends BaseHelper {
 
     private VirtualDiskType getDiskProvisioningType(DiskStateExpanded diskState) throws
             IllegalArgumentException {
-        return diskState.customProperties != null
-                && diskState.customProperties.get(PROVISION_TYPE) != null ?
-                VirtualDiskType.fromValue(diskState.customProperties.get(PROVISION_TYPE)) :
-                VirtualDiskType.THIN;
+        try {
+            // Return null as default so that what ever defaults picked by vc will be honored
+            // instead of we setting to default THIN.
+            return diskState.customProperties != null
+                    && diskState.customProperties.get(PROVISION_TYPE) != null ?
+                    VirtualDiskType.fromValue(diskState.customProperties.get(PROVISION_TYPE)) :
+                    null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
-     * Constructs storage IO allocation if this is not already dictated by the storage policy
-     * that is chosen.
+     * Constructs storage IO allocation if this is not already dictated by the storage policy that
+     * is chosen.
      */
     private StorageIOAllocationInfo getStorageIOAllocationInfo(DiskStateExpanded diskState) throws
             NumberFormatException {
         if (diskState.customProperties != null) {
-            StorageIOAllocationInfo allocationInfo = new StorageIOAllocationInfo();
-            String sharesLevel = diskState.customProperties.getOrDefault(SHARES_LEVEL,
-                    SharesLevel.NORMAL.value());
-            SharesInfo sharesInfo = new SharesInfo();
-            sharesInfo.setLevel(SharesLevel.fromValue(sharesLevel));
-            if (sharesInfo.getLevel() == SharesLevel.CUSTOM) {
-                // Set shares value
-                String sharesVal = diskState.customProperties.get(SHARES);
-                if (sharesVal == null || sharesVal.isEmpty()) {
-                    // Reset to normal as nothing is specified for the shares
-                    sharesInfo.setLevel(SharesLevel.NORMAL);
-                } else {
-                    sharesInfo.setShares(Integer.parseInt(sharesVal));
+            String sharesLevel = diskState.customProperties.get(SHARES_LEVEL);
+            // If the value is null or wrong value sent by the caller for SharesLevel then don't
+            // set anything on the API for this. Hence default to null.
+            if (sharesLevel != null) {
+                try {
+                    StorageIOAllocationInfo allocationInfo = new StorageIOAllocationInfo();
+                    SharesInfo sharesInfo = new SharesInfo();
+                    sharesInfo.setLevel(SharesLevel.fromValue(sharesLevel));
+                    if (sharesInfo.getLevel() == SharesLevel.CUSTOM) {
+                        // Set shares value
+                        String sharesVal = diskState.customProperties.get(SHARES);
+                        if (sharesVal == null || sharesVal.isEmpty()) {
+                            // Reset to normal as nothing is specified for the shares
+                            sharesInfo.setLevel(SharesLevel.NORMAL);
+                        } else {
+                            sharesInfo.setShares(Integer.parseInt(sharesVal));
+                        }
+                    }
+                    allocationInfo.setShares(sharesInfo);
+                    String limitIops = diskState.customProperties.get(LIMIT_IOPS);
+                    if (limitIops != null && !limitIops.isEmpty()) {
+                        allocationInfo.setLimit(Long.parseLong(limitIops));
+                    }
+                    return allocationInfo;
+                } catch (Exception e) {
+                    return null;
                 }
             }
-            allocationInfo.setShares(sharesInfo);
-            String limitIops = diskState.customProperties.get(LIMIT_IOPS);
-            if (limitIops != null && !limitIops.isEmpty()) {
-                allocationInfo.setLimit(Long.parseLong(limitIops));
-            }
-            return allocationInfo;
         }
         return null;
     }
