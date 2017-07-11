@@ -32,6 +32,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.Instance;
@@ -220,6 +221,13 @@ public class AWSEnumerationUtils {
                     .map(TagFactoryService::generateSelfLink)
                     .collect(Collectors.toSet());
 
+            if (computeState.tagLinks != null && computeState.tagLinks.contains(null)) {
+                host.log(Level.SEVERE, "Null tag link inserted in new ComputeState for instance ID: %s",
+                        instance.getInstanceId());
+                host.log(Level.SEVERE, "Removing null tag link from new ComputeState");
+                computeState.tagLinks.remove(null);
+            }
+
             // The name of the compute state is the value of the AWS_TAG_NAME tag
             String nameTag = getTagValue(instance.getTags(), AWS_TAG_NAME);
             if (nameTag != null && !nameTag.equals(EMPTY_STRING)) {
@@ -241,9 +249,9 @@ public class AWSEnumerationUtils {
         return instance.getState().getName()
                 .equals(AWSConstants.INSTANCE_STATE_SHUTTING_DOWN)
                 || instance.getState().getName()
-                        .equals(AWSConstants.INSTANCE_STATE_STOPPED)
+                .equals(AWSConstants.INSTANCE_STATE_STOPPED)
                 || instance.getState().getName()
-                        .equals(AWSConstants.INSTANCE_STATE_STOPPING);
+                .equals(AWSConstants.INSTANCE_STATE_STOPPING);
     }
 
     /**

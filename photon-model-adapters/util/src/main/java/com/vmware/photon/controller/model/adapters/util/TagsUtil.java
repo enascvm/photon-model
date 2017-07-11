@@ -34,6 +34,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
@@ -143,6 +144,13 @@ public class TagsUtil {
                     .collect(Collectors.toMap(
                             tagState -> tagState.documentSelfLink,
                             tagState -> tagState));
+
+            if (remoteTagStates != null && remoteTagStates.containsKey(null)) {
+                service.logSevere("Null selfLink found in remoteTagStates for TagState: %s",
+                        Utils.toJsonHtml(remoteTagStates.get(null)));
+                service.logSevere("Removing null key from remoteTagStates.");
+                remoteTagStates.remove(null);
+            }
         }
         //the method will return calculated set of tags, which will be updated via the post operation
         Set<String> resultTagLinks = new HashSet<String>();
@@ -210,7 +218,7 @@ public class TagsUtil {
                             qBuilder.build(),
                             TagState.class,
                             localState.tenantLinks)
-                                    .setMaxResultsLimit(tagLinksToRemove.size());
+                            .setMaxResultsLimit(tagLinksToRemove.size());
 
                     removeAllExternalTagLinksDR = queryLocalStates.collectLinks(
                             Collectors.toCollection(HashSet::new));
@@ -284,6 +292,12 @@ public class TagsUtil {
             Collection<String> tagLinksToDelete,
             Collection<String> tagLinksToAdd,
             String currentStateSelfLink) {
+
+        if (tagLinksToAdd != null && tagLinksToAdd.contains(null)) {
+            service.logSevere("Null tag link found for ResourceState: %s", currentStateSelfLink);
+            service.logSevere("Removing null tag link from tagLinksToAdd.");
+            tagLinksToAdd.remove(null);
+        }
 
         // nothing to add/update
         if (tagLinksToDelete.isEmpty() && tagLinksToAdd.isEmpty()) {
