@@ -947,6 +947,7 @@ public class AzureTestUtil {
         rGroupState.groupLinks = Collections.singleton(rGroupState.name + randomString(4));
 
         rGroupState.tenantLinks = endpointState.tenantLinks;
+        rGroupState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
 
         rGroupState.customProperties = new HashMap<>();
         rGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME, computeHost.documentSelfLink);

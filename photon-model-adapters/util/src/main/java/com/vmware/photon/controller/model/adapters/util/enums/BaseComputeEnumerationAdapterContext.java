@@ -89,7 +89,9 @@ public abstract class BaseComputeEnumerationAdapterContext<T extends BaseCompute
      */
     @Override
     public String getEndpointRegion() {
-        return this.request.regionId;
+        return this.request.regionId != null
+                ? this.request.regionId
+                : super.getEndpointRegion();
     }
 
 }
