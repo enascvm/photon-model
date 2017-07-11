@@ -191,8 +191,8 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
 
                 schedulePeriodicCertificatesReload();
             } catch (Exception e) {
-                this.host.log(Level.WARNING, e.getMessage());
-                this.host.log(Level.FINE, Utils.toString(e));
+                this.host.log(Level.WARNING, "%s", e.getMessage());
+                this.host.log(Level.FINE, "%s", Utils.toString(e));
 
                 schedulePeriodicCertificatesReload();
             }
