@@ -119,7 +119,6 @@ public class AzureInstanceContext extends
 
     public String storageAccountName;
     public String storageAccountRGName;
-    public boolean createResourceGroupForStorageAccount;
     public StorageAccountInner storageAccount;
 
     public ImageSource imageSource;
@@ -377,5 +376,14 @@ public class AzureInstanceContext extends
 
         return image.diskConfigs.get(0);
     }
+
+    /**
+     * Convenience method to know if we are reusing existing azure storage accounts or creating
+     * new ones
+     */
+    public boolean reuseExistingStorageAccount() {
+        return this.bootDiskState.storageDescription != null;
+    }
+
 
 }
