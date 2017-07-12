@@ -28,6 +28,7 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.ec2.model.Filter;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -36,7 +37,9 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Stopwatch;
 import org.junit.rules.TestName;
+import org.junit.runner.Description;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService.PartitionedIterator;
@@ -76,8 +79,29 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     // }}
 
     private static final String AMAZON_PRIVATE_IMAGE_FILTER = null;
+
     // As of now uniquely identify a SINGLE AWS image.
-    private static final String AMAZON_PUBLIC_IMAGE_FILTER = "Amazon-Linux_WordPress";
+    private static final String AMAZON_PUBLIC_IMAGE_FILTER_SINGLE;
+
+    static {
+        Filter nameFilter = new Filter("name").withValues("*" + "Amazon-Linux_WordPress" + "*");
+
+        // Serialize the list of filters to JSON string
+        AMAZON_PUBLIC_IMAGE_FILTER_SINGLE = Utils.toJson(Arrays.asList(nameFilter));
+    }
+
+    // As of now uniquely identify ~10K AWS images out of ~85K.
+    private static final String AMAZON_PUBLIC_IMAGE_FILTER_ALL;
+
+    static {
+        Filter windowsPlatform = new Filter("platform").withValues("windows");
+
+        // Serialize the list of filters to JSON string
+        AMAZON_PUBLIC_IMAGE_FILTER_ALL = Utils.toJson(Arrays.asList(windowsPlatform));
+    }
+
+    // The expected number of images where platform = Windows (out of ~85K)
+    private static final int AMAZON_PUBLIC_IMAGES_ALL_COUNT = 10_000;
 
     private static final boolean EXACT_COUNT = true;
 
@@ -86,6 +110,17 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     @Rule
     public TestName currentTestName = new TestName();
+
+    @Rule
+    public Stopwatch stopwatch = new Stopwatch() {
+
+        @Override
+        protected void finished(long nanos, Description description) {
+            getHost().log(Level.INFO,
+                    "Test %s finished: %d seconds",
+                    description.getMethodName(), TimeUnit.NANOSECONDS.toSeconds(nanos));
+        }
+    };
 
     @Before
     public final void beforeTest() throws Throwable {
@@ -265,9 +300,9 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         {
             getHost().log(Level.INFO,
                     "=== First enumeration should create a single '%s' image",
-                    AMAZON_PUBLIC_IMAGE_FILTER);
+                    AMAZON_PUBLIC_IMAGE_FILTER_SINGLE);
 
-            kickOffImageEnumeration(endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER);
+            kickOffImageEnumeration(endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER_SINGLE);
 
             if (!this.isMock) {
                 // Validate 1 image state is CREATED
@@ -298,14 +333,14 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         {
             getHost().log(Level.INFO,
                     "=== Second enumeration should update the single '%s' image",
-                    AMAZON_PUBLIC_IMAGE_FILTER);
+                    AMAZON_PUBLIC_IMAGE_FILTER_SINGLE);
 
             if (!this.isMock) {
                 // Update local image state
                 updateImageState(imagesAfterFirstEnum.documentLinks.get(0));
             }
 
-            kickOffImageEnumeration(endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER);
+            kickOffImageEnumeration(endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER_SINGLE);
 
             if (!this.isMock) {
                 // Validate 1 image state is UPDATED (and the local update above is overridden)
@@ -343,7 +378,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     @Test
     public void testPublicImageEnumeration_delete() throws Throwable {
 
-        testImageEnumeration_delete(PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER);
+        testImageEnumeration_delete(PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER_SINGLE);
     }
 
     @Test
@@ -357,9 +392,10 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         // Important: MUST share same Endpoint between the two enum runs.
         final EndpointState endpointState = createEndpointState();
 
-        ImageEnumerationTaskState task = kickOffImageEnumeration(endpointState, PUBLIC, null);
+        ImageEnumerationTaskState task = kickOffImageEnumeration(
+                endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER_ALL);
 
-        // Validate at least 50K image states are created
+        // Validate at least 10K image states are created
 
         // NOTE: do not use queryDocumentsAndAssertExpectedCount
         // since it fails with 'Query returned large number of results'
@@ -374,8 +410,9 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         Long imagesCount = QueryByPages.waitToComplete(
                 queryAll.collectLinks(Collectors.counting()));
 
-        Assert.assertTrue("Expected at least " + 58_000 + " images, but found only " + imagesCount,
-                imagesCount > 58_000);
+        Assert.assertTrue("Expected at least " + AMAZON_PUBLIC_IMAGES_ALL_COUNT
+                + " images, but found only " + imagesCount,
+                imagesCount > AMAZON_PUBLIC_IMAGES_ALL_COUNT);
     }
 
     @Test

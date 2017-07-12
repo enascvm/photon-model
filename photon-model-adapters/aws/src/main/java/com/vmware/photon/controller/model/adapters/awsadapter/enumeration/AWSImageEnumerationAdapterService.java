@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -31,6 +32,7 @@ import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Tag;
+import com.google.gson.reflect.TypeToken;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
@@ -226,12 +228,19 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                     .withFilters(new Filter(AWSConstants.AWS_IMAGE_IS_PUBLIC_FILTER)
                             .withValues(Boolean.toString(isPublic)));
 
+            // Apply additional filtering to AWS images (used by tests)
             if (this.imageEnumTaskState.filter != null
                     && !this.imageEnumTaskState.filter.isEmpty()) {
-                // Apply filtering to AWS images
-                request.withFilters(
-                        new Filter(AWSConstants.AWS_IMAGE_NAME_FILTER)
-                                .withValues("*" + this.imageEnumTaskState.filter + "*"));
+
+                // List<Filter> type
+                final Type listOfFiltersType = new TypeToken<List<Filter>>() {}.getType();
+
+                // Deserialize the JSON string to a list of AWS Filters
+                List<Filter> filters = Utils.fromJson(
+                        this.imageEnumTaskState.filter, listOfFiltersType);
+
+                // NOTE: use withFilters(Filter...) to append NOT withFilter(List<>)
+                request.withFilters(filters.toArray(new Filter[0]));
             }
 
             String msg = "Enumerating AWS images by " + request;
@@ -239,6 +248,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             // ALL AWS images are returned with a single call, NO pagination!
             AWSDeferredResultAsyncHandler<DescribeImagesRequest, DescribeImagesResult> handler =
                     new AWSDeferredResultAsyncHandler<>(this.service, msg);
+
             this.awsClient.describeImagesAsync(request, handler);
 
             return handler.toDeferredResult().thenApply(imagesResult -> {
