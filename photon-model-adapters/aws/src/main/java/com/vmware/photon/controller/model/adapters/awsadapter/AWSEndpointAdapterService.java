@@ -44,6 +44,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -187,8 +188,13 @@ public class AWSEndpointAdapterService extends StatelessService {
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
             String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
             if (billsBucketName != null) {
-                addEntryToCustomProperties(c, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
-                        billsBucketName);
+                addEntryToCustomProperties(c, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
+            }
+
+            String isAutoDiscoveryEnabled = r.get(PhotonModelConstants.IS_RESOURCE_AUTO_DISCOVERY_ENABLED).orElse(null);
+            if (isAutoDiscoveryEnabled != null) {
+                addEntryToCustomProperties(c, PhotonModelConstants.IS_RESOURCE_AUTO_DISCOVERY_ENABLED,
+                        isAutoDiscoveryEnabled);
             }
 
             Boolean mock = Boolean.valueOf(r.getRequired(EndpointAdapterUtils.MOCK_REQUEST));
