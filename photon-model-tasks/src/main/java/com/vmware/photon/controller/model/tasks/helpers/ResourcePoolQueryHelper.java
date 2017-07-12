@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -86,6 +87,22 @@ public class ResourcePoolQueryHelper {
         public Map<String, ResourcePoolData> resourcesPools = new HashMap<>();
         public Map<String, Set<String>> rpLinksByComputeLink = new HashMap<>();
         public Map<String, ComputeState> computesByLink = new HashMap<>();
+
+        public Stream<ComputeState> computesByResPool(String resPoolLink) {
+            if (!this.resourcesPools.containsKey(resPoolLink)
+                    || !this.computesByLink.containsKey(resPoolLink)) {
+
+                return Stream.empty();
+            }
+
+            Set<String> computeLinksPerRP = this.resourcesPools.get(resPoolLink).computeStateLinks;
+
+            if (computeLinksPerRP == null) {
+                return Stream.empty();
+            }
+
+            return computeLinksPerRP.stream().map(this.computesByLink::get);
+        }
 
         /**
          * Creates a new QueryResult for the given error.
@@ -155,19 +172,25 @@ public class ResourcePoolQueryHelper {
     }
 
     /**
-     * Perform the actual retrieval and notifies the client through the given completionHandler.
+     * Perform the actual retrieval and returns to the client DeferredResult with actual QueryResult.
      */
-    public void query(Consumer<QueryResult> completionHandler) {
+    public DeferredResult<QueryResult> query() {
+
         this.result = new QueryResult();
 
         // start by retrieving the requested resource pools
-        retrieveResourcePools()
+        return retrieveResourcePools()
                 .thenCompose(ignore -> executeRpQueries())
                 .thenCompose(ignore -> findComputesWithoutPool())
                 .thenCompose(this::handleMissingComputes)
-                .thenApply(ignore -> this.result)
-                .exceptionally(QueryResult::forError)
-                .thenAccept(completionHandler);
+                .handle((ignore, exc) -> exc != null ? QueryResult.forError(exc) : this.result);
+    }
+
+    /**
+     * Perform the actual retrieval and notifies the client through the given completionHandler.
+     */
+    public void query(Consumer<QueryResult> completionHandler) {
+        query().thenAccept(completionHandler);
     }
 
     /**
