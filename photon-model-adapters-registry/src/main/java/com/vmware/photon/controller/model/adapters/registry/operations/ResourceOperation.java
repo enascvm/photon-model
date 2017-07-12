@@ -29,7 +29,9 @@ public enum ResourceOperation {
 
     RESET("Reset", "Reset", "Reset Compute Resource"),
 
-    CREATE_SNAPSHOT("CreateSnapshot", "Create Snapshot", "Create Snapshot Operation");
+    CREATE_SNAPSHOT("Snapshot.Create", "Create Snapshot", "Create Snapshot Operation"),
+
+    DELETE_SNAPSHOT("Snapshot.Delete", "Delete Snapshot", "Delete Snapshot Operation");
 
     public final String operation;
 

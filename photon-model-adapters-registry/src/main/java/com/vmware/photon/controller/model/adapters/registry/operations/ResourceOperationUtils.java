@@ -53,7 +53,13 @@ public class ResourceOperationUtils {
     public static final String NETWORK_KIND = Utils.buildKind(NetworkState.class);
 
     public static enum TargetCriteria {
-        RESOURCE_POWER_STATE_ON("resource.powerState.equals('ON')");
+        RESOURCE_POWER_STATE_ON("resource.powerState.equals('ON')"),
+
+        // ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS = "__hasSnapshot". So "__hasSnapshot"
+        // is used here. Any modification in that custom property requires manual changes here as well.
+        RESOURCE_HAS_SNAPSHOTS("resource.customProperties != null && " +
+                " (resource.customProperties.get('__hasSnapshot') != null) && " +
+                "('true' == (resource.customProperties.get('__hasSnapshot')).toLowerCase())");
 
         private final String criteria;
 

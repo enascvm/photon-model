@@ -108,6 +108,7 @@ public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryP
                 return;
             }
             createSnapshotAndWait(vm);
+            deleteSnapshotAndWait(vm);
         } finally {
             if (vm != null) {
                 deleteVmAndWait(vm);
