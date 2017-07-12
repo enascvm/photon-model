@@ -119,6 +119,7 @@ public class AWSConstants {
     public static final String CURRENT_BURN_RATE = "CurrentBurnRatePerHour";
     public static final String AVERAGE_BURN_RATE = "AverageBurnRatePerHour";
     public static final String COST = "Cost";
+    public static final String OTHER_CHARGES = "OtherCharges";
     public static final String RESERVED_INSTANCE_PLAN_DETAILS = "ReservedInstancePlanDetails";
     public static final String RESERVED_INSTANCE_DURATION = "ReservedInstanceDuration";
     public static final String SERVICE_RESOURCE_COST = "Service.%s.ResourceCost";

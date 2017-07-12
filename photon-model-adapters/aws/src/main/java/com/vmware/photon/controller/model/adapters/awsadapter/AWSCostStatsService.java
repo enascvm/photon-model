@@ -680,6 +680,10 @@ public class AWSCostStatsService extends StatelessService {
                         AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.COST),
                         awsAccountDetailDto.billProcessedTimeMillis, awsAccountDetailDto.cost);
                 accountStats.statValues.put(costStat.name, Collections.singletonList(costStat));
+                ServiceStat otherCostsStat = createStat(
+                        AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE), AWSConstants.OTHER_CHARGES,
+                        awsAccountDetailDto.billProcessedTimeMillis, awsAccountDetailDto.otherCharges);
+                accountStats.statValues.put(otherCostsStat.name, Collections.singletonList(otherCostsStat));
             }
             if (!accountStats.statValues.isEmpty()) {
                 statsData.statsResponse.statsList.add(accountStats);
@@ -689,7 +693,7 @@ public class AWSCostStatsService extends StatelessService {
 
         ResourceMetrics prevMarkerMetrics = statsData.accountsMarkersMap.get(awsAccountDetailDto.id);
         if (prevMarkerMetrics != null) {
-            prevMarkerMetrics.entries.putAll(transformMapDataTypes(awsAccountDetailDto.lineCountPerHour));
+            prevMarkerMetrics.entries.putAll(transformMapDataTypes(awsAccountDetailDto.lineCountPerInterval));
         }
     }
 
@@ -764,8 +768,8 @@ public class AWSCostStatsService extends StatelessService {
      */
     private boolean isBillUpdated(AWSCostStatsCreationContext context, AwsAccountDetailDto accountDetailDto) {
         ResourceMetrics prevMarkerMetrics = context.accountsMarkersMap.get(accountDetailDto.id);
-        for (Entry<Long, Integer> entry : accountDetailDto.lineCountPerHour.entrySet()) {
-            Double prevLineCount = prevMarkerMetrics.entries.get(Long.toString(entry.getKey()));
+        for (Entry<String, Integer> entry : accountDetailDto.lineCountPerInterval.entrySet()) {
+            Double prevLineCount = prevMarkerMetrics.entries.get(entry.getKey());
             if (prevLineCount == null || !prevLineCount.equals(entry.getValue().doubleValue())) {
                 return true;
             }
@@ -896,7 +900,7 @@ public class AWSCostStatsService extends StatelessService {
             ResourceMetrics markerMetrics = new ResourceMetrics();
             markerMetrics.documentSelfLink = StatsUtil.getMetricKey(compute.documentSelfLink, Utils.getNowMicrosUtc());
             markerMetrics.entries = new HashMap<>();
-            markerMetrics.entries.putAll(transformMapDataTypes(accountDto.lineCountPerHour));
+            markerMetrics.entries.putAll(transformMapDataTypes(accountDto.lineCountPerInterval));
             markerMetrics.entries
                     .put(AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, accountDto.billProcessedTimeMillis.doubleValue());
             markerMetrics.timestampMicrosUtc = getCurrentMonthStartTimeMicros();
@@ -907,19 +911,18 @@ public class AWSCostStatsService extends StatelessService {
         }
     }
 
-    private Map<String, Double> transformMapDataTypes(Map<Long, Integer> map) {
-        return map.entrySet().stream()
-                .collect(Collectors.toMap(e -> Long.toString(e.getKey()), e -> e.getValue().doubleValue()));
+    private Map<String, Double> transformMapDataTypes(Map<String, Integer> map) {
+        return map.entrySet().stream().collect(Collectors.toMap(Entry::getKey, e -> e.getValue().doubleValue()));
     }
 
     /**
      * Consumes the monthly stats from bill rows and creates stats
      */
-    protected BiConsumer<Map<String, AwsAccountDetailDto>, Long> getHourlyStatsConsumer(LocalDate billMonth,
+    protected BiConsumer<Map<String, AwsAccountDetailDto>, String> getHourlyStatsConsumer(LocalDate billMonth,
             AWSCostStatsCreationContext statsData) {
-        return (accountDetailDtoMap, hour) -> {
+        return (accountDetailDtoMap, interval) -> {
             accountDetailDtoMap.values().forEach(accountDto -> {
-                filterAccountDetails(statsData, accountDto, hour);
+                filterAccountDetails(statsData, accountDto, interval);
                 createResourceStatsForAccount(statsData, accountDto);
                 createServiceStatsForAccount(statsData, billMonth, accountDto);
                 accountDto.serviceDetailsMap.clear();
@@ -928,14 +931,14 @@ public class AWSCostStatsService extends StatelessService {
         };
     }
 
-    private void filterAccountDetails(AWSCostStatsCreationContext context, AwsAccountDetailDto accountDto, Long hour) {
+    private void filterAccountDetails(AWSCostStatsCreationContext context, AwsAccountDetailDto accountDto,
+            String interval) {
         ResourceMetrics markerMetrics = context.accountsMarkersMap.get(accountDto.id);
-        if (markerMetrics == null || hour == null) {
+        if (markerMetrics == null || interval == null) {
             return;
         }
-        String prevRowTimeString = Long.toString(hour);
-        Double previousLineCount = markerMetrics.entries.get(prevRowTimeString);
-        Integer currentLineCount = accountDto.lineCountPerHour.get(hour);
+        Double previousLineCount = markerMetrics.entries.get(interval);
+        Integer currentLineCount = accountDto.lineCountPerInterval.get(interval);
         if (previousLineCount != null && previousLineCount.intValue() == currentLineCount) {
             accountDto.serviceDetailsMap.clear();
         }

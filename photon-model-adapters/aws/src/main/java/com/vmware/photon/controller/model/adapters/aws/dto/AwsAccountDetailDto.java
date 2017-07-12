@@ -29,7 +29,8 @@ public class AwsAccountDetailDto {
     // the next record in the bill being processed in the current collection cycle. In case
     // this value is 0, the complete bill be processed and persisted.
     public Long billProcessedTimeMillis = 0L;
-    public Map<Long, Integer> lineCountPerHour = new HashMap<>();
+    // if lineItem is hourly, key will be hour startTime,otherwise key will be interval
+    public Map<String, Integer> lineCountPerInterval = new HashMap<>();
 
     public AwsServiceDetailDto fetchServiceDetail(String serviceName) {
         return this.serviceDetailsMap.get(serviceName);

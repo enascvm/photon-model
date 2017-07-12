@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
@@ -71,7 +72,7 @@ public class AWSCsvBillParser {
 
     public void parseDetailedCsvBill(List<String> ignorableInvoiceCharge,
             Path csvBillZipFilePath, Set<String> configuredAccounts,
-            BiConsumer<Map<String, AwsAccountDetailDto>, Long> hourlyStatsConsumer,
+            BiConsumer<Map<String, AwsAccountDetailDto>, String> hourlyStatsConsumer,
             Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer)
             throws IOException {
 
@@ -89,7 +90,7 @@ public class AWSCsvBillParser {
     }
 
     private void parseDetailedCsvBill(InputStream inputStream, Collection<String> ignorableInvoiceCharge,
-            Set<String> configuredAccounts, BiConsumer<Map<String, AwsAccountDetailDto>, Long> hourlyStatsConsumer,
+            Set<String> configuredAccounts, BiConsumer<Map<String, AwsAccountDetailDto>, String> hourlyStatsConsumer,
             Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer) throws IOException {
 
         final CsvPreference STANDARD_SKIP_COMMENTS = new CsvPreference.Builder(
@@ -121,6 +122,8 @@ public class AWSCsvBillParser {
             cellProcessorArray = processorList.toArray(cellProcessorArray);
             Map<String, Object> rowMap;
             Long prevRowTime = null;
+            Long prevRowEndTime;
+            String interval = null;
             while ((rowMap = mapReader.read(header, cellProcessorArray)) != null) {
                 LocalDateTime currRowLocalDateTime = (LocalDateTime) rowMap
                         .get(DetailedCsvHeaders.USAGE_START_DATE);
@@ -128,16 +131,18 @@ public class AWSCsvBillParser {
                 if (prevRowTime != null && curRowTime != null && !prevRowTime.equals(curRowTime)) {
                     // This indicates that we have processed all rows belonging to a corresponding hour in the
                     // current month bill. Consume the batch
-                    hourlyStatsConsumer.accept(monthlyBill, prevRowTime);
+                    hourlyStatsConsumer.accept(monthlyBill, interval);
                 }
                 readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge,configuredAccounts);
                 if (curRowTime != null) {
                     prevRowTime = curRowTime;
+                    prevRowEndTime = getMillisForHour((LocalDateTime) rowMap.get(DetailedCsvHeaders.USAGE_END_DATE));
+                    interval = createInterval(prevRowTime, prevRowEndTime);
                 }
             }
 
             // Consume the final batch of parsed rows
-            hourlyStatsConsumer.accept(monthlyBill, prevRowTime);
+            hourlyStatsConsumer.accept(monthlyBill, interval);
             monthlyStatsConsumer.accept(monthlyBill);
         }
     }
@@ -260,9 +265,19 @@ public class AWSCsvBillParser {
 
         // update the line count of the account to whom this row belongs to
         if (millisForBillHour != null) {
-            Integer currentLineCount = accountDetails.lineCountPerHour.getOrDefault(millisForBillHour,0);
-            accountDetails.lineCountPerHour.put(millisForBillHour, currentLineCount + 1);
+            LocalDateTime usageEndTimeFromCsv = (LocalDateTime) rowMap.get(DetailedCsvHeaders.USAGE_END_DATE);
+            Long endMillisForBillHour = getMillisForHour(usageEndTimeFromCsv);
+            String interval = createInterval(millisForBillHour, endMillisForBillHour);
+            Integer currentLineCount = accountDetails.lineCountPerInterval.getOrDefault(interval, 0);
+            accountDetails.lineCountPerInterval.put(interval, currentLineCount + 1);
         }
+    }
+
+    private String createInterval(Long startMillis, Long endMillis) {
+        if (endMillis.compareTo(startMillis + TimeUnit.HOURS.toMillis(1)) == 0) {
+            return Long.toString(startMillis);
+        }
+        return String.format("%d-%d", startMillis, endMillis);
     }
 
     private long getMonthStartMillis() {
@@ -270,11 +285,11 @@ public class AWSCsvBillParser {
                 .toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis();
     }
 
-    private Long getMillisForHour(LocalDateTime usageStartTime) {
-        if (usageStartTime == null) {
+    private Long getMillisForHour(LocalDateTime localDateTime) {
+        if (localDateTime == null) {
             return null;
         }
-        return usageStartTime.toDateTime(DateTimeZone.UTC).getMillis();
+        return localDateTime.toDateTime(DateTimeZone.UTC).getMillis();
     }
 
     private Double getResourceCost(Map<String, Object> rowMap) {
@@ -442,6 +457,8 @@ public class AWSCsvBillParser {
                     awsAccountDetail.otherCharges += getResourceCost(rowMap);
                 }
                 ignorableInvoiceCharge.add(invoiceId);
+            } else {
+                awsAccountDetail.otherCharges += getResourceCost(rowMap);
             }
         } else if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, INVOICE_TOTAL)
                 || matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, ACCOUNT_TOTAL)) {
