@@ -13,6 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.google.gson.reflect.TypeToken;
+
 import io.netty.util.internal.StringUtil;
 
 import org.slf4j.Logger;
@@ -30,6 +36,7 @@ import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
+import com.vmware.xenon.common.Utils;
 
 /**
  * A factory class to return {@link VirtualDeviceBackingInfo} for network connection for a given
@@ -106,12 +113,17 @@ public class NetworkDeviceBackingFactory {
 
         DistributedVirtualSwitchPortConnection port = new DistributedVirtualSwitchPortConnection();
 
-        String portGroupKey = props.getString(DvsProperties.PORT_GROUP_KEY) ;
-        port.setPortgroupKey(portGroupKey);
-
+        String portGroupKey = props.getString(DvsProperties.PORT_GROUP_KEY);
         String dvsUuid = props.getString(DvsProperties.DVS_UUID);
 
         if (StringUtil.isNullOrEmpty(dvsUuid)) {
+            // NSX-V sets the value to a list of dvPortGroupsKeys as the logical switch is
+            // created in a transport zone which could be associated with multiple clusters.
+            // Hence dvPortGroup is created per cluster. The configTarget will filter based on
+            // the cluster where machine is being provisioned.
+            Type listType = new TypeToken<ArrayList<String>>(){}.getType();
+            final List<String> portGroupIds = Utils.fromJson(portGroupKey, listType);
+
             // NSX-V doesn't have UUID information in its API response
             DistributedVirtualPortgroupInfo info = null;
 
@@ -120,7 +132,7 @@ public class NetworkDeviceBackingFactory {
                 info = configTarget.getDistributedVirtualPortgroup()
                         .stream()
                         .filter(d -> {
-                            return d.getPortgroupKey().equals(portGroupKey);
+                            return portGroupIds.contains(d.getPortgroupKey());
                         })
                         .findFirst()
                         .orElse(null);
@@ -133,9 +145,11 @@ public class NetworkDeviceBackingFactory {
                        + "information is not found for key: " + portGroupKey);
             }
 
+            portGroupKey = info.getPortgroupKey();
             dvsUuid = info.getSwitchUuid();
         }
 
+        port.setPortgroupKey(portGroupKey);
         port.setSwitchUuid(dvsUuid);
 
         VirtualEthernetCardDistributedVirtualPortBackingInfo backing =

@@ -18,7 +18,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.Test;
@@ -32,6 +34,7 @@ import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
+import com.vmware.xenon.common.Utils;
 
 public class NetworkDeviceBackingFactoryTest {
 
@@ -85,7 +88,12 @@ public class NetworkDeviceBackingFactoryTest {
     public void testGetDvsPortBackingInfoWithPortGroupKey() {
         this.subnet = new SubnetState();
         this.subnet.customProperties = new HashMap<>();
-        this.subnet.customProperties.put(DvsProperties.PORT_GROUP_KEY, UUID.randomUUID().toString());
+
+        List<String> portGroupIds = new ArrayList<>();
+        portGroupIds.add(UUID.randomUUID().toString());
+        portGroupIds.add(UUID.randomUUID().toString());
+
+        this.subnet.customProperties.put(DvsProperties.PORT_GROUP_KEY, Utils.toJson(portGroupIds));
 
         // will throw NPE here as the querytargetrequest is null
         VirtualDeviceBackingInfo deviceBackingInfo = NetworkDeviceBackingFactory
