@@ -38,7 +38,6 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.AssertUtil;
@@ -426,13 +425,13 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         // Delegate to descendants to any doc specific criteria
         customizeLocalStatesQuery(qBuilder);
 
-        QueryTop<LOCAL_STATE> queryLocalStates = new QueryTop<>(
+        QueryByPages<LOCAL_STATE> queryLocalStates = new QueryByPages<>(
                 context.service.getHost(),
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
                 isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
-        queryLocalStates.setMaxResultsLimit(remoteIds.size());
+        queryLocalStates.setMaxPageSize(remoteIds.size());
 
         return queryLocalStates
                 .queryDocuments(doc -> context.localResourceStates.put(doc.id, doc))
