@@ -738,9 +738,8 @@ public class AWSInstanceService extends StatelessService {
         final String instanceId = aws.child.id;
 
         if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
-            aws.error = new IllegalStateException("AWS InstanceId not available");
-            aws.stage = AWSInstanceStage.ERROR;
-            handleAllocation(aws);
+            // nothing to delete
+            aws.taskManager.finishTask();
             return;
         }
 
