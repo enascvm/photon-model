@@ -819,7 +819,7 @@ public class InstanceClient extends BaseHelper {
         }
 
         return this.ctx.disks.stream()
-                .filter(d -> d.type == DiskType.HDD && d.bootOrder == 1)
+                .filter(d -> d.type == DiskType.HDD && d.bootOrder != null && d.bootOrder == 1)
                 .findFirst()
                 .orElse(null);
     }

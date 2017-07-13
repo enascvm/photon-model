@@ -1836,7 +1836,7 @@ public class AzureInstanceService extends StatelessService {
                                         .getBody(DiskService.DiskStateExpanded.class);
 
                                 // We treat the first disk in the boot order as the boot disk.
-                                if (disk.bootOrder == 1) {
+                                if (disk.bootOrder != null && disk.bootOrder == 1) {
                                     if (ctx.bootDiskState != null) {
                                         handleError(ctx, new IllegalStateException(
                                                 "Only 1 boot disk is allowed"));

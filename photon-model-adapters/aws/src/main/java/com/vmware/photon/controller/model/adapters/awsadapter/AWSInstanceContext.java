@@ -592,7 +592,7 @@ public class AWSInstanceContext
         return DeferredResult.allOf(getStatesDR)
                 .thenAccept(diskStates -> diskStates.forEach(
                         diskState -> {
-                            if (diskState.bootOrder == 1) {
+                            if (diskState.bootOrder != null && diskState.bootOrder == 1) {
                                 context.bootDisk = diskState;
                             } else {
                                 context.dataDisks.add(diskState);
