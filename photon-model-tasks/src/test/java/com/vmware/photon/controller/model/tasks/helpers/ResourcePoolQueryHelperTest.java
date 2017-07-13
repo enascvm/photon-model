@@ -174,6 +174,11 @@ public class ResourcePoolQueryHelperTest extends Suite {
             assertThat(qr.computesByLink.get(this.c2.documentSelfLink), is(not(nullValue())));
             assertThat(qr.computesByLink.get(this.c3.documentSelfLink), is(not(nullValue())));
             assertThat(qr.computesByLink.get(this.c4.documentSelfLink), is(not(nullValue())));
+
+            assertThat("Compute states should have been expanded",
+                    qr.getComputesByResPool(this.rp2.documentSelfLink).count(), is(1L));
+            assertThat(qr.getComputesByResPool(this.rp2.documentSelfLink).findFirst().get().documentSelfLink,
+                    is(this.c3.documentSelfLink));
         }
 
         @Test
@@ -209,6 +214,9 @@ public class ResourcePoolQueryHelperTest extends Suite {
             assertThat(qr.rpLinksByComputeLink.get(this.c1.documentSelfLink),
                     contains(this.rp1.documentSelfLink));
             assertThat(qr.rpLinksByComputeLink.get(this.c4.documentSelfLink), is(empty()));
+
+            assertThat("Compute states should not have been expanded",
+                    qr.getComputesByResPool(this.rp1.documentSelfLink).count(), is(0L));
         }
 
         @Test

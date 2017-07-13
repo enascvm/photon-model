@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -88,20 +89,30 @@ public class ResourcePoolQueryHelper {
         public Map<String, Set<String>> rpLinksByComputeLink = new HashMap<>();
         public Map<String, ComputeState> computesByLink = new HashMap<>();
 
-        public Stream<ComputeState> computesByResPool(String resPoolLink) {
-            if (!this.resourcesPools.containsKey(resPoolLink)
-                    || !this.computesByLink.containsKey(resPoolLink)) {
-
+        /**
+         * Helper method returning Computes per specific Resource Pool. It eases manipulations over
+         * {@link #resourcesPools}, {@link ResourcePoolData#computeStateLinks} and
+         * {@link computesByLink}.
+         */
+        public Stream<ComputeState> getComputesByResPool(String resPoolLink) {
+            if (!this.resourcesPools.containsKey(resPoolLink) || this.computesByLink.isEmpty()) {
+                // Either RP does not exist OR no Computes are loaded at all
                 return Stream.empty();
             }
 
+            // Get compute links per RP
             Set<String> computeLinksPerRP = this.resourcesPools.get(resPoolLink).computeStateLinks;
 
             if (computeLinksPerRP == null) {
+                // No Computes are assigned per this RP
                 return Stream.empty();
             }
 
-            return computeLinksPerRP.stream().map(this.computesByLink::get);
+            return computeLinksPerRP.stream()
+                    // Get Computes by their links
+                    .map(this.computesByLink::get)
+                    // And filter 'null' values
+                    .filter(Objects::nonNull);
         }
 
         /**
