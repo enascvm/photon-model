@@ -42,6 +42,7 @@ import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceRequestSender;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -86,6 +87,9 @@ public class ProvisionContext {
         this.mgr = new TaskManager(service, req.taskReference, req.resourceLink());
         this.provisioningTaskReference = req.taskReference;
         this.errorHandler = failure -> {
+            Utils.logWarning("Error while provisioning. %s:  compute: %s. ",
+                    failure.getMessage(),
+                    Utils.toJsonHtml(ProvisionContext.this.child));
             this.mgr.patchTaskToFailure(failure);
         };
     }
