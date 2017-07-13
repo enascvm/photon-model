@@ -74,11 +74,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
     private String computeLink;
     private Collection<String> createdComputeLinks;
     private ComputeState compute;
-    private String existingSubsComputeLink1;
-    private String existingSubsComputeLink2;
 
-    private static final String SUBSCRIPTION_EXISTING_1 = "subscriptionExisting1";
-    private static final String SUBSCRIPTION_EXISTING_2 = "subscriptionExisting2";
     private static final String SUBSCRIPTION_ID_1 = "subscriptionId1";
     private static final String SUBSCRIPTION_ID_2 = "subscriptionId2";
     private static final String ACCOUNT_EMAIL_ID_1 = "accountId1";
@@ -113,14 +109,6 @@ public class AzureSubscriptionsEnumerationServiceTest {
             this.host.waitForServiceAvailable(AzureEaAdapters.LINKS);
 
             this.host.setTimeoutSeconds(600);
-
-            // Create Azure non-ea endpoints
-            EndpointState nonEaEp1 = createNonEaEndpointState(SUBSCRIPTION_EXISTING_1);
-            EndpointAllocationTaskState state1 = createEndpoint(nonEaEp1);
-            this.existingSubsComputeLink1 = state1.endpointState.computeLink;
-            EndpointState nonEaEp2 = createNonEaEndpointState(SUBSCRIPTION_EXISTING_2);
-            EndpointAllocationTaskState state2 = createEndpoint(nonEaEp2);
-            this.existingSubsComputeLink2 = state2.endpointState.computeLink;
 
             // Create an Azure endpoint which will act as Azure EA endpoint
             EndpointState ep = createEaEndpointState();
@@ -213,30 +201,14 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 ACCOUNT_EMAIL_ID_1);
         AzureSubscription subscription2 = getAzureSubscription(SUBSCRIPTION_ID_2,
                 ACCOUNT_EMAIL_ID_2);
-        AzureSubscription existingSubscription2 = getAzureSubscription(SUBSCRIPTION_EXISTING_2,
-                ACCOUNT_EMAIL_ID_2);
-        createAzureCostComputesForSubscriptions(Arrays.asList(subscription1, subscription2,
-                existingSubscription2));
+        createAzureCostComputesForSubscriptions(Arrays.asList(subscription1, subscription2));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
         QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
 
-        assertQueryTaskResponse(queryTaskResponse, 4);
-
-        // Remove compute for existing subscription
-        ComputeState existingSubsCs1 = Utils.fromJson(queryTaskResponse.results
-                .documents.remove(this.existingSubsComputeLink1), ComputeState.class);
-        Assert.assertNotNull(existingSubsCs1);
-        Assert.assertNull(existingSubsCs1
-                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
-
-        ComputeState existingSubsCs2 = Utils.fromJson(queryTaskResponse.results
-                .documents.remove(this.existingSubsComputeLink2), ComputeState.class);
-        Assert.assertNotNull(existingSubsCs2);
-        Assert.assertNull(existingSubsCs1
-                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
+        assertQueryTaskResponse(queryTaskResponse, 2);
     }
 
     private void testAddMoreAzureSubscriptions() throws Throwable {
@@ -249,14 +221,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
 
-        assertQueryTaskResponse(queryTaskResponse, 3);
-
-        // Remove compute for existing subscription
-        ComputeState existingSubsCs = Utils.fromJson(queryTaskResponse.results
-                .documents.remove(this.existingSubsComputeLink1), ComputeState.class);
-        Assert.assertNotNull(existingSubsCs);
-        Assert.assertNull(existingSubsCs
-                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
+        assertQueryTaskResponse(queryTaskResponse, 2);
 
         // Remove the already asserted computes
         this.createdComputeLinks.stream().forEach(computeLnk -> {
@@ -287,22 +252,13 @@ public class AzureSubscriptionsEnumerationServiceTest {
         // Request for creating computes for 1 Azure Subscriptions
         AzureSubscription subscription = getAzureSubscription(SUBSCRIPTION_ID_1,
                 ACCOUNT_EMAIL_ID_1);
-        AzureSubscription existingSubscription1 = getAzureSubscription(SUBSCRIPTION_EXISTING_1,
-                ACCOUNT_EMAIL_ID_1);
-        createAzureCostComputesForSubscriptions(Arrays.asList(subscription, existingSubscription1));
+        createAzureCostComputesForSubscriptions(Arrays.asList(subscription));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
         QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
-        assertQueryTaskResponse(queryTaskResponse, 2);
-
-        // Remove compute for existing subscription
-        ComputeState existingSubsCs = Utils.fromJson(queryTaskResponse.results
-                .documents.remove(this.existingSubsComputeLink1), ComputeState.class);
-        Assert.assertNotNull(existingSubsCs);
-        Assert.assertNull(existingSubsCs
-                .customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
+        assertQueryTaskResponse(queryTaskResponse, 1);
 
         // Get and assert the returned compute
         ComputeState cs = Utils

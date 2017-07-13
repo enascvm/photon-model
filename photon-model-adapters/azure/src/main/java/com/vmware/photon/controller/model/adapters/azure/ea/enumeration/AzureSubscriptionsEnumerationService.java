@@ -80,7 +80,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     }
 
     protected enum AzureCostComputeEnumerationStages {
-        FETCH_EXISTING_RESOURCES, UPDATE_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
+        FETCH_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
     }
 
     protected static class AzureSubscriptionsEnumerationContext
@@ -145,10 +145,6 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             switch (enumerationContext.stage) {
             case FETCH_EXISTING_RESOURCES:
                 fetchExistingResources(enumerationContext,
-                        AzureCostComputeEnumerationStages.UPDATE_EXISTING_RESOURCES);
-                break;
-            case UPDATE_EXISTING_RESOURCES:
-                updateExistingResources(enumerationContext,
                         AzureCostComputeEnumerationStages.CREATE_RESOURCES);
                 break;
             case CREATE_RESOURCES:
@@ -283,6 +279,8 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                         AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                         enumerationContext.parentAuth.privateKeyId)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK,
+                        enumerationContext.parent.endpointLink)
                 .build();
         return azureSubscriptionComputesQuery;
     }
@@ -304,7 +302,6 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                                             enumerationContext.parent.endpointLink,
                                             enumerationContext.parent.tenantLinks,
                                             subscription.entityId, null, null))
-
                             .setCompletion((o, e) -> {
                                 if (e != null) {
                                     logSevere(

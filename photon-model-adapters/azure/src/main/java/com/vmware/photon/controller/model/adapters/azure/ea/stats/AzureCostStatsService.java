@@ -142,7 +142,6 @@ public class AzureCostStatsService extends StatelessService {
         GET_AUTH,
         GET_BILL_MONTH_TO_FETCH_STATS_FOR,
         GET_HISTORICAL_COSTS,
-        GET_LAST_COLLECTED_EA_TOTAL_USAGE_COST,
         DOWNLOAD_DETAILED_BILL,
         PARSE_DETAILED_BILL,
         CREATE_UPDATE_MISSING_COMPUTE_STATES,
@@ -248,7 +247,8 @@ public class AzureCostStatsService extends StatelessService {
 
     private void handleRequest(Context context) {
         try {
-            logFine(() -> String.format("Cost collection at stage: %s", context.stage));
+            logFine(() -> String.format("Cost collection at stage: %s for endpoint %s",
+                    context.stage, context.computeHostDesc.endpointLink));
             switch (context.stage) {
             case GET_COMPUTE_HOST:
                 getComputeHost(context, Stages.GET_AUTH);
@@ -259,19 +259,17 @@ public class AzureCostStatsService extends StatelessService {
             case GET_BILL_MONTH_TO_FETCH_STATS_FOR:
                 getBillProcessedTime(context, Stages.GET_HISTORICAL_COSTS);
                 break;
+
             case GET_HISTORICAL_COSTS:
                 // Try getting cost using the new API and if the call fails, try with
                 // the old API.
                 try {
                     getPastAndCurrentMonthsEaAccountCost(context,
-                            Stages.GET_LAST_COLLECTED_EA_TOTAL_USAGE_COST);
+                            Stages.DOWNLOAD_DETAILED_BILL);
                 } catch (Exception e) {
                     getPastAndCurrentMonthsEaAccountCostUsingOldApi(context,
-                            Stages.GET_LAST_COLLECTED_EA_TOTAL_USAGE_COST);
+                            Stages.DOWNLOAD_DETAILED_BILL);
                 }
-                break;
-            case GET_LAST_COLLECTED_EA_TOTAL_USAGE_COST:
-                getStoredEaUsageCost(context, Stages.DOWNLOAD_DETAILED_BILL);
                 break;
             case DOWNLOAD_DETAILED_BILL:
                 downloadDetailedBill(context, Stages.PARSE_DETAILED_BILL);
@@ -320,7 +318,8 @@ public class AzureCostStatsService extends StatelessService {
      * requesting data.
      */
     private void getAuth(Context context, Stages next) {
-        logInfo(() -> "Starting cost stats collection for account: ");
+        logInfo(() -> String.format("Starting azure ea cost stats collection for endpoint %s ",
+                context.computeHostDesc.endpointLink));
 
         URI authUri = UriUtils.extendUri(getInventoryServiceUri(),
                 context.computeHostDesc.description.authCredentialsLink);
@@ -459,6 +458,9 @@ public class AzureCostStatsService extends StatelessService {
         populateBillMonthToDownload(context,
                 context.auth.customProperties.get(AzureConstants.AZURE_TENANT_ID));
         LocalDate billMonthToDownload = context.billMonthToDownload;
+        logInfo(() -> String.format("Getting historical cost using old API " +
+                        "from month %s for endpoint %s ", context.billMonthToDownload,
+                context.computeHostDesc.endpointLink));
         List<Operation> summarizedBillOps = new ArrayList<>();
         while (!billMonthToDownload
                 .isAfter(AzureCostStatsServiceHelper.getFirstDayOfCurrentMonth())) {
@@ -545,8 +547,8 @@ public class AzureCostStatsService extends StatelessService {
             }
         }
         context.billMonthToDownload = start.withDayOfMonth(1);
-        logFine(() -> String.format("Downloading Azure account %s bills since: %s.", accountId,
-                context.billMonthToDownload));
+        logInfo(() -> String.format("Downloading for Azure endpoint %s bills since: %s.",
+                context.computeHostDesc.endpointLink, context.billMonthToDownload));
     }
 
     /**
@@ -555,17 +557,8 @@ public class AzureCostStatsService extends StatelessService {
      * @param next the next stage to proceed to.
      */
     private void downloadDetailedBill(Context context, Stages next) {
-        EaAccountCost eaAccountCost = context.eaAccountCost
-                .get(AzureCostStatsServiceHelper.getFirstDayOfCurrentMonth());
-        if (eaAccountCost != null && eaAccountCost.monthlyEaAccountUsageCost != null) {
-            Double collectedCurrentMonthEaUsageCost = eaAccountCost.monthlyEaAccountUsageCost;
-            if (collectedCurrentMonthEaUsageCost.equals(context.storedCurrentMonthEaUsageCost)) {
-                logInfo(() -> "Microsoft Azure hasn't updated the bill since the last run."
-                        + "Aborting this run.");
-                postStats(context, true);
-                return;
-            }
-        }
+        logInfo(() -> String.format("Downloading detailed current month bill for endpoint %s.",
+                context.computeHostDesc.endpointLink));
         this.executor.submit(() -> {
             // Restore context since this is a new thread
             OperationContext.restoreOperationContext(context.opContext);
@@ -601,8 +594,9 @@ public class AzureCostStatsService extends StatelessService {
                                     new Exception("Empty response obtained from Azure"), false);
                         } else {
                             logSevere(() -> String
-                                    .format("Unexpected response obtained from Azure: %s",
-                                            response));
+                                    .format("Unexpected response obtained from Azure: %s " +
+                                                    "for endpoint %s", response,
+                                            context.computeHostDesc.endpointLink));
                             handleError(context, next, new Exception(response.toString()), false);
                         }
                     } else {
@@ -618,8 +612,9 @@ public class AzureCostStatsService extends StatelessService {
                             sink.writeAll(response.body().source());
                         } catch (Exception ex) {
                             logWarning(() -> String
-                                    .format("Unexpected data obtained from Azure: %s",
-                                            Utils.toString(ex)));
+                                    .format("Unexpected data obtained from Azure: %s " +
+                                                    "for endpoint %s", Utils.toString(ex),
+                                            context.computeHostDesc.endpointLink));
                             handleError(context, next, ex, false);
                             return;
                         }
@@ -686,8 +681,9 @@ public class AzureCostStatsService extends StatelessService {
     private void createMissingComputeStates(Context context,
             Stages next, List<AzureSubscription> newSubscriptions) {
         logInfo(() -> String
-                .format("Creating compute states for the following subscriptions: %s ",
-                        newSubscriptions.toString()));
+                .format("Creating compute states for the following subscriptions: %s for " +
+                                "endpoint %s ", newSubscriptions.toString(),
+                        context.computeHostDesc.endpointLink));
         AzureSubscriptionsEnumerationRequest request = new AzureSubscriptionsEnumerationRequest();
         request.resourceReference = UriUtils
                 .extendUri(getInventoryServiceUri(), context.computeHostDesc.documentSelfLink);
@@ -695,7 +691,9 @@ public class AzureCostStatsService extends StatelessService {
         Operation.createPatch(getHost(), AzureSubscriptionsEnumerationService.SELF_LINK)
                 .setBody(request)
                 .setCompletion((operation, exception) -> {
-                    logInfo(() -> ("Finished creating compute states for subscriptions."));
+                    logInfo(() -> String.format("Finished creating compute states for " +
+                            "subscriptions under endpoint %s.",
+                            context.computeHostDesc.documentSelfLink));
                     context.stage = next;
                     handleRequest(context);
                 }).sendWith(this);
@@ -739,6 +737,8 @@ public class AzureCostStatsService extends StatelessService {
                         PhotonModelConstants.CLOUD_ACCOUNT_ID, subscriptionGuid)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE,
                         ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK,
+                        context.computeHostDesc.endpointLink)
                 .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
                         context.computeHostDesc.tenantLinks)
                 .build();
@@ -869,7 +869,8 @@ public class AzureCostStatsService extends StatelessService {
         if (eaAccountStats.size() > 0) {
             context.statsResponse.statsList.addAll(eaAccountStats);
             postStats(context, true);
-            logInfo(() -> "Finished collecting cost stats.");
+            logInfo(() -> String.format("Finished collecting cost stats for endpoint %s ",
+                    context.computeHostDesc.endpointLink));
         }
         context.stage = next;
         handleRequest(context);
@@ -1074,8 +1075,8 @@ public class AzureCostStatsService extends StatelessService {
                 .getOrDefault(subscription.entityId, null);
         if (subscriptionComputeState == null) {
             logWarning(() -> String.format("Could not find compute state for Azure subscription "
-                            + "with ID '%s'. Not creating cost metrics for the same.",
-                    subscription.entityId));
+                            + "with ID '%s' for endpoint %s. Not creating cost metrics for the same",
+                    subscription.entityId, context.computeHostDesc.endpointLink));
             return;
         }
         processor.accept(subscriptionComputeState);
@@ -1449,12 +1450,14 @@ public class AzureCostStatsService extends StatelessService {
             for (Throwable ex : exceptions.values()) {
                 String exceptionString = Utils.toString(ex);
                 logWarning(() -> String
-                        .format("Error retrieving bill from Azure for the operation: %s.",
-                                exceptionString));
+                        .format("Error retrieving bill from Azure for the operation: %s " +
+                                        "for endpoint %s.",
+                                exceptionString, context.computeHostDesc.endpointLink));
                 if (exceptionString
                         .contains(AzureCostConstants.ERROR_RESPONSE_MESSAGE_SERVICE_UNAVAILABLE)) {
                     logWarning(() -> String.format("One of the request failed with "
-                            + "the exception: %s Retrying the requests.", exceptionString));
+                            + "the exception: %s Retrying the requests for endpoint %s",
+                            exceptionString, context.computeHostDesc.endpointLink));
                     //TODO gjobin: Check how to retry from here.
                 }
                 handleError(context, next, ex, false);
@@ -1484,14 +1487,18 @@ public class AzureCostStatsService extends StatelessService {
                             AzureCostStatsServiceHelper.isCurrentMonth(context.billMonthToDownload))) {
                 cleanUp(context);
                 if (throwable != null) {
-                    logSevere(() -> String.format("Failed at stage %s with the exception: %s",
-                            context.stage, Utils.toString(throwable)));
+                    logSevere(() -> String.format("Failed at stage %s for endpoint %s" +
+                                    " with the exception: %s",
+                            context.stage, context.computeHostDesc.endpointLink,
+                            Utils.toString(throwable)));
                     getFailureConsumer(context).accept(throwable);
                 }
             } else {
-                logInfo(() -> String.format("Failed at stage %s with the exception: %s"
+                logInfo(() -> String.format("Failed at stage %s for endpoint %s" +
+                                " with the exception: %s"
                                 + "Proceeding to next stage since this is not critical.",
-                        context.stage, Utils.toString(throwable)));
+                        context.stage, context.computeHostDesc.endpointLink,
+                        Utils.toString(throwable)));
                 if (shouldGoToNextStage) {
                     context.stage = next;
                     handleRequest(context);
