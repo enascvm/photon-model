@@ -119,6 +119,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         public Map<String, Volume> remoteAWSVolumes;
         public Set<String> remoteAWSVolumeIds;
         public List<Volume> volumesToBeCreated;
+        public List<Tag> volumeTagsToBeCreated;
         // Mappings of the volume and the String documentSelf link of the volume to be updated.
         public Map<String, Volume> volumesToBeUpdated;
         // Mappings of the disk state and the String documentSelf link of the disk state to be updated.
@@ -147,6 +148,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.parentCompute = request.parentCompute;
             this.localDiskStateMap = new ConcurrentSkipListMap<>();
             this.volumesToBeUpdated = new HashMap<>();
+            this.volumeTagsToBeCreated = new ArrayList<>();
             this.diskStatesToBeUpdated = new HashMap<>();
             this.remoteAWSVolumes = new ConcurrentSkipListMap<>();
             this.volumesToBeCreated = new ArrayList<>();
@@ -471,11 +473,11 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
 
             List<Operation> operations = new ArrayList<>();
             if (this.context.volumesToBeCreated.size() > 0) {
-                List<Tag> volumeTagsToBeCreated = this.context.volumesToBeCreated.stream()
+                this.context.volumeTagsToBeCreated = this.context.volumesToBeCreated.stream()
                         .flatMap(i -> i.getTags().stream())
                         .collect(Collectors.toList());
 
-                operations = volumeTagsToBeCreated.stream()
+                operations = this.context.volumeTagsToBeCreated.stream()
                         .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
                         .map(t -> TagsUtil.newExternalTagState(t.getKey(), t.getValue(),
                                 this.context.parentCompute.tenantLinks))
@@ -519,7 +521,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         this.context.parentAuth.documentSelfLink,
                         this.context.request.original.endpointLink,
                         this.context.request.regionId,
-                        this.context.parentCompute.tenantLinks));
+                        this.context.parentCompute.tenantLinks, true));
 
             });
             diskStatesToBeCreated.forEach(diskState ->
@@ -539,7 +541,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         this.context.parentAuth.documentSelfLink,
                         this.context.request.original.endpointLink,
                         this.context.request.regionId,
-                        this.context.parentCompute.tenantLinks));
+                        this.context.parentCompute.tenantLinks, false));
 
             });
             diskStatesToBeUpdated.forEach(diskState -> {
@@ -624,7 +626,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
          * Map an EBS volume to a photon-model disk state.
          */
         private DiskState mapVolumeToDiskState(Volume volume, String resourcePoolLink,
-                String authCredentialsLink, String endpointLink, String regionId, List<String> tenantLinks) {
+                String authCredentialsLink, String endpointLink, String regionId, List<String> tenantLinks,
+                boolean isNewDiskState) {
             DiskState diskState = new DiskState();
             diskState.id = volume.getVolumeId();
 
@@ -651,6 +654,18 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         .filter(tag -> tag.getKey().equals(AWS_TAG_NAME))
                         .map(tag -> tag.getValue()).findFirst()
                         .orElse(volume.getVolumeId());
+            }
+
+            // If we're creating a new DiskState, we've already created TagStates for it, so populate the
+            // tagLinks with appropriate links.
+            if (isNewDiskState) {
+                diskState.tagLinks = new HashSet<>();
+                diskState.tagLinks = this.context.volumeTagsToBeCreated.stream()
+                        .filter(tag -> volume.getTags().contains(tag))
+                        .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME))
+                        .map(tag -> TagsUtil.newExternalTagState(tag.getKey(), tag.getValue(),
+                                this.context.parentCompute.tenantLinks)).map(tag -> tag.documentSelfLink)
+                        .collect(Collectors.toSet());
             }
 
             mapAttachmentState(diskState, volume);
