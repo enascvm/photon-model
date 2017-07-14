@@ -87,9 +87,11 @@ public class ProvisionContext {
         this.mgr = new TaskManager(service, req.taskReference, req.resourceLink());
         this.provisioningTaskReference = req.taskReference;
         this.errorHandler = failure -> {
-            Utils.logWarning("Error while provisioning. %s:  compute: %s. ",
+            Utils.logWarning("Error while provisioning. %s:  \ncompute: %s\nnics: %s\ndisks: %s",
                     failure.getMessage(),
-                    Utils.toJsonHtml(ProvisionContext.this.child));
+                    Utils.toJsonHtml(ProvisionContext.this.child),
+                    Utils.toJsonHtml(ProvisionContext.this.nics),
+                    Utils.toJsonHtml(ProvisionContext.this.disks));
             this.mgr.patchTaskToFailure(failure);
         };
     }
