@@ -663,7 +663,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 diskState.tagLinks = this.context.volumeTagsToBeCreated.stream()
                         .filter(tag -> volume.getTags().contains(tag))
                         .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME))
-                        .map(tag -> TagsUtil.newExternalTagState(tag.getKey(), tag.getValue(),
+                        .map(tag -> TagsUtil.newTagState(tag.getKey(), tag.getValue(), true,
                                 this.context.parentCompute.tenantLinks)).map(tag -> tag.documentSelfLink)
                         .collect(Collectors.toSet());
             }
