@@ -29,6 +29,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -140,6 +141,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         refreshAndRetire();
 
         captureFactoryState("updated");
+        snapshotFactoryState("metrics", ResourceMetricsService.class);
 
         if (aComputeLink != null) {
             // the second enumeration marked the fake vm as retired

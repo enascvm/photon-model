@@ -35,6 +35,6 @@ public class DatastoreOverlay extends AbstractOverlay {
     }
 
     public long getFreeSpaceBytes() {
-        return (long) getOrFail(VimPath.ds_summary_freeSpace);
+        return (long) getOrDefault(VimPath.ds_summary_freeSpace, 0L);
     }
 }

@@ -52,6 +52,7 @@ public class PhotonModelConstants {
     public static final String MEMORY_AVAILABLE_PERCENT = "MemoryAvailablePercent";
     public static final String MEMORY_USED_PERCENT = "MemoryUsedPercent";
     public static final String STORAGE_USED_BYTES = "StorageUsedBytes";
+    public static final String STORAGE_AVAILABLE_BYTES = "StorageAvailableBytes";
 
     public static final String SERVICE_RESOURCE_COST = "Service.%s.ResourceCost";
     public static final String SERVICE_OTHER_COST = "Service.%s.OtherCost";
@@ -102,6 +103,7 @@ public class PhotonModelConstants {
         statMap.put(MEMORY_AVAILABLE_BYTES, UNIT_BYTES);
         statMap.put(MEMORY_USED_BYTES, UNIT_BYTES);
         statMap.put(STORAGE_USED_BYTES, UNIT_BYTES);
+        statMap.put(STORAGE_AVAILABLE_BYTES, UNIT_BYTES);
         METRIC_UNIT_MAP = Collections.unmodifiableMap(statMap);
     }
 

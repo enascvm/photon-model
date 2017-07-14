@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_AVAILABLE_BYTES;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.io.IOException;
@@ -63,6 +65,8 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.TaggingClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -84,6 +88,10 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.OpaqueNetworkSummary;
@@ -1173,6 +1181,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     trackDatastore(enumerationProgress, ds).handle(o, e);
                     if (e == null) {
                         updateLocalTags(enumerationProgress, ds, o.getBody(ResourceState.class));
+                        updateStorageStats(ds, o.getBody(ServiceDocument.class).documentSelfLink);
                     }
                 }).sendWith(this);
     }
@@ -1193,7 +1202,29 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
                             .setBody(makeStorageGroup(ds, enumerationProgress))
                             .sendWith(this);
+                    updateStorageStats(ds, o.getBody(ServiceDocument.class).documentSelfLink);
                 })
+                .sendWith(this);
+    }
+
+    private void updateStorageStats(DatastoreOverlay ds, String selfLink) {
+        ResourceMetrics metrics = new ResourceMetrics();
+        metrics.timestampMicrosUtc = Utils.getNowMicrosUtc();
+        metrics.documentSelfLink = StatsUtil.getMetricKey(selfLink, metrics.timestampMicrosUtc);
+        metrics.entries = new HashMap<>();
+        metrics.entries.put(STORAGE_USED_BYTES, (double) ds.getCapacityBytes() - ds.getFreeSpaceBytes());
+        metrics.entries.put(STORAGE_AVAILABLE_BYTES, (double) ds.getFreeSpaceBytes());
+        metrics.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(
+                SingleResourceStatsCollectionTaskService.EXPIRATION_INTERVAL);
+
+        metrics.customProperties = new HashMap<>();
+        metrics.customProperties
+                .put(ResourceMetrics.PROPERTY_RESOURCE_LINK, selfLink);
+
+        Operation.createPost(UriUtils.buildUri(
+                    ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
+                    ResourceMetricsService.FACTORY_LINK))
+                .setBodyNoCloning(metrics)
                 .sendWith(this);
     }
 

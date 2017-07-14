@@ -81,7 +81,7 @@ public class SingleResourceStatsCollectionTaskService
             + "SingleResourceStatsCollectionTaskService.metric.retentionLimitDays";
     private static final int DEFAULT_RETENTION_LIMIT_DAYS = 56; // 8*7 (8 weeks)
 
-    private static final long EXPIRATION_INTERVAL = Integer
+    public static final long EXPIRATION_INTERVAL = Integer
             .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_DAYS, DEFAULT_RETENTION_LIMIT_DAYS);
 
     public static FactoryService createFactory() {
@@ -381,13 +381,13 @@ public class SingleResourceStatsCollectionTaskService
 
             InMemoryResourceMetric hourlyMemoryState = new InMemoryResourceMetric();
             hourlyMemoryState.timeSeriesStats = new HashMap<>();
-            hourlyMemoryState.documentSelfLink = computeId.concat(StatsConstants.HOUR_SUFFIX);
+            hourlyMemoryState.documentSelfLink = computeId + StatsConstants.HOUR_SUFFIX;
 
             inMemoryMetricsList.add(hourlyMemoryState);
 
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 // sort stats by source time
-                (entries.getValue()).sort(Comparator.comparing(o -> o.sourceTimeMicrosUtc));
+                entries.getValue().sort(Comparator.comparing(o -> o.sourceTimeMicrosUtc));
 
                 // Persist every data point
                 for (ServiceStat serviceStat : entries.getValue()) {
