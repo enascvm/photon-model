@@ -16,34 +16,40 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.BUCKET_OWNER_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_S3;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
+import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -66,7 +72,6 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 public class AWSS3StorageEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_S3_STORAGE_ENUMERATION_ADAPTER_SERVICE;
-    private AWSClientManager clientManager;
     private ExecutorService executorService;
 
     public enum S3StorageEnumerationStages {
@@ -74,13 +79,12 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     }
 
     public enum S3StorageEnumerationSubStage {
-        QUERY_LOCAL_RESOURCES, COMPARE, CREATE_UPDATE_DISK_STATES, DELETE_DISKS, ENUMERATION_STOP
+        QUERY_LOCAL_RESOURCES, COMPARE, ENUMERATE_TAGS, CREATE_DISK_STATES,
+        CREATE_TAG_STATES_UPDATE_TAG_LINKS, DELETE_DISKS, ENUMERATION_STOP
     }
 
     public AWSS3StorageEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AwsClientType.S3);
     }
 
     /**
@@ -88,6 +92,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      * of buckets that need to be represented in the system.
      */
     public static class S3StorageEnumerationContext {
+        public AWSClientManager clientManager;
+        public StatelessService service;
         public AmazonS3Client amazonS3Client;
         public ComputeEnumerateAdapterRequest request;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
@@ -95,11 +101,13 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         public S3StorageEnumerationStages stage;
         public S3StorageEnumerationSubStage subStage;
         public Throwable error;
-        public Map<String, Bucket> remoteAWSBuckets;
-        public Map<String, DiskState> localDiskStateMap;
+        public Map<String, Bucket> remoteBucketsByBucketName;
+        public Map<String, String> regionsByBucketName;
+        public Map<String, Map<String, String>> tagsByBucketName;
+        public Map<String, DiskState> localDiskStatesByBucketName;
         public List<Bucket> bucketsToBeCreated;
-        public Map<String, Bucket> bucketsToBeUpdated;
-        public Map<String, DiskState> diskStatesToBeUpdated;
+        public List<DiskState> diskStatesEnumerated;
+        public Map<String, DiskState> diskStatesToBeUpdatedByBucketName;
         public String deletionNextPageLink;
         public String localResourcesNextPageLink;
         public Operation operation;
@@ -110,15 +118,18 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
 
         public S3StorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
+            this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.S3);
             this.operation = op;
             this.request = request;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
-            this.remoteAWSBuckets = new ConcurrentHashMap<>();
-            this.localDiskStateMap = new ConcurrentHashMap<>();
-            this.diskStatesToBeUpdated = new ConcurrentHashMap<>();
+            this.remoteBucketsByBucketName = new ConcurrentHashMap<>();
+            this.regionsByBucketName = new ConcurrentHashMap<>();
+            this.tagsByBucketName = new ConcurrentHashMap<>();
+            this.localDiskStatesByBucketName = new ConcurrentHashMap<>();
+            this.diskStatesToBeUpdatedByBucketName = new ConcurrentHashMap<>();
             this.bucketsToBeCreated = new ArrayList<>();
-            this.bucketsToBeUpdated = new ConcurrentHashMap<>();
+            this.diskStatesEnumerated = new ArrayList<>();
             this.enumerationOperations = new ArrayList<>();
             this.stage = S3StorageEnumerationStages.CLIENT;
             this.subStage = S3StorageEnumerationSubStage.QUERY_LOCAL_RESOURCES;
@@ -134,8 +145,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager,
-                AwsClientType.S3);
         this.executorService.shutdown();
         AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(op);
@@ -148,8 +157,11 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
+
         S3StorageEnumerationContext awsEnumerationContext = new S3StorageEnumerationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
+        awsEnumerationContext.service = this;
+
         if (awsEnumerationContext.request.original.isMockRequest) {
             awsEnumerationContext.operation.complete();
             return;
@@ -179,6 +191,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 enumerateS3Buckets(aws);
                 break;
             case STOP:
+                AWSClientManagerFactory.returnClientManager(aws.clientManager,
+                        AWSConstants.AwsClientType.S3);
                 logInfo(() -> String.format("Stopping S3 enumeration for %s",
                         aws.request.original.resourceReference));
                 setOperationDurationStat(aws.operation);
@@ -189,6 +203,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             }
             break;
         case ERROR:
+            AWSClientManagerFactory.returnClientManager(aws.clientManager,
+                    AWSConstants.AwsClientType.S3);
             aws.operation.fail(aws.error);
             break;
         default:
@@ -206,11 +222,11 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      */
     private void getAWSS3Client(S3StorageEnumerationContext aws,
             S3StorageEnumerationStages next) {
-        aws.amazonS3Client = this.clientManager.getOrCreateS3Client
-                (aws.parentAuth, aws.request.regionId,this,t -> aws.error = t);
+        aws.amazonS3Client = aws.clientManager.getOrCreateS3Client
+                (aws.parentAuth, aws.request.regionId, this, t -> aws.error = t);
 
         // If S3 client obtained is invalid complete the operation.
-        if (this.clientManager.isS3ClientInvalid(aws.parentAuth, aws.request.regionId)) {
+        if (aws.clientManager.isS3ClientInvalid(aws.parentAuth, aws.request.regionId)) {
             aws.operation.complete();
             aws.subStage = S3StorageEnumerationSubStage.ENUMERATION_STOP;
             handleReceivedEnumerationData(aws);
@@ -243,12 +259,12 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 try {
                     List<Bucket> bucketList = aws.amazonS3Client.listBuckets();
                     for (Bucket bucket : bucketList) {
-                        aws.remoteAWSBuckets.put(bucket.getName(), bucket);
+                        aws.remoteBucketsByBucketName.put(bucket.getName(), bucket);
                     }
 
                     OperationContext.restoreOperationContext(operationContext);
 
-                    if (aws.remoteAWSBuckets.isEmpty()) {
+                    if (aws.remoteBucketsByBucketName.isEmpty()) {
                         aws.subStage = S3StorageEnumerationSubStage.DELETE_DISKS;
                     }
 
@@ -258,8 +274,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                             .getStatusCode() == Operation.STATUS_CODE_FORBIDDEN) {
                         markClientInvalid(aws);
                     } else {
-                        logSevere("Exception enumerating S3 buckets for [region=%s] [ex=%s]",
-                                aws.request.regionId, e.getMessage());
+                        logSevere("Exception enumerating S3 buckets for [ex=%s]",
+                                e.getMessage());
                         aws.error = e;
                         aws.stage = S3StorageEnumerationStages.ERROR;
                         handleEnumerationRequest(aws);
@@ -275,7 +291,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      * @param aws
      */
     private void markClientInvalid(S3StorageEnumerationContext aws) {
-        AWSClientManagerFactory.getClientManager(AwsClientType.S3)
+        aws.clientManager
                 .markS3ClientInvalid(this, aws.parentAuth, aws.request.regionId);
         aws.operation.complete();
         aws.subStage = S3StorageEnumerationSubStage.ENUMERATION_STOP;
@@ -291,10 +307,17 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             getLocalResources(aws, S3StorageEnumerationSubStage.COMPARE);
             break;
         case COMPARE:
-            compareLocalStateWithEnumerationData(aws, S3StorageEnumerationSubStage.CREATE_UPDATE_DISK_STATES);
+            compareLocalStateWithEnumerationData(aws, S3StorageEnumerationSubStage.ENUMERATE_TAGS);
             break;
-        case CREATE_UPDATE_DISK_STATES:
-            createOrUpdateDiskStates(aws, S3StorageEnumerationSubStage.DELETE_DISKS);
+        case ENUMERATE_TAGS:
+            enumerateTags(aws, S3StorageEnumerationSubStage.CREATE_DISK_STATES);
+            break;
+        case CREATE_DISK_STATES:
+            createDiskStates(aws, S3StorageEnumerationSubStage.CREATE_TAG_STATES_UPDATE_TAG_LINKS);
+            break;
+        case CREATE_TAG_STATES_UPDATE_TAG_LINKS:
+            createTagStatesAndUpdateTagLinks(aws).whenComplete(thenDiskDelete(aws,
+                    S3StorageEnumerationSubStage.DELETE_DISKS));
             break;
         case DELETE_DISKS:
             deleteDiskStates(aws, S3StorageEnumerationSubStage.ENUMERATION_STOP);
@@ -320,9 +343,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK, aws.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE, STORAGE_TYPE_S3)
-                    .addInClause(ComputeState.FIELD_NAME_ID, aws.remoteAWSBuckets.keySet());
+                    .addInClause(ComputeState.FIELD_NAME_ID, aws.remoteBucketsByBucketName.keySet());
 
-            addScopeCriteria(qBuilder, DiskState.class,aws);
+            addScopeCriteria(qBuilder, DiskState.class, aws);
 
             QueryTask queryTask = QueryTask.Builder.createDirectTask()
                     .setQuery(qBuilder.build())
@@ -334,15 +357,15 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             QueryUtils.startQueryTask(this, queryTask).whenComplete((qrt, e) -> {
                 if (e != null) {
                     this.logSevere(() -> String.format("Failure retrieving query" + " results: %s", e.toString()));
-                    signalErrorToEnumerationAdapter(aws,e);
+                    signalErrorToEnumerationAdapter(aws, e);
                     return;
                 }
                 qrt.results.documents.values().forEach(documentJson -> {
                     DiskState localDisk = Utils.fromJson(documentJson, DiskState.class);
-                    aws.localDiskStateMap.put(localDisk.name, localDisk);
+                    aws.localDiskStatesByBucketName.put(localDisk.name, localDisk);
 
                 });
-                this.logFine(() -> String.format("%d S3 disk states found.",qrt.results.documentCount));
+                this.logFine(() -> String.format("%d S3 disk states found.", qrt.results.documentCount));
 
                 if (qrt.results.nextPageLink != null) {
                     this.logFine("Processing next page for local disk states.");
@@ -358,14 +381,15 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     .setReferer(this.getUri())
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            this.logSevere(() -> String.format("Failure retrieving query" + " results: %s",e.toString()));
-                            signalErrorToEnumerationAdapter(aws,e);
+                            this.logSevere(() -> String.format("Failure retrieving query" + " results: %s",
+                                    e.toString()));
+                            signalErrorToEnumerationAdapter(aws, e);
                             return;
                         }
                         QueryTask qrt = o.getBody(QueryTask.class);
                         qrt.results.documents.values().forEach(documentJson -> {
                             DiskState localDisk = Utils.fromJson(documentJson, DiskState.class);
-                            aws.localDiskStateMap.put(localDisk.name, localDisk);
+                            aws.localDiskStatesByBucketName.put(localDisk.name, localDisk);
                         });
 
                         this.logFine(() -> String.format("%d S3 disk states found.", qrt.results.documentCount));
@@ -389,46 +413,157 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     private void compareLocalStateWithEnumerationData(S3StorageEnumerationContext aws,
             S3StorageEnumerationSubStage next) {
         // No remote disks
-        if (aws.remoteAWSBuckets == null
-                || aws.remoteAWSBuckets.size() == 0) {
+        if (aws.remoteBucketsByBucketName == null
+                || aws.remoteBucketsByBucketName.size() == 0) {
             this.logFine(() -> "No disks discovered on the remote system.");
             // no local disks
-        } else if (aws.localDiskStateMap == null
-                || aws.localDiskStateMap.size() == 0) {
-            aws.remoteAWSBuckets.entrySet().forEach(
+        } else if (aws.localDiskStatesByBucketName == null
+                || aws.localDiskStatesByBucketName.size() == 0) {
+            aws.remoteBucketsByBucketName.entrySet().forEach(
                     entry -> aws.bucketsToBeCreated
                             .add(entry.getValue()));
             // Compare local and remote state and find candidates for update and create.
         } else {
-            for (String key : aws.remoteAWSBuckets.keySet()) {
-                if (aws.localDiskStateMap.containsKey(key)) {
-                    aws.bucketsToBeUpdated
-                            .put(key, aws.remoteAWSBuckets.get(key));
-                    aws.diskStatesToBeUpdated
-                            .put(key, aws.localDiskStateMap.get(key));
+            for (String key : aws.remoteBucketsByBucketName.keySet()) {
+                if (aws.localDiskStatesByBucketName.containsKey(key)) {
+                    aws.diskStatesToBeUpdatedByBucketName
+                            .put(key, aws.localDiskStatesByBucketName.get(key));
                 } else {
-                    aws.bucketsToBeCreated.add(aws.remoteAWSBuckets.get(key));
+                    aws.bucketsToBeCreated.add(aws.remoteBucketsByBucketName.get(key));
                 }
             }
         }
+
         aws.subStage = next;
         handleReceivedEnumerationData(aws);
     }
 
     /**
-     * Creates the disk states that represent the buckets received from AWS during
-     * enumeration.
+     * Calls getBucketTaggingConfiguration() on every bucket to enumerate bucket tags.
+     * getBucketTaggingConfiguration() method is region aware and only returns valid results when we
+     * call it with the client region same as the S3 bucket region. Since S3 bucket region is not
+     * available through API, when a new bucket is discovered, we try to get tags for it by calling
+     * getBucketTaggingConfiguration() with client in every AWS region. We then store the client region
+     * for which we received successful response as region in DiskState for that S3 bucket. This region
+     * in DiskState is then used for any subsequent calls for enumerating tags.
      */
-    private void createOrUpdateDiskStates(S3StorageEnumerationContext aws,
+    private void enumerateTags(S3StorageEnumerationContext aws,
+            S3StorageEnumerationSubStage next) {
+        OperationContext operationContext = OperationContext.getOperationContext();
+        this.executorService.submit(new Runnable() {
+            public void run() {
+                OperationContext.restoreOperationContext(operationContext);
+                AmazonS3Client s3Client;
+                BucketTaggingConfiguration bucketTaggingConfiguration = null;
+
+                // We have previously enumerated these disks so we know which region they belong to.
+                // Get a client for that region and make a call to enumerate tags.
+                for (Map.Entry<String, DiskState> entry : aws.diskStatesToBeUpdatedByBucketName.entrySet()) {
+                    aws.regionsByBucketName.put(entry.getKey(), entry.getValue().regionId);
+
+                    s3Client = aws.clientManager
+                            .getOrCreateS3Client(aws.parentAuth, entry.getValue().regionId, aws.service,
+                                    t -> aws.error = t);
+                    if (aws.error != null) {
+                        logSevere("Error getting AWS S3 client for [endpoint=%s] [region=%s] [ex=%s]",
+                                aws.request.original.endpointLink, entry.getValue().regionId, aws.error.getMessage());
+                        continue;
+                    }
+
+                    try {
+                        bucketTaggingConfiguration = s3Client
+                                .getBucketTaggingConfiguration(entry.getKey());
+
+                        if (bucketTaggingConfiguration != null) {
+                            aws.tagsByBucketName.put(entry.getKey(), new ConcurrentHashMap<>());
+
+                            bucketTaggingConfiguration.getAllTagSets().stream().forEach(tagSet -> {
+                                aws.tagsByBucketName.get(entry.getKey()).putAll(tagSet.getAllTags());
+                            });
+                        }
+                    } catch (Exception e) {
+                        logSevere("Exception enumerating tags for S3 bucket with known region " +
+                                        "[endpoint=%s] [region=%s] [ex=%s]", aws.request.original.endpointLink,
+                                entry.getValue().regionId, e.getMessage());
+                        continue;
+                    }
+                }
+
+                // This is the first time these buckets are being enumerated. Brute force and try to enumerate
+                // tags for these buckets over every region until we find the correct region and then store it
+                // in DiskState for future reference.
+                for (Bucket bucket : aws.bucketsToBeCreated) {
+                    for (Regions region : Regions.values()) {
+                        s3Client = aws.clientManager
+                                .getOrCreateS3Client(aws.parentAuth, region.getName(), aws.service,
+                                        t -> aws.error = t);
+                        if (aws.error != null) {
+                            logSevere("Error getting AWS S3 client for [endpoint=%s] [region=%s] [ex=%s]",
+                                    aws.request.original.endpointLink, region.getName(), aws.error.getMessage());
+                            continue;
+                        }
+
+                        try {
+                            bucketTaggingConfiguration = s3Client
+                                    .getBucketTaggingConfiguration(bucket.getName());
+
+                            aws.regionsByBucketName.put(bucket.getName(), region.getName());
+
+                            if (bucketTaggingConfiguration != null) {
+                                aws.tagsByBucketName.put(bucket.getName(), new ConcurrentHashMap<>());
+
+                                bucketTaggingConfiguration.getAllTagSets().stream().forEach(tagSet -> {
+                                    aws.tagsByBucketName.get(bucket.getName()).putAll(tagSet.getAllTags());
+                                });
+                            }
+                            break;
+                        } catch (Exception e) {
+                            // If AmazonS3Exception is thrown due to region mismatch, ignore it and continue.
+                            // 301 or 403 is thrown when a client with a different region than S3 bucket
+                            // calls getbucketTaggingConfiguration().
+                            // 400 is thrown when a client in invalid region (such as government region) calls
+                            // getbucketTaggingConfiguration().
+                            if (e instanceof AmazonS3Exception && (((AmazonS3Exception) e).getStatusCode() ==
+                                    Operation.STATUS_CODE_MOVED_PERM
+                                    || ((AmazonS3Exception) e).getStatusCode() == Operation.STATUS_CODE_FORBIDDEN
+                                    || ((AmazonS3Exception) e).getStatusCode() == Operation.STATUS_CODE_BAD_REQUEST)) {
+                                continue;
+                            } else {
+                                logSevere("Exception enumerating tags for S3 bucket with unknown region " +
+                                                "[endpoint=%s] [region=%s] [ex=%s]", aws.request.original.endpointLink,
+                                        region.getName(), e.getMessage());
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                aws.subStage = next;
+                handleEnumerationRequest(aws);
+            }
+        });
+    }
+
+    /**
+     * Creates the disk states that represent the buckets received from AWS during
+     * enumeration. Fields currently being enumerated for S3 are all immutable on AWS side, hence we only create
+     * disks and don't patch to them in subsequent except for changes in tagLinks.
+     */
+    private void createDiskStates(S3StorageEnumerationContext aws,
             S3StorageEnumerationSubStage next) {
 
-        // For all the disks to be created..map them and create operations.
+        // For all the disks to be created, we filter them based on whether we were able to find the correct
+        // region for the disk using getBucketTaggingConfiguration() call and then map them and create operations.
+        // Filtering is done to avoid creating disk states with null region (since we don't PATCH region field
+        // after creating the disk, we need to ensure that disk state is initially created with the correct region).
         // kick off the operation using a JOIN
         List<DiskState> diskStatesToBeCreated = new ArrayList<>();
-        aws.bucketsToBeCreated.forEach(bucket -> {
-            diskStatesToBeCreated.add(mapBucketToDiskState(bucket, aws));
 
-        });
+        aws.bucketsToBeCreated.stream()
+                .filter(bucket -> aws.regionsByBucketName.containsKey(bucket.getName()))
+                .forEach(bucket -> {
+                    diskStatesToBeCreated.add(mapBucketToDiskState(bucket, aws));
+                });
         diskStatesToBeCreated.forEach(diskState ->
                 aws.enumerationOperations.add(
                         createPostOperation(this, diskState,
@@ -436,31 +571,21 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         this.logFine(() -> String.format("Creating %d S3 disks",
                 aws.bucketsToBeCreated.size()));
 
-        // For all the disks to be updated, map the updated state from the received
-        // volumes and issue patch requests against the existing disk state representations
-        // in the system
-        List<DiskState> diskStatesToBeUpdated = new ArrayList<>();
-        aws.bucketsToBeUpdated.forEach((selfLink, bucket) -> {
-            diskStatesToBeUpdated.add(mapBucketToDiskState(bucket, aws));
-
-        });
-        diskStatesToBeUpdated.forEach(diskState -> {
-            aws.enumerationOperations.add(
-                    createPatchOperation(this, diskState,
-                            aws.localDiskStateMap.get(diskState.id).documentSelfLink));
-        });
-
-        this.logFine(() -> String.format("Updating %d disks",
-                aws.bucketsToBeUpdated.size()));
-
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
                 this.logSevere(() -> String.format("Error creating/updating disk %s",
                         Utils.toString(exc)));
-                signalErrorToEnumerationAdapter(aws, exc.values().iterator().next());
+                aws.subStage = S3StorageEnumerationSubStage.DELETE_DISKS;
+                handleReceivedEnumerationData(aws);
                 return;
             }
+
+            ox.entrySet().stream()
+                    .forEach(operationEntry -> {
+                        aws.diskStatesEnumerated.add(operationEntry.getValue().getBody(DiskState.class));
+                    });
+
             this.logFine(() -> "Successfully created and updated all the disk states.");
             aws.subStage = next;
             handleReceivedEnumerationData(aws);
@@ -477,6 +602,27 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         joinOp.sendWith(this.getHost());
     }
 
+
+    /**
+     * Create tag states for S3 buckets. States are created only for newly discovered tags.
+     */
+    private DeferredResult<S3StorageEnumerationContext>
+            createTagStatesAndUpdateTagLinks(S3StorageEnumerationContext aws) {
+
+        aws.diskStatesEnumerated.addAll(aws.diskStatesToBeUpdatedByBucketName.values());
+
+        List<DeferredResult<Set<String>>> updateCSTagLinksOps = new ArrayList<>();
+
+        aws.diskStatesEnumerated.stream()
+                .filter(diskState -> aws.tagsByBucketName.get(diskState.id) != null)
+                .forEach(diskState -> {
+                    updateCSTagLinksOps.add(TagsUtil.updateLocalTagStates(aws.service, diskState,
+                            aws.tagsByBucketName.get(diskState.id)));
+                });
+
+        return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> aws);
+    }
+
     /**
      * Map an S3 bucket to a photon-model disk state.
      */
@@ -485,6 +631,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         diskState.id = bucket.getName();
         diskState.name = bucket.getName();
         diskState.storageType = STORAGE_TYPE_S3;
+        diskState.regionId = aws.regionsByBucketName.get(bucket.getName());
         diskState.authCredentialsLink = aws.parentAuth.documentSelfLink;
         diskState.resourcePoolLink = aws.request.original.resourcePoolLink;
         diskState.endpointLink = aws.request.original.endpointLink;
@@ -567,53 +714,53 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         this.logFine(() -> String.format("Querying page [%s] for resources to be deleted",
                 aws.deletionNextPageLink));
         this.sendRequest(
-                        Operation.createGet(this, aws.deletionNextPageLink)
-                                .setCompletion((o, e) -> {
-                                    if (e != null) {
-                                        signalErrorToEnumerationAdapter(aws, e);
-                                        return;
-                                    }
-                                    QueryTask queryTask = o.getBody(QueryTask.class);
+                Operation.createGet(this, aws.deletionNextPageLink)
+                        .setCompletion((o, e) -> {
+                            if (e != null) {
+                                signalErrorToEnumerationAdapter(aws, e);
+                                return;
+                            }
+                            QueryTask queryTask = o.getBody(QueryTask.class);
 
-                                    aws.deletionNextPageLink = queryTask.results.nextPageLink;
-                                    List<Operation> deleteOperations = new ArrayList<>();
-                                    for (Object s : queryTask.results.documents.values()) {
-                                        DiskState diskState = Utils
-                                                .fromJson(s, DiskState.class);
-                                        // If the global list of ids does not contain this entity and it
-                                        // was not updated then delete it. This check is necessary as
-                                        // the document update timestamp/version does not change if
-                                        // there are no changes to the attributes of the entity during
-                                        // update.
-                                        if (aws.remoteAWSBuckets
-                                                .get(diskState.id) == null) {
-                                            deleteOperations
-                                                    .add(Operation.createDelete(this,
-                                                            diskState.documentSelfLink));
+                            aws.deletionNextPageLink = queryTask.results.nextPageLink;
+                            List<Operation> deleteOperations = new ArrayList<>();
+                            for (Object s : queryTask.results.documents.values()) {
+                                DiskState diskState = Utils
+                                        .fromJson(s, DiskState.class);
+                                // If the global list of ids does not contain this entity and it
+                                // was not updated then delete it. This check is necessary as
+                                // the document update timestamp/version does not change if
+                                // there are no changes to the attributes of the entity during
+                                // update.
+                                if (aws.remoteBucketsByBucketName
+                                        .get(diskState.id) == null) {
+                                    deleteOperations
+                                            .add(Operation.createDelete(this,
+                                                    diskState.documentSelfLink));
+                                }
+                            }
+                            this.logFine(() -> String.format("Deleting %d disks",
+                                    deleteOperations.size()));
+                            if (deleteOperations.size() == 0) {
+                                this.logFine(() -> "No disk states to be deleted");
+                                processDeletionRequest(aws, next);
+                                return;
+                            }
+                            OperationJoin.create(deleteOperations)
+                                    .setCompletion((ops, exs) -> {
+                                        if (exs != null) {
+                                            // We don't want to fail the whole data collection
+                                            // if some of the operation fails.
+                                            exs.values().forEach(
+                                                    ex -> this
+                                                            .logWarning(() ->
+                                                                    String.format("Error: %s",
+                                                                            ex.getMessage())));
                                         }
-                                    }
-                                    this.logFine(() -> String.format("Deleting %d disks",
-                                            deleteOperations.size()));
-                                    if (deleteOperations.size() == 0) {
-                                        this.logFine(() -> "No disk states to be deleted");
                                         processDeletionRequest(aws, next);
-                                        return;
-                                    }
-                                    OperationJoin.create(deleteOperations)
-                                            .setCompletion((ops, exs) -> {
-                                                if (exs != null) {
-                                                    // We don't want to fail the whole data collection
-                                                    // if some of the operation fails.
-                                                    exs.values().forEach(
-                                                            ex -> this
-                                                                    .logWarning(() ->
-                                                                            String.format("Error: %s",
-                                                                                    ex.getMessage())));
-                                                }
-                                                processDeletionRequest(aws, next);
-                                            })
-                                            .sendWith(this);
-                                }));
+                                    })
+                                    .sendWith(this);
+                        }));
 
     }
 
@@ -648,5 +795,22 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria
         QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
+    }
+
+    /**
+     * {@code deleteDisks} version suitable for chaining to
+     * {@code DeferredResult.whenComplete}.
+     */
+    private BiConsumer<S3StorageEnumerationContext, Throwable> thenDiskDelete(S3StorageEnumerationContext aws,
+            S3StorageEnumerationSubStage next) {
+        // NOTE: In case of error 'ignoreCtx' is null so use passed context!
+        return (ignoreCtx, exc) -> {
+            if (exc != null) {
+                logSevere("Exception while creating tag states and updating tag links for " +
+                        "[endpoint=%s], [ex=%s]", aws.parentCompute.endpointLink, exc.getMessage());
+            }
+            aws.subStage = next;
+            handleReceivedEnumerationData(aws);
+        };
     }
 }

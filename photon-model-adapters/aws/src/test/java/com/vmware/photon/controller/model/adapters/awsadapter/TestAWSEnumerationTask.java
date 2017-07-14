@@ -71,6 +71,7 @@ import static com.vmware.photon.controller.model.tasks.TestUtils.doPatch;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,8 @@ import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
+import com.amazonaws.services.s3.model.TagSet;
 
 import io.netty.util.internal.StringUtil;
 
@@ -132,6 +135,7 @@ import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
@@ -175,6 +179,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public static final String VM_TAG_VALUE_1 = "value1";
     public static final String VM_TAG_VALUE_2 = "value2";
     public static final String VM_TAG_VALUE_3 = "value3";
+
+    public static final String S3_TAG_KEY_1 = "s3-enumtest-key1";
+    public static final String S3_TAG_KEY_2 = "s3-enumtest-key2";
+    public static final String S3_TAG_VALUE_1 = "s3-enumtest-value1";
+    public static final String S3_TAG_VALUE_2 = "s3-enumtest-value2";
 
     public static final String INITIAL_SG_TAG = "initialSGTag";
     public static final String INITIAL_VPC_TAG = "initialVPCTag";
@@ -315,14 +324,25 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ProvisioningUtils.queryComputeInstances(this.host, count2);
 
         // Create S3 bucket on amazon
-        this.s3Client.createBucket(TEST_BUCKET_NAME);
+        Map<String, String> tags = new HashMap<>();
+        tags.put(S3_TAG_KEY_1, S3_TAG_VALUE_1);
+        tags.put(S3_TAG_KEY_2, S3_TAG_VALUE_2);
+
+        createS3BucketAndTags(tags);
         this.bucketToBeDeleted = TEST_BUCKET_NAME;
 
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_INITIAL);
 
         // Validate if the S3 bucket is enumerated.
-        validateS3Enumeration(count1);
+        validateS3Enumeration(count1, count2);
+        // Validate S3 tag state count.
+        validateS3TagsEnumeration();
+
+        // Remove a tag from test S3 bucket.
+        tags.clear();
+        tags.put(S3_TAG_KEY_1, S3_TAG_VALUE_1);
+        createS3BucketAndTags(tags);
 
         // 5 new resources should be discovered. Mapping to 2 new compute description and 5 new
         // compute states.
@@ -377,9 +397,12 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Validate stale resources have been deleted
         validateStaleResourceStateDeletion(staleSubnetDocumentSelfLink, staleNetworkDocumentSelfLink);
 
-        // After two enumeration cycles, validate that we did not create a duplicate document for existing
-        // S3 bucket.
-        validateS3Enumeration(count1);
+        // After two enumeration cycles, validate that we did not create duplicate documents for existing
+        // S3 bucket and validate that we did not add duplicate tagLink in diskState and removed the tagLink
+        // for tag deleted from AWS.
+        validateS3Enumeration(count1, count1);
+        // Validate that deleted S3 tag's local state is deleted.
+        validateS3TagsEnumeration();
 
         // Delete the S3 bucket created in the test
         this.s3Client.deleteBucket(TEST_BUCKET_NAME);
@@ -471,7 +494,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             }
         }
         // Validate that the document for the deleted S3 bucket is deleted after enumeration.
-        validateS3Enumeration(ZERO);
+        validateS3Enumeration(ZERO, ZERO);
     }
 
     // Runs the enumeration task after a new nic has been added to a CS and then after it has been
@@ -847,8 +870,19 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         }
     }
 
-    // Validate S3 bucket enumeration by querying DiskState and comparing result to expected number of documents.
-    private void validateS3Enumeration(int expectedCount) {
+    private void createS3BucketAndTags(Map<String, String> tags) {
+        this.s3Client.createBucket(TEST_BUCKET_NAME);
+
+        TagSet tagSet = new TagSet(tags);
+        BucketTaggingConfiguration bucketTaggingConfiguration = new
+                BucketTaggingConfiguration(Collections.singletonList(tagSet));
+
+        this.s3Client.setBucketTaggingConfiguration(TEST_BUCKET_NAME, bucketTaggingConfiguration);
+    }
+
+    // Validate S3 bucket enumeration by querying DiskState and comparing result to expected number of documents
+    // and validate the size of tagLinks.
+    private void validateS3Enumeration(int expectedDiskCount, int expectedTagsCount) {
         Query s3Query = QueryTask.Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(DiskState.FIELD_NAME_NAME, TEST_BUCKET_NAME)
@@ -856,6 +890,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(s3Query)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .build();
 
         Operation s3QueryOp = Operation.createPost(this.host,ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
@@ -865,7 +900,37 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         QueryTask response = s3QueryResponse.getBody(QueryTask.class);
 
-        assertEquals(expectedCount, response.results.documentLinks.size());
+        if (expectedDiskCount > 0) {
+            DiskState diskState = Utils.fromJson(response.results.documents
+                    .get(response.results.documentLinks.get(0)), DiskState.class);
+            assertEquals(expectedTagsCount,diskState.tagLinks.size());
+        }
+
+        assertEquals(expectedDiskCount, response.results.documentLinks.size());
+    }
+
+    private void validateS3TagsEnumeration() {
+        List<String> tags = new ArrayList<>();
+        tags.add(S3_TAG_KEY_1);
+        tags.add(S3_TAG_KEY_2);
+
+        Query s3TagsQuery = QueryTask.Query.Builder.create()
+                .addKindFieldClause(TagState.class)
+                .addInClause(TagState.FIELD_NAME_KEY, tags)
+                .build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(s3TagsQuery)
+                .build();
+
+        Operation s3QueryOp = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+                .setBody(queryTask).setReferer(this.host.getUri());
+
+        Operation s3QueryResponse = this.host.waitForResponse(s3QueryOp);
+
+        QueryTask response = s3QueryResponse.getBody(QueryTask.class);
+
+        assertEquals(2, response.results.documentLinks.size());
     }
 
     /**
