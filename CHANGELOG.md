@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.6.25-SNAPSHOT
+## 0.6.25
+* Added 'Create Snapshot' operation for vSphere compute resources.
+* Added '/resources/routers' service under photon-model to data-collect NSX-T logical routers.
+* Added support to create 'type' tag for AWS computes.
 
 ## 0.6.24
 * Added services to allocate and deallocate IP addresses.
