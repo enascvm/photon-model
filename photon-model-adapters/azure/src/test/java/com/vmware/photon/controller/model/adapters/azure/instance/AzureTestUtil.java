@@ -30,6 +30,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_STATE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_STATUS;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_DISKS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_CAPACITY;
@@ -40,6 +41,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.MEMORY_USED_PERCENT;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -92,6 +94,7 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComputeEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
@@ -99,6 +102,7 @@ import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource.Type;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -871,7 +875,7 @@ public class AzureTestUtil {
 
             dataDisk.endpointLink = endpointState.documentSelfLink;
             dataDisk.tenantLinks = endpointState.tenantLinks;
-
+            dataDisk.storageType = AZURE_STORAGE_DISKS;
             dataDisk.customProperties = new HashMap<>();
             dataDisk.customProperties.put(AZURE_DATA_DISK_CACHING, DEFAULT_DATA_DISK_CACHING.toString());
 
@@ -987,7 +991,7 @@ public class AzureTestUtil {
 
         diskState.storageDescriptionLink = storageContainerLink;
         diskState.type = DEFAULT_DISK_TYPE;
-        diskState.storageType = AZURE_STORAGE_BLOBS;
+        diskState.storageType = AZURE_STORAGE_DISKS;
         diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
         diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
 
@@ -1381,6 +1385,35 @@ public class AzureTestUtil {
 
         assertEquals("Expected: " + shouldExists + ", but was: " + exists, shouldExists, exists);
     }
+
+    /**
+     * Validate DiskStates are populated with the appropriate type tagLinks
+     */
+    public static void validateDiskInternalTag(VerificationHost host) {
+
+        ServiceDocumentQueryResult result = host.getExpandedFactoryState(
+                UriUtils.buildUri(host, DiskService.FACTORY_LINK));
+
+        List<String> tenantLinks = Collections.singletonList( EndpointType.azure.name() + "-tenant");
+        for (Object document : result.documents.values()) {
+            DiskState state = Utils.fromJson(document, DiskState.class);
+            if (state.storageType != null) {
+                switch (state.storageType) {
+                case AZURE_STORAGE_DISKS:
+                    assertTrue(state.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
+                            AzureResourceType.azure_vhd.name(), false, tenantLinks).documentSelfLink));
+                    break;
+                case AZURE_STORAGE_BLOBS:
+                    assertTrue(state.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
+                            AzureResourceType.azure_blob.name(), false, tenantLinks).documentSelfLink));
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+    }
+
 
     /**
      * Query to get ResourceMetrics document for a specific resource containing a specific metric.

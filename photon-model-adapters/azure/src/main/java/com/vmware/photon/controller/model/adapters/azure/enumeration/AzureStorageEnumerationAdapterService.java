@@ -35,13 +35,16 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -70,12 +73,14 @@ import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.RestClient;
+import org.apache.commons.lang3.EnumUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
@@ -97,8 +102,11 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -156,6 +164,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Map<String, StorageAccount> storageAccountBlobUriMap = new ConcurrentHashMap<>();
         // stores mapping of StorageAccount id and its StorageAccount
         Map<String, StorageAccount> storageAccountMap = new ConcurrentHashMap<>();
+        String internalBlobTypeTag;
+        String internalVhdTypeTag;
 
         // Azure API call statistics
         int apiStorageAccountsCount;
@@ -194,6 +204,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         UPDATE_RESOURCE_GROUP_STATES,
         CREATE_RESOURCE_GROUP_STATES,
         DELETE_RESOURCE_GROUP_STATES,
+        CREATE_INTERNAL_TYPE_TAGS,
         GET_BLOBS,
         GET_LOCAL_STORAGE_DISKS,
         CREATE_DISK_STATES,
@@ -347,7 +358,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             createResourceGroupStates(context, StorageEnumStages.DELETE_RESOURCE_GROUP_STATES);
             break;
         case DELETE_RESOURCE_GROUP_STATES:
-            deleteResourceGroupStates(context, StorageEnumStages.GET_BLOBS);
+            deleteResourceGroupStates(context, StorageEnumStages.CREATE_INTERNAL_TYPE_TAGS);
+            break;
+        case CREATE_INTERNAL_TYPE_TAGS:
+            createInternalTypeTags(context,StorageEnumStages.GET_BLOBS);
             break;
         case GET_BLOBS:
             getBlobsAsync(context, StorageEnumStages.GET_LOCAL_STORAGE_DISKS);
@@ -1185,6 +1199,48 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 });
     }
 
+    private void createInternalTypeTags(StorageEnumContext context, StorageEnumStages next) {
+        TagState blobTypeTag = newTagState(TAG_KEY_TYPE, AzureResourceType.azure_blob.name(), false,
+                context.parentCompute.tenantLinks);
+        TagState vhdTypeTag = newTagState(TAG_KEY_TYPE, AzureResourceType.azure_vhd.name(), false,
+                context.parentCompute.tenantLinks);
+
+        Collection<Operation> opCollection = new ArrayList<>();
+        Operation blobTypeTagOp = Operation.createPost(getHost(), TagService.FACTORY_LINK)
+                .setBody(blobTypeTag);
+        opCollection.add(blobTypeTagOp);
+        Operation vhdTypeTagOp = Operation.createPost(getHost(), TagService.FACTORY_LINK)
+                .setBody(vhdTypeTag);
+        opCollection.add(vhdTypeTagOp);
+
+        OperationJoin.create(opCollection)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        exs.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                ex.getMessage())));
+                    } else {
+
+                        for (Operation taskOp : ops.values()) {
+                            TagState state = taskOp.getBody(TagState.class);
+                            if (EnumUtils.isValidEnum(AzureResourceType.class, state.value)) {
+                                switch (AzureResourceType.valueOf(state.value)) {
+                                case azure_vhd:
+                                    context.internalVhdTypeTag = vhdTypeTag.documentSelfLink;
+                                    break;
+                                case azure_blob:
+                                    context.internalBlobTypeTag = blobTypeTag.documentSelfLink;
+                                    break;
+                                default:
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    context.subStage = next;
+                    handleSubStage(context);
+                }).sendWith(this);
+    }
+
     private void getBlobsAsync(StorageEnumContext context, StorageEnumStages next) {
         // If no storage accounts exist in Azure, no disks exist either
         // Move on to disk deletion stage
@@ -1404,6 +1460,27 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         diskState.customProperties = new HashMap<>();
         String storageType = isDisk(diskState.name) ? AZURE_STORAGE_DISKS : AZURE_STORAGE_BLOBS;
         diskState.storageType = storageType;
+
+        if (oldDiskState != null) {
+            diskState.tagLinks = (oldDiskState.tagLinks == null) ? new HashSet<>() : oldDiskState.tagLinks;
+        } else {
+            diskState.tagLinks = new HashSet<>();
+        }
+        switch (storageType) {
+        case AZURE_STORAGE_DISKS:
+            if (context.internalVhdTypeTag != null) {
+                diskState.tagLinks.add(context.internalVhdTypeTag);
+            }
+            break;
+        case AZURE_STORAGE_BLOBS:
+            if (context.internalVhdTypeTag != null) {
+                diskState.tagLinks.add(context.internalBlobTypeTag);
+            }
+            break;
+        default:
+            break;
+        }
+
         // following two properties are set to defaults - can't retrieve that information from
         // existing calls
         diskState.type = DEFAULT_DISK_TYPE;

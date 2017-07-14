@@ -47,6 +47,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualMachine;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualNetwork;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.validateDiskInternalTag;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
@@ -163,14 +164,14 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     public static final String STALE_VM_NAME_PREFIX = "stalevm-";
     public static final String STALE_SA_NAME_PREFIX = "stalesa-";
     public static final String STALE_CONTAINER_NAME_PREFIX = "stalecontainer-";
-    public static final String STALE_BLOB_NAME_PREFIX = "staleblob-";
+    public static final String STALE_DISKS_NAME_PREFIX = "staledisk-";
     public static final String STALE_SG_NAME_PREFIX = "stalesg-";
 
     private static final int STALE_RG_COUNT = 3;
     private static final int STALE_VM_RESOURCES_COUNT = 5;
     private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
     private static final int STALE_CONTAINERS_COUNT = 5;
-    private static final int STALE_BLOBS_COUNT = 5;
+    private static final int STALE_DISKS_COUNT = 5;
     private static final int STALE_SECURITY_GROUPS_COUNT = 4;
 
     private static final String NETWORK_TAG_KEY_PREFIX = "vNetTagKey";
@@ -327,7 +328,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
             }
         }
 
-        // try to delete the blobs
+        // try to delete the disks
         if (this.diskState != null) {
             try {
                 deleteServiceDocument(this.host, this.diskState.documentSelfLink);
@@ -417,7 +418,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_CONTAINERS_COUNT + STALE_RG_COUNT + 1, ResourceGroupService.FACTORY_LINK,
                 false);
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_DISKS_COUNT + 1,
                 DiskService.FACTORY_LINK, false);
         // 1 network per each stale vm resource + 1 network for original vm compute state.
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
@@ -641,7 +642,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         createAzureVMResources(STALE_VM_RESOURCES_COUNT);
         createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
         createAzureStorageContainers(STALE_CONTAINERS_COUNT);
-        createAzureBlobs(STALE_BLOBS_COUNT);
+        createAzureDisks(STALE_DISKS_COUNT);
         createAzureSecurityGroups(STALE_SECURITY_GROUPS_COUNT);
 
     }
@@ -666,6 +667,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         assertResourceExists(this.host, DiskService.FACTORY_LINK, azureVMName + "-boot-disk",
                 true);
+        validateDiskInternalTag(this.host);
 
         // Tags
         final Map<String, String> expectedTags = new HashMap<>();
@@ -766,10 +768,10 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                     STALE_CONTAINER_NAME_PREFIX + i, false);
         }
 
-        // Blobs
-        for (int i = 0; i < STALE_BLOBS_COUNT; i++) {
+        // Disks
+        for (int i = 0; i < STALE_DISKS_COUNT; i++) {
             assertResourceExists(this.host, DiskService.FACTORY_LINK,
-                    STALE_BLOB_NAME_PREFIX + i, false);
+                    STALE_DISKS_NAME_PREFIX + i, false);
         }
 
         // Security Groups
@@ -948,10 +950,10 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         }
     }
 
-    private void createAzureBlobs(int numOfBlobs) throws Throwable {
-        for (int i = 0; i < numOfBlobs; i++) {
-            String staleBlobName = STALE_BLOB_NAME_PREFIX + i;
-            createDefaultDiskState(this.host, staleBlobName, computeHost.documentSelfLink,
+    private void createAzureDisks(int numOfDisks) throws Throwable {
+        for (int i = 0; i < numOfDisks; i++) {
+            String staleDiskName = STALE_DISKS_NAME_PREFIX + i;
+            createDefaultDiskState(this.host, staleDiskName, computeHost.documentSelfLink,
                     computeHost, endpointState);
         }
     }

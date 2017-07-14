@@ -52,7 +52,7 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
             return;
         }
 
-        // Get Storage Descriptions. Atleast one should exist. Maximum of 2 will be fetched.
+        // Get Storage Descriptions. At least one should exist. Maximum of 2 will be fetched.
         ServiceDocumentQueryResult result = ProvisioningUtils
                 .queryDocumentsAndAssertExpectedCount(this
                                 .getHost(), 1,
