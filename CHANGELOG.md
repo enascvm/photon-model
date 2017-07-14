@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.26-SNAPSHOT
+
 ## 0.6.25
 * Added 'Create Snapshot' operation for vSphere compute resources.
 * Added '/resources/routers' service under photon-model to data-collect NSX-T logical routers.
