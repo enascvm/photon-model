@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -41,6 +42,8 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualMachine;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualNetwork;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 
@@ -103,6 +106,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
@@ -511,6 +515,18 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
                 .filter(c -> !c.documentSelfLink.equals(computeHost.documentSelfLink))
                 .forEach(c -> assertEquals(ComputeType.VM_GUEST, c.type));
+
+        // validate internal tags for enumerated VMs
+        TagService.TagState expectedInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                AzureConstants.AzureResourceType.azure_vm.toString(), false,
+                endpointState.tenantLinks);
+        result.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
+                .filter(c -> c.type.equals(ComputeType.VM_GUEST))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(c.tagLinks.contains(expectedInternalTypeTag.documentSelfLink));
+                });
 
         // validate environment name field for enumerated VMs
         result.documents.entrySet().stream()
