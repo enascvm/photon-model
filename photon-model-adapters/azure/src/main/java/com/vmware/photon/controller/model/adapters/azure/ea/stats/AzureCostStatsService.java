@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -55,6 +56,7 @@ import org.joda.time.format.DateTimeFormatter;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
@@ -65,6 +67,7 @@ import com.vmware.photon.controller.model.adapters.azure.ea.enumeration
 import com.vmware.photon.controller.model.adapters.azure.ea.enumeration
         .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureErrorResponse;
+import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureResource;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureService;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaSummarizedBillElement;
@@ -74,10 +77,14 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureStatsNormali
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
@@ -96,6 +103,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
@@ -148,7 +156,9 @@ public class AzureCostStatsService extends StatelessService {
         SET_LINKED_ACCOUNTS_CUSTOM_PROPERTY,
         QUERY_LINKED_SUBSCRIPTIONS,
         CREATE_MONTHLY_STATS_AND_POST,
-        CREATE_DAILY_STATS_AND_POST
+        CREATE_DAILY_STATS_AND_POST,
+        QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS,
+        CREATE_RESOURCES_DAILY_STATS_AND_POST
     }
 
     public AzureCostStatsService() {
@@ -180,6 +190,8 @@ public class AzureCostStatsService extends StatelessService {
         private ComputeStatsRequest statsRequest;
         private ComputeStatsResponse statsResponse = new ComputeStatsResponse();
         private Map<String, List<ComputeState>> subscriptionGuidToComputeState =
+                new ConcurrentHashMap<>();
+        private Map<String, Map<String, List<String>>> subscriptionGuidToResources =
                 new ConcurrentHashMap<>();
         private TaskManager taskManager;
         // billParsingCompleteTimeMillis is populated once the entire bill is parsed
@@ -281,7 +293,10 @@ public class AzureCostStatsService extends StatelessService {
                 setLinkedSubscriptionGuids(context, Stages.QUERY_LINKED_SUBSCRIPTIONS);
                 break;
             case QUERY_LINKED_SUBSCRIPTIONS:
-                queryLinkedSubscriptions(context, Stages.CREATE_DAILY_STATS_AND_POST);
+                queryLinkedSubscriptions(context, Stages.QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS);
+                break;
+            case QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS:
+                queryResourcesForExistingSubscriptions(context, Stages.CREATE_DAILY_STATS_AND_POST);
                 break;
             case CREATE_DAILY_STATS_AND_POST:
                 createStats(context);
@@ -297,6 +312,129 @@ public class AzureCostStatsService extends StatelessService {
         } catch (Exception exception) {
             handleError(context, null, exception, false);
         }
+    }
+
+    private void queryResourcesForExistingSubscriptions(Context context, Stages next) {
+        List<String> subscriptionsToQueryResources = getSubscriptionGuidsToQueryResources(context);
+        if (subscriptionsToQueryResources.size() == 0) {
+            logInfo(() -> String.format("No subscriptions to query VMs for" +
+                    " endpoint %s", context.computeHostDesc.endpointLink));
+            context.stage = next;
+            handleRequest(context);
+            return;
+        }
+        QueryByPages<EndpointState> querySubscriptionEndpoints = new QueryByPages<>(getHost(),
+                createQueryForSubscriptionEndpoints(context, subscriptionsToQueryResources),
+                EndpointState.class, context.computeHostDesc.tenantLinks);
+        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        querySubscriptionEndpoints.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
+        querySubscriptionEndpoints.collectDocuments(Collectors.toList())
+                .whenComplete((subscriptionEndpoints, t) -> {
+                    if (t != null) {
+                        logSevere(() -> String.format("Failed to query endpoints of existing " +
+                                "azure subscriptions for endpoint %s, won't add cost to " +
+                                "resources under subscriptions",
+                                context.computeHostDesc.endpointLink));
+                        handleError(context, next, t, true);
+                        return;
+                    }
+                    // For all the subscriptions queried now add them to map so we don't look for
+                    // their endpoints again.
+                    subscriptionsToQueryResources.forEach(subscriptionGuid -> {
+                        context.subscriptionGuidToResources.put(subscriptionGuid,
+                                new ConcurrentHashMap<>());
+                    });
+                    if (subscriptionEndpoints.size() == 0) {
+                        logInfo(() -> String.format("No existing subscription endpoints found for" +
+                                " endpoint %s", context.computeHostDesc.endpointLink));
+                        context.stage = next;
+                        handleRequest(context);
+                        return;
+                    }
+                    queryAzureVmsUnderEndpoints(context, next, subscriptionEndpoints);
+                });
+    }
+
+    /**
+     * For now query the VMs based on endpointLinks
+     * @param context
+     * @param endpoints
+     */
+    private void queryAzureVmsUnderEndpoints(Context context, Stages next,
+                                             List<EndpointState> endpoints) {
+        Map<String, String> endpointLinkToSubscription = new HashMap<>();
+        endpoints.stream().forEach(endpointState -> {
+            if (endpointState.endpointProperties != null) {
+                String subscriptionId = endpointState.endpointProperties.get(
+                        EndpointConfigRequest.USER_LINK_KEY);
+                if (subscriptionId != null) {
+                    endpointLinkToSubscription.put(endpointState.documentSelfLink, subscriptionId);
+                }
+            }
+        });
+        QueryByPages<ComputeState> queryVms = new QueryByPages<>(getHost(),
+                createQueryForVmsWithEndpoints(endpointLinkToSubscription.keySet()),
+                ComputeState.class, context.computeHostDesc.tenantLinks);
+        queryVms.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        queryVms.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
+        queryVms.queryDocuments(computeState -> {
+                    if (computeState.endpointLink != null) {
+                        String subscriptionGuid = endpointLinkToSubscription
+                                .get(computeState.endpointLink);
+                        Map<String, List<String>> instanceIdToCompLinks =
+                                context.subscriptionGuidToResources
+                                        .computeIfAbsent(subscriptionGuid,
+                                                k -> new ConcurrentHashMap<>());
+                        List<String> computeLinks =
+                                instanceIdToCompLinks.computeIfAbsent(computeState.id.toLowerCase(),
+                                        k -> new ArrayList<>());
+                        computeLinks.add(computeState.documentSelfLink);
+                    }
+                }
+                ).whenComplete((aVoid, t) -> {
+                    if (t != null) {
+                        logSevere(() -> String.format("Failed to query vms under existing " +
+                                "azure subscriptions for endpoint %s, won't add cost to " +
+                                "vms under subscriptions",
+                                context.computeHostDesc.endpointLink));
+                        handleError(context, next, t, true);
+                        return;
+                    }
+                    context.stage = next;
+                    handleRequest(context);
+                });
+    }
+
+    private Query createQueryForVmsWithEndpoints(Set<String> endpointLinks) {
+        Query azureVmsQuery = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE,
+                        ComputeDescriptionService.ComputeDescription.ComputeType.VM_GUEST)
+                .addInClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, endpointLinks)
+                .build();
+        return azureVmsQuery;
+    }
+
+    private Query createQueryForSubscriptionEndpoints(Context context,
+                                                      List<String> subscriptionsGuids) {
+        Query  subscriptionsEndpointQuery = Query.Builder.create()
+                .addKindFieldClause(EndpointState.class)
+                .addFieldClause(EndpointState.FIELD_NAME_ENDPOINT_TYPE,
+                        EndpointType.azure.name())
+                .addInClause(QueryTask.QuerySpecification.buildCompositeFieldName
+                                (new String[]{EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
+                                        EndpointConfigRequest.USER_LINK_KEY}), subscriptionsGuids)
+                .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
+                        context.computeHostDesc.tenantLinks)
+                .build();
+        return subscriptionsEndpointQuery;
+    }
+
+    private List<String> getSubscriptionGuidsToQueryResources(Context context) {
+        return context.subscriptionGuidToComputeState.entrySet().stream()
+                .filter(e -> !context.subscriptionGuidToResources.containsKey(e.getKey()))
+                .map(Entry::getKey)
+                .collect(Collectors.toList());
     }
 
     private void getComputeHost(Context context, Stages next) {
@@ -737,8 +875,6 @@ public class AzureCostStatsService extends StatelessService {
                         PhotonModelConstants.CLOUD_ACCOUNT_ID, subscriptionGuid)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE,
                         ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST)
-                .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK,
-                        context.computeHostDesc.endpointLink)
                 .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
                         context.computeHostDesc.tenantLinks)
                 .build();
@@ -1086,28 +1222,35 @@ public class AzureCostStatsService extends StatelessService {
             AzureSubscription subscription) {
         Consumer<List<ComputeState>> serviceStatsProcessor = (subscriptionComputeStates) -> {
             subscriptionComputeStates.forEach(subscriptionComputeState -> {
+                List<ComputeStats> resourceStatsList = new ArrayList<>();
                 ComputeStats subscriptionStats = new ComputeStats();
                 subscriptionStats.statValues = new ConcurrentHashMap<>();
                 subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
                 for (AzureService service : subscription.getServices().values()) {
+                    List<ComputeStats> resourcesCostStats = new ArrayList<>();
                     Map<String, List<ServiceStat>> statsForAzureService = createStatsForAzureService(
-                            service);
+                            context, service, resourcesCostStats);
                     subscriptionStats.statValues.putAll(statsForAzureService);
+                    resourceStatsList.addAll(resourcesCostStats);
                 }
                 if (!subscriptionStats.statValues.isEmpty()) {
                     context.statsResponse.statsList.add(subscriptionStats);
+                }
+                if (!resourceStatsList.isEmpty()) {
+                    context.statsResponse.statsList.addAll(resourceStatsList);
                 }
             });
         };
         processSubscriptionStats(context, subscription, serviceStatsProcessor);
     }
 
-    private Map<String, List<ServiceStat>> createStatsForAzureService(AzureService service) {
+    private Map<String, List<ServiceStat>> createStatsForAzureService(Context context,
+                 AzureService service, List<ComputeStats> resourceCostStats) {
         String currencyUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
         String serviceCode = service.meterCategory.replaceAll(" ", "");
         Map<String, List<ServiceStat>> stats = new HashMap<>();
 
-        // Create stats for daily resource cost
+        // Create stats for daily service cost
         List<ServiceStat> serviceStats = new ArrayList<>();
         String serviceResourceCostMetric = String
                 .format(AzureCostConstants.SERVICE_RESOURCE_COST, serviceCode);
@@ -1121,8 +1264,57 @@ public class AzureCostStatsService extends StatelessService {
             stats.put(serviceResourceCostMetric, serviceStats);
         }
 
+        // Create daily cost stats for resources
+        createStatsForAzureResources(context, service, resourceCostStats);
+
         return stats;
     }
+
+    private void createStatsForAzureResources(Context context, AzureService service,
+            List<ComputeStats> resourceCostStats) {
+        //Now creating cost stats for VMs only
+        if (service.meterCategory.equals(AzureCostConstants.METER_CATEGORY_VIRTUAL_MACHINES)) {
+            // Check if there are resources under this subscription
+            Map<String, List<String>> instanceIdToComputeLinks =
+                    context.subscriptionGuidToResources.getOrDefault(service.getSubscriptionId(),
+                            new ConcurrentHashMap<>());
+            // Create compute stats for resources present
+            service.resourceDetailsMap.keySet().forEach(instanceId -> {
+                List<String> computeLinks =
+                        instanceIdToComputeLinks.getOrDefault(instanceId.toLowerCase(),
+                                new ArrayList<>());
+                AzureResource azureResource =  service.resourceDetailsMap.get(instanceId);
+                // Create stats for each of the compute links
+                computeLinks.forEach(computeLink -> {
+                    ComputeStats resourceComputeStat = createComputeStatsForResource(computeLink,
+                            azureResource);
+                    if (!resourceComputeStat.statValues.isEmpty()) {
+                        resourceCostStats.add(resourceComputeStat);
+                    }
+                });
+            });
+        }
+    }
+
+    private ComputeStats createComputeStatsForResource(String resourceLink,
+            AzureResource azureResource) {
+        String currencyUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
+        String costStatName = AzureStatsNormalizer
+                .getNormalizedStatKeyValue(AzureCostConstants.COST);
+        ComputeStats resourceComputeStats = new ComputeStats();
+        resourceComputeStats.statValues = new HashMap<>();
+        resourceComputeStats.computeLink = resourceLink;
+        azureResource.cost.forEach((dayOfMonth, cost) -> {
+            List<ServiceStat> vmCostStats = new ArrayList<>();
+            ServiceStat vmCostStat = AzureCostStatsServiceHelper
+                    .createServiceStat(costStatName,
+                            cost, currencyUnit, dayOfMonth);
+            vmCostStats.add(vmCostStat);
+            resourceComputeStats.statValues.put(costStatName, vmCostStats);
+        });
+        return resourceComputeStats;
+    }
+
 
     /**
      * Send stats for persistence.

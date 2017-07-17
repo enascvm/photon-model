@@ -80,7 +80,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     }
 
     protected enum AzureCostComputeEnumerationStages {
-        FETCH_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
+        FETCH_EXISTING_RESOURCES, UPDATE_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
     }
 
     protected static class AzureSubscriptionsEnumerationContext
@@ -145,7 +145,11 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             switch (enumerationContext.stage) {
             case FETCH_EXISTING_RESOURCES:
                 fetchExistingResources(enumerationContext,
-                        AzureCostComputeEnumerationStages.CREATE_RESOURCES);
+                        AzureCostComputeEnumerationStages.UPDATE_EXISTING_RESOURCES);
+                break;
+            case UPDATE_EXISTING_RESOURCES:
+                updateExistingResources(enumerationContext,
+                            AzureCostComputeEnumerationStages.CREATE_RESOURCES);
                 break;
             case CREATE_RESOURCES:
                 createResources(enumerationContext,
@@ -237,7 +241,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                             .get(EndpointConfigRequest.USER_LINK_KEY);
                     ComputeState cs = new ComputeState();
                     cs.customProperties = getPropertiesMap(enumerationContext,
-                            enumerationContext.idToSubscription.remove(subscriptionId),
+                            enumerationContext.idToSubscription.get(subscriptionId),
                             false);
                     Operation patchOp = Operation.createPatch(UriUtils.extendUri(
                             getInventoryServiceUri(), endpointState.computeLink))

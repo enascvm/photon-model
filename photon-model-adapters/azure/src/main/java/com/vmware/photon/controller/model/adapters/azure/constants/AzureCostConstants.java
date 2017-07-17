@@ -169,6 +169,9 @@ public class AzureCostConstants {
 
     public static final long THRESHOLD_FOR_TIME_IN_SECONDS = 9999999999L;
 
+    // Resource Costing, Virtual Machines
+    public static final String METER_CATEGORY_VIRTUAL_MACHINES = "Virtual Machines";
+
     public static Map<String, Double> exchangeRates = new HashMap<>();
 
     static {
