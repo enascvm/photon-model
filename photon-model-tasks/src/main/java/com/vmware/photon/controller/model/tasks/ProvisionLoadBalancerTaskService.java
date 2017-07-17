@@ -20,6 +20,7 @@ import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -221,7 +222,15 @@ public class ProvisionLoadBalancerTaskService extends TaskService<ProvisionLoadB
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
-                                sendSelfPatch(TaskState.TaskStage.FAILED, e);
+                                if (e instanceof ServiceNotFoundException
+                                        && InstanceRequestType.DELETE
+                                                .equals(taskState.requestType)) {
+                                    logWarning("Load balancer not found at %s, nothing to delete",
+                                            taskState.loadBalancerLink);
+                                    sendSelfPatch(TaskState.TaskStage.FINISHED, null);
+                                } else {
+                                    sendSelfPatch(TaskState.TaskStage.FAILED, e);
+                                }
                                 return;
                             }
                             LoadBalancerState loadBalancerState = o.getBody(LoadBalancerState.class);

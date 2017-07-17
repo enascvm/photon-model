@@ -171,6 +171,19 @@ public class ProvisionLoadBalancerTaskServiceTest extends Suite {
                             ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState.class,
                             IllegalArgumentException.class);
         }
+
+        @Test
+        public void testDeletionOfMissingLoadBalancer() throws Throwable {
+            ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState startState =
+                    new ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState();
+            startState.requestType = LoadBalancerInstanceRequest.InstanceRequestType.DELETE;
+            startState.loadBalancerLink = "dummyLbLink";
+            startState.isMockRequest = true;
+
+            ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState completeState =
+                    postAndWaitForService(this, startState);
+            assertThat(completeState.taskInfo.stage, is(TaskState.TaskStage.FINISHED));
+        }
     }
 
     /**
