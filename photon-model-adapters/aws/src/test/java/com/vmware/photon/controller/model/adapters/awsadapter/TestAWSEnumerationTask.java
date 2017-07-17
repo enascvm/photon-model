@@ -64,6 +64,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getSubnetStates;
+import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryAllFactoryResources;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPatch;
@@ -155,6 +156,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final int count6 = 6;
     private static final int count7 = 7;
     private static final int count8 = 8;
+    private static final int internalTagsCount1 = 1;
 
     private static final String TEST_CASE_INITIAL = "Initial Run ";
     private static final String TEST_CASE_ADDITIONAL_VM = "Additional VM ";
@@ -789,9 +791,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             // Validate tag states number
             int allTagsNumber = vmTags.size() + sgTags.size() + networkTags.size()
                     + subnetTags.size() + diskTags.size();
-            ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
+            queryDocumentsAndAssertExpectedCount(
                     this.host, allTagsNumber, TagService.FACTORY_LINK, false);
 
+            ServiceDocumentQueryResult  serviceDocumentQueryResult = queryAllFactoryResources(this.host,
+                    TagService.FACTORY_LINK);
             Map<String, TagState> tagsMap = new HashMap<>();
             for (Entry<String, Object> entry : serviceDocumentQueryResult.documents.entrySet()) {
                 tagsMap.put(entry.getKey(), Utils.fromJson(entry.getValue(), TagState.class));
@@ -835,20 +839,22 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             for (Tag tag : vmTags) {
                 for (TagState tagState : tagsMap.values()) {
                     if (tagState.key.equals(tag.getKey())) {
-                        vmTagLinks.put(tag, tagState.key);
-                        return;
+                        vmTagLinks.put(tag, tagState.documentSelfLink);
                     }
                 }
             }
 
             ComputeState linuxVMId1ComputeState = getComputeByAWSId(this.host, linuxVMId1);
-            assertEquals(linuxVMId1Tags.size(), linuxVMId1ComputeState.tagLinks.size());
+            // compute has 2 remote tags + 1 local tag
+            assertEquals(linuxVMId1Tags.size() + internalTagsCount1,
+                    linuxVMId1ComputeState.tagLinks.size());
             for (Tag tag : linuxVMId1Tags) {
                 assertTrue(linuxVMId1ComputeState.tagLinks.contains(vmTagLinks.get(tag)));
             }
 
             ComputeState linuxVMId2ComputeState = getComputeByAWSId(this.host, linuxVMId2);
-            assertEquals(linuxVMId2Tags.size(), linuxVMId2ComputeState.tagLinks.size());
+            assertEquals(linuxVMId2Tags.size() + internalTagsCount1,
+                    linuxVMId2ComputeState.tagLinks.size());
             for (Tag tag : linuxVMId2Tags) {
                 assertTrue(linuxVMId2ComputeState.tagLinks.contains(vmTagLinks.get(tag)));
             }

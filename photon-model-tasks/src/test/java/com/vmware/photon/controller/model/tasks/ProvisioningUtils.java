@@ -211,6 +211,18 @@ public class ProvisioningUtils {
     }
 
     /**
+     * Query all resources for a factory
+     */
+    public static ServiceDocumentQueryResult queryAllFactoryResources(VerificationHost host, String factoryLink)
+            throws Throwable {
+        URI queryUri = UriUtils.buildExpandLinksQueryUri(
+                createServiceURI(host, host.getUri(), factoryLink));
+
+        ServiceDocumentQueryResult res = host.getFactoryState(queryUri);
+        return res;
+    }
+
+    /**
      * Query all States for the given Service
      */
     public static <K extends ResourceState> Map<String, K> getResourceStates(VerificationHost host,
