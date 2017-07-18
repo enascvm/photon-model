@@ -214,6 +214,24 @@
       "dataDiskMaxCount": 2,
       "networkType": "High"
     },
+    "g3.4xlarge": {
+      "cpuCount": 16,
+      "memoryInMB": 16374,
+      "storageType": "EBS",
+      "networkType": "10 Gigabit"
+    },
+    "g3.8xlarge": {
+      "cpuCount": 32,
+      "memoryInMB": 261993,
+      "storageType": "EBS",
+      "networkType": "10 Gigabit"
+    },
+    "g3.16xlarge": {
+      "cpuCount": 64,
+      "memoryInMB": 523986,
+      "storageType": "EBS",
+      "networkType": "10 Gigabit"
+    },
     "x1.16xlarge": {
       "cpuCount": 64,
       "memoryInMB": 999424,
