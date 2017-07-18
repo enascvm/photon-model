@@ -175,10 +175,10 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
 
         if (withAdditionalDisks) {
             computeState.diskLinks.add(createDiskWithDatastore("AdditionalDisk1", DiskService.DiskType.HDD,
-                    2, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+                    0, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
             computeState.diskLinks
-                    .add(createDiskWithStoragePolicy("AdditionalDisk2", DiskService.DiskType.HDD, 3, null,
-                            ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+                    .add(createDiskWithStoragePolicy("AdditionalDisk2", DiskService.DiskType.HDD,
+                            0, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
         }
 
         computeState.networkInterfaceLinks = new ArrayList<>(1);

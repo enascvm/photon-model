@@ -16,11 +16,18 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_INDEPENDENT;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
+
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import org.junit.Assert;
@@ -42,6 +49,7 @@ import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.SharesLevel;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualDiskFlatVer2BackingInfo;
+import com.vmware.vim25.VirtualDiskType;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
@@ -199,14 +207,14 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
             computeState.diskLinks.add(createDiskWithStoragePolicy("boot", DiskService.DiskType.HDD, 1,
                     getDiskUri(), HDD_DISK_SIZE, diskCustomization ? buildCustomProperties() : null).documentSelfLink);
         }
-        computeState.diskLinks.add(createDisk("A", DiskService.DiskType.FLOPPY, 2, null, FLOPPY_DISK_SIZE, null)
+        computeState.diskLinks.add(createDisk("A", DiskService.DiskType.FLOPPY, 0, null, FLOPPY_DISK_SIZE, null)
                 .documentSelfLink);
 
         if (withAdditionalDisks) {
             computeState.diskLinks.add(createDiskWithDatastore("AdditionalDisk1", DiskService.DiskType.HDD,
-                    3, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+                    0, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
             computeState.diskLinks
-                    .add(createDiskWithStoragePolicy("AdditionalDisk2", DiskService.DiskType.HDD, 4, null,
+                    .add(createDiskWithStoragePolicy("AdditionalDisk2", DiskService.DiskType.HDD, 0, null,
                             ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
         }
         String placementLink = findRandomResourcePoolOwningCompute();
@@ -225,8 +233,7 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
     }
 
     protected ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription
-            vmDescription, boolean
-            diskCustomization, String bootDiskSelfLink)
+            vmDescription, boolean diskCustomization, String bootDiskSelfLink)
             throws Throwable {
         return createVmState(vmDescription, diskCustomization, bootDiskSelfLink,
                 false);
@@ -257,8 +264,7 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
     }
 
     protected ComputeService.ComputeState createCloneVmState(ComputeDescriptionService.ComputeDescription
-            vmDescription,
-            boolean isStoragePolicyBased, boolean withAdditionalDisks) throws Throwable {
+            vmDescription, boolean isStoragePolicyBased, boolean withAdditionalDisks) throws Throwable {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.id = vmDescription.name;
         computeState.documentSelfLink = computeState.id;
@@ -278,10 +284,14 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
         } else {
             computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, 1, getDiskUri(),
                     CLONE_HDD_DISK_SIZE, null).documentSelfLink);
+            computeState.diskLinks.add(createDisk("boot-2", DiskService.DiskType.HDD, 2, null,
+                    FLOPPY_DISK_SIZE, buildCustomPropertiesForCloneBoot(true)).documentSelfLink);
+            computeState.diskLinks.add(createDisk("boot-3", DiskService.DiskType.HDD, 3, null,
+                    FLOPPY_DISK_SIZE, buildCustomPropertiesForCloneBoot(false)).documentSelfLink);
         }
         if (withAdditionalDisks) {
             computeState.diskLinks.add(createDiskWithDatastore("AdditionalDisk1", DiskService.DiskType.HDD,
-                    2, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
+                    0, null, ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
         }
 
         CustomProperties.of(computeState)
@@ -292,6 +302,18 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
+    }
+
+    private HashMap<String, String> buildCustomPropertiesForCloneBoot(boolean isPersistent) {
+        HashMap<String, String> customProperties = new HashMap<>();
+
+        customProperties.put(DISK_MODE_INDEPENDENT, "true");
+        customProperties.put(DISK_MODE_PERSISTENT, String.valueOf(isPersistent));
+        customProperties.put(PROVISION_TYPE, VirtualDiskType.THICK.value());
+        customProperties.put(SHARES_LEVEL, SharesLevel.NORMAL.value());
+        customProperties.put(LIMIT_IOPS, "50");
+
+        return customProperties;
     }
 
     private String findFirstNetwork() {

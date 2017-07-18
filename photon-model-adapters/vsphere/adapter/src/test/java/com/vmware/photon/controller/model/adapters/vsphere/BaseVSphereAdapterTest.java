@@ -945,7 +945,9 @@ public class BaseVSphereAdapterTest {
             URI sourceImageReference, long capacityMBytes, HashMap<String, String> customProperties) {
         DiskState res = new DiskState();
         res.capacityMBytes = capacityMBytes;
-        res.bootOrder = bootOrder;
+        if (bootOrder > 0) {
+            res.bootOrder = bootOrder;
+        }
         res.type = type;
         res.id = res.name = "disk-" + alias;
 

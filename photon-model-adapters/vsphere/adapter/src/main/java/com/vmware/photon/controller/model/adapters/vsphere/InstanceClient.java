@@ -24,7 +24,6 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -158,6 +157,7 @@ public class InstanceClient extends BaseHelper {
     private final Finder finder;
     private final ProvisionContext ctx;
     private DiskStateExpanded bootDisk;
+    private List<DiskStateExpanded> imageDisks;
     private List<DiskStateExpanded> dataDisks;
     private ManagedObjectReference vm;
     private ManagedObjectReference datastore;
@@ -170,10 +170,17 @@ public class InstanceClient extends BaseHelper {
         this.ctx = ctx;
 
         if (ctx.disks != null) {
+            this.dataDisks = new ArrayList<>(ctx.disks.size());
+            this.imageDisks = new ArrayList<>(ctx.disks.size());
+
+            ctx.disks.stream().forEach(ds -> {
+                if (ds.bootOrder != null) {
+                    this.imageDisks.add(ds);
+                } else {
+                    this.dataDisks.add(ds);
+                }
+            });
             this.bootDisk = findBootDisk();
-            this.dataDisks = new ArrayList<>(ctx.disks);
-            // Remove the boot Disk reference from the dataDisks
-            this.dataDisks.remove(this.bootDisk);
         }
 
         this.finder = new Finder(connection, this.ctx.datacenterMoRef);
@@ -241,14 +248,14 @@ public class InstanceClient extends BaseHelper {
         }
 
         // Find whether it has HDD disk
-        if (this.bootDisk != null && this.bootDisk.capacityMBytes > 0) {
+        if (this.imageDisks != null && !this.imageDisks.isEmpty()) {
             // If there are nics, then devices would have already retrieved, so that it
             // can avoid one more network call.
-            VirtualDeviceConfigSpec bootDiskSpec = getBootDiskCustomizeConfigSpec(this.vm, this.bootDisk,
-                    devices);
-            if (bootDiskSpec != null) {
-                spec.getDeviceChange().add(bootDiskSpec);
+            // Iterate over each of the VirtualDisk and reconfigure if needed
+            if (devices == null) {
+                devices = this.get.entityProp(this.vm, VimPath.vm_config_hardware_device);
             }
+            spec.getDeviceChange().addAll(getCustomizationConfigSpecs(devices, this.imageDisks));
         }
 
         ManagedObjectReference task = getVimPort().reconfigVMTask(this.vm, spec);
@@ -262,6 +269,43 @@ public class InstanceClient extends BaseHelper {
         if (this.dataDisks != null && !this.dataDisks.isEmpty()) {
             attachDisks(this.dataDisks, false);
         }
+    }
+
+    /**
+     * Get customization config spec for all the image disks if any
+     */
+    private List<VirtualDeviceConfigSpec> getCustomizationConfigSpecs(ArrayOfVirtualDevice devices,
+            List<DiskStateExpanded> diskStates)
+            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        List<VirtualDeviceConfigSpec> specs = new ArrayList<>();
+        List<VirtualDisk> virtualDisks = devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d)
+                .collect(Collectors.toList());
+
+        for (VirtualDisk vd : virtualDisks) {
+            VirtualDeviceConfigSpec diskSpec = getBootDiskCustomizeConfigSpec(
+                    findMatchingDiskState(vd, diskStates), vd);
+            if (diskSpec != null) {
+                specs.add(diskSpec);
+            }
+        }
+        return specs;
+    }
+
+    /**
+     * Find a matching DiskState object for the virtual disk
+     */
+    private DiskStateExpanded findMatchingDiskState(VirtualDisk virtualDisk,
+            List<DiskStateExpanded> diskStates) {
+        if (diskStates == null || diskStates.isEmpty()) {
+            return null;
+        }
+        // Filter the disk state that matches the virtual disk scsi number. If not then default
+        // it to the properties of the boot disk
+        return diskStates.stream()
+                .filter(ds -> (ds.bootOrder - 1) == virtualDisk.getUnitNumber()).findFirst()
+                .orElse(this.bootDisk);
     }
 
     /**
@@ -388,7 +432,7 @@ public class InstanceClient extends BaseHelper {
             // store reference to created vm for further processing
             this.vm = vm;
 
-            attachDisks(Arrays.asList(this.bootDisk), true);
+            attachDisks(this.imageDisks, true);
         }
         // If there are any data disks then attach then to the VM
         if (this.dataDisks != null && !this.dataDisks.isEmpty()) {
@@ -701,7 +745,7 @@ public class InstanceClient extends BaseHelper {
         Integer[] scsiUnit = findFreeScsiUnit(scsiController, devices.getVirtualDevice());
 
         VirtualMachineRelocateDiskMoveOptions diskMoveOption = computeDiskMoveType();
-        boolean customizeBootDisk = false;
+        boolean customizeImageDisk = false;
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
         if (this.bootDisk != null) {
             if (vd == null) {
@@ -712,11 +756,22 @@ public class InstanceClient extends BaseHelper {
                         diskName, datastore, pbmSpec);
                 newDisks.add(hdd);
             } else {
-                // get customization spec for boot disk if it is not linked clone
-                if (toKb(this.bootDisk.capacityMBytes) > vd.getCapacityInKB()) {
-                    diskMoveOption = VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING;
-                    logger.warn("Changing clone strategy to MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING, as there is disk resize requested");
-                    customizeBootDisk = true;
+                // if any one of the image disk is requesting for resize, then change the clone
+                // strategy
+                if (this.imageDisks != null && !this.imageDisks.isEmpty()) {
+                    long count = devices.getVirtualDevice().stream()
+                            .filter(d -> d instanceof VirtualDisk)
+                            .map(d -> (VirtualDisk) d)
+                            .filter(d -> {
+                                DiskStateExpanded ds = findMatchingDiskState(d, this.imageDisks);
+                                return toKb(ds.capacityMBytes) > d.getCapacityInKB() || ds.customProperties != null;
+                            }).count();
+                    if (count > 0) {
+                        diskMoveOption = VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING;
+                        logger.warn(
+                                "Changing clone strategy to MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING, as there is disk resize requested");
+                        customizeImageDisk = true;
+                    }
                 }
             }
         }
@@ -799,10 +854,10 @@ public class InstanceClient extends BaseHelper {
 
         ManagedObjectReference vmMoref = (ManagedObjectReference) info.getResult();
         // Apply boot disk customization if any, if done through full clone.
-        if (customizeBootDisk) {
-            VirtualDeviceConfigSpec hddDevice = getBootDiskCustomizeConfigSpec(vmMoref,
-                    this.bootDisk, null);
-            reconfigureBootDisk(vmMoref, hddDevice);
+        if (customizeImageDisk) {
+            ArrayOfVirtualDevice virtualDevices = this.get.entityProp(vmMoref, VimPath
+                    .vm_config_hardware_device);
+            reconfigureBootDisk(vmMoref, getCustomizationConfigSpecs(virtualDevices, this.imageDisks));
         }
 
         return vmMoref;
@@ -828,7 +883,7 @@ public class InstanceClient extends BaseHelper {
      * Creates disks and attaches them to the vm created by {@link #createInstance()}. The given
      * diskStates are enriched with data from vSphere and can be patched back to xenon.
      */
-    public void attachDisks(List<DiskStateExpanded> diskStates, boolean customizeBootDisk) throws
+    public void attachDisks(List<DiskStateExpanded> diskStates, boolean isImageDisks) throws
             Exception {
         if (this.vm == null) {
             throw new IllegalStateException("Cannot attach diskStates if VM is not created");
@@ -864,7 +919,7 @@ public class InstanceClient extends BaseHelper {
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
 
         boolean cdromAdded = false;
-        DiskStateExpanded bootDisk = null;
+        List<DiskStateExpanded> disksToBeCustomized = null;
 
         int scsiUnitIndex = 0;
         for (DiskStateExpanded ds : diskStates) {
@@ -879,9 +934,13 @@ public class InstanceClient extends BaseHelper {
                     hdd = createFullCloneAndAttach(diskPath, ds, dir, scsiController,
                             scsiUnits[scsiUnitIndex], pbmSpec);
                     newDisks.add(hdd);
-                    // Don't overwrite, assume the first HDD disk.
-                    if (bootDisk == null && customizeBootDisk) {
-                        bootDisk = ds;
+
+                    // When it is through clone, customize after the clone is complete.
+                    if (disksToBeCustomized == null) {
+                        disksToBeCustomized = new ArrayList<>(diskStates.size());
+                    }
+                    if (isImageDisks) {
+                        disksToBeCustomized.add(ds);
                     }
                 } else {
                     String dsDirForDisk = getDatastorePathForDisk(ds, dir);
@@ -917,7 +976,7 @@ public class InstanceClient extends BaseHelper {
         }
 
         // add a cdrom so that ovf transport works
-        if (!cdromAdded && customizeBootDisk) {
+        if (!cdromAdded && isImageDisks) {
             VirtualDeviceConfigSpec cdrom = createCdrom(ideController, ideUnit);
             newDisks.add(cdrom);
         }
@@ -934,22 +993,22 @@ public class InstanceClient extends BaseHelper {
             }
         }
 
-        // If boot HDD disk capacityMBytes is > 0 && created through full clone, then reconfigure
-        if (bootDisk != null && bootDisk.capacityMBytes > 0) {
-            VirtualDeviceConfigSpec hddDevice = getBootDiskCustomizeConfigSpec(this.vm, bootDisk,
-                    null);
-            reconfigureBootDisk(this.vm, hddDevice);
+        // If disks are created through full clone, then reconfigure
+        if (disksToBeCustomized != null && !disksToBeCustomized.isEmpty()) {
+            // Get the hardware devices once again as they are reconfigured
+            devices = this.get.entityProp(this.vm, VimPath.vm_config_hardware_device);
+            reconfigureBootDisk(this.vm, getCustomizationConfigSpecs(devices, disksToBeCustomized));
         }
     }
 
     /**
-     * Reconfigure boot disk with the customizations
+     * Reconfigure image disk with the customizations
      */
     private void reconfigureBootDisk(ManagedObjectReference vmMoref,
-            VirtualDeviceConfigSpec hddDevice) throws Exception {
-        if (hddDevice != null) {
+            List<VirtualDeviceConfigSpec> deviceConfigSpecs) throws Exception {
+        if (deviceConfigSpecs != null && !deviceConfigSpecs.isEmpty()) {
             VirtualMachineConfigSpec bootDiskSpec = new VirtualMachineConfigSpec();
-            bootDiskSpec.getDeviceChange().add(hddDevice);
+            bootDiskSpec.getDeviceChange().addAll(deviceConfigSpecs);
             ManagedObjectReference task = getVimPort().reconfigVMTask(vmMoref, bootDiskSpec);
             TaskInfo info = waitTaskEnd(task);
 
@@ -963,19 +1022,12 @@ public class InstanceClient extends BaseHelper {
      * Construct VM config spec for boot disk size customization, if the user defined value is
      * greater then the existing size of the disk
      */
-    private VirtualDeviceConfigSpec getBootDiskCustomizeConfigSpec(ManagedObjectReference vm,
-            DiskStateExpanded bootDisk, ArrayOfVirtualDevice devices)
+    private VirtualDeviceConfigSpec getBootDiskCustomizeConfigSpec(DiskStateExpanded disk, VirtualDisk virtualDisk)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, FinderException {
-        if (devices == null) {
-            devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
-        }
-        VirtualDisk virtualDisk = devices.getVirtualDevice().stream()
-                .filter(d -> d instanceof VirtualDisk)
-                .map(d -> (VirtualDisk) d).findFirst().orElse(null);
-        // If HDD disk is attached successfully and new boot size is > then existing size, then
-        // resize
-        if (virtualDisk != null && toKb(bootDisk.capacityMBytes) > virtualDisk.getCapacityInKB()) {
-            VirtualDeviceConfigSpec hdd = resizeHdd(virtualDisk, bootDisk);
+        if (disk != null && virtualDisk != null) {
+            // Resize happens if the new size is more than the existing disk size, other storage
+            // related attributes will be applied the disk.
+            VirtualDeviceConfigSpec hdd = resizeHdd(virtualDisk, disk);
             return hdd;
         }
         return null;
@@ -1259,7 +1311,11 @@ public class InstanceClient extends BaseHelper {
         backing.setFileName(oldbacking.getFileName());
 
         VirtualDisk disk = new VirtualDisk();
-        disk.setCapacityInKB(toKb(ds.capacityMBytes));
+        if (toKb(ds.capacityMBytes) > sysdisk.getCapacityInKB()) {
+            disk.setCapacityInKB(toKb(ds.capacityMBytes));
+        } else {
+            disk.setCapacityInKB(sysdisk.getCapacityInKB());
+        }
         disk.setBacking(backing);
         disk.setStorageIOAllocation(getStorageIOAllocationInfo(ds));
         disk.setControllerKey(sysdisk.getControllerKey());
