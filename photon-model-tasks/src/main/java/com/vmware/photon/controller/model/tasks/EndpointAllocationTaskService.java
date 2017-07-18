@@ -313,7 +313,7 @@ public class EndpointAllocationTaskService
         Operation endpointOp = Operation.createPost(this, EndpointService.FACTORY_LINK);
 
         ComputeDescription computeDescription = configureDescription(es);
-        ComputeState computeState = configureCompute(es);
+        ComputeState computeState = configureCompute(es, endpointProperties);
 
         // TODO VSYM-2484: EndpointAllocationTaskService doesn't tag the compute host with resource
         // pool link
@@ -814,10 +814,13 @@ public class EndpointAllocationTaskService
         return cd;
     }
 
-    private ComputeState configureCompute(EndpointState state) {
+    private ComputeState configureCompute(EndpointState state, Map<String, String> endpointProperties) {
+        String endpointRegionId = endpointProperties != null
+                ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
+
         ComputeState computeHost = new ComputeState();
         computeHost.id = UUID.randomUUID().toString();
-        computeHost.name = state.name;
+        computeHost.name = endpointRegionId != null ? endpointRegionId : state.name;
         computeHost.tenantLinks = state.tenantLinks;
         computeHost.endpointLink = state.documentSelfLink;
         computeHost.regionId = state.regionId;

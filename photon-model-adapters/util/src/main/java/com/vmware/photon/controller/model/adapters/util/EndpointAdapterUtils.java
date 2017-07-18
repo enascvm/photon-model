@@ -197,11 +197,15 @@ public class EndpointAdapterUtils {
             }
             break;
 
-        default:
+        case ENHANCE:
             op.complete();
             configureEndpoint(service, body, credEnhancer, descEnhancer, compEnhancer,
                     endpointEnhancer);
             break;
+
+        default:
+            op.fail(new IllegalArgumentException(
+                    "Unexpected endpoint request: " + body.requestType.toString()));
         }
     }
 

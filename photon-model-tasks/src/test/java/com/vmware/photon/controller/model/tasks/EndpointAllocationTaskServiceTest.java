@@ -183,6 +183,10 @@ public class EndpointAllocationTaskServiceTest extends Suite {
                     completeState.endpointState.computeDescriptionLink, ComputeDescription.class);
             assertNull(endpointDescr.zoneId);
 
+            ComputeState computeState = getServiceSynchronously(
+                    completeState.endpointState.computeLink, ComputeState.class);
+            assertEquals(endpoint.endpointProperties.get(REGION_KEY), computeState.name);
+
             ResourcePoolState poolState = getServiceSynchronously(
                     completeState.endpointState.resourcePoolLink, ResourcePoolState.class);
             assertNotNull(poolState.customProperties);
