@@ -199,7 +199,10 @@ public class LoadBalancerService extends StatefulService {
                         getDr(currentState.endpointLink, EndpointState.class)
                                 .thenAccept(endpointState -> expanded.endpointState = endpointState),
                         getDr(currentState.computeLinks, ComputeState.class, HashSet::new)
-                                .thenAccept(computes -> expanded.computes = computes),
+                                .exceptionally(e -> {
+                                    logWarning("Error retrieving compute states: %s", e.toString());
+                                    return new HashSet<>();
+                                }).thenAccept(computes -> expanded.computes = computes),
                         getDr(currentState.subnetLinks, SubnetState.class, HashSet::new)
                                 .thenAccept(subnets -> expanded.subnets = subnets))
                 .whenComplete((ignore, e) -> {
