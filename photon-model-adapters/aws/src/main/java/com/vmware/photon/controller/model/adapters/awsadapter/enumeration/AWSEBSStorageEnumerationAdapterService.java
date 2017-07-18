@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,6 +48,7 @@ import com.amazonaws.services.ec2.model.Volume;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -488,22 +490,23 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 this.context.enumerationOperations.addAll(operations);
             }
 
-            if (operations.isEmpty()) {
+            // Create internal type TagState for EBS.
+            operations.add(Operation.createPost(this.service, TagService.FACTORY_LINK)
+                    .setBody(TagsUtil.newTagState(TAG_KEY_TYPE, AWSResourceType.ebs_block.toString(),
+                            false, this.context.parentCompute.tenantLinks))
+                    .setReferer(this.service.getUri()));
+
+            OperationJoin.create(operations).setCompletion((ops, exs) -> {
+                if (exs != null && !exs.isEmpty()) {
+                    this.service.logSevere(() -> String.format("Error creating disk tags %s",
+                            Utils.toString(exs)));
+                    signalErrorToEnumerationAdapter(exs.values().iterator().next());
+                    return;
+                }
+                this.service.logFine(() -> "Successfully created all disk states tags.");
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
-            } else {
-                OperationJoin.create(operations).setCompletion((ops, exs) -> {
-                    if (exs != null && !exs.isEmpty()) {
-                        this.service.logSevere(() -> String.format("Error creating disk tags %s",
-                                Utils.toString(exs)));
-                        signalErrorToEnumerationAdapter(exs.values().iterator().next());
-                        return;
-                    }
-                    this.service.logFine(() -> "Successfully created all disk states tags.");
-                    this.context.subStage = next;
-                    handleReceivedEnumerationData();
-                }).sendWith(this.service);
-            }
+            }).sendWith(this.service);
         }
 
         /**
@@ -663,9 +666,14 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 diskState.tagLinks = this.context.volumeTagsToBeCreated.stream()
                         .filter(tag -> volume.getTags().contains(tag))
                         .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME))
-                        .map(tag -> TagsUtil.newTagState(tag.getKey(), tag.getValue(), true,
-                                this.context.parentCompute.tenantLinks)).map(tag -> tag.documentSelfLink)
+                        .map(tag -> TagsUtil.newTagState(tag.getKey(), tag.getValue(),
+                                true, this.context.parentCompute.tenantLinks))
+                        .map(tag -> tag.documentSelfLink)
                         .collect(Collectors.toSet());
+
+                // Add internal type tag with for all EBS Disk States.
+                diskState.tagLinks.add(TagsUtil.newTagState(TAG_KEY_TYPE, AWSResourceType.ebs_block.toString(),
+                        false, tenantLinks).documentSelfLink);
             }
 
             mapAttachmentState(diskState, volume);

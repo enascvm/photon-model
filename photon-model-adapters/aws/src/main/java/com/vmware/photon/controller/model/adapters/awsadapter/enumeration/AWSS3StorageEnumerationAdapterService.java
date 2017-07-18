@@ -17,9 +17,13 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_S3;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +40,7 @@ import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -49,10 +54,13 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -79,7 +87,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     }
 
     public enum S3StorageEnumerationSubStage {
-        QUERY_LOCAL_RESOURCES, COMPARE, ENUMERATE_TAGS, CREATE_DISK_STATES,
+        CREATE_INTERNAL_TYPE_TAG, QUERY_LOCAL_RESOURCES, COMPARE, ENUMERATE_TAGS, CREATE_DISK_STATES,
         CREATE_TAG_STATES_UPDATE_TAG_LINKS, DELETE_DISKS, ENUMERATION_STOP
     }
 
@@ -115,6 +123,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         public List<Operation> enumerationOperations;
         // The time stamp at which the enumeration started.
         public long enumerationStartTimeInMicros;
+        // selfLink for internal type TagState
+        public String internalTypeTagSelfLink;
 
         public S3StorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
@@ -132,7 +142,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             this.diskStatesEnumerated = new ArrayList<>();
             this.enumerationOperations = new ArrayList<>();
             this.stage = S3StorageEnumerationStages.CLIENT;
-            this.subStage = S3StorageEnumerationSubStage.QUERY_LOCAL_RESOURCES;
+            this.subStage = S3StorageEnumerationSubStage.CREATE_INTERNAL_TYPE_TAG;
         }
     }
 
@@ -303,6 +313,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      */
     private void handleReceivedEnumerationData(S3StorageEnumerationContext aws) {
         switch (aws.subStage) {
+        case CREATE_INTERNAL_TYPE_TAG:
+            createInternalTypeTag(aws, S3StorageEnumerationSubStage.QUERY_LOCAL_RESOURCES);
+            break;
         case QUERY_LOCAL_RESOURCES:
             getLocalResources(aws, S3StorageEnumerationSubStage.COMPARE);
             break;
@@ -331,6 +344,31 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         }
     }
 
+    /**
+     * Send a POST to create internal type tag for S3. Don't wait for completion, tag will eventually get created
+     * while we go through the enumeration flow. If tag creation is successful, we set the internalTypeTagCreated
+     * flag and add the internalTypeTagSelfLink to DiskStates.
+     */
+    private void createInternalTypeTag(S3StorageEnumerationContext aws, S3StorageEnumerationSubStage next) {
+
+        TagState internalTypeTagState = TagsUtil.newTagState(TAG_KEY_TYPE, AWSResourceType.s3_bucket.toString(),
+                false, aws.parentCompute.tenantLinks);
+
+        Operation.createPost(aws.service,TagService.FACTORY_LINK)
+                .setBody(internalTypeTagState)
+                .setReferer(aws.service.getUri())
+                .setCompletion((o, e) -> {
+                    // log exception if tag creation fails with anything other than IDEMPOTENT_POST behaviour.
+                    if (e != null) {
+                        logSevere("Error creating internal type tag for S3");
+                        return;
+                    }
+                    aws.internalTypeTagSelfLink = internalTypeTagState.documentSelfLink;
+                }).sendWith(aws.service);
+
+        aws.subStage = next;
+        handleReceivedEnumerationData(aws);
+    }
     /**
      * Query and get list of S3 buckets present locally in disk states in current context.
      */
@@ -551,7 +589,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      */
     private void createDiskStates(S3StorageEnumerationContext aws,
             S3StorageEnumerationSubStage next) {
-
         // For all the disks to be created, we filter them based on whether we were able to find the correct
         // region for the disk using getBucketTaggingConfiguration() call and then map them and create operations.
         // Filtering is done to avoid creating disk states with null region (since we don't PATCH region field
@@ -570,6 +607,28 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                 DiskService.FACTORY_LINK)));
         this.logFine(() -> String.format("Creating %d S3 disks",
                 aws.bucketsToBeCreated.size()));
+
+        // If internal type tag creation was successful, check if existing S3 disk states have that tag in tagLinks.
+        // For those disk states which do not have the tagLink, add the tagLink by PATCHing those states.
+        if (aws.internalTypeTagSelfLink != null) {
+            aws.diskStatesToBeUpdatedByBucketName.entrySet().stream()
+                    .filter(diskMap -> !diskMap.getValue().tagLinks.contains(aws.internalTypeTagSelfLink))
+                    .forEach(diskMap -> {
+                        Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                                (ComputeState.FIELD_NAME_TAG_LINKS,
+                                        Collections.singletonList(aws.internalTypeTagSelfLink));
+                        Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
+                                (ComputeState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+
+                        ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
+                                .create(collectionsToAddMap, collectionsToRemoveMap);
+
+                        aws.enumerationOperations.add(Operation.createPatch(this.getHost(),
+                                diskMap.getValue().documentSelfLink)
+                                .setReferer(aws.service.getUri())
+                                .setBody(updateTagLinksRequest));
+                    });
+        }
 
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
@@ -602,7 +661,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         joinOp.sendWith(this.getHost());
     }
 
-
     /**
      * Create tag states for S3 buckets. States are created only for newly discovered tags.
      */
@@ -621,33 +679,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 });
 
         return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> aws);
-    }
-
-    /**
-     * Map an S3 bucket to a photon-model disk state.
-     */
-    private DiskState mapBucketToDiskState(Bucket bucket, S3StorageEnumerationContext aws) {
-        DiskState diskState = new DiskState();
-        diskState.id = bucket.getName();
-        diskState.name = bucket.getName();
-        diskState.storageType = STORAGE_TYPE_S3;
-        diskState.regionId = aws.regionsByBucketName.get(bucket.getName());
-        diskState.authCredentialsLink = aws.parentAuth.documentSelfLink;
-        diskState.resourcePoolLink = aws.request.original.resourcePoolLink;
-        diskState.endpointLink = aws.request.original.endpointLink;
-        diskState.tenantLinks = aws.parentCompute.tenantLinks;
-
-        if (bucket.getCreationDate() != null) {
-            diskState.creationTimeMicros = TimeUnit.MILLISECONDS
-                    .toMicros(bucket.getCreationDate().getTime());
-        }
-
-        if (bucket.getOwner() != null && bucket.getOwner().getDisplayName() != null) {
-            diskState.customProperties = new HashMap<>();
-            diskState.customProperties.put(BUCKET_OWNER_NAME, bucket.getOwner().getDisplayName());
-        }
-
-        return diskState;
     }
 
     /**
@@ -762,6 +793,39 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                     .sendWith(this);
                         }));
 
+    }
+
+    /**
+     * Map an S3 bucket to a photon-model disk state.
+     */
+    private DiskState mapBucketToDiskState(Bucket bucket, S3StorageEnumerationContext aws) {
+        DiskState diskState = new DiskState();
+        diskState.id = bucket.getName();
+        diskState.name = bucket.getName();
+        diskState.storageType = STORAGE_TYPE_S3;
+        diskState.regionId = aws.regionsByBucketName.get(bucket.getName());
+        diskState.authCredentialsLink = aws.parentAuth.documentSelfLink;
+        diskState.resourcePoolLink = aws.request.original.resourcePoolLink;
+        diskState.endpointLink = aws.request.original.endpointLink;
+        diskState.tenantLinks = aws.parentCompute.tenantLinks;
+        diskState.tagLinks = new HashSet<>();
+
+        if (bucket.getCreationDate() != null) {
+            diskState.creationTimeMicros = TimeUnit.MILLISECONDS
+                    .toMicros(bucket.getCreationDate().getTime());
+        }
+
+        if (bucket.getOwner() != null && bucket.getOwner().getDisplayName() != null) {
+            diskState.customProperties = new HashMap<>();
+            diskState.customProperties.put(BUCKET_OWNER_NAME, bucket.getOwner().getDisplayName());
+        }
+
+        // Set internal type tag for all S3 disk states only if POST for the TagState was successful.
+        if (aws.internalTypeTagSelfLink != null) {
+            diskState.tagLinks.add(aws.internalTypeTagSelfLink);
+        }
+
+        return diskState;
     }
 
     /**

@@ -64,6 +64,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getSubnetStates;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryAllFactoryResources;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
@@ -90,6 +91,7 @@ import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
 import com.amazonaws.services.s3.model.TagSet;
 
+
 import io.netty.util.internal.StringUtil;
 
 import org.junit.After;
@@ -101,8 +103,10 @@ import org.junit.rules.TestName;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -337,9 +341,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 TEST_CASE_INITIAL);
 
         // Validate if the S3 bucket is enumerated.
-        validateS3Enumeration(count1, count2);
+        validateS3Enumeration(count1, count3);
         // Validate S3 tag state count.
-        validateS3TagsEnumeration();
+        validateS3TagStatesCreated();
 
         // Remove a tag from test S3 bucket.
         tags.clear();
@@ -402,9 +406,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // After two enumeration cycles, validate that we did not create duplicate documents for existing
         // S3 bucket and validate that we did not add duplicate tagLink in diskState and removed the tagLink
         // for tag deleted from AWS.
-        validateS3Enumeration(count1, count1);
+        validateS3Enumeration(count1, count2);
         // Validate that deleted S3 tag's local state is deleted.
-        validateS3TagsEnumeration();
+        validateS3TagStatesCreated();
 
         // Delete the S3 bucket created in the test
         this.s3Client.deleteBucket(TEST_BUCKET_NAME);
@@ -832,7 +836,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                             DiskService.FACTORY_LINK, DiskState.class);
             DiskState defaultDiskState = allDiskStatesMap.get(this.diskId);
             // ensure one link is deleted and one new is added to the disk state
-            assertEquals("Wrong number of disk tag links found.", 1, defaultDiskState.tagLinks.size());
+            assertEquals("Wrong number of disk tag links found.", 2, defaultDiskState.tagLinks.size());
+            // ensure EBS disk has an internal type tag set
+            assertTrue(defaultDiskState.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
+                    AWSResourceType.ebs_block.toString(), false,
+                    this.endpointState.tenantLinks).documentSelfLink));
 
             // validate vm tags
             Map<Tag, String> vmTagLinks = new HashMap<>();
@@ -909,13 +917,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         if (expectedDiskCount > 0) {
             DiskState diskState = Utils.fromJson(response.results.documents
                     .get(response.results.documentLinks.get(0)), DiskState.class);
-            assertEquals(expectedTagsCount,diskState.tagLinks.size());
+            assertEquals(expectedTagsCount, diskState.tagLinks.size());
         }
 
         assertEquals(expectedDiskCount, response.results.documentLinks.size());
     }
 
-    private void validateS3TagsEnumeration() {
+    private void validateS3TagStatesCreated() {
         List<String> tags = new ArrayList<>();
         tags.add(S3_TAG_KEY_1);
         tags.add(S3_TAG_KEY_2);
@@ -937,6 +945,16 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         QueryTask response = s3QueryResponse.getBody(QueryTask.class);
 
         assertEquals(2, response.results.documentLinks.size());
+
+        // Validate the internal type tag for S3 got created
+        Operation internalTagOp = Operation.createGet(this.host, TagsUtil.newTagState(TAG_KEY_TYPE,
+                AWSResourceType.s3_bucket.toString(), false,
+                this.endpointState.tenantLinks).documentSelfLink)
+                .setReferer(this.host.getUri());
+
+        Operation internalTagOpResponse = this.host.waitForResponse(internalTagOp);
+
+        assertEquals(Operation.STATUS_CODE_OK, internalTagOpResponse.getStatusCode());
     }
 
     /**
