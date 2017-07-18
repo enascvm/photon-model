@@ -987,10 +987,9 @@ public class AzureTestUtil {
 
         diskState.storageDescriptionLink = storageContainerLink;
         diskState.type = DEFAULT_DISK_TYPE;
+        diskState.storageType = AZURE_STORAGE_BLOBS;
         diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
         diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
-        diskState.customProperties = new HashMap<>();
-        diskState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_BLOBS);
 
         return TestUtils.doPost(host, diskState, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));

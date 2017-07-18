@@ -1459,20 +1459,18 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros));
 
-        String blobProperty = QuerySpecification
-                .buildCompositeFieldName(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AZURE_STORAGE_TYPE);
         Query.Builder typeFilterQuery = Query.Builder
                 .create(Occurance.MUST_OCCUR);
 
         Query blobFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
-                .addFieldClause(blobProperty, AZURE_STORAGE_BLOBS)
+                .addFieldClause(AZURE_STORAGE_TYPE, AZURE_STORAGE_BLOBS)
                 .build();
 
         QueryTask.Query diskFilter = QueryTask.Query.Builder
                 .create(QueryTask.Query.Occurance.SHOULD_OCCUR)
-                .addFieldClause(blobProperty, AZURE_STORAGE_DISKS)
+                .addFieldClause(AZURE_STORAGE_TYPE, AZURE_STORAGE_DISKS)
                 .build();
+
         typeFilterQuery.addClause(blobFilter);
         typeFilterQuery.addClause(diskFilter);
 
