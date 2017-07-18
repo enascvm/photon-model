@@ -132,6 +132,7 @@ public class TestAWSProvisionTask {
 
     private Map<String, Object> awsTestContext;
     private AwsNicSpecs singleNicSpec;
+    private static Map<String, Integer> instanceStoreDiskSizeSupportMap = new HashMap<>();
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -215,6 +216,8 @@ public class TestAWSProvisionTask {
                 this.isAwsClientMock,
                 this.awsMockEndpointReference, null /*tags*/);
     }
+
+
 
     // Creates a AWS instance via a provision task.
     @Test
@@ -627,10 +630,9 @@ public class TestAWSProvisionTask {
         assertAdditionalDiskConfiguration(client, awsInstance, additionalDiskLinks);
     }
 
-    private void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
+    protected void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
             String diskLink) {
-        DiskState diskState = this.host.getServiceState(null, DiskState.class,
-                UriUtils.buildUri(this.host, diskLink));
+        DiskState diskState = getDiskState(diskLink);
 
         Volume bootVolume = getVolume(client, awsInstance, awsInstance.getRootDeviceName());
 
@@ -647,11 +649,10 @@ public class TestAWSProvisionTask {
                 bootVolume.getIops().intValue());
     }
 
-    private void assertAdditionalDiskConfiguration(AmazonEC2AsyncClient client,
+    protected void assertAdditionalDiskConfiguration(AmazonEC2AsyncClient client,
             Instance awsInstance, List<String> diskLinks) {
         for (String diskLink : diskLinks) {
-            DiskState diskState = this.host.getServiceState(null, DiskState.class,
-                    UriUtils.buildUri(this.host, diskLink));
+            DiskState diskState = getDiskState(diskLink);
 
             assertNotNull("Additional Disk should contain atleast one custom property",
                     diskState.customProperties);
@@ -685,6 +686,11 @@ public class TestAWSProvisionTask {
         }
     }
 
+    protected DiskState getDiskState(String diskLink) {
+        return this.host.getServiceState(null, DiskState.class,
+                UriUtils.buildUri(this.host, diskLink));
+    }
+
     private Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance, String deviceName) {
         InstanceBlockDeviceMapping bootDiskMapping = awsInstance.getBlockDeviceMappings().stream()
                 .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName().equals(deviceName))
@@ -701,5 +707,15 @@ public class TestAWSProvisionTask {
                 .describeVolumes(describeVolumesRequest);
 
         return describeVolumesResult.getVolumes().get(0);
+    }
+
+    protected Integer getSupportedInstanceStoreDiskSize(String instanceType) {
+        if (!instanceStoreDiskSizeSupportMap.containsKey(instanceType)) {
+            Integer diskSize = TestAWSSetupUtils
+                    .getSupportedInstanceStoreDiskSize(this.host, instanceType,
+                            this.endpointState.documentSelfLink);
+            instanceStoreDiskSizeSupportMap.put(instanceType, diskSize);
+        }
+        return instanceStoreDiskSizeSupportMap.get(instanceType);
     }
 }

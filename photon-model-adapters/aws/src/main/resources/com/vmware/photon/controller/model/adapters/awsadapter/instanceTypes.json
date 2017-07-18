@@ -303,7 +303,7 @@
     "i3.large": {
       "cpuCount": 2,
       "memoryInMB": 15616,
-      "storageType": "SSD",
+      "storageType": "NVMe_SSD",
       "dataDiskSizeInMB": 486400,
       "dataDiskMaxCount": 1,
       "networkType": "Up to 10 Gigabit"
@@ -311,7 +311,7 @@
     "i3.xlarge": {
       "cpuCount": 4,
       "memoryInMB": 31232,
-      "storageType": "SSD",
+      "storageType": "NVMe_SSD",
       "dataDiskSizeInMB": 972800,
       "dataDiskMaxCount": 1,
       "networkType": "Up to 10 Gigabit"
@@ -319,7 +319,7 @@
     "i3.2xlarge": {
       "cpuCount": 8,
       "memoryInMB": 62464,
-      "storageType": "SSD",
+      "storageType": "NVMe_SSD",
       "dataDiskSizeInMB": 1945600,
       "dataDiskMaxCount": 1,
       "networkType": "Up to 10 Gigabit"
@@ -327,7 +327,7 @@
     "i3.4xlarge": {
       "cpuCount": 16,
       "memoryInMB": 124928,
-      "storageType": "SSD",
+      "storageType": "NVMe_SSD",
       "dataDiskSizeInMB": 1945600,
       "dataDiskMaxCount": 2,
       "networkType": "Up to 10 Gigabit"
@@ -335,7 +335,7 @@
     "i3.8xlarge": {
       "cpuCount": 32,
       "memoryInMB": 249856,
-      "storageType": "SSD",
+      "storageType": "NVMe_SSD",
       "dataDiskSizeInMB": 1945600,
       "dataDiskMaxCount": 4,
       "networkType": "10 Gigabit"
@@ -343,7 +343,7 @@
     "i3.16xlarge": {
       "cpuCount": 64,
       "memoryInMB": 499712,
-      "storageType": "SSD",
+      "storageType": "NVMe_SSD",
       "dataDiskSizeInMB": 1945600,
       "dataDiskMaxCount": 8,
       "networkType": "20 Gigabit"
@@ -404,67 +404,115 @@
     },
     "m1.small": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 163840,
+      "dataDiskMaxCount": 1
     },
     "m1.medium": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 419840,
+      "dataDiskMaxCount": 1
     },
     "m1.large": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 430080,
+      "dataDiskMaxCount": 2
     },
     "m1.xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 430080,
+      "dataDiskMaxCount": 4
     },
     "m2.xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 430080,
+      "dataDiskMaxCount": 1
     },
     "m2.2xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 870400,
+      "dataDiskMaxCount": 1
     },
     "m2.4xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 860160,
+      "dataDiskMaxCount": 2
     },
     "cr1.8xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 122880,
+      "dataDiskMaxCount": 2
     },
     "i2.xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 819200,
+      "dataDiskMaxCount": 1
     },
     "i2.2xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 819200,
+      "dataDiskMaxCount": 2
     },
     "i2.4xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 819200,
+      "dataDiskMaxCount": 4
     },
     "i2.8xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 819200,
+      "dataDiskMaxCount": 2
     },
     "hi1.4xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "SSD",
+      "dataDiskSizeInMB": 1048576,
+      "dataDiskMaxCount": 2
     },
     "hs1.8xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 2048000,
+      "dataDiskMaxCount": 24
     },
     "c1.medium": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 358400,
+      "dataDiskMaxCount": 1
     },
     "c1.xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 430080,
+      "dataDiskMaxCount": 4
     },
     "cc1.4xlarge": {
       "cpuCount": -1,
@@ -472,11 +520,17 @@
     },
     "cc2.8xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 860160,
+      "dataDiskMaxCount": 4
     },
     "cg1.4xlarge": {
       "cpuCount": -1,
-      "memoryInMB": -1
+      "memoryInMB": -1,
+      "storageType": "HDD",
+      "dataDiskSizeInMB": 860160,
+      "dataDiskMaxCount": 2
     }
   }
 }

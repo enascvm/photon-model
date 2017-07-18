@@ -22,7 +22,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
@@ -116,7 +116,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
     public static List<String> testComputeDescriptions = new ArrayList<String>(
             Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE,
-                    zoneId + "~" + instanceType_t2_micro));
+                    zoneId + "~" + instanceType));
 
     private Map<String, Object> awsTestContext;
     private String subnetId;
@@ -245,7 +245,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     firstSpawnCycle = false;
                 }
                 instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, instancesToSpawn,
-                        instanceType_t2_micro, this.subnetId, this.securityGroupId);
+                        instanceType, this.subnetId, this.securityGroupId);
                 instancesToCleanUp.addAll(instanceIds);
                 this.host.log("Instances to cleanup is %d", instancesToCleanUp.size());
                 waitForProvisioningToComplete(instanceIds, this.host, this.client, this.errorRate);

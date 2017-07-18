@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_ENDPOINT;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_INSTANCE_TYPE;
+
 import java.io.File;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -21,6 +24,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.InstanceType;
+
 import org.apache.commons.io.IOUtils;
 
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -40,8 +44,6 @@ import com.vmware.xenon.common.Utils;
  */
 public class AWSInstanceTypeService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_INSTANCE_TYPE_ADAPTER;
-
-    private static final String URI_PARAM_ENDPOINT = "endpoint";
 
     private static final String DEFAULT_AWS_INSTANCE_TYPES_FILE = "instanceTypes.json";
 
@@ -83,7 +85,16 @@ public class AWSInstanceTypeService extends StatelessService {
                         op.fail(err);
                         return;
                     }
-
+                    String instanceTypeId = queryParams.get(URI_PARAM_INSTANCE_TYPE);
+                    if (instanceTypeId != null) {
+                        InstanceTypeList.InstanceType instanceType = context.instanceTypes.instanceTypes
+                                .stream().filter(type -> type.id.equals(instanceTypeId))
+                                .findFirst()
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                        String.format("%s not found", instanceTypeId)));
+                        op.setBody(instanceType).complete();
+                        return;
+                    }
                     op.setBodyNoCloning(context.instanceTypes).complete();
                 });
     }

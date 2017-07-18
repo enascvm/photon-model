@@ -80,6 +80,8 @@ public class AWSConstants {
             + AWSConstants.class.getSimpleName() + ".QUERY_RESULT_LIMIT";
     private static int QUERY_RESULT_LIMIT = Integer.getInteger(PROPERTY_NAME_QUERY_RESULT_LIMIT,
             100);
+    public static final String URI_PARAM_ENDPOINT = "endpoint";
+    public static final String URI_PARAM_INSTANCE_TYPE = "instance-type";
     public static final String PROPERTY_NAME_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".CLIENT_CACHE_MAX_SIZE";
     public static int CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
@@ -96,7 +98,7 @@ public class AWSConstants {
             + AWSConstants.class.getSimpleName() + ".THREAD_POOL_CACHE_INITIAL_SIZE";
     public static int THREAD_POOL_CACHE_INITIAL_SIZE = Integer.getInteger(
             PROPERTY_NAME_CLIENT_CACHE_INITIAL_SIZE, 5);
-    public static final Integer MAX_IOPS_PER_GB = 50;
+    public static final Integer MAX_IOPS_PER_GiB = 50;
 
     // AWS Metric related Constants
     public static final String CPU_UTILIZATION = "CPUUtilization";
@@ -157,6 +159,10 @@ public class AWSConstants {
         EBS, EFS, INSTANCE_STORE
     }
 
+    public static enum AWSInstanceStoreTypes {
+        SSD, HDD, NVMe_SSD
+    }
+
     // AWS Error codes {{
     // http://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html#api-error-codes-table-client
     public static final String AWS_DEPENDENCY_VIOLATION_ERROR_CODE = "DependencyViolation";
@@ -210,7 +216,7 @@ public class AWSConstants {
         return THREAD_POOL_CACHE_INITIAL_SIZE;
     }
 
-    public static List<String> AWS_DEVICE_NAMES = Arrays.asList(
+    public static List<String> AWS_EBS_DEVICE_NAMES = Arrays.asList(
             "xvdb",
             "xvdc",
             "xvdd",
@@ -253,5 +259,59 @@ public class AWSConstants {
             return this.value;
         }
     }
+
+    public static List<String> AWS_INSTANCE_STORE_DEVICE_NAMES = Arrays.asList(
+            "/dev/sdb",
+            "/dev/sdc",
+            "/dev/sdd",
+            "/dev/sde",
+            "/dev/sdf",
+            "/dev/sdg",
+            "/dev/sdh",
+            "/dev/sdi",
+            "/dev/sdj",
+            "/dev/sdk",
+            "/dev/sdl",
+            "/dev/sdm",
+            "/dev/sdn",
+            "/dev/sdo",
+            "/dev/sdp",
+            "/dev/sdq",
+            "/dev/sdr",
+            "/dev/sds",
+            "/dev/sdt",
+            "/dev/sdu",
+            "/dev/sdv",
+            "/dev/sdw",
+            "/dev/sdx",
+            "/dev/sdy"
+    );
+
+    public static List<String> AWS_VIRTUAL_NAMES = Arrays.asList(
+            "ephemeral0",
+            "ephemeral1",
+            "ephemeral2",
+            "ephemeral3",
+            "ephemeral4",
+            "ephemeral5",
+            "ephemeral6",
+            "ephemeral7",
+            "ephemeral8",
+            "ephemeral9",
+            "ephemeral10",
+            "ephemeral11",
+            "ephemeral12",
+            "ephemeral13",
+            "ephemeral14",
+            "ephemeral15",
+            "ephemeral16",
+            "ephemeral17",
+            "ephemeral18",
+            "ephemeral19",
+            "ephemeral20",
+            "ephemeral21",
+            "ephemeral22",
+            "ephemeral23"
+    );
 
 }

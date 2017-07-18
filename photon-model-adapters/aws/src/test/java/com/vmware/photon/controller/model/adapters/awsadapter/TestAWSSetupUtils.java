@@ -19,6 +19,8 @@ import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_ENDPOINT;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_INSTANCE_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
@@ -101,6 +103,7 @@ import com.amazonaws.services.ec2.model.Volume;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import org.joda.time.LocalDateTime;
+import org.junit.Assert;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetSpec;
@@ -142,6 +145,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.support.InstanceTypeList;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -173,9 +177,9 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 public class TestAWSSetupUtils {
 
     public static final String awsEndpointReference = "http://ec2.us-east-1.amazonaws.com";
-    public static final String imageId = "ami-0d4cfd66";
-    public static final String securityGroup = "aws-security-group";
-    public static final String instanceType_t2_micro = "t2.micro";
+    public static String imageId = "ami-0d4cfd66";
+    public static String securityGroup = "aws-security-group";
+    public static String instanceType = "t2.micro";
     public static final String regionId = "us-east-1";
     public static final String zoneId = "us-east-1";
     public static final String avalabilityZoneIdentifier = "a";
@@ -230,7 +234,7 @@ public class TestAWSSetupUtils {
      * For a matrix of maximum supported NICs per Instance type check:
      * http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-eni.html#AvailableIpPerENI
      *
-     * @see {@value #instanceType_t2_micro} instance type
+     * @see {@value #instanceType} instance type
      */
     public static AwsNicSpecs multiNicSpecs() throws UnknownHostException {
 
@@ -866,7 +870,7 @@ public class TestAWSSetupUtils {
             Set<String> tagLinks, AwsNicSpecs nicSpec)
             throws Throwable {
         return createAWSVMResource(host, computeHost, endpointState, clazz,
-                instanceType_t2_micro, zoneId, regionId,
+                instanceType, zoneId, regionId,
                 tagLinks, nicSpec, /* add new security group */ false);
     }
 
@@ -894,10 +898,10 @@ public class TestAWSSetupUtils {
         // Step 2: Create a VM desc
         ComputeDescription awsVMDesc = new ComputeDescription();
 
-        awsVMDesc.id = instanceType_t2_micro;
+        awsVMDesc.id = instanceType;
         awsVMDesc.name = vmName;
         awsVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-        awsVMDesc.instanceType = instanceType_t2_micro;
+        awsVMDesc.instanceType = instanceType;
 
         awsVMDesc.supportedChildren = new ArrayList<>();
         awsVMDesc.supportedChildren.add(ComputeType.DOCKER_CONTAINER.name());
@@ -1043,6 +1047,23 @@ public class TestAWSSetupUtils {
             disks.add(disk);
         }
         return disks;
+    }
+
+    public static Integer getSupportedInstanceStoreDiskSize(VerificationHost host,
+            String instanceType,
+            String endpointLink) {
+        URI instanceTypeServiceURI = UriUtils
+                .buildUri(host, AWSInstanceTypeService.SELF_LINK);
+        instanceTypeServiceURI = UriUtils.appendQueryParam(instanceTypeServiceURI,
+                URI_PARAM_ENDPOINT, endpointLink);
+        instanceTypeServiceURI = UriUtils.appendQueryParam(instanceTypeServiceURI,
+                URI_PARAM_INSTANCE_TYPE, instanceType);
+        Operation op = Operation.createGet(instanceTypeServiceURI).setReferer(host.getUri());
+        Operation response = host.waitForResponse(op);
+        InstanceTypeList.InstanceType type = response.getBody(InstanceTypeList.InstanceType.class);
+        Assert.assertNotNull(type);
+        Assert.assertNotNull(type.dataDiskSizeInMB);
+        return type.dataDiskSizeInMB;
     }
 
     /*
@@ -1575,7 +1596,7 @@ public class TestAWSSetupUtils {
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
                 .withSubnetId(subnetId)
                 .withImageId(ami)
-                .withInstanceType(instanceType_t2_micro)
+                .withInstanceType(instanceType)
                 .withMinCount(1).withMaxCount(1)
                 .withSecurityGroupIds(securityGroupId);
 
@@ -1601,7 +1622,7 @@ public class TestAWSSetupUtils {
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
                 .withSubnetId(subnetId)
                 .withImageId(ami)
-                .withInstanceType(instanceType_t2_micro)
+                .withInstanceType(instanceType)
                 .withMinCount(1).withMaxCount(1)
                 .withSecurityGroupIds(securityGroupId)
                 .withBlockDeviceMappings(blockDeviceMapping);

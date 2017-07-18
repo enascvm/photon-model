@@ -19,7 +19,10 @@ import static java.util.Collections.singletonMap;
 import static com.vmware.photon.controller.model.ComputeProperties.CREATE_CONTEXT_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_ENDPOINT;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_INSTANCE_TYPE;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -47,9 +50,11 @@ import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInst
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.support.InstanceTypeList.InstanceType;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * AWS context used by {@link AWSInstanceService} during VM provisioning.
@@ -96,6 +101,8 @@ public class AWSInstanceContext
 
     public long taskExpirationMicros;
 
+    public InstanceType instanceTypeInfo;
+
     public AWSInstanceContext(StatelessService service, ComputeInstanceRequest computeRequest) {
         super(service, computeRequest, AWSNicContext::new);
     }
@@ -124,7 +131,7 @@ public class AWSInstanceContext
     protected DeferredResult<AWSInstanceContext> customizeContext(AWSInstanceContext context) {
         // The order of population is important!
         return DeferredResult.completed(context)
-
+                .thenCompose(this::getInstanceTypeInfo).thenApply(log("getInstanceTypeInfo"))
                 .thenCompose(this::getDiskStates).thenApply(log("getDiskStates"))
                 .thenCompose(this::getBootDiskImageNativeId)
                 .thenApply(log("getBootDiskImageNativeId"))
@@ -608,6 +615,45 @@ public class AWSInstanceContext
                     }
                     return context;
                 });
+    }
+
+    private DeferredResult<AWSInstanceContext> getInstanceTypeInfo(AWSInstanceContext context) {
+        String instanceType = context.child.description.instanceType;
+        if (instanceType == null) {
+            instanceType = context.child.description.name;
+        }
+
+        if (instanceType == null) {
+            String msg = String.format(
+                    "AWS Instance type not specified for [%s] VM.",
+                    context.child.name);
+            return DeferredResult.failed(new IllegalStateException(msg));
+        }
+
+        URI instanceTypeServiceURI = UriUtils
+                .buildUri(context.service.getHost(), AWSInstanceTypeService.SELF_LINK);
+        instanceTypeServiceURI = UriUtils.appendQueryParam(instanceTypeServiceURI,
+                URI_PARAM_ENDPOINT, context.child.endpointLink);
+
+        instanceTypeServiceURI = UriUtils.appendQueryParam(instanceTypeServiceURI,
+                URI_PARAM_INSTANCE_TYPE, instanceType);
+
+        Operation op = Operation.createGet(instanceTypeServiceURI)
+                .setReferer(context.service.getHost().getUri());
+
+        DeferredResult<InstanceType> dr = context.service
+                .sendWithDeferredResult(op, InstanceType.class);
+        return dr.thenAccept(type -> {
+            context.instanceTypeInfo = type;
+        }).handle((all, err) -> {
+            if (err != null) {
+                String msg = String.format(
+                        "Error getting instance-type info for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, err);
+            }
+            return context;
+        });
     }
 
     /**

@@ -48,7 +48,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getInternalTagsByType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getNICByAWSId;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSEBSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
@@ -321,7 +321,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         List<String> instanceIdsToDeleteFirstTime = provisionAWSVMWithEC2Client(this.client,
                 this.host, count4, T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
         List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
-                instanceType_t2_micro, this.subnetId, this.securityGroupId);
+                instanceType, this.subnetId, this.securityGroupId);
         instanceIdsToDeleteFirstTime.addAll(instanceIds);
         this.instancesToCleanUp.addAll(instanceIdsToDeleteFirstTime);
         waitForProvisioningToComplete(instanceIdsToDeleteFirstTime, this.host, this.client, ZERO);
@@ -422,7 +422,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Provision an additional VM with a different instance type. It should re-use the
         // existing compute description created by the enumeration task above.
         List<String> instanceIdsToDeleteSecondTime = provisionAWSVMWithEC2Client(this.client,
-                this.host, count1, TestAWSSetupUtils.instanceType_t2_micro, this.subnetId, this.securityGroupId);
+                this.host, count1, TestAWSSetupUtils.instanceType, this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.addAll(instanceIdsToDeleteSecondTime);
         waitForProvisioningToComplete(instanceIdsToDeleteSecondTime, this.host, this.client,
                 ZERO);
@@ -596,7 +596,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         List<String> instanceIdsToDelete = provisionAWSVMWithEC2Client(this.client,
                 this.host, count4, T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
         List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
-                instanceType_t2_micro, this.subnetId, this.securityGroupId);
+                instanceType, this.subnetId, this.securityGroupId);
         instanceIdsToDelete.addAll(instanceIds);
         this.instancesToCleanUp.addAll(instanceIdsToDelete);
         waitForProvisioningToComplete(instanceIdsToDelete, this.host, this.client, ZERO);
