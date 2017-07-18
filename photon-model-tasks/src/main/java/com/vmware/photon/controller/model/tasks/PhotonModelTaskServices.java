@@ -91,5 +91,6 @@ public class PhotonModelTaskServices {
                 () -> StatsCollectionTaskService.createFactory());
         host.startFactory(SubTaskService.class,
                 () -> TaskFactoryService.create(SubTaskService.class));
+        host.startService(new IPAddressReleaseTaskService());
     }
 }

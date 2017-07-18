@@ -24,6 +24,7 @@ public class UriPaths {
     public static final String CONFIG = "/config";
     public static final String ADAPTER = "/adapter";
     public static final String TASKS = "/tasks";
+    public static final String SCHEDULES = "/schedules";
 
     public static final String RESOURCES_NETWORKS = RESOURCES + "/networks";
     public static final String RESOURCES_NETWORK_INTERFACES = RESOURCES + "/network-interfaces";

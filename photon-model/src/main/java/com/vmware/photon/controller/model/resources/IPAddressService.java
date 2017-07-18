@@ -45,6 +45,7 @@ public class IPAddressService extends StatefulService {
 
         public static final String FIELD_NAME_SUBNET_RANGE_LINK = "subnetRangeLink";
         public static final String FIELD_NAME_NETWORK_INTERFACE_LINK = "networkInterfaceLink";
+        public static final String FIELD_NAME_IP_ADDRESS_STATUS = "ipAddressStatus";
 
         // Default values for non-required fields
         public static final IPVersion DEFAULT_IP_VERSION = IPVersion.IPv4;

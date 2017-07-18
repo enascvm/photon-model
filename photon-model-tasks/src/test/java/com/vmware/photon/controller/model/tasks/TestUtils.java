@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
@@ -199,5 +201,21 @@ public class TestUtils {
         }
 
         return enumerationTaskState;
+    }
+
+    /**
+     * Sets the field value of a final field to the specified value
+     * @param field Field instance
+     * @param newValue Value to set
+     * @throws Exception If any exception is thrown
+     */
+    public static void setFinalStatic(Field field, Object newValue) throws Exception {
+        field.setAccessible(true);
+
+        Field modifiersField = Field.class.getDeclaredField("modifiers");
+        modifiersField.setAccessible(true);
+        modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+
+        field.set(null, newValue);
     }
 }
