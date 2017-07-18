@@ -70,6 +70,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AWSLoadBalancerService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_LOAD_BALANCER_ADAPTER;
+    private static final int MAX_NAME_LENGTH = 32;
 
     /**
      * Load balancer request context.
@@ -285,8 +286,15 @@ public class AWSLoadBalancerService extends StatelessService {
     private DeferredResult<AWSLoadBalancerContext> stripDownInvalidCharactersFromLoadBalancerName(
             AWSLoadBalancerContext context) {
 
+        // strip down invalid characters
         context.loadBalancerStateExpanded.name = context.loadBalancerStateExpanded.name.replaceAll
                 ("[^a-zA-Z0-9-]","");
+
+        // truncate if needed
+        if (context.loadBalancerStateExpanded.name.length() > MAX_NAME_LENGTH) {
+            context.loadBalancerStateExpanded.name = context.loadBalancerStateExpanded.name
+                    .substring(0, MAX_NAME_LENGTH);
+        }
 
         return DeferredResult.completed(context);
     }
