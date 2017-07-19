@@ -19,6 +19,9 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_net_interface;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_subnet;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
@@ -51,6 +54,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
@@ -82,6 +86,7 @@ import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -137,6 +142,10 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  * much load on the host's memory.
  */
 public class TestAzureLongRunningEnumeration extends BaseModelTest {
+
+    private static final String NETWORK_TAG_TYPE_VALUE = azure_vnet.toString();
+    private static final String SUBNET_TAG_TYPE_VALUE = azure_subnet.toString();
+    private static final String NETWORK_INTERFACE_TAG_TYPE_VALUE = azure_net_interface.toString();
 
     static {
         // Set the size of returned pages
@@ -203,7 +212,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     private static List<AzureNicSpecs> nicSpecs;
 
     // Configurable options for the test.
-
     public boolean isMock = true;
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -229,6 +237,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                     SubnetState.class,
                     TagState.class,
                     SecurityGroupState.class));
+
+    private static final Map<Class, String> internalTagResourcesMap = new LinkedHashMap<>();
 
     private Map<String, Long> resourcesCountAfterFirstEnumeration = new HashMap<>();
     private Map<String, Long> resourcesCountAfterMultipleEnumerations = new HashMap<>();
@@ -297,6 +307,11 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
             this.nodeStatsUri = UriUtils.buildUri(this.host.getUri(), ServiceUriPaths.CORE_MANAGEMENT);
             this.maxMemoryInMb = this.host.getState().systemInfo.maxMemoryByteCount / BYTES_TO_MB;
+
+            internalTagResourcesMap.put(NetworkState.class, NETWORK_TAG_TYPE_VALUE);
+            internalTagResourcesMap.put(SubnetState.class, SUBNET_TAG_TYPE_VALUE);
+            internalTagResourcesMap
+                    .put(NetworkInterfaceState.class, NETWORK_INTERFACE_TAG_TYPE_VALUE);
 
             if (!this.isMock) {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
@@ -469,14 +484,40 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_BLOBS_COUNT + numOfVMsToTest, DiskService.FACTORY_LINK, false);
         // 1 network per each stale vm resource + 1 network for original vm compute state.
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
-                STALE_VM_RESOURCES_COUNT + numOfVMsToTest, NetworkService.FACTORY_LINK,
-                false);
+        ServiceDocumentQueryResult networkResults = ProvisioningUtils
+                .queryDocumentsAndAssertExpectedCount(this.host,
+                        STALE_VM_RESOURCES_COUNT + 1,
+                        NetworkService.FACTORY_LINK, false);
+
+        // validate internal tags for enumerated networks
+        TagService.TagState expectedNetworkInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                NETWORK_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        networkResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
+                });
+
         // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
         // compute state.
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
-                STALE_VM_RESOURCES_COUNT + numOfVMsToTest, SubnetService.FACTORY_LINK,
-                false);
+        ServiceDocumentQueryResult subnetResults = ProvisioningUtils
+                .queryDocumentsAndAssertExpectedCount(this.host,
+                        STALE_VM_RESOURCES_COUNT + 1,
+                        SubnetService.FACTORY_LINK, false);
+
+        // validate internal tags for enumerated subnets
+        TagService.TagState expectedSubnetInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                SUBNET_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        subnetResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), SubnetState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
+                });
+
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_SECURITY_GROUPS_COUNT, SecurityGroupService.FACTORY_LINK, false);
 
@@ -669,6 +710,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             generateResourcesCounts();
             // assert check on resources count after first and last enumeration.
             verifyResourcesCount();
+            // assert check on resources count for internal tags
+            verifyInternalTagsResourceCount();
         }, 0, this.enumerationFrequencyInMinutes, TimeUnit.MINUTES);
     }
 
@@ -700,6 +743,15 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             this.host.log(Level.INFO, "Verifying Resources counts...");
 
             for (Class resource : resourcesList) {
+                this.host.log(Level.INFO, "resource values are: [resource: %s],"
+                        + "[1st enumeration value: %d], "
+                        + "[latest enumeration value: %d],"
+                        + "[delta value: %f]",
+                        resource.toString(),
+                        this.resourcesCountAfterFirstEnumeration.get(resource.toString()),
+                        this.resourcesCountAfterMultipleEnumerations.get(resource.toString()),
+                        this.resourceDeltaMap.get(resource.toString()));
+
                 assertTrue((this.resourcesCountAfterFirstEnumeration.get(resource.toString())
                         + this.resourceDeltaMap.get(resource.toString()))
                         >= this.resourcesCountAfterMultipleEnumerations.get(resource.toString()));
@@ -718,6 +770,30 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                     this.resourcesCountAfterFirstEnumeration.get(resource.toString()) *
                             this.resourceDeltaValue / 100));
         }
+    }
+
+    /**
+     * Verifies expected internal tags are created for resources.
+     */
+    private void verifyInternalTagsResourceCount() {
+        List<TagState> tagStates = getInternalTypeTagsList();
+        if (this.numOfEnumerationsRan >= 1) {
+            for (Map.Entry<Class, String> resourceEntry : internalTagResourcesMap.entrySet()) {
+                if (this.resourcesCountAfterFirstEnumeration.get(resourceEntry.getKey().toString()) > 0) {
+                    assertTrue(isInternalTagPresent(tagStates, resourceEntry.getValue()));
+                }
+            }
+        }
+        this.host.log("Internal tags verification successful...");
+    }
+
+    private boolean isInternalTagPresent(List<TagState> tagStates, String expectedValue) {
+        for (TagState tagState : tagStates) {
+            if (tagState.value.equalsIgnoreCase(expectedValue)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -785,8 +861,9 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             assertResourceExists(this.host, NetworkService.FACTORY_LINK, nicSpecs.get(i).network.name,
                     true);
 
-            for (NicSpec nicSpec : nicSpecs.get(i).nicSpecs ) {
-                assertResourceExists(this.host, SubnetService.FACTORY_LINK, nicSpec.geSubnetSpec().name, true);
+            for (NicSpec nicSpec : nicSpecs.get(i).nicSpecs) {
+                assertResourceExists(this.host, SubnetService.FACTORY_LINK,
+                        nicSpec.getSubnetSpec().name, true);
             }
 
             assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK, azureVMNames.get(i), true);
@@ -994,5 +1071,20 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
         this.host.createQueryTaskService(queryTask, false, true, queryTask, null);
         return queryTask.results.documentCount;
+    }
+
+    private List<TagState> getInternalTypeTagsList() {
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(TagState.class)
+                .addFieldClause(TagState.FIELD_NAME_KEY, PhotonModelConstants.TAG_KEY_TYPE)
+                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.FALSE.toString());
+
+        QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
+                getHost(), qBuilder.build(), TagState.class, null)
+                .setMaxResultsLimit(Integer.MAX_VALUE);
+
+        List<TagState> tagStates = waitToComplete(
+                queryLocalTags.collectDocuments(Collectors.toList()));
+        return tagStates;
     }
 }

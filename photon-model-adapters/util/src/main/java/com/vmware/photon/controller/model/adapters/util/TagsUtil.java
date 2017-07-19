@@ -244,16 +244,13 @@ public class TagsUtil {
      * to generate their unique document self link and adds a list of links to the provided state.
      */
     public static void setTagLinksToResourceState(
-            ResourceState resourceState,
-            Map<String, String> tags) {
-
+            ResourceState resourceState, Map<String, String> tags, boolean isExternal) {
         if (tags == null || tags.isEmpty()) {
             return;
         }
-
         // we have already made sure that the tags exist and we can build their links ourselves
         resourceState.tagLinks = tags.entrySet().stream()
-                .map(t -> newTagState(t.getKey(), t.getValue(), true, resourceState.tenantLinks))
+                .map(t -> newTagState(t.getKey(), t.getValue(), isExternal, resourceState.tenantLinks))
                 .map(TagFactoryService::generateSelfLink)
                 .collect(Collectors.toSet());
     }

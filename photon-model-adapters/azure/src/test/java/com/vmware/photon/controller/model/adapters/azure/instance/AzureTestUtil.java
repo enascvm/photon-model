@@ -318,7 +318,7 @@ public class AzureTestUtil {
                 return this.ipAssignment;
             }
 
-            public NetSpec geSubnetSpec() {
+            public NetSpec getSubnetSpec() {
                 return this.subnetSpec;
             }
 

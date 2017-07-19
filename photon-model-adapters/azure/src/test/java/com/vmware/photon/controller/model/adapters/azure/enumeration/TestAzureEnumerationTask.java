@@ -20,6 +20,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_subnet;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
@@ -50,6 +52,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -92,6 +95,7 @@ import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.query.QueryStrategy;
@@ -172,6 +176,9 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     private static final String VM_TAG_VALUE = "VMTagValue";
     private static final String SG_TAG_KEY_PREFIX = "SGTagKey";
     private static final String SG_TAG_VALUE = "SGTagValue";
+
+    private static final String NETWORK_TAG_TYPE_VALUE = azure_vnet.toString();
+    private static final String SUBNET_TAG_TYPE_VALUE = azure_subnet.toString();
 
     // Shared Compute Host / End-point between test runs.
     private static ComputeState computeHost;
@@ -409,14 +416,40 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
                 DiskService.FACTORY_LINK, false);
         // 1 network per each stale vm resource + 1 network for original vm compute state.
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
-                STALE_VM_RESOURCES_COUNT + 1,
-                NetworkService.FACTORY_LINK, false);
+        ServiceDocumentQueryResult networkResults = ProvisioningUtils
+                .queryDocumentsAndAssertExpectedCount(this.host,
+                        STALE_VM_RESOURCES_COUNT + 1,
+                        NetworkService.FACTORY_LINK, false);
+
+        // validate internal tags for enumerated networks
+        TagService.TagState expectedNetworkInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                NETWORK_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        networkResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
+                });
+
         // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
         // compute state.
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
-                STALE_VM_RESOURCES_COUNT + 1,
-                SubnetService.FACTORY_LINK, false);
+        ServiceDocumentQueryResult subnetResults = ProvisioningUtils
+                .queryDocumentsAndAssertExpectedCount(this.host,
+                        STALE_VM_RESOURCES_COUNT + 1,
+                        SubnetService.FACTORY_LINK, false);
+
+        // validate internal tags for enumerated subnets
+        TagService.TagState expectedSubnetInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                SUBNET_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        subnetResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), SubnetState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
+                });
+
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_SECURITY_GROUPS_COUNT,
                 SecurityGroupService.FACTORY_LINK, false);
@@ -427,6 +460,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         runEnumeration();
 
         assertRemoteResources();
+        assertInternalTagResources();
         assertStaleResources();
 
         // VM count + 1 compute host instance
@@ -587,7 +621,8 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 true);
 
         for (NicSpec nicSpec : NIC_SPEC.nicSpecs) {
-            assertResourceExists(this.host, SubnetService.FACTORY_LINK, nicSpec.geSubnetSpec().name, true);
+            assertResourceExists(this.host, SubnetService.FACTORY_LINK,
+                    nicSpec.getSubnetSpec().name, true);
         }
 
         assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK, azureVMName, true);
@@ -617,18 +652,56 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
 
         QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
-                getHost(),
-                qBuilder.build(),
-                TagState.class,
-                null)
-                        .setMaxResultsLimit(expectedTags.size() + 1);
+                getHost(), qBuilder.build(), TagState.class, null)
+                .setMaxResultsLimit(expectedTags.size() + 1);
 
         List<TagState> tagStates = waitToComplete(
                 queryLocalTags.collectDocuments(Collectors.toList()));
+        this.host.log(Level.INFO, "external tag states discovered: " + tagStates.size());
 
         assertEquals("TagStates were not discovered.", expectedTags.size(), tagStates.size());
         for (TagState tag : tagStates) {
             assertEquals(expectedTags.get(tag.key), tag.value);
+        }
+    }
+
+    /**
+     * Verify internal tags are created.
+     */
+    private void assertInternalTagResources() {
+        final List<String> expectedTagValues = new ArrayList<>();
+        expectedTagValues.add(NETWORK_TAG_TYPE_VALUE);
+        expectedTagValues.add(SUBNET_TAG_TYPE_VALUE);
+
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(TagState.class)
+                .addFieldClause(TagState.FIELD_NAME_KEY, PhotonModelConstants.TAG_KEY_TYPE)
+                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.FALSE.toString());
+
+        QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
+                getHost(), qBuilder.build(), TagState.class, null)
+                .setMaxResultsLimit(20);
+
+        List<TagState> tagStates = waitToComplete(
+                queryLocalTags.collectDocuments(Collectors.toList()));
+        this.host.log(Level.INFO, "internal tag states discovered: " + tagStates.size());
+        assertTrue(tagStates.size() >= 2);
+
+        final List<String> actualTagValues = new ArrayList<>();
+        for (TagState tag : tagStates) {
+            assertNotNull(tag);
+            actualTagValues.add(tag.value);
+        }
+
+        // assert check if every expected tag value is present in actual values list.
+        for (String tagValue : expectedTagValues) {
+            assertTrue(actualTagValues.contains(tagValue));
+            actualTagValues.remove(tagValue);
+        }
+
+        // verify tag values no more exist in list that verifies duplicate tags are not created
+        for (String tagValue : expectedTagValues) {
+            assertFalse(actualTagValues.contains(tagValue));
         }
     }
 

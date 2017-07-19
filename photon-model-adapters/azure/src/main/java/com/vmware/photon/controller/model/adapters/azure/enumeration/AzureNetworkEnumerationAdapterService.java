@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_subnet;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VIRTUAL_NETWORKS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
@@ -56,6 +58,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -65,6 +68,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -102,6 +106,8 @@ import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
  */
 public class AzureNetworkEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_NETWORK_ENUMERATION_ADAPTER;
+    private static final String NETWORK_TAG_TYPE_VALUE = azure_vnet.toString();
+    private static final String SUBNET_TAG_TYPE_VALUE = azure_subnet.toString();
 
     /**
      * The local service context that is used to identify and create/update a representative set of
@@ -139,6 +145,16 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Local subnet states map.
         // Key -> Subnet state id; value -> subnet state documentLink.
         Map<String, String> subnetStates = new ConcurrentHashMap<>();
+
+        // stores a mapping of internal tag values for networks.
+        Map<String, String> networkInternalTagsMap = new ConcurrentHashMap<>();
+        // stores documentSelfLink for networks internal tags
+        Set<String> networkInternalTagLinksSet = new HashSet<>();
+
+        // stores a mapping of internal tag values for subnets.
+        Map<String, String> subnetInternalTagsMap = new ConcurrentHashMap<>();
+        // stores documentSelfLink for subnets internal tags
+        Set<String> subnetInternalTagLinksSet = new HashSet<>();
 
         // Stored operation to signal completion to the Azure network enumeration once all the
         // stages are successfully completed.
@@ -210,9 +226,11 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         QUERY_RESOURCE_GROUP_STATES,
         QUERY_NETWORK_STATES,
         QUERY_SUBNET_STATES,
-        CREATE_TAG_STATES,
+        CREATE_NETWORK_EXTERNAL_TAG_STATES,
+        CREATE_NETWORK_INTERNAL_TAG_STATES,
         CREATE_UPDATE_NETWORK_STATES,
         UPDATE_TAG_LINKS,
+        CREATE_SUBNET_INTERNAL_TAG_STATES,
         CREATE_UPDATE_SUBNET_STATES,
         DELETE_NETWORK_STATES,
         DELETE_SUBNET_STATES,
@@ -339,17 +357,23 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             queryNetworkStates(context, NetworkEnumStages.QUERY_SUBNET_STATES);
             break;
         case QUERY_SUBNET_STATES:
-            querySubnetStates(context, NetworkEnumStages.CREATE_TAG_STATES);
+            querySubnetStates(context, NetworkEnumStages.CREATE_NETWORK_EXTERNAL_TAG_STATES);
             break;
-        case CREATE_TAG_STATES:
-            createNetworkTagStates(context, NetworkEnumStages.CREATE_UPDATE_NETWORK_STATES);
+        case CREATE_NETWORK_EXTERNAL_TAG_STATES:
+            createNetworkExternalTagStates(context, NetworkEnumStages.CREATE_NETWORK_INTERNAL_TAG_STATES);
+            break;
+        case CREATE_NETWORK_INTERNAL_TAG_STATES:
+            createNetworkInternalTagStates(context, NetworkEnumStages.CREATE_UPDATE_NETWORK_STATES);
             break;
         case CREATE_UPDATE_NETWORK_STATES:
             createUpdateNetworkStates(context, NetworkEnumStages.UPDATE_TAG_LINKS);
             break;
         case UPDATE_TAG_LINKS:
             updateNetworkTagLinks(context).whenComplete(
-                    thenHandleSubStage(context, NetworkEnumStages.CREATE_UPDATE_SUBNET_STATES));
+                    thenHandleSubStage(context, NetworkEnumStages.CREATE_SUBNET_INTERNAL_TAG_STATES));
+            break;
+        case CREATE_SUBNET_INTERNAL_TAG_STATES:
+            createSubnetInternalTagStates(context, NetworkEnumStages.CREATE_UPDATE_SUBNET_STATES);
             break;
         case CREATE_UPDATE_SUBNET_STATES:
             createUpdateSubnetStates(context, NetworkEnumStages.DELETE_NETWORK_STATES);
@@ -749,7 +773,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .setCompletion(completionHandler));
     }
 
-    private void createNetworkTagStates(NetworkEnumContext context, NetworkEnumStages next) {
+    /**
+     * Create external and internal tags resources for Networks.
+     */
+    private void createNetworkExternalTagStates(NetworkEnumContext context, NetworkEnumStages next) {
         logFine("Create or update Tag States for discovered Networks with the actual state in Azure.");
 
         if (context.virtualNetworks.isEmpty()) {
@@ -761,18 +788,13 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // POST each of the tags. If a tag exists it won't be created again. We don't want the name
         // tags, so filter them out
         List<Operation> operations = context.virtualNetworks.values().stream()
-
                 .filter(vNet -> vNet.tags != null && !vNet.tags.isEmpty())
-
                 .flatMap(vNet -> vNet.tags.entrySet().stream())
-
-                .map(vNetTagEntry -> newTagState(vNetTagEntry.getKey(), vNetTagEntry.getValue(), true,
-                        context.parentCompute.tenantLinks))
-
+                .map(vNetTagEntry -> newTagState(vNetTagEntry.getKey(), vNetTagEntry.getValue(),
+                        true, context.parentCompute.tenantLinks))
                 .map(vNetTagState -> Operation
                         .createPost(this, TagService.FACTORY_LINK)
                         .setBody(vNetTagState))
-
                 .collect(Collectors.toList());
 
         if (operations.isEmpty()) {
@@ -786,6 +808,27 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 }
             }).sendWith(this);
         }
+    }
+
+    /**
+     * Create internal tag states for networks.
+     */
+    private void createNetworkInternalTagStates(NetworkEnumContext context, NetworkEnumStages next) {
+        TagState internalTypeTag = newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+                NETWORK_TAG_TYPE_VALUE, false, context.parentCompute.tenantLinks);
+        // operation to create tag "type" for subnets.
+        Operation.createPost(this, TagService.FACTORY_LINK)
+                .setBody(internalTypeTag)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere("Error creating internal type tag for networks %s", e.getMessage());
+                    } else {
+                        context.networkInternalTagsMap.put(PhotonModelConstants.TAG_KEY_TYPE,
+                                NETWORK_TAG_TYPE_VALUE);
+                        context.networkInternalTagLinksSet.add(internalTypeTag.documentSelfLink);
+                    }
+                    handleSubStage(context, next);
+                }).sendWith(this);
     }
 
     /**
@@ -808,7 +851,24 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     NetworkState networkState = buildNetworkState(context, virtualNetwork,
                             existingNetworkState);
 
-                    setTagLinksToResourceState(networkState, virtualNetwork.tags);
+                    setTagLinksToResourceState(networkState, virtualNetwork.tags, true);
+
+                    if (existingNetworkState == null) {
+                        // set internal tags as tagLinks for networks to be newly created.
+                        setTagLinksToResourceState(networkState, context.networkInternalTagsMap,
+                                false);
+                    } else {
+                        // for already existing networks, add internal tags only if missing
+                        if (networkState.tagLinks == null || networkState.tagLinks.isEmpty()) {
+                            setTagLinksToResourceState(networkState, context.networkInternalTagsMap,
+                                    false);
+                        } else {
+                            context.networkInternalTagLinksSet.stream()
+                                    .filter(tagLink -> !networkState.tagLinks.contains(tagLink))
+                                    .map(tagLink -> networkState.tagLinks.add(tagLink))
+                                    .collect(Collectors.toSet());
+                        }
+                    }
 
                     CompletionHandler handler = (completedOp, failure) -> {
                         if (failure != null) {
@@ -882,6 +942,27 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     }
 
     /**
+     * Create internal tag resources for subnets.
+     */
+    private void createSubnetInternalTagStates(NetworkEnumContext context, NetworkEnumStages next) {
+        TagState internalTypeTag = newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+                SUBNET_TAG_TYPE_VALUE, false, context.parentCompute.tenantLinks);
+        // operation to create tag "type" for subnets.
+        Operation.createPost(this, TagService.FACTORY_LINK)
+                .setBody(internalTypeTag)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere("Error creating internal type tag for subnets %s", e.getMessage());
+                    } else {
+                        context.subnetInternalTagsMap.put(PhotonModelConstants.TAG_KEY_TYPE,
+                                SUBNET_TAG_TYPE_VALUE);
+                        context.subnetInternalTagLinksSet.add(internalTypeTag.documentSelfLink);
+                    }
+                    handleSubStage(context, next);
+                }).sendWith(this);
+    }
+
+    /**
      * Create new subnet states or updates matching subnet states with the actual state in Azure.
      */
     private void createUpdateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
@@ -895,6 +976,21 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             SubnetStateWithParentVNetId subnetStateWithParentVNetId = context.subnets.get(subnetId);
 
             SubnetState subnetState = subnetStateWithParentVNetId.subnetState;
+            if (!context.subnetStates.containsKey(subnetId)) {
+                // set internal tags as tagLinks for subnets to be newly created.
+                setTagLinksToResourceState(subnetState, context.subnetInternalTagsMap, false);
+            } else {
+                // for already existing subnets, add internal tags only if missing
+                if (subnetState.tagLinks == null || subnetState.tagLinks.isEmpty()) {
+                    setTagLinksToResourceState(subnetState, context.subnetInternalTagsMap,
+                            false);
+                } else {
+                    context.subnetInternalTagLinksSet.stream()
+                            .filter(tagLink -> !subnetState.tagLinks.contains(tagLink))
+                            .map(tagLink -> subnetState.tagLinks.add(tagLink))
+                            .collect(Collectors.toSet());
+                }
+            }
 
             // Update networkLink with "latest" (either created or updated)
             // NetworkState.documentSelfLink
@@ -963,6 +1059,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             resultNetworkState.documentSelfLink = localNetworkState.documentSelfLink;
             resultNetworkState.groupLinks = localNetworkState.groupLinks;
             resultNetworkState.resourcePoolLink = localNetworkState.resourcePoolLink;
+            resultNetworkState.tagLinks = localNetworkState.tagLinks;
         } else {
             resultNetworkState.id = azureVirtualNetwork.id;
             resultNetworkState.authCredentialsLink = context.parentAuth.documentSelfLink;

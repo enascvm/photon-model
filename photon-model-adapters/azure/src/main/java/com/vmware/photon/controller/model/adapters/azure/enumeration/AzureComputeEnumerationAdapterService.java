@@ -20,7 +20,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_net_interface;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vm;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
@@ -81,6 +82,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResu
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -99,6 +101,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -124,6 +127,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList("Deleting",
             "Deleted");
     private ExecutorService executorService;
+    private static final String NETWORK_INTERFACE_TAG_TYPE_VALUE = azure_net_interface.toString();
 
     /**
      * The enumeration service context that holds all the information needed to determine the list
@@ -152,6 +156,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Map<String, StorageDescription> storageDescriptions = new ConcurrentHashMap<>();
         Map<String, NicMetadata> networkInterfaceIds = new ConcurrentHashMap<>();
         Map<String, String> computeDescriptionIds = new ConcurrentHashMap<>();
+        // stores a mapping of all internal tags for network interfaces.
+        Map<String, String> nicInternalTagsMap = new ConcurrentHashMap<>();
+        // stores documentSelfLink for network interfaces internal tags
+        Set<String> nicInternalTagLinksSet = new HashSet<>();
         // Compute States for patching additional fields.
         Map<String, ComputeState> computeStatesForPatching = new ConcurrentHashMap<>();
         List<String> vmIds = new ArrayList<>();
@@ -184,13 +192,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private enum ComputeEnumerationSubStages {
         LISTVMS,
         GET_COMPUTE_STATES,
-        CREATE_EXTERNAL_TAG_STATES,
-        CREATE_INTERNAL_TYPE_TAG,
+        CREATE_COMPUTE_EXTERNAL_TAG_STATES,
+        CREATE_COMPUTE_INTERNAL_TYPE_TAG,
         UPDATE_COMPUTE_STATES,
         GET_DISK_STATES,
         GET_STORAGE_DESCRIPTIONS,
         CREATE_COMPUTE_DESCRIPTIONS,
         UPDATE_DISK_STATES,
+        CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES,
         CREATE_NETWORK_INTERFACE_STATES,
         CREATE_COMPUTE_STATES,
         PATCH_ADDITIONAL_FIELDS,
@@ -322,13 +331,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             queryForComputeStates(ctx, ComputeEnumerationSubStages.GET_DISK_STATES);
             break;
         case GET_DISK_STATES:
-            queryForDiskStates(ctx, ComputeEnumerationSubStages.CREATE_INTERNAL_TYPE_TAG);
+            queryForDiskStates(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_INTERNAL_TYPE_TAG);
             break;
-        case CREATE_INTERNAL_TYPE_TAG:
-            createInternalTypeTag(ctx, ComputeEnumerationSubStages.CREATE_EXTERNAL_TAG_STATES);
+        case CREATE_COMPUTE_INTERNAL_TYPE_TAG:
+            createInternalTypeTag(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_EXTERNAL_TAG_STATES);
             break;
-        case CREATE_EXTERNAL_TAG_STATES:
-            createTagStates(ctx, ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES);
+        case CREATE_COMPUTE_EXTERNAL_TAG_STATES:
+            createTagStates(ctx,
+                    ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES);
+            break;
+        case CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES:
+            createNetworkInterfaceInternalTagStates(ctx,
+                    ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES);
             break;
         case CREATE_NETWORK_INTERFACE_STATES:
             createNetworkInterfaceStates(ctx, ComputeEnumerationSubStages.UPDATE_DISK_STATES);
@@ -389,7 +403,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private void createInternalTypeTag(EnumerationContext context, ComputeEnumerationSubStages next) {
-        TagService.TagState typeTag = newTagState(TAG_KEY_TYPE, AzureResourceType.azure_vm.toString(),
+        TagService.TagState typeTag = newTagState(TAG_KEY_TYPE, azure_vm.toString(),
                 false, context.parentCompute.tenantLinks);
 
         Operation.CompletionHandler handler = (completedOp, failure) -> {
@@ -1030,6 +1044,30 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     /**
+     * Create internal tag resources for network interfaces.
+     */
+    private void createNetworkInterfaceInternalTagStates(EnumerationContext ctx,
+            ComputeEnumerationSubStages next) {
+        TagState internalTypeTag = newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+                NETWORK_INTERFACE_TAG_TYPE_VALUE, false, ctx.parentCompute.tenantLinks);
+        // operation to create tag "type" for network interfaces.
+        Operation.createPost(this, TagService.FACTORY_LINK)
+                .setBody(internalTypeTag)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere("Error creating internal type tag for network interfaces: %s",
+                                e.getMessage());
+                    } else {
+                        ctx.nicInternalTagsMap.put(PhotonModelConstants.TAG_KEY_TYPE,
+                                NETWORK_INTERFACE_TAG_TYPE_VALUE);
+                        ctx.nicInternalTagLinksSet.add(internalTypeTag.documentSelfLink);
+                    }
+                    ctx.subStage = next;
+                    handleSubStage(ctx);
+                }).sendWith(this);
+    }
+
+    /**
      * Create network interface states for each VM
      */
     private void createNetworkInterfaceStates(EnumerationContext ctx,
@@ -1180,9 +1218,20 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             List<DeferredResult<NetworkInterfaceState>> ops, NicMetadata nicMeta,
             boolean isCreate) {
         if (isCreate) {
+            // set internal tags as tagLinks for nics to be newly created.
+            setTagLinksToResourceState(nic, ctx.nicInternalTagsMap, false);
             // perform POST request
             addPostToNetworkInterfaceService(ctx, ops, nic, remoteNic, nicMeta);
         } else {
+            // for already existing nics, add internal tags only if missing
+            if (nic.tagLinks == null || nic.tagLinks.isEmpty()) {
+                setTagLinksToResourceState(nic, ctx.nicInternalTagsMap, false);
+            } else {
+                ctx.nicInternalTagLinksSet.stream()
+                        .filter(tagLink -> !nic.tagLinks.contains(tagLink))
+                        .map(tagLink -> nic.tagLinks.add(tagLink))
+                        .collect(Collectors.toSet());
+            }
             // perform PATCH request
             addPatchToNetworkInterfaceService(ctx, ops, nic, remoteNic, nicMeta);
         }
@@ -1361,7 +1410,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.tenantLinks = ctx.parentCompute.tenantLinks;
 
         // add tag links
-        setTagLinksToResourceState(computeState, virtualMachine.getTags());
+        setTagLinksToResourceState(computeState, virtualMachine.getTags(), true);
         if (computeState.tagLinks == null) {
             computeState.tagLinks = new HashSet<>();
         }

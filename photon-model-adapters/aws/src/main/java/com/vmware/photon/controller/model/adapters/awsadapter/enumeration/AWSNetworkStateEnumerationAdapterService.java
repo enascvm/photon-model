@@ -812,7 +812,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 awsResourceTags.remove(AWSConstants.AWS_TAG_NAME);
             }
             // add tag links
-            setTagLinksToResourceState(resourceState, awsResourceTags);
+            setTagLinksToResourceState(resourceState, awsResourceTags, true);
         }
     }
 
