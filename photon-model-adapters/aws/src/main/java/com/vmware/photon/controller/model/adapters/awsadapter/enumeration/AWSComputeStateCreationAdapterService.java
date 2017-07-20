@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_instance;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getInternalTypeTagQuery;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromCD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRepresentativeListOfCDsFromInstanceList;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.mapInstanceToComputeState;
@@ -139,7 +138,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // states are successfully created.
         public Operation operation;
         // maintains internal tagLinks Example, link for tagState for type=ec2_instances
-        public Set<String> internalTagLinks = new HashSet<>();
+        public String ec2TagLink;
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
@@ -220,11 +219,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         this.logFine(() -> String.format("Transition to: %s", context.creationStage));
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
-            getRelatedComputeDescriptions(context,
-                    AWSComputeStateCreationStage.GET_INTERNAL_TYPE_TAG);
-            break;
-        case GET_INTERNAL_TYPE_TAG:
-            getInternalTypeTag(context);
+            getRelatedComputeDescriptions(context, AWSComputeStateCreationStage.CREATE_INTERNAL_TYPE_TAG);
             break;
         case CREATE_INTERNAL_TYPE_TAG:
             createInternalTypeTag(context, AWSComputeStateCreationStage.CREATE_EXTERNAL_TAGS);
@@ -276,47 +271,18 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         };
     }
 
-    private void getInternalTypeTag(AWSComputeStateCreationContext context) {
-        QueryTask queryTask = getInternalTypeTagQuery(ec2_instance.toString(), context.request.tenantLinks);
-        queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
-
-        // create the query to find an existing internal tag state for type=ec2_instance
-        QueryUtils.startQueryTask(this, queryTask)
-                .whenComplete((qrt, e) -> {
-                    if (e != null) {
-                        logWarning(() -> String.format("Failure retrieving query results: %s",
-                                e.toString()));
-                        finishWithFailure(context, e);
-                        return;
-                    }
-
-                    if (qrt != null && qrt.results.documentCount > 0) {
-                        for (Object tag : qrt.results.documents.values()) {
-                            TagState typeTag = Utils.fromJson(tag, TagState.class);
-                            context.internalTagLinks.add(typeTag.documentSelfLink);
-                        }
-                        logFine(() -> String.format("Internal tagState found for type %s", ec2_instance.toString()));
-                        context.creationStage = AWSComputeStateCreationStage.CREATE_EXTERNAL_TAGS;
-                    } else {
-                        logFine(() -> "No internal tagState found - creating one");
-                        context.creationStage = AWSComputeStateCreationStage.CREATE_INTERNAL_TYPE_TAG;
-                    }
-                    handleComputeStateCreateOrUpdate(context);
-                });
-    }
-
     private void createInternalTypeTag(AWSComputeStateCreationContext context, AWSComputeStateCreationStage next) {
         TagState typeTag = newTagState(TAG_KEY_TYPE, ec2_instance.toString(), false, context.request.tenantLinks);
 
         Operation.CompletionHandler handler = (completedOp, failure) -> {
             if (failure != null) {
                 // Process successful operations only.
-                logWarning(() -> String.format("Error creating internal tag: %s", failure.getMessage()));
-                return;
+                context.creationStage = next;
+                handleComputeStateCreateOrUpdate(context);
             }
 
             TagState tagState = completedOp.getBody(TagState.class);
-            context.internalTagLinks.add(tagState.documentSelfLink);
+            context.ec2TagLink = tagState.documentSelfLink;
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         };
@@ -449,7 +415,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.endpointLink,
                         context.computeDescriptionMap.get(descKey),
                         context.request.parentCDStatsAdapterReferences,
-                        context.internalTagLinks,
+                        context.ec2TagLink,
                         regionId, zoneId,
                         context.request.tenantLinks);
                 computeStateToBeCreated.networkInterfaceLinks = new ArrayList<>();
@@ -587,7 +553,6 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     linksToNICSToAddOrRemove = addUpdateOrRemoveNICStates(context, instance,
                             deviceIndexesDelta);
                 }
-                // }}
 
                 // Create dedicated PATCH operation for updating NIC Links {{
                 if (linksToNICSToAddOrRemove.get(ADD_NIC_STATES) != null
@@ -603,7 +568,6 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             .setReferer(this.getUri());
                     context.enumerationOperations.add(patchComputeStateNICLinks);
                 }
-                // }}
 
                 // Update ComputeState
                 String zoneId = instance.getPlacement().getAvailabilityZone();
@@ -618,7 +582,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.endpointLink,
                         existingComputeState.descriptionLink,
                         context.request.parentCDStatsAdapterReferences,
-                        context.internalTagLinks,
+                        context.ec2TagLink,
                         zoneData.regionId, zoneId,
                         context.request.tenantLinks);
                 computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;
@@ -626,7 +590,18 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 Operation patchComputeState = createPatchOperation(this, computeStateToBeUpdated,
                         existingComputeState.documentSelfLink);
                 context.enumerationOperations.add(patchComputeState);
-                // }}
+
+                Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                        (ComputeState.FIELD_NAME_TAG_LINKS, Collections.singletonList(context.ec2TagLink));
+                Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
+                        (ComputeState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+
+                ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
+                        .create(collectionsToAddMap, collectionsToRemoveMap);
+                context.enumerationOperations.add(Operation.createPatch(this.getHost(),
+                        computeStateToBeUpdated.documentSelfLink)
+                        .setReferer(this.getUri())
+                        .setBody(updateTagLinksRequest));
             }
 
             context.creationStage = next;

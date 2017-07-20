@@ -44,12 +44,10 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
-import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
@@ -169,39 +167,12 @@ public class AWSEnumerationUtils {
     }
 
     /**
-     *
-     * Get internal tagState used for maintaining cloud specific type.
-     * The only filter we can apply to this query is the resourceType (i.e., ec2_instance, ec2_vpc, etc.)
-     */
-    public static QueryTask getInternalTypeTagQuery(String resourceType, List<String> tenantLinks) {
-        Query query = Query.Builder.create()
-                .addKindFieldClause(TagState.class)
-                .addFieldClause(TagState.FIELD_NAME_KEY,
-                        PhotonModelConstants.TAG_KEY_TYPE)
-                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, false)
-                .addFieldClause(TagState.FIELD_NAME_VALUE, resourceType)
-                .build();
-
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(query)
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(getQueryResultLimit())
-                .build();
-
-        queryTask.documentSelfLink = UUID.randomUUID().toString();
-        queryTask.tenantLinks = tenantLinks;
-
-        return queryTask;
-    }
-
-    /**
      * Maps the instance discovered on AWS to a local compute state that will be persisted.
      */
     public static ComputeState mapInstanceToComputeState(ServiceHost host, Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
             String endpointLink,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
-            Set<String> internalTagLinks, String regionId, String zoneId, List<String> tenantLinks) {
+            String internalTagLink, String regionId, String zoneId, List<String> tenantLinks) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
@@ -227,7 +198,6 @@ public class AWSEnumerationUtils {
         computeState.hostName = instance.getPublicDnsName();
 
         // TODO VSYM-375 for adding disk information
-
         computeState.address = instance.getPublicIpAddress();
         computeState.powerState = AWSUtils.mapToPowerState(instance.getState());
 
@@ -241,6 +211,7 @@ public class AWSEnumerationUtils {
         // Network State. Create one network state mapping to each VPC that is discovered during
         // enumeration.
         computeState.customProperties.put(AWS_VPC_ID, instance.getVpcId());
+        computeState.tagLinks = new HashSet<>();
 
         if (!instance.getTags().isEmpty()) {
 
@@ -266,13 +237,8 @@ public class AWSEnumerationUtils {
         }
 
         // append internal tagLinks to any existing ones
-        if (internalTagLinks != null && !internalTagLinks.isEmpty()) {
-            if (computeState.tagLinks != null && !computeState.tagLinks.isEmpty()) {
-                computeState.tagLinks.addAll(internalTagLinks);
-            } else {
-                computeState.tagLinks = new HashSet<>();
-                computeState.tagLinks.addAll(internalTagLinks);
-            }
+        if (internalTagLink != null) {
+            computeState.tagLinks.add(internalTagLink);
         }
 
         if (instance.getLaunchTime() != null) {
