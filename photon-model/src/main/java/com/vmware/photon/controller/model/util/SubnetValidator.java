@@ -36,7 +36,7 @@ public class SubnetValidator {
     public static boolean isValidIPAddress(String ipAddress, IPVersion ipVersion) {
         if (StringUtil.isNullOrEmpty(ipAddress)) {
             throw new LocalizableValidationException("IP address must be specified",
-                    "model.subnet.ip.must.be.specified");
+                    "subnet.range.ip.must.be.specified");
         }
         switch (ipVersion) {
         case IPv6:
@@ -135,6 +135,6 @@ public class SubnetValidator {
             isIpGreaterThanStart = true;
         }
 
-        return (isIpGreaterThanStart && isIpLessThanEnd) ;
+        return (isIpGreaterThanStart && isIpLessThanEnd);
     }
 }
