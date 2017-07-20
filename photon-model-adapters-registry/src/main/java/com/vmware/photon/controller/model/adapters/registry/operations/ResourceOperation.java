@@ -31,7 +31,9 @@ public enum ResourceOperation {
 
     CREATE_SNAPSHOT("Snapshot.Create", "Create Snapshot", "Create Snapshot Operation"),
 
-    DELETE_SNAPSHOT("Snapshot.Delete", "Delete Snapshot", "Delete Snapshot Operation");
+    DELETE_SNAPSHOT("Snapshot.Delete", "Delete Snapshot", "Delete Snapshot Operation"),
+
+    REVERT_SNAPSHOT("Snapshot.Revert", "Revert To Snapshot", "Revert To Snapshot Operation");
 
     public final String operation;
 

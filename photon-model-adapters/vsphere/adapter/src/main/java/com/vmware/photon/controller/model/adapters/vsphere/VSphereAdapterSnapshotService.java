@@ -155,6 +155,27 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     }).sendWith(this);
             break;
         case REVERT:
+            Operation.createGet(UriUtils.buildUri(this.getHost(),request.resourceLink()))
+                    .setCompletion((o,e) -> {
+                        if (e != null) {
+                            mgr.patchTaskToFailure(e);
+                            return;
+                        }
+                        SnapshotContext revertSnapshotContext = new SnapshotContext(o.getBody(SnapshotState.class), mgr,
+                                requestType);
+                        DeferredResult.completed(revertSnapshotContext)
+                                .thenCompose(this::thenSetComputeDescription)
+                                .thenCompose(this::thenSetParentComputeDescription)
+                                .thenCompose(this::querySnapshotStates)
+                                .thenCompose(this::performSnapshotOperation)
+                                .whenComplete((context, err) -> {
+                                    if (err != null) {
+                                        mgr.patchTaskToFailure(err);
+                                        return;
+                                    }
+                                    mgr.finishTask();
+                                });
+                    }).sendWith(this);
             break;
         default:
             mgr.patchTaskToFailure(new IllegalStateException(String.format("Unknown Operation %s for a Snapshot",
@@ -223,7 +244,9 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                         Optional<SnapshotState> snapshotStateOptional = rp.streamDocuments(SnapshotState.class).findFirst();
                         if (snapshotStateOptional.isPresent()) {
                             context.existingSnapshotState = snapshotStateOptional.get();
-                            context.snapshotState.parentLink = context.existingSnapshotState.documentSelfLink;
+                            if (context.requestType == SnapshotService.SnapshotRequestType.CREATE) {
+                                context.snapshotState.parentLink = context.existingSnapshotState.documentSelfLink;
+                            }
                         }
                     }
                     return context;
@@ -257,6 +280,15 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     });
             break;
         case REVERT:
+            pool.submit(this, context.parentComputeDescription.adapterManagementReference,
+                    context.parentComputeDescription.description.authCredentialsLink,
+                    (connection, e) -> {
+                        if (e != null) {
+                            result.fail(e);
+                        } else {
+                            revertSnapshot(context, connection, result);
+                        }
+                    });
             break;
         default:
             result.fail(new IllegalStateException("Unsupported requestType " + context.requestType));
@@ -361,7 +393,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         // Once the actual snapshot delete is successful, process the update of the children
         // snapshot states and the next current snapshot
         final List<SnapshotState> childSnapshots = new ArrayList<>();
-        DeferredResult<List<SnapshotState>> dr = getChildSnapshots(snapshot.documentSelfLink, context.mgr) ;
+        DeferredResult<List<SnapshotState>> dr = getChildSnapshots(snapshot.documentSelfLink) ;
         List<SnapshotState> updatedChildSnapshots = new ArrayList<>();
         dr.whenComplete((o, e) -> {
             if (e != null) {
@@ -381,14 +413,81 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                 context.snapshotOperations =
                         updatedChildSnapshots
                                 .stream()
-                                .map(childSnapshot -> Operation.createPatch(this.getHost(),
-                                        SnapshotService.FACTORY_LINK)
+                                .map(childSnapshot -> Operation.createPatch(UriUtils.buildUri(getHost(), childSnapshot.documentSelfLink))
                                         .setBody(childSnapshot)
                                         .setReferer(getUri()))
                                 .collect(Collectors.toList());
             }
             processNextStepsForDeleteOperation(context, deferredResult);
         });
+    }
+
+    private void revertSnapshot(SnapshotContext context, Connection connection, DeferredResult<SnapshotContext> deferredResult) {
+        final SnapshotState snapshot = context.snapshotState;
+        SnapshotState existingSnapshotState = context.existingSnapshotState;
+        // Physical snapshot processing
+        ManagedObjectReference snapshotMoref = CustomProperties.of(snapshot)
+                .getMoRef(CustomProperties.MOREF);
+
+        if (snapshotMoref == null) {
+            deferredResult.fail(new IllegalStateException(String.format("Cannot find the snapshot %s to revert to", snapshotMoref)));
+            return;
+        }
+
+        ManagedObjectReference task;
+        TaskInfo info;
+        try {
+            logInfo("Reverting to  snapshot with name %s", context.snapshotState.name);
+            task = connection.getVimPort()
+                    .revertToSnapshotTask(snapshotMoref, null, false);
+            info = VimUtils.waitTaskEnd(connection, task);
+            if (info.getState() != TaskInfoState.SUCCESS) {
+                VimUtils.rethrow(info.getError());
+            }
+        } catch (Exception e) {
+            logSevere("Reverting to the snapshot %s failed", context.snapshotState.name);
+            deferredResult.fail(e);
+            return;
+        }
+
+        // Check if we're trying to revert to the current snapshot. In that case we need not
+        // update the isCurrent for both the snapshot states (existing and the reverted).
+        // Also sending multiple patch requests on the same snapshot document will
+        // cause concurrency issue
+        if (snapshot.isCurrent) {
+            deferredResult.complete(context);
+        } else {
+            snapshot.isCurrent = true;
+
+            context.snapshotOperations.add(Operation
+                    .createPatch(UriUtils.buildUri(getHost(), snapshot.documentSelfLink))
+                    .setBody(snapshot)
+                    .setReferer(getUri()));
+
+            if (existingSnapshotState != null) {
+                existingSnapshotState.isCurrent = false;
+                context.snapshotOperations.add(Operation
+                        .createPatch(UriUtils.buildUri(getHost(), existingSnapshotState.documentSelfLink))
+                        .setBody(existingSnapshotState)
+                        .setReferer(getUri()));
+            }
+
+            OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
+                                                                    exc) -> {
+                if (exc != null) {
+                    this.logSevere(() -> String.format("Error updating the snapshot states: %s",
+                            Utils.toString(exc)));
+                    deferredResult.fail(
+                            new IllegalStateException("Error updating the snapshot states"));
+                    return;
+                }
+                deferredResult.complete(context);
+            };
+
+            OperationJoin joinOp = OperationJoin.create(context.snapshotOperations);
+            joinOp.setCompletion(joinCompletion);
+            joinOp.sendWith(this.getHost());
+        }
     }
 
     private void processNextStepsForDeleteOperation(SnapshotContext context, DeferredResult<SnapshotContext> deferredResult) {
@@ -469,7 +568,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         return dr;
     }
 
-    private DeferredResult<List<SnapshotState>> getChildSnapshots(String snapshotLink, TaskManager mgr) {
+    private DeferredResult<List<SnapshotState>> getChildSnapshots(String snapshotLink) {
         DeferredResult<List<SnapshotState>> snapshotStates = new DeferredResult<>();
 
         // find the child snapshots for the given snapshot document link
@@ -511,7 +610,9 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         ResourceOperationSpecService.ResourceOperationSpec createSnapshotSpec = getResourceOperationSpec(ResourceOperation.CREATE_SNAPSHOT, null);
         ResourceOperationSpecService.ResourceOperationSpec deleteSnapshotSpec = getResourceOperationSpec(ResourceOperation.DELETE_SNAPSHOT,
                 TargetCriteria.RESOURCE_HAS_SNAPSHOTS.getCriteria());
-        return new ResourceOperationSpecService.ResourceOperationSpec[]{createSnapshotSpec, deleteSnapshotSpec};
+        ResourceOperationSpecService.ResourceOperationSpec revertSnapshotSpec = getResourceOperationSpec(ResourceOperation.REVERT_SNAPSHOT,
+                TargetCriteria.RESOURCE_HAS_SNAPSHOTS.getCriteria());
+        return new ResourceOperationSpecService.ResourceOperationSpec[]{createSnapshotSpec, deleteSnapshotSpec, revertSnapshotSpec};
     }
 
     private ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,

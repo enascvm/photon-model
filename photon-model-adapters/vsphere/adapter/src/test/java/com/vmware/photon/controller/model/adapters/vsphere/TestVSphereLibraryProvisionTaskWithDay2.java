@@ -101,13 +101,15 @@ public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryP
     }
 
     @Test
-    public void deployFromLibraryAndCreateSnapshot() throws Throwable {
+    public void deployFromLibraryAndPerformSnapshotOperations() throws Throwable {
         ComputeService.ComputeState vm = provisionVMAndGetState();
         try {
             if (vm == null) {
                 return;
             }
-            createSnapshotAndWait(vm);
+            createSnapshotAndWait(vm, false);
+            createSnapshotAndWait(vm, true); // this will create a child to the snapshot created in above statement
+            revertToSnapshotAndWait(vm);
             deleteSnapshotAndWait(vm);
         } finally {
             if (vm != null) {

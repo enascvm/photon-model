@@ -53,6 +53,7 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants;
@@ -573,26 +574,11 @@ public class BaseVSphereAdapterTest {
         assertEquals(ComputeService.PowerState.ON, cState[0].powerState);
     }
 
-    protected void createSnapshotAndWait(ComputeState vm) throws Throwable {
+    protected void createSnapshotAndWait(ComputeState vm, Boolean isSnapshottedAgain) throws Throwable {
 
         String taskLink = UUID.randomUUID().toString();
 
-        ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest("Snapshot.Create", vm.documentSelfLink, taskLink);
-
-        TestContext ctx = this.host.testCreate(1);
-        createTaskResultListener(this.host, taskLink, (u) -> {
-            if (u.getAction() != Service.Action.PATCH) {
-                return false;
-            }
-            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
-            if (TaskState.isFailed(response.taskInfo)) {
-                ctx.failIteration(
-                        new IllegalStateException(response.taskInfo.failure.message));
-            } else {
-                ctx.completeIteration();
-            }
-            return true;
-        });
+        ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest(ResourceOperation.CREATE_SNAPSHOT.operation, vm.documentSelfLink, taskLink);
 
         Operation createSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
                 .setBody(snapshotRequest)
@@ -603,16 +589,25 @@ public class BaseVSphereAdapterTest {
         sender.sendRequest(createSnapshotOp);
         this.host.log("Waiting for the snapshot to be created");
 
-        ComputeState[] cState = new ComputeState[1];
         this.host.waitFor("Create snapshot request failed", () -> {
-            cState[0] = this.host.getServiceState(null, ComputeState.class,
+            ComputeState cState = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, vm.documentSelfLink));
-
-            if (cState[0].customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS) != null &&
-                    cState[0].customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS).equalsIgnoreCase("true")) {
-                return true;
+            SnapshotState snapshotState = querySnapshotState(vm.documentSelfLink, true);
+            String hasSnapshot = cState.customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS);
+            if (!isSnapshottedAgain) {
+                if (hasSnapshot != null && Boolean.parseBoolean(hasSnapshot) &&
+                        snapshotState.parentLink == null) {
+                    return true;
+                } else {
+                    return false;
+                }
             } else {
-                return false;
+                if (hasSnapshot != null && Boolean.parseBoolean(hasSnapshot) &&
+                        snapshotState.parentLink != null) {
+                    return true;
+                } else {
+                    return false;
+                }
             }
         });
         this.host.log("Create snapshot operation completed successfully");
@@ -621,26 +616,11 @@ public class BaseVSphereAdapterTest {
     protected void deleteSnapshotAndWait(ComputeState computeState) throws Throwable {
 
         // Get the snapshot associated with the compute
-        SnapshotState snapshotState = querySnapshotState(computeState.documentSelfLink);
+        SnapshotState snapshotState = querySnapshotState(computeState.documentSelfLink, true);
 
         String taskLink = UUID.randomUUID().toString();
 
-        ResourceOperationRequest snapshotRequest = getDeleteSnapshotRequest("Snapshot.Delete", snapshotState.documentSelfLink, taskLink);
-
-        TestContext ctx = this.host.testCreate(1);
-        createTaskResultListener(this.host, taskLink, (u) -> {
-            if (u.getAction() != Service.Action.PATCH) {
-                return false;
-            }
-            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
-            if (TaskState.isFailed(response.taskInfo)) {
-                ctx.failIteration(
-                        new IllegalStateException(response.taskInfo.failure.message));
-            } else {
-                ctx.completeIteration();
-            }
-            return true;
-        });
+        ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(ResourceOperation.DELETE_SNAPSHOT.operation, "DELETE", snapshotState.documentSelfLink, taskLink);
 
         Operation deleteSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
                 .setBody(snapshotRequest)
@@ -651,22 +631,56 @@ public class BaseVSphereAdapterTest {
         sender.sendRequest(deleteSnapshotOp);
         this.host.log("Waiting for the snapshot to be deleted");
 
-        SnapshotState[] finalSnapshotState = new SnapshotState[1];
-        ComputeState[] finalComputeState = new ComputeState[1];
         this.host.waitFor("Delete snapshot request failed", () -> {
-            finalSnapshotState[0] = querySnapshotState(computeState.documentSelfLink);
-            finalComputeState[0] = this.host.getServiceState(null, ComputeState.class,
+            SnapshotState finalSnapshotState = querySnapshotState(computeState.documentSelfLink, true);
+            ComputeState finalComputeState = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, computeState.documentSelfLink));
-            // Check for the snapshot state and _hasSnapshots flag in compute
-            if (finalComputeState[0].customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS) != null &&
-                    finalComputeState[0].customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS).equalsIgnoreCase("false")
-                    && finalSnapshotState[0] == null) {
+            String hasSnapshot = finalComputeState.customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS);
+            // Check for the snapshot state and _hasSnapshots flag in compute. Since we are deleting
+            // the current snapshot, the vm is left with one more snapshot (which is the child of the deleted )
+            // snapshot. So hasSnapshot will still be true.
+            if (hasSnapshot != null && Boolean.parseBoolean(hasSnapshot)
+                    && finalSnapshotState == null) {
                 return true;
             } else {
                 return false;
             }
         });
         this.host.log("Delete snapshot operation completed successfully");
+    }
+
+    protected void revertToSnapshotAndWait(ComputeState computeState) throws Throwable {
+
+        // Get the snapshot to revert to
+        SnapshotState snapshotStateToRevertTo = querySnapshotState(computeState.documentSelfLink, false);
+
+        String taskLink = UUID.randomUUID().toString();
+
+        ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(ResourceOperation.REVERT_SNAPSHOT.operation, "REVERT", snapshotStateToRevertTo.documentSelfLink, taskLink);
+
+        Operation revertSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
+                .setBody(snapshotRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> Assert.assertNull(e));
+
+        TestRequestSender sender = new TestRequestSender(this.host);
+        sender.sendRequest(revertSnapshotOp);
+        this.host.log("Waiting for the snapshot to be reverted");
+
+        this.host.waitFor("Revert snapshot request failed", () -> {
+            SnapshotState finalSnapshotState = querySnapshotState(computeState.documentSelfLink, true);
+            ComputeState finalComputeState = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, computeState.documentSelfLink));
+            String hasSnapshot = finalComputeState.customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS);
+            // Check for the snapshot state and _hasSnapshots flag in compute
+            if (hasSnapshot != null && Boolean.parseBoolean(hasSnapshot)
+                    && finalSnapshotState.documentSelfLink.equals(snapshotStateToRevertTo.documentSelfLink)) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+        this.host.log("Revert to snapshot operation completed successfully");
     }
 
     private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink,
@@ -1021,12 +1035,12 @@ public class BaseVSphereAdapterTest {
         return resourceOperationRequest;
     }
 
-    private ResourceOperationRequest getDeleteSnapshotRequest(String operation, String documentSelfLink,
+    private ResourceOperationRequest getDeleteOrRevertSnapshotRequest(String operationId, String operationType, String documentSelfLink,
                                                         String taskLink) {
         Map<String, String> payload = new HashMap<>();
-        payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, "DELETE");
+        payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, operationType);
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
-        resourceOperationRequest.operation = operation;
+        resourceOperationRequest.operation = operationId;
         resourceOperationRequest.isMockRequest = isMock();
         resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, documentSelfLink);
         resourceOperationRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
@@ -1034,11 +1048,12 @@ public class BaseVSphereAdapterTest {
         return resourceOperationRequest;
     }
 
-    private SnapshotState querySnapshotState(String computeReferenceLink) {
+    private SnapshotState querySnapshotState(String computeReferenceLink, Boolean isCurrent) {
         List<SnapshotState> snapshotStates = new ArrayList<>();
         QueryTask.Query querySnapshot = QueryTask.Query.Builder.create()
                 .addKindFieldClause(SnapshotState.class)
                 .addFieldClause(SnapshotState.FIELD_NAME_COMPUTE_LINK, computeReferenceLink)
+                .addFieldClause(SnapshotState.FIELD_NAME_IS_CURRENT, isCurrent)
                 .build();
 
         QueryTask qTask = QueryTask.Builder.createDirectTask()
