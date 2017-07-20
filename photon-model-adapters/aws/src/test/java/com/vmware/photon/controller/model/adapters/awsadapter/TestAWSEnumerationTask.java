@@ -228,6 +228,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private EbsBlockDevice ebsBlockDevice;
     private String snapshotId;
     private String diskId;
+    private boolean isTestBucketPatched = false;
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -407,8 +408,16 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // S3 bucket and validate that we did not add duplicate tagLink in diskState and removed the tagLink
         // for tag deleted from AWS.
         validateS3Enumeration(count1, count2);
+        // Remove region from S3 bucket DiskState.
+        removeS3BucketRegionFromDiskState();
         // Validate that deleted S3 tag's local state is deleted.
         validateS3TagStatesCreated();
+
+        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
+                TEST_CASE_ADDITIONAL_VM);
+
+        // Validate that diskState of S3 bucket with null region got deleted
+        validateBucketStateDeletionForNullRegion();
 
         // Delete the S3 bucket created in the test
         this.s3Client.deleteBucket(TEST_BUCKET_NAME);
@@ -957,6 +966,64 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertEquals(Operation.STATUS_CODE_OK, internalTagOpResponse.getStatusCode());
     }
 
+    private void removeS3BucketRegionFromDiskState() {
+        Query query = Query.Builder.create()
+                .addKindFieldClause(DiskState.class)
+                .addFieldClause(DiskState.FIELD_NAME_ID, TEST_BUCKET_NAME)
+                .build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
+
+        Operation getTestBucketState = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+                .setBody(queryTask).setReferer(this.host.getUri());
+
+        Operation response = this.host.waitForResponse(getTestBucketState);
+
+        QueryTask queryTaskResponse = response.getBody(QueryTask.class);
+
+        DiskState testBucketDiskState = Utils.fromJson(queryTaskResponse.results.documents.get(queryTaskResponse
+                .results.documentLinks.get(0)), DiskState.class);
+
+        testBucketDiskState.regionId = null;
+
+        Operation setNullRegionOp = Operation.createPatch(this.host, testBucketDiskState.documentSelfLink)
+                .setBody(testBucketDiskState).setReferer(this.host.getUri());
+
+        response = this.host.waitForResponse(setNullRegionOp);
+
+        if (response.getStatusCode() == Operation.STATUS_CODE_OK) {
+            this.isTestBucketPatched = true;
+        }
+    }
+
+    private void validateBucketStateDeletionForNullRegion() {
+        if (!this.isTestBucketPatched) {
+            this.host.log(Level.SEVERE, "Failure patching null region to test bucket diskState");
+            return;
+        }
+
+        Query query = Query.Builder.create()
+                .addKindFieldClause(DiskState.class)
+                .addFieldClause(DiskState.FIELD_NAME_ID, TEST_BUCKET_NAME)
+                .build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .build();
+
+        Operation getTestBucketState = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+                .setBody(queryTask).setReferer(this.host.getUri());
+
+        Operation response = this.host.waitForResponse(getTestBucketState);
+
+        QueryTask queryTaskResponse = response.getBody(QueryTask.class);
+
+        assertTrue(queryTaskResponse.results.documentLinks.size() == 0);
+    }
+
     /**
      * Verifies if the tag information exists for a given resource. And that private and public IP
      * addresses are mapped to separate NICs.Also, checks that the compute description mapping is
@@ -1058,8 +1125,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
      * on the cloud, in order to test that this resource state will be deleted after the next enumeration run.
      */
     private String markFirstResourceStateAsStale(VerificationHost host,
-            Class<? extends ResourceState> resourceClass,
-            String serviceFactoryLink) throws Throwable {
+            Class<? extends ResourceState> resourceClass, String serviceFactoryLink) throws Throwable {
         // get enumerated resources, and change the id of one of them, so that it is deleted on the
         // next enum
         Map<String, ? extends ResourceState> statesMap = ProvisioningUtils

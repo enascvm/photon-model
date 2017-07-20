@@ -496,7 +496,27 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 // We have previously enumerated these disks so we know which region they belong to.
                 // Get a client for that region and make a call to enumerate tags.
                 for (Map.Entry<String, DiskState> entry : aws.diskStatesToBeUpdatedByBucketName.entrySet()) {
-                    aws.regionsByBucketName.put(entry.getKey(), entry.getValue().regionId);
+                    // We need valid S3 bucket region in diskState in order to enumerate S3 tags. If we
+                    // encounter a diskState with null region, we delete that disk, it will get re-enumerated
+                    // with valid region in subsequent enumeration runs.
+                    if (entry.getValue().regionId != null) {
+                        aws.regionsByBucketName.put(entry.getKey(), entry.getValue().regionId);
+                    } else {
+                        logWarning("Null region found in S3 diskState");
+                        Operation.createDelete(aws.service.getHost(), entry.getValue().documentSelfLink)
+                                .setReferer(aws.service.getUri())
+                                .setCompletion((o, e) -> {
+                                    if (e != null) {
+                                        logWarning("Exception deleting diskState with null region [ex=%s]",
+                                                e.getMessage());
+                                        return;
+                                    }
+                                    logWarning("Deleted diskState with null region [diskState=%s]",
+                                            Utils.toJsonHtml(entry.getValue()));
+                                })
+                                .sendWith(aws.service);
+                        continue;
+                    }
 
                     s3Client = aws.clientManager
                             .getOrCreateS3Client(aws.parentAuth, entry.getValue().regionId, aws.service,
