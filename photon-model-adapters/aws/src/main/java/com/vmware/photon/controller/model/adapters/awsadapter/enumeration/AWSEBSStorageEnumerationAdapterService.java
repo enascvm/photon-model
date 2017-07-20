@@ -29,6 +29,8 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -69,6 +71,7 @@ import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -94,7 +97,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
     }
 
     public enum EBSVolumesEnumerationSubStage {
-        QUERY_LOCAL_RESOURCES, COMPARE, CREATE_TAGS, CREATE_UPDATE_DISK_STATES, UPDATE_TAGS, GET_NEXT_PAGE, DELETE_DISKS, ENUMERATION_STOP
+        CREATE_INTERNAL_TYPE_TAG, QUERY_LOCAL_RESOURCES, COMPARE, CREATE_EXTERNAL_TAGS, CREATE_UPDATE_DISK_STATES,
+        UPDATE_TAGS, GET_NEXT_PAGE, DELETE_DISKS, ENUMERATION_STOP
     }
 
     public AWSEBSStorageEnumerationAdapterService() {
@@ -141,6 +145,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         public List<Operation> enumerationOperations;
         // The time stamp at which the enumeration started.
         public long enumerationStartTimeInMicros;
+        public String internalTypeTagSelfLink;
 
         public EBSStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
@@ -157,7 +162,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.enumerationOperations = new ArrayList<>();
             this.remoteAWSVolumeIds = new HashSet<>();
             this.stage = AWSEBSStorageEnumerationStages.CLIENT;
-            this.subStage = EBSVolumesEnumerationSubStage.QUERY_LOCAL_RESOURCES;
+            this.subStage = EBSVolumesEnumerationSubStage.CREATE_INTERNAL_TYPE_TAG;
             this.pageNo = 1;
         }
     }
@@ -348,15 +353,18 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
          */
         private void handleReceivedEnumerationData() {
             switch (this.context.subStage) {
+            case CREATE_INTERNAL_TYPE_TAG:
+                createInternalTypeTag(EBSVolumesEnumerationSubStage.QUERY_LOCAL_RESOURCES);
+                break;
             case QUERY_LOCAL_RESOURCES:
                 getLocalResources(EBSVolumesEnumerationSubStage.COMPARE);
                 break;
             case COMPARE:
                 compareLocalStateWithEnumerationData(
-                        EBSVolumesEnumerationSubStage.CREATE_TAGS);
+                        EBSVolumesEnumerationSubStage.CREATE_EXTERNAL_TAGS);
                 break;
-            case CREATE_TAGS:
-                createTags(EBSVolumesEnumerationSubStage.CREATE_UPDATE_DISK_STATES);
+            case CREATE_EXTERNAL_TAGS:
+                createExternalTags(EBSVolumesEnumerationSubStage.CREATE_UPDATE_DISK_STATES);
                 break;
             case CREATE_UPDATE_DISK_STATES:
                 createOrUpdateDiskStates(EBSVolumesEnumerationSubStage.UPDATE_TAGS);
@@ -388,10 +396,36 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         }
 
         /**
+         * Send a POST to create internal type tag for S3. Don't wait for completion, tag will eventually get created
+         * while we go through the enumeration flow. If tag creation is successful, we set the internalTypeTagCreated
+         * flag and add the internalTypeTagSelfLink to DiskStates.
+         */
+        private void createInternalTypeTag(EBSVolumesEnumerationSubStage next) {
+            TagService.TagState internalTypeTagState = TagsUtil.newTagState(TAG_KEY_TYPE, AWSResourceType.ebs_block.toString(),
+                    false, this.context.parentCompute.tenantLinks);
+
+            // Create internal type TagState for EBS.
+            Operation.createPost(this.service, TagService.FACTORY_LINK)
+                    .setBody(internalTypeTagState)
+                    .setReferer(this.service.getUri())
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            this.service.logWarning("Failure creating internal type tag for EBS [ex=%s]",
+                                    e.getMessage());
+                            return;
+                        }
+                        this.context.internalTypeTagSelfLink = internalTypeTagState.documentSelfLink;
+                    }).sendWith(this.service);
+
+            this.context.subStage = next;
+            handleReceivedEnumerationData();
+        }
+
+        /**
          * Query the local data store and retrieve all the the compute states that exist filtered by
          * the volumeIds that are received in the enumeration data from AWS.
          */
-        public void getLocalResources(EBSVolumesEnumerationSubStage next) {
+        private void getLocalResources(EBSVolumesEnumerationSubStage next) {
             // query all disk state resources for the cluster filtered by the received set of
             // instance Ids. the filtering is performed on the selected resource pool and auth
             // credentials link.
@@ -471,7 +505,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         /**
          * Create tags for disk states based on the volumes being created
          */
-        private void createTags(EBSVolumesEnumerationSubStage next) {
+        private void createExternalTags(EBSVolumesEnumerationSubStage next) {
 
             List<Operation> operations = new ArrayList<>();
             if (this.context.volumesToBeCreated.size() > 0) {
@@ -490,11 +524,12 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 this.context.enumerationOperations.addAll(operations);
             }
 
-            // Create internal type TagState for EBS.
-            operations.add(Operation.createPost(this.service, TagService.FACTORY_LINK)
-                    .setBody(TagsUtil.newTagState(TAG_KEY_TYPE, AWSResourceType.ebs_block.toString(),
-                            false, this.context.parentCompute.tenantLinks))
-                    .setReferer(this.service.getUri()));
+            if (operations.isEmpty()) {
+                this.service.logFine(() -> "No disk state tags to be created.");
+                this.context.subStage = next;
+                handleReceivedEnumerationData();
+                return;
+            }
 
             OperationJoin.create(operations).setCompletion((ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
@@ -533,10 +568,33 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                     DiskService.FACTORY_LINK)));
             this.service.logFine(() -> String.format("Creating %d EBS disks",
                     this.context.volumesToBeCreated.size()));
+
+            // For existing disk states, check if tagLinks contains internal type tag. If it doesn't
+            // then send a collection update request and add internal type tag to tagLinks.
+            if (this.context.internalTypeTagSelfLink != null) {
+                this.context.diskStatesToBeUpdated.entrySet().stream()
+                        .filter(diskMap -> !diskMap.getValue().tagLinks.contains(this.context.internalTypeTagSelfLink))
+                        .forEach(diskMap -> {
+                            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                                    (DiskState.FIELD_NAME_TAG_LINKS,
+                                            Collections.singletonList(this.context.internalTypeTagSelfLink));
+                            Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
+                                    (DiskState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+
+                            ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
+                                    .create(collectionsToAddMap, collectionsToRemoveMap);
+
+                            this.context.enumerationOperations.add(Operation.createPatch(this.service.getHost(),
+                                    diskMap.getValue().documentSelfLink)
+                                    .setReferer(this.service.getUri())
+                                    .setBody(updateTagLinksRequest));
+                        });
+            }
+
+            // For those existing disk states which do not have internal type tag, add
             // For all the disks to be updated, map the updated state from the received
             // volumes and issue patch requests against the existing disk state representations
             // in the system
-
             List<DiskState> diskStatesToBeUpdated = new ArrayList<>();
             this.context.volumesToBeUpdated.forEach((selfLink, volume) -> {
                 diskStatesToBeUpdated.add(mapVolumeToDiskState(volume,
@@ -556,8 +614,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.service.logFine(() -> String.format("Updating %d disks",
                     this.context.volumesToBeUpdated.size()));
 
-            OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
-                    exc) -> {
+            OperationJoin.JoinedCompletionHandler joinCompletion = (ox, exc) -> {
                 if (exc != null) {
                     this.service.logSevere(() -> String.format("Error creating/updating disk %s",
                             Utils.toString(exc)));
@@ -643,6 +700,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             diskState.resourcePoolLink = resourcePoolLink;
             diskState.endpointLink = endpointLink;
             diskState.tenantLinks = tenantLinks;
+            diskState.tagLinks = new HashSet<>();
 
             if (volume.getCreateTime() != null) {
                 diskState.creationTimeMicros = TimeUnit.MILLISECONDS
@@ -662,7 +720,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             // If we're creating a new DiskState, we've already created TagStates for it, so populate the
             // tagLinks with appropriate links.
             if (isNewDiskState) {
-                diskState.tagLinks = new HashSet<>();
                 diskState.tagLinks = this.context.volumeTagsToBeCreated.stream()
                         .filter(tag -> volume.getTags().contains(tag))
                         .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME))
@@ -671,9 +728,11 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         .map(tag -> tag.documentSelfLink)
                         .collect(Collectors.toSet());
 
-                // Add internal type tag with for all EBS Disk States.
-                diskState.tagLinks.add(TagsUtil.newTagState(TAG_KEY_TYPE, AWSResourceType.ebs_block.toString(),
-                        false, tenantLinks).documentSelfLink);
+                // If we've successfully created the internal type tag for EBS, add it's tagLink to diskStates.
+                if (this.context.internalTypeTagSelfLink != null) {
+                    // Add internal type tag with for all EBS Disk States.
+                    diskState.tagLinks.add(this.context.internalTypeTagSelfLink);
+                }
             }
 
             mapAttachmentState(diskState, volume);

@@ -49,7 +49,6 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryUtils;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -381,7 +380,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK, aws.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE, STORAGE_TYPE_S3)
-                    .addInClause(ComputeState.FIELD_NAME_ID, aws.remoteBucketsByBucketName.keySet());
+                    .addInClause(DiskState.FIELD_NAME_ID, aws.remoteBucketsByBucketName.keySet());
 
             addScopeCriteria(qBuilder, DiskState.class, aws);
 
@@ -615,10 +614,10 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     .filter(diskMap -> !diskMap.getValue().tagLinks.contains(aws.internalTypeTagSelfLink))
                     .forEach(diskMap -> {
                         Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
-                                (ComputeState.FIELD_NAME_TAG_LINKS,
+                                (DiskState.FIELD_NAME_TAG_LINKS,
                                         Collections.singletonList(aws.internalTypeTagSelfLink));
                         Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
-                                (ComputeState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+                                (DiskState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
 
                         ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
                                 .create(collectionsToAddMap, collectionsToRemoveMap);
