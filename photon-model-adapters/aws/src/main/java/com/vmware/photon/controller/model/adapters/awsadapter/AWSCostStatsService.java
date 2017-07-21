@@ -357,7 +357,7 @@ public class AWSCostStatsService extends StatelessService {
         Consumer<Operation> onSuccess = (op) -> {
             ComputeStateWithDescription compute = op.getBody(ComputeStateWithDescription.class);
             statsData.computeDesc = compute;
-            String accountId = compute.customProperties.get(AWS_ACCOUNT_ID_KEY);
+            String accountId = AWSUtils.isAwsS3Proxy() ? "mock" : compute.customProperties.get(AWS_ACCOUNT_ID_KEY);
             if (compute.type != ComputeType.VM_HOST || compute.parentLink != null
                     || compute.endpointLink == null || accountId == null) {
                 logWarning(() -> String.format("AWS Cost collection is not supported for this "

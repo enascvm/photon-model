@@ -23,6 +23,8 @@ public class AWSConstants {
 
     public static final String AWS_MOCK_HOST_SYSTEM_PROPERTY = "awsMockHost";
 
+    public static final String AWS_S3PROXY_SYSTEM_PROPERTY = "awsS3Proxy";
+
     public static final String AWS_INSTANCE_ID_PREFIX = "i-";
     public static final String AWS_VOLUME_ID_PREFIX = "vol-";
 

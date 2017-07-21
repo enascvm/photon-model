@@ -17,6 +17,7 @@ import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATE
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MOCK_HOST_SYSTEM_PROPERTY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_S3PROXY_SYSTEM_PROPERTY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_PENDING;
@@ -125,6 +126,21 @@ public class AWSUtils {
      */
     private static String awsMockHost = null;
 
+
+    /**
+     * Flag to use s3proxy, will be set in test files. s3proxy is a open-source tool for testing
+     * AWS services in a mock S3 environment.
+     *
+     * @see <a href="https://https://github.com/andrewgaul/s3proxy">s3proxy</a>
+     */
+    private static boolean IS_S3_PROXY = false;
+
+    /**
+     * Mock Host and port http://<ip-address>:<port> of s3proxy, will be set in test files.
+     */
+    private static String awsS3ProxyHost = null;
+
+
     /**
      * Custom retry condition with exception logs.
      */
@@ -132,8 +148,8 @@ public class AWSUtils {
 
         @Override
         public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
-                AmazonClientException exception,
-                int retriesAttempted) {
+                                   AmazonClientException exception,
+                                   int retriesAttempted) {
             Utils.log(CustomRetryCondition.class, CustomRetryCondition.class.getSimpleName(),
                     Level.FINE, () -> String
                             .format("Encountered exception %s for request %s, retries attempted: %d",
@@ -197,6 +213,18 @@ public class AWSUtils {
 
     }
 
+    public static void setAwsS3ProxyHost(String s3ProxyHost) {
+        awsMockHost = s3ProxyHost;
+    }
+
+    public static boolean isAwsS3Proxy() {
+        return System.getProperty(AWS_S3PROXY_SYSTEM_PROPERTY) == null ? IS_S3_PROXY : true;
+    }
+
+    public static void setAwsS3Proxy(boolean isAwsS3Proxy) {
+        IS_S3_PROXY = isAwsS3Proxy;
+    }
+
     public static AmazonEC2AsyncClient getAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
@@ -232,10 +260,16 @@ public class AWSUtils {
         return (AmazonEC2AsyncClient) ec2AsyncClientBuilder.build();
     }
 
+    private static String getAwsS3ProxyHost() {
+        return System.getProperty(AWS_S3PROXY_SYSTEM_PROPERTY) == null ? awsS3ProxyHost
+                : System.getProperty(AWS_S3PROXY_SYSTEM_PROPERTY);
+
+    }
+
     public static void validateCredentials(AmazonEC2AsyncClient ec2Client,
-            AWSClientManager clientManager, AuthCredentialsServiceState credentials,
-            ComputeEnumerateAdapterRequest context, Operation op, StatelessService service,
-            Consumer<DescribeAvailabilityZonesResult> onSuccess, Consumer<Throwable> onFail) {
+                                           AWSClientManager clientManager, AuthCredentialsServiceState credentials,
+                                           ComputeEnumerateAdapterRequest context, Operation op, StatelessService service,
+                                           Consumer<DescribeAvailabilityZonesResult> onSuccess, Consumer<Throwable> onFail) {
 
         if (clientManager.isEc2ClientInvalid(credentials, context.regionId)) {
             op.complete();
@@ -261,7 +295,7 @@ public class AWSUtils {
 
                     @Override
                     public void onSuccess(DescribeAvailabilityZonesRequest request,
-                            DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
+                                          DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
                         onSuccess.accept(describeAvailabilityZonesResult);
                     }
                 });
@@ -299,7 +333,7 @@ public class AWSUtils {
     }
 
     public static TransferManager getS3TransferManager(AuthCredentialsServiceState credentials,
-            String region, ExecutorService executorService) {
+                                                       String region, ExecutorService executorService) {
 
         AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
                 new BasicAWSCredentials(credentials.privateKeyId,
@@ -313,7 +347,16 @@ public class AWSUtils {
             region = Regions.DEFAULT_REGION.getName();
         }
 
-        amazonS3ClientBuilder.setRegion(region);
+
+
+        if (isAwsS3Proxy()) {
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
+                    getAwsS3ProxyHost(), region);
+            amazonS3ClientBuilder.setEndpointConfiguration(endpointConfiguration);
+        } else {
+            amazonS3ClientBuilder.setRegion(region);
+        }
+
 
         TransferManagerBuilder transferManagerBuilder = TransferManagerBuilder.standard()
                 .withS3Client(amazonS3ClientBuilder.build())
@@ -368,11 +411,12 @@ public class AWSUtils {
 
         return (AmazonS3Client) amazonS3ClientBuilder.build();
     }
+
     /**
      * Synchronous UnTagging of one or many AWS resources with the provided tags.
      */
     public static void unTagResources(AmazonEC2AsyncClient client, Collection<Tag> tags,
-            String... resourceIds) {
+                                      String... resourceIds) {
         if (isAwsClientMock()) {
             return;
         }
@@ -388,7 +432,7 @@ public class AWSUtils {
      * Synchronous Tagging of one or many AWS resources with the provided tags.
      */
     public static void tagResources(AmazonEC2AsyncClient client,
-            Collection<Tag> tags, String... resourceIds) {
+                                    Collection<Tag> tags, String... resourceIds) {
         if (isAwsClientMock()) {
             return;
         }
@@ -403,7 +447,7 @@ public class AWSUtils {
      * Synchronous Tagging of one or many AWS resources with the provided name.
      */
     public static void tagResourcesWithName(AmazonEC2AsyncClient client, String name,
-            String... resourceIds) {
+                                            String... resourceIds) {
         Tag awsNameTag = new Tag().withKey(AWS_TAG_NAME).withValue(name);
         tagResources(client, Collections.singletonList(awsNameTag), resourceIds);
     }
@@ -412,7 +456,7 @@ public class AWSUtils {
      * Return the tags for a giving resource
      */
     public static List<TagDescription> getResourceTags(String resourceID,
-            AmazonEC2AsyncClient client) {
+                                                       AmazonEC2AsyncClient client) {
         Filter resource = new Filter().withName(AWS_FILTER_RESOURCE_ID)
                 .withValues(resourceID);
         DescribeTagsRequest req = new DescribeTagsRequest()
@@ -488,7 +532,7 @@ public class AWSUtils {
      * above method discover a security group, a new security group is created
      */
     public static List<String> getOrCreateSecurityGroups(AWSInstanceContext aws,
-            AWSNicContext nicCtx) {
+                                                         AWSNicContext nicCtx) {
 
         String groupId;
         SecurityGroup group;
@@ -543,7 +587,7 @@ public class AWSUtils {
     }
 
     public static List<String> getOrCreateDefaultSecurityGroup(AmazonEC2AsyncClient amazonEC2Client,
-            AWSNicContext nicCtx) {
+                                                               AWSNicContext nicCtx) {
 
         AWSSecurityGroupClient client = new AWSSecurityGroupClient(amazonEC2Client);
         // in case no group is configured in the properties, attempt to discover the default one
@@ -566,7 +610,7 @@ public class AWSUtils {
         // if the group doesn't exist an exception is thrown. We won't throw a
         // missing group exception
         // we will continue and create the group
-        String groupId = client.createDefaultSecurityGroupWithDefaultRules( nicCtx.vpc);
+        String groupId = client.createDefaultSecurityGroupWithDefaultRules(nicCtx.vpc);
 
         return Collections.singletonList(groupId);
     }
@@ -646,7 +690,7 @@ public class AWSUtils {
         double averageBurnRate = (latestDatapoint.getAverage()
                 - oldestDatapoint.getAverage())
                 / getDateDifference(oldestDatapoint.getTimestamp(),
-                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
         // If there are only 2 datapoints and the oldestDatapoint is greater than the
         // latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
@@ -684,7 +728,7 @@ public class AWSUtils {
         double currentBurnRate = (latestDatapoint.getAverage()
                 - dayOldDatapoint.getAverage())
                 / getDateDifference(dayOldDatapoint.getTimestamp(),
-                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
         // If there are only 2 datapoints and the oldestDatapoint is greater than the
         // latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
@@ -714,9 +758,9 @@ public class AWSUtils {
     }
 
     public static void waitForTransitionCompletion(ServiceHost host,
-            List<InstanceStateChange> stateChangeList,
-            final String desiredState, AmazonEC2AsyncClient client,
-            BiConsumer<InstanceState, Exception> callback) {
+                                                   List<InstanceStateChange> stateChangeList,
+                                                   final String desiredState, AmazonEC2AsyncClient client,
+                                                   BiConsumer<InstanceState, Exception> callback) {
         InstanceStateChange stateChange = stateChangeList.get(0);
 
         try {
