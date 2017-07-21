@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.endpoint;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SUPPORT_DATASTORES;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SUPPORT_PUBLIC_IMAGES;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
@@ -109,6 +110,8 @@ public class AzureEndpointAdapterService extends StatelessService {
 
             // Azure end-point does support public images enumeration
             e.endpointProperties.put(SUPPORT_PUBLIC_IMAGES, Boolean.TRUE.toString());
+            // Azure end-point does have the notion of datastores (storage accounts).
+            e.endpointProperties.put(SUPPORT_DATASTORES, Boolean.TRUE.toString());
         };
     }
 

@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.ComputeProperties.LINKED_ENDPOI
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SUPPORT_DATASTORES;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_BAD_REQUEST;
 
@@ -81,6 +82,9 @@ public class VSphereEndpointAdapterService extends StatelessService {
                     .ifPresent(rk -> e.endpointProperties.put(LINKED_ENDPOINT_PROP_NAME, rk));
             r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
             r.get(ZONE_KEY).ifPresent(zk -> e.endpointProperties.put(ZONE_KEY, zk));
+
+            // vSphere end-point does have the notion of datastores.
+            e.endpointProperties.put(SUPPORT_DATASTORES, Boolean.TRUE.toString());
         };
     }
 

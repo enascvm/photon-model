@@ -26,8 +26,8 @@ import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption
  * Request to validate and/or enhance an Endpoint. The {@link ResourceRequest#resourceReference}
  * field is reference to the Endpoint to enhance.
  * <p>
- * If the value of {@link EndpointConfigRequest#validateOnly} is {@code true} then value of
- * {@link ResourceRequest#resourceReference} won't be set.
+ * If the value of {@link EndpointConfigRequest#requestType} is {@code RequestType#VALIDATE} then
+ * value of {@link ResourceRequest#resourceReference} won't be set.
  */
 public class EndpointConfigRequest extends ResourceRequest {
 
@@ -55,6 +55,11 @@ public class EndpointConfigRequest extends ResourceRequest {
      * Set this property to true if the end-point support public/global images enumeration.
      */
     public static final String SUPPORT_PUBLIC_IMAGES = "supportPublicImages";
+
+    /**
+     * Set this property to true if the end-point supports explicit datastores concept.
+     */
+    public static final String SUPPORT_DATASTORES = "supportDatastores";
 
     /**
      * Endpoint request type.
