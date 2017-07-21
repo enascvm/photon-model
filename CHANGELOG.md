@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.27-SNAPSHOT
+
 ## 0.6.26
 * Added support to create internal tag 'type' for AWS storage and disk resources.
 * Added support to create internal tag 'type' for Azure compute and network resources.
