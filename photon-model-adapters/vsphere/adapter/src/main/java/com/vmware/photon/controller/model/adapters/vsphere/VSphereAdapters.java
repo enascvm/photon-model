@@ -31,6 +31,7 @@ public class VSphereAdapters {
             VSphereAdapterInstanceService.SELF_LINK,
             VSphereAdapterPowerService.SELF_LINK,
             VSphereAdapterSnapshotService.SELF_LINK,
+            VSphereListComputeSnapshotService.SELF_LINK,
             VSphereAdapterResourceEnumerationService.SELF_LINK,
             VSphereAdapterStatsService.SELF_LINK,
             OvfImporterService.SELF_LINK,
@@ -54,6 +55,7 @@ public class VSphereAdapters {
         host.startService(new VSphereAdapterInstanceService());
         host.startService(new VSphereAdapterPowerService());
         host.startService(new VSphereAdapterSnapshotService());
+        host.startService(new VSphereListComputeSnapshotService());
         host.startService(new VSphereAdapterResourceEnumerationService());
         host.startService(new VSphereAdapterStatsService());
         host.startService(new OvfImporterService());
