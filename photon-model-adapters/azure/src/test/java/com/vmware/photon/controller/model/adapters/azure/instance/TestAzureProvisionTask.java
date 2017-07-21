@@ -82,7 +82,7 @@ import com.vmware.xenon.common.UriUtils;
 public class TestAzureProvisionTask extends AzureBaseTest {
 
     // Every test in addition might change it.
-    private static String azureVMName = generateName("test-");
+    private static String azureVMName = generateName("test_");
 
     public boolean skipStats = true;
 
@@ -300,6 +300,10 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         getHost().waitForFinishedTask(
                 ProvisionComputeTaskState.class,
                 provisionTask.documentSelfLink);
+
+        this.vmState = getHost().getServiceState(null,
+                ComputeState.class,
+                UriUtils.buildUri(getHost(), this.vmState.documentSelfLink));
     }
 
     private void issueStatsRequest(ComputeState vm) throws Throwable {
@@ -447,7 +451,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             provisionedVM = AzureTestUtil.getAzureVirtualMachine(
                     getAzureSdkClients().getComputeManagementClientImpl(),
                     vmRGName,
-                    azureVMName);
+                    this.vmState.name);
         } catch (Exception e) {
             fail("Unable to get Azure VM details: " + e.getMessage());
         }

@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import java.util.List;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
@@ -147,6 +148,11 @@ public class AzureInstanceContext extends
                 // Populate vm name
                 .thenApply(ctx -> {
                     ctx.vmName = ctx.child.name != null ? ctx.child.name : ctx.child.id;
+                    if (ctx.vmName.contains("_")) {
+                        ctx.vmName = ctx.vmName.replace('_', '-');
+                        this.service().log(Level.WARNING, "Virtual machine name changed to [%s] due to invalid characters", ctx.vmName);
+                    }
+
                     return ctx;
                 });
     }

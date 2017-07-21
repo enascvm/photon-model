@@ -1431,6 +1431,7 @@ public class AzureInstanceService extends StatelessService {
         ComputeState computeState = new ComputeState();
 
         computeState.address = ctx.getPrimaryNic().publicIP.ipAddress();
+        computeState.name = ctx.vmName;
 
         Operation updateCS = Operation.createPatch(ctx.computeRequest.resourceReference)
                 .setBody(computeState);
