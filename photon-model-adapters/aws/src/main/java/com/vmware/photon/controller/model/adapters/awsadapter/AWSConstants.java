@@ -82,22 +82,75 @@ public class AWSConstants {
             100);
     public static final String URI_PARAM_ENDPOINT = "endpoint";
     public static final String URI_PARAM_INSTANCE_TYPE = "instance-type";
-    public static final String PROPERTY_NAME_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
-            + AWSConstants.class.getSimpleName() + ".CLIENT_CACHE_MAX_SIZE";
-    public static int CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
-            PROPERTY_NAME_CLIENT_CACHE_MAX_SIZE, 50);
-    public static final String PROPERTY_NAME_CLIENT_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
-            + AWSConstants.class.getSimpleName() + ".CLIENT_CACHE_INITIAL_SIZE";
-    public static int CLIENT_CACHE_INITIAL_SIZE = Integer.getInteger(
-            PROPERTY_NAME_CLIENT_CACHE_INITIAL_SIZE, 16);
+
+    // Support 10 account * 16 regions
+    public static final String PROPERTY_NAME_EC2_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".EC2_CLIENT_CACHE_MAX_SIZE";
+    public static int EC2_CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
+            PROPERTY_NAME_EC2_CLIENT_CACHE_MAX_SIZE, 160);
+    public static final String PROPERTY_NAME_EC2_CLIENT_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".EC2_CLIENT_CACHE_INITIAL_SIZE";
+    public static int EC2_CLIENT_CACHE_INITIAL_SIZE = Integer.getInteger(
+            PROPERTY_NAME_EC2_CLIENT_CACHE_INITIAL_SIZE, 32);
+
+    // Accounting for 2 invalid credentials * 16 regions each.
+    public static final String PROPERTY_NAME_INVALID_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".INVALID_CLIENT_CACHE_MAX_SIZE";
+    public static int INVALID_CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
+            PROPERTY_NAME_INVALID_CLIENT_CACHE_MAX_SIZE, 32);
+    public static final String PROPERTY_NAME_INVALID_CLIENT_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".INVALID_CLIENT_CACHE_INITIAL_SIZE";
+    public static int INVALID_CLIENT_CACHE_INITIAL_SIZE = Integer.getInteger(
+            PROPERTY_NAME_INVALID_CLIENT_CACHE_INITIAL_SIZE, 16);
+
+    // Support 10 account * 16 regions
+    public static final String PROPERTY_NAME_CW_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".CW_CLIENT_CACHE_MAX_SIZE";
+    public static int CW_CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
+            PROPERTY_NAME_CW_CLIENT_CACHE_MAX_SIZE, 160);
+    public static final String PROPERTY_NAME_CW_CLIENT_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".CW_CLIENT_CACHE_INITIAL_SIZE";
+    public static int CW_CLIENT_CACHE_INITIAL_SIZE = Integer.getInteger(
+            PROPERTY_NAME_CW_CLIENT_CACHE_INITIAL_SIZE, 32);
+
+    // Support 10 account * 16 regions
+    public static final String PROPERTY_NAME_S3_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".S3_CLIENT_CACHE_MAX_SIZE";
+    public static int S3_CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
+            PROPERTY_NAME_S3_CLIENT_CACHE_MAX_SIZE, 160);
+    public static final String PROPERTY_NAME_S3_CLIENT_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".S3_CLIENT_CACHE_INITIAL_SIZE";
+    public static int S3_CLIENT_CACHE_INITIAL_SIZE = Integer.getInteger(
+            PROPERTY_NAME_S3_CLIENT_CACHE_INITIAL_SIZE, 32);
+
+    // Support 10 account * 1 region
+    public static final String PROPERTY_NAME_S3_TM_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".S3_TM_CLIENT_CACHE_MAX_SIZE";
+    public static int S3_TM_CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
+            PROPERTY_NAME_S3_TM_CLIENT_CACHE_MAX_SIZE, 10);
+    public static final String PROPERTY_NAME_S3_TM_CLIENT_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".S3_TM_CLIENT_CACHE_INITIAL_SIZE";
+    public static int S3_TM_CLIENT_CACHE_INITIAL_SIZE = Integer.getInteger(
+            PROPERTY_NAME_S3_TM_CLIENT_CACHE_INITIAL_SIZE, 2);
+
+    // Support 10 account * 16 regions
+    public static final String PROPERTY_NAME_LB_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".LB_CLIENT_CACHE_MAX_SIZE";
+    public static int LB_CLIENT_CACHE_MAX_SIZE = Integer.getInteger(
+            PROPERTY_NAME_LB_CLIENT_CACHE_MAX_SIZE, 160);
+    public static final String PROPERTY_NAME_LB_CLIENT_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
+            + AWSConstants.class.getSimpleName() + ".LB_CLIENT_CACHE_INITIAL_SIZE";
+    public static int LB_CLIENT_CACHE_INITIAL_SIZE = Integer.getInteger(
+            PROPERTY_NAME_LB_CLIENT_CACHE_INITIAL_SIZE, 32);
+
     public static final String PROPERTY_NAME_THREAD_POOL_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".THREAD_POOL_CACHE_MAX_SIZE";
     public static int THREAD_POOL_CACHE_MAX_SIZE = Integer.getInteger(
-            PROPERTY_NAME_CLIENT_CACHE_MAX_SIZE, 10);
+            PROPERTY_NAME_THREAD_POOL_CACHE_MAX_SIZE, 10);
     public static final String PROPERTY_NAME_THREAD_POOL_CACHE_INITIAL_SIZE = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".THREAD_POOL_CACHE_INITIAL_SIZE";
     public static int THREAD_POOL_CACHE_INITIAL_SIZE = Integer.getInteger(
-            PROPERTY_NAME_CLIENT_CACHE_INITIAL_SIZE, 5);
+            PROPERTY_NAME_THREAD_POOL_CACHE_INITIAL_SIZE, 5);
     public static final Integer MAX_IOPS_PER_GiB = 50;
 
     // AWS Metric related Constants
@@ -183,22 +236,6 @@ public class AWSConstants {
 
     public static int getQueryResultLimit() {
         return QUERY_RESULT_LIMIT;
-    }
-
-    public static void setClientCacheMaxSize(int size) {
-        CLIENT_CACHE_MAX_SIZE = size;
-    }
-
-    public static int getClientCacheMaxSize() {
-        return CLIENT_CACHE_MAX_SIZE;
-    }
-
-    public static void setClientCacheInitialSize(int size) {
-        CLIENT_CACHE_INITIAL_SIZE = size;
-    }
-
-    public static int getClientCacheInitialSize() {
-        return CLIENT_CACHE_INITIAL_SIZE;
     }
 
     public static void setThreadPoolCacheMaxSize(int size) {

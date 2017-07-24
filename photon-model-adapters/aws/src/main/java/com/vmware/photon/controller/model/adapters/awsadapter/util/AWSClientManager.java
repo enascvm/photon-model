@@ -13,8 +13,18 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CLIENT_CACHE_INITIAL_SIZE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CLIENT_CACHE_MAX_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CW_CLIENT_CACHE_INITIAL_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CW_CLIENT_CACHE_MAX_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.EC2_CLIENT_CACHE_INITIAL_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.EC2_CLIENT_CACHE_MAX_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INVALID_CLIENT_CACHE_INITIAL_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INVALID_CLIENT_CACHE_MAX_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.LB_CLIENT_CACHE_INITIAL_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.LB_CLIENT_CACHE_MAX_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_CLIENT_CACHE_INITIAL_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_CLIENT_CACHE_MAX_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_TM_CLIENT_CACHE_INITIAL_SIZE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_TM_CLIENT_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_INITIAL_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
@@ -41,6 +51,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -65,10 +76,11 @@ public class AWSClientManager {
     private LRUCache<String, Long> invalidLoadBalancingClients;
     private LRUCache<String, Long> invalidS3Clients;
 
-    public static final String AWS_RETRY_AFTER_INTERVAL_MINUTES = UriPaths.PROPERTY_PREFIX + "AWSClientManager.retryInterval";
+    public static final String AWS_RETRY_AFTER_INTERVAL_MINUTES = UriPaths.PROPERTY_PREFIX
+            + "AWSClientManager.retryInterval";
     private static final int DEFAULT_RETRY_AFTER_INTERVAL_MINUTES = 60;
-    private static final int RETRY_AFTER_INTERVAL_MINUTES =
-            Integer.getInteger(AWS_RETRY_AFTER_INTERVAL_MINUTES, DEFAULT_RETRY_AFTER_INTERVAL_MINUTES);
+    private static final int RETRY_AFTER_INTERVAL_MINUTES = Integer
+            .getInteger(AWS_RETRY_AFTER_INTERVAL_MINUTES, DEFAULT_RETRY_AFTER_INTERVAL_MINUTES);
 
     public AWSClientManager() {
         this(AwsClientType.EC2);
@@ -78,28 +90,32 @@ public class AWSClientManager {
         this.awsClientType = awsClientType;
         switch (awsClientType) {
         case EC2:
-            this.ec2ClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
-            this.invalidEc2Clients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
-                    CLIENT_CACHE_MAX_SIZE);
+            this.ec2ClientCache = new LRUCache<>(EC2_CLIENT_CACHE_INITIAL_SIZE,
+                    EC2_CLIENT_CACHE_MAX_SIZE);
+            this.invalidEc2Clients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
+                    INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
         case CLOUD_WATCH:
-            this.cloudWatchClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
-                    CLIENT_CACHE_MAX_SIZE);
-            this.invalidCloudWatchClients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
-                    CLIENT_CACHE_MAX_SIZE);
+            this.cloudWatchClientCache = new LRUCache<>(CW_CLIENT_CACHE_INITIAL_SIZE,
+                    CW_CLIENT_CACHE_MAX_SIZE);
+            this.invalidCloudWatchClients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
+                    INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
         case S3:
-            this.s3clientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
-            this.invalidS3Clients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            this.s3clientCache = new LRUCache<>(S3_CLIENT_CACHE_INITIAL_SIZE,
+                    S3_CLIENT_CACHE_MAX_SIZE);
+            this.invalidS3Clients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
+                    INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
         case S3_TRANSFER_MANAGER:
-            this.s3TransferManagerCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            this.s3TransferManagerCache = new LRUCache<>(S3_TM_CLIENT_CACHE_INITIAL_SIZE,
+                    S3_TM_CLIENT_CACHE_MAX_SIZE);
             return;
         case LOAD_BALANCING:
-            this.loadBalancingClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
-                    CLIENT_CACHE_MAX_SIZE);
-            this.invalidLoadBalancingClients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
-                    CLIENT_CACHE_MAX_SIZE);
+            this.loadBalancingClientCache = new LRUCache<>(LB_CLIENT_CACHE_INITIAL_SIZE,
+                    LB_CLIENT_CACHE_MAX_SIZE);
+            this.invalidLoadBalancingClients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
+                    INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
         default:
             String msg = "The specified AWS client type " + awsClientType
@@ -186,7 +202,8 @@ public class AWSClientManager {
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         if (isInvalidClient(this.invalidCloudWatchClients, cacheKey)) {
-            failConsumer.accept(new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
+            failConsumer.accept(
+                    new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
             return null;
         }
         AmazonCloudWatchAsyncClient amazonCloudWatchClient = null;
@@ -204,7 +221,8 @@ public class AWSClientManager {
                         }
 
                         @Override
-                        public void onSuccess(DescribeAlarmsRequest request, DescribeAlarmsResult result) {
+                        public void onSuccess(DescribeAlarmsRequest request,
+                                DescribeAlarmsResult result) {
                             //noop
                         }
                     });
@@ -216,7 +234,8 @@ public class AWSClientManager {
         return amazonCloudWatchClient;
     }
 
-    public synchronized void markCloudWatchClientInvalid(StatelessService service, String cacheKey) {
+    public synchronized void markCloudWatchClientInvalid(StatelessService service,
+            String cacheKey) {
         service.logWarning("Marking cloudwatch client cache entry invalid for key: " + cacheKey);
         this.invalidCloudWatchClients.put(cacheKey, Utils.getNowMicrosUtc());
         this.cloudWatchClientCache.remove(cacheKey);
@@ -292,7 +311,8 @@ public class AWSClientManager {
     public synchronized void markLoadBalancingClientInvalid(StatelessService service,
             AuthCredentialsServiceState credentials, String regionId) {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        service.logWarning("Marking load balancing client cache entry invalid for key: " + cacheKey);
+        service.logWarning(
+                "Marking load balancing client cache entry invalid for key: " + cacheKey);
         this.invalidLoadBalancingClients.put(cacheKey, Utils.getNowMicrosUtc());
         this.loadBalancingClientCache.remove(cacheKey);
     }
@@ -311,7 +331,7 @@ public class AWSClientManager {
             return this.s3clientCache.get(cacheKey);
         }
         try {
-            amazonS3Client = AWSUtils.getS3Client(credentials,regionId);
+            amazonS3Client = AWSUtils.getS3Client(credentials, regionId);
             this.s3clientCache.put(cacheKey, amazonS3Client);
         } catch (Exception e) {
             markS3ClientInvalid(service, credentials, regionId);
@@ -362,8 +382,8 @@ public class AWSClientManager {
     private synchronized boolean isInvalidClient(LRUCache<String, Long> cache, String cacheKey) {
         Long entryTimestamp = cache.get(cacheKey);
         if (entryTimestamp != null) {
-            if ((entryTimestamp + TimeUnit.MINUTES.toMicros(RETRY_AFTER_INTERVAL_MINUTES)) <
-                    Utils.getNowMicrosUtc()) {
+            if ((entryTimestamp + TimeUnit.MINUTES.toMicros(RETRY_AFTER_INTERVAL_MINUTES)) < Utils
+                    .getNowMicrosUtc()) {
                 cache.remove(cacheKey);
             } else {
                 return true;
@@ -415,7 +435,8 @@ public class AWSClientManager {
             break;
 
         default:
-            throw new UnsupportedOperationException("AWS client type not supported by this client manager");
+            throw new UnsupportedOperationException(
+                    "AWS client type not supported by this client manager");
         }
         cleanupExecutorCache();
     }
