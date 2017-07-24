@@ -616,6 +616,10 @@ public class BaseVSphereAdapterTest {
         this.host.log("Create snapshot operation completed successfully");
     }
 
+    protected SnapshotState getSnapshots(ComputeState computeState) throws Throwable {
+        return querySnapshotState(computeState.documentSelfLink, true);
+    }
+
     protected void deleteSnapshotAndWait(ComputeState computeState) throws Throwable {
 
         // Get the snapshot associated with the compute

@@ -131,6 +131,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                 // library item
                                 state = client.createInstanceFromLibraryItem(ctx.image);
                             }
+                        } else if (ctx.snapshotMoRef != null) {
+                            state = client.createInstanceFromSnapshot();
                         } else {
                             state = client.createInstance();
                         }

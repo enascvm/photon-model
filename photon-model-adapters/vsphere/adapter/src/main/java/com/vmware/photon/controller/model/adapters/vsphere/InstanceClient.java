@@ -209,6 +209,73 @@ public class InstanceClient extends BaseHelper {
         return state;
     }
 
+    public ComputeState createInstanceFromSnapshot() throws Exception {
+        String message = "";
+        if (this.ctx.snapshotMoRef == null) {
+            message = String.format("No MoRef found for the specified snapshot %s",
+                  this.ctx.child.documentSelfLink);
+
+            logger.error(message);
+
+            this.ctx.fail(new IllegalStateException(message));
+        }
+
+        if (this.ctx.referenceComputeMoRef == null) {
+            if (this.ctx.snapshotMoRef == null) {
+                message = String.format("No MoRef found for the reference compute for linkedclone creation for %s.",
+                      this.ctx.child.documentSelfLink);
+
+                logger.error(message);
+
+                this.ctx.fail(new IllegalStateException(message));
+            }
+        }
+
+        VirtualMachineRelocateSpec relocateSpec = new VirtualMachineRelocateSpec();
+        relocateSpec.setDiskMoveType(VirtualMachineRelocateDiskMoveOptions
+                .CREATE_NEW_CHILD_DISK_BACKING.value());
+
+        VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
+        cloneSpec.setPowerOn(false);
+        cloneSpec.setLocation(relocateSpec);
+        cloneSpec.setSnapshot(this.ctx.snapshotMoRef);
+        cloneSpec.setTemplate(false);
+
+        ManagedObjectReference folder = getVmFolder();
+        String displayName = this.ctx.child.name;
+
+        ManagedObjectReference linkedCloneTask = getVimPort()
+                .cloneVMTask(this.ctx.referenceComputeMoRef, folder, displayName, cloneSpec);
+
+        TaskInfo info = waitTaskEnd(linkedCloneTask);
+
+        if (info.getState() == TaskInfoState.ERROR) {
+            MethodFault fault = info.getError().getFault();
+            if (fault instanceof FileAlreadyExists) {
+                // a .vmx file already exists, assume someone won the race to create the vm
+                return null;
+            } else {
+                return VimUtils.rethrow(info.getError());
+            }
+        }
+
+        ManagedObjectReference clonedVM = (ManagedObjectReference) info.getResult();
+        if (clonedVM == null) {
+            // vm was created by someone else
+            return null;
+        }
+        // store reference to created vm for further processing
+        this.vm = clonedVM;
+
+        //customizeAfterClone();
+
+        ComputeState state = new ComputeState();
+        state.resourcePoolLink = VimUtils
+              .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
+
+        return state;
+    }
+
     private void customizeAfterClone() throws Exception {
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
 

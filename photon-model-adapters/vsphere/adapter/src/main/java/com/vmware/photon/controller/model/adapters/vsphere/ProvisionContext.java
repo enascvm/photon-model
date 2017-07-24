@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
@@ -62,6 +63,9 @@ public class ProvisionContext {
     public ManagedObjectReference templateMoRef;
     public ManagedObjectReference computeMoRef;
     public ManagedObjectReference datacenterMoRef; // target datacenter resolved from the target placement
+
+    public ManagedObjectReference snapshotMoRef;
+    public ManagedObjectReference referenceComputeMoRef;
 
     public List<DiskStateExpanded> disks;
     public List<NetworkInterfaceStateWithDetails> nics;
@@ -142,6 +146,50 @@ public class ProvisionContext {
                 }
             }, ctx.errorHandler);
             return;
+        }
+
+        //For creation based on linked clone of snapshot
+        if (ctx.snapshotMoRef == null) {
+            String snapshotLink = CustomProperties.of(ctx.child).getString(CustomProperties.SNAPSHOT_LINK);
+
+            if (snapshotLink != null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
+                URI snapshotUri = UriUtils.buildUri(service.getHost(), snapshotLink);
+
+                AdapterUtils.getServiceState(service, snapshotUri, op -> {
+                    SnapshotService.SnapshotState snapshotState = op.getBody(SnapshotService.SnapshotState.class);
+
+                    ctx.snapshotMoRef = CustomProperties.of(snapshotState).getMoRef(CustomProperties.MOREF);
+
+                    if (ctx.snapshotMoRef == null) {
+                        String msg = String
+                                .format("The linked clone snapshot %s does not contain a MoRef in its custom properties",
+                                    snapshotLink);
+                        ctx.fail(new IllegalStateException(msg));
+                    } else {
+                        //Retrieve the reference endpoint moref from which the linkedclone has to be created.
+                        String refComputeLink = snapshotState.computeLink;
+
+                        if (refComputeLink != null) {
+                            URI refComputeUri = UriUtils.buildUri(service.getHost(), refComputeLink);
+
+                            AdapterUtils.getServiceState(service, refComputeUri, opCompute -> {
+                                ComputeStateWithDescription refComputeState = opCompute.getBody(ComputeStateWithDescription.class);
+
+                                ctx.referenceComputeMoRef = CustomProperties.of(refComputeState).getMoRef(CustomProperties.MOREF);
+
+                                if (ctx.referenceComputeMoRef == null) {
+                                    String msg = String
+                                            .format("The linked clone endpoint ref %s does not contain a MoRef in its custom properties",
+                                                refComputeLink);
+                                    ctx.fail(new IllegalStateException(msg));
+                                }
+                                populateContextThen(service, ctx, onSuccess);
+                            }, ctx.errorHandler);
+                        }
+                    }
+                }, ctx.errorHandler);
+                return;
+            }
         }
 
         if (ctx.parent == null && ctx.child.parentLink != null) {

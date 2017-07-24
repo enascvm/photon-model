@@ -41,6 +41,16 @@ public class CustomProperties {
     public static final String TEMPLATE_LINK = "__templateComputeLink";
 
     /**
+     * When the instance needs to be linked clone from a snapshot.
+     */
+    public static final String SNAPSHOT_LINK = "__snapshotLink";
+
+    /**
+     * compute link from which the linkedclone has to be created.
+     */
+    public static final String REF_ENDPOINT_LINK = "__refComputeLink";
+
+    /**
      * When part of computeDescription, causes a vm to be created from an the
      * library item found at this link.
      */
