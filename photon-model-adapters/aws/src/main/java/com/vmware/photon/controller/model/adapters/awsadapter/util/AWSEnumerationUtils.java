@@ -172,7 +172,8 @@ public class AWSEnumerationUtils {
     public static ComputeState mapInstanceToComputeState(ServiceHost host, Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
             String endpointLink,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
-            String internalTagLink, String regionId, String zoneId, List<String> tenantLinks) {
+            String internalTagLink, String regionId, String zoneId, List<String> tenantLinks,
+            Boolean isNewState) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
@@ -237,7 +238,7 @@ public class AWSEnumerationUtils {
         }
 
         // append internal tagLinks to any existing ones
-        if (internalTagLink != null) {
+        if (internalTagLink != null && isNewState) {
             computeState.tagLinks.add(internalTagLink);
         }
 

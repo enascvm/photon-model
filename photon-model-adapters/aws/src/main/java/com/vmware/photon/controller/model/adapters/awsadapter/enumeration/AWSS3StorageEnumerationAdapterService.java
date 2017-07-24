@@ -631,7 +631,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         // For those disk states which do not have the tagLink, add the tagLink by PATCHing those states.
         if (aws.internalTypeTagSelfLink != null) {
             aws.diskStatesToBeUpdatedByBucketName.entrySet().stream()
-                    .filter(diskMap -> !diskMap.getValue().tagLinks.contains(aws.internalTypeTagSelfLink))
+                    .filter(diskMap -> diskMap.getValue().tagLinks == null
+                            || !diskMap.getValue().tagLinks.contains(aws.internalTypeTagSelfLink))
                     .forEach(diskMap -> {
                         Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
                                 (DiskState.FIELD_NAME_TAG_LINKS,

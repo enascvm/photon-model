@@ -279,10 +279,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 // Process successful operations only.
                 context.creationStage = next;
                 handleComputeStateCreateOrUpdate(context);
+                return;
             }
 
-            TagState tagState = completedOp.getBody(TagState.class);
-            context.ec2TagLink = tagState.documentSelfLink;
+            context.ec2TagLink = typeTag.documentSelfLink;
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         };
@@ -417,7 +417,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.parentCDStatsAdapterReferences,
                         context.ec2TagLink,
                         regionId, zoneId,
-                        context.request.tenantLinks);
+                        context.request.tenantLinks,
+                        true);
                 computeStateToBeCreated.networkInterfaceLinks = new ArrayList<>();
 
                 if (!AWSEnumerationUtils.instanceIsInStoppedState(instance)) {
@@ -584,24 +585,28 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.parentCDStatsAdapterReferences,
                         context.ec2TagLink,
                         zoneData.regionId, zoneId,
-                        context.request.tenantLinks);
+                        context.request.tenantLinks,
+                        false);
                 computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;
 
                 Operation patchComputeState = createPatchOperation(this, computeStateToBeUpdated,
                         existingComputeState.documentSelfLink);
                 context.enumerationOperations.add(patchComputeState);
 
-                Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
-                        (ComputeState.FIELD_NAME_TAG_LINKS, Collections.singletonList(context.ec2TagLink));
-                Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
-                        (ComputeState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+                if (existingComputeState.tagLinks == null
+                        || !existingComputeState.tagLinks.contains(context.ec2TagLink)) {
+                    Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                            (ComputeState.FIELD_NAME_TAG_LINKS, Collections.singletonList(context.ec2TagLink));
+                    Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
+                            (ComputeState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
 
-                ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
-                        .create(collectionsToAddMap, collectionsToRemoveMap);
-                context.enumerationOperations.add(Operation.createPatch(this.getHost(),
-                        computeStateToBeUpdated.documentSelfLink)
-                        .setReferer(this.getUri())
-                        .setBody(updateTagLinksRequest));
+                    ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
+                            .create(collectionsToAddMap, collectionsToRemoveMap);
+                    context.enumerationOperations.add(Operation.createPatch(this.getHost(),
+                            computeStateToBeUpdated.documentSelfLink)
+                            .setReferer(this.getUri())
+                            .setBody(updateTagLinksRequest));
+                }
             }
 
             context.creationStage = next;

@@ -573,7 +573,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             // then send a collection update request and add internal type tag to tagLinks.
             if (this.context.internalTypeTagSelfLink != null) {
                 this.context.diskStatesToBeUpdated.entrySet().stream()
-                        .filter(diskMap -> !diskMap.getValue().tagLinks.contains(this.context.internalTypeTagSelfLink))
+                        .filter(diskMap -> diskMap.getValue().tagLinks == null
+                                || !diskMap.getValue().tagLinks.contains(this.context.internalTypeTagSelfLink))
                         .forEach(diskMap -> {
                             Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
                                     (DiskState.FIELD_NAME_TAG_LINKS,
