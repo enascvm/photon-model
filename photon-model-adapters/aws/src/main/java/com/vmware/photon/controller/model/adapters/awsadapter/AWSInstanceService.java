@@ -461,6 +461,7 @@ public class AWSInstanceService extends StatelessService {
                 cs.type = ComputeType.VM_GUEST;
                 cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
                 cs.address = instance.getPublicIpAddress();
+                cs.regionId = getRequestRegionId(this.context);
                 cs.powerState = AWSUtils.mapToPowerState(instance.getState());
                 if (this.context.child.customProperties == null) {
                     cs.customProperties = new HashMap<>();
