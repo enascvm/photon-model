@@ -209,8 +209,20 @@ public class AWSConstants {
     /**
      * supported aws device types.
      */
-    public static enum AWSStorageType {
-        EBS, EFS, INSTANCE_STORE
+    public enum AWSStorageType {
+        EBS("ebs"),
+        EFS("efs"),
+        INSTANCE_STORE("instance-store");
+
+        private String name;
+
+        AWSStorageType(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return this.name;
+        }
     }
 
     public static enum AWSInstanceStoreTypes {
