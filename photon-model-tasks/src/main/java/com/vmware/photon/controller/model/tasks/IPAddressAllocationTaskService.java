@@ -706,6 +706,9 @@ public class IPAddressAllocationTaskService extends
         result.ipAddressLinks = state.ipAddressLinks;
         result.subnetRangeLinks = state.subnetRangeLinks;
         result.connectedResourceLink = state.connectedResourceLink;
+        if (state.ipAddresses != null && state.ipAddresses.size() > 0) {
+            result.customProperties.put(state.connectedResourceLink, state.ipAddresses.get(0));
+        }
 
         logInfo(String.format("Allocated IP addresses [%s] for resource [%s]",
                 result.ipAddresses != null ?
