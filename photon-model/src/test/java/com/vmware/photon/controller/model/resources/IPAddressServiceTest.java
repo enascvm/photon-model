@@ -13,16 +13,16 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.UUID;
 import java.util.logging.Logger;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -32,6 +32,8 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
+import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Service;
@@ -57,16 +59,17 @@ public class IPAddressServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static IPAddressService.IPAddressState buildValidStartState() {
-        IPAddressService.IPAddressState ipAddressState = new IPAddressService.IPAddressState();
+    private static IPAddressState buildValidStartState() {
+        IPAddressState ipAddressState = new IPAddressState();
         ipAddressState.id = UUID.randomUUID().toString();
         ipAddressState.name = "ipAddress";
         ipAddressState.ipAddress = "192.130.120.110";
         ipAddressState.ipVersion = IPVersion.IPv4;
-        ipAddressState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.ALLOCATED;
+        ipAddressState.ipAddressStatus = IPAddressStatus.ALLOCATED;
         ipAddressState.subnetRangeLink = SubnetRangeService.FACTORY_LINK + "/subnet-range-1";
         ipAddressState.tenantLinks = new ArrayList<>();
         ipAddressState.tenantLinks.add("tenant-linkA");
+        ipAddressState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
 
         return ipAddressState;
     }
@@ -108,10 +111,9 @@ public class IPAddressServiceTest extends Suite {
 
         @Test
         public void testValidStartState() throws Throwable {
-            IPAddressService.IPAddressState startState = buildValidStartState();
-            IPAddressService.IPAddressState returnState = postServiceSynchronously(
-                    IPAddressService.FACTORY_LINK,
-                    startState, IPAddressService.IPAddressState.class);
+            IPAddressState startState = buildValidStartState();
+            IPAddressState returnState = postServiceSynchronously(
+                    IPAddressService.FACTORY_LINK, startState, IPAddressState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
@@ -120,29 +122,40 @@ public class IPAddressServiceTest extends Suite {
             assertThat(returnState.ipAddressStatus, is(startState.ipAddressStatus));
             assertThat(returnState.ipVersion, is(startState.ipVersion));
             assertThat(returnState.subnetRangeLink, is(startState.subnetRangeLink));
+            assertThat(returnState.connectedResourceLink, is(startState.connectedResourceLink));
 
             assertThat(returnState.tenantLinks.get(0),
                     is(startState.tenantLinks.get(0)));
 
         }
 
+        @Test
+        public void testDefaultValues() throws Throwable {
+            IPAddressState addressState = buildValidStartState();
+            addressState.ipVersion = null;
+            addressState = postServiceSynchronously(
+                    IPAddressService.FACTORY_LINK, addressState, IPAddressState.class);
+
+            assertNotNull(addressState);
+            assertThat(IPVersion.IPv4, is(addressState.ipVersion));
+        }
+
         @Test(expected = IllegalArgumentException.class)
         public void testMissingRequiredFieldsOnPost() throws Throwable {
-            IPAddressService.IPAddressState startState = buildValidStartState();
+            IPAddressState startState = buildValidStartState();
 
             // Missing ip address
             startState.ipAddress = null;
             postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
             assertThat("exception expected", false);
         }
 
         @Test(expected = IllegalArgumentException.class)
         public void testMissingRequiredFieldsOnPut() throws Throwable {
-            IPAddressService.IPAddressState startState = buildValidStartState();
-            IPAddressService.IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK,
-                    startState,
-                    IPAddressService.IPAddressState.class);
+            IPAddressState startState = buildValidStartState();
+            IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK,
+                    startState, IPAddressState.class);
 
             // Missing ip address
             returnState.ipAddress = null;
@@ -152,37 +165,36 @@ public class IPAddressServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            IPAddressService.IPAddressState startState = buildValidStartState();
-            IPAddressService.IPAddressState returnState = postServiceSynchronously(
-                    IPAddressService.FACTORY_LINK,
-                    startState, IPAddressService.IPAddressState.class);
+            IPAddressState startState = buildValidStartState();
+            IPAddressState returnState = postServiceSynchronously(
+                    IPAddressService.FACTORY_LINK, startState, IPAddressState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.name, is(startState.name));
             startState.name = startState.name + "-second";
             returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK,
-                    startState, IPAddressService.IPAddressState.class);
+                    startState, IPAddressState.class);
             assertThat(returnState.name, is(startState.name));
         }
 
         @Test
         public void testInvalidValuesOnPost() throws Throwable {
 
-            IPAddressService.IPAddressState missingIp = buildValidStartState();
+            IPAddressState missingIp = buildValidStartState();
             missingIp.ipAddress = "";
 
-            IPAddressService.IPAddressState invalidIp = buildValidStartState();
+            IPAddressState invalidIp = buildValidStartState();
             invalidIp.ipAddress = "abc.1.1.1";
 
-            IPAddressService.IPAddressState[] states = {
+            IPAddressState[] states = {
                     missingIp, invalidIp
             };
 
-            for (IPAddressService.IPAddressState state : states) {
+            for (IPAddressState state : states) {
                 System.out.println("Subnet range: " + state.toString());
                 try {
                     postServiceSynchronously(IPAddressService.FACTORY_LINK, state,
-                            IPAddressService.IPAddressState.class);
+                            IPAddressState.class);
                     assertThat("exception expected for invalid post", false);
                 } catch (Exception e) {
                     assertThat("exception expected for invalid post", e instanceof LocalizableValidationException);
@@ -193,41 +205,41 @@ public class IPAddressServiceTest extends Suite {
         @Test
         public void testInvalidValuesOnPut() throws Throwable {
 
-            IPAddressService.IPAddressState missingIp = buildValidStartState();
+            IPAddressState missingIp = buildValidStartState();
             missingIp = postServiceSynchronously(IPAddressService.FACTORY_LINK, missingIp,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
             missingIp.ipAddress = "";
 
-            IPAddressService.IPAddressState invalidIp = buildValidStartState();
+            IPAddressState invalidIp = buildValidStartState();
             invalidIp = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
             invalidIp.ipAddress = "abc.1.1.1";
 
-            IPAddressService.IPAddressState invalidIp2 = buildValidStartState();
+            IPAddressState invalidIp2 = buildValidStartState();
             invalidIp2 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp2,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
             invalidIp2.ipAddress = "1.1.1";
 
-            IPAddressService.IPAddressState invalidIp3 = buildValidStartState();
+            IPAddressState invalidIp3 = buildValidStartState();
             invalidIp3 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp3,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
             invalidIp3.ipAddress = "1.1.1.1.1";
 
-            IPAddressService.IPAddressState invalidIp4 = buildValidStartState();
+            IPAddressState invalidIp4 = buildValidStartState();
             invalidIp4 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp4,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
             invalidIp4.ipAddress = "257.1.1.1";
 
-            IPAddressService.IPAddressState invalidIp5 = buildValidStartState();
+            IPAddressState invalidIp5 = buildValidStartState();
             invalidIp5 = postServiceSynchronously(IPAddressService.FACTORY_LINK, invalidIp5,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
             invalidIp5.ipAddress = "-1.1.1.1";
 
-            IPAddressService.IPAddressState[] states = {
+            IPAddressState[] states = {
                     missingIp, invalidIp, invalidIp2, invalidIp3, invalidIp4, invalidIp5
             };
 
-            for (IPAddressService.IPAddressState state : states) {
+            for (IPAddressState state : states) {
                 System.out.println("Subnet range: " + state.toString());
                 try {
                     putServiceSynchronously(state.documentSelfLink, state);
@@ -241,16 +253,17 @@ public class IPAddressServiceTest extends Suite {
         @Test
         public void testStatusUpdates() throws Throwable {
 
-            // Create subnet range
-            IPAddressService.IPAddressState startState = buildValidStartState();
-            startState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.AVAILABLE;
-            IPAddressService.IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
-                    IPAddressService.IPAddressState.class);
+            // Create IP address
+            IPAddressState startState = buildValidStartState();
+            startState.connectedResourceLink = null;
+            startState.ipAddressStatus = IPAddressStatus.AVAILABLE;
+            IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
+                    IPAddressState.class);
 
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.AVAILABLE);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.AVAILABLE);
 
             // Invalid: AVAILABLE -> RELEASED
-            returnState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.RELEASED;
+            returnState.ipAddressStatus = IPAddressStatus.RELEASED;
             try {
                 putServiceSynchronously(returnState.documentSelfLink, returnState);
                 assertThat("exception expected for invalid status transition", false);
@@ -259,19 +272,21 @@ public class IPAddressServiceTest extends Suite {
             }
 
             // Verify no transition
-            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressService.IPAddressState.class);
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.AVAILABLE);
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.AVAILABLE);
 
             // Valid: AVAILABLE -> ALLOCATED
-            returnState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.ALLOCATED;
+            returnState.ipAddressStatus = IPAddressStatus.ALLOCATED;
+            returnState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
             putServiceSynchronously(returnState.documentSelfLink, returnState);
 
             // Verify transition
-            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressService.IPAddressState.class);
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.ALLOCATED);
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.ALLOCATED);
 
             // Invalid: ALLOCATED -> AVAILABLE
-            returnState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.AVAILABLE;
+            returnState.ipAddressStatus = IPAddressStatus.AVAILABLE;
+            returnState.connectedResourceLink = null;
             try {
                 putServiceSynchronously(returnState.documentSelfLink, returnState);
                 assertThat("exception expected for invalid status transition", false);
@@ -280,19 +295,20 @@ public class IPAddressServiceTest extends Suite {
             }
 
             // Verify no transition
-            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressService.IPAddressState.class);
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.ALLOCATED);
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.ALLOCATED);
 
             // Valid: ALLOCATED -> RELEASED
-            returnState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.RELEASED;
+            returnState.ipAddressStatus = IPAddressStatus.RELEASED;
+            returnState.connectedResourceLink = null;
             putServiceSynchronously(returnState.documentSelfLink, returnState);
 
             // Verify transition
-            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressService.IPAddressState.class);
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.RELEASED);
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.RELEASED);
 
             // Invalid: RELEASED -> ALLOCATED
-            returnState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.ALLOCATED;
+            returnState.ipAddressStatus = IPAddressStatus.ALLOCATED;
             try {
                 putServiceSynchronously(returnState.documentSelfLink, returnState);
                 assertThat("exception expected for invalid status transition", false);
@@ -301,17 +317,65 @@ public class IPAddressServiceTest extends Suite {
             }
 
             // Verify no transition
-            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressService.IPAddressState.class);
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.RELEASED);
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.RELEASED);
 
             // Valid: RELEASED -> AVAILABLE
-            returnState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.AVAILABLE;
+            returnState.ipAddressStatus = IPAddressStatus.AVAILABLE;
             putServiceSynchronously(returnState.documentSelfLink, returnState);
 
             // Verify transition
-            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressService.IPAddressState.class);
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.AVAILABLE);
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.AVAILABLE);
 
+        }
+
+        @Test
+        public void testStatusUpdatesConnectedResource() throws Throwable {
+            // Create IP address
+            IPAddressState startState = buildValidStartState();
+            IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
+                    IPAddressState.class);
+
+            // Invalid: ALLOCATED -> RELEASED, connectedResourceLink still set
+            returnState.ipAddressStatus = IPAddressStatus.RELEASED;
+            try {
+                putServiceSynchronously(returnState.documentSelfLink, returnState);
+                assertThat("exception expected for invalid status transition", false);
+            } catch (Exception e) {
+                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
+            }
+
+            // Release IP address
+            returnState.connectedResourceLink = null;
+            putServiceSynchronously(returnState.documentSelfLink, returnState);
+
+            // Invalid: RELEASED -> AVAILABLE, connectedResourceLink set
+            returnState.ipAddressStatus = IPAddressStatus.AVAILABLE;
+            returnState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
+            try {
+                putServiceSynchronously(returnState.documentSelfLink, returnState);
+                assertThat("exception expected for invalid status transition", false);
+            } catch (Exception e) {
+                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
+            }
+
+            // Mark IP address AVAILABLE
+            returnState.connectedResourceLink = null;
+            putServiceSynchronously(returnState.documentSelfLink, returnState);
+
+            // Invalid: AVAILABLE -> ALLOCATED, connectedResourceLink not set
+            returnState.ipAddressStatus = IPAddressStatus.ALLOCATED;
+            try {
+                putServiceSynchronously(returnState.documentSelfLink, returnState);
+                assertThat("exception expected for invalid status transition", false);
+            } catch (Exception e) {
+                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
+            }
+
+            // Mark IP address ALLOCATED
+            returnState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
+            putServiceSynchronously(returnState.documentSelfLink, returnState);
         }
     }
 
@@ -329,22 +393,22 @@ public class IPAddressServiceTest extends Suite {
 
         @Test
         public void testPatch() throws Throwable {
-            IPAddressService.IPAddressState startState = buildValidStartState();
+            IPAddressState startState = buildValidStartState();
 
-            IPAddressService.IPAddressState returnState = postServiceSynchronously(
+            IPAddressState returnState = postServiceSynchronously(
                     IPAddressService.FACTORY_LINK,
-                    startState, IPAddressService.IPAddressState.class);
+                    startState, IPAddressState.class);
 
-            assertEquals(returnState.ipAddressStatus, IPAddressService.IPAddressState.IPAddressStatus.ALLOCATED);
+            assertEquals(returnState.ipAddressStatus, IPAddressStatus.ALLOCATED);
             // Patch the ip address status
-
-            IPAddressService.IPAddressState patchState = new IPAddressService.IPAddressState();
-            patchState.ipAddressStatus = IPAddressService.IPAddressState.IPAddressStatus.RELEASED;
+            IPAddressState patchState = new IPAddressState();
+            patchState.ipAddressStatus = IPAddressStatus.RELEASED;
+            patchState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
-            IPAddressService.IPAddressState afterPatchState = getServiceSynchronously(
+            IPAddressState afterPatchState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    IPAddressService.IPAddressState.class);
+                    IPAddressState.class);
 
             assertThat(afterPatchState.name, is(startState.name));
             assertThat(afterPatchState.ipAddress, is(startState.ipAddress));
@@ -355,22 +419,70 @@ public class IPAddressServiceTest extends Suite {
 
         @Test
         public void testPatchNoChange() throws Throwable {
-            IPAddressService.IPAddressState startState = buildValidStartState();
+            IPAddressState startState = buildValidStartState();
 
-            IPAddressService.IPAddressState returnState = postServiceSynchronously(
+            IPAddressState returnState = postServiceSynchronously(
                     IPAddressService.FACTORY_LINK,
-                    startState, IPAddressService.IPAddressState.class);
+                    startState, IPAddressState.class);
 
             // Same start ip address
-            IPAddressService.IPAddressState patchState = new IPAddressService.IPAddressState();
+            IPAddressState patchState = new IPAddressState();
             patchState.ipAddress = startState.ipAddress;
 
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             // Verify no change
-            IPAddressService.IPAddressState afterPatchState = getServiceSynchronously(returnState.documentSelfLink,
-                    IPAddressService.IPAddressState.class);
+            IPAddressState afterPatchState = getServiceSynchronously(returnState.documentSelfLink,
+                    IPAddressState.class);
             assertEquals(startState.documentVersion, afterPatchState.documentVersion);
+        }
+
+        @Test
+        public void testStatusUpdatesConnectedResource() throws Throwable {
+            // Create IP address
+            IPAddressState startState = buildValidStartState();
+            IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
+                    IPAddressState.class);
+
+            // Invalid: ALLOCATED -> RELEASED, connectedResourceLink still set
+            returnState.ipAddressStatus = IPAddressStatus.RELEASED;
+            try {
+                patchServiceSynchronously(returnState.documentSelfLink, returnState);
+                assertThat("exception expected for invalid status transition", false);
+            } catch (Exception e) {
+                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
+            }
+
+            // Release IP address
+            returnState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
+            patchServiceSynchronously(returnState.documentSelfLink, returnState);
+
+            // Invalid: RELEASED -> AVAILABLE, connectedResourceLink set
+            returnState.ipAddressStatus = IPAddressStatus.AVAILABLE;
+            returnState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
+            try {
+                patchServiceSynchronously(returnState.documentSelfLink, returnState);
+                assertThat("exception expected for invalid status transition", false);
+            } catch (Exception e) {
+                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
+            }
+
+            // Mark IP address AVAILABLE
+            returnState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
+            patchServiceSynchronously(returnState.documentSelfLink, returnState);
+
+            // Invalid: AVAILABLE -> ALLOCATED, connectedResourceLink not set
+            returnState.ipAddressStatus = IPAddressStatus.ALLOCATED;
+            try {
+                patchServiceSynchronously(returnState.documentSelfLink, returnState);
+                assertThat("exception expected for invalid status transition", false);
+            } catch (Exception e) {
+                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
+            }
+
+            // Mark IP address ALLOCATED
+            returnState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
+            patchServiceSynchronously(returnState.documentSelfLink, returnState);
         }
     }
 
@@ -388,16 +500,16 @@ public class IPAddressServiceTest extends Suite {
 
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            IPAddressService.IPAddressState ipAddressState = buildValidStartState();
+            IPAddressState ipAddressState = buildValidStartState();
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             ipAddressState.tenantLinks = new ArrayList<>();
             ipAddressState.tenantLinks.add(UriUtils.buildUriPath(
                     tenantUri.getPath(), "tenantA"));
-            IPAddressService.IPAddressState startState = postServiceSynchronously(
+            IPAddressState startState = postServiceSynchronously(
                     IPAddressService.FACTORY_LINK,
-                    ipAddressState, IPAddressService.IPAddressState.class);
+                    ipAddressState, IPAddressState.class);
 
-            String kind = Utils.buildKind(IPAddressService.IPAddressState.class);
+            String kind = Utils.buildKind(IPAddressState.class);
             String propertyName = QueryTask.QuerySpecification
                     .buildCollectionItemName(ResourceState.FIELD_NAME_TENANT_LINKS);
 
@@ -421,17 +533,17 @@ public class IPAddressServiceTest extends Suite {
             // populate data
             String ipPrefix = "10.10.10.";
             for (int i = 1; i < 4; i++) {
-                IPAddressService.IPAddressState ipAddressState = buildValidStartState();
+                IPAddressState ipAddressState = buildValidStartState();
                 ipAddressState.ipAddress = ipPrefix + i;
                 ipAddressState.ipVersion = IPVersion.IPv4;
                 ipAddressState.subnetRangeLink = SubnetRangeService.FACTORY_LINK  + "/subnet-range-A";
-                IPAddressService.IPAddressState startState = postServiceSynchronously(
+                IPAddressState startState = postServiceSynchronously(
                         IPAddressService.FACTORY_LINK,
-                        ipAddressState, IPAddressService.IPAddressState.class);
+                        ipAddressState, IPAddressState.class);
             }
 
-            String kind = Utils.buildKind (IPAddressService.IPAddressState.class);
-            String propertyName = IPAddressService.IPAddressState.FIELD_NAME_SUBNET_RANGE_LINK;
+            String kind = Utils.buildKind (IPAddressState.class);
+            String propertyName = IPAddressState.FIELD_NAME_SUBNET_RANGE_LINK;
 
             QueryTask q = createDirectQueryTask(kind, propertyName,
                     SubnetRangeService.FACTORY_LINK + "/subnet-range-A");

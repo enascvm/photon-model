@@ -54,6 +54,24 @@ public class AssertUtil {
         }
     }
 
+    /**
+     * Assert that provided {@code expression} is {@code false} otherwise throwing an
+     * {@link IllegalArgumentException} with the specified {@code errorMessage}.
+     * <p>
+     * {@code AssertUtil.assertFalse(arr.length>0, "'arr' shall be empty.");}
+     * @param expression
+     *         the boolean expression to check
+     * @param errorMessage
+     *         the exception message if invalid
+     * @throws IllegalArgumentException
+     *         if expression is <code>false</code>
+     */
+    public static void assertFalse(boolean expression, String errorMessage) {
+        if (expression) {
+            throw new IllegalArgumentException(errorMessage);
+        }
+    }
+
     public static void assertNotEmpty(String value, String errorMessage) {
         if (value == null || value.isEmpty()) {
             throw new IllegalArgumentException(errorMessage);

@@ -33,12 +33,12 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
 import org.junit.runners.Suite;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.IPAddressService;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -47,7 +47,6 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.tasks.IPAddressAllocationTaskService.IPAddressAllocationTaskResult;
 import com.vmware.photon.controller.model.tasks.IPAddressAllocationTaskService.IPAddressAllocationTaskState;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -82,6 +81,7 @@ public class IPAddressAllocationTaskServiceTest extends Suite{
         IPAddressAllocationTaskState allocationTask = new IPAddressAllocationTaskState();
         allocationTask.subnetLink = subnetLink;
         allocationTask.requestType = IPAddressAllocationTaskState.RequestType.ALLOCATE;
+        allocationTask.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
         return allocationTask;
     }
 
@@ -528,11 +528,18 @@ public class IPAddressAllocationTaskServiceTest extends Suite{
                 IPAddressService.IPAddressState ipAddressState = new IPAddressService.IPAddressState();
                 ipAddressState.documentSelfLink = ipAddressLinks.get(i);
                 ipAddressState.ipAddressStatus = status;
+                if (status == IPAddressStatus.ALLOCATED) {
+                    ipAddressState.connectedResourceLink =
+                            ComputeService.FACTORY_LINK + "/machine-1";
+                } else {
+                    ipAddressState.connectedResourceLink = null;
+                }
                 try {
                     patchServiceSynchronously(ipAddressLinks.get(i), ipAddressState);
                 } catch (Throwable throwable) {
-                    String message = String.format("Failed to make ip address %s available for allocation due to error %s",
-                            ipAddressLinks.get(i), throwable.getMessage());
+                    String message = String
+                            .format("Failed to make ip address %s available for allocation due to error %s",
+                                    ipAddressLinks.get(i), throwable.getMessage());
                     fail(message);
                 }
             }
@@ -557,8 +564,14 @@ public class IPAddressAllocationTaskServiceTest extends Suite{
 
         private void validateIPAddressState(String ipAddressLink, IPAddressStatus status) {
             try {
-                IPAddressService.IPAddressState state = getServiceSynchronously(ipAddressLink, IPAddressService.IPAddressState.class);
+                IPAddressService.IPAddressState state = getServiceSynchronously(ipAddressLink,
+                        IPAddressService.IPAddressState.class);
                 assertEquals(status, state.ipAddressStatus);
+                if (status == IPAddressStatus.ALLOCATED) {
+                    assertTrue(state.connectedResourceLink != null);
+                } else {
+                    assertTrue(state.connectedResourceLink == null);
+                }
             } catch (Throwable throwable) {
                 String message = String.format("Failed to retrieve ip address %s due to error %s",
                         ipAddressLink, throwable.getMessage());

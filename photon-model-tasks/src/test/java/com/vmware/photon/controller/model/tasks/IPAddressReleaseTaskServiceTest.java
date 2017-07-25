@@ -28,6 +28,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.IPAddressService;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
@@ -160,8 +161,13 @@ public class IPAddressReleaseTaskServiceTest extends Suite {
             state.ipAddressStatus = status;
             state.subnetRangeLink = UUID.randomUUID().toString();
 
+            if (status == IPAddressStatus.ALLOCATED) {
+                state.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
+            }
+
             try {
-                return postServiceSynchronously(IPAddressService.FACTORY_LINK, state, IPAddressState.class);
+                return postServiceSynchronously(IPAddressService.FACTORY_LINK, state,
+                        IPAddressState.class);
             } catch (Throwable throwable) {
                 String message = String.format("Failed to create ip address %s. Exception: %s",
                         ipAddress, throwable.getMessage());

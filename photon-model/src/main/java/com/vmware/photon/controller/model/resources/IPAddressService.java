@@ -14,12 +14,14 @@
 package com.vmware.photon.controller.model.resources;
 
 import static com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.DEFAULT_IP_VERSION;
-import static com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.DEFAULT_STATUS;
 
 import java.util.UUID;
 
+import io.netty.util.internal.StringUtil;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.SubnetValidator;
@@ -44,12 +46,11 @@ public class IPAddressService extends StatefulService {
     public static class IPAddressState extends ResourceState {
 
         public static final String FIELD_NAME_SUBNET_RANGE_LINK = "subnetRangeLink";
-        public static final String FIELD_NAME_NETWORK_INTERFACE_LINK = "networkInterfaceLink";
         public static final String FIELD_NAME_IP_ADDRESS_STATUS = "ipAddressStatus";
+        public static final String FIELD_NAME_CONNECTED_RESOURCE_LINK = "connectedResourceLink";
 
         // Default values for non-required fields
         public static final IPVersion DEFAULT_IP_VERSION = IPVersion.IPv4;
-        public static final IPAddressStatus DEFAULT_STATUS = IPAddressStatus.AVAILABLE;
 
         public enum IPAddressStatus {
             ALLOCATED, // IP is allocated
@@ -85,14 +86,15 @@ public class IPAddressService extends StatefulService {
         public String subnetRangeLink;
 
         /**
-         * Link to the network interface this IP is assigned to.
+         * Link to the resource this IP is assigned to.
          */
-        @Documentation(description = "Link to the network interface.")
+        @Documentation(description = "Link to the resource this IP is assigned to.")
         @PropertyOptions(usage = {
                 ServiceDocumentDescription.PropertyUsageOption.OPTIONAL,
-                ServiceDocumentDescription.PropertyUsageOption.LINK
+                ServiceDocumentDescription.PropertyUsageOption.LINK,
+                ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL
                 })
-        public String networkInterfaceLink;
+        public String connectedResourceLink;
 
         /**
          * Ip address.
@@ -111,7 +113,7 @@ public class IPAddressService extends StatefulService {
         @Documentation(description = "IP address version: IPv4 or IPv6. Default: IPv4")
         @PropertyOptions(usage = {
                 ServiceDocumentDescription.PropertyUsageOption.OPTIONAL,
-                ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL
+                ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT
                 })
         public IPVersion ipVersion;
 
@@ -120,8 +122,7 @@ public class IPAddressService extends StatefulService {
          */
         @Documentation(description = "IP address status: ALLOCATED, RELEASED or AVAILABLE")
         @PropertyOptions(usage = {
-                ServiceDocumentDescription.PropertyUsageOption.REQUIRED,
-                ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL
+                ServiceDocumentDescription.PropertyUsageOption.REQUIRED
                 })
         public IPAddressStatus ipAddressStatus;
 
@@ -130,7 +131,7 @@ public class IPAddressService extends StatefulService {
             sb.append("name: ").append(this.name);
             sb.append(", id: ").append(this.id);
             sb.append(", subnet range link: ").append(this.subnetRangeLink);
-            sb.append(", network interface link: ").append(this.networkInterfaceLink);
+            sb.append(", resource link: ").append(this.connectedResourceLink);
             sb.append(", IP address: ").append(this.ipAddress);
             sb.append(", IP version: ").append(this.ipVersion);
             sb.append(", status: ").append(this.ipAddressStatus);
@@ -166,7 +167,7 @@ public class IPAddressService extends StatefulService {
 
         // Verify valid status changes
         IPAddressState currentState = getState(put);
-        validateIPAddressStatusTransition(currentState.ipAddressStatus, newState.ipAddressStatus);
+        validateIPAddressStatusTransition(currentState, newState);
         setState(put, newState);
         put.complete();
     }
@@ -187,8 +188,9 @@ public class IPAddressService extends StatefulService {
                     // Verify valid status changes
                     if (patchState.ipAddressStatus != null
                             && patchState.ipAddressStatus != currentState.ipAddressStatus) {
-                        validateIPAddressStatusTransition(currentState.ipAddressStatus,
-                                patchState.ipAddressStatus);
+                        validateIPAddressStatusTransition(currentState, patchState);
+                        currentState.ipAddressStatus = patchState.ipAddressStatus;
+                        validateIPAddressStatusWithConnectedResource(currentState);
                         hasChanged = true;
                     }
 
@@ -237,9 +239,6 @@ public class IPAddressService extends StatefulService {
         if (state.ipVersion == null) {
             state.ipVersion = DEFAULT_IP_VERSION;
         }
-        if (state.ipAddressStatus == null) {
-            state.ipAddressStatus = DEFAULT_STATUS;
-        }
 
         if (!SubnetValidator.isValidIPAddress(state.ipAddress, state.ipVersion)) {
             throw new LocalizableValidationException(String.format("Invalid IP address: %s",
@@ -247,19 +246,36 @@ public class IPAddressService extends StatefulService {
                     "ip.address.invalid", state.ipAddress);
         }
 
+        validateIPAddressStatusWithConnectedResource(state);
+
         logFine("Completed validation of IPAddressState: " + state);
     }
 
     /**
-     * @param currentStatus current IP address status
-     * @param desiredStatus requested IP address status
+     * @param currentState current IP address
+     * @param desiredState requested IP address
      * @throws IllegalArgumentException if an invalid transition
      */
-    private void validateIPAddressStatusTransition(IPAddressState.IPAddressStatus currentStatus,
-            IPAddressState.IPAddressStatus desiredStatus) {
-        AssertUtil.assertTrue(IPAddressState.IPAddressStatus
-                        .isValidTransition(currentStatus, desiredStatus),
+    private void validateIPAddressStatusTransition(IPAddressState currentState,
+            IPAddressState desiredState) {
+        AssertUtil.assertTrue(IPAddressStatus
+                        .isValidTransition(currentState.ipAddressStatus, desiredState.ipAddressStatus),
                 String.format("Invalid IP address status transition from [%s] to [%s]",
-                        currentStatus, desiredStatus));
+                        currentState.ipAddressStatus, desiredState.ipAddressStatus));
+    }
+
+    /**
+     * Validate connectedResourceLink is set if IP address is ALLOCATED and not set otherwise
+     *
+     * @param ipAddressState
+     */
+    private void validateIPAddressStatusWithConnectedResource(IPAddressState ipAddressState) {
+        AssertUtil.assertFalse(ipAddressState.ipAddressStatus == IPAddressStatus.ALLOCATED
+                        && StringUtil.isNullOrEmpty(ipAddressState.connectedResourceLink),
+                "ConnectedResourceLink is required if IP address status is ALLOCATED");
+        AssertUtil.assertFalse((ipAddressState.ipAddressStatus == IPAddressStatus.RELEASED
+                        || ipAddressState.ipAddressStatus == IPAddressStatus.AVAILABLE)
+                        && !StringUtil.isNullOrEmpty(ipAddressState.connectedResourceLink),
+                "ConnectedResourceLink must be null if IP address status is RELEASED");
     }
 }

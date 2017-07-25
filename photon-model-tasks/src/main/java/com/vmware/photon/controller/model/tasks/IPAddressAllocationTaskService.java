@@ -28,10 +28,11 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.IPAddressService;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
+import com.vmware.photon.controller.model.resources.ResourceUtils;
 import com.vmware.photon.controller.model.resources.SubnetRangeService.SubnetRangeState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.IPVersion;
-
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.util.IpHelper;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -65,12 +66,15 @@ public class IPAddressAllocationTaskService extends
 
         // Enumeration of subnet range states
         public Iterator<SubnetRangeState> subnetRangeStatesIterator;
+
+        // Resource requesting IP address
+        public String connectedResourceLink;
     }
 
     /**
      * Class that represents the result of IP address allocation.
      */
-    public static class IPAddressAllocationTaskResult extends ServiceTaskCallback.ServiceTaskCallbackResponse<IPAddressAllocationTaskState.SubStage> {
+    public static class IPAddressAllocationTaskResult extends ServiceTaskCallbackResponse<IPAddressAllocationTaskState.SubStage> {
         public IPAddressAllocationTaskResult(TaskState.TaskStage taskStage, Object taskSubStage, ServiceErrorResponse failure) {
             super(taskStage, taskSubStage, new HashMap<>(), failure);
         }
@@ -366,6 +370,7 @@ public class IPAddressAllocationTaskService extends
     private void deallocateIpAddress(IPAddressAllocationTaskState state) {
         IPAddressState addressState = new IPAddressState();
         addressState.ipAddressStatus = IPAddressState.IPAddressStatus.RELEASED;
+        addressState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
 
         List<DeferredResult<Operation>> deferredResults = new ArrayList<>();
         for (int i = 0; i < state.ipAddressLinks.size(); i++) {
@@ -392,6 +397,7 @@ public class IPAddressAllocationTaskService extends
      */
     private void allocateIpAddress(IPAddressAllocationTaskState state) {
         IPAddressAllocationContext context = new IPAddressAllocationContext();
+        context.connectedResourceLink = state.connectedResourceLink;
         this.retrieveSubnet(state.subnetLink, context)
                 .thenCompose(this::retrieveIpRanges)
                 .thenAccept(this::allocateIpAddressFromSubnet);
@@ -459,7 +465,8 @@ public class IPAddressAllocationTaskService extends
         SubnetRangeState rangeState = context.subnetRangeStatesIterator.next();
         retrieveExistingIpAddressesFromRange(rangeState)
                 .thenAccept((existingIpAddresses) -> {
-                    if (!allocateIpAddressFromRange(context.subnetState, rangeState, existingIpAddresses)) {
+                    if (!allocateIpAddressFromRange(context.subnetState, rangeState,
+                            existingIpAddresses, context.connectedResourceLink)) {
                         allocateIpAddressFromSubnet(context);
                     }
                 });
@@ -493,7 +500,7 @@ public class IPAddressAllocationTaskService extends
      */
     private boolean allocateIpAddressFromRange(SubnetState subnetState,
             SubnetRangeState subnetRangeState,
-            List<IPAddressState> existingIpAddressStates) {
+            List<IPAddressState> existingIpAddressStates, String resourceLink) {
         if (!IPVersion.IPv4.equals(subnetRangeState.ipVersion)) {
             logWarning("Not allocating from IP address range %s. Currently, only IPV4 is supported",
                     subnetRangeState.documentSelfLink);
@@ -507,6 +514,7 @@ public class IPAddressAllocationTaskService extends
         for (IPAddressState addressState : existingIpAddressStates) {
             if (addressState.ipAddressStatus == IPAddressState.IPAddressStatus.AVAILABLE) {
                 addressState.ipAddressStatus = IPAddressState.IPAddressStatus.ALLOCATED;
+                addressState.connectedResourceLink = resourceLink;
                 updateExistingIpAddressResource(addressState, subnetRangeState.documentSelfLink);
                 return true;
             }
@@ -521,7 +529,8 @@ public class IPAddressAllocationTaskService extends
         for (long address = beginAddress; address <= endAddress; address++) {
             if (!unavailableIpAddresses.contains(address)) {
                 String ipAddress = IpHelper.longToIpString(address);
-                createNewIpAddressResource(ipAddress, subnetRangeState.documentSelfLink);
+                createNewIpAddressResource(ipAddress, subnetRangeState.documentSelfLink,
+                        resourceLink);
                 return true;
             }
         }
@@ -538,8 +547,10 @@ public class IPAddressAllocationTaskService extends
      *
      * @param ipAddress               IP address to use for the new IP address resource.
      * @param subnetRangeResourceLink Subnet range resource link to use for the new IP address resource.
+     * @param connectedResourceLink   Link to the resource this IP is assigned to.
      */
-    private void createNewIpAddressResource(String ipAddress, String subnetRangeResourceLink) {
+    private void createNewIpAddressResource(String ipAddress, String subnetRangeResourceLink,
+            String connectedResourceLink) {
         IPAddressState ipAddressState = new IPAddressState();
         ipAddressState.ipAddressStatus = IPAddressState.IPAddressStatus.AVAILABLE;
         ipAddressState.ipAddress = ipAddress;
@@ -558,6 +569,7 @@ public class IPAddressAllocationTaskService extends
                     } else {
                         IPAddressState availableIPAddress = o.getBody(IPAddressState.class);
                         availableIPAddress.ipAddressStatus = IPAddressState.IPAddressStatus.ALLOCATED;
+                        availableIPAddress.connectedResourceLink = connectedResourceLink;
                         updateExistingIpAddressResource(availableIPAddress, subnetRangeResourceLink);
                     }
                 }));
