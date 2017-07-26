@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.28-SNAPSHOT
+
 ## 0.6.27
 * Added 'Revert to Snapshot' operation for vSphere compute resources.
 
