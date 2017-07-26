@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## 0.6.27-SNAPSHOT
+## 0.6.27
+* Added 'Revert to Snapshot' operation for vSphere compute resources.
 
 ## 0.6.26
 * Added support to create internal tag 'type' for AWS storage and disk resources.
