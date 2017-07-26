@@ -872,8 +872,8 @@ public class AWSInstanceService extends StatelessService {
             if (bootDiskConditions.stream()
                     .anyMatch(condition -> condition.enforcement == Enforcement.HARD)) {
                 String deviceType = bootDisk.customProperties.get(DEVICE_TYPE);
-                if (deviceType != null && rootDeviceType.equals(deviceType)) {
-                    String message = String.format("Found hard constraint on boot disk.%s type "
+                if (deviceType != null && !rootDeviceType.equals(deviceType)) {
+                    String message = String.format("Found hard constraint on boot disk. %s type "
                             + "cannot be changed to %s type.", rootDeviceType, deviceType);
                     this.logSevere("[AWSInstanceService] " + message);
                     throw new IllegalArgumentException(message);
