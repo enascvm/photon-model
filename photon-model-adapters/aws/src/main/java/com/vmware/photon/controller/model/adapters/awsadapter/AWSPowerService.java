@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.resources.ComputeService.PowerState.OFF;
+
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.StartInstancesRequest;
@@ -154,6 +156,9 @@ public class AWSPowerService extends StatelessService {
     private void updateComputeState(ComputePowerRequest pr, DefaultAdapterContext c) {
         ComputeState state = new ComputeState();
         state.powerState = pr.powerState;
+        if (OFF.equals(pr.powerState)) {
+            state.address = ""; //clear IP address in case of power-off
+        }
         Operation.createPatch(pr.resourceReference)
                 .setBody(state)
                 .setCompletion((o, e) -> {

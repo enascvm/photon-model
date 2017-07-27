@@ -129,6 +129,9 @@ public class VSphereAdapterPowerService extends StatelessService {
             ProvisionContext ctx) {
         // update just the power state
         ctx.child.powerState = request.powerState;
+        if (PowerState.OFF.equals(request.powerState)) {
+            ctx.child.address = ""; //set the IP address to empty in case of POWER OFF
+        }
         Operation patchState = patchComputeResource(ctx.child, ctx.computeReference);
 
         // finish task

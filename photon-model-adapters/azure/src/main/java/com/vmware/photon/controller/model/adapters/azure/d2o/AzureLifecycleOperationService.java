@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.d2o;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
+import static com.vmware.photon.controller.model.resources.ComputeService.PowerState.SUSPEND;
 
 import java.util.concurrent.ExecutorService;
 
@@ -237,6 +238,9 @@ public class AzureLifecycleOperationService extends StatelessService {
     private void updateComputeState(AzureLifecycleOpDataHolder dh, DefaultAdapterContext c) {
         ComputeState state = new ComputeState();
         state.powerState = getPowerState(dh.request);
+        if (SUSPEND.equals(state.powerState)) {
+            state.address = ""; //clear IP address in case of power-off
+        }
         Operation.createPatch(dh.request.resourceReference)
                 .setBody(state)
                 .setCompletion((o, e) -> {

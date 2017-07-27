@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
@@ -240,6 +241,9 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         ComputeState compute = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, computeLink));
         assertEquals(powerState, compute.powerState);
+        if (PowerState.OFF.equals(powerState)) {
+            assertTrue(compute.address.isEmpty());
+        }
     }
 
     private EndpointState configureEndpoint() throws Throwable {

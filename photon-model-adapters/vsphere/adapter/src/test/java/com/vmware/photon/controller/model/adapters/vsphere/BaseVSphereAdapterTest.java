@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
@@ -469,6 +470,7 @@ public class BaseVSphereAdapterTest {
             cstate[0] = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, computeState.documentSelfLink));
             if (cstate[0].powerState.equals(ComputeService.PowerState.SUSPEND)) {
+                assertTrue(cstate[0].address.isEmpty());
                 return true;
             } else {
                 return false;
@@ -518,6 +520,7 @@ public class BaseVSphereAdapterTest {
                     UriUtils.buildUri(this.host, computeState.documentSelfLink));
 
             if (cState[0].powerState.equals(ComputeService.PowerState.OFF)) {
+                assertTrue(cState[0].address.isEmpty());
                 return true;
             } else {
                 return false;

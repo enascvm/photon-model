@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.d2o;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeFalse;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
@@ -173,6 +174,8 @@ public class AzureLifecycleOperationServiceTest extends BasicReusableHostTestCas
         triggerRestart();
 
         triggerSuspend();
+
+        assertVMCurrentAddressEmpty(); // assert IP address to empty after SUSPEND
     }
 
     private void triggerRestart() {
@@ -293,6 +296,12 @@ public class AzureLifecycleOperationServiceTest extends BasicReusableHostTestCas
                 .setReferer(this.host.getReferer());
         this.host.startService(startOp, service);
         ctx.await();
+    }
+
+    private void assertVMCurrentAddressEmpty() {
+        ComputeState compute = this.host.getServiceState(null, ComputeState.class,
+                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+        assertTrue(compute.address.isEmpty());
     }
 
 }

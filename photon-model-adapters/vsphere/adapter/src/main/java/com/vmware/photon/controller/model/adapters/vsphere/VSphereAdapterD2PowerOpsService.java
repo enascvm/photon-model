@@ -87,8 +87,10 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
             ctx.child.powerState = ComputeService.PowerState.ON;
         } else if (ResourceOperation.SUSPEND.operation.equalsIgnoreCase(operation)) {
             ctx.child.powerState = ComputeService.PowerState.SUSPEND;
+            ctx.child.address = ""; //set the IP address to empty in case of SUSPEND
         } else if (ResourceOperation.SHUTDOWN.operation.equalsIgnoreCase(operation)) {
             ctx.child.powerState = ComputeService.PowerState.OFF;
+            ctx.child.address = ""; //set the IP address to empty in case of SHUTDOWN (soft power-off)
         } else if (ResourceOperation.RESET.operation.equalsIgnoreCase(operation)) {
             ctx.child.powerState = ComputeService.PowerState.ON;
         } else {

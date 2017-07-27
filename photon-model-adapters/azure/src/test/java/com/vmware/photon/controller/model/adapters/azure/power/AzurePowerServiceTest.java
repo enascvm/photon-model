@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.power;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 
@@ -194,6 +195,8 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
 
         assertVmCurrentPowerState(PowerState.OFF);
 
+        assertVMCurrentAddressEmpty(); // assert IP address to empty after POWER OFF
+
         triggerPowerChange(PowerState.ON, computeHostDesc.powerAdapterReference);
 
         assertVmCurrentPowerState(PowerState.ON);
@@ -265,6 +268,12 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
             fail("Unable to verify current Machine Power state on Azure");
             e.printStackTrace();
         }
+    }
+
+    private void assertVMCurrentAddressEmpty() {
+        ComputeState compute = this.host.getServiceState(null, ComputeState.class,
+                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+        assertTrue(compute.address.isEmpty());
     }
 
     private void kickOffProvisionTask() throws Throwable {

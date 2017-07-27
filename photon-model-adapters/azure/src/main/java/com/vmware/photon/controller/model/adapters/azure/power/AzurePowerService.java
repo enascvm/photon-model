@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.power;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
+import static com.vmware.photon.controller.model.resources.ComputeService.PowerState.OFF;
 
 import java.util.concurrent.ExecutorService;
 
@@ -181,6 +182,9 @@ public class AzurePowerService extends StatelessService {
     private void updateComputeState(AzurePowerDataHolder dh, DefaultAdapterContext c) {
         ComputeState state = new ComputeState();
         state.powerState = dh.pr.powerState;
+        if (OFF.equals(dh.pr.powerState)) {
+            state.address = ""; //clear IP address in case of power-off
+        }
         Operation.createPatch(dh.pr.resourceReference)
                 .setBody(state)
                 .setCompletion((o, e) -> {
