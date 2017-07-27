@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.6.28-SNAPSHOT
+## 0.6.28
+
+* Upgrading xenon to 1.5.3.
+* Adding S3Proxy for AWS Mock.
 
 ## 0.6.27
 * Added 'Revert to Snapshot' operation for vSphere compute resources.
