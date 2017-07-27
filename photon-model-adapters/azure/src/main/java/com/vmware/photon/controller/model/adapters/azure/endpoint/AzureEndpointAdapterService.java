@@ -56,6 +56,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -245,6 +246,11 @@ public class AzureEndpointAdapterService extends StatelessService {
             c.regionId = r.get(REGION_KEY).orElse(null);
             c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             c.adapterManagementReference = UriUtils.buildUri("https://management.azure.com");
+            if (c.customProperties == null) {
+                c.customProperties = new HashMap<>();
+            }
+            c.customProperties
+                    .put(PhotonModelConstants.CLOUD_ACCOUNT_ID, r.getRequired(USER_LINK_KEY));
         };
     }
 
