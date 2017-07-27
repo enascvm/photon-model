@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.29-SNAPSHOT
+
 ## 0.6.28
 
 * Upgrading xenon to 1.5.3.
