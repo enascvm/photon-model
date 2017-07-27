@@ -13,9 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ELASTIC_IP_ALLOCATION_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_NAT_GATEWAY_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
@@ -49,6 +53,7 @@ public class AWSSubnetService extends StatelessService {
         AuthCredentialsServiceState credentials;
         SubnetState subnetState;
         NetworkState parentNetwork;
+        SubnetState publicSubnet;
 
         String awsSubnetId;
 
@@ -56,10 +61,18 @@ public class AWSSubnetService extends StatelessService {
 
         TaskManager taskManager;
 
+        AWSNATGatewayContext natSubContext;
+
         AWSSubnetContext(StatelessService service, SubnetInstanceRequest request) {
             this.request = request;
             this.taskManager = new TaskManager(service, request.taskReference,
                     request.resourceLink());
+        }
+
+        private static class AWSNATGatewayContext {
+            String allocationId;
+            String natGatewayId;
+            String routeTableId;
         }
     }
 
@@ -119,7 +132,9 @@ public class AWSSubnetService extends StatelessService {
     private DeferredResult<AWSSubnetContext> populateContext(AWSSubnetContext context) {
         return DeferredResult.completed(context)
                 .thenCompose(this::getSubnetState)
+                .thenCompose(this::getNATContext)
                 .thenCompose(this::getParentNetwork)
+                .thenCompose(this::getPublicSubnet)
                 .thenCompose(this::getEndpointState)
                 .thenCompose(this::getCredentials)
                 .thenCompose(this::getAWSClient);
@@ -135,6 +150,28 @@ public class AWSSubnetService extends StatelessService {
                 });
     }
 
+    private DeferredResult<AWSSubnetContext> getNATContext(AWSSubnetContext context) {
+        if (context.subnetState == null || context.subnetState.customProperties == null) {
+            return DeferredResult.completed(context);
+        }
+
+        String allocationId = context.subnetState.customProperties.get(
+                AWS_ELASTIC_IP_ALLOCATION_ID);
+        String natGatewayId = context.subnetState.customProperties.get(
+                AWS_NAT_GATEWAY_ID);
+        String routeTableId = context.subnetState.customProperties.get(
+                AWS_ROUTE_TABLE_ID);
+
+        if (allocationId != null || natGatewayId != null || routeTableId != null) {
+            context.natSubContext = new AWSSubnetContext.AWSNATGatewayContext();
+            context.natSubContext.allocationId = allocationId;
+            context.natSubContext.natGatewayId = natGatewayId;
+            context.natSubContext.routeTableId = routeTableId;
+        }
+
+        return DeferredResult.completed(context);
+    }
+
     private DeferredResult<AWSSubnetContext> getParentNetwork(AWSSubnetContext context) {
         URI uri = context.request.buildUri(context.subnetState.networkLink);
         return this.sendWithDeferredResult(
@@ -142,6 +179,21 @@ public class AWSSubnetService extends StatelessService {
                 NetworkState.class)
                 .thenApply(parentNetwork -> {
                     context.parentNetwork = parentNetwork;
+                    return context;
+                });
+    }
+
+    private DeferredResult<AWSSubnetContext> getPublicSubnet(AWSSubnetContext context) {
+        if (context.subnetState.externalSubnetLink == null) {
+            return DeferredResult.completed(context);
+        }
+
+        URI uri = context.request.buildUri(context.subnetState.externalSubnetLink);
+        return this.sendWithDeferredResult(
+                Operation.createGet(uri),
+                SubnetState.class)
+                .thenApply(publicSubnet -> {
+                    context.publicSubnet = publicSubnet;
                     return context;
                 });
     }
@@ -193,14 +245,16 @@ public class AWSSubnetService extends StatelessService {
             if (context.request.isMockRequest) {
                 // no need to go the end-point; just generate AWS Subnet Id.
                 context.awsSubnetId = UUID.randomUUID().toString();
+                execution = execution.thenCompose(this::updateSubnetState);
             } else {
                 execution = execution
                         .thenCompose(this::createSubnet)
-                        .thenCompose(this::nameTagSubnet);
+                        .thenCompose(this::updateSubnetState)
+                        .thenCompose(this::nameTagSubnet)
+                        .thenCompose(this::provideOutboundAccess);
             }
 
-            return execution
-                    .thenCompose(this::updateSubnetState);
+            return execution;
 
         case DELETE:
             if (context.request.isMockRequest) {
@@ -208,7 +262,9 @@ public class AWSSubnetService extends StatelessService {
                 this.logFine("Mock request to delete an AWS subnet ["
                         + context.subnetState.name + "] processed.");
             } else {
-                execution = execution.thenCompose(this::deleteSubnet);
+                execution = execution
+                        .thenCompose(this::deleteSubnet)
+                        .thenCompose(this::deleteNATResources);
             }
 
             return execution.thenCompose(this::deleteSubnetState);
@@ -237,6 +293,8 @@ public class AWSSubnetService extends StatelessService {
         context.subnetState.id = context.awsSubnetId;
         context.subnetState.lifecycleState = LifecycleState.READY;
 
+        addNATCustomProperties(context.natSubContext, context.subnetState);
+
         return this.sendWithDeferredResult(
                 Operation.createPatch(this, context.subnetState.documentSelfLink)
                         .setBody(context.subnetState))
@@ -248,9 +306,154 @@ public class AWSSubnetService extends StatelessService {
                 .thenApply((result) -> context);
     }
 
+    private DeferredResult<AWSSubnetContext> deleteNATResources(AWSSubnetContext context) {
+        if (context.natSubContext == null) {
+            return DeferredResult.completed(context);
+        }
+
+        return DeferredResult.completed(context)
+                .thenCompose(this::deleteNATGateway)
+                .thenCompose(this::deleteRouteTable)
+                .thenCompose(this::releaseIPAddress)
+                .thenApply((result) -> context);
+    }
+
+    private DeferredResult<AWSSubnetContext> deleteNATGateway(AWSSubnetContext context) {
+        if (context.natSubContext.natGatewayId == null) {
+            return DeferredResult.completed(context);
+        }
+
+        return context.client.deleteNATGateway(context.natSubContext.natGatewayId,
+                context.taskManager, context.subnetState.documentExpirationTimeMicros)
+                .thenApply((result) -> context);
+    }
+
+    private DeferredResult<AWSSubnetContext> deleteRouteTable(AWSSubnetContext context) {
+        if (context.natSubContext.routeTableId == null) {
+            return DeferredResult.completed(context);
+        }
+
+        return context.client.deleteRouteTable(context.natSubContext.routeTableId)
+                .thenApply((result) -> context);
+    }
+
+    private DeferredResult<AWSSubnetContext> releaseIPAddress(AWSSubnetContext context) {
+        if (context.natSubContext.allocationId == null) {
+            return DeferredResult.completed(context);
+        }
+
+        return context.client.releaseElasticIPAddress(context.natSubContext.allocationId)
+                .thenApply((result) -> context);
+    }
+
     private DeferredResult<AWSSubnetContext> deleteSubnetState(AWSSubnetContext context) {
         return this.sendWithDeferredResult(
                 Operation.createDelete(this, context.subnetState.documentSelfLink))
                 .thenApply(operation -> context);
+    }
+
+    /**
+     * Provides outbound access for the newly created subnet. That requires 5 steps:
+     * 1. allocate an elastic IP for a NAT gateway (temporary).
+     * 2. create a NAT gateway.
+     * 3. create a new route table.
+     * 4. associate the subnet to the new route table.
+     * 5. add a route for Internet traffic to the NAT gateway.
+     */
+    private DeferredResult<AWSSubnetContext> provideOutboundAccess(AWSSubnetContext context) {
+        DeferredResult<AWSSubnetContext> execution = DeferredResult.completed(context);
+
+        if (context.publicSubnet == null) {
+            return execution;
+        }
+
+        return execution
+                .thenCompose(this::getAddressAllocationId)
+                .thenCompose(this::createRouteTable)
+                .thenCompose(this::createNATGateway)
+                .thenCompose(this::associateSubnetToRouteTable)
+                .thenCompose(this::addRouteToNatGateway);
+    }
+
+    /**
+     * Allocates an elastic IP address for the NAT gateway
+     * Note: this is temporary. Eventually, this address will be allocated outside this service.
+     */
+    private DeferredResult<AWSSubnetContext> getAddressAllocationId(AWSSubnetContext context) {
+        return context.client.allocateElasticIPAddress()
+                .thenApply(allocationId -> {
+                    context.natSubContext = new AWSSubnetContext.AWSNATGatewayContext();
+                    context.natSubContext.allocationId = allocationId;
+                    return context;
+                })
+                .thenCompose(this::updateSubnetState);
+    }
+
+    /**
+     * Creates a NAT gateway
+     */
+    private DeferredResult<AWSSubnetContext> createNATGateway(AWSSubnetContext context) {
+        return context.client.createNatGateway(context.publicSubnet.id,
+                context.natSubContext.allocationId, context.taskManager,
+                context.subnetState.documentExpirationTimeMicros)
+                .thenApply(natGatewayId -> {
+                    context.natSubContext.natGatewayId = natGatewayId;
+                    return context;
+                })
+                .thenCompose(this::updateSubnetState);
+    }
+
+    /**
+     * Creates a new route table
+     */
+    private DeferredResult<AWSSubnetContext> createRouteTable(AWSSubnetContext context) {
+        return context.client.createRouteTable(context.parentNetwork.id)
+                .thenApply(routeTableId -> {
+                    context.natSubContext.routeTableId = routeTableId;
+                    return context;
+                })
+                .thenCompose(this::updateSubnetState);
+    }
+
+    /**
+     * Associates the newly provisioned subnet to the route table
+     */
+    private DeferredResult<AWSSubnetContext> associateSubnetToRouteTable(AWSSubnetContext context) {
+        return context.client.associateSubnetToRouteTable(context.natSubContext.routeTableId,
+                context.awsSubnetId).thenApply(ignore -> context);
+    }
+
+    /**
+     * Adds route for Internet traffic to NAT gateway
+     */
+    private DeferredResult<AWSSubnetContext> addRouteToNatGateway(AWSSubnetContext context) {
+        return context.client.addRouteToNatGateway(context.natSubContext.routeTableId,
+                context.natSubContext.natGatewayId).thenApply(ignore -> context);
+    }
+
+    /**
+     * Adds NAT-specific data to the subnet's custom properties
+     */
+    private void addNATCustomProperties(AWSSubnetContext.AWSNATGatewayContext natContext,
+            SubnetState subnetState) {
+        if (natContext == null) {
+            return;
+        }
+
+        if (subnetState.customProperties == null) {
+            subnetState.customProperties = new HashMap<>();
+        }
+
+        if (natContext.allocationId != null) {
+            subnetState.customProperties.put(AWS_ELASTIC_IP_ALLOCATION_ID, natContext.allocationId);
+        }
+
+        if (natContext.natGatewayId != null) {
+            subnetState.customProperties.put(AWS_NAT_GATEWAY_ID, natContext.natGatewayId);
+        }
+
+        if (natContext.routeTableId != null) {
+            subnetState.customProperties.put(AWS_ROUTE_TABLE_ID, natContext.routeTableId);
+        }
     }
 }

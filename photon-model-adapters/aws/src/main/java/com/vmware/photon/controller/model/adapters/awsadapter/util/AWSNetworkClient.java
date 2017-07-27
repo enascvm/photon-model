@@ -15,15 +15,25 @@ package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSNetworkService.ROUTE_DEST_ALL;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.AllocateAddressRequest;
+import com.amazonaws.services.ec2.model.AllocateAddressResult;
 import com.amazonaws.services.ec2.model.AmazonEC2Exception;
+import com.amazonaws.services.ec2.model.AssociateRouteTableRequest;
+import com.amazonaws.services.ec2.model.AssociateRouteTableResult;
 import com.amazonaws.services.ec2.model.AttachInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.CreateInternetGatewayResult;
+import com.amazonaws.services.ec2.model.CreateNatGatewayRequest;
+import com.amazonaws.services.ec2.model.CreateNatGatewayResult;
 import com.amazonaws.services.ec2.model.CreateRouteRequest;
+import com.amazonaws.services.ec2.model.CreateRouteResult;
+import com.amazonaws.services.ec2.model.CreateRouteTableRequest;
+import com.amazonaws.services.ec2.model.CreateRouteTableResult;
 import com.amazonaws.services.ec2.model.CreateSubnetRequest;
 import com.amazonaws.services.ec2.model.CreateSubnetResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
@@ -31,6 +41,10 @@ import com.amazonaws.services.ec2.model.CreateTagsResult;
 import com.amazonaws.services.ec2.model.CreateVpcRequest;
 import com.amazonaws.services.ec2.model.CreateVpcResult;
 import com.amazonaws.services.ec2.model.DeleteInternetGatewayRequest;
+import com.amazonaws.services.ec2.model.DeleteNatGatewayRequest;
+import com.amazonaws.services.ec2.model.DeleteNatGatewayResult;
+import com.amazonaws.services.ec2.model.DeleteRouteTableRequest;
+import com.amazonaws.services.ec2.model.DeleteRouteTableResult;
 import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
 import com.amazonaws.services.ec2.model.DeleteSubnetResult;
 import com.amazonaws.services.ec2.model.DeleteVpcRequest;
@@ -43,14 +57,20 @@ import com.amazonaws.services.ec2.model.DescribeSubnetsResult;
 import com.amazonaws.services.ec2.model.DescribeVpcsRequest;
 import com.amazonaws.services.ec2.model.DescribeVpcsResult;
 import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest;
+import com.amazonaws.services.ec2.model.DomainType;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.InternetGateway;
+import com.amazonaws.services.ec2.model.NatGateway;
+import com.amazonaws.services.ec2.model.ReleaseAddressRequest;
+import com.amazonaws.services.ec2.model.ReleaseAddressResult;
 import com.amazonaws.services.ec2.model.RouteTable;
 import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.Vpc;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSTaskStatusChecker;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.StatelessService;
 
@@ -61,6 +81,8 @@ public class AWSNetworkClient {
 
     public static final String STATUS_CODE_SUBNET_NOT_FOUND = "InvalidSubnetID.NotFound";
     public static final String STATUS_CODE_SUBNET_CONFLICT = "InvalidSubnet.Conflict";
+    private static final String AWS_AVAILABLE_NAME = "available";
+    private static final String AWS_DELETED_NAME = "deleted";
 
     private final AmazonEC2AsyncClient client;
     private StatelessService service;
@@ -254,5 +276,168 @@ public class AWSNetworkClient {
                 .withRouteTableId(routeTableId)
                 .withDestinationCidrBlock(subnetCidr);
         this.client.createRoute(req);
+    }
+
+    /**
+     * Create a NAT Gateway
+     * It waits for the NAT gateway to become available before returning the gateway id.
+     */
+    public DeferredResult<String> createNatGateway(String publicSubnetId, String allocationId,
+            TaskManager taskManager, long taskExpirationMicros) {
+        CreateNatGatewayRequest req = new CreateNatGatewayRequest()
+                .withSubnetId(publicSubnetId)
+                .withAllocationId(allocationId);
+
+        String message = "Create AWS NAT Gateway for subnet [" + publicSubnetId
+                + "] with elastic IP allocation id [" + allocationId + "].";
+
+        AWSDeferredResultAsyncHandler<CreateNatGatewayRequest, CreateNatGatewayResult> handler = new
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.createNatGatewayAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenApply(CreateNatGatewayResult::getNatGateway)
+                .thenApply(NatGateway::getNatGatewayId)
+                .thenCompose(natGatewayId -> waitForNatGatewayState(natGatewayId,
+                        taskManager, taskExpirationMicros, AWS_AVAILABLE_NAME));
+    }
+
+    /**
+     * Delete a NAT Gateway
+     * It waits for the NAT gateway to get into the Deleted state before returning.
+     */
+    public DeferredResult<Void> deleteNATGateway(String natGatewayId, TaskManager taskManager,
+            long taskExpirationMicros) {
+        DeleteNatGatewayRequest req = new DeleteNatGatewayRequest()
+                .withNatGatewayId(natGatewayId);
+
+        String message = "Delete AWS NAT Gateway with id [" + natGatewayId + "].";
+
+        AWSDeferredResultAsyncHandler<DeleteNatGatewayRequest, DeleteNatGatewayResult> handler = new
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.deleteNatGatewayAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenCompose(ignore -> waitForNatGatewayState(natGatewayId,
+                        taskManager, taskExpirationMicros, AWS_DELETED_NAME))
+                .thenApply(ignore -> null);
+
+    }
+
+    /**
+     * Allocate an elastic IP address
+     */
+    public DeferredResult<String> allocateElasticIPAddress() {
+        AllocateAddressRequest req = new AllocateAddressRequest()
+                .withDomain(DomainType.Vpc);
+
+        String message = "Allocate AWS Elastic IP Address for use with instances in a VPC.";
+
+        AWSDeferredResultAsyncHandler<AllocateAddressRequest, AllocateAddressResult> handler = new
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.allocateAddressAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenApply(AllocateAddressResult::getAllocationId);
+    }
+
+    /**
+     * Release an elastic IP address
+     */
+    public DeferredResult<Void> releaseElasticIPAddress(String allocationId) {
+        ReleaseAddressRequest req = new ReleaseAddressRequest()
+                .withAllocationId(allocationId);
+
+        String message = "Release AWS Elastic IP Address with allocation id [" + allocationId
+                + "].";
+
+        AWSDeferredResultAsyncHandler<ReleaseAddressRequest, ReleaseAddressResult> handler = new
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.releaseAddressAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenApply(ignore -> null);
+    }
+
+    /**
+     * Create a route table
+     */
+    public DeferredResult<String> createRouteTable(String vpcId) {
+        CreateRouteTableRequest req = new CreateRouteTableRequest()
+                .withVpcId(vpcId);
+
+        String message = "Create AWS Route Table on VPC [" + vpcId + "].";
+
+        AWSDeferredResultAsyncHandler<CreateRouteTableRequest, CreateRouteTableResult> handler = new
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.createRouteTableAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenApply(CreateRouteTableResult::getRouteTable)
+                .thenApply(RouteTable::getRouteTableId);
+    }
+
+    /**
+     * Delete a route table
+     */
+    public DeferredResult<Void> deleteRouteTable(String routeTableId) {
+        DeleteRouteTableRequest req = new DeleteRouteTableRequest()
+                .withRouteTableId(routeTableId);
+
+        String message = "Delete AWS Route Table with id [" + routeTableId + "].";
+
+        AWSDeferredResultAsyncHandler<DeleteRouteTableRequest, DeleteRouteTableResult> handler = new
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.deleteRouteTableAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenApply(ignore -> null);
+    }
+
+    /**
+     * Add a 0.0.0.0/0 route to NAT gateway on an existing route table
+     */
+    public DeferredResult<Void> addRouteToNatGateway(String routeTableId, String natGatewayId) {
+        CreateRouteRequest req = new CreateRouteRequest()
+                .withNatGatewayId(natGatewayId)
+                .withDestinationCidrBlock(ROUTE_DEST_ALL)
+                .withRouteTableId(routeTableId);
+
+        String message = "Create AWS Route to NAT Gateway [" + natGatewayId + "] for Internet "
+                + "traffic on route table [" + routeTableId + "].";
+
+        AWSDeferredResultAsyncHandler<CreateRouteRequest, CreateRouteResult> handler = new
+                AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.createRouteAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenAccept(ignore -> { });
+    }
+
+    /**
+     * Associate a subnet to an existing route table
+     */
+    public DeferredResult<Void> associateSubnetToRouteTable(String routeTableId,
+            String subnetId) {
+        AssociateRouteTableRequest req = new AssociateRouteTableRequest()
+                .withSubnetId(subnetId)
+                .withRouteTableId(routeTableId);
+
+        String message = "Associate AWS Subnet [" + subnetId + "] to route table [" +
+                routeTableId + "].";
+
+        AWSDeferredResultAsyncHandler<AssociateRouteTableRequest, AssociateRouteTableResult> handler
+                = new AWSDeferredResultAsyncHandler<>(this.service, message);
+        this.client.associateRouteTableAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenAccept(ignore -> { });
+    }
+
+    /**
+     * Wait for NAT Gateway to go into the desired state
+     */
+    private DeferredResult<String> waitForNatGatewayState(String natGatewayId, TaskManager
+            taskManager, long taskExpirationMicros, String desiredState) {
+        DeferredResult<String> waitCompleted = new DeferredResult<>();
+
+        AWSTaskStatusChecker.create(this.client, natGatewayId,
+                desiredState, (ignore) -> waitCompleted.complete(natGatewayId),
+                taskManager, this.service,
+                taskExpirationMicros).start(new NatGateway());
+
+        return waitCompleted;
     }
 }

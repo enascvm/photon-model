@@ -490,7 +490,7 @@ public class AWSInstanceService extends StatelessService {
             this.service.logInfo(() -> message);
 
             // consumer to be invoked once a VM is in the running state
-            Consumer<Instance> consumer = instance -> {
+            Consumer<Object> consumer = instance -> {
                 List<Operation> patchOperations = new ArrayList<>();
                 if (instance == null) {
                     this.context.taskManager.patchTaskToFailure(
@@ -499,12 +499,12 @@ public class AWSInstanceService extends StatelessService {
                 }
 
                 ComputeState cs = new ComputeState();
-                cs.id = instance.getInstanceId();
+                cs.id = ((Instance)instance).getInstanceId();
                 cs.type = ComputeType.VM_GUEST;
                 cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-                cs.address = instance.getPublicIpAddress();
+                cs.address = ((Instance)instance).getPublicIpAddress();
                 cs.regionId = getRequestRegionId(this.context);
-                cs.powerState = AWSUtils.mapToPowerState(instance.getState());
+                cs.powerState = AWSUtils.mapToPowerState(((Instance)instance).getState());
                 if (this.context.child.customProperties == null) {
                     cs.customProperties = new HashMap<>();
                 } else {
@@ -513,10 +513,11 @@ public class AWSInstanceService extends StatelessService {
                 cs.customProperties.put(SOURCE_TASK_LINK,
                         ProvisionComputeTaskService.FACTORY_LINK);
                 cs.customProperties.put(AWSConstants.AWS_VPC_ID,
-                        instance.getVpcId());
+                        ((Instance)instance).getVpcId());
                 cs.lifecycleState = LifecycleState.READY;
 
-                patchOperations.addAll(createPatchNICStatesOperations(this.context.nics, instance));
+                patchOperations.addAll(createPatchNICStatesOperations(this.context.nics,
+                        ((Instance)instance)));
                 //update boot disk size of instance-store AMI's
                 patchOperations.addAll(createPatchDiskStatesOperations(
                         Arrays.asList(this.context.bootDisk)));
@@ -598,7 +599,7 @@ public class AWSInstanceService extends StatelessService {
         }
 
         private void tagInstanceAndStartStatusChecker(String instanceId, Set<String> tagLinks,
-                Consumer<Instance> consumer) {
+                Consumer<Object> consumer) {
 
             List<Tag> tagsToCreate = new ArrayList<>();
             tagsToCreate.add(new Tag().withKey(AWS_TAG_NAME).withValue(this.context.child.name));
@@ -611,7 +612,7 @@ public class AWSInstanceService extends StatelessService {
                                 AWSInstanceService.AWS_RUNNING_NAME, consumer,
                                 this.context.taskManager,
                                 this.service, this.context.taskExpirationMicros)
-                        .start();
+                        .start(new Instance());
             };
 
             // add the name tag only if there are no tag links
@@ -695,7 +696,7 @@ public class AWSInstanceService extends StatelessService {
         public void onSuccess(TerminateInstancesRequest request,
                 TerminateInstancesResult result) {
 
-            Consumer<Instance> postTerminationCallback = (instance) -> {
+            Consumer<Object> postTerminationCallback = (instance) -> {
 
                 OperationContext.restoreOperationContext(AWSTerminateHandler.this.opContext);
 
@@ -724,7 +725,7 @@ public class AWSInstanceService extends StatelessService {
             AWSTaskStatusChecker.create(this.context.amazonEC2Client, this.instanceId,
                     AWSInstanceService.AWS_TERMINATED_NAME, postTerminationCallback,
                     this.context.taskManager, AWSInstanceService.this,
-                    this.context.taskExpirationMicros).start();
+                    this.context.taskExpirationMicros).start(new Instance());
         }
 
         private DeferredResult<List<ResourceState>> deleteConstructsReferredByInstance() {

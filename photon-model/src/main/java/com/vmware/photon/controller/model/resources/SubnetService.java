@@ -139,6 +139,13 @@ public class SubnetService extends StatefulService {
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_18)
         @UsageOption(option = PropertyUsageOption.SINGLE_ASSIGNMENT)
         public String type = NETWORK_SUBTYPE_SUBNET_STATE;
+
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_31)
+        @Documentation(description = "Link to another subnet that provides outbound access to "
+                + "instances connected to this subnet")
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+                PropertyUsageOption.OPTIONAL })
+        public String externalSubnetLink;
     }
 
     public SubnetService() {

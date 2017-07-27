@@ -222,6 +222,8 @@ public class TestAWSSetupUtils {
 
     public static final String AWS_NON_EXISTING_SUBNET_CIDR = "172.31.80.0/20";
     public static final String AWS_NON_EXISTING_SUBNET_NAME = "nonexisting";
+    public static final String AWS_NON_EXISTING_PUBLIC_SUBNET_CIDR = "172.31.176.0/20";
+    public static final String AWS_NON_EXISTING_PUBLIC_SUBNET_NAME = "nonexisting-public";
 
     public static final String VPC_KEY = "vpc-id";
     public static final String SUBNET_KEY = "subnet-id";

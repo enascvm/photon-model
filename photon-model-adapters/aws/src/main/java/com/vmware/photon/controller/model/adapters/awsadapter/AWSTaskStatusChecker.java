@@ -21,34 +21,39 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.AmazonWebServiceRequest;
+import com.amazonaws.AmazonWebServiceResult;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
+import com.amazonaws.services.ec2.model.DescribeNatGatewaysRequest;
+import com.amazonaws.services.ec2.model.DescribeNatGatewaysResult;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.NatGateway;
 
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 
 /**
- * Class to check if an instance is in the desired state if the vm is in the
+ * Class to check if an instance is in the desired state; if the instance is in the
  * desired state invoke the consumer, else reschedule to check in 5 seconds.
  *
  */
-public class AWSTaskStatusChecker {
+public class AWSTaskStatusChecker<T> {
 
     private String instanceId;
     private AmazonEC2AsyncClient amazonEC2Client;
     private String desiredState;
-    private Consumer<Instance> consumer;
+    private Consumer<Object> consumer;
     private TaskManager taskManager;
     private StatelessService service;
     private long expirationTimeMicros;
 
     private AWSTaskStatusChecker(AmazonEC2AsyncClient amazonEC2Client,
             String instanceId, String desiredState,
-            Consumer<Instance> consumer, TaskManager taskManager, StatelessService service,
+            Consumer<Object> consumer, TaskManager taskManager, StatelessService service,
             long expirationTimeMicros) {
         this.instanceId = instanceId;
         this.amazonEC2Client = amazonEC2Client;
@@ -61,14 +66,14 @@ public class AWSTaskStatusChecker {
 
     public static AWSTaskStatusChecker create(
             AmazonEC2AsyncClient amazonEC2Client, String instanceId,
-            String desiredState, Consumer<Instance> consumer,
+            String desiredState, Consumer<Object> consumer,
             TaskManager taskManager, StatelessService service,
             long expirationTimeMicros) {
         return new AWSTaskStatusChecker(amazonEC2Client, instanceId,
                 desiredState, consumer, taskManager, service, expirationTimeMicros);
     }
 
-    public void start() {
+    public void start(T type) {
         if (this.expirationTimeMicros > 0 && Utils.getNowMicrosUtc() > this.expirationTimeMicros) {
             String msg = String
                     .format("Compute with instance id %s did not reach desired %s state in the required time interval.",
@@ -77,11 +82,49 @@ public class AWSTaskStatusChecker {
             this.taskManager.patchTaskToFailure(new RuntimeException(msg));
             return;
         }
-        DescribeInstancesRequest descRequest = new DescribeInstancesRequest();
-        List<String> instanceIdList = new ArrayList<>();
-        instanceIdList.add(this.instanceId);
-        descRequest.setInstanceIds(instanceIdList);
-        AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> describeHandler = new AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult>() {
+
+        runSearch(type);
+    }
+
+    private void runSearch(T type) {
+        AmazonWebServiceRequest descRequest = buildRequest(type);
+        AsyncHandler describeHandler = buildHandler(type);
+        if (type instanceof Instance) {
+            this.amazonEC2Client.describeInstancesAsync(
+                    (DescribeInstancesRequest) descRequest, describeHandler);
+        } else if (type instanceof NatGateway) {
+            this.amazonEC2Client.describeNatGatewaysAsync(
+                    (DescribeNatGatewaysRequest) descRequest, describeHandler);
+        } else {
+            AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
+                    new IllegalArgumentException("Invalid type " + type));
+        }
+    }
+
+    private AmazonWebServiceRequest buildRequest(T type) {
+        if (type instanceof Instance) {
+            DescribeInstancesRequest descRequest = new DescribeInstancesRequest();
+            List<String> instanceIdList = new ArrayList<>();
+            instanceIdList.add(this.instanceId);
+            descRequest.setInstanceIds(instanceIdList);
+
+            return descRequest;
+        } else if (type instanceof NatGateway) {
+            DescribeNatGatewaysRequest descRequest = new DescribeNatGatewaysRequest();
+            List<String> instanceIdList = new ArrayList<>();
+            instanceIdList.add(this.instanceId);
+            descRequest.setNatGatewayIds(instanceIdList);
+
+            return descRequest;
+        } else {
+            AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
+                    new IllegalArgumentException("Invalid type " + type));
+            return null;
+        }
+    }
+
+    private AsyncHandler buildHandler(T type) {
+        return new AsyncHandler<AmazonWebServiceRequest, AmazonWebServiceResult>() {
 
             @Override
             public void onError(Exception exception) {
@@ -90,7 +133,7 @@ public class AWSTaskStatusChecker {
                 // particular instanceId.
                 if (exception instanceof AmazonServiceException
                         && ((AmazonServiceException) exception).getErrorCode()
-                                .equalsIgnoreCase(AWS_INVALID_INSTANCE_ID_ERROR_CODE)) {
+                        .equalsIgnoreCase(AWS_INVALID_INSTANCE_ID_ERROR_CODE)) {
                     AWSTaskStatusChecker.this.service.logWarning(
                             "Could not retrieve status for instance %s. Retrying... Exception on AWS is %s",
                             AWSTaskStatusChecker.this.instanceId, exception);
@@ -98,7 +141,7 @@ public class AWSTaskStatusChecker {
                             AWSTaskStatusChecker.this.instanceId, AWSTaskStatusChecker.this.desiredState, AWSTaskStatusChecker.this.consumer,
                             AWSTaskStatusChecker.this.taskManager,
                             AWSTaskStatusChecker.this.service,
-                            AWSTaskStatusChecker.this.expirationTimeMicros).start();
+                            AWSTaskStatusChecker.this.expirationTimeMicros).start(type);
                     return;
                 }
                 AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(exception);
@@ -106,21 +149,34 @@ public class AWSTaskStatusChecker {
             }
 
             @Override
-            public void onSuccess(DescribeInstancesRequest request,
-                    DescribeInstancesResult result) {
-                Instance instance = result.getReservations().get(0)
-                        .getInstances().get(0);
-                if (!instance.getState().getName().equals(AWSTaskStatusChecker.this.desiredState)) {
-                    // if the task is not in the running state, schedule thread
+            public void onSuccess(AmazonWebServiceRequest request,
+                    AmazonWebServiceResult result) {
+                String status;
+                Object instance;
+                if (result instanceof DescribeInstancesResult) {
+                    instance = ((DescribeInstancesResult)result).getReservations().get(0)
+                            .getInstances().get(0);
+                    status = ((Instance)instance).getState().getName();
+                } else if (result instanceof DescribeNatGatewaysResult) {
+                    instance = ((DescribeNatGatewaysResult)result).getNatGateways().get
+                            (0);
+                    status = ((NatGateway)instance).getState();
+                } else {
+                    AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
+                            new IllegalArgumentException("Invalid type " + result));
+                    return;
+                }
+                if (!status.equals(AWSTaskStatusChecker.this.desiredState)) {
+                    // if the instance is not in the desired state, schedule thread
                     // to run again in 5 seconds
                     AWSTaskStatusChecker.this.service.getHost().schedule(
                             () -> {
                                 AWSTaskStatusChecker.create(AWSTaskStatusChecker.this.amazonEC2Client,
                                         AWSTaskStatusChecker.this.instanceId, AWSTaskStatusChecker.this.desiredState, AWSTaskStatusChecker.this.consumer,
-                                                AWSTaskStatusChecker.this.taskManager,
-                                                AWSTaskStatusChecker.this.service,
-                                                AWSTaskStatusChecker.this.expirationTimeMicros)
-                                        .start();
+                                        AWSTaskStatusChecker.this.taskManager,
+                                        AWSTaskStatusChecker.this.service,
+                                        AWSTaskStatusChecker.this.expirationTimeMicros)
+                                        .start(type);
                             }, 5, TimeUnit.SECONDS);
                     return;
                 }
@@ -128,6 +184,5 @@ public class AWSTaskStatusChecker {
                 return;
             }
         };
-        this.amazonEC2Client.describeInstancesAsync(descRequest, describeHandler);
     }
 }
