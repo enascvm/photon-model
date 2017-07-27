@@ -385,6 +385,7 @@ public class AWSInstanceService extends StatelessService {
                             instanceStoreDisks = aws.dataDisks;
                             validateSupportForInstanceStoreDisks(instanceStoreDisks, blockDeviceMappings,
                                     aws.instanceTypeInfo, rootDeviceType);
+                            validateInstanceStoreDiskConfiguration(instanceStoreDisks, aws.bootDiskImageNativeId);
                         } else {
                             splitExistingDisks(aws.dataDisks, instanceStoreDisks, ebsDisks);
                             addDefaultPropertiesIfMissing(ebsDisks);
@@ -438,7 +439,7 @@ public class AWSInstanceService extends StatelessService {
      */
     private void splitExistingDisks(List<DiskState> dataDisks, List<DiskState> instanceStoreDisks,
             List<DiskState> ebsDisks) {
-        dataDisks.stream().forEach(diskState -> {
+        dataDisks.forEach(diskState -> {
             if (diskState.customProperties != null &&
                     diskState.customProperties.get(DEVICE_TYPE) != null &&
                     diskState.customProperties.get(DEVICE_TYPE)
@@ -960,8 +961,29 @@ public class AWSInstanceService extends StatelessService {
         int numExistingInstanceStoreDisks = countExistingInstanceStoreDisks(blockDeviceMappings);
         int totalRequestedInstanceStoreDisks = numExistingInstanceStoreDisks + disks.size();
         AssertUtil.assertTrue(totalRequestedInstanceStoreDisks <= type.dataDiskMaxCount,
-                String.format("%s does not support %s additional instance-store disks", type,
-                        disks.size()));
+                String.format("%s does not support more than %s additional instance-store disks", type,
+                        type.dataDiskMaxCount - numExistingInstanceStoreDisks));
+    }
+
+    /**
+     * validate if the instance-store disks are matched only to instance-store items from the profile
+     */
+    private void validateInstanceStoreDiskConfiguration(List<DiskState> instanceStoreDisks,
+            String imageId) {
+        String instanceStoreType = AWSStorageType.INSTANCE_STORE.getName();
+        for (DiskState instanceStoreDisk : instanceStoreDisks) {
+            if (instanceStoreDisk.customProperties == null) {
+                continue;
+            }
+
+            String configuredDeviceType = instanceStoreDisk.customProperties.get(DEVICE_TYPE);
+            if (instanceStoreDisk.customProperties != null && configuredDeviceType != null) {
+                AssertUtil.assertTrue(instanceStoreType.equals(configuredDeviceType),
+                        String.format("%s disks cannot be attached to %s AMI %s.",
+                                configuredDeviceType, configuredDeviceType, instanceStoreType,
+                                imageId));
+            }
+        }
     }
 
     private List<String> getUsedDeviceNames(List<BlockDeviceMapping> blockDeviceMappings) {
