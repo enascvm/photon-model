@@ -483,40 +483,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 ResourceGroupService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_BLOBS_COUNT + numOfVMsToTest, DiskService.FACTORY_LINK, false);
-        // 1 network per each stale vm resource + 1 network for original vm compute state.
-        ServiceDocumentQueryResult networkResults = ProvisioningUtils
-                .queryDocumentsAndAssertExpectedCount(this.host,
-                        STALE_VM_RESOURCES_COUNT + 1,
-                        NetworkService.FACTORY_LINK, false);
-
-        // validate internal tags for enumerated networks
-        TagService.TagState expectedNetworkInternalTypeTag = newTagState(TAG_KEY_TYPE,
-                NETWORK_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
-        networkResults.documents.entrySet().stream()
-                .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
-                .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(
-                            c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
-                });
-
-        // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
-        // compute state.
-        ServiceDocumentQueryResult subnetResults = ProvisioningUtils
-                .queryDocumentsAndAssertExpectedCount(this.host,
-                        STALE_VM_RESOURCES_COUNT + 1,
-                        SubnetService.FACTORY_LINK, false);
-
-        // validate internal tags for enumerated subnets
-        TagService.TagState expectedSubnetInternalTypeTag = newTagState(TAG_KEY_TYPE,
-                SUBNET_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
-        subnetResults.documents.entrySet().stream()
-                .map(e -> Utils.fromJson(e.getValue(), SubnetState.class))
-                .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(
-                            c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
-                });
 
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_SECURITY_GROUPS_COUNT, SecurityGroupService.FACTORY_LINK, false);
@@ -589,6 +555,37 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             assertTrue(later.documentVersion - original.documentVersion <
                     this.numOfEnumerationsRan);
         }
+
+        // 1 network per each stale vm resource + 1 network for original vm compute state.
+        ServiceDocumentQueryResult networkResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, NetworkService.FACTORY_LINK);
+
+        // validate internal tags for enumerated networks
+        TagService.TagState expectedNetworkInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                NETWORK_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        networkResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
+                });
+
+        // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
+        // compute state.
+        ServiceDocumentQueryResult subnetResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, SubnetService.FACTORY_LINK);
+
+        // validate internal tags for enumerated subnets
+        TagService.TagState expectedSubnetInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                SUBNET_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        subnetResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), SubnetState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
+                });
 
         // 6. Delete VMs and update documents via enumeration.
 
