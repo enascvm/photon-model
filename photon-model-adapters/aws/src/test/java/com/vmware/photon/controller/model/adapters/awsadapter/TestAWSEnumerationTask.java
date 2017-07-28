@@ -22,6 +22,9 @@ import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_instance;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_net_interface;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_subnet;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_vpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
@@ -403,8 +406,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         String vpCId = validateTagAndNetworkAndComputeDescriptionInformation(vmState);
         validateVPCInformation(vpCId);
         // Count should be 1 NICs per discovered VM.
-        int totalNetworkInterfaceStateCount = count6
-                * this.singleNicSpec.numberOfNics();
+        int totalNetworkInterfaceStateCount = count6 * this.singleNicSpec.numberOfNics();
         validateNetworkInterfaceCount(totalNetworkInterfaceStateCount);
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
@@ -478,16 +480,21 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // validate the internal tag tor type=ec2_instance is set
         // query for the existing internal tag state for type=ec2_instance.
         // There should be only one internal tag.
-        ServiceDocumentQueryResult tagsResult = getInternalTagsByType(this.host, ec2_instance.toString());
-        assertEquals(count1, tagsResult.documentLinks.size());
-        String tagLink = tagsResult.documentLinks.get(0);
-        for (Map.Entry<String, Object> resourceMap : computesResult1.documents.entrySet()) {
-            ComputeState compute = Utils
-                    .fromJson(resourceMap.getValue(), ComputeState.class);
-            if (!compute.type.equals(ComputeType.ZONE) && !compute.type.equals(ComputeType.VM_HOST)) {
-                assertTrue(compute.tagLinks.contains(tagLink));
-            }
-        }
+        validateTagInEntity(computesResult1, ComputeState.class, ec2_instance.toString());
+
+        ServiceDocumentQueryResult networkInterfaceResult = queryDocumentsAndAssertExpectedCount(
+                this.host, totalNetworkInterfaceStateCount - 1,
+                NetworkInterfaceService.FACTORY_LINK, false);
+        validateTagInEntity(networkInterfaceResult, NetworkInterfaceState.class,
+                ec2_net_interface.toString());
+
+        ServiceDocumentQueryResult networkStateResult = queryDocumentsAndAssertExpectedCount(
+                this.host, count1, NetworkService.FACTORY_LINK, false);
+        validateTagInEntity(networkStateResult, NetworkState.class, ec2_vpc.toString());
+
+        ServiceDocumentQueryResult subnetStateResult = queryDocumentsAndAssertExpectedCount(
+                this.host, count1, SubnetService.FACTORY_LINK, false);
+        validateTagInEntity(subnetStateResult, NetworkState.class, ec2_subnet.toString());
         queryDocumentsAndAssertExpectedCount(this.host,
                 count8, DiskService.FACTORY_LINK, false);
 
@@ -505,16 +512,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // validate the internal tag tor type=ec2_instance is set
         // query for the existing internal tag state for type=ec2_instance.
         // There should be only one internal tag.
-        tagsResult = getInternalTagsByType(this.host, ec2_instance.toString());
-        assertEquals(count1, tagsResult.documentLinks.size());
-        tagLink = tagsResult.documentLinks.get(0);
-        for (Map.Entry<String, Object> resourceMap : computesResult2.documents.entrySet()) {
-            ComputeState compute = Utils
-                    .fromJson(resourceMap.getValue(), ComputeState.class);
-            if (!compute.type.equals(ComputeType.ZONE) && !compute.type.equals(ComputeType.VM_HOST)) {
-                assertTrue(compute.tagLinks.contains(tagLink));
-            }
-        }
+        validateTagInEntity(computesResult2, ComputeState.class, ec2_instance.toString());
 
         // Delete 1 VMs spawned above of type T2_Micro
         deleteVMsUsingEC2Client(this.client, this.host, instanceIdsToDeleteSecondTime);
@@ -529,18 +527,35 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // validate the internal tag tor type=ec2_instance is set
         // query for the existing internal tag state for type=ec2_instance.
         // There should be only one internal tag.
-        tagsResult = getInternalTagsByType(this.host, ec2_instance.toString());
-        assertEquals(count1, tagsResult.documentLinks.size());
-        tagLink = tagsResult.documentLinks.get(0);
-        for (Map.Entry<String, Object> resourceMap : computesResult3.documents.entrySet()) {
-            ComputeState compute = Utils
-                    .fromJson(resourceMap.getValue(), ComputeState.class);
-            if (!compute.type.equals(ComputeType.ZONE) && !compute.type.equals(ComputeType.VM_HOST)) {
-                assertTrue(compute.tagLinks.contains(tagLink));
-            }
-        }
+        validateTagInEntity(computesResult3, ComputeState.class, ec2_instance.toString());
         // Validate that the document for the deleted S3 bucket is deleted after enumeration.
         validateS3Enumeration(ZERO, ZERO);
+    }
+
+    /**
+     * Validates that the given internal tag is present on the passed in entity.
+     */
+    private void validateTagInEntity(ServiceDocumentQueryResult queryResult, Class<?> documentKind,
+            String internalTagType) {
+        ServiceDocumentQueryResult tagsResult;
+        String tagLink;
+        tagsResult = getInternalTagsByType(this.host, internalTagType);
+        assertEquals(count1, tagsResult.documentLinks.size());
+        tagLink = tagsResult.documentLinks.get(0);
+        for (Map.Entry<String, Object> resourceMap : queryResult.documents.entrySet()) {
+            if (documentKind == ComputeState.class) {
+                ComputeState compute = Utils
+                        .fromJson(resourceMap.getValue(), ComputeState.class);
+                if (!compute.type.equals(ComputeType.ZONE)
+                        && !compute.type.equals(ComputeType.VM_HOST)) {
+                    assertTrue(compute.tagLinks.contains(tagLink));
+                }
+            } else {
+                ResourceState resourceState = Utils.fromJson(resourceMap.getValue(),
+                        ResourceState.class);
+                assertTrue(resourceState.tagLinks.contains(tagLink));
+            }
+        }
     }
 
     // Runs the enumeration task after a new nic has been added to a CS and then after it has been
@@ -585,6 +600,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertEquals(numberOfNICsBeforeAdding + 1, updatedComputeState.networkInterfaceLinks.size());
 
         NetworkInterfaceState addedNetworkInterfaceState = getNICByAWSId(this.host, newNICId);
+        // Assert that the network interface state has the right internal tag link
+        assertTrue(addedNetworkInterfaceState.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
+                AWSResourceType.ec2_net_interface.toString(), false,
+                this.endpointState.tenantLinks).documentSelfLink));
         //NIC State with the new ID should have been created
         assertNotNull(addedNetworkInterfaceState);
 
@@ -859,16 +878,22 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                     ProvisioningUtils.<NetworkState> getResourceStates(this.host,
                             NetworkService.FACTORY_LINK, NetworkState.class);
             NetworkState defaultNetworkState = allNetworkStatesMap.get(this.vpcId);
-            // ensure one link is deleted and one new is added to the network state
-            assertEquals("Wrong number of network tag links found.", 1, defaultNetworkState.tagLinks.size());
+
+            // ensure one link is deleted and one new is added to the network state. One additional
+            // link is an internal tag.
+            assertEquals("Wrong number of network tag links found.", 1 + internalTagsCount1,
+                    defaultNetworkState.tagLinks.size());
 
             // validate subnet tags
             Map<String, SubnetState> allSubnetStatesMap =
                     ProvisioningUtils.<SubnetState> getResourceStates(this.host,
                             SubnetService.FACTORY_LINK, SubnetState.class);
             SubnetState defaultSubnetState = allSubnetStatesMap.get(this.subnetId);
-            // ensure one link is deleted and one new is added to the subnet state
-            assertEquals("Wrong number of subnet tag links found.", 1, defaultSubnetState.tagLinks.size());
+
+            // ensure one link is deleted and one new is added to the subnet state. One additional
+            // link is an internal tag.
+            assertEquals("Wrong number of subnet tag links found.", 1 + internalTagsCount1,
+                    defaultSubnetState.tagLinks.size());
 
             // validate disk tags
             Map<String, DiskState> allDiskStatesMap =
@@ -876,7 +901,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                             DiskService.FACTORY_LINK, DiskState.class);
             DiskState defaultDiskState = allDiskStatesMap.get(this.diskId);
             // ensure one link is deleted and one new is added to the disk state
-            assertEquals("Wrong number of disk tag links found.", 2, defaultDiskState.tagLinks.size());
+            assertEquals("Wrong number of disk tag links found.", 1 + internalTagsCount1,
+                    defaultDiskState.tagLinks.size());
             // ensure EBS disk has an internal type tag set
             assertTrue(defaultDiskState.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
                     AWSResourceType.ebs_block.toString(), false,
@@ -1159,12 +1185,22 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // This is assuming that the internet gateway is attached to the VPC by default
         assertNotNull(networkState.customProperties.get(AWS_GATEWAY_ID));
         assertNotNull(networkState.customProperties.get(AWS_VPC_ROUTE_TABLE_ID));
+        assertNotNull(networkState.tagLinks);
+        assertTrue(networkState.tagLinks.size() > 0);
+        assertTrue(networkState.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
+                AWSResourceType.ec2_vpc.toString(), false,
+                this.endpointState.tenantLinks).documentSelfLink));
 
         List<SubnetState> subnetStates = getSubnetStates(this.host, networkState);
         assertFalse(subnetStates.isEmpty());
         subnetStates.stream().forEach(subnetState -> {
             assertNotNull(subnetState.subnetCIDR);
             assertNotNull(subnetState.zoneId);
+            assertNotNull(subnetState.tagLinks);
+            assertTrue(subnetState.tagLinks.size() > 0);
+            assertTrue(subnetState.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
+                    AWSResourceType.ec2_subnet.toString(), false,
+                    this.endpointState.tenantLinks).documentSelfLink));
         });
     }
 

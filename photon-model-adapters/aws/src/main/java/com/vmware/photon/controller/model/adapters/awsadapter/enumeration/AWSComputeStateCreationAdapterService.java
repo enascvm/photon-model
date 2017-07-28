@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_instance;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_net_interface;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromCD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRepresentativeListOfCDsFromInstanceList;
@@ -27,6 +28,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -89,6 +91,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     private static final String ADD_NIC_STATES = "add";
 
     private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(1);
+    public static final List<String> internalTagList = Arrays.asList(ec2_instance.toString(),
+            ec2_net_interface.toString());
     private AWSClientManager clientManager;
 
     /**
@@ -137,8 +141,9 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // Cached operation to signal completion to the AWS instance adapter once all the compute
         // states are successfully created.
         public Operation operation;
-        // maintains internal tagLinks Example, link for tagState for type=ec2_instances
-        public String ec2TagLink;
+        // maintains internal tagLinks Example, link for tagState for type=ec2_instances or
+        // type=ec2_net_interface
+        public Map<String, Set<String>> internalTagLinksMap = new HashMap<>();
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
@@ -153,9 +158,9 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     public static enum AWSComputeStateCreationStage {
         GET_RELATED_COMPUTE_DESCRIPTIONS,
         /**
-         * Query for the internal tagState {key = "type", value = "ec2_instance"}
+         * Create internal tag for types
          */
-        GET_INTERNAL_TYPE_TAG,
+        CREATE_INTERNAL_TYPE_TAGS,
         /**
          * Create internal tag for type
          */
@@ -219,10 +224,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         this.logFine(() -> String.format("Transition to: %s", context.creationStage));
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
-            getRelatedComputeDescriptions(context, AWSComputeStateCreationStage.CREATE_INTERNAL_TYPE_TAG);
+            getRelatedComputeDescriptions(context,
+                    AWSComputeStateCreationStage.CREATE_INTERNAL_TYPE_TAGS);
             break;
-        case CREATE_INTERNAL_TYPE_TAG:
-            createInternalTypeTag(context, AWSComputeStateCreationStage.CREATE_EXTERNAL_TAGS);
+        case CREATE_INTERNAL_TYPE_TAGS:
+            createInternalTypeTags(context, AWSComputeStateCreationStage.CREATE_EXTERNAL_TAGS);
             break;
         case CREATE_EXTERNAL_TAGS:
             createTags(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES_OPERATIONS);
@@ -271,25 +277,40 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         };
     }
 
-    private void createInternalTypeTag(AWSComputeStateCreationContext context, AWSComputeStateCreationStage next) {
-        TagState typeTag = newTagState(TAG_KEY_TYPE, ec2_instance.toString(), false, context.request.tenantLinks);
+    private void createInternalTypeTags(AWSComputeStateCreationContext context,
+            AWSComputeStateCreationStage next) {
+        // Go over the list of internal tags to be created. Find whatever already does not have an
+        // associated tag state and create an operation for its creation.
 
-        Operation.CompletionHandler handler = (completedOp, failure) -> {
-            if (failure != null) {
-                // Process successful operations only.
-                context.creationStage = next;
-                handleComputeStateCreateOrUpdate(context);
-                return;
-            }
+        List<Operation> joinOperations = new ArrayList<>();
+        for (String resourceType : internalTagList) {
+            TagState typeTag = newTagState(TAG_KEY_TYPE, resourceType, false,
+                    context.request.tenantLinks);
+            Operation op = Operation.createPost(this, TagService.FACTORY_LINK)
+                    .setBody(typeTag);
+            joinOperations.add(op);
 
-            context.ec2TagLink = typeTag.documentSelfLink;
-            context.creationStage = next;
-            handleComputeStateCreateOrUpdate(context);
-        };
-
-        sendRequest(Operation.createPost(this, TagService.FACTORY_LINK)
-                .setBody(typeTag)
-                .setCompletion(handler));
+        }
+        OperationJoin.create(joinOperations)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        exs.values()
+                                .forEach(ex -> logWarning(
+                                        () -> String.format("Error creating internal tag%s",
+                                                ex.getMessage())));
+                        context.creationStage = next;
+                        handleComputeStateCreateOrUpdate(context);
+                        return;
+                    }
+                    for (String internalTagValue : internalTagList) {
+                        TagState tagState = newTagState(TAG_KEY_TYPE, internalTagValue, false,
+                                context.request.tenantLinks);
+                        context.internalTagLinksMap.put(tagState.value,
+                                new HashSet<>(Arrays.asList(tagState.documentSelfLink)));
+                    }
+                    context.creationStage = next;
+                    handleComputeStateCreateOrUpdate(context);
+                }).sendWith(this);
     }
 
     private void createTags(AWSComputeStateCreationContext context,
@@ -415,7 +436,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.endpointLink,
                         context.computeDescriptionMap.get(descKey),
                         context.request.parentCDStatsAdapterReferences,
-                        context.ec2TagLink,
+                        context.internalTagLinksMap.get(ec2_instance.toString()),
                         regionId, zoneId,
                         context.request.tenantLinks,
                         true);
@@ -462,6 +483,17 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             nicState.tenantLinks = context.request.tenantLinks;
             nicState.endpointLink = context.request.endpointLink;
             nicState.regionId = context.request.regionId;
+            Set<String> internalTagLinks = context.internalTagLinksMap
+                    .get(ec2_net_interface.toString());
+            // append internal tagLinks to any existing ones
+            if (internalTagLinks != null && !internalTagLinks.isEmpty()) {
+                if (nicState.tagLinks != null && !nicState.tagLinks.isEmpty()) {
+                    nicState.tagLinks.addAll(internalTagLinks);
+                } else {
+                    nicState.tagLinks = new HashSet<>();
+                    nicState.tagLinks.addAll(internalTagLinks);
+                }
+            }
 
             if (context.request.enumeratedSecurityGroups != null) {
                 for (GroupIdentifier awsSG : awsNic.getGroups()) {
@@ -583,7 +615,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.endpointLink,
                         existingComputeState.descriptionLink,
                         context.request.parentCDStatsAdapterReferences,
-                        context.ec2TagLink,
+                        context.internalTagLinksMap.get(ec2_instance.toString()),
                         zoneData.regionId, zoneId,
                         context.request.tenantLinks,
                         false);
@@ -593,17 +625,23 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         existingComputeState.documentSelfLink);
                 context.enumerationOperations.add(patchComputeState);
 
-                if (existingComputeState.tagLinks == null
-                        || !existingComputeState.tagLinks.contains(context.ec2TagLink)) {
-                    Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
-                            (ComputeState.FIELD_NAME_TAG_LINKS, Collections.singletonList(context.ec2TagLink));
-                    Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
-                            (ComputeState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+                // If existing computeState does not have an internal tag then create dedicated
+                // patch to update the internal tag link.
+                String ec2ComputeInternalTagLink = context.internalTagLinksMap
+                        .get(ec2_instance.toString()).iterator().next();
+                if (existingComputeState.tagLinks == null || (existingComputeState.tagLinks != null
+                        && !existingComputeState.tagLinks.contains(ec2ComputeInternalTagLink))) {
+                    Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap(
+                            ComputeState.FIELD_NAME_TAG_LINKS,
+                            Collections.singletonList(ec2ComputeInternalTagLink));
+                    Map<String, Collection<Object>> collectionsToRemoveMap = Collections
+                            .singletonMap(ComputeState.FIELD_NAME_TAG_LINKS,
+                                    Collections.emptyList());
 
                     ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
                             .create(collectionsToAddMap, collectionsToRemoveMap);
                     context.enumerationOperations.add(Operation.createPatch(this.getHost(),
-                            computeStateToBeUpdated.documentSelfLink)
+                            existingComputeState.documentSelfLink)
                             .setReferer(this.getUri())
                             .setBody(updateTagLinksRequest));
                 }
@@ -674,7 +712,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 .get(instance.getInstanceId());
 
         // Generate operation for adding NIC state and description, and retain its link to add to
-        // the CS {{
+        // the CS
         List<Integer> deviceIndexesToAdd = nicsDeviceIndexDeltaMap.get(ADD_NIC_STATES);
 
         Collection<Object> networkInterfaceLinksToBeAdded = instance.getNetworkInterfaces().stream()
@@ -687,7 +725,6 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 .map(addedNicState -> UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                         addedNicState.documentSelfLink))
                 .collect(Collectors.toList());
-        // }}
 
         // Generate operation for removing NIC states, and retain its link to remove from the CS {{
         List<Integer> deviceIndexesToRemove = nicsDeviceIndexDeltaMap.get(REMOVE_NIC_STATES);
@@ -708,10 +745,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
                 .map(existingNicState -> existingNicState.documentSelfLink)
                 .collect(Collectors.toList());
-        // }}
 
         // Generate operation for updating NIC states, no links should be updated on CS in this case
-        // {{
         List<Integer> deviceIndexesToUpdate = nicsDeviceIndexDeltaMap.get(UPDATE_NIC_STATES);
         deviceIndexesToUpdate.stream()
                 .map(deviceIndexToUpdate -> existingNicStates
@@ -723,7 +758,6 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
                 // create NIC patch operation for update
                 .forEach(existingNicState -> updateNICState(context, instance, existingNicState));
-        // }}
 
         Map<String, Map<String, Collection<Object>>> nicsDeltaMap = new HashMap<>();
         // only add the collections to the delta map in case there is something to add/remove
@@ -791,6 +825,27 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         Operation updateNicOperation = createPatchOperation(this, updateNicState,
                 existingNicState.documentSelfLink);
         context.enumerationOperations.add(updateNicOperation);
+
+        // If existing network state does not have an internal tag then create dedicated
+        // patch to update the internal tag link.
+        String networkInterfaceInternalTagLink = context.internalTagLinksMap
+                .get(ec2_net_interface.toString()).iterator().next();
+        if (existingNicState.tagLinks == null || (existingNicState.tagLinks != null
+                && !existingNicState.tagLinks.contains(networkInterfaceInternalTagLink))) {
+            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap(
+                    NetworkInterfaceState.FIELD_NAME_TAG_LINKS,
+                    Collections.singletonList(networkInterfaceInternalTagLink));
+            Map<String, Collection<Object>> collectionsToRemoveMap = Collections
+                    .singletonMap(NetworkInterfaceState.FIELD_NAME_TAG_LINKS,
+                            Collections.emptyList());
+
+            ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
+                    .create(collectionsToAddMap, collectionsToRemoveMap);
+            context.enumerationOperations.add(Operation.createPatch(this.getHost(),
+                    existingNicState.documentSelfLink)
+                    .setReferer(this.getUri())
+                    .setBody(updateTagLinksRequest));
+        }
 
         return updateNicState;
     }

@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_subnet;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_vpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ATTACHMENT_VPC_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
@@ -28,15 +30,19 @@ import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.crea
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -69,6 +75,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandl
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -79,6 +86,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -104,6 +112,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE = Integer
             .getInteger(UriPaths.PROPERTY_PREFIX
                     + "enum.max.resources.query.on.delete", 950);
+    public static final List<String> internalTagList = Arrays.asList(ec2_vpc.toString(),
+            ec2_subnet.toString());
 
     private AWSClientManager clientManager;
 
@@ -170,6 +180,15 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         public Map<String, SubnetStateWithParentVpcId> subnets = new HashMap<>();
         // Map for local subnet states. key = subnet-id, value = SubnetState.documentSelfLink
         public Map<String, SubnetState> localSubnetStateMap = new HashMap<>();
+        // stores a mapping of internal tag values for networks.
+        Map<String, String> networkInternalTagsMap = new ConcurrentHashMap<>();
+        // stores documentSelfLink for networks internal tags
+        Set<String> networkInternalTagLinksSet = new HashSet<>();
+
+        // stores a mapping of internal tag values for subnets.
+        Map<String, String> subnetInternalTagsMap = new ConcurrentHashMap<>();
+        // stores documentSelfLink for subnets internal tags
+        Set<String> subnetInternalTagLinksSet = new HashSet<>();
 
         static class SubnetStateWithParentVpcId {
             String parentVpcId;
@@ -191,6 +210,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
     enum AWSNetworkStateCreationStage {
         CLIENT,
+        CREATE_INTERNAL_TYPE_TAGS,
         GET_REMOTE_VPC,
         GET_LOCAL_NETWORK_STATES,
         GET_REMOTE_SUBNETS,
@@ -246,7 +266,10 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         switch (context.networkCreationStage) {
         case CLIENT:
             context.enumStartTimeInMicros = Utils.getNowMicrosUtc();
-            getAWSAsyncClient(context, AWSNetworkStateCreationStage.GET_REMOTE_VPC);
+            getAWSAsyncClient(context, AWSNetworkStateCreationStage.CREATE_INTERNAL_TYPE_TAGS);
+            break;
+        case CREATE_INTERNAL_TYPE_TAGS:
+            createInternalTypeTags(context, AWSNetworkStateCreationStage.GET_REMOTE_VPC);
             break;
         case GET_REMOTE_VPC:
             refreshVPCInformation(context, AWSNetworkStateCreationStage.GET_LOCAL_NETWORK_STATES);
@@ -360,6 +383,53 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         if (context.amazonEC2Client != null) {
             handleNetworkStateChanges(context, next);
         }
+    }
+
+    /**
+     * Method to create the internal tags for subnets and VPCs.
+     */
+    private void createInternalTypeTags(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
+        // Go over the list of internal tags to be created. Find whatever already does not have an
+        // associated tag state and create an operation for its creation.
+
+        List<Operation> joinOperations = new ArrayList<>();
+        for (String resourceType : internalTagList) {
+            TagState typeTag = newTagState(TAG_KEY_TYPE, resourceType, false,
+                    context.request.tenantLinks);
+            Operation op = Operation.createPost(this, TagService.FACTORY_LINK)
+                    .setBody(typeTag);
+            joinOperations.add(op);
+
+        }
+
+        OperationJoin.create(joinOperations)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        exs.values()
+                                .forEach(ex -> logWarning(
+                                        () -> String.format("Error creating internal tag : %s",
+                                                ex.getMessage())));
+                        context.networkCreationStage = next;
+                        handleNetworkStateChanges(context);
+                        return;
+                    }
+                    for (String internalTagValue : internalTagList) {
+                        TagState tagState = newTagState(TAG_KEY_TYPE, internalTagValue, false,
+                                context.request.tenantLinks);
+                        if (internalTagValue.equalsIgnoreCase(ec2_vpc.toString())) {
+                            context.networkInternalTagsMap
+                                    .put(PhotonModelConstants.TAG_KEY_TYPE, tagState.value);
+                            context.networkInternalTagLinksSet.add(tagState.documentSelfLink);
+                        } else {
+                            context.subnetInternalTagsMap
+                                    .put(PhotonModelConstants.TAG_KEY_TYPE, tagState.value);
+                            context.subnetInternalTagLinksSet.add(tagState.documentSelfLink);
+                        }
+                    }
+                    context.networkCreationStage = next;
+                    handleNetworkStateChanges(context);
+                }).sendWith(this);
     }
 
     /**
@@ -545,7 +615,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             return DeferredResult.completed(context);
         } else {
 
-            List<DeferredResult<Set<String>>> updateNetwOrSubnTagLinksOps = new ArrayList<>();
+            List<DeferredResult<Set<String>>> updateNetworkSubnetTagLinksOps = new ArrayList<>();
             // update tag links for the existing NetworkStates
             for (String vpcId : context.awsVpcs.keySet()) {
                 if (!context.localNetworkStateMap.containsKey(vpcId)) {
@@ -559,7 +629,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsVpcTag.getKey(), awsVpcTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps
+                updateNetworkSubnetTagLinksOps
                         .add(updateLocalTagStates(this, existingNetworkState, remoteTags));
             }
             // update tag links for the existing SubnetStates
@@ -575,11 +645,11 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsSubnetTag.getKey(), awsSubnetTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps
+                updateNetworkSubnetTagLinksOps
                         .add(updateLocalTagStates(this, existingSubnetState, remoteTags));
             }
 
-            return DeferredResult.allOf(updateNetwOrSubnTagLinksOps)
+            return DeferredResult.allOf(updateNetworkSubnetTagLinksOps)
                     .thenApply(ignore -> context);
         }
     }
@@ -610,13 +680,23 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 networkState.documentSelfLink = context.localNetworkStateMap.get(remoteVPCId).documentSelfLink;
                 // don't overwrite resourcePoolLink
                 networkState.resourcePoolLink = null;
+                if (networkState.tagLinks == null || networkState.tagLinks.isEmpty()) {
+                    setTagLinksToResourceState(networkState, context.networkInternalTagsMap,
+                            false);
+                } else {
+                    context.networkInternalTagLinksSet.stream()
+                            .filter(tagLink -> !networkState.tagLinks.contains(tagLink))
+                            .map(tagLink -> networkState.tagLinks.add(tagLink))
+                            .collect(Collectors.toSet());
+                }
 
                 networkStateOp = createPatchOperation(this,
                         networkState, networkState.documentSelfLink);
             } else {
                 Vpc awsVpc = context.awsVpcs.get(remoteVPCId);
-
+                // Add both external and internal tags.
                 setResourceTags(networkState, awsVpc.getTags());
+                setTagLinksToResourceState(networkState, context.networkInternalTagsMap, false);
 
                 networkStateOp = createPostOperation(this,
                         networkState, NetworkService.FACTORY_LINK);
@@ -678,15 +758,24 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             final Operation subnetStateOp;
             if (context.localSubnetStateMap.containsKey(remoteSubnetId)) {
                 // If the local subnet state already exists for the Subnet -> Update it.
-                subnetState.documentSelfLink = context.localSubnetStateMap.get(remoteSubnetId).documentSelfLink;
-
+                subnetState.documentSelfLink = context.localSubnetStateMap
+                        .get(remoteSubnetId).documentSelfLink;
+                // for already existing subnets, add internal tags only if missing
+                if (subnetState.tagLinks == null || subnetState.tagLinks.isEmpty()) {
+                    setTagLinksToResourceState(subnetState, context.subnetInternalTagsMap, false);
+                } else {
+                    context.subnetInternalTagLinksSet.stream()
+                            .filter(tagLink -> !subnetState.tagLinks.contains(tagLink))
+                            .map(tagLink -> subnetState.tagLinks.add(tagLink))
+                            .collect(Collectors.toSet());
+                }
                 subnetStateOp = createPatchOperation(this,
                         subnetState, subnetState.documentSelfLink);
             } else {
                 // add tag links
                 Subnet awsSubnet = context.awsSubnets.get(remoteSubnetId);
-
                 setResourceTags(subnetState, awsSubnet.getTags());
+                setTagLinksToResourceState(subnetState, context.subnetInternalTagsMap, false);
 
                 subnetStateOp = createPostOperation(this,
                         subnetState, SubnetService.FACTORY_LINK);
