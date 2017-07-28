@@ -308,6 +308,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
                 .build();
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.INDEXED_METADATA)
                 .setResultLimit(QUERY_RESULT_LIMIT)
                 .setQuery(query)
                 .build();
@@ -675,6 +676,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QueryTask.QuerySpecification.QueryOption.INDEXED_METADATA)
                 .setQuery(query)
                 .build();
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;

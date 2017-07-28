@@ -156,6 +156,7 @@ public class AWSEnumerationUtils {
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
                 .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.INDEXED_METADATA)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
                 .build();

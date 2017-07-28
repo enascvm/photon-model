@@ -234,6 +234,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         QueryTask qTask = QueryTask.Builder.createDirectTask()
                 .setQuery(snapshotQuery)
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QueryTask.QuerySpecification.QueryOption.INDEXED_METADATA)
                 .build();
 
         return this.sendWithDeferredResult(Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))

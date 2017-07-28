@@ -203,6 +203,7 @@ public class ProvisionContext {
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.EXPAND_LINKS)
                     .addOption(QueryOption.SELECT_LINKS)
+                    .addOption(QueryOption.INDEXED_METADATA)
                     .addLinkTerm(NetworkInterfaceState.FIELD_NAME_NETWORK_LINK)
                     .addLinkTerm(NetworkInterfaceState.FIELD_NAME_SUBNET_LINK)
                     .addLinkTerm(NetworkInterfaceState.FIELD_NAME_DESCRIPTION_LINK)
