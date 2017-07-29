@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.30-SNAPSHOT
+
+
 ## 0.6.29
 
 * Adding QueryOption.INDEXED_METADATA to queries.
