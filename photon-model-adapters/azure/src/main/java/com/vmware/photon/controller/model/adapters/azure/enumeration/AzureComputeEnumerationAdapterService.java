@@ -1086,7 +1086,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         DeferredResult.allOf(remoteNics)
                 .thenCompose(rnics -> loadSubnets(ctx, rnics)
-                        .thenCompose(subnetPerNicId -> doCreateOrUpdateNics(ctx, subnetPerNicId,
+                        .thenCompose(subnetPerNicId -> doCreateUpdateDeleteNics(ctx, subnetPerNicId,
                                 rnics)))
                 .whenComplete(thenHandleSubStage(ctx, next));
 
@@ -1096,7 +1096,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Manages creating and updating Network Interfaces resources based on network interfaces
      * associated with virtual machines.
      */
-    private DeferredResult<List<NetworkInterfaceState>> doCreateOrUpdateNics(EnumerationContext ctx,
+    private DeferredResult<List<NetworkInterfaceState>> doCreateUpdateDeleteNics(EnumerationContext ctx,
             Map<String, String> subnetPerNicId,
             List<Pair<NetworkInterfaceInner, String>> remoteNics) {
 
@@ -1112,16 +1112,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
 
         return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
-                localNics -> requestCreateUpdateNic(localNics, remoteStates, ctx, subnetPerNicId));
+                localNics -> requestCreateUpdateDeleteNic(localNics, remoteStates, ctx, subnetPerNicId,
+                        remoteNics));
     }
 
     /**
      * Serves request for creating and updating Network Interfaces resources
      */
-    private DeferredResult<List<NetworkInterfaceState>> requestCreateUpdateNic(
+    private DeferredResult<List<NetworkInterfaceState>> requestCreateUpdateDeleteNic(
             List<NetworkInterfaceState> localNics,
             Map<String, Pair<NetworkInterfaceInner, String>> remoteStates, EnumerationContext ctx,
-            Map<String, String> subnetPerNicId) {
+            Map<String, String> subnetPerNicId,
+            List<Pair<NetworkInterfaceInner, String>> remoteNics) {
         List<DeferredResult<NetworkInterfaceState>> ops = new ArrayList<>();
 
         // execute update existing NICs followed by creating new NICs. Update needs to be performed
@@ -1134,8 +1136,51 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // create new network interfaces identified as 'remoteStates'. Here, 'remoteStates' includes
         // ONLY newly identified nics.
         createNic(remoteStates, ctx, subnetPerNicId, ops);
+        // Delete the NICs that exist locally but not on remote.
+        List<String> remoteNicIds = new ArrayList<>();
+        // Collect IDs of all remote network interfaces. Delete all local states that
+        // have IDs other than remoteNicIds (i.e. stale states).
+        remoteNics.stream()
+                .forEach(pair -> remoteNicIds.add(pair.getLeft().id()));
+
+        deleteNicHelper(remoteNicIds, ctx);
 
         return DeferredResult.allOf(ops);
+    }
+
+    /**
+     * Helper for deleting stale network interfaces.
+     */
+    private DeferredResult<List<Operation>> deleteNicHelper(
+            List<String> remoteNicIds, EnumerationContext ctx) {
+
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(NetworkInterfaceState.class);
+
+        QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
+                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
+                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
+
+        return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
+                allLocalNics -> deleteNics(remoteNicIds, allLocalNics));
+    }
+
+    /**
+     * Deletes stale network interface states that are deleted from the remote.
+     */
+    private DeferredResult<List<Operation>> deleteNics(
+            List<String> remoteNicIds, List<NetworkInterfaceState> allLocalNics) {
+
+        List<DeferredResult<Operation>> deleteOps = new ArrayList<>();
+
+        allLocalNics.stream()
+                .filter(localNic -> !remoteNicIds.contains(localNic.id))
+                .forEach(localNic -> {
+                    deleteOps.add(sendWithDeferredResult(Operation.createDelete(this.getHost(),
+                            localNic.documentSelfLink).setReferer(this.getUri())));
+                });
+
+        return DeferredResult.allOf(deleteOps);
     }
 
     private void updateNic(List<NetworkInterfaceState> localNics,
