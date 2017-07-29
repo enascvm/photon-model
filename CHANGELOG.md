@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.6.29-SNAPSHOT
+## 0.6.29
+
+* Adding QueryOption.INDEXED_METADATA to queries.
+* Adding document option INDEX_METADATA to services.
 
 ## 0.6.28
 
