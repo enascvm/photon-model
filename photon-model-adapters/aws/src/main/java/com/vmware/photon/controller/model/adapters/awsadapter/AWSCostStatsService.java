@@ -922,10 +922,12 @@ public class AWSCostStatsService extends StatelessService {
             AWSCostStatsCreationContext statsData) {
         return (accountDetailDtoMap, interval) -> {
             accountDetailDtoMap.values().forEach(accountDto -> {
-                filterAccountDetails(statsData, accountDto, interval);
-                createResourceStatsForAccount(statsData, accountDto);
-                createServiceStatsForAccount(statsData, billMonth, accountDto);
-                accountDto.serviceDetailsMap.clear();
+                if (!accountDto.serviceDetailsMap.isEmpty()) {
+                    filterAccountDetails(statsData, accountDto, interval);
+                    createResourceStatsForAccount(statsData, accountDto);
+                    createServiceStatsForAccount(statsData, billMonth, accountDto);
+                    accountDto.serviceDetailsMap.clear();
+                }
             });
             postAccumulatedCostStats(statsData, false);
         };
@@ -939,7 +941,8 @@ public class AWSCostStatsService extends StatelessService {
         }
         Double previousLineCount = markerMetrics.entries.get(interval);
         Integer currentLineCount = accountDto.lineCountPerInterval.get(interval);
-        if (previousLineCount != null && previousLineCount.intValue() == currentLineCount) {
+        if (previousLineCount != null && currentLineCount != null
+                && previousLineCount.intValue() == currentLineCount) {
             accountDto.serviceDetailsMap.clear();
         }
     }

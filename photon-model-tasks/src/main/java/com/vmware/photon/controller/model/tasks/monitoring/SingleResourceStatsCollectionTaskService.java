@@ -75,7 +75,7 @@ public class SingleResourceStatsCollectionTaskService
 
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
-    private static final long DEFAULT_EXPIRATION_MINUTES = 30;
+    private static final long DEFAULT_EXPIRATION_MINUTES = 60;
 
     public static final String RESOURCE_METRIC_RETENTION_LIMIT_DAYS = UriPaths.PROPERTY_PREFIX
             + "SingleResourceStatsCollectionTaskService.metric.retentionLimitDays";
