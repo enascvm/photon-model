@@ -1966,7 +1966,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param handler
      */
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
-        task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.INDEXED_METADATA);
+        task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
         Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task)

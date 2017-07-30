@@ -30,13 +30,11 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.SubnetValidator;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
-import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -229,9 +227,6 @@ public class SubnetRangeService extends StatefulService {
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
         ServiceUtils.setRetentionLimit(td);
-        // enable metadata indexing
-        td.documentDescription.documentIndexingOptions =
-                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
         SubnetRangeState template = (SubnetRangeState) td;
 
         template.id = UUID.randomUUID().toString();
