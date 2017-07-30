@@ -99,6 +99,13 @@ public class CustomProperties {
      */
     public static final String LIMIT_IOPS = "limitIops";
 
+    /**
+     * Disk controller (ex: SCSI) unit number which will be used to identify the disk uniquely
+     */
+    public static final String DISK_CONTROLLER_NUMBER = "__controllerUnitNumber";
+
+    public static final String PROVIDER_DISK_UNIQUE_ID = "__providerUniqueIdentifier";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

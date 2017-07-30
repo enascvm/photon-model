@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_INDEPENDENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
@@ -285,7 +286,7 @@ public class InstanceClient extends BaseHelper {
 
         for (VirtualDisk vd : virtualDisks) {
             VirtualDeviceConfigSpec diskSpec = getBootDiskCustomizeConfigSpec(
-                    findMatchingDiskState(vd, diskStates), vd);
+                    findMatchingImageDiskState(vd, diskStates), vd);
             if (diskSpec != null) {
                 specs.add(diskSpec);
             }
@@ -296,16 +297,15 @@ public class InstanceClient extends BaseHelper {
     /**
      * Find a matching DiskState object for the virtual disk
      */
-    private DiskStateExpanded findMatchingDiskState(VirtualDisk virtualDisk,
+    private DiskStateExpanded findMatchingImageDiskState(VirtualDisk virtualDisk,
             List<DiskStateExpanded> diskStates) {
         if (diskStates == null || diskStates.isEmpty()) {
             return null;
         }
         // Filter the disk state that matches the virtual disk scsi number. If not then default
         // it to the properties of the boot disk
-        return diskStates.stream()
-                .filter(ds -> (ds.bootOrder - 1) == virtualDisk.getUnitNumber()).findFirst()
-                .orElse(this.bootDisk);
+        return diskStates.stream().filter(ds -> ds.bootOrder != null &&
+                (ds.bootOrder - 1) == virtualDisk.getUnitNumber()).findFirst().orElse(this.bootDisk);
     }
 
     /**
@@ -763,7 +763,7 @@ public class InstanceClient extends BaseHelper {
                             .filter(d -> d instanceof VirtualDisk)
                             .map(d -> (VirtualDisk) d)
                             .filter(d -> {
-                                DiskStateExpanded ds = findMatchingDiskState(d, this.imageDisks);
+                                DiskStateExpanded ds = findMatchingImageDiskState(d, this.imageDisks);
                                 return toKb(ds.capacityMBytes) > d.getCapacityInKB() || ds.customProperties != null;
                             }).count();
                     if (count > 0) {
@@ -1084,6 +1084,7 @@ public class InstanceClient extends BaseHelper {
         disk.setStorageIOAllocation(getStorageIOAllocationInfo(ds));
         disk.setControllerKey(scsiController.getKey());
         disk.setUnitNumber(unitNumber);
+        fillInControllerUnitNumber(ds, unitNumber);
         disk.setKey(-1);
 
         VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
@@ -1217,6 +1218,13 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
+     * Fill in the scsi controller unit number into the custom properties of disk state so that
+     * we can update the details of the disk once the provisioning is complete.
+     */
+    private void fillInControllerUnitNumber(DiskStateExpanded ds, int unitNumber) {
+        CustomProperties.of(ds).put(DISK_CONTROLLER_NUMBER, unitNumber);
+    }
+    /**
      * Increments the given unit number. Skips the number 6 which is reserved in scsi. IDE and SIO
      * go up to 2 so it is safe to use this method for all types of controllers.
      *
@@ -1284,6 +1292,7 @@ public class InstanceClient extends BaseHelper {
         disk.setStorageIOAllocation(getStorageIOAllocationInfo(ds));
         disk.setControllerKey(controllerKey);
         disk.setUnitNumber(unitNumber);
+        fillInControllerUnitNumber(ds, unitNumber);
         disk.setKey(-1);
 
         VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
@@ -1320,6 +1329,7 @@ public class InstanceClient extends BaseHelper {
         disk.setStorageIOAllocation(getStorageIOAllocationInfo(ds));
         disk.setControllerKey(sysdisk.getControllerKey());
         disk.setUnitNumber(sysdisk.getUnitNumber());
+        fillInControllerUnitNumber(ds, sysdisk.getUnitNumber());
         disk.setKey(sysdisk.getKey());
 
         VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();

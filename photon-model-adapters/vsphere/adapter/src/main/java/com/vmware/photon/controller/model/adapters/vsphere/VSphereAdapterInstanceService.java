@@ -13,6 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVIDER_DISK_UNIQUE_ID;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +37,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.LifecycleStat
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -38,21 +45,19 @@ import com.vmware.vim25.CustomizationSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.vim25.StorageIOAllocationInfo;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
-/**
- */
+
 public class VSphereAdapterInstanceService extends StatelessService {
 
     public static final String SELF_LINK = VSphereUriPaths.INSTANCE_SERVICE;
@@ -114,9 +119,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                         ComputeState state;
 
-                        // all sides effect collected, patch model:
-                        OperationJoin patchDisks = null;
-
                         if (ctx.templateMoRef != null) {
                             state = client.createInstanceFromTemplate(ctx.templateMoRef);
                         } else if (ctx.image != null) {
@@ -131,10 +133,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             }
                         } else {
                             state = client.createInstance();
-                            // attach disks, collecting side effects
-                            if (!client.isOvfDeploy()) {
-                                patchDisks = createDiskPatch(ctx.disks);
-                            }
                         }
 
                         if (state == null) {
@@ -190,22 +188,13 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             finishTask = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
                         }
 
-                        // TODO Remove this line once the existing disks and new disks are handled
-                        // properly.
-                        if (ctx.templateMoRef != null || ctx.image != null || client.isOvfDeploy()) {
-                            addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
-                        }
+                        updateDiskLinksAfterProvisionSuccess(state, vmOverlay.getDisks(), ctx);
 
                         state.lifecycleState = LifecycleState.READY;
                         Operation patchResource = createComputeResourcePatch(state,
                                 ctx.computeReference);
 
                         OperationSequence seq = OperationSequence.create(patchResource);
-
-                        if (patchDisks != null) {
-                            seq = seq.next(patchDisks);
-                        }
-
                         if (finishTask != null) {
                             seq = seq.next(finishTask);
                         }
@@ -272,35 +261,85 @@ public class VSphereAdapterInstanceService extends StatelessService {
         };
     }
 
-    // TODO This method needs refactoring as it loses the original configuration of the disks
-    // This should be called only for additional disks to get the details from the VM.
-    private void addDiskLinksAfterClone(ComputeState state, List<VirtualDisk> disks,
+    /**
+     * Update the details of the disk into compute state after the provisioning is successful
+     */
+    private void updateDiskLinksAfterProvisionSuccess(ComputeState state, List<VirtualDisk> disks,
             ProvisionContext ctx) {
-        if (state.diskLinks == null) {
-            state.diskLinks = new ArrayList<>(2);
-        } else {
-            state.diskLinks.clear();
-        }
+        ArrayList<String> diskLinks = new ArrayList<>(disks.size());
+        // Fill in the disk links from the input to the ComputeState, as it may contain non hdd
+        // disk as well. For ex, Floppy or CD-Rom
+        ctx.disks.stream().forEach(ds -> diskLinks.add(ds.documentSelfLink));
 
         for (VirtualDisk disk : disks) {
             if (!(disk.getBacking() instanceof VirtualDeviceFileBackingInfo)) {
                 continue;
             }
             VirtualDeviceFileBackingInfo backing = (VirtualDeviceFileBackingInfo) disk.getBacking();
+            DiskStateExpanded matchedDs = findMatchingDiskState(disk, ctx.disks);
+            if (matchedDs == null) {
+                // This is the new disk, hence add it to the list
+                DiskState ds = new DiskState();
+                ds.documentSelfLink = UriUtils.buildUriPath(
+                        DiskService.FACTORY_LINK, getHost().nextUUID());
 
-            DiskState ds = new DiskState();
-            ds.documentSelfLink = UriUtils.buildUriPath(
-                    DiskService.FACTORY_LINK, getHost().nextUUID());
+                ds.name = disk.getDeviceInfo().getLabel();
+                ds.creationTimeMicros = Utils.getNowMicrosUtc();
+                ds.type = DiskType.HDD;
+                ds.regionId = ctx.parent.description.regionId;
+                ds.capacityMBytes = disk.getCapacityInKB() / 1024;
+                ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+                updateDiskStateFromVirtualDisk(disk, ds);
+                if (disk.getStorageIOAllocation() != null) {
+                    StorageIOAllocationInfo storageInfo = disk.getStorageIOAllocation();
+                    CustomProperties.of(ds)
+                            .put(SHARES, storageInfo.getShares().getShares())
+                            .put(LIMIT_IOPS, storageInfo.getLimit())
+                            .put(SHARES_LEVEL, storageInfo.getShares().getLevel().value());
+                }
+                createDiskOnDemand(ds);
+                diskLinks.add(ds.documentSelfLink);
+            } else {
+                // This is known disk, hence update with the provisioned attributes.
+                matchedDs.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+                updateDiskStateFromVirtualDisk(disk, matchedDs);
+                createDiskPatch(matchedDs);
+            }
 
-            ds.name = disk.getDeviceInfo().getLabel();
-            ds.creationTimeMicros = Utils.getNowMicrosUtc();
-            ds.type = DiskType.HDD;
-            ds.regionId = ctx.parent.description.regionId;
-            ds.capacityMBytes = disk.getCapacityInKB() / 1024;
-            ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
-            createDiskOnDemand(ds);
-            state.diskLinks.add(ds.documentSelfLink);
         }
+        state.diskLinks = diskLinks;
+    }
+
+    /**
+     * Capture virtual disk attributes in the disk state for reference.
+     */
+    private void updateDiskStateFromVirtualDisk(VirtualDisk vd, DiskState disk) {
+        CustomProperties.of(disk)
+                .put(PROVIDER_DISK_UNIQUE_ID, vd.getDiskObjectId());
+    }
+
+    private DiskStateExpanded findMatchingDiskState(VirtualDisk vd, List<DiskStateExpanded> disks) {
+        // Step 1: Match if there are matching bootOrder number with Unit number of disk
+        // Step 2: If not, then find a custom property to match the bootOrder with the unit number
+        // Step 3: If no match found then this is the new disk so return null
+        if (disks == null || disks.isEmpty()) {
+            return null;
+        }
+
+        return disks.stream().filter(ds -> {
+            boolean isFound = (ds.bootOrder != null && (ds.bootOrder - 1) == vd
+                    .getUnitNumber());
+            if (!isFound) {
+                // Now check custom properties for controller unit number
+                if (ds.customProperties != null && ds.customProperties.get
+                        (DISK_CONTROLLER_NUMBER) != null) {
+                    int unitNumber = Integer.parseInt(ds.customProperties.get
+                            (DISK_CONTROLLER_NUMBER));
+                    isFound = unitNumber == vd.getUnitNumber();
+                }
+            }
+            return isFound;
+        }).findFirst().orElse(null);
     }
 
     private void createDiskOnDemand(DiskState ds) {
@@ -309,17 +348,10 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 .sendWith(this);
     }
 
-    private Operation selfPatch(ServiceDocument doc) {
-        return Operation.createPatch(this, doc.documentSelfLink).setBody(doc);
-    }
-
-    private OperationJoin createDiskPatch(List<DiskService.DiskStateExpanded> disks) {
-        if (disks == null || disks.isEmpty()) {
-            return null;
-        }
-
-        return OperationJoin.create()
-                .setOperations(disks.stream().map(this::selfPatch));
+    private void createDiskPatch(DiskState ds) {
+        Operation.createPatch(this, ds.documentSelfLink)
+                .setBody(ds)
+                .sendWith(this);
     }
 
     private Operation createComputeResourcePatch(ComputeState state, URI computeReference) {

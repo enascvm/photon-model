@@ -108,6 +108,7 @@ public class DiskService extends StatefulService {
          * <p>Set either this or {@link #imageLink} property. If both are set {@link #imageLink} has
          * precedence.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI sourceImageReference;
 
         /**

@@ -14,15 +14,22 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVIDER_DISK_UNIQUE_ID;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.vim25.VirtualDisk;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.Operation;
 
 /**
  * Test cases for provisioning through library item with disks.
@@ -41,6 +48,22 @@ public class TestVSphereLibraryProvisionTaskWithStorage extends TestVSphereLibra
             GetMoRef get = new GetMoRef(connection);
             List<VirtualDisk> virtualDisks = fetchAllVirtualDisks(vm, get);
             assertEquals(3, virtualDisks.size());
+            assertEquals(3, vm.diskLinks.size());
+
+            List<DeferredResult<DiskService.DiskState>> disks = vm.diskLinks.stream()
+                    .map(link -> {
+                        Operation getOp = Operation
+                                .createGet(this.host, link)
+                                .setReferer(this.host.getReferer());
+                        return this.host.sendWithDeferredResult(getOp, DiskService.DiskState.class);
+                    }).collect(Collectors.toList());
+            DeferredResult.allOf(disks).thenAccept(diskStates -> {
+                diskStates.stream().forEach(ds -> {
+                    assertNotNull(ds.customProperties);
+                    assertNotNull(ds.sourceImageReference);
+                    assertNotNull(ds.customProperties.get(PROVIDER_DISK_UNIQUE_ID));
+                });
+            });
         } finally {
             if (vm != null) {
                 deleteVmAndWait(vm);
