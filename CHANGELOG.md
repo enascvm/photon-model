@@ -1,7 +1,10 @@
 # CHANGELOG
 
-## 0.6.30-SNAPSHOT
+## 0.6.30
 
+* Fix NPE in AWS Cost Stats service.
+* Reverting QueryOption.INDEXED_METADATA added to queries.
+* Reverting document option INDEX_METADATA added to services.
 
 ## 0.6.29
 
