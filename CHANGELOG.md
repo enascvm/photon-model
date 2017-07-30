@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.31-SNAPSHOT
+
+
 ## 0.6.30
 
 * Fix NPE in AWS Cost Stats service.
