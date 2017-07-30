@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.resources;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE;
 
 import java.net.URI;
-import java.util.EnumSet;
 import java.util.List;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
@@ -29,7 +28,6 @@ import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
@@ -245,9 +243,6 @@ public class NetworkInterfaceService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument template = super.getDocumentTemplate();
-        // enable metadata indexing
-        template.documentDescription.documentIndexingOptions =
-                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
         ServiceUtils.setRetentionLimit(template);
         return template;
     }

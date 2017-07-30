@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.resources.TagService.TagState;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
