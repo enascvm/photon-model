@@ -33,7 +33,9 @@ public enum ResourceOperation {
 
     DELETE_SNAPSHOT("Snapshot.Delete", "Delete Snapshot", "Delete Snapshot Operation"),
 
-    REVERT_SNAPSHOT("Snapshot.Revert", "Revert To Snapshot", "Revert To Snapshot Operation");
+    REVERT_SNAPSHOT("Snapshot.Revert", "Revert To Snapshot", "Revert To Snapshot Operation"),
+
+    RESIZE("Resize", "Resize Compute", "Resize CPU/RAM for Compute resource");
 
     public final String operation;
 

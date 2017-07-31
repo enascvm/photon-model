@@ -117,4 +117,20 @@ public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryP
             }
         }
     }
+
+    @Test
+    public void deployFromLibraryAndResizeVM() throws Throwable {
+        ComputeService.ComputeState vm = provisionVMAndGetState();
+        try {
+            if (vm == null) {
+                return;
+            }
+            // test resize VM operation
+            resizeVM(vm);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
 }

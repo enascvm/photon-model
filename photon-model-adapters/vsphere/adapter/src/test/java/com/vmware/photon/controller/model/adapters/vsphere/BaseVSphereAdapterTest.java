@@ -22,6 +22,8 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
+import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResizeComputeService.COMPUTE_CPU_COUNT;
+import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResizeComputeService.REBOOT_VM_FLAG;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.io.File;
@@ -690,6 +692,31 @@ public class BaseVSphereAdapterTest {
         this.host.log("Revert to snapshot operation completed successfully");
     }
 
+    protected void resizeVM(ComputeState vm) {
+        String taskLink = UUID.randomUUID().toString();
+        ResourceOperationRequest resizeRequest = getResizeComputeRequest(ResourceOperation.RESIZE.operation, vm.documentSelfLink, taskLink);
+        Operation resizeComputeOperation = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterResizeComputeService.SELF_LINK))
+                .setBody(resizeRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> Assert.assertNull(e));
+
+        TestRequestSender sender = new TestRequestSender(this.host);
+        sender.sendRequest(resizeComputeOperation);
+        this.host.log("Waiting for the resource resize to complete");
+        ComputeState cState = this.host.getServiceState(null, ComputeState.class,
+                UriUtils.buildUri(this.host, vm.documentSelfLink));
+        this.host.waitFor("Resize compute request failed", () -> {
+            Operation op = this.host.waitForResponse(Operation.createGet(this.host, cState.documentSelfLink + "?expand"));
+            ComputeService.ComputeStateWithDescription cDesc = op.getBody(ComputeService.ComputeStateWithDescription.class);
+            if (cDesc != null && cDesc.description.cpuCount == 4L) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+        this.host.log("Resize compute operation completed successfully");
+    }
+
     private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink,
             String taskLink) {
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
@@ -1033,6 +1060,20 @@ public class BaseVSphereAdapterTest {
         Map<String, String> payload = new HashMap<>();
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, "CREATE");
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_MEMORY, "false");
+        ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
+        resourceOperationRequest.operation = operation;
+        resourceOperationRequest.isMockRequest = isMock();
+        resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, documentSelfLink);
+        resourceOperationRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
+        resourceOperationRequest.payload = payload;
+        return resourceOperationRequest;
+    }
+
+    private ResourceOperationRequest getResizeComputeRequest(String operation, String documentSelfLink,
+                                                              String taskLink) {
+        Map<String, String> payload = new HashMap<>();
+        payload.put(COMPUTE_CPU_COUNT, "4"); //update "__cpuCount" to 4 from 2
+        payload.put(REBOOT_VM_FLAG, "true"); //reboot vm flag to true (not expecting hot-plug to be enabled in the provisioned machine)
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
         resourceOperationRequest.operation = operation;
         resourceOperationRequest.isMockRequest = isMock();
