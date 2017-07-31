@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_net_interface;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_subnet;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
@@ -109,6 +110,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
@@ -179,6 +182,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
     private static final String NETWORK_TAG_TYPE_VALUE = azure_vnet.toString();
     private static final String SUBNET_TAG_TYPE_VALUE = azure_subnet.toString();
+    private static final String NETWORK_INTERFACE_TAG_TYPE_VALUE = azure_net_interface.toString();
 
     // Shared Compute Host / End-point between test runs.
     private static ComputeState computeHost;
@@ -416,39 +420,20 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
                 DiskService.FACTORY_LINK, false);
         // 1 network per each stale vm resource + 1 network for original vm compute state.
-        ServiceDocumentQueryResult networkResults = ProvisioningUtils
-                .queryDocumentsAndAssertExpectedCount(this.host,
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                         STALE_VM_RESOURCES_COUNT + 1,
                         NetworkService.FACTORY_LINK, false);
 
-        // validate internal tags for enumerated networks
-        TagService.TagState expectedNetworkInternalTypeTag = newTagState(TAG_KEY_TYPE,
-                NETWORK_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
-        networkResults.documents.entrySet().stream()
-                .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
-                .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(
-                            c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
-                });
-
         // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
         // compute state.
-        ServiceDocumentQueryResult subnetResults = ProvisioningUtils
-                .queryDocumentsAndAssertExpectedCount(this.host,
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                         STALE_VM_RESOURCES_COUNT + 1,
                         SubnetService.FACTORY_LINK, false);
 
-        // validate internal tags for enumerated subnets
-        TagService.TagState expectedSubnetInternalTypeTag = newTagState(TAG_KEY_TYPE,
-                SUBNET_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
-        subnetResults.documents.entrySet().stream()
-                .map(e -> Utils.fromJson(e.getValue(), SubnetState.class))
-                .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(
-                            c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
-                });
+        // 1 network per each stale vm resource + 1 network for original vm compute state.
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
+                STALE_VM_RESOURCES_COUNT + 1,
+                NetworkInterfaceService.FACTORY_LINK, false);
 
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_SECURITY_GROUPS_COUNT,
@@ -484,6 +469,52 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .forEach(c -> {
                     assertNotNull(c.tagLinks);
                     assertTrue(c.tagLinks.contains(expectedInternalTypeTag.documentSelfLink));
+                });
+
+        // 1 network per each stale vm resource + 1 network for original vm compute state.
+        ServiceDocumentQueryResult networkResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, NetworkService.FACTORY_LINK);
+
+        // validate internal tags for enumerated networks
+        TagService.TagState expectedNetworkInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                NETWORK_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        networkResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
+                });
+
+        // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
+        // compute state.
+        ServiceDocumentQueryResult subnetResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, SubnetService.FACTORY_LINK);
+
+        // validate internal tags for enumerated subnets
+        TagService.TagState expectedSubnetInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                SUBNET_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        subnetResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), SubnetState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
+                });
+
+        ServiceDocumentQueryResult nicResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, NetworkInterfaceService.FACTORY_LINK);
+
+        // validate internal tags for enumerated network interfaces
+        TagService.TagState expectedNicInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                NETWORK_INTERFACE_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        nicResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), NetworkInterfaceState.class))
+                .filter(c -> c.regionId != null)
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedNicInternalTypeTag.documentSelfLink));
                 });
 
         // validate environment name field for enumerated VMs
@@ -672,6 +703,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         final List<String> expectedTagValues = new ArrayList<>();
         expectedTagValues.add(NETWORK_TAG_TYPE_VALUE);
         expectedTagValues.add(SUBNET_TAG_TYPE_VALUE);
+        expectedTagValues.add(NETWORK_INTERFACE_TAG_TYPE_VALUE);
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(TagState.class)
@@ -685,7 +717,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         List<TagState> tagStates = waitToComplete(
                 queryLocalTags.collectDocuments(Collectors.toList()));
         this.host.log(Level.INFO, "internal tag states discovered: " + tagStates.size());
-        assertTrue(tagStates.size() >= 2);
+        assertTrue(tagStates.size() >= 3);
 
         final List<String> actualTagValues = new ArrayList<>();
         for (TagState tag : tagStates) {

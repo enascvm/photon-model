@@ -99,6 +99,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -585,6 +586,21 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                     assertNotNull(c.tagLinks);
                     assertTrue(
                             c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
+                });
+
+
+        ServiceDocumentQueryResult nicResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, NetworkInterfaceService.FACTORY_LINK);
+
+        // validate internal tags for enumerated network interfaces
+        TagService.TagState expectedNicInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                NETWORK_INTERFACE_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
+        nicResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), NetworkInterfaceState.class))
+                .forEach(c -> {
+                    assertNotNull(c.tagLinks);
+                    assertTrue(
+                            c.tagLinks.contains(expectedNicInternalTypeTag.documentSelfLink));
                 });
 
         // 6. Delete VMs and update documents via enumeration.
