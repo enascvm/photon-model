@@ -500,7 +500,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     // encounter a diskState with null region, we delete that disk, it will get re-enumerated
                     // with valid region in subsequent enumeration runs.
                     if (entry.getValue().regionId != null) {
-                        aws.regionsByBucketName.put(entry.getKey(), entry.getValue().regionId);
+                        aws.regionsByBucketName.put(entry.getValue().id, entry.getValue().regionId);
                     } else {
                         logWarning("Null region found in S3 diskState");
                         Operation.createDelete(aws.service.getHost(), entry.getValue().documentSelfLink)
@@ -540,8 +540,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                         }
                     } catch (Exception e) {
                         logSevere("Exception enumerating tags for S3 bucket with known region " +
-                                        "[endpoint=%s] [region=%s] [ex=%s]", aws.request.original.endpointLink,
-                                entry.getValue().regionId, e.getMessage());
+                                        "[endpoint=%s] [bucketName=%s - %s] [region=%s] [ex=%s]",
+                                aws.request.original.endpointLink, entry.getKey(),
+                                entry.getValue().id, entry.getValue().regionId, e.getMessage());
                         continue;
                     }
                 }
@@ -564,6 +565,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                             bucketTaggingConfiguration = s3Client
                                     .getBucketTaggingConfiguration(bucket.getName());
 
+                            logInfo("[EndpointLink=%s], [bucketName=%s], [region=%s]",
+                                    aws.request.original.endpointLink, bucket.getName(),
+                                    region.getName());
                             aws.regionsByBucketName.put(bucket.getName(), region.getName());
 
                             if (bucketTaggingConfiguration != null) {
