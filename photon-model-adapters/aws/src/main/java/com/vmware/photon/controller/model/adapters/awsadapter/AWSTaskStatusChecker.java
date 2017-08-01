@@ -43,6 +43,11 @@ import com.vmware.xenon.common.Utils;
  */
 public class AWSTaskStatusChecker<T> {
 
+    public static final String AWS_RUNNING_NAME = "running";
+    public static final String AWS_TERMINATED_NAME = "terminated";
+    public static final String AWS_AVAILABLE_NAME = "available";
+    public static final String AWS_DELETED_NAME = "deleted";
+
     private String instanceId;
     private AmazonEC2AsyncClient amazonEC2Client;
     private String desiredState;
@@ -153,6 +158,7 @@ public class AWSTaskStatusChecker<T> {
                     AmazonWebServiceResult result) {
                 String status;
                 Object instance;
+                String failureMessage = null;
                 if (result instanceof DescribeInstancesResult) {
                     instance = ((DescribeInstancesResult)result).getReservations().get(0)
                             .getInstances().get(0);
@@ -161,12 +167,21 @@ public class AWSTaskStatusChecker<T> {
                     instance = ((DescribeNatGatewaysResult)result).getNatGateways().get
                             (0);
                     status = ((NatGateway)instance).getState();
+                    // if NAT gateway creation fails, the status is still "pending";
+                    // rather than keep checking for status and eventually time out, get the
+                    // failure message and fail the task
+                    failureMessage = ((NatGateway)instance).getFailureMessage();
                 } else {
                     AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
                             new IllegalArgumentException("Invalid type " + result));
                     return;
                 }
-                if (!status.equals(AWSTaskStatusChecker.this.desiredState)) {
+                if (failureMessage != null) {
+                    // operation failed; no need to keep checking for desired status
+                    AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
+                            new IllegalStateException(failureMessage));
+                    return;
+                } else if (!status.equals(AWSTaskStatusChecker.this.desiredState)) {
                     // if the instance is not in the desired state, schedule thread
                     // to run again in 5 seconds
                     AWSTaskStatusChecker.this.service.getHost().schedule(

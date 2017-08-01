@@ -53,6 +53,7 @@ public class SubnetService extends StatefulService {
         public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
         public static final String FIELD_NAME_LIFECYCLE_STATE = "lifecycleState";
         public static final String FIELD_NAME_ZONE_ID = "zoneId";
+        public static final String FIELD_NAME_EXTERNAL_SUBNET_LINK = "externalSubnetLink";
 
         /**
          * Link to the network this subnet is part of.

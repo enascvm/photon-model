@@ -81,8 +81,6 @@ public class AWSNetworkClient {
 
     public static final String STATUS_CODE_SUBNET_NOT_FOUND = "InvalidSubnetID.NotFound";
     public static final String STATUS_CODE_SUBNET_CONFLICT = "InvalidSubnet.Conflict";
-    private static final String AWS_AVAILABLE_NAME = "available";
-    private static final String AWS_DELETED_NAME = "deleted";
 
     private final AmazonEC2AsyncClient client;
     private StatelessService service;
@@ -298,7 +296,8 @@ public class AWSNetworkClient {
                 .thenApply(CreateNatGatewayResult::getNatGateway)
                 .thenApply(NatGateway::getNatGatewayId)
                 .thenCompose(natGatewayId -> waitForNatGatewayState(natGatewayId,
-                        taskManager, taskExpirationMicros, AWS_AVAILABLE_NAME));
+                        taskManager, taskExpirationMicros,
+                        AWSTaskStatusChecker.AWS_AVAILABLE_NAME));
     }
 
     /**
@@ -317,7 +316,7 @@ public class AWSNetworkClient {
         this.client.deleteNatGatewayAsync(req, handler);
         return handler.toDeferredResult()
                 .thenCompose(ignore -> waitForNatGatewayState(natGatewayId,
-                        taskManager, taskExpirationMicros, AWS_DELETED_NAME))
+                        taskManager, taskExpirationMicros, AWSTaskStatusChecker.AWS_DELETED_NAME))
                 .thenApply(ignore -> null);
 
     }

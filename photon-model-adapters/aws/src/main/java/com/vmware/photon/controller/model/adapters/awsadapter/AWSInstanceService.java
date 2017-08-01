@@ -112,9 +112,6 @@ public class AWSInstanceService extends StatelessService {
     // firewall rules etc and is
     // specific to an instance and should come from the compute desc for the VM
 
-    private static final String AWS_RUNNING_NAME = "running";
-    private static final String AWS_TERMINATED_NAME = "terminated";
-
     public AWSInstanceService() {
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
@@ -609,7 +606,7 @@ public class AWSInstanceService extends StatelessService {
 
                 AWSTaskStatusChecker
                         .create(this.context.amazonEC2Client, instanceId,
-                                AWSInstanceService.AWS_RUNNING_NAME, consumer,
+                                AWSTaskStatusChecker.AWS_RUNNING_NAME, consumer,
                                 this.context.taskManager,
                                 this.service, this.context.taskExpirationMicros)
                         .start(new Instance());
@@ -723,7 +720,7 @@ public class AWSInstanceService extends StatelessService {
             };
 
             AWSTaskStatusChecker.create(this.context.amazonEC2Client, this.instanceId,
-                    AWSInstanceService.AWS_TERMINATED_NAME, postTerminationCallback,
+                    AWSTaskStatusChecker.AWS_TERMINATED_NAME, postTerminationCallback,
                     this.context.taskManager, AWSInstanceService.this,
                     this.context.taskExpirationMicros).start(new Instance());
         }
