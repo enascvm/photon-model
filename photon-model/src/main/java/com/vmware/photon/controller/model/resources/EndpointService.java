@@ -40,6 +40,9 @@ public class EndpointService extends StatefulService {
 
     public static final String FACTORY_LINK = UriPaths.RESOURCES + "/endpoints";
 
+    public static final String ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME = "endpoint-removal-request-referrer";
+    public static final String ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE = "endpoint-removal-task";
+
     /**
      * This class represents the document state associated with a {@link EndpointService} task.
      */
@@ -101,10 +104,22 @@ public class EndpointService extends StatefulService {
 
     @Override
     public void handleDelete(Operation delete) {
-        logInfo("Deleting Endpoint, Path: %s, Operation ID: %d, Referrer: %s",
-                delete.getUri().getPath(), delete.getId(),
-                delete.getRefererAsString());
-        super.handleDelete(delete);
+        String requestHeader = delete.getRequestHeader(ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME);
+        if ((requestHeader != null && requestHeader
+                .equals(ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE)) ||
+                delete.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_FROM_MIGRATION_TASK)) {
+            logInfo("Deleting Endpoint, Path: %s, Operation ID: %d, Referrer: %s",
+                    delete.getUri().getPath(), delete.getId(),
+                    delete.getRefererAsString());
+            super.handleDelete(delete);
+        } else {
+            logSevere(
+                    "Invalid request for deleting endpoint, Path: %s, Operation ID: %d, Referrer: %s",
+                    delete.getUri().getPath(), delete.getId(),
+                    delete.getRefererAsString());
+            throw new UnsupportedOperationException(
+                    "Direct request to delete an endpoint is not a supported operation");
+        }
     }
 
     @Override
