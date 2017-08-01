@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -80,7 +81,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     }
 
     protected enum AzureCostComputeEnumerationStages {
-        FETCH_EXISTING_RESOURCES, UPDATE_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
+        UPDATE_EXISTING_RESOURCES, FETCH_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
     }
 
     protected static class AzureSubscriptionsEnumerationContext
@@ -100,7 +101,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 this.idToSubscription = resourceRequest.azureSubscriptions
                         .stream().collect(Collectors.toMap(subscription -> subscription.entityId,
                                 subscription -> subscription));
-                this.stage = AzureCostComputeEnumerationStages.FETCH_EXISTING_RESOURCES;
+                this.stage = AzureCostComputeEnumerationStages.UPDATE_EXISTING_RESOURCES;
             }
             this.operation = parentOp;
         }
@@ -143,12 +144,12 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             AzureSubscriptionsEnumerationContext enumerationContext) {
         try {
             switch (enumerationContext.stage) {
-            case FETCH_EXISTING_RESOURCES:
-                fetchExistingResources(enumerationContext,
-                        AzureCostComputeEnumerationStages.UPDATE_EXISTING_RESOURCES);
-                break;
             case UPDATE_EXISTING_RESOURCES:
                 updateExistingResources(enumerationContext,
+                            AzureCostComputeEnumerationStages.FETCH_EXISTING_RESOURCES);
+                break;
+            case FETCH_EXISTING_RESOURCES:
+                fetchExistingResources(enumerationContext,
                             AzureCostComputeEnumerationStages.CREATE_RESOURCES);
                 break;
             case CREATE_RESOURCES:
@@ -199,13 +200,6 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
 
     private void updateExistingResources(AzureSubscriptionsEnumerationContext enumerationContext,
                                          AzureCostComputeEnumerationStages nextStage) {
-        if (enumerationContext.idToSubscription.isEmpty()) {
-            // Nothing to do all the subscriptions are created and updated
-            enumerationContext.stage = nextStage;
-            handleAzureSubscriptionsEnumerationRequest(enumerationContext);
-            return;
-        }
-
         // Query the subscriptions which we want to create to check if they already exist
         Query azureSubscriptionEndpointQuery = createQueryForAzureSubscriptionEndpoints(
                 enumerationContext);
@@ -226,26 +220,70 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                         handleAzureSubscriptionsEnumerationRequest(enumerationContext);
                         return;
                     }
-                    patchExitingSubscriptionComputes(enumerationContext, nextStage,
+                    queryExistingComputeStatesOfEndpoints(enumerationContext, nextStage,
                             subscriptionEndpoints);
                 });
     }
 
-    private void patchExitingSubscriptionComputes(AzureSubscriptionsEnumerationContext
-                    enumerationContext, AzureCostComputeEnumerationStages nextStage,
-                    Collection<EndpointState> subscriptionEndpoints) {
-        Collection<Operation> patchComputesOp = subscriptionEndpoints
+    private void queryExistingComputeStatesOfEndpoints(AzureSubscriptionsEnumerationContext
+             enumerationContext, AzureCostComputeEnumerationStages nextStage,
+             Collection<EndpointState> subscriptionEndpoints) {
+        // Get the compute states for already existing subscription endpoints and
+        // if needed patch them with custom properties
+        Map<String, ComputeState> computeLinkToState = new ConcurrentHashMap<>();
+        Collection<Operation> getComputeOps = subscriptionEndpoints
                 .stream()
                 .map(endpointState -> {
-                    String subscriptionId = endpointState.endpointProperties
-                            .get(EndpointConfigRequest.USER_LINK_KEY);
-                    ComputeState cs = new ComputeState();
-                    cs.customProperties = getPropertiesMap(enumerationContext,
-                            enumerationContext.idToSubscription.get(subscriptionId),
-                            false);
-                    Operation patchOp = Operation.createPatch(UriUtils.extendUri(
+                    Operation op = Operation.createGet(UriUtils.extendUri(
                             getInventoryServiceUri(), endpointState.computeLink))
-                            .setBody(cs);
+                            .setCompletion((o, t) -> {
+                                if (t != null) {
+                                    logSevere(
+                                            () -> String.format("Failed getting compute state" +
+                                                            "for  %s due to %s",
+                                                    endpointState.computeLink, Utils.toString(t)));
+                                    return;
+                                }
+                                ComputeState cs = o.getBody(ComputeState.class);
+                                // Only add custom properties if it does not have it already
+                                if (!hasAzureEaCustomProperties(cs)) {
+                                    ComputeState comWithProps = new ComputeState();
+                                    String subscriptionId = endpointState.endpointProperties
+                                            .get(EndpointConfigRequest.USER_LINK_KEY);
+                                    comWithProps.customProperties =
+                                            getPropertiesMap(enumerationContext,
+                                                    enumerationContext.idToSubscription
+                                                            .get(subscriptionId), false);
+                                    computeLinkToState.put(cs.documentSelfLink, comWithProps);
+                                }
+                            });
+                    return op;
+                })
+                .collect(Collectors.toList());
+
+        joinOperationAndSendRequest(getComputeOps, enumerationContext, (enumCtx) -> {
+            patchExitingSubscriptionComputes(enumCtx, nextStage, computeLinkToState);
+        });
+    }
+
+    private boolean hasAzureEaCustomProperties(ComputeState computeState) {
+        if (computeState.customProperties != null
+                && computeState.customProperties
+                .containsKey(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY)) {
+            return true;
+        }
+        return false;
+    }
+
+    private void patchExitingSubscriptionComputes(AzureSubscriptionsEnumerationContext
+                    enumerationContext, AzureCostComputeEnumerationStages nextStage,
+                    Map<String, ComputeState> computeLinkToPatchState) {
+        Collection<Operation> patchComputesOp = computeLinkToPatchState.keySet()
+                .stream()
+                .map(computeLink -> {
+                    Operation patchOp = Operation.createPatch(UriUtils.extendUri(
+                            getInventoryServiceUri(), computeLink))
+                            .setBody(computeLinkToPatchState.get(computeLink));
                     return  patchOp;
                 })
                 .collect(Collectors.toList());

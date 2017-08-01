@@ -76,6 +76,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
     private ComputeState compute;
     private String existingSubsComputeLink1;
     private String existingSubsComputeLink2;
+    private String existingSubsComputeLink3;
 
     private static final String SUBSCRIPTION_EXISTING_1 = "subscriptionExisting1";
     private static final String SUBSCRIPTION_EXISTING_2 = "subscriptionExisting2";
@@ -205,6 +206,34 @@ public class AzureSubscriptionsEnumerationServiceTest {
          * Create existing subscriptions again
          */
         testAddSameAzureSubscriptions();
+
+        /**
+         * Add a non ea azure subscription now and check if it has cost
+         */
+        testAddNonEaAzureSubscriptionLater();
+    }
+
+    private void  testAddNonEaAzureSubscriptionLater() throws Throwable {
+        // Create Azure non-ea endpoints
+        EndpointState nonEaEp3 = createNonEaEndpointState(SUBSCRIPTION_ID_2);
+        EndpointAllocationTaskState state3 = createEndpoint(nonEaEp3);
+        this.existingSubsComputeLink3 = state3.endpointState.computeLink;
+
+        AzureSubscription subscription1 = getAzureSubscription(SUBSCRIPTION_ID_1,
+                ACCOUNT_EMAIL_ID_1);
+        AzureSubscription subscription2 = getAzureSubscription(SUBSCRIPTION_ID_2,
+                ACCOUNT_EMAIL_ID_2);
+        AzureSubscription existingSubscription2 = getAzureSubscription(SUBSCRIPTION_EXISTING_2,
+                ACCOUNT_EMAIL_ID_2);
+        createAzureCostComputesForSubscriptions(Arrays.asList(subscription1, subscription2,
+                existingSubscription2));
+
+        // Query for Azure Computes created with CLIENT_ID as enrollment Number
+        QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
+                Collections.singletonList(TENANT_ID));
+        QueryTask queryTaskResponse = executQuerySynchronously(task);
+
+        assertQueryTaskResponse(queryTaskResponse, 7);
     }
 
     private void testAddSameAzureSubscriptions() throws  Throwable {
@@ -411,6 +440,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
         Assert.assertEquals(ComputeType.VM_HOST, cs.type);
         Assert.assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE, cs.environmentName);
         Assert.assertEquals(expectedTenantLinks, cs.tenantLinks);
+        Assert.assertNotNull(cs.creationTimeMicros);
     }
 
     private AzureSubscription getAzureSubscription(String subscriptionId, String accountId) {

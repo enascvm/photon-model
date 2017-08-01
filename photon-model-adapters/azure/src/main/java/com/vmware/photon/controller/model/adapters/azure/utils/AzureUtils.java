@@ -74,6 +74,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -386,6 +387,7 @@ public class AzureUtils {
         cs.type = ComputeType.VM_HOST;
         cs.descriptionLink = descriptionLink;
         cs.resourcePoolLink = resourcePoolLink;
+        cs.creationTimeMicros = Utils.getNowMicrosUtc();
         return cs;
     }
 
