@@ -887,12 +887,11 @@ public class AWSInstanceService extends StatelessService {
                             bootDisk.customProperties.get(VOLUME_TYPE));
                 }
             }
-            if (bootDisk.customProperties != null &&
-                    bootDisk.customProperties.containsKey(DISK_IOPS) &&
-                    bootDisk.customProperties.get(DISK_IOPS) != null) {
-                int iops = Integer
-                        .parseInt(bootDisk.customProperties.get(DISK_IOPS));
-                ebsRootDeviceMapping.setIops(iops);
+            if (bootDisk.customProperties != null) {
+                String diskIops = bootDisk.customProperties.get(DISK_IOPS);
+                if (diskIops != null && !diskIops.isEmpty()) {
+                    ebsRootDeviceMapping.setIops(Integer.parseInt(diskIops));
+                }
             }
         } else if (bootDisk.capacityMBytes > 0) {
             this.logWarning(() -> "[AWSInstanceService] Instance-store boot disk cannot be "
@@ -977,7 +976,7 @@ public class AWSInstanceService extends StatelessService {
             }
 
             String configuredDeviceType = instanceStoreDisk.customProperties.get(DEVICE_TYPE);
-            if (instanceStoreDisk.customProperties != null && configuredDeviceType != null) {
+            if (configuredDeviceType != null) {
                 AssertUtil.assertTrue(instanceStoreType.equals(configuredDeviceType),
                         String.format("%s disks cannot be attached to %s AMI %s.",
                                 configuredDeviceType, configuredDeviceType, instanceStoreType,
@@ -1034,21 +1033,19 @@ public class AWSInstanceService extends StatelessService {
                                 ebsBlockDevice
                                         .setVolumeType(diskState.customProperties.get(VOLUME_TYPE));
                             }
-
-                            if (diskState.customProperties.containsKey(DISK_IOPS)) {
-                                int diskIops = Integer.parseInt(
-                                        diskState.customProperties.get(DISK_IOPS));
-                                if (diskIops > diskSize * MAX_IOPS_PER_GiB) {
-                                    String info = String
-                                            .format("[AWSInstanceService] Requested IOPS"
-                                                            + "(%s) exceeds the maximum value supported by %sGiB"
-                                                            + " disk. Provisions the disk with %siops",
-                                                    diskIops, diskSize,
-                                                    diskSize * MAX_IOPS_PER_GiB);
+                            String diskIops = diskState.customProperties.get(DISK_IOPS);
+                            if (diskIops != null && !diskIops.isEmpty()) {
+                                int iops = Integer.parseInt(diskIops);
+                                if (iops > diskSize * MAX_IOPS_PER_GiB) {
+                                    String info = String.format("[AWSInstanceService] Requested "
+                                                    + "IOPS (%s) exceeds the maximum value supported"
+                                                    + " by %sGiB disk. Continues provisioning the "
+                                                    + "disk with %s iops", iops, diskSize,
+                                            diskSize * MAX_IOPS_PER_GiB);
                                     this.logInfo(() -> info);
-                                    diskIops = diskSize * MAX_IOPS_PER_GiB;
+                                    iops = diskSize * MAX_IOPS_PER_GiB;
                                 }
-                                ebsBlockDevice.setIops(diskIops);
+                                ebsBlockDevice.setIops(iops);
                             }
                         }
 
