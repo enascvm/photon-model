@@ -1,7 +1,10 @@
 # CHANGELOG
 
-## 0.6.31-SNAPSHOT
-
+## 0.6.31
+* Upgrade to xenon v1.5.4.
+* Added support to create internal tag 'type' for AWS network resources.
+* Added support to create internal tag 'type' for Azure VHDs.
+* Added "Outbound access" support for private subnets to create/delete a NAT gateway.
 
 ## 0.6.30
 
