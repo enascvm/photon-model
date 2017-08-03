@@ -17,7 +17,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_ENDPOINT;
@@ -156,6 +159,10 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.support.InstanceTypeList;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
+import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService;
+import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -858,7 +865,6 @@ public class TestAWSSetupUtils {
         return TestUtils.doPost(host, endpoint, EndpointState.class,
                 UriUtils.buildUri(host, EndpointService.FACTORY_LINK));
     }
-
 
     public static ResourcePoolState createAWSResourcePool(VerificationHost host)
             throws Throwable {
@@ -2595,5 +2601,79 @@ public class TestAWSSetupUtils {
         host.createQueryTaskService(queryTask, false, true, queryTask, null);
         ServiceDocumentQueryResult results = queryTask.results;
         return  results;
+    }
+
+    /**
+     * Create endpoint using EndpointAllocationTaskService.
+     */
+    public static EndpointState createAWSEndpointStateUsingAllocationTask(VerificationHost host,
+            String authLink, String resPoolLink,
+            String accessKey, String secretKey, String endpointName) throws Throwable {
+        EndpointState endpoint = createEndpointState(authLink, resPoolLink, accessKey, secretKey,
+                endpointName);
+        EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
+
+        EndpointAllocationTaskState returnState = TestUtils
+                .doPost(host, startState, EndpointAllocationTaskState.class,
+                        UriUtils.buildUri(host, EndpointAllocationTaskService.FACTORY_LINK));
+        EndpointAllocationTaskState completeState = host
+                .waitForFinishedTask(EndpointAllocationTaskState.class,
+                        returnState.documentSelfLink);
+        assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+        Operation response = host
+                .waitForResponse(Operation.createGet(host, completeState.documentSelfLink));
+        EndpointAllocationTaskState taskState = response.getBody(EndpointAllocationTaskState.class);
+        assertNotNull(taskState.endpointState);
+
+        ServiceDocument endpointState = taskState.endpointState;
+        assertNotNull(endpointState.documentSelfLink);
+
+        response = host.waitForResponse(Operation.createGet(host, endpointState.documentSelfLink));
+        return response.getBody(EndpointState.class);
+    }
+
+    private static EndpointState createEndpointState(String authLink, String resPoolLink,
+            String accessKey, String secretKey, String endpointName) {
+        EndpointState endpoint = new EndpointState();
+        endpoint.endpointType = EndpointType.aws.name();
+        endpoint.id = endpointName + "-id";
+        endpoint.name = endpointName;
+        endpoint.authCredentialsLink = authLink;
+        endpoint.endpointProperties = new HashMap<>();
+        endpoint.endpointProperties.put(PRIVATE_KEY_KEY, secretKey);
+        endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, accessKey);
+        endpoint.tenantLinks = Collections.singletonList(EndpointType.aws.name() + "-tenant");
+        endpoint.resourcePoolLink = resPoolLink;
+        return endpoint;
+    }
+
+    private static EndpointAllocationTaskState createEndpointAllocationRequest(
+            EndpointState endpoint) {
+        EndpointAllocationTaskState endpointAllocationTaskState = new EndpointAllocationTaskState();
+        endpointAllocationTaskState.endpointState = endpoint;
+        endpointAllocationTaskState.tenantLinks = endpoint.tenantLinks;
+        return endpointAllocationTaskState;
+    }
+
+    /**
+     * Delete endpoint using EndpointRemovalTaskService.
+     */
+    public static EndpointRemovalTaskState deleteEndpointState(VerificationHost host,
+            EndpointState endpointState) throws Throwable {
+        EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpointState);
+        EndpointRemovalTaskState returnState = TestUtils
+                .doPost(host, removalTaskState, EndpointRemovalTaskState.class,
+                        UriUtils.buildUri(host, EndpointRemovalTaskService.FACTORY_LINK));
+        return host
+                .waitForFinishedTask(EndpointRemovalTaskState.class, returnState.documentSelfLink);
+    }
+
+    private static EndpointRemovalTaskState createEndpointRemovalTaskState(
+            EndpointState endpoint) {
+        EndpointRemovalTaskState endpointRemovalTaskState = new EndpointRemovalTaskState();
+        endpointRemovalTaskState.endpointLink = endpoint.documentSelfLink;
+        endpointRemovalTaskState.tenantLinks = endpoint.tenantLinks;
+        return endpointRemovalTaskState;
     }
 }

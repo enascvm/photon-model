@@ -370,10 +370,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         }
 
         QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
-                representativeCDSet,
-                context.request.tenantLinks,
-                this, context.request.parentTaskLink,
-                context.request.regionId);
+                representativeCDSet, context.request.tenantLinks, context.request.regionId,
+                context.request.endpointLink);
         queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
 
         // create the query to find an existing compute description

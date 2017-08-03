@@ -68,12 +68,14 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -118,7 +120,11 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private Set<String> subnetIds;
 
     private ComputeState computeHost;
+    private ComputeState computeHostTwo;
     private EndpointState endpointState;
+    private EndpointState endpointStateTwo;
+
+    private ResourcePoolState resourcePool;
 
     private Level loggingLevelForMemory;
     private double availableMemoryPercentage;
@@ -209,6 +215,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
             this.host.waitForServiceAvailable(AWSAdapters.LINKS);
+
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
             throw new Exception(e);
@@ -262,6 +269,22 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                 this.securityGroupId);
         this.instancesToCleanUp.addAll(this.instanceIds);
         waitForProvisioningToComplete(this.instanceIds, this.host, this.client, 0);
+
+        // create 2nd endpoint with same auth credentials
+        initResourcePoolAndComputeHostTwo();
+        // run enumeration on both the endpoints.
+        enumerateResources(this.host, this.computeHostTwo, this.endpointStateTwo, this.isMock,
+                TEST_CASE_INITIAL);
+        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
+                TEST_CASE_INITIAL);
+
+        // delete 2nd endpoint
+        EndpointRemovalTaskState completeState = TestAWSSetupUtils
+                .deleteEndpointState(this.host, this.endpointStateTwo);
+        assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+        // validate compute descriptions's of 1st endpoint
+        validateComputeDescForEndpoint();
 
         // Periodically run enumeration, specified by enumerationFrequencyInMinutes parameter.
         runEnumerationAndLogNodeStatsPeriodically();
@@ -631,6 +654,45 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     }
 
     /**
+     * Validate if existing compute hosts have valid compute description links.
+     */
+    private void validateComputeDescForEndpoint() {
+        QueryTask.Query query = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .build();
+        QueryTask q = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .build();
+
+        Operation queryDocument = Operation.createPost(UriUtils.buildUri(this.host.getUri(),
+                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)).setReferer(this.host.getUri()).setBody(q);
+        Operation queryResponse = this.host.waitForResponse(queryDocument);
+
+        Assert.assertTrue("Error retrieving enumerated documents",
+                queryResponse.getStatusCode() == 200);
+
+        QueryTask qt = queryResponse.getBody(QueryTask.class);
+        List<String> computeLinks = qt.results.documentLinks;
+        for (String computeLink : computeLinks) {
+            Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), computeLink))
+                    .setReferer(this.host.getUri());
+            Operation response = this.host.waitForResponse(op);
+            Assert.assertTrue("Error retrieving compute",
+                    response.getStatusCode() == 200);
+            ComputeState computeState = response
+                    .getBody(ComputeState.class);
+
+            String descLink = computeState.descriptionLink;
+            op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), descLink))
+                    .setReferer(this.host.getUri());
+            response = this.host.waitForResponse(op);
+            Assert.assertTrue("Error retrieving compute description",
+                    response.getStatusCode() == 200);
+        }
+        this.host.log(Level.INFO, "All compute states have valid compute description links");
+    }
+
+    /**
      * Clear all sets to reuse them and store document links and ids after deletion.
      */
     private void clearStoredDocumentLinksAndIds() {
@@ -652,18 +714,36 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
      */
     private void initResourcePoolAndComputeHost() throws Throwable {
         // Create a resource pool where the VM will be housed
-        ResourcePoolState resourcePool = createAWSResourcePool(this.host);
+        this.resourcePool = createAWSResourcePool(this.host);
 
-        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey, this.secretKey);
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey,
+                this.secretKey);
 
-        this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host, auth.documentSelfLink, resourcePool.documentSelfLink);
+        if (this.isMock) {
+            this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host,
+                    auth.documentSelfLink, this.resourcePool.documentSelfLink);
+        } else {
+            this.endpointState = TestAWSSetupUtils.createAWSEndpointStateUsingAllocationTask(
+                    this.host, auth.documentSelfLink, this.resourcePool.documentSelfLink,
+                    this.accessKey, this.secretKey, "endpoint-one");
+        }
 
         // create a compute host for the AWS EC2 VM
         this.computeHost = createAWSComputeHost(this.host,
-                this.endpointState,
-                null /*zoneId*/, this.useAllRegions ? null : regionId,
-                this.isAwsClientMock,
-                this.awsMockEndpointReference, null /*tags*/);
+                this.endpointState, null /*zoneId*/, this.useAllRegions ? null : regionId,
+                this.isAwsClientMock, this.awsMockEndpointReference, null /*tags*/);
+    }
+
+    private void initResourcePoolAndComputeHostTwo() throws Throwable {
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey,
+                this.secretKey);
+        this.endpointStateTwo = TestAWSSetupUtils
+                .createAWSEndpointStateUsingAllocationTask(this.host,
+                        auth.documentSelfLink, this.resourcePool.documentSelfLink,
+                        this.accessKey, this.secretKey, "endpoint-two");
+        this.computeHostTwo = createAWSComputeHost(this.host,
+                this.endpointStateTwo, null /*zoneId*/, this.useAllRegions ? null : regionId,
+                this.isAwsClientMock, this.awsMockEndpointReference, null /*tags*/);
     }
 
     /**

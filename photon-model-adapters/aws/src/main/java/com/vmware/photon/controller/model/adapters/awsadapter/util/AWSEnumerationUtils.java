@@ -50,7 +50,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
@@ -112,13 +111,14 @@ public class AWSEnumerationUtils {
      * - Environment name(AWS),
      * - id (instance type),
      * - ZoneId(placement).
+     * - Endpoint link
      * - Created from the enumeration task.
      * Compute hosts are modeled to support VM guests.So excluding them from the query to get
      * compute descriptions for VMs.
      */
     public static QueryTask getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
             Set<InstanceDescKey> descriptionsSet, List<String> tenantLinks,
-            StatelessService service, URI parentTaskLink, String regionId) {
+            String regionId, String endpointLink) {
         String sourceTaskName = QueryTask.QuerySpecification
                 .buildCompositeFieldName(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         SOURCE_TASK_LINK);
@@ -128,6 +128,7 @@ public class AWSEnumerationUtils {
                 .addFieldClause(ComputeDescription.FIELD_NAME_ENVIRONMENT_NAME,
                         ComputeDescription.ENVIRONMENT_NAME_AWS)
                 .addFieldClause(ComputeDescription.FIELD_NAME_REGION_ID, regionId)
+                .addFieldClause(ComputeDescription.FIELD_NAME_ENDPOINT_LINK, endpointLink)
                 .addFieldClause(sourceTaskName, ResourceEnumerationTaskService.FACTORY_LINK)
                 .build();
 

@@ -201,12 +201,13 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
      * - Environment name(AWS),
      * - Name (instance type),
      * - ZoneId(placement).
+     * - Endpoint link
      */
     private void getLocalComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
         QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 context.representativeComputeDescriptionSet, context.cdState.tenantLinks,
-                this, context.cdState.parentTaskLink, context.cdState.regionId);
+                context.cdState.regionId, context.cdState.endpointLink);
 
         // create the query to find an existing compute description
         QueryUtils.startQueryTask(this, queryTask)
