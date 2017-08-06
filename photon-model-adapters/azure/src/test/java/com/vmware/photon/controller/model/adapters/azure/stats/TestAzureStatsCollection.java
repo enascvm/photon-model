@@ -243,21 +243,24 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
             return;
         }
 
-        this.availableMemoryPercentage = (statsMap.get(
-                ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
-                .latestValue / BYTES_TO_MB) / this.maxMemoryInMb * 100;
+        if (statsMap.get(
+                ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR) != null) {
+            this.availableMemoryPercentage = (statsMap.get(
+                    ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
+                    .latestValue / BYTES_TO_MB) / this.maxMemoryInMb * 100;
 
-        // Increase logging level if available Memory is less than expected.
-        if (this.availableMemoryPercentage > MEMORY_THRESHOLD_WARNING) {
-            this.loggingLevelForMemory = Level.INFO;
-        } else if (this.availableMemoryPercentage > MEMORY_THRESHOLD_SEVERE) {
-            this.loggingLevelForMemory = Level.WARNING;
-        } else {
-            this.loggingLevelForMemory = Level.SEVERE;
+            // Increase logging level if available Memory is less than expected.
+            if (this.availableMemoryPercentage > MEMORY_THRESHOLD_WARNING) {
+                this.loggingLevelForMemory = Level.INFO;
+            } else if (this.availableMemoryPercentage > MEMORY_THRESHOLD_SEVERE) {
+                this.loggingLevelForMemory = Level.WARNING;
+            } else {
+                this.loggingLevelForMemory = Level.SEVERE;
+            }
+
+            this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
+                    + SEPARATOR + this.availableMemoryPercentage);
         }
-
-        this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
-                + SEPARATOR + this.availableMemoryPercentage);
     }
 
     /**

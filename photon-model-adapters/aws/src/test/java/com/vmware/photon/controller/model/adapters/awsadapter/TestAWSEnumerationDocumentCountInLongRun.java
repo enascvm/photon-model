@@ -411,21 +411,24 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             return;
         }
 
-        this.availableMemoryPercentage = (statsMap.get(
-                ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
-                .latestValue / BYTES_TO_MB) / this.maxMemoryInMb * 100;
+        if (statsMap.get(
+                ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR) != null) {
+            this.availableMemoryPercentage = (statsMap.get(
+                    ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
+                    .latestValue / BYTES_TO_MB) / this.maxMemoryInMb * 100;
 
-        this.loggingLevelForMemory = Level.INFO;
+            this.loggingLevelForMemory = Level.INFO;
 
-        // Increase logging level if available Memory is less than expected.
-        if (this.availableMemoryPercentage > MEMORY_THRESHOLD_SEVERE) {
-            this.loggingLevelForMemory = Level.SEVERE;
-        } else if (this.availableMemoryPercentage > MEMORY_THRESHOLD_WARNING) {
-            this.loggingLevelForMemory = Level.WARNING;
+            // Increase logging level if available Memory is less than expected.
+            if (this.availableMemoryPercentage > MEMORY_THRESHOLD_SEVERE) {
+                this.loggingLevelForMemory = Level.SEVERE;
+            } else if (this.availableMemoryPercentage > MEMORY_THRESHOLD_WARNING) {
+                this.loggingLevelForMemory = Level.WARNING;
+            }
+
+            this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
+                    + SEPARATOR + this.availableMemoryPercentage);
         }
-
-        this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
-                + SEPARATOR + this.availableMemoryPercentage);
     }
 
     /**

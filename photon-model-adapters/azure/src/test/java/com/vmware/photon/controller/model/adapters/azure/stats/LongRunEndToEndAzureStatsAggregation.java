@@ -370,25 +370,36 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
             return;
         }
 
-        this.cpuUsagePercentage =
-                statsMap.get(ServiceHostManagementService.STAT_NAME_CPU_USAGE_PCT_PER_HOUR)
-                        .latestValue;
-        this.availableMemoryMb =
-                statsMap.get(ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
-                        .latestValue / BYTES_TO_MB;
-        this.loggingLevelMemory = Level.SEVERE;
+        // statsMap will have at least default auto backup entries.
+        // memory, cpu related values are populate only after enumeration runs.
+        if (statsMap.get(
+                ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR) != null) {
+            this.availableMemoryMb =
+                    statsMap.get(
+                            ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
+                            .latestValue / BYTES_TO_MB;
+            this.loggingLevelMemory = Level.SEVERE;
 
-        // Increase logging level if available Memory is less than expected.
-        if ((this.availableMemoryMb / this.maxMemoryInMb) * 100 > MEMORY_SEVERE_THRESHOLD) {
-            this.loggingLevelMemory = Level.INFO;
-        } else if ((this.availableMemoryMb / this.maxMemoryInMb) * 100 > MEMORY_WARNING_THRESHOLD) {
-            this.loggingLevelMemory = Level.WARNING;
+            // Increase logging level if available Memory is less than expected.
+            if ((this.availableMemoryMb / this.maxMemoryInMb) * 100 > MEMORY_SEVERE_THRESHOLD) {
+                this.loggingLevelMemory = Level.INFO;
+            } else if ((this.availableMemoryMb / this.maxMemoryInMb) * 100
+                    > MEMORY_WARNING_THRESHOLD) {
+                this.loggingLevelMemory = Level.WARNING;
+            }
+            this.host.log(this.loggingLevelMemory,
+                    STAT_NAME_MEMORY_AVAILABLE_IN_MB + SEPARATOR + this.availableMemoryMb);
         }
 
-        this.host.log(Level.INFO,
-                STAT_NAME_CPU_USAGE_PERCENT + SEPARATOR + this.cpuUsagePercentage);
-        this.host.log(this.loggingLevelMemory,
-                STAT_NAME_MEMORY_AVAILABLE_IN_MB + SEPARATOR + this.availableMemoryMb);
+        if (statsMap.get(
+                ServiceHostManagementService.STAT_NAME_CPU_USAGE_PCT_PER_HOUR) != null) {
+            this.cpuUsagePercentage =
+                    statsMap.get(ServiceHostManagementService.STAT_NAME_CPU_USAGE_PCT_PER_HOUR)
+                            .latestValue;
+            this.host.log(Level.INFO,
+                    STAT_NAME_CPU_USAGE_PERCENT + SEPARATOR + this.cpuUsagePercentage);
+
+        }
     }
 
 
