@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea.stats;
 
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.AUTO_DISCOVERED_ENTITY;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -36,8 +38,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Sets;
 import com.opencsv.CSVReader;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -149,12 +153,14 @@ public class AzureCostStatsService extends StatelessService {
         GET_COMPUTE_HOST,
         GET_AUTH,
         GET_BILL_MONTH_TO_FETCH_STATS_FOR,
+        QUERY_EXISTING_LINKED_SUBSCRIPTIONS,
+        FILTER_SUBSCRIPTIONS_ADDED_AFTER_LAST_RUN,
         GET_HISTORICAL_COSTS,
         DOWNLOAD_DETAILED_BILL,
         PARSE_DETAILED_BILL,
         CREATE_UPDATE_MISSING_COMPUTE_STATES,
         SET_LINKED_ACCOUNTS_CUSTOM_PROPERTY,
-        QUERY_LINKED_SUBSCRIPTIONS,
+        QUERY_LINKED_SUBSCRIPTIONS_OBTAINED_FROM_BILL,
         CREATE_MONTHLY_STATS_AND_POST,
         CREATE_DAILY_STATS_AND_POST,
         QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS,
@@ -193,6 +199,7 @@ public class AzureCostStatsService extends StatelessService {
                 new ConcurrentHashMap<>();
         private Map<String, Map<String, List<String>>> subscriptionGuidToResources =
                 new ConcurrentHashMap<>();
+        private Set<String> subscriptionsAddedAfterLastRun = Sets.newConcurrentHashSet();
         private TaskManager taskManager;
         // billParsingCompleteTimeMillis is populated once the entire bill is parsed
         private long billParsingCompleteTimeMillis = 0;
@@ -208,7 +215,7 @@ public class AzureCostStatsService extends StatelessService {
         Double monthlyEaAccountMarketplaceCost;
         Double monthlyEaAccountSeparatelyBilledCost;
 
-        public Double getTotalCost() {
+        Double getTotalCost() {
             Double totalCost = 0.0d;
             if (this.monthlyEaAccountUsageCost != null) {
                 totalCost += this.monthlyEaAccountUsageCost;
@@ -269,9 +276,14 @@ public class AzureCostStatsService extends StatelessService {
                 getAuth(context, Stages.GET_BILL_MONTH_TO_FETCH_STATS_FOR);
                 break;
             case GET_BILL_MONTH_TO_FETCH_STATS_FOR:
-                getBillProcessedTime(context, Stages.GET_HISTORICAL_COSTS);
+                getBillProcessedTime(context, Stages.QUERY_EXISTING_LINKED_SUBSCRIPTIONS);
                 break;
-
+            case QUERY_EXISTING_LINKED_SUBSCRIPTIONS:
+                queryLinkedSubscriptions(context, Stages.FILTER_SUBSCRIPTIONS_ADDED_AFTER_LAST_RUN);
+                break;
+            case FILTER_SUBSCRIPTIONS_ADDED_AFTER_LAST_RUN:
+                filterSubscriptionsAddedAfterLastRan(context, Stages.GET_HISTORICAL_COSTS);
+                break;
             case GET_HISTORICAL_COSTS:
                 // Try getting cost using the new API and if the call fails, try with
                 // the old API.
@@ -290,10 +302,12 @@ public class AzureCostStatsService extends StatelessService {
                 parseDetailedBill(context, Stages.SET_LINKED_ACCOUNTS_CUSTOM_PROPERTY);
                 break;
             case SET_LINKED_ACCOUNTS_CUSTOM_PROPERTY:
-                setLinkedSubscriptionGuids(context, Stages.QUERY_LINKED_SUBSCRIPTIONS);
+                setLinkedSubscriptionGuids(context,
+                        Stages.QUERY_LINKED_SUBSCRIPTIONS_OBTAINED_FROM_BILL);
                 break;
-            case QUERY_LINKED_SUBSCRIPTIONS:
-                queryLinkedSubscriptions(context, Stages.QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS);
+            case QUERY_LINKED_SUBSCRIPTIONS_OBTAINED_FROM_BILL:
+                queryLinkedSubscriptions(context,
+                        Stages.QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS);
                 break;
             case QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS:
                 queryResourcesForExistingSubscriptions(context, Stages.CREATE_DAILY_STATS_AND_POST);
@@ -357,8 +371,6 @@ public class AzureCostStatsService extends StatelessService {
 
     /**
      * For now query the VMs based on endpointLinks
-     * @param context
-     * @param endpoints
      */
     private void queryAzureVmsUnderEndpoints(Context context, Stages next,
                                              List<EndpointState> endpoints) {
@@ -406,28 +418,26 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private Query createQueryForVmsWithEndpoints(Set<String> endpointLinks) {
-        Query azureVmsQuery = Query.Builder.create()
+        return Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE,
                         ComputeDescriptionService.ComputeDescription.ComputeType.VM_GUEST)
                 .addInClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, endpointLinks)
                 .build();
-        return azureVmsQuery;
     }
 
     private Query createQueryForSubscriptionEndpoints(Context context,
                                                       List<String> subscriptionsGuids) {
-        Query  subscriptionsEndpointQuery = Query.Builder.create()
+        return Query.Builder.create()
                 .addKindFieldClause(EndpointState.class)
                 .addFieldClause(EndpointState.FIELD_NAME_ENDPOINT_TYPE,
                         EndpointType.azure.name())
                 .addInClause(QueryTask.QuerySpecification.buildCompositeFieldName
-                                (new String[]{EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
-                                        EndpointConfigRequest.USER_LINK_KEY}), subscriptionsGuids)
+                                (EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
+                                        EndpointConfigRequest.USER_LINK_KEY), subscriptionsGuids)
                 .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
                         context.computeHostDesc.tenantLinks)
                 .build();
-        return subscriptionsEndpointQuery;
     }
 
     private List<String> getSubscriptionGuidsToQueryResources(Context context) {
@@ -623,6 +633,38 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     /**
+     * This will filter the subscriptions of the EA account that is being processed currently that
+     * have been explicitly added after the last cost collection ran.
+     * @param context data holder for current run.
+     * @param next next stage to proceed to.
+     */
+    private void filterSubscriptionsAddedAfterLastRan(Context context, Stages next) {
+
+        Function<ComputeState, Boolean> isNewSubscription = (cs) -> {
+            Boolean isAutoDiscovered = Boolean
+                    .valueOf(cs.customProperties.get(AUTO_DISCOVERED_ENTITY));
+            return (!isAutoDiscovered
+                    && cs.creationTimeMicros != null
+                    && cs.creationTimeMicros > context.billProcessedTimeMillis);
+        };
+
+        List<ComputeState> subscriptionCsAddedAfterLastRun = context.subscriptionGuidToComputeState
+                .values().stream()
+                .flatMap(List::stream)
+                .filter(isNewSubscription::apply)
+                .collect(Collectors.toList());
+
+        context.subscriptionsAddedAfterLastRun = subscriptionCsAddedAfterLastRun.stream()
+                .map(s -> s.customProperties.get(PhotonModelConstants.CLOUD_ACCOUNT_ID))
+                .collect(Collectors.toSet());
+
+        logInfo(() -> String.format("Found the following new subscriptions added after the "
+                + "last run: %s", context.subscriptionsAddedAfterLastRun));
+        context.stage = next;
+        handleRequest(context);
+    }
+
+    /**
      * Azure provides an API which will fetch the total EA account cost for a given month.
      * This API is invoked iteratively to the get the past (@code BILLS_BACK_IN_TIME_MONTHS_KEY}
      * months' cost.
@@ -800,9 +842,11 @@ public class AzureCostStatsService extends StatelessService {
                         AzureCostConstants.DEFAULT_ESCAPE_CHARACTER,
                         AzureCostConstants.DEFAULT_LINES_TO_SKIP);
             }
-            boolean parsingComplete = billHandler
-                    .parseDetailedCsv(context.csvReader, context.billProcessedTimeMillis,
-                            context.currency, getDailyStatsConsumer(context, next));
+            // Get the subscription GUIDs from the subscription compute states.
+            boolean parsingComplete = billHandler.parseDetailedCsv(context.csvReader,
+                    context.subscriptionsAddedAfterLastRun,
+                    context.billProcessedTimeMillis, context.currency,
+                            getDailyStatsConsumer(context, next));
             if (parsingComplete) {
                 cleanUp(context);
             }
@@ -843,7 +887,14 @@ public class AzureCostStatsService extends StatelessService {
         String[] linkedSubscriptionGuids = context.computeHostDesc.customProperties
                 .getOrDefault(AzureCostConstants.LINKED_SUBSCRIPTION_GUIDS, "")
                 .split(",");
-
+        if (linkedSubscriptionGuids.length == 0) {
+            // If there are no linked subscriptions found in the custom property of the compute
+            // state of the EA account, proceed to the next stage. This is because this is
+            // the first run and this property has not been populate yet or there are actually
+            // no subscriptions in this EA account.
+            context.stage = next;
+            handleRequest(context);
+        }
         List<Operation> queryOps = Arrays
                 .stream(linkedSubscriptionGuids)
                 .filter(subscriptionGuid -> subscriptionGuid != null && !subscriptionGuid.isEmpty())
@@ -982,9 +1033,6 @@ public class AzureCostStatsService extends StatelessService {
                     .forEach(service -> createServiceStatsForSubscription(context, subscription));
             subscription.getServices().clear();
         });
-        if (context.statsResponse.statsList.size() == 0) {
-            return;
-        }
         postStats(context, false);
         // Check if the entire bill is parsed
         if (context.billParsingCompleteTimeMillis > 0) {
@@ -1324,6 +1372,9 @@ public class AzureCostStatsService extends StatelessService {
      *                     this run.
      */
     private void postStats(Context context, boolean isFinalBatch) {
+        if (!isFinalBatch && context.statsResponse.statsList.size() == 0) {
+            return;
+        }
         SingleResourceStatsCollectionTaskState respBody =
                 new SingleResourceStatsCollectionTaskState();
         respBody.taskStage = SingleResourceTaskCollectionStage
@@ -1341,13 +1392,12 @@ public class AzureCostStatsService extends StatelessService {
         context.statsResponse.statsList = new ArrayList<>();
     }
 
-    private void joinOpSendRequest(Context context,
-            List<Operation> queryOps, Stages next) {
-
+    private void joinOpSendRequest(Context context, List<Operation> queryOps, Stages next) {
         if (queryOps.isEmpty()) {
+            context.stage = next;
+            handleRequest(context);
             return;
         }
-
         OperationJoin
                 .create(queryOps)
                 .setCompletion((operations, exceptions) -> {

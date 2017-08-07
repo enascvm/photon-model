@@ -13,8 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.cost;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * POJO for storing processed details of a subscription. Entity ID for subscription is
@@ -24,7 +24,7 @@ import java.util.Map;
 public class AzureSubscription extends AzureEntity {
 
     public String subscriptionName;
-    private Map<String, AzureService> serviceDetailsMap = new HashMap<>();
+    private Map<String, AzureService> serviceDetailsMap = new ConcurrentHashMap<>();
     private double cost = 0d;
 
     public AzureSubscription() {
@@ -53,7 +53,7 @@ public class AzureSubscription extends AzureEntity {
         return this.serviceDetailsMap.get(serviceName);
     }
 
-    private AzureService createServiceDetailDto(
+    public AzureService createServiceDetailDto(
             EaDetailedBillElement detailedBillElement) {
         AzureService service = new AzureService();
         service.subscriptionGuid = detailedBillElement.subscriptionGuid;
