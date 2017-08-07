@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAMESPACE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.MISSING_SUBSCRIPTION_CODE;
@@ -1539,6 +1540,12 @@ public class AzureInstanceService extends StatelessService {
             diskStateToUpdate.documentSelfLink = dataDiskState.documentSelfLink;
             // The actual value being updated
             diskStateToUpdate.id = azureDataDisk.vhd().uri();
+
+            // The LUN value of disk
+            if (diskStateToUpdate.customProperties == null) {
+                diskStateToUpdate.customProperties = new HashMap<>();
+            }
+            diskStateToUpdate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
 
             Operation updateDiskState = Operation
                     .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)

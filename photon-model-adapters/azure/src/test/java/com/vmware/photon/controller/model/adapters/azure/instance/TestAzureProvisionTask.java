@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NO_PUBLIC_IP_NIC_SPEC;
@@ -437,6 +438,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             } else {
                 assertEquals("Data Disk size does not match",
                         AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE, diskState.capacityMBytes);
+                assertNotNull(diskState.customProperties);
+                assertNotNull(diskState.customProperties.get(DISK_CONTROLLER_NUMBER));
             }
         }
 
@@ -495,6 +498,9 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             // assert size of each of the attached disks
             assertEquals("Mismatch in intended size of data disks " + azureDataDisk.name(),
                     AZURE_CUSTOM_DATA_DISK_SIZE, azureDataDisk.diskSizeGB().longValue() * 1024);
+
+            assertEquals("LUN of DiskState does not match Azure.dataDisk.lun",
+                    String.valueOf(azureDataDisk.lun()), dataDiskState.customProperties.get(DISK_CONTROLLER_NUMBER));
         }
     }
 
