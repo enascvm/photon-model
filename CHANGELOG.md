@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.32-SNAPSHOT
+
 ## 0.6.31
 * Upgrade to xenon v1.5.4.
 * Added support to create internal tag 'type' for AWS network resources.
