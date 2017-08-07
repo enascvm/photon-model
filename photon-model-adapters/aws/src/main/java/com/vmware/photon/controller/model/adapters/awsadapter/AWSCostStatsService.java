@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -554,17 +555,16 @@ public class AWSCostStatsService extends StatelessService {
     protected void queryInstances(AWSCostStatsCreationContext statsData, AWSCostStatsCreationStages nextStage,
             AWSCostStatsCreationSubStage nextSubStage) {
 
-        List<String> linkedAccountsLinks = statsData.awsAccountIdToComputeStates.values()
+        Set<String> endpointLinks = statsData.awsAccountIdToComputeStates.values()
                 .stream().flatMap(List::stream) // flatten collection of lists to single list
-                .map(e -> e.documentSelfLink)
-                .collect(Collectors.toList()); // extract document self links of all accounts
+                .map(e -> e.endpointLink)
+                .collect(Collectors.toSet()); // extract endpointLinks of all accounts
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE,
                         ComputeDescriptionService.ComputeDescription.ComputeType.VM_GUEST)
-                .addInClause(ComputeState.FIELD_NAME_PARENT_LINK, linkedAccountsLinks,
-                        Occurance.MUST_OCCUR)
+                .addInClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, endpointLinks, Occurance.MUST_OCCUR)
                 .build();
 
         populateAwsResources(query, statsData, nextStage, nextSubStage);
@@ -712,7 +712,28 @@ public class AWSCostStatsService extends StatelessService {
                 statsData.statsResponse.statsList.add(awsServiceStats);
             }
         };
+        insertEC2ServiceDetail(awsAccountDetailDto);
         processAccountStats(statsData, billMonth, awsAccountDetailDto, serviceStatsProcessor);
+    }
+
+    private void insertEC2ServiceDetail(AwsAccountDetailDto awsAccountDetailDto) {
+        AwsServiceDetailDto vm = awsAccountDetailDto.serviceDetailsMap.get(AwsServices.EC2_Instance_Usage.getName());
+        AwsServiceDetailDto ebs = awsAccountDetailDto.serviceDetailsMap.get(AwsServices.EC2_EBS.getName());
+        AwsServiceDetailDto others = awsAccountDetailDto.serviceDetailsMap.get(AwsServices.EC2_Others.getName());
+        AwsServiceDetailDto ec2ServiceDetail = new AwsServiceDetailDto();
+        ec2ServiceDetail.id = AwsServices.EC2.getName();
+        ec2ServiceDetail.type = AwsServices.getTypeByName(AwsServices.EC2.getName()).toString();
+        ec2ServiceDetail.directCosts = Stream.of(vm, ebs, others).filter(Objects::nonNull)
+                .map(dto -> dto.directCosts.entrySet()).flatMap(Set::stream)
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue, Double::sum));
+        ec2ServiceDetail.otherCosts = Stream.of(vm, ebs, others).filter(Objects::nonNull)
+                .map(dto -> dto.otherCosts.entrySet()).flatMap(Set::stream)
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue, Double::sum));
+        ec2ServiceDetail.remainingCost = Stream.of(vm, ebs, others).filter(Objects::nonNull)
+                .mapToDouble(dto -> dto.remainingCost).sum();
+        ec2ServiceDetail.reservedRecurringCost = Stream.of(vm, ebs, others).filter(Objects::nonNull)
+                .mapToDouble(dto -> dto.reservedRecurringCost).sum();
+        awsAccountDetailDto.serviceDetailsMap.put(AwsServices.EC2.getName(), ec2ServiceDetail);
     }
 
     private void processAccountStats(AWSCostStatsCreationContext statsData, LocalDate billMonth,
@@ -737,7 +758,7 @@ public class AWSCostStatsService extends StatelessService {
     protected void createResourceStatsForAccount(AWSCostStatsCreationContext statsData,
             AwsAccountDetailDto awsAccountDetailDto) {
         Map<String, AwsServiceDetailDto> serviceDetails = awsAccountDetailDto.serviceDetailsMap;
-        List<AwsServices> supportedServices = Arrays.asList(AwsServices.EC2, AwsServices.S3);
+        List<AwsServices> supportedServices = Arrays.asList(AwsServices.EC2_Instance_Usage, AwsServices.EC2_EBS, AwsServices.S3);
         for (String service : serviceDetails.keySet()) {
             if (!supportedServices.contains(AwsServices.getByName(service))) {
                 continue;

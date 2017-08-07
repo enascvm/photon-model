@@ -39,7 +39,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
-import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser.AwsServices;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -264,18 +264,19 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         assertTrue(account2Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue == account2TotalCost);
 
         // check that service level stats exist
-        String serviceCode = AWSCsvBillParser.AwsServices.EC2.getName().replaceAll(" ", "");
+        String serviceCode = AwsServices.EC2_Instance_Usage.getName().replaceAll(" ", "");
         String serviceResourceCostMetric = String.format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
         assertTrue(!account1Stats.statValues.get(serviceResourceCostMetric).isEmpty());
 
-        String serviceOtherCostMetric = String.format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
+        String serviceCode2 = AwsServices.EC2_Others.getName().replaceAll(" ", "");
+        String serviceOtherCostMetric = String.format(AWSConstants.SERVICE_OTHER_COST, serviceCode2);
         assertTrue(!account1Stats.statValues.get(serviceOtherCostMetric).isEmpty());
 
-        String serviceMonthlyOtherCostMetric = String.format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
+        String serviceMonthlyOtherCostMetric = String.format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode2);
         assertTrue(!account1Stats.statValues.get(serviceMonthlyOtherCostMetric).isEmpty());
 
         String serviceReservedRecurringCostMetric = String
-                .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode);
+                .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode2);
         assertTrue(!account1Stats.statValues.get(serviceReservedRecurringCostMetric).isEmpty());
 
         ComputeStats instance1Stats = computeStatsByLink.get(INSTANCE_1_SELF_LINK);

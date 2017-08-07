@@ -227,12 +227,12 @@ public class AWSCsvBillParser {
         // for previous months.
         if (millisForBillHour == null || (millisForBillHour >= getMonthStartMillis())) {
 
-            AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails, serviceName);
+            String resourceId = getStringFieldValue(rowMap, DetailedCsvHeaders.RESOURCE_ID);
+            AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails, serviceName, resourceId);
             Double resourceCost = getResourceCost(rowMap);
             // In case we do not have resource id, this might be unknown
             // cost(unallocated) or one of summary line items {otherCost
             // (recurring charges for reserved instance)or sign up charges(which we have to ignore)}
-            String resourceId = getStringFieldValue(rowMap, DetailedCsvHeaders.RESOURCE_ID);
             if (resourceId == null || resourceId.length() == 0) {
                 // Check if this row has usageStartTime, if so set otherCost for
                 // day, otherwise set it as common for month, can divide later for all days
@@ -377,7 +377,16 @@ public class AWSCsvBillParser {
     }
 
     private AwsServiceDetailDto createOrGetServiceDetailObject(AwsAccountDetailDto accountDetails,
-            String serviceName) {
+            String serviceName, String resourceId) {
+        if (serviceName != null && serviceName.contains(AwsServices.EC2.getName())) {
+            if (resourceId != null && resourceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
+                serviceName = AwsServices.EC2_Instance_Usage.getName();
+            } else if (resourceId != null && resourceId.startsWith(AWS_VOLUME_ID_PREFIX)) {
+                serviceName = AwsServices.EC2_EBS.getName();
+            } else {
+                serviceName = AwsServices.EC2_Others.getName();
+            }
+        }
         AwsServiceDetailDto serviceDetail = accountDetails.fetchServiceDetail(serviceName);
 
         /*
@@ -444,7 +453,7 @@ public class AWSCsvBillParser {
         }
         String invoiceId = getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID);
         if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, DetailedCsvHeaders.LINE_ITEM)) {
-            AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(awsAccountDetail, productName);
+            AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(awsAccountDetail, productName, null);
             // If the RecordType is LineItem then it is either sign up charge or
             // recurring charges for reserved purchase
             if (matchFieldValue(rowMap, DetailedCsvHeaders.OPERATION, RUN_INSTANCES)) {
@@ -561,6 +570,9 @@ public class AWSCsvBillParser {
 
     public enum AwsServices {
         EC2("Amazon Elastic Compute Cloud", PublicCloudServiceType.COMPUTE),
+        EC2_Instance_Usage("Amazon Elastic Compute Cloud Instance", PublicCloudServiceType.COMPUTE),
+        EC2_EBS("Amazon Elastic Block Store", PublicCloudServiceType.COMPUTE),
+        EC2_Others("Amazon Elastic Compute Cloud Other Usage", PublicCloudServiceType.COMPUTE),
         RDS("Amazon RDS Service", PublicCloudServiceType.DATABASE),
         SNS("Amazon Simple Notification Service", PublicCloudServiceType.OTHERS),
         S3("Amazon Simple Storage Service", PublicCloudServiceType.STORAGE),
@@ -612,7 +624,7 @@ public class AWSCsvBillParser {
         }
     }
 
-    private enum PublicCloudServiceType {
+    public enum PublicCloudServiceType {
         COMPUTE, STORAGE, DATABASE, NETWORKING, MANAGEMENT, OTHERS;
 
         public String toString() {
