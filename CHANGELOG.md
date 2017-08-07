@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.33-SNAPSHOT
+
 ## 0.6.32
 * Adding document option INDEX_METADATA to services.
 
