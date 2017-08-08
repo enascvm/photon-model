@@ -15,11 +15,19 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EMPTY_STR;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 
+import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.StorageUri;
+import com.microsoft.azure.storage.blob.CloudBlobContainer;
+import com.microsoft.azure.storage.blob.CloudBlobDirectory;
+import com.microsoft.azure.storage.blob.ListBlobItem;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -41,6 +49,61 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
     //Possible types of azure storage accounts
     public static final HashSet<String> typeOfStorageAccounts = new HashSet<String>(Arrays.asList
             ("Standard_LRS", "Standard_ZRS", "Standard_GRS", "Standard_RAGRS", "Premium_LRS"));
+
+    class MockListBlobItem implements ListBlobItem {
+        URI uri;
+
+        /**
+         * Mock azure blob, must pass in {uri} while creating.
+         *
+         * @param uri
+         */
+        public MockListBlobItem(URI uri) {
+            super();
+            this.uri = uri;
+        }
+
+        @Override
+        public URI getUri() {
+            return this.uri;
+        }
+
+        @Override
+        public CloudBlobContainer getContainer() throws URISyntaxException, StorageException {
+            return null;
+        }
+
+        @Override
+        public CloudBlobDirectory getParent() throws URISyntaxException, StorageException {
+            return null;
+        }
+
+        @Override
+        public StorageUri getStorageUri() {
+            return null;
+        }
+    }
+
+    @Test
+    public void testGetAzureBlobName () throws Throwable {
+        String blobName = "MyStorageBlob";
+
+        URI validBlobUri1 = new URI("http://account.blob.core.windows.net/cid/" + blobName);
+        ListBlobItem validBlob1 = new MockListBlobItem(validBlobUri1);
+        Assert.assertEquals(blobName, AzureStorageEnumerationAdapterService.getAzureBlobName(validBlob1));
+
+        URI validBLobUri2 = new URI("http://account.blob.core.windows.net/cid/" + blobName + "/");
+        ListBlobItem validBlob2 = new MockListBlobItem(validBLobUri2);
+        Assert.assertEquals(blobName, AzureStorageEnumerationAdapterService.getAzureBlobName(validBlob2));
+
+        URI invalidBlobUri = new URI("http://account.blob.core.windows.net/cid/" + blobName + "//");
+        ListBlobItem invalidBlob = new MockListBlobItem(invalidBlobUri);
+        Assert.assertEquals(EMPTY_STR, AzureStorageEnumerationAdapterService.getAzureBlobName(invalidBlob));
+
+        ListBlobItem nullUriBlob = new MockListBlobItem(null);
+        AzureStorageEnumerationAdapterService.getAzureBlobName(nullUriBlob);
+        Assert.assertEquals(EMPTY_STR, AzureStorageEnumerationAdapterService.getAzureBlobName(invalidBlob));
+    }
 
     @Test
     public void testAzureStorageAccountEnumeration() throws Throwable {

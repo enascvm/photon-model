@@ -37,6 +37,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EMPTY_STR;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
 import java.net.URI;
@@ -1439,11 +1440,31 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 });
     }
 
+    public static String getAzureBlobName(ListBlobItem blob) {
+        if (blob == null || blob.getUri() == null) {
+            return EMPTY_STR;
+        }
+
+        String path = blob.getUri().getPath();
+        if (!path.endsWith(UriUtils.URI_PATH_CHAR)) {
+            return UriUtils.getLastPathSegment(blob.getUri());
+        }
+
+        String correctedUriPath = path.substring(0, path.length() - 1);
+        URI correctedUri;
+        try {
+            correctedUri = new URI(correctedUriPath);
+            return UriUtils.getLastPathSegment(correctedUri);
+        } catch (URISyntaxException use) {
+            return UriUtils.getLastPathSegment(blob.getUri());
+        }
+    }
+
     private DiskState createDiskStateObject(StorageEnumContext context, ListBlobItem blob,
             String containerLink, DiskState oldDiskState) {
 
         DiskState diskState = new DiskState();
-        diskState.name = UriUtils.getLastPathSegment(blob.getUri());
+        diskState.name = getAzureBlobName(blob);
         if (containerLink != null) {
             diskState.storageDescriptionLink = containerLink;
         }

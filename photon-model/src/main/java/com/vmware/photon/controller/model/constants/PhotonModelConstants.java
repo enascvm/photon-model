@@ -66,6 +66,7 @@ public class PhotonModelConstants {
     public static final String UNIT_MICROSECONDS = "MicroSeconds";
     public static final String UNIT_HOURS = "Hours";
     public static final String UNIT_COST = "USD";
+    public static final String EMPTY_STR = "";
 
     // Photon-Model specific constants
     public static final String API_CALL_COUNT = "APICallCount";
