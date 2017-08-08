@@ -29,6 +29,7 @@ import com.microsoft.azure.management.resources.implementation.ResourceGroupInne
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
@@ -389,6 +390,15 @@ public class AzureInstanceContext extends
      */
     public boolean reuseExistingStorageAccount() {
         return this.bootDiskState.storageDescription != null;
+    }
+
+
+    /**
+     * Method to know if provisioning is using azure managed disks
+     */
+    public boolean useManagedDisks() {
+        return this.bootDiskState.customProperties != null && this.bootDiskState.customProperties
+                .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE);
     }
 
 

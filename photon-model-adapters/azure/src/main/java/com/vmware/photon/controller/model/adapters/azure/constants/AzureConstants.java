@@ -34,6 +34,7 @@ public class AzureConstants {
     public static final String AZURE_DATA_DISK_CACHING = "azureDataDiskCaching";
     public static final String AZURE_DISK_BLOB_URI = "azureDiskBlobUri";
     public static final String AZURE_DISK_LUN = "azureDiskLun";
+    public static final String AZURE_MANAGED_DISK_TYPE = "azureManagedDiskType";
 
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "azureStorageAccountType";
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "azureStorageAccountName";

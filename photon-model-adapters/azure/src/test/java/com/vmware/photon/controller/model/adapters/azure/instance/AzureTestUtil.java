@@ -1012,6 +1012,7 @@ public class AzureTestUtil {
                 AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
 
+
         rootDisk = TestUtils.doPost(host, rootDisk, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 

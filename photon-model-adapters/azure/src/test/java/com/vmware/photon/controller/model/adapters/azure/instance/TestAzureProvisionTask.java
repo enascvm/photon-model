@@ -487,8 +487,14 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             assertNotNull("Azure OS Disk with name '" + azureOsDisk.name()
                     + "' does not match any DiskState by name", bootDiskState);
 
-            assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
-                    azureOsDisk.vhd().uri(), bootDiskState.id);
+            if (bootDiskState.customProperties != null && bootDiskState.customProperties
+                    .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
+                assertEquals("Boot DiskState.id does not match Azure managed disk id",
+                        azureOsDisk.managedDisk().id(), bootDiskState.id);
+            } else {
+                assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
+                        azureOsDisk.vhd().uri(), bootDiskState.id);
+            }
 
             assertEquals("OS Disk size of the VM in azure does not match with the intended size",
                     AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE, azureOsDisk.diskSizeGB() * 1024);
@@ -506,8 +512,14 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             assertNotNull("Azure Data Disk with name '" + azureDataDisk.name()
                     + "' does not match any DiskState by name", dataDiskState);
 
-            assertEquals("Data DiskState.id does not match Azure.dataDisk.vhd.uri",
-                    azureDataDisk.vhd().uri(), dataDiskState.id);
+            if (dataDiskState.customProperties != null && dataDiskState.customProperties
+                    .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
+                assertEquals("Boot DiskState.id does not match Azure managed disk id.",
+                        azureDataDisk.managedDisk().id(), dataDiskState.id);
+            } else {
+                assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
+                        azureDataDisk.vhd().uri(), dataDiskState.id);
+            }
 
             // assert size of each of the attached disks
             assertEquals("Mismatch in intended size of data disks " + azureDataDisk.name(),

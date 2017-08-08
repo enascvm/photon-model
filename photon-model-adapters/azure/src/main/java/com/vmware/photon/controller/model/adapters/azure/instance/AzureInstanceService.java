@@ -71,11 +71,13 @@ import com.microsoft.azure.management.compute.NetworkProfile;
 import com.microsoft.azure.management.compute.OSDisk;
 import com.microsoft.azure.management.compute.OSProfile;
 import com.microsoft.azure.management.compute.OperatingSystemTypes;
+import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.compute.StorageProfile;
 import com.microsoft.azure.management.compute.VirtualHardDisk;
 import com.microsoft.azure.management.compute.VirtualMachineSizeTypes;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
+import com.microsoft.azure.management.compute.implementation.ManagedDiskParametersInner;
 import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineImageResourceInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
@@ -691,9 +693,9 @@ public class AzureInstanceService extends StatelessService {
                     .thenCompose(this::resolveStorageAccountForPrivateImage);
         }
 
-        // Check if storage Description is set. If so we are reusing an existing storage account.
-        // No need to create or use ctx.storageAccountRGName or ctx.storageAccountName
-        if (ctx.reuseExistingStorageAccount()) {
+        // No need for resource group for storage account.
+        // Either we are reusing an existing storage account or using managed disks.
+        if (ctx.reuseExistingStorageAccount() || ctx.useManagedDisks()) {
             return DeferredResult.completed(ctx);
         } else {
             ctx.storageAccountName = ctx.bootDiskState.customProperties
@@ -762,11 +764,13 @@ public class AzureInstanceService extends StatelessService {
 
     private DeferredResult<AzureInstanceContext> createStorageAccount(AzureInstanceContext ctx) {
 
-        if (ctx.reuseExistingStorageAccount()) {
+        if (ctx.reuseExistingStorageAccount() || ctx.useManagedDisks()) {
             //no need to create a storage account
-            logInfo("Not Creating any new storage Account. Reusing existing ones.");
+            logInfo("Not Creating any new storage Account. Reusing existing ones or using managed"
+                    + " disks.");
             return DeferredResult.completed(ctx);
         }
+
         String msg = "Create Azure Storage Account [" + ctx.storageAccountName + "] for ["
                 + ctx.vmName + "] VM";
 
@@ -1299,6 +1303,12 @@ public class AzureInstanceService extends StatelessService {
         if (ctx.reuseExistingStorageAccount()) {
             azureOsDisk.withVhd(getVHDUriForOSDisk(ctx.vmName, ctx.bootDiskState
                     .storageDescription.name));
+        } else if (ctx.useManagedDisks()) {
+            ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
+            String accountType = ctx.bootDiskState.customProperties.getOrDefault(AzureConstants
+                    .AZURE_MANAGED_DISK_TYPE, StorageAccountTypes.STANDARD_LRS.toString());
+            managedDiskParams.withStorageAccountType(StorageAccountTypes.fromString(accountType));
+            azureOsDisk.withManagedDisk(managedDiskParams);
         } else {
             azureOsDisk.withVhd(getVHDUriForOSDisk(ctx.vmName, ctx.storageAccountName));
         }
@@ -1351,6 +1361,12 @@ public class AzureInstanceService extends StatelessService {
             if (ctx.reuseExistingStorageAccount()) {
                 dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
                         lunIndex));
+            } else if (ctx.useManagedDisks()) {
+                ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
+                String accountType = diskState.customProperties.getOrDefault(AzureConstants
+                        .AZURE_MANAGED_DISK_TYPE, StorageAccountTypes.STANDARD_LRS.toString());
+                managedDiskParams.withStorageAccountType(StorageAccountTypes.fromString(accountType));
+                dataDisk.withManagedDisk(managedDiskParams);
             } else {
                 dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
             }
@@ -1505,7 +1521,11 @@ public class AzureInstanceService extends StatelessService {
             final DiskState diskStateToUpdate = new DiskState();
             diskStateToUpdate.documentSelfLink = ctx.bootDiskState.documentSelfLink;
             // The actual value being updated
-            diskStateToUpdate.id = azureOsDisk.vhd().uri();
+            if (ctx.useManagedDisks()) {
+                diskStateToUpdate.id = azureOsDisk.managedDisk().id();
+            } else {
+                diskStateToUpdate.id = azureOsDisk.vhd().uri();
+            }
 
             Operation updateDiskState = Operation
                     .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
@@ -1539,7 +1559,11 @@ public class AzureInstanceService extends StatelessService {
             final DiskState diskStateToUpdate = new DiskState();
             diskStateToUpdate.documentSelfLink = dataDiskState.documentSelfLink;
             // The actual value being updated
-            diskStateToUpdate.id = azureDataDisk.vhd().uri();
+            if (ctx.useManagedDisks()) {
+                diskStateToUpdate.id = azureDataDisk.managedDisk().id();
+            } else {
+                diskStateToUpdate.id = azureDataDisk.vhd().uri();
+            }
 
             // The LUN value of disk
             if (diskStateToUpdate.customProperties == null) {
@@ -1575,7 +1599,7 @@ public class AzureInstanceService extends StatelessService {
      */
     private void getStorageKeys(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
 
-        if (ctx.reuseExistingStorageAccount()) {
+        if (ctx.reuseExistingStorageAccount() || ctx.useManagedDisks()) {
               // no need to get keys as no new storage description was created
             handleAllocation(ctx, nextStage);
             return;
