@@ -236,6 +236,7 @@ public class AWSSecurityGroupService extends StatelessService {
                 context.securityGroupId)
                 .thenCompose(v -> context.client.updateEgressRules(context.securityGroup.egress,
                         context.securityGroupId))
+                .thenCompose(v -> addInnerRules(context))
                 .thenApply(v -> context);
     }
 
@@ -272,5 +273,13 @@ public class AWSSecurityGroupService extends StatelessService {
         return this.sendWithDeferredResult(
                 Operation.createDelete(this, context.securityGroup.documentSelfLink))
                 .thenApply(operation -> context);
+    }
+
+    /**
+     * Adds the rules for internal communication among group members
+     */
+    public DeferredResult<Void> addInnerRules(AWSSecurityGroupContext context) {
+        return context.client.addInnerIngressRule(context.securityGroupId)
+                .thenCompose(v -> context.client.addInnerEgressRule(context.securityGroupId));
     }
 }

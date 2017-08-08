@@ -46,6 +46,7 @@ import com.amazonaws.services.ec2.model.RevokeSecurityGroupEgressResult;
 import com.amazonaws.services.ec2.model.RevokeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.RevokeSecurityGroupIngressResult;
 import com.amazonaws.services.ec2.model.SecurityGroup;
+import com.amazonaws.services.ec2.model.UserIdGroupPair;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import org.apache.commons.collections.CollectionUtils;
@@ -69,6 +70,7 @@ public class AWSSecurityGroupClient {
     public static final String SECURITY_GROUP_RULE_DUPLICATE = "InvalidPermission.Duplicate";
 
     public static final String ALL_TRAFFIC = "*";
+    public static final String ALL_PROTOCOLS = "-1";
     public static final String DEFAULT_PROTOCOL = "tcp";
     public static final int[] DEFAULT_ALLOWED_PORTS = { 22, 443, 80, 8080,
             2376, 2375, 1 };
@@ -205,6 +207,39 @@ public class AWSSecurityGroupClient {
         }
     }
 
+    public DeferredResult<Void> addInnerIngressRule(String securityGroupId) {
+        AuthorizeSecurityGroupIngressRequest req = new AuthorizeSecurityGroupIngressRequest()
+                .withGroupId(securityGroupId)
+                .withIpPermissions(Collections.singletonList(buildInnerRule(securityGroupId)));
+
+        String message = "Create internal Ingress Rule on AWS Security Group with id [" +
+                securityGroupId + "].";
+
+        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest,
+                AuthorizeSecurityGroupIngressResult>
+                handler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest,
+                AuthorizeSecurityGroupIngressResult>(this.service, message) {
+
+                    @Override
+                    protected Exception consumeError(Exception e) {
+                        if (e instanceof AmazonEC2Exception &&
+                                ((AmazonEC2Exception)e).getErrorCode().equals
+                                        (SECURITY_GROUP_RULE_DUPLICATE)) {
+                            Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(),
+                                    Level.WARNING, () -> String
+                                            .format("Ingress rule already exists: %s",
+                                                    Utils.toString(e)));
+                            return null;
+                        } else {
+                            return e;
+                        }
+                    }
+                };
+        this.client.authorizeSecurityGroupIngressAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenApply(r -> (Void)null);
+    }
+
     public void addIngressRules(String groupId, List<IpPermission> rules) {
         if (CollectionUtils.isNotEmpty(rules)) {
             AuthorizeSecurityGroupIngressRequest req = new AuthorizeSecurityGroupIngressRequest()
@@ -303,6 +338,39 @@ public class AWSSecurityGroupClient {
         } else {
             return DeferredResult.completed(null);
         }
+    }
+
+    public DeferredResult<Void> addInnerEgressRule(String securityGroupId) {
+        AuthorizeSecurityGroupEgressRequest req = new AuthorizeSecurityGroupEgressRequest()
+                .withGroupId(securityGroupId)
+                .withIpPermissions(Collections.singletonList(buildInnerRule(securityGroupId)));
+
+        String message = "Create internal Egress Rule on AWS Security Group with id [" +
+                securityGroupId + "].";
+
+        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest,
+                AuthorizeSecurityGroupEgressResult>
+                handler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest,
+                AuthorizeSecurityGroupEgressResult>(this.service, message) {
+
+                    @Override
+                    protected Exception consumeError(Exception e) {
+                        if (e instanceof AmazonEC2Exception &&
+                                ((AmazonEC2Exception)e).getErrorCode().equals
+                                        (SECURITY_GROUP_RULE_DUPLICATE)) {
+                            Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(),
+                                    Level.WARNING, () -> String
+                                            .format("Egress rule already exists: %s",
+                                                    Utils.toString(e)));
+                            return null;
+                        } else {
+                            return e;
+                        }
+                    }
+                };
+        this.client.authorizeSecurityGroupEgressAsync(req, handler);
+        return handler.toDeferredResult()
+                .thenApply(r -> (Void)null);
     }
 
     public DeferredResult<Void> removeEgressRules(String groupId, List<IpPermission> rules) {
@@ -461,7 +529,7 @@ public class AWSSecurityGroupClient {
 
         IpRange ipRange = new IpRange().withCidrIp(subnet);
 
-        protocol = protocol.equals(ALL_TRAFFIC) ? "-1" : protocol;
+        protocol = protocol.equals(ALL_TRAFFIC) ? ALL_PROTOCOLS : protocol;
 
         return new IpPermission()
                 .withIpProtocol(protocol)
@@ -490,5 +558,14 @@ public class AWSSecurityGroupClient {
                     rule.protocol));
         }
         return awsRules;
+    }
+
+    private IpPermission buildInnerRule(String securityGroupId) {
+        return new IpPermission()
+                .withIpProtocol(ALL_PROTOCOLS)
+                .withUserIdGroupPairs(Collections.singletonList(
+                        new UserIdGroupPair()
+                        .withGroupId(securityGroupId)
+                ));
     }
 }

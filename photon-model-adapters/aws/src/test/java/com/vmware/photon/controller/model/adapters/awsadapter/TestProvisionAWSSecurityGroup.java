@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -24,11 +25,13 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Vpc;
 
@@ -280,10 +283,14 @@ public class TestProvisionAWSSecurityGroup {
                 securityGroup.customProperties.get(AWSSecurityGroupService.SECURITY_GROUP_ID));
         assertNotNull(sg);
         assertNotNull(sg.getIpPermissions());
-        assertTrue(sg.getIpPermissions().size() == 1);
+        assertTrue(sg.getIpPermissions().size() == 2);
+        // check that there is a rule that enables internal communication
+        assertTrue(isInternalRule(sg.getGroupId(), sg.getIpPermissions()));
         assertNotNull(sg.getIpPermissionsEgress());
         // there are two egress rules (one that was added as part of this test, and the default one)
         assertTrue(sg.getIpPermissionsEgress().size() == 2);
+        // check that there is a rule that enables internal communication
+        assertTrue(isInternalRule(sg.getGroupId(), sg.getIpPermissionsEgress()));
     }
 
     private SecurityGroup getAWSSecurityGroup(String name, AuthCredentialsServiceState creds)
@@ -424,6 +431,20 @@ public class TestProvisionAWSSecurityGroup {
         rules.add(ssh);
 
         return rules;
+    }
+
+    private boolean isInternalRule(String sgId, List<IpPermission> ipPermissions) {
+        boolean isInternalRule = false;
+        assertNotNull(ipPermissions);
+        for (IpPermission ipPermission : ipPermissions) {
+            if (ipPermission.getUserIdGroupPairs() != null) {
+                assertEquals(1, ipPermission.getUserIdGroupPairs().size());
+                assertEquals(sgId, ipPermission.getUserIdGroupPairs().get(0).getGroupId());
+                isInternalRule = true;
+                break;
+            }
+        }
+        return isInternalRule;
     }
 
 }

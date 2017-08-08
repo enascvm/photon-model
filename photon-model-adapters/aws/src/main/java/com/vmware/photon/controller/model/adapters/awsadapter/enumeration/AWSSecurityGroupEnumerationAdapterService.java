@@ -181,7 +181,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             stateHolder.localState.egress = new ArrayList<>();
             for (IpPermission ipPermission : remoteResource.getIpPermissionsEgress()) {
                 stateHolder.localState.egress.add(generateSecurityRuleFromAWSIpPermission(
-                        ipPermission, Rule.Access.Deny));
+                        ipPermission, Rule.Access.Allow));
             }
 
             stateHolder.localState.customProperties = new HashMap<>();
