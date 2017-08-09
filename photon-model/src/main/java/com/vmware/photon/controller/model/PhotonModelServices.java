@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model;
 import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.DeploymentService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.FirewallService;
@@ -47,6 +48,7 @@ public class PhotonModelServices {
     public static final String[] LINKS = {
             ComputeDescriptionService.FACTORY_LINK,
             ComputeService.FACTORY_LINK,
+            DeploymentService.FACTORY_LINK,
             ResourcePoolService.FACTORY_LINK,
             ResourceDescriptionService.FACTORY_LINK,
             DiskService.FACTORY_LINK,
@@ -64,11 +66,12 @@ public class PhotonModelServices {
             TagService.FACTORY_LINK,
             LoadBalancerDescriptionService.FACTORY_LINK,
             LoadBalancerService.FACTORY_LINK,
-            RouterService.FACTORY_LINK  };
+            RouterService.FACTORY_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
         host.startFactory(new ComputeDescriptionService());
         host.startFactory(new ComputeService());
+        host.startFactory(new DeploymentService());
         host.startFactory(new ResourcePoolService());
         host.startFactory(new ResourceDescriptionService());
         host.startFactory(new DiskService());

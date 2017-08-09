@@ -15,9 +15,9 @@ package com.vmware.photon.controller.model.resources.util;
 
 import static java.util.Collections.singletonMap;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -146,12 +146,13 @@ public class PhotonModelUtils {
      * @return Returns a pair. The left part is the merged list and the right one is the boolean
      * value, indicating if the changes to @source is modified.
      */
-    public static Pair<List<String>, Boolean> mergeLists(List<String> source, List<String> patch) {
+    public static <C extends Collection<String>> Pair<C, Boolean> mergeLists(
+            C source, C patch) {
         if (patch == null) {
             return new ImmutablePair<>(source, Boolean.FALSE);
         }
         boolean hasChanged = false;
-        List<String> result = source;
+        C result = source;
         if (result == null) {
             result = patch;
             hasChanged = true;
