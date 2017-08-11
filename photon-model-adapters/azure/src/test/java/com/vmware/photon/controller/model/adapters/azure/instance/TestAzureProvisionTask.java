@@ -23,12 +23,14 @@ import static org.junit.Assert.fail;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.IMAGE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NO_PUBLIC_IP_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.PRIVATE_IP_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createPrivateImageSource;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createVMResourceFromSpec;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
@@ -63,6 +65,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.VMResourceSpec;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -128,9 +131,13 @@ public class TestAzureProvisionTask extends AzureBaseTest {
     @Test
     public void testProvision() throws Throwable {
 
-        // create a Azure VM compute resource.
-        this.vmState = createDefaultVMResource(getHost(), azureVMName,
-                this.computeHost, this.endpointState, DEFAULT_NIC_SPEC);
+        VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
+                this.endpointState, azureVMName)
+                .withNicSpecs(DEFAULT_NIC_SPEC)
+                .withImageReferenceId(IMAGE_REFERENCE);
+
+        // create Azure VM compute resource.
+        this.vmState = createVMResourceFromSpec(vmResourceSpec);
 
         kickOffProvisionTask();
 
@@ -164,8 +171,15 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         // Create a Azure VM compute resource with 2 additional disks.
         int numberOfAdditionalDisks = 2;
-        this.vmState = createDefaultVMResource(getHost(), azureVMName,
-                computeHost, endpointState, DEFAULT_NIC_SPEC, null, numberOfAdditionalDisks);
+
+        VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
+                this.endpointState, azureVMName)
+                .withImageReferenceId(IMAGE_REFERENCE)
+                .withNicSpecs(DEFAULT_NIC_SPEC)
+                .withNumberOfAdditionalDisks(numberOfAdditionalDisks);
+
+        // create Azure VM compute resource.
+        this.vmState = createVMResourceFromSpec(vmResourceSpec);
 
         kickOffProvisionTask();
 

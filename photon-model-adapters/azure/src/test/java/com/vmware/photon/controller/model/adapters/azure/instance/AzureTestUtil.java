@@ -709,7 +709,6 @@ public class AzureTestUtil {
                 networkRGLink, 0);
     }
 
-
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
             ComputeState computeHost, EndpointState endpointState,
             AzureNicSpecs nicSpecs, String networkRGLink, int numberOfAdditionalDisks)
@@ -731,6 +730,192 @@ public class AzureTestUtil {
 
         return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
                 networkRGLink, imageSource, numberOfAdditionalDisks);
+    }
+
+    /**
+     * This class encapsulates VerficationHost, VM's name, ComputeState, EndpointState,
+     * number of additional disks, imageID etc information required for creating VM.
+     */
+    public static class VMResourceSpec {
+        public final VerificationHost host;
+        public final ComputeState computeHost;
+        public final EndpointState endpointState;
+        public final String azureVmName;
+        public AzureTestUtil.AzureNicSpecs nicSpecs;
+        public String networkRGLink;
+        public String imageReferenceId;
+        public int numberOfAdditionalDisks;
+
+        public VMResourceSpec(VerificationHost host, ComputeState computeHost, EndpointState endpointState,
+                              String azureVmName) {
+            this.host = host;
+            this.computeHost = computeHost;
+            this.endpointState = endpointState;
+            this.azureVmName = azureVmName;
+        }
+
+        public VMResourceSpec withNicSpecs(AzureTestUtil.AzureNicSpecs nicSpecs) {
+            this.nicSpecs = nicSpecs;
+            return this;
+        }
+
+        public VMResourceSpec withImageReferenceId(String imageReferenceId) {
+            this.imageReferenceId = imageReferenceId;
+            return this;
+        }
+
+        public VMResourceSpec withNumberOfAdditionalDisks(int numberOfAdditionalDisks) {
+            this.numberOfAdditionalDisks = numberOfAdditionalDisks;
+            return this;
+        }
+    }
+
+    /**
+     * Separate method to create VM from given spec
+     */
+    public static ComputeState createVMResourceFromSpec(VMResourceSpec spec) throws Throwable {
+        final String defaultVmRGName = spec.azureVmName;
+
+        // TODO Modify createDefaultResourceGroupState() to have only spec parameter passed
+        final ResourceGroupState defaultVmRG = createDefaultResourceGroupState(
+                spec.host, defaultVmRGName, spec.computeHost, spec.endpointState,
+                ResourceGroupStateType.AzureResourceGroup);
+
+        final String defaultVmRGLink = defaultVmRG.documentSelfLink;
+
+        if (spec.networkRGLink == null) {
+            // The RG where the VM is deployed is also used as RG for the Network!
+            spec.networkRGLink = defaultVmRGLink;
+        }
+        // The RG where the VM is deployed is also used as RG for the SecurityGroup!
+        final String sgRGLink = defaultVmRGLink;
+
+        // Create resource group with a different type. It should be filtered out.
+        ResourceGroupState azureStorageContainerRG = createDefaultResourceGroupState(
+                spec.host, AZURE_STORAGE_CONTAINER_RG_NAME, spec.computeHost, spec.endpointState,
+                ResourceGroupStateType.AzureStorageContainer);
+
+        final Set<String> networkRGLinks = new HashSet<>();
+        networkRGLinks.add(spec.networkRGLink);
+        networkRGLinks.add(azureStorageContainerRG.documentSelfLink);
+
+        final Set<String> sgRGLinks = new HashSet<>();
+        sgRGLinks.add(sgRGLink);
+        sgRGLinks.add(azureStorageContainerRG.documentSelfLink);
+
+        AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
+        azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
+        azureVMAuth.privateKey = AZURE_ADMIN_PASSWORD;
+        azureVMAuth = TestUtils.doPost(spec.host, azureVMAuth, AuthCredentialsServiceState.class,
+                UriUtils.buildUri(spec.host, AuthCredentialsService.FACTORY_LINK));
+
+        // Create a VM desc
+        ComputeDescription azureVMDesc = new ComputeDescription();
+        azureVMDesc.id = UUID.randomUUID().toString();
+        azureVMDesc.documentSelfLink = azureVMDesc.id;
+        azureVMDesc.name = azureVMDesc.id;
+        azureVMDesc.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+        azureVMDesc.authCredentialsLink = azureVMAuth.documentSelfLink;
+        azureVMDesc.tenantLinks = spec.endpointState.tenantLinks;
+        azureVMDesc.endpointLink = spec.endpointState.documentSelfLink;
+        azureVMDesc.instanceType = AZURE_VM_SIZE;
+        azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+        azureVMDesc.customProperties = new HashMap<>();
+
+        // set the create service to the azure instance service
+        azureVMDesc.instanceAdapterReference = UriUtils.buildUri(spec.host,
+                AzureUriPaths.AZURE_INSTANCE_ADAPTER);
+
+        azureVMDesc.powerAdapterReference = UriUtils.buildUri(spec.host,
+                AzureUriPaths.AZURE_POWER_ADAPTER);
+
+        azureVMDesc = TestUtils.doPost(spec.host, azureVMDesc, ComputeDescription.class,
+                UriUtils.buildUri(spec.host, ComputeDescriptionService.FACTORY_LINK));
+
+
+        DiskState rootDisk = new DiskState();
+        rootDisk.name = spec.azureVmName + "-boot-disk";
+        rootDisk.id = UUID.randomUUID().toString();
+        rootDisk.documentSelfLink = rootDisk.id;
+        rootDisk.type = DiskType.HDD;
+
+        ImageState bootImage = new ImageState();
+
+        if (null != spec.imageReferenceId) {
+            bootImage.id = spec.imageReferenceId;
+        } else {
+            bootImage.id = IMAGE_REFERENCE;
+        }
+
+        bootImage.endpointType = spec.endpointState.endpointType;
+        bootImage = TestUtils.doPost(spec.host, bootImage, ImageState.class,
+                UriUtils.buildUri(spec.host, ImageService.FACTORY_LINK));
+
+        ImageSource imageSource = ImageSource.fromImageState(bootImage);
+
+        // Custom OSDisk size of 32 GBs
+        rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE;
+        if (imageSource.type == Type.PRIVATE_IMAGE || imageSource.type == Type.PUBLIC_IMAGE) {
+            rootDisk.imageLink = imageSource.asImageState().documentSelfLink;
+        } else if (imageSource.type == Type.IMAGE_REFERENCE) {
+            rootDisk.sourceImageReference = URI.create(imageSource.asRef());
+        }
+        rootDisk.bootOrder = 1;
+
+        rootDisk.endpointLink = spec.endpointState.documentSelfLink;
+        rootDisk.tenantLinks = spec.endpointState.tenantLinks;
+
+        rootDisk.customProperties = new HashMap<>();
+        rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING.name());
+
+        rootDisk.customProperties.put(
+                AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
+                (spec.azureVmName + "sa").replaceAll("[_-]", "").toLowerCase());
+        rootDisk.customProperties.put(
+                AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                defaultVmRGName);
+        rootDisk.customProperties.put(
+                AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
+                AZURE_STORAGE_ACCOUNT_TYPE);
+
+        rootDisk = TestUtils.doPost(spec.host, rootDisk, DiskState.class,
+                UriUtils.buildUri(spec.host, DiskService.FACTORY_LINK));
+
+        List<String> vmDisks = new ArrayList<>();
+        vmDisks.add(rootDisk.documentSelfLink);
+
+        //create additional disks
+        if (spec.numberOfAdditionalDisks > 0) {
+            // TODO Need to modify createAdditionalDisks() to have only spec passed as parameter
+            vmDisks.addAll(createAdditionalDisks(spec.host, spec.azureVmName,
+                    spec.endpointState, spec.numberOfAdditionalDisks));
+        }
+        // Create NICs
+        List<String> nicLinks = createDefaultNicStates(
+                spec.host, spec.computeHost, spec.endpointState, networkRGLinks, sgRGLinks, spec.nicSpecs)
+                .stream()
+                .map(nic -> nic.documentSelfLink)
+                .collect(Collectors.toList());
+
+        // Finally create the compute resource state to provision using all constructs above.
+        ComputeState computeState = new ComputeState();
+        computeState.id = UUID.randomUUID().toString();
+        computeState.name = spec.azureVmName;
+        computeState.parentLink = spec.computeHost.documentSelfLink;
+        computeState.type = ComputeType.VM_GUEST;
+        computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+        computeState.descriptionLink = azureVMDesc.documentSelfLink;
+        computeState.resourcePoolLink = spec.computeHost.resourcePoolLink;
+        computeState.diskLinks = vmDisks;
+        computeState.networkInterfaceLinks = nicLinks;
+        computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, defaultVmRGName);
+        computeState.groupLinks = Collections.singleton(defaultVmRGLink);
+        computeState.endpointLink = spec.endpointState.documentSelfLink;
+        computeState.tenantLinks = spec.endpointState.tenantLinks;
+
+        return TestUtils.doPost(spec.host, computeState, ComputeState.class,
+                UriUtils.buildUri(spec.host, ComputeService.FACTORY_LINK));
+
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
