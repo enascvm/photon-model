@@ -41,9 +41,8 @@ public class ClusterUtil {
 
     /**
      * Enum mapping Clusters with their URIs.
-     *
      */
-    public enum ServiceTypeCluster {
+    public enum ServiceTypeCluster implements ServiceEndpointLocator {
 
         METRIC_SERVICE(METRICS_URI),
         DISCOVERY_SERVICE(DISCOVERY_URI);
@@ -54,6 +53,7 @@ public class ClusterUtil {
             this.uri = uri;
         }
 
+        @Override
         public String getUri() {
             return this.uri;
         }
@@ -73,24 +73,18 @@ public class ClusterUtil {
      * @return
      *          URI of the cluster or the host.
      */
-    public static URI getClusterUri(ServiceHost host, ServiceTypeCluster cluster) {
-        // If cluster is null, return the host URI.
+    public static URI getClusterUri(ServiceHost host, ServiceEndpointLocator cluster) {
+        // If serviceLocator is null, return the host URI.
         if (cluster == null) {
             return host.getUri();
         }
 
-        String uriString = cluster.getUri();
-        if (uriString == null || uriString.isEmpty()) {
-            // If the clusterUri is not passed as a parameter, return host URI.
-            return host.getUri();
-        }
-
-        URI clusterUri = null;
         try {
-            clusterUri = new URI(uriString);
+            URI serviceUri = cluster.getServiceUri();
+            // If the serviceUri is not passed as a parameter, return host URI.
+            return serviceUri != null ? serviceUri : host.getUri();
         } catch (URISyntaxException e) {
-            throw new IllegalStateException(e.getLocalizedMessage());
+            throw new IllegalStateException(e.getLocalizedMessage(), e);
         }
-        return clusterUri;
     }
 }

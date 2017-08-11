@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.photon.controller.model.util.ServiceEndpointLocator;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -174,7 +175,7 @@ public class QueryUtils {
         protected final List<String> tenantLinks;
 
         protected URI referer;
-        protected ServiceTypeCluster cluster;
+        protected ServiceEndpointLocator serviceLocator;
 
         protected Level level = Level.FINE;
         protected String msg;
@@ -267,10 +268,10 @@ public class QueryUtils {
          * <p>
          * Default value, if not set, is {@code null}.
          *
-         * @see ClusterUtil#getClusterUri(ServiceHost, ServiceTypeCluster)
+         * @see ClusterUtil#getClusterUri(ServiceHost, ServiceEndpointLocator)
          */
-        public void setClusterType(ServiceTypeCluster cluster) {
-            this.cluster = cluster;
+        public void setClusterType(ServiceEndpointLocator serviceLocator) {
+            this.serviceLocator = serviceLocator;
         }
 
         /**
@@ -281,7 +282,7 @@ public class QueryUtils {
          */
         @SuppressWarnings("rawtypes")
         protected abstract DeferredResult<Void> handleQueryTask(
-                QueryTask queryTask, Consumer resultConsumer);
+                Operation queryTaskOp, Consumer resultConsumer);
 
         /*
          * (non-Javadoc)
@@ -380,7 +381,7 @@ public class QueryUtils {
 
             // Build PhM URI to query against
             final URI uri = UriUtils.buildUri(
-                    ClusterUtil.getClusterUri(this.host, this.cluster),
+                    ClusterUtil.getClusterUri(this.host, this.serviceLocator),
                     ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
 
             // Prepare 'query-task' create/POST request
@@ -393,19 +394,19 @@ public class QueryUtils {
                     this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));
 
             // Initiate the query
-            return this.host.sendWithDeferredResult(createQueryTaskOp, QueryTask.class)
+            return this.host.sendWithDeferredResult(createQueryTaskOp)
                     // Delegate to descendant to actually do QT processing
-                    .thenCompose(qt -> handleQueryTask(qt, resultConsumer));
+                    .thenCompose(qtOp -> handleQueryTask(qtOp, resultConsumer));
         }
 
         @SuppressWarnings({ "rawtypes", "unchecked" })
-        protected QueryTask consumeQueryTask(QueryTask qt, Consumer resultConsumer) {
+        protected void consumeQueryTask(QueryTask qt, Consumer resultConsumer) {
 
             this.host.log(this.level, "%s: PROCESS %s docs",
                     this.msg, qt.results.documentCount);
 
             if (qt.results.documentCount == 0) {
-                return qt;
+                return;
             }
 
             final Stream resultsStream;
@@ -419,8 +420,6 @@ public class QueryUtils {
             }
             // Delegate to passed callback one-by-one
             resultsStream.forEach(resultConsumer);
-
-            return qt;
         }
     }
 
@@ -475,10 +474,10 @@ public class QueryUtils {
         @Override
         @SuppressWarnings({ "rawtypes" })
         protected DeferredResult<Void> handleQueryTask(
-                QueryTask queryTask,
+                Operation queryTaskOp,
                 Consumer resultConsumer) {
 
-            return DeferredResult.completed(queryTask)
+            return DeferredResult.completed(queryTaskOp.getBody(QueryTask.class))
                     // Handle TOP results
                     .thenAccept(qt -> consumeQueryTask(qt, resultConsumer));
         }
@@ -551,28 +550,36 @@ public class QueryUtils {
         @Override
         @SuppressWarnings({ "rawtypes" })
         protected DeferredResult<Void> handleQueryTask(
-                QueryTask queryTask,
+                Operation queryTaskOp,
                 Consumer resultConsumer) {
+
+            final QueryTask queryTask = queryTaskOp.getBody(QueryTask.class);
 
             final String pageLink = queryTask.results.nextPageLink;
 
             if (pageLink == null) {
                 this.host.log(this.level, this.msg + ": FINISHED");
 
-                return DeferredResult.completed(null);
+                return DeferredResult.completed((Void) null);
             }
 
             this.host.log(this.level, this.msg + ": PAGE %s", pageLink);
 
+            // For any subsequent get-page call we use the Host of previous Op!
             Operation getQueryTaskOp = Operation
-                    .createGet(this.host, pageLink)
-                    .setReferer(super.referer);
+                    .createGet(UriUtils.buildUri(queryTaskOp.getUri(), pageLink))
+                    .setReferer(this.referer);
 
-            return this.host.sendWithDeferredResult(getQueryTaskOp, QueryTask.class)
+            return this.host.sendWithDeferredResult(getQueryTaskOp)
                     // Handle current page of results
-                    .thenApply(qt -> consumeQueryTask(qt, resultConsumer))
+                    .thenApply(qtOp -> {
+                        final QueryTask qt = qtOp.getBody(QueryTask.class);
+                        consumeQueryTask(qt, resultConsumer);
+
+                        return qtOp;
+                    })
                     // Handle next page of results
-                    .thenCompose(qt -> handleQueryTask(qt, resultConsumer));
+                    .thenCompose(qtOp -> handleQueryTask(qtOp, resultConsumer));
         }
     }
 
