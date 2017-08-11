@@ -99,7 +99,6 @@ import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
 import com.amazonaws.services.s3.model.TagSet;
 
-
 import io.netty.util.internal.StringUtil;
 
 import org.junit.After;
@@ -1258,6 +1257,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         if (securityGroupLinks == null) {
             return;
         }
+        validateSecurityGroupTagLinks(allSecurityGroupStatesMap);
         List<URI> securityGroupURIs = new ArrayList<>();
         for (String sgLink : securityGroupLinks) {
             securityGroupURIs.add(UriUtils.buildUri(this.host, sgLink));
@@ -1276,6 +1276,21 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             assertFalse(
                     StringUtil.isNullOrEmpty(
                             sgStatesToLinksMap.get(uri).customProperties.get(AWS_VPC_ID)));
+        }
+    }
+
+    /**
+     * Validates the taglinks for the security group to follow the expected norm
+     * i.e. /resources/security-groups/UUID
+    */
+    private void validateSecurityGroupTagLinks(Map<String, SecurityGroupState> allSecurityGroupStatesMap) {
+        for (Map.Entry<String, SecurityGroupState> securityGroupState : allSecurityGroupStatesMap.entrySet()) {
+            Set<String> tagLinks = securityGroupState.getValue().tagLinks;
+            if (tagLinks != null) {
+                for (String tag : tagLinks) {
+                    assertTrue(tag.startsWith(TagService.FACTORY_LINK));
+                }
+            }
         }
     }
 

@@ -535,6 +535,19 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                     }
                 });
 
+        // validate Security Group tagLinks
+        ServiceDocumentQueryResult securityGroupResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, SecurityGroupService.FACTORY_LINK);
+        securityGroupResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), SecurityGroupService.SecurityGroupState.class))
+                .forEach(c -> {
+                    if (c.tagLinks != null) {
+                        for (String tag : c.tagLinks) {
+                            assertTrue(tag.startsWith(TagService.FACTORY_LINK));
+                        }
+                    }
+                });
+
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
             if (!document.documentSelfLink.equals(computeHost.documentSelfLink)

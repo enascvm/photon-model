@@ -104,7 +104,10 @@ public class TagsUtil {
                     () -> String.format(msg, localState.getClass().getSimpleName(), localState.name,
                             remoteTagsMap.size(), "COMPLETED"));
 
-            return tagStatesList.stream().map(tagState -> tagState.documentSelfLink).collect(Collectors.toSet());
+            return tagStatesList.stream().map(tagState -> {
+                TagState state = newTagState(tagState.key, tagState.value, true, localState.tenantLinks);
+                return state.documentSelfLink;
+            }).collect(Collectors.toSet());
         });
     }
 
