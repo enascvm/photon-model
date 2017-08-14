@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -144,12 +145,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // maintains internal tagLinks Example, link for tagState for type=ec2_instances or
         // type=ec2_net_interface
         public Map<String, Set<String>> internalTagLinksMap = new HashMap<>();
+        List<Tag> createdExternalTags = new ArrayList<>();
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
             this.request = request;
             this.enumerationOperations = new ArrayList<>();
             this.computeDescriptionMap = new HashMap<>();
+            this.createdExternalTags = new ArrayList<>();
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
             this.operation = op;
         }
@@ -269,7 +272,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
             if (exc != null) {
-                finishWithFailure(context, exc);
+                logSevere(() -> String.format("Error updating tag Links for compute states: %s",
+                        Utils.toString(exc)));
+                context.creationStage = next;
+                handleComputeStateCreateOrUpdate(context);
                 return;
             }
             context.creationStage = next;
@@ -326,13 +332,19 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         // POST each of the tags. If a tag exists it won't be created again. We don't want the name
         // tags, so filter them out
-        List<Operation> operations = allTags.stream()
+        List<Operation> operations = new ArrayList<>();
+        Map<Long, Tag> tagsCreationOperationIdsMap = new ConcurrentHashMap<>();
+
+        allTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> newTagState(t.getKey(), t.getValue(), true,
-                        context.request.tenantLinks))
-                .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
-                        .setBody(tagState))
-                .collect(Collectors.toList());
+                .forEach(t -> {
+                    TagState tagState = newTagState(t.getKey(), t.getValue(), true,
+                            context.request.tenantLinks);
+                    Operation op = Operation.createPost(this, TagService.FACTORY_LINK)
+                            .setBody(tagState);
+                    operations.add(op);
+                    tagsCreationOperationIdsMap.put(op.getId(), t);
+                });
 
         if (operations.isEmpty()) {
             context.creationStage = next;
@@ -340,9 +352,19 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         } else {
             OperationJoin.create(operations).setCompletion((ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
-                    finishWithFailure(context, exs.values().iterator().next());
-                    return;
+                    logSevere(() -> String.format("Error creating %s external tags for compute"
+                                    + "states: %s", exs.size(), Utils.toString(exs.get(0))));
                 }
+
+                ops.values().stream()
+                        .filter(operation -> operation.getStatusCode() == Operation.STATUS_CODE_OK
+                                || operation.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED)
+                        .forEach(operation -> {
+                            if (tagsCreationOperationIdsMap.containsKey(operation.getId())) {
+                                context.createdExternalTags.add(tagsCreationOperationIdsMap
+                                        .get(operation.getId()));
+                            }
+                        });
 
                 context.creationStage = next;
                 handleComputeStateCreateOrUpdate(context);
@@ -539,7 +561,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         .get(instanceId);
                 Map<String, String> remoteTags = new HashMap<>();
                 for (Tag awsInstanceTag : instance.getTags()) {
-                    if (!awsInstanceTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
+                    if (!awsInstanceTag.getKey().equals(AWSConstants.AWS_TAG_NAME)
+                            && context.createdExternalTags.contains(awsInstanceTag)) {
                         remoteTags.put(awsInstanceTag.getKey(), awsInstanceTag.getValue());
                     }
                 }
@@ -867,7 +890,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             if (exc != null) {
                 logSevere(() -> String.format("Error creating compute state and the associated"
                         + " network %s", Utils.toString(exc)));
-                finishWithFailure(context, exc.values().iterator().next());
+                context.creationStage = next;
+                handleComputeStateCreateOrUpdate(context);
                 return;
             }
             logFine(() -> "Successfully created compute and networks states.");
