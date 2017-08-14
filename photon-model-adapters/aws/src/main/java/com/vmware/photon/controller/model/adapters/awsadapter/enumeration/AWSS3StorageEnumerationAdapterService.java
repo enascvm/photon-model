@@ -600,7 +600,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 }
 
                 aws.subStage = next;
-                handleEnumerationRequest(aws);
+                handleReceivedEnumerationData(aws);
             }
         });
     }
