@@ -145,14 +145,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // maintains internal tagLinks Example, link for tagState for type=ec2_instances or
         // type=ec2_net_interface
         public Map<String, Set<String>> internalTagLinksMap = new HashMap<>();
-        List<Tag> createdExternalTags = new ArrayList<>();
+        List<Tag> createdExternalTags;
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
             this.request = request;
             this.enumerationOperations = new ArrayList<>();
-            this.computeDescriptionMap = new HashMap<>();
             this.createdExternalTags = new ArrayList<>();
+            this.computeDescriptionMap = new HashMap<>();
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
             this.operation = op;
         }

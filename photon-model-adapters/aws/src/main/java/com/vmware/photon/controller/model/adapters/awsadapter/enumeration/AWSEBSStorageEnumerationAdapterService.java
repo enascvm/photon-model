@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -66,6 +67,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -146,6 +148,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         // The time stamp at which the enumeration started.
         public long enumerationStartTimeInMicros;
         public String internalTypeTagSelfLink;
+        public List<Tag> createdExternalTags;
 
         public EBSStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
@@ -161,6 +164,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.volumesToBeCreated = new ArrayList<>();
             this.enumerationOperations = new ArrayList<>();
             this.remoteAWSVolumeIds = new HashSet<>();
+            this.createdExternalTags = new ArrayList<>();
             this.stage = AWSEBSStorageEnumerationStages.CLIENT;
             this.subStage = EBSVolumesEnumerationSubStage.CREATE_INTERNAL_TYPE_TAG;
             this.pageNo = 1;
@@ -508,21 +512,31 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         private void createExternalTags(EBSVolumesEnumerationSubStage next) {
 
             List<Operation> operations = new ArrayList<>();
-            if (this.context.volumesToBeCreated.size() > 0) {
-                this.context.volumeTagsToBeCreated = this.context.volumesToBeCreated.stream()
-                        .flatMap(i -> i.getTags().stream())
-                        .collect(Collectors.toList());
+            Map<Long, Tag> tagsCreationOperationIdsMap = new ConcurrentHashMap<>();
 
-                operations = this.context.volumeTagsToBeCreated.stream()
-                        .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                        .map(t -> TagsUtil.newTagState(t.getKey(), t.getValue(), true,
-                                this.context.parentCompute.tenantLinks))
-                        .map(tagState -> Operation.createPost(this.service, TagService.FACTORY_LINK)
+            this.context.volumesToBeCreated.stream()
+                    .forEach(volume -> {
+                        this.context.volumeTagsToBeCreated.addAll(volume.getTags());
+                    });
+
+            this.context.volumesToBeUpdated.values().stream()
+                    .forEach(volume -> {
+                        this.context.volumeTagsToBeCreated.addAll(volume.getTags());
+                    });
+
+            this.context.volumeTagsToBeCreated.stream()
+                    .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
+                    .forEach(t -> {
+                        TagState tagState = TagsUtil.newTagState(t.getKey(), t.getValue(),
+                                true,
+                                this.context.parentCompute.tenantLinks);
+                        Operation createTagOp = Operation.createPost(this.service,
+                                TagService.FACTORY_LINK)
                                 .setBody(tagState)
-                                .setReferer(this.service.getUri()))
-                        .collect(Collectors.toList());
-                this.context.enumerationOperations.addAll(operations);
-            }
+                                .setReferer(this.service.getUri());
+                        operations.add(createTagOp);
+                        tagsCreationOperationIdsMap.put(createTagOp.getId(), t);
+                    });
 
             if (operations.isEmpty()) {
                 this.service.logFine(() -> "No disk state tags to be created.");
@@ -535,10 +549,18 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 if (exs != null && !exs.isEmpty()) {
                     this.service.logSevere(() -> String.format("Error creating disk tags %s",
                             Utils.toString(exs)));
-                    signalErrorToEnumerationAdapter(exs.values().iterator().next());
-                    return;
                 }
-                this.service.logFine(() -> "Successfully created all disk states tags.");
+
+                ops.values().stream()
+                        .filter(operation -> operation.getStatusCode() == Operation.STATUS_CODE_OK
+                                || operation.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED)
+                        .forEach(operation -> {
+                            if (tagsCreationOperationIdsMap.containsKey(operation.getId())) {
+                                this.context.createdExternalTags.add(tagsCreationOperationIdsMap
+                                        .get(operation.getId()));
+                            }
+                        });
+
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
             }).sendWith(this.service);
@@ -659,7 +681,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                             .get(volumeId);
                     Map<String, String> remoteTags = new HashMap<>();
                     for (Tag awsVolumeTag : volume.getTags()) {
-                        if (!awsVolumeTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
+                        if (!awsVolumeTag.getKey().equals(AWSConstants.AWS_TAG_NAME) &&
+                                this.context.createdExternalTags.contains(awsVolumeTag)) {
                             remoteTags.put(awsVolumeTag.getKey(), awsVolumeTag.getValue());
                         }
                     }
@@ -675,8 +698,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             return (ignoreCtx, exc) -> {
                 if (exc != null) {
-                    this.context.operation.fail(exc);
-                    return;
+                    this.service.logWarning("Failure while updating EBS tagLinks: %s",
+                            exc.getMessage());
                 }
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
@@ -721,9 +744,9 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             // If we're creating a new DiskState, we've already created TagStates for it, so populate the
             // tagLinks with appropriate links.
             if (isNewDiskState) {
-                diskState.tagLinks = this.context.volumeTagsToBeCreated.stream()
-                        .filter(tag -> volume.getTags().contains(tag))
-                        .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME))
+                diskState.tagLinks = volume.getTags().stream()
+                        .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME)
+                                && this.context.createdExternalTags.contains(tag))
                         .map(tag -> TagsUtil.newTagState(tag.getKey(), tag.getValue(),
                                 true, this.context.parentCompute.tenantLinks))
                         .map(tag -> tag.documentSelfLink)
@@ -838,7 +861,10 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             QueryUtils.startQueryTask(this.service, q)
                     .whenComplete((queryTask, e) -> {
                         if (e != null) {
-                            signalErrorToEnumerationAdapter(e);
+                            this.service.logWarning("Failure getting EBS diskStates for deletion: %s",
+                                    e.getMessage());
+                            this.context.subStage = next;
+                            handleReceivedEnumerationData();
                             return;
                         }
 
@@ -946,6 +972,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.context.volumesToBeUpdated.clear();
             this.context.diskStatesToBeUpdated.clear();
             this.context.localDiskStateMap.clear();
+            this.context.createdExternalTags.clear();
             this.context.describeVolumesRequest.setNextToken(this.context.nextToken);
             this.context.subStage = next;
             this.service.handleEnumerationRequest(this.context);
