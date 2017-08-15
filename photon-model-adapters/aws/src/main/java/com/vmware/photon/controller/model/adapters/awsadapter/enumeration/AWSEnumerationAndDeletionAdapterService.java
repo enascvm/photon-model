@@ -499,7 +499,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             if (exc != null) {
                 logSevere(() -> String.format("Failure deleting local compute states.",
                         Utils.toString(exc)));
-                signalErrorToEnumerationAdapter(context, exc.values().iterator().next());
+                deleteResourcesInLocalSystem(context);
                 return;
 
             }
@@ -543,7 +543,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             if (exc != null) {
                 logSevere(() -> String.format("Failure retiring local compute states: %s ",
                         Utils.toString(exc)));
-                signalErrorToEnumerationAdapter(context, exc.values().iterator().next());
+                deleteResourcesInLocalSystem(context);
                 return;
 
             }
