@@ -189,6 +189,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         Map<String, String> subnetInternalTagsMap = new ConcurrentHashMap<>();
         // stores documentSelfLink for subnets internal tags
         Set<String> subnetInternalTagLinksSet = new HashSet<>();
+        List<Tag> createdExternalTags = new ArrayList<>();
 
         static class SubnetStateWithParentVpcId {
             String parentVpcId;
@@ -332,8 +333,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
             if (exc != null) {
-                finishWithFailure(context, exc);
-                return;
+                this.logWarning("Failure updating tagLinks for networks and subnets: %s",
+                        exc.getMessage());
             }
             handleNetworkStateChanges(context, next);
         };
@@ -583,13 +584,19 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         // POST each of the tags. If a tag exists it won't be created again. We don't want the name
         // tags, so filter them out
-        List<Operation> operations = allNetworkAndSubnetsTags.stream()
+        List<Operation> operations = new ArrayList<>();
+        Map<Long, Tag> tagsCreationOperationIdsMap = new ConcurrentHashMap<>();
+
+        allNetworkAndSubnetsTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> newTagState(t.getKey(), t.getValue(), true,
-                        context.request.tenantLinks))
-                .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
-                        .setBody(tagState))
-                .collect(Collectors.toList());
+                .forEach(t -> {
+                    TagState tagState = newTagState(t.getKey(), t.getValue(), true,
+                            context.request.tenantLinks);
+                    Operation createTagOp = Operation.createPost(this, TagService.FACTORY_LINK)
+                            .setBody(tagState);
+                    operations.add(createTagOp);
+                    tagsCreationOperationIdsMap.put(createTagOp.getId(), t);
+                });
 
         if (operations.isEmpty()) {
             context.networkCreationStage = next;
@@ -597,9 +604,19 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         } else {
             OperationJoin.create(operations).setCompletion((ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
-                    finishWithFailure(context, exs.values().iterator().next());
-                    return;
+                    this.logWarning("Failure creating external tags for network and subnets: %s",
+                            exs.get(0).getMessage());
                 }
+
+                ops.values().stream()
+                        .filter(operation -> operation.getStatusCode() == Operation.STATUS_CODE_OK
+                                || operation.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED)
+                        .forEach(operation -> {
+                            if (tagsCreationOperationIdsMap.containsKey(operation.getId())) {
+                                context.createdExternalTags.add(tagsCreationOperationIdsMap
+                                        .get(operation.getId()));
+                            }
+                        });
 
                 context.networkCreationStage = next;
                 handleNetworkStateChanges(context);
