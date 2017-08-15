@@ -50,6 +50,7 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.R
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -487,12 +488,48 @@ public class EndpointAllocationTaskService
                         }
                         return;
                     }
+
                     EndpointState loadedState = o.getBody(EndpointState.class);
                     loadedState.endpointProperties = endpointProperties;
                     EndpointAllocationTaskState state = createUpdateSubStageTask(
                             SubStage.INVOKE_ADAPTER);
                     state.endpointState = loadedState;
-                    sendSelfPatch(state);
+
+                    List<Operation> patchOperations = new ArrayList<>();
+
+                    if (es.computeDescriptionLink != null) {
+                        Operation compDescOp = Operation
+                                .createPatch(this, es.computeDescriptionLink)
+                                .setBody(configureDescriptionPatch(es));
+                        patchOperations.add(compDescOp);
+                    }
+
+                    if (es.computeLink != null) {
+                        Operation computeOp = Operation
+                                .createPatch(this, es.computeLink)
+                                .setBody(configureComputePatch(es, es.endpointProperties));
+                        patchOperations.add(computeOp);
+                    }
+
+                    if (patchOperations.size() == 0) {
+                        sendSelfPatch(state);
+                        return;
+                    }
+
+                    OperationJoin.create(patchOperations)
+                            .setCompletion((ops, failures) -> {
+                                if (failures != null) {
+                                    long firstKey = failures.keySet().iterator().next();
+                                    failures.values()
+                                            .forEach(ex -> logWarning(
+                                                    () -> String.format("Error: %s",
+                                                            ex.getMessage())));
+                                    sendFailurePatch(this, currentState, failures.get(firstKey));
+                                    return;
+                                }
+                                sendSelfPatch(state);
+                            })
+                            .sendWith(this);
                 })
                 .sendWith(this);
     }
@@ -814,6 +851,12 @@ public class EndpointAllocationTaskService
         return cd;
     }
 
+    private ComputeDescription configureDescriptionPatch(EndpointState state) {
+        ComputeDescription cd = new ComputeDescription();
+        cd.name = state.name;
+        return cd;
+    }
+
     private ComputeState configureCompute(EndpointState state, Map<String, String> endpointProperties) {
         String endpointRegionId = endpointProperties != null
                 ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
@@ -830,6 +873,14 @@ public class EndpointAllocationTaskService
             computeHost.customProperties.putAll(state.customProperties);
         }
         computeHost.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
+        return computeHost;
+    }
+
+    private ComputeState configureComputePatch(EndpointState state, Map<String, String> endpointProperties) {
+        String endpointRegionId = endpointProperties != null
+                ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
+        ComputeState computeHost = new ComputeState();
+        computeHost.name = endpointRegionId != null ? endpointRegionId : state.name;
         return computeHost;
     }
 
