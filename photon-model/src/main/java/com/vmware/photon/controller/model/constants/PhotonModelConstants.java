@@ -154,6 +154,5 @@ public class PhotonModelConstants {
     public static final String IS_RESOURCE_AUTO_DISCOVERY_ENABLED = "isAutoDiscoveryEnabled";
 
     // constant for tag with key = type
-    public static final String TAG_ENUMERATION_PREFIX = "vmware.enumeration.";
-    public static final String TAG_KEY_TYPE = TAG_ENUMERATION_PREFIX + "type";
+    public static final String TAG_KEY_TYPE = "type";
 }
