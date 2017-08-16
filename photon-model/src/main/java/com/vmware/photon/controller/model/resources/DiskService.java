@@ -51,7 +51,7 @@ public class DiskService extends StatefulService {
      * Status of disk.
      */
     public static enum DiskStatus {
-        DETACHED, ATTACHED
+        DETACHED, ATTACHED, AVAILABLE
     }
 
     /**
@@ -167,6 +167,14 @@ public class DiskService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_13)
         public Constraint constraint;
+
+
+        /**
+         * URI reference to the adapter used to manage a disk.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_36)
+        public URI diskAdapterReference;
 
         /**
          * If set, disks will be connected in ascending order by the
@@ -287,6 +295,7 @@ public class DiskService extends StatefulService {
                 targetState.currencyUnit = this.currencyUnit;
                 targetState.computeHostLink = this.computeHostLink;
                 targetState.endpointLink = this.endpointLink;
+                targetState.diskAdapterReference = this.diskAdapterReference;
             }
         }
     }

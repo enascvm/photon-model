@@ -49,6 +49,8 @@ public class PhotonModelTaskServices {
                     () -> TaskFactoryService.create(ProvisionComputeTaskService.class)),
             factoryService(ProvisionNetworkTaskService.class,
                     () -> TaskFactoryService.create(ProvisionNetworkTaskService.class)),
+            factoryService(ProvisionDiskTaskService.class,
+                    () -> TaskFactoryService.create(ProvisionDiskTaskService.class)),
             factoryService(IPAddressAllocationTaskService.class,
                     () -> TaskFactoryService.create(IPAddressAllocationTaskService.class)),
             factoryService(ProvisionSubnetTaskService.class,

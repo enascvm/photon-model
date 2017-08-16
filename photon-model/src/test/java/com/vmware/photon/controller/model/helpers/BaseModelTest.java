@@ -26,6 +26,7 @@ import org.junit.Before;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
@@ -234,6 +235,22 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
     public <T extends ServiceDocument> int patchServiceSynchronously(
             String serviceUri, ComputeInstanceRequest patchBody)
                     throws Throwable {
+
+        TestContext ctx = this.host.testCreate(1);
+
+        Operation patchOperation = Operation
+                .createPatch(UriUtils.buildUri(this.host, serviceUri))
+                .setBody(patchBody)
+                .setCompletion(ctx.getCompletion());
+
+        this.host.send(patchOperation);
+        this.testWait(ctx);
+        return patchOperation.getStatusCode();
+    }
+
+    public <T extends ServiceDocument> int patchServiceSynchronously(
+            String serviceUri, DiskInstanceRequest patchBody)
+            throws Throwable {
 
         TestContext ctx = this.host.testCreate(1);
 

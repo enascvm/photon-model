@@ -26,6 +26,7 @@ import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 
 import com.vmware.xenon.common.ServiceDocument;
@@ -105,6 +106,28 @@ public class ProvisioningUtils {
             int desiredCount)
             throws Throwable {
         return queryComputeInstances(host, host.getUri(), desiredCount);
+    }
+
+    public static ServiceDocumentQueryResult queryDiskInstances(VerificationHost host,
+            int desiredCount) throws Throwable {
+        return queryDiskInstances(host, host.getUri(), desiredCount);
+    }
+
+    public static ServiceDocumentQueryResult queryDiskInstances(VerificationHost host,
+            URI peerURI, int desiredCount)
+            throws Throwable {
+        Date expiration = host.getTestExpiration();
+        ServiceDocumentQueryResult res;
+        do {
+            res = host.getFactoryState(UriUtils
+                    .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
+                            DiskService.FACTORY_LINK)));
+            if (res.documents.size() == desiredCount) {
+                return res;
+            }
+        } while (new Date().before(expiration));
+        throw new TimeoutException("Desired number of disk states not found. Expected "
+                + desiredCount + ", found " + res.documents.size());
     }
 
     public static ServiceDocumentQueryResult queryComputeInstances(VerificationHost host,

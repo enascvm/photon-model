@@ -204,6 +204,8 @@ public class TestAWSSetupUtils {
 
     public static final long BOOT_DISK_SIZE_IN_MEBI_BYTES = 16 * 1024L;
     public static final long ADDITIONAL_DISK_SIZE_IN_MEBI_BYTES = 16 * 1024L;
+    public static final long EBS_VOLUME_SIZE_IN_MEBI_BYTES = 16 * 1024L;
+
     private static final String DEVICE_TYPE = "deviceType";
     private static final String VOLUME_TYPE = "volumeType";
     private static final String IOPS = "iops";
@@ -744,6 +746,7 @@ public class TestAWSSetupUtils {
     public static final String BASELINE_COMPUTE_DESCRIPTION_COUNT = " Baseline Compute Description Count ";
     private static final float HUNDERED = 100.0f;
     public static final int AWS_VM_REQUEST_TIMEOUT_MINUTES = 5;
+    public static final int AWS_DISK_REQUEST_TIMEOUT_MINUTES = 5;
     public static final String AWS_INSTANCE_PREFIX = "i-";
 
     public static final String EC2_LINUX_AMI = "ami-0d4cfd66";
@@ -1266,6 +1269,7 @@ public class TestAWSSetupUtils {
         deleteVMs(documentSelfLink, isMock, host, false);
     }
 
+
     /**
      * Deletes the VM that is present on an endpoint and represented by the passed in ID.
      *
@@ -1302,6 +1306,38 @@ public class TestAWSSetupUtils {
         host.testWait();
         // check that the VMs are gone
         ProvisioningUtils.queryComputeInstances(host, 1);
+    }
+
+    /**
+     * Deletes the Disk that is present on an endpoint and represented by the passed in ID.
+     */
+    public static void deleteDisks(String documentSelfLink, boolean isMock, VerificationHost host,
+            boolean deleteDocumentOnly)
+            throws Throwable {
+        host.testStart(1);
+        ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
+        QuerySpecification resourceQuerySpec = new QueryTask.QuerySpecification();
+        // query all disks  for the cluster
+        resourceQuerySpec.query
+                .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
+                .setTermMatchValue(documentSelfLink);
+        deletionState.resourceQuerySpec = resourceQuerySpec;
+        deletionState.isMockRequest = isMock;
+        // Waiting for default request timeout in minutes for the disk to be deleted.
+        deletionState.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                + TimeUnit.MINUTES.toMicros(AWS_DISK_REQUEST_TIMEOUT_MINUTES);
+        if (deleteDocumentOnly) {
+            deletionState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
+        }
+        host.send(Operation
+                .createPost(
+                        UriUtils.buildUri(host,
+                                ResourceRemovalTaskService.FACTORY_LINK))
+                .setBody(deletionState)
+                .setCompletion(host.getCompletion()));
+        host.testWait();
+        // check that the disks are deleted
+        ProvisioningUtils.queryDiskInstances(host, 0);
     }
 
     /**
@@ -1449,8 +1485,7 @@ public class TestAWSSetupUtils {
      */
     private static ResourceState getResourceState(VerificationHost host, String resourceLink)
             throws Throwable {
-        Operation response = host
-                .waitForResponse(Operation.createGet(host, resourceLink));
+        Operation response = host.waitForResponse(Operation.createGet(host, resourceLink));
         return response.getBody(ResourceState.class);
     }
 

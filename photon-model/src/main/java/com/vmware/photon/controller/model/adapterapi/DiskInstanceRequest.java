@@ -23,16 +23,11 @@ public class DiskInstanceRequest extends ResourceRequest {
      */
     public enum DiskRequestType {
         CREATE,
-        DELETE;
+        DELETE
     }
 
     /**
      * Disk request type
      */
     public DiskRequestType requestType;
-
-    /**
-     * Auth credentials. Used for validation of a host.
-     */
-    public String authCredentialsLink;
 }

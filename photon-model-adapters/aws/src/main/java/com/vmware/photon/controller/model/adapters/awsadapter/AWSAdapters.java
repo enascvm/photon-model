@@ -37,6 +37,7 @@ public class AWSAdapters {
     private static final ServiceMetadata[] SERVICES_METADATA = {
             service(AWSInstanceService.class),
             service(AWSNetworkService.class),
+            service(AWSDiskService.class),
             service(AWSSubnetService.class),
             service(AWSLoadBalancerService.class),
             service(AWSStatsService.class),
