@@ -13,12 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -88,12 +92,14 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
         public ComputeService.ComputeStateWithDescription computeHost;
         public ComputeHostMetricsStages stage;
         public Throwable error;
+        public Set<String> childComputeLinks;
 
         public AzureStatsDataHolder(Operation op) {
             this.statsResponse = new ComputeStatsResponse.ComputeStats();
             // create a thread safe map to hold stats values for resource
             this.statsResponse.statValues = new ConcurrentSkipListMap<>();
             this.computeHostStatsOp = op;
+            this.childComputeLinks = new HashSet<>();
             this.stage = ComputeHostMetricsStages.GET_COMPUTE_HOST;
         }
     }
@@ -162,9 +168,9 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
                         statsData.computeHost.documentSelfLink)
                 .build();
 
-        // TODO VSYM-1270: Handle Pagination
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         queryTask.tenantLinks = statsData.computeHost.tenantLinks;
 
@@ -191,7 +197,20 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
             return;
         }
 
-        int computeCount = Math.toIntExact(queryTask.results.documentCount);
+        if (queryTask.results.documentLinks != null) {
+            statsData.childComputeLinks.addAll(queryTask.results.documentLinks);
+        }
+
+        if (queryTask.results.nextPageLink != null) {
+            Operation op = Operation.createGet(UriUtils.buildUri(this.getHost(),
+                    queryTask.results.nextPageLink));
+            sendWithDeferredResult(op)
+                    .whenComplete((o, e) -> handleComputeQueryCompletion(o.getBody(QueryTask.class),
+                            e, statsData));
+            return;
+        }
+
+        int computeCount = Math.toIntExact(statsData.childComputeLinks.size());
 
         // No children found, proceed to finish
         if (computeCount <= 0) {
@@ -202,7 +221,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
 
         // Create multiple operations, one each for a VM compute.
         List<Operation> statOperations = new ArrayList<>(computeCount);
-        for (String computeLink : queryTask.results.documentLinks) {
+        for (String computeLink : statsData.childComputeLinks) {
             Operation statsOp = getStatsQueryTaskOperation(statsData, computeLink);
             statOperations.add(statsOp);
         }
