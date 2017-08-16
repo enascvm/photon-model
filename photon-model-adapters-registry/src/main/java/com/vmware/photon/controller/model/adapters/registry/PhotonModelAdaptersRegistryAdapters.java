@@ -13,11 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.registry;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecFactoryService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
 
@@ -25,21 +30,21 @@ import com.vmware.xenon.common.Utils;
  * Helper class to start Photon model adapter registry related services
  */
 public class PhotonModelAdaptersRegistryAdapters {
-    public static final String[] LINKS = {
-            PhotonModelAdaptersRegistryService.FACTORY_LINK,
-            ResourceOperationSpecService.FACTORY_LINK,
-            ResourceOperationService.SELF_LINK
+
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            factoryService(PhotonModelAdaptersRegistryService.class,
+                    PhotonModelAdaptersRegistryFactoryService::new),
+            factoryService(ResourceOperationSpecService.class,
+                    ResourceOperationSpecFactoryService::new),
+
+            service(ResourceOperationService.class)
     };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     public static void startServices(ServiceHost host) {
         try {
-            host.startFactory(
-                    PhotonModelAdaptersRegistryService.class,
-                    PhotonModelAdaptersRegistryFactoryService::new);
-            host.startFactory(
-                    ResourceOperationSpecService.class,
-                    ResourceOperationSpecFactoryService::new);
-            host.startService(new ResourceOperationService());
+            StartServicesHelper.startServices(host, SERVICES_METADATA);
         } catch (Exception e) {
             host.log(Level.WARNING, "Error on start adapter registry related services. %s",
                     Utils.toString(e));

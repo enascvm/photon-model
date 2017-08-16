@@ -13,8 +13,11 @@
 
 package com.vmware.photon.controller.model;
 
-import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
 
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
@@ -26,11 +29,16 @@ import com.vmware.xenon.common.UriUtils;
  */
 public class PhotonModelMetricServices {
 
-    public static final String[] LINKS = {
-            ResourceMetricsService.FACTORY_LINK};
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            factoryService(ResourceMetricsService.class, ResourceMetricsService::createFactory)
+    };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     public static void startServices(ServiceHost host) throws Throwable {
-        host.startFactory(ResourceMetricsService.class, ResourceMetricsService::createFactory);
+
+        StartServicesHelper.startServices(host, SERVICES_METADATA);
+
         setFactoryToAvailable(host, ResourceMetricsService.FACTORY_LINK);
     }
 
@@ -40,15 +48,19 @@ public class PhotonModelMetricServices {
     }
 
     /**
-     * Helper method to explicitly set a factory to be "available". This is usually unnecessary,
-     * but currently factories that create {@code ON_DEMAND_LOAD} services are not being set to
+     * Helper method to explicitly set a factory to be "available". This is usually unnecessary, but
+     * currently factories that create {@code ON_DEMAND_LOAD} services are not being set to
      * available... and currently require this work-around.
      *
-     * @param host the host
-     * @param factoryPath the path of the factory to explicitly set to be available
-     * @param handler an optional completion handler
+     * @param host
+     *            the host
+     * @param factoryPath
+     *            the path of the factory to explicitly set to be available
+     * @param handler
+     *            an optional completion handler
      */
-    public static void setFactoryToAvailable(ServiceHost host, String factoryPath, Operation.CompletionHandler handler) {
+    public static void setFactoryToAvailable(ServiceHost host, String factoryPath,
+            Operation.CompletionHandler handler) {
         ServiceStats.ServiceStat body = new ServiceStats.ServiceStat();
         body.name = Service.STAT_NAME_AVAILABLE;
         body.latestValue = Service.STAT_VALUE_TRUE;

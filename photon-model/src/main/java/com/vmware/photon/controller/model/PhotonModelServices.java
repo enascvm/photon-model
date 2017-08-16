@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
+
 import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -38,6 +40,8 @@ import com.vmware.photon.controller.model.resources.SubnetRangeService;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -45,53 +49,37 @@ import com.vmware.xenon.common.ServiceHost;
  */
 public class PhotonModelServices {
 
-    public static final String[] LINKS = {
-            ComputeDescriptionService.FACTORY_LINK,
-            ComputeService.FACTORY_LINK,
-            DeploymentService.FACTORY_LINK,
-            ResourcePoolService.FACTORY_LINK,
-            ResourceDescriptionService.FACTORY_LINK,
-            DiskService.FACTORY_LINK,
-            SnapshotService.FACTORY_LINK,
-            NetworkInterfaceService.FACTORY_LINK,
-            NetworkInterfaceDescriptionService.FACTORY_LINK,
-            ResourceGroupService.FACTORY_LINK,
-            NetworkService.FACTORY_LINK,
-            SecurityGroupService.FACTORY_LINK,
-            FirewallService.FACTORY_LINK,
-            StorageDescriptionService.FACTORY_LINK,
-            InMemoryResourceMetricService.FACTORY_LINK,
-            EndpointService.FACTORY_LINK,
-            ImageService.FACTORY_LINK,
-            TagService.FACTORY_LINK,
-            LoadBalancerDescriptionService.FACTORY_LINK,
-            LoadBalancerService.FACTORY_LINK,
-            RouterService.FACTORY_LINK };
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            factoryService(ComputeDescriptionService.class),
+            factoryService(ComputeService.class),
+            factoryService(DeploymentService.class),
+            factoryService(ResourcePoolService.class),
+            factoryService(ResourceDescriptionService.class),
+            factoryService(DiskService.class),
+            factoryService(SnapshotService.class),
+            factoryService(NetworkInterfaceService.class),
+            factoryService(NetworkInterfaceDescriptionService.class),
+            factoryService(ResourceGroupService.class),
+            factoryService(NetworkService.class),
+            factoryService(SubnetService.class),
+            factoryService(SubnetRangeService.class),
+            factoryService(IPAddressService.class),
+            factoryService(SecurityGroupService.class),
+            factoryService(FirewallService.class),
+            factoryService(StorageDescriptionService.class),
+            factoryService(InMemoryResourceMetricService.class),
+            factoryService(EndpointService.class),
+            factoryService(ImageService.class),
+            factoryService(TagService.class, TagFactoryService::new),
+            factoryService(LoadBalancerDescriptionService.class),
+            factoryService(LoadBalancerService.class),
+            factoryService(RouterService.class)
+    };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     public static void startServices(ServiceHost host) throws Throwable {
-        host.startFactory(new ComputeDescriptionService());
-        host.startFactory(new ComputeService());
-        host.startFactory(new DeploymentService());
-        host.startFactory(new ResourcePoolService());
-        host.startFactory(new ResourceDescriptionService());
-        host.startFactory(new DiskService());
-        host.startFactory(new SnapshotService());
-        host.startFactory(new NetworkInterfaceService());
-        host.startFactory(new NetworkInterfaceDescriptionService());
-        host.startFactory(new SubnetService());
-        host.startFactory(new SubnetRangeService());
-        host.startFactory(new IPAddressService());
-        host.startFactory(new ResourceGroupService());
-        host.startFactory(new NetworkService());
-        host.startFactory(new FirewallService());
-        host.startFactory(new SecurityGroupService());
-        host.startFactory(new StorageDescriptionService());
-        host.startFactory(new EndpointService());
-        host.startFactory(new ImageService());
-        host.startFactory(new InMemoryResourceMetricService());
-        host.startFactory(TagService.class, TagFactoryService::new);
-        host.startFactory(new LoadBalancerDescriptionService());
-        host.startFactory(new LoadBalancerService());
-        host.startFactory(new RouterService());
+
+        StartServicesHelper.startServices(host, SERVICES_METADATA);
     }
 }

@@ -13,11 +13,15 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
-import com.vmware.xenon.common.Operation;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.services.common.TaskFactoryService;
 
@@ -26,71 +30,55 @@ import com.vmware.xenon.services.common.TaskFactoryService;
  */
 public class PhotonModelTaskServices {
 
-    public static final String[] LINKS = {
-            SshCommandTaskService.FACTORY_LINK,
-            ResourceAllocationTaskService.FACTORY_LINK,
-            ResourceEnumerationTaskService.FACTORY_LINK,
-            ImageEnumerationTaskService.FACTORY_LINK,
-            ScheduledTaskService.FACTORY_LINK,
-            ResourceRemovalTaskService.FACTORY_LINK,
-            ProvisionComputeTaskService.FACTORY_LINK,
-            ProvisionNetworkTaskService.FACTORY_LINK,
-            IPAddressAllocationTaskService.FACTORY_LINK,
-            ProvisionSubnetTaskService.FACTORY_LINK,
-            ProvisionLoadBalancerTaskService.FACTORY_LINK,
-            SnapshotTaskService.FACTORY_LINK,
-            ProvisionSecurityGroupTaskService.FACTORY_LINK,
-            StatsCollectionTaskService.FACTORY_LINK,
-            SingleResourceStatsCollectionTaskService.FACTORY_LINK,
-            StatsAggregationTaskService.FACTORY_LINK,
-            EndpointAllocationTaskService.FACTORY_LINK,
-            SingleResourceStatsAggregationTaskService.FACTORY_LINK,
-            SubTaskService.FACTORY_LINK
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            factoryService(SshCommandTaskService.class,
+                    SshCommandTaskService::createFactory),
+            factoryService(ResourceAllocationTaskService.class,
+                    () -> TaskFactoryService.create(ResourceAllocationTaskService.class)),
+            factoryService(ResourceEnumerationTaskService.class,
+                    ResourceEnumerationTaskService::createFactory),
+            factoryService(ImageEnumerationTaskService.class,
+                    ImageEnumerationTaskService::createFactory),
+            factoryService(ScheduledTaskService.class,
+                    () -> TaskFactoryService.create(ScheduledTaskService.class)),
+            factoryService(ResourceRemovalTaskService.class,
+                    () -> TaskFactoryService.create(ResourceRemovalTaskService.class)),
+            factoryService(ProvisionComputeTaskService.class,
+                    () -> TaskFactoryService.create(ProvisionComputeTaskService.class)),
+            factoryService(ProvisionNetworkTaskService.class,
+                    () -> TaskFactoryService.create(ProvisionNetworkTaskService.class)),
+            factoryService(IPAddressAllocationTaskService.class,
+                    () -> TaskFactoryService.create(IPAddressAllocationTaskService.class)),
+            factoryService(ProvisionSubnetTaskService.class,
+                    () -> TaskFactoryService.create(ProvisionSubnetTaskService.class)),
+            factoryService(ProvisionLoadBalancerTaskService.class,
+                    () -> TaskFactoryService.create(ProvisionLoadBalancerTaskService.class)),
+            factoryService(SnapshotTaskService.class,
+                    () -> TaskFactoryService.create(SnapshotTaskService.class)),
+            factoryService(ProvisionSecurityGroupTaskService.class,
+                    () -> TaskFactoryService.create(ProvisionSecurityGroupTaskService.class)),
+            factoryService(EndpointAllocationTaskService.class,
+                    () -> TaskFactoryService.create(EndpointAllocationTaskService.class)),
+            factoryService(EndpointRemovalTaskService.class,
+                    () -> TaskFactoryService.create(EndpointRemovalTaskService.class)),
+            factoryService(SingleResourceStatsAggregationTaskService.class,
+                    SingleResourceStatsAggregationTaskService::createFactory),
+            factoryService(StatsAggregationTaskService.class,
+                    StatsAggregationTaskService::createFactory),
+            factoryService(SingleResourceStatsCollectionTaskService.class,
+                    SingleResourceStatsCollectionTaskService::createFactory),
+            factoryService(StatsCollectionTaskService.class,
+                    StatsCollectionTaskService::createFactory),
+            factoryService(SubTaskService.class,
+                    () -> TaskFactoryService.create(SubTaskService.class)),
+
+            service(IPAddressReleaseTaskService.class)
     };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     public static void startServices(ServiceHost host) throws Throwable {
 
-        host.startService(Operation.createPost(host,
-                SshCommandTaskService.FACTORY_LINK),
-                SshCommandTaskService.createFactory());
-        host.startFactory(ResourceAllocationTaskService.class,
-                () -> TaskFactoryService.create(ResourceAllocationTaskService.class));
-        host.startFactory(ResourceEnumerationTaskService.class,
-                () -> ResourceEnumerationTaskService.createFactory());
-        host.startFactory(ImageEnumerationTaskService.class,
-                () -> ImageEnumerationTaskService.createFactory());
-        host.startFactory(ScheduledTaskService.class,
-                () -> TaskFactoryService.create(ScheduledTaskService.class));
-        host.startFactory(ResourceRemovalTaskService.class,
-                () -> TaskFactoryService.create(ResourceRemovalTaskService.class));
-        host.startFactory(ProvisionComputeTaskService.class,
-                () -> TaskFactoryService.create(ProvisionComputeTaskService.class));
-        host.startFactory(ProvisionNetworkTaskService.class,
-                () -> TaskFactoryService.create(ProvisionNetworkTaskService.class));
-        host.startFactory(IPAddressAllocationTaskService.class,
-                () -> TaskFactoryService.create(IPAddressAllocationTaskService.class));
-        host.startFactory(ProvisionSubnetTaskService.class,
-                () -> TaskFactoryService.create(ProvisionSubnetTaskService.class));
-        host.startFactory(ProvisionLoadBalancerTaskService.class,
-                () -> TaskFactoryService.create(ProvisionLoadBalancerTaskService.class));
-        host.startFactory(SnapshotTaskService.class,
-                () -> TaskFactoryService.create(SnapshotTaskService.class));
-        host.startFactory(ProvisionSecurityGroupTaskService.class,
-                () -> TaskFactoryService.create(ProvisionSecurityGroupTaskService.class));
-        host.startFactory(EndpointAllocationTaskService.class,
-                () -> TaskFactoryService.create(EndpointAllocationTaskService.class));
-        host.startFactory(EndpointRemovalTaskService.class,
-                () -> TaskFactoryService.create(EndpointRemovalTaskService.class));
-        host.startFactory(SingleResourceStatsAggregationTaskService.class,
-                () -> SingleResourceStatsAggregationTaskService.createFactory());
-        host.startFactory(StatsAggregationTaskService.class,
-                () -> StatsAggregationTaskService.createFactory());
-        host.startFactory(SingleResourceStatsCollectionTaskService.class,
-                () -> SingleResourceStatsCollectionTaskService.createFactory());
-        host.startFactory(StatsCollectionTaskService.class,
-                () -> StatsCollectionTaskService.createFactory());
-        host.startFactory(SubTaskService.class,
-                () -> TaskFactoryService.create(SubTaskService.class));
-        host.startService(new IPAddressReleaseTaskService());
+        StartServicesHelper.startServices(host, SERVICES_METADATA);
     }
 }

@@ -89,11 +89,16 @@ public class QueryUtils {
                     + QueryUtils.TEN_MINUTES_IN_MICROS;
         }
 
-        return service.sendWithDeferredResult(Operation
-                .createPost(UriUtils.buildUri(
-                        ClusterUtil.getClusterUri(service.getHost(), cluster),
-                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(queryTask).setConnectionSharing(true), QueryTask.class);
+        URI buildUri = UriUtils.buildUri(
+                ClusterUtil.getClusterUri(service.getHost(), cluster),
+                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+
+        Operation createQueryTaskOp = Operation
+                .createPost(buildUri)
+                .setBody(queryTask)
+                .setConnectionSharing(true);
+
+        return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
     }
 
     /**
@@ -388,8 +393,8 @@ public class QueryUtils {
             final Operation createQueryTaskOp = Operation
                     .createPost(uri)
                     .setReferer(this.referer)
-                    .setConnectionSharing(true)
-                    .setBody(queryTask);
+                    .setBody(queryTask)
+                    .setConnectionSharing(true);
 
             this.host.log(this.level,
                     this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));

@@ -13,8 +13,12 @@
 
 package com.vmware.photon.controller.model.security;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
+
 import com.vmware.photon.controller.model.security.service.SslTrustCertificateFactoryService;
 import com.vmware.photon.controller.model.security.service.SslTrustCertificateService;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -22,10 +26,13 @@ import com.vmware.xenon.common.ServiceHost;
  */
 public class PhotonModelSecurityServices {
 
-    public static final String[] LINKS = {
-            SslTrustCertificateService.FACTORY_LINK };
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            factoryService(SslTrustCertificateService.class, SslTrustCertificateFactoryService::new)
+    };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     public static void startServices(ServiceHost host) throws Throwable {
-        host.startFactory(SslTrustCertificateService.class, SslTrustCertificateFactoryService::new);
+        StartServicesHelper.startServices(host, SERVICES_METADATA);
     }
 }

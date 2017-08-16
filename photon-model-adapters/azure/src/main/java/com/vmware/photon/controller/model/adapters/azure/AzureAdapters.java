@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.azure.d2o.AzureLifecycleOperationService;
@@ -31,6 +33,8 @@ import com.vmware.photon.controller.model.adapters.azure.stats.AzureStatsService
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -40,20 +44,23 @@ import com.vmware.xenon.common.Utils;
  */
 public class AzureAdapters {
 
-    public static final String[] LINKS = {
-            AzureEnumerationAdapterService.SELF_LINK,
-            AzureImageEnumerationAdapterService.SELF_LINK,
-            AzureInstanceTypeService.SELF_LINK,
-            AzureInstanceService.SELF_LINK,
-            AzureSubnetService.SELF_LINK,
-            AzureSecurityGroupService.SELF_LINK,
-            AzureStatsService.SELF_LINK,
-            AzureComputeStatsGatherer.SELF_LINK,
-            AzureComputeHostStatsGatherer.SELF_LINK,
-            AzureComputeHostStorageStatsGatherer.SELF_LINK,
-            AzureEndpointAdapterService.SELF_LINK,
-            AzurePowerService.SELF_LINK,
-            AzureLifecycleOperationService.SELF_LINK };
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            service(AzureEnumerationAdapterService.class),
+            service(AzureImageEnumerationAdapterService.class),
+            service(AzureInstanceTypeService.class),
+            service(AzureInstanceService.class),
+            service(AzureSubnetService.class),
+            service(AzureSecurityGroupService.class),
+            service(AzureStatsService.class),
+            service(AzureComputeStatsGatherer.class),
+            service(AzureComputeHostStatsGatherer.class),
+            service(AzureComputeHostStorageStatsGatherer.class),
+            service(AzureEndpointAdapterService.class),
+            service(AzurePowerService.class),
+            service(AzureLifecycleOperationService.class)
+    };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     /**
      * The link of Azure configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -65,19 +72,7 @@ public class AzureAdapters {
 
     public static void startServices(ServiceHost host) throws Throwable {
         try {
-            host.startService(new AzureEnumerationAdapterService());
-            host.startService(new AzureImageEnumerationAdapterService());
-            host.startService(new AzureInstanceTypeService());
-            host.startService(new AzureInstanceService());
-            host.startService(new AzureSubnetService());
-            host.startService(new AzureSecurityGroupService());
-            host.startService(new AzureStatsService());
-            host.startService(new AzureComputeStatsGatherer());
-            host.startService(new AzureComputeHostStatsGatherer());
-            host.startService(new AzureComputeHostStorageStatsGatherer());
-            host.startService(new AzureEndpointAdapterService());
-            host.startService(new AzurePowerService());
-            host.startService(new AzureLifecycleOperationService());
+            StartServicesHelper.startServices(host, SERVICES_METADATA);
 
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.azure, LINKS, AzureUriPaths.AZURE_ADAPTER_LINK_TYPES);

@@ -13,36 +13,45 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+
+import java.util.logging.Level;
+
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.adapters.vsphere.stats.VSphereAdapterStatsService;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Facade for starting all vSphere adapters on a host.
  */
 public class VSphereAdapters {
 
-    public static final String[] LINKS = {
-            VSphereAdapterInstanceService.SELF_LINK,
-            VSphereAdapterPowerService.SELF_LINK,
-            VSphereAdapterSnapshotService.SELF_LINK,
-            VSphereListComputeSnapshotService.SELF_LINK,
-            VSphereAdapterResourceEnumerationService.SELF_LINK,
-            VSphereAdapterStatsService.SELF_LINK,
-            OvfImporterService.SELF_LINK,
-            DatacenterEnumeratorService.SELF_LINK,
-            VsphereResourceCleanerService.SELF_LINK,
-            VSphereEndpointAdapterService.SELF_LINK,
-            DvsNetworkService.SELF_LINK,
-            VSphereAdapterImageEnumerationService.SELF_LINK,
-            VSphereAdapterD2PowerOpsService.SELF_LINK,
-            VSphereAdapterResizeComputeService.SELF_LINK
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            service(VSphereAdapterInstanceService.class),
+            service(VSphereAdapterPowerService.class),
+            service(VSphereAdapterSnapshotService.class),
+            service(VSphereListComputeSnapshotService.class),
+            service(VSphereAdapterResourceEnumerationService.class),
+            service(VSphereAdapterStatsService.class),
+            service(OvfImporterService.class),
+            service(DatacenterEnumeratorService.class),
+            service(VsphereResourceCleanerService.class),
+            service(VSphereEndpointAdapterService.class),
+            service(DvsNetworkService.class),
+            service(VSphereAdapterImageEnumerationService.class),
+            service(VSphereAdapterD2PowerOpsService.class),
+            service(VSphereAdapterResizeComputeService.class)
     };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     /**
      * The link of vSphere configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -53,25 +62,17 @@ public class VSphereAdapters {
             EndpointType.vsphere.name());
 
     public static void startServices(ServiceHost host) throws Throwable {
-        host.startService(new VSphereAdapterInstanceService());
-        host.startService(new VSphereAdapterPowerService());
-        host.startService(new VSphereAdapterSnapshotService());
-        host.startService(new VSphereListComputeSnapshotService());
-        host.startService(new VSphereAdapterResourceEnumerationService());
-        host.startService(new VSphereAdapterStatsService());
-        host.startService(new OvfImporterService());
-        host.startService(new DatacenterEnumeratorService());
-        host.startService(new VsphereResourceCleanerService());
-        host.startService(new VSphereEndpointAdapterService());
-        host.startService(new DvsNetworkService());
-        host.startService(new VSphereAdapterImageEnumerationService());
-        host.startService(new VSphereAdapterD2PowerOpsService());
-        host.startService(new VSphereAdapterResizeComputeService());
+        try {
+            StartServicesHelper.startServices(host, SERVICES_METADATA);
 
-        EndpointAdapterUtils.registerEndpointAdapters(
-                host,
-                EndpointType.vsphere,
-                LINKS,
-                VSphereUriPaths.VSPHERE_ADAPTER_LINK_TYPES);
+            EndpointAdapterUtils.registerEndpointAdapters(
+                    host,
+                    EndpointType.vsphere,
+                    LINKS,
+                    VSphereUriPaths.VSPHERE_ADAPTER_LINK_TYPES);
+        } catch (Exception e) {
+            host.log(Level.WARNING, "Exception staring vSphere adapters: %s",
+                    Utils.toString(e));
+        }
     }
 }

@@ -13,16 +13,18 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService;
-
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration
-        .AWSMissingResourcesEnumerationService;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSMissingResourcesEnumerationService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -32,23 +34,26 @@ import com.vmware.xenon.common.Utils;
  */
 public class AWSAdapters {
 
-    public static final String[] LINKS = {
-            AWSInstanceService.SELF_LINK,
-            AWSNetworkService.SELF_LINK,
-            AWSSubnetService.SELF_LINK,
-            AWSLoadBalancerService.SELF_LINK,
-            AWSStatsService.SELF_LINK,
-            AWSCostStatsService.SELF_LINK,
-            AWSReservedInstancePlanService.SELF_LINK,
-            AWSEnumerationAdapterService.SELF_LINK,
-            AWSImageEnumerationAdapterService.SELF_LINK,
-            AWSInstanceTypeService.SELF_LINK,
-            AWSEndpointAdapterService.SELF_LINK,
-            AWSPowerService.SELF_LINK,
-            AWSSecurityGroupService.SELF_LINK,
-            AWSMissingResourcesEnumerationService.SELF_LINK,
-            AWSRebootService.SELF_LINK,
-            AWSResetService.SELF_LINK};
+    private static final ServiceMetadata[] SERVICES_METADATA = {
+            service(AWSInstanceService.class),
+            service(AWSNetworkService.class),
+            service(AWSSubnetService.class),
+            service(AWSLoadBalancerService.class),
+            service(AWSStatsService.class),
+            service(AWSCostStatsService.class),
+            service(AWSReservedInstancePlanService.class),
+            service(AWSEnumerationAdapterService.class),
+            service(AWSImageEnumerationAdapterService.class),
+            service(AWSInstanceTypeService.class),
+            service(AWSEndpointAdapterService.class),
+            service(AWSPowerService.class),
+            service(AWSSecurityGroupService.class),
+            service(AWSMissingResourcesEnumerationService.class),
+            service(AWSRebootService.class),
+            service(AWSResetService.class)
+    };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     /**
      * The link of AWS configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -60,22 +65,7 @@ public class AWSAdapters {
 
     public static void startServices(ServiceHost host) throws Throwable {
         try {
-            host.startService(new AWSInstanceService());
-            host.startService(new AWSNetworkService());
-            host.startService(new AWSSubnetService());
-            host.startService(new AWSLoadBalancerService());
-            host.startService(new AWSStatsService());
-            host.startService(new AWSCostStatsService());
-            host.startService(new AWSReservedInstancePlanService());
-            host.startService(new AWSEnumerationAdapterService());
-            host.startService(new AWSImageEnumerationAdapterService());
-            host.startService(new AWSInstanceTypeService());
-            host.startService(new AWSEndpointAdapterService());
-            host.startService(new AWSPowerService());
-            host.startService(new AWSSecurityGroupService());
-            host.startService(new AWSMissingResourcesEnumerationService());
-            host.startService(new AWSRebootService());
-            host.startService(new AWSResetService());
+            StartServicesHelper.startServices(host, SERVICES_METADATA);
 
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.aws, LINKS, AWSUriPaths.AWS_ADAPTER_LINK_TYPES);
