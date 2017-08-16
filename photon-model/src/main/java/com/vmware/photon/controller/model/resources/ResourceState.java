@@ -115,6 +115,17 @@ public class ResourceState extends ServiceDocument {
     @PropertyOptions(indexing = { PropertyIndexingOption.SORT })
     public String regionId;
 
+    /**
+     * Set of endpoint links set on this resource.
+     *
+     * @see EndpointService
+     */
+    @UsageOption(option = PropertyUsageOption.OPTIONAL)
+    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+    @UsageOption(option = PropertyUsageOption.LINKS)
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_33)
+    public Set<String> endpointLinks;
+
     public void copyTo(ResourceState target) {
         super.copyTo(target);
 
