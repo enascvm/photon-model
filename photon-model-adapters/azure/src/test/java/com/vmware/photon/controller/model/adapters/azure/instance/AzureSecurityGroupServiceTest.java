@@ -161,9 +161,9 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
     }
 
     @Test
-    public void testCreateSecurityGroup() throws Throwable {
+    public void testCreateSecurityGroupWithNonDefaultRules() throws Throwable {
         SecurityGroupState securityGroupState = provisionSecurityGroup(
-                buildRules(), buildRules(), TaskStage.FINISHED);
+                buildNonDefaultRules(), buildNonDefaultRules(), TaskStage.FINISHED);
 
         assertNotNull(securityGroupState.id);
         assertNotEquals(securityGroupState.id, this.securityGroupName);
@@ -176,7 +176,32 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
             assertEquals(this.securityGroupName, sgResponse.name());
             assertEquals(securityGroupState.id, sgResponse.id());
             assertEquals(sgResponse.securityRules().size(), 2 * securityGroupState.ingress.size());
-            validateAzureSecurityRules(securityGroupState, sgResponse.securityRules());
+            validateAzureSecurityRules(sgResponse.securityRules(), securityGroupState.ingress.size());
+
+            // delete the security group
+            startSecurityGroupProvisioning(InstanceRequestType.DELETE, securityGroupState,
+                    TaskStage.FINISHED);
+        }
+    }
+
+    @Test
+    public void testCreateSecurityGroupWithDefaultRules() throws Throwable {
+        SecurityGroupState securityGroupState = provisionSecurityGroup(
+                buildDefaultRules(), buildDefaultRules(), TaskStage.FINISHED);
+
+        assertNotNull(securityGroupState.id);
+        assertNotEquals(securityGroupState.id, this.securityGroupName);
+
+        if (!this.isMock) {
+            // Verify that the security group was created.
+            NetworkSecurityGroupInner sgResponse = this.securityGroupsClient.getByResourceGroup(
+                    this.rgName, this.securityGroupName);
+
+            assertEquals(this.securityGroupName, sgResponse.name());
+            assertEquals(securityGroupState.id, sgResponse.id());
+            assertEquals(sgResponse.securityRules().size(), securityGroupState.ingress.size());
+            validateAzureSecurityRules(sgResponse.securityRules(), securityGroupState.ingress
+                    .size() - 1);
 
             // delete the security group
             startSecurityGroupProvisioning(InstanceRequestType.DELETE, securityGroupState,
@@ -236,17 +261,22 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
         if (!this.isMock) {
             // test invalid security rule name
             SecurityGroupState securityGroupState = provisionSecurityGroup(
-                    buildInvalidNameRules(), buildRules(), TaskStage.FAILED);
+                    buildInvalidNameRules(), buildNonDefaultRules(), TaskStage.FAILED);
 
             assertNotNull(securityGroupState.id);
-            assertEquals(securityGroupState.id, this.securityGroupName);
+            assertNotEquals(securityGroupState.id, this.securityGroupName);
 
-            // test duplicate security rule name
-            securityGroupState = provisionSecurityGroup(
-                    buildDulicateNameRules(), buildRules(), TaskStage.FAILED);
+            // Verify that the security group was created without any rules.
+            NetworkSecurityGroupInner sgResponse = this.securityGroupsClient.getByResourceGroup(
+                    this.rgName, this.securityGroupName);
 
-            assertNotNull(securityGroupState.id);
-            assertEquals(securityGroupState.id, this.securityGroupName);
+            assertEquals(this.securityGroupName, sgResponse.name());
+            assertEquals(securityGroupState.id, sgResponse.id());
+            assertEquals(sgResponse.securityRules().size(), 0);
+
+            // delete the security group
+            startSecurityGroupProvisioning(InstanceRequestType.DELETE, securityGroupState,
+                    TaskStage.FINISHED);
         }
     }
 
@@ -333,10 +363,20 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
                 liveState -> expectedTaskState == liveState.taskInfo.stage);
     }
 
-    private List<Rule> buildRules() {
+    private List<Rule> buildDefaultRules() {
         return Arrays.asList(
                 buildRule("rule-" + UUID.randomUUID().toString(),
                         SecurityGroupService.ANY, "0.0.0.0/0",
+                        Access.Deny, SecurityGroupService.ALL_PORTS),
+                buildRule("rule-" + UUID.randomUUID().toString(),
+                        "Tcp", "0.0.0.0/0",
+                        Access.Allow, SecurityGroupService.ALL_PORTS));
+    }
+
+    private List<Rule> buildNonDefaultRules() {
+        return Arrays.asList(
+                buildRule("rule-" + UUID.randomUUID().toString(),
+                        "Udp", "0.0.0.0/0",
                         Access.Deny, SecurityGroupService.ALL_PORTS),
                 buildRule("rule-" + UUID.randomUUID().toString(),
                         "Tcp", "0.0.0.0/0",
@@ -374,33 +414,12 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
         return Arrays.asList(isolationRule, allowRule);
     }
 
-    private List<Rule> buildDulicateNameRules() {
-        Rule isolationRule = new Rule();
-        isolationRule.name = "Rule-" + UUID.randomUUID().toString();
-        isolationRule.protocol = SecurityGroupService.ANY;
-        isolationRule.ipRangeCidr = "0.0.0.0/0";
-        isolationRule.access = Access.Deny;
-        isolationRule.ports = "1-65535";
-
-        Rule allowRule = new Rule();
-        // you can't have two rules with the same name
-        allowRule.name = isolationRule.name;
-        allowRule.protocol = "Tcp";
-        allowRule.ipRangeCidr = "0.0.0.0/0";
-        allowRule.access = Access.Allow;
-        allowRule.ports = "1-65535";
-
-        return Arrays.asList(isolationRule, allowRule);
-    }
-
-    private void validateAzureSecurityRules(SecurityGroupState securityGroupState,
-            List<SecurityRuleInner> actualRules) {
-        List<Rule> inboundRules = securityGroupState.ingress;
-        List<Rule> outboundRules = securityGroupState.egress;
-        assertEquals(inboundRules.size(), actualRules
+    private void validateAzureSecurityRules(
+            List<SecurityRuleInner> actualRules, int expectedNumberOfRules) {
+        assertEquals(expectedNumberOfRules, actualRules
                 .stream()
                 .filter(r -> r.direction().equals(SecurityRuleDirection.INBOUND)).count());
-        assertEquals(outboundRules.size(), actualRules
+        assertEquals(expectedNumberOfRules, actualRules
                 .stream()
                 .filter(r -> r.direction().equals(SecurityRuleDirection.OUTBOUND)).count());
 
@@ -413,7 +432,7 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
             if (rule.access().equals(SecurityRuleAccess.ALLOW)) {
                 assertTrue(rule.protocol().equals(SecurityRuleProtocol.TCP));
             } else {
-                assertTrue(rule.protocol().equals(SecurityRuleProtocol.ASTERISK));
+                assertTrue(rule.protocol().equals(SecurityRuleProtocol.UDP));
             }
         }
     }

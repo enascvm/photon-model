@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.StatelessService;
 
@@ -45,37 +46,59 @@ public class AzureSecurityGroupUtils {
             SecurityGroupState securityGroupState, String resourceGroupName,
             String location, String msg) {
 
-        service.logInfo(() -> msg);
+        return createOrUpdateSecurityGroup(service, azureClient, resourceGroupName,
+                securityGroupState.name, buildSecurityGroup(securityGroupState, location), msg);
+    }
 
-        final String sgName = securityGroupState.name;
+    public static DeferredResult<NetworkSecurityGroupInner> addSecurityRules(
+            StatelessService service, NetworkSecurityGroupsInner azureClient,
+            SecurityGroupState securityGroupState, String resourceGroupName,
+            NetworkSecurityGroupInner securityGroup, String msg) {
+
+        addSecurityRules(securityGroup, securityGroupState);
+        if (securityGroup.securityRules() != null && securityGroup.securityRules().size() > 0) {
+            return createOrUpdateSecurityGroup(service, azureClient,
+                    resourceGroupName, securityGroupState.name,
+                    securityGroup, msg);
+        } else {
+            return DeferredResult.completed(securityGroup);
+        }
+    }
+
+    private static DeferredResult<NetworkSecurityGroupInner> createOrUpdateSecurityGroup(
+            StatelessService service, NetworkSecurityGroupsInner azureClient,
+            String resourceGroupName, String sgName, NetworkSecurityGroupInner securityGroup,
+            String msg) {
+
+        service.logInfo(() -> msg);
 
         AzureProvisioningCallback<NetworkSecurityGroupInner> handler =
                 new AzureProvisioningCallback<NetworkSecurityGroupInner>(service, msg) {
-            @Override
-            protected DeferredResult<NetworkSecurityGroupInner> consumeProvisioningSuccess(
-                    NetworkSecurityGroupInner securityGroup) {
+                    @Override
+                    protected DeferredResult<NetworkSecurityGroupInner> consumeProvisioningSuccess(
+                            NetworkSecurityGroupInner securityGroup) {
 
-                return DeferredResult.completed(securityGroup);
-            }
+                        return DeferredResult.completed(securityGroup);
+                    }
 
-            @Override
-            protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<NetworkSecurityGroupInner> checkProvisioningStateCallback) {
-                return () -> azureClient.getByResourceGroupAsync(
-                        resourceGroupName,
-                        sgName,
-                        null /* expand */,
-                        checkProvisioningStateCallback);
-            }
+                    @Override
+                    protected Runnable checkProvisioningStateCall(
+                            ServiceCallback<NetworkSecurityGroupInner> checkProvisioningStateCallback) {
+                        return () -> azureClient.getByResourceGroupAsync(
+                                resourceGroupName,
+                                sgName,
+                                null /* expand */,
+                                checkProvisioningStateCallback);
+                    }
 
-            @Override
-            protected String getProvisioningState(NetworkSecurityGroupInner body) {
-                return body.provisioningState();
-            }
-        };
+                    @Override
+                    protected String getProvisioningState(NetworkSecurityGroupInner body) {
+                        return body.provisioningState();
+                    }
+                };
 
         azureClient.createOrUpdateAsync(resourceGroupName, sgName,
-                buildSecurityGroup(securityGroupState, location), handler);
+                securityGroup, handler);
 
         return handler.toDeferredResult();
     }
@@ -106,32 +129,49 @@ public class AzureSecurityGroupUtils {
 
     private static NetworkSecurityGroupInner buildSecurityGroup(SecurityGroupState sg,
             String location) {
-
-        if (sg == null) {
-            throw new IllegalStateException("SecurityGroup state should not be null.");
-        }
-
-        List<SecurityRuleInner> securityRules = new ArrayList<>();
-        final AtomicInteger priority = new AtomicInteger(1000);
-        if (sg.ingress != null) {
-            sg.ingress.forEach(rule -> securityRules.add(buildSecurityRule(rule,
-                    SecurityRuleDirection.INBOUND, priority.getAndIncrement())));
-        }
-
-        priority.set(1000);
-        if (sg.egress != null) {
-            sg.egress.forEach(rule -> securityRules.add(buildSecurityRule(rule,
-                    SecurityRuleDirection.OUTBOUND, priority.getAndIncrement())));
-        }
+        AssertUtil.assertNotNull(sg, "SecurityGroup state should not be null.");
 
         NetworkSecurityGroupInner nsg = new NetworkSecurityGroupInner();
         nsg.withLocation(location);
 
-        if (securityRules.size() > 0) {
-            nsg.withSecurityRules(securityRules);
+        return nsg;
+    }
+
+    private static NetworkSecurityGroupInner addSecurityRules(
+            NetworkSecurityGroupInner securityGroupInner, SecurityGroupState sgState) {
+        AssertUtil.assertNotNull(sgState, "SecurityGroup state should not be null.");
+        AssertUtil.assertNotNull(securityGroupInner, "NetworkSecurityGroupInner should not be null.");
+
+        List<SecurityRuleInner> securityRules = new ArrayList<>();
+
+        List<SecurityRuleInner> defaultSecurityRules = securityGroupInner.defaultSecurityRules();
+        final AtomicInteger priority = new AtomicInteger(1000);
+        if (sgState.ingress != null) {
+            sgState.ingress.forEach(rule -> {
+                SecurityRuleInner sgRule = buildSecurityRule(rule,
+                        SecurityRuleDirection.INBOUND, priority.getAndIncrement());
+                if (!isDefaultRule(defaultSecurityRules, sgRule)) {
+                    securityRules.add(sgRule);
+                }
+            });
         }
 
-        return nsg;
+        priority.set(1000);
+        if (sgState.egress != null) {
+            sgState.egress.forEach(rule -> {
+                SecurityRuleInner sgInner = buildSecurityRule(rule,
+                        SecurityRuleDirection.OUTBOUND, priority.getAndIncrement());
+                if (!isDefaultRule(defaultSecurityRules, sgInner)) {
+                    securityRules.add(sgInner);
+                }
+            });
+        }
+
+        if (securityRules.size() > 0) {
+            securityGroupInner.withSecurityRules(securityRules);
+        }
+
+        return securityGroupInner;
     }
 
     private static SecurityRuleInner buildSecurityRule(Rule rule, SecurityRuleDirection
@@ -165,5 +205,21 @@ public class AzureSecurityGroupUtils {
         }
 
         return sr;
+    }
+
+    private static boolean isDefaultRule(List<SecurityRuleInner> defaultRules, SecurityRuleInner
+            sgRule) {
+        for (SecurityRuleInner defaultRule : defaultRules) {
+            if (defaultRule.access().equals(sgRule.access()) &&
+                    defaultRule.direction().equals(sgRule.direction()) &&
+                    defaultRule.protocol().equals(sgRule.protocol()) &&
+                    defaultRule.sourcePortRange().equals(sgRule.sourcePortRange()) &&
+                    defaultRule.destinationPortRange().equals(sgRule.destinationPortRange()) &&
+                    defaultRule.sourceAddressPrefix().equals(sgRule.sourcePortRange()) &&
+                    defaultRule.destinationAddressPrefix().equals(sgRule.destinationAddressPrefix())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

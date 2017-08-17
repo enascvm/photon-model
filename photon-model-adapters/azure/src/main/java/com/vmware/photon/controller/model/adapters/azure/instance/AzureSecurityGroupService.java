@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
@@ -65,6 +66,8 @@ public class AzureSecurityGroupService extends StatelessService {
 
         NetworkState networkState;
         ResourceGroupState networkRGState;
+
+        NetworkSecurityGroupInner securityGroup;
 
         AzureSecurityGroupContext(AzureSecurityGroupService service,
                 SecurityGroupInstanceRequest request) {
@@ -271,14 +274,14 @@ public class AzureSecurityGroupService extends StatelessService {
             if (context.securityGroupRequest.isMockRequest) {
                 // no need to go the end-point; just generate Azure Security Group Id.
                 context.securityGroupState.id = UUID.randomUUID().toString();
+                return execution
+                        .thenCompose(this::updateSecurityGroupState);
             } else {
-                execution = execution
-                        .thenCompose(this::createSecurityGroup);
+                return execution
+                        .thenCompose(this::createSecurityGroup)
+                        .thenCompose(this::updateSecurityGroupState)
+                        .thenCompose(this::updateRules);
             }
-
-            return execution
-                    .thenCompose(this::updateSecurityGroupState);
-
         case DELETE:
             if (context.securityGroupRequest.isMockRequest) {
                 // no need to go to the end-point
@@ -326,8 +329,28 @@ public class AzureSecurityGroupService extends StatelessService {
                 .thenApply(sg -> {
                     // Populate the security group id with Azure Network Security Group ID
                     context.securityGroupState.id = sg.id();
+                    context.securityGroup = sg;
                     return context;
                 });
+    }
+
+    private DeferredResult<AzureSecurityGroupContext> updateRules(
+            AzureSecurityGroupContext context) {
+
+        String rgName = context.securityGroupRGState != null ?
+                context.securityGroupRGState.name : context.networkRGState.name;
+
+        final String msg = "Adding Azure Security Rules to Group [" + context.securityGroupState
+                .name + "] in resource group [" + rgName + "].";
+
+        NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
+                .getNetworkManagementClientImpl().networkSecurityGroups();
+
+        return AzureSecurityGroupUtils.addSecurityRules(this,
+                azureSecurityGroupClient,
+                context.securityGroupState, rgName,
+                context.securityGroup, msg)
+                .thenApply(__ -> context);
     }
 
     private DeferredResult<AzureSecurityGroupContext> deleteSecurityGroup(

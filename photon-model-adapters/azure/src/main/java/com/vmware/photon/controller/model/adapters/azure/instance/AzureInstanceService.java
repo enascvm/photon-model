@@ -1040,9 +1040,17 @@ public class AzureInstanceService extends StatelessService {
 
                     return AzureSecurityGroupUtils.createSecurityGroup(this, azureClient,
                             sgState, rgName, ctx.resourceGroup.location(), msg)
-                            .thenApply(sg -> {
-                                nicCtx.securityGroup = sg;
-                                return sg;
+                            .thenCompose(sg -> {
+                                String addMsg = "Add Azure Security Rules to Group ["
+                                        + rgName + "/" + sgState.name
+                                        + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
+                                        + ctx.vmName + "] VM";
+                                return AzureSecurityGroupUtils.addSecurityRules(this,
+                                        azureClient, sgState, rgName, sg, addMsg);
+                            })
+                            .thenApply(updatedSG -> {
+                                nicCtx.securityGroup = updatedSG;
+                                return updatedSG;
                             });
                 })
 
