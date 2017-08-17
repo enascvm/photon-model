@@ -143,7 +143,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         assertVmNetworksConfiguration(DEFAULT_NIC_SPEC);
 
-        assertConfigurationOfDisks(0);
+        assertConfigurationOfDisks(0,0);
 
         assertStorageDescription();
 
@@ -184,7 +184,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         kickOffProvisionTask();
 
         // Assert if 2 additional disks were created
-        assertConfigurationOfDisks(numberOfAdditionalDisks);
+        assertConfigurationOfDisks(numberOfAdditionalDisks, 0);
     }
 
     /**
@@ -197,7 +197,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         ImageSource privateImageSource = createPrivateImageSource(getHost(), this.endpointState);
 
-        int numberOfAdditionalDisks = 0;
+        int numberOfAdditionalDisks = 1;
         // create a Azure VM compute resource.
         this.vmState = createDefaultVMResource(getHost(), azureVMName,
                 this.computeHost, this.endpointState, NO_PUBLIC_IP_NIC_SPEC,
@@ -205,7 +205,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertConfigurationOfDisks(numberOfAdditionalDisks);
+        assertConfigurationOfDisks(numberOfAdditionalDisks, 2);
 
         assertStorageDescription();
     }
@@ -435,7 +435,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 provisionedSG);
     }
 
-    private void assertConfigurationOfDisks(int numberOfAdditionalDisks) {
+    private void assertConfigurationOfDisks(int numberOfAdditionalDisks, int
+            numberOfDataDisksOnImage) {
 
         ComputeState vm = getHost().getServiceState(null,
                 ComputeState.class, UriUtils.buildUri(getHost(), this.vmState.documentSelfLink));
@@ -445,17 +446,21 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                         null, DiskState.class, UriUtils.buildUri(getHost(), diskLink)))
                 .collect(Collectors.toList());
 
-        for (DiskState diskState : diskStates) {
-            if (diskState.bootOrder == 1) {
-                assertEquals("OS Disk size does not match", AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
-                        diskState.capacityMBytes);
-            } else {
-                assertEquals("Data Disk size does not match",
-                        AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE, diskState.capacityMBytes);
-                assertNotNull(diskState.customProperties);
-                assertNotNull(diskState.customProperties.get(DISK_CONTROLLER_NUMBER));
+        if (numberOfDataDisksOnImage == 0) {
+            for (DiskState diskState : diskStates) {
+                if (diskState.bootOrder == 1) {
+                    assertEquals("OS Disk size does not match", AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
+                            diskState.capacityMBytes);
+                } else {
+
+                    assertEquals("Data Disk size does not match",
+                            AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE, diskState.capacityMBytes);
+                    assertNotNull(diskState.customProperties);
+                    assertNotNull(diskState.customProperties.get(DISK_CONTROLLER_NUMBER));
+                }
             }
         }
+
 
         if (this.isMock) { // return. Nothing to check on Azure.
             return;
@@ -468,66 +473,82 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             provisionedVM = AzureTestUtil.getAzureVirtualMachine(
                     getAzureSdkClients().getComputeManagementClientImpl(),
                     vmRGName,
-                    this.vmState.name);
+                    this.vmState.name.replace('_', '-'));
         } catch (Exception e) {
             fail("Unable to get Azure VM details: " + e.getMessage());
         }
 
-        final Function<String, DiskState> findDiskStateByName = diskName -> diskStates.stream()
+        final Function<String, Optional<DiskState>> findDiskStateByName = diskName -> diskStates
+                .stream()
                 .filter(dS -> diskName.equals(dS.name))
-                .findFirst()
-                .get();
+                .findFirst();
 
         // Validate boot DiskState against Azure osDisk
         {
             final OSDisk azureOsDisk = provisionedVM.storageProfile().osDisk();
+            Optional<DiskState> bootDiskOpt = findDiskStateByName.apply(azureOsDisk.name());
 
-            final DiskState bootDiskState = findDiskStateByName.apply(azureOsDisk.name());
+            if (bootDiskOpt.isPresent()) {
+                final DiskState bootDiskState = bootDiskOpt.get();
+                assertNotNull("Azure OS Disk with name '" + azureOsDisk.name()
+                        + "' does not match any DiskState by name", bootDiskState);
 
-            assertNotNull("Azure OS Disk with name '" + azureOsDisk.name()
-                    + "' does not match any DiskState by name", bootDiskState);
+                if (bootDiskState.customProperties != null && bootDiskState.customProperties
+                        .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
+                    assertEquals("Boot DiskState.id does not match Azure managed disk id",
+                            azureOsDisk.managedDisk().id(), bootDiskState.id);
+                } else {
+                    assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
+                            azureOsDisk.vhd().uri(), bootDiskState.id);
+                }
 
-            if (bootDiskState.customProperties != null && bootDiskState.customProperties
-                    .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
-                assertEquals("Boot DiskState.id does not match Azure managed disk id",
-                        azureOsDisk.managedDisk().id(), bootDiskState.id);
+                assertEquals("OS Disk size of the VM in azure does not match with the intended size",
+                        AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE, azureOsDisk.diskSizeGB() * 1024);
             } else {
-                assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
-                        azureOsDisk.vhd().uri(), bootDiskState.id);
+                fail("Mismatch in boot disk name.");
             }
 
-            assertEquals("OS Disk size of the VM in azure does not match with the intended size",
-                    AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE, azureOsDisk.diskSizeGB() * 1024);
         }
 
         // Validate data DiskStates against Azure dataDisks
 
-        assertEquals("Mismatch in number of data disks found on VM in azure",
-                numberOfAdditionalDisks, provisionedVM.storageProfile().dataDisks().size());
-
         for (DataDisk azureDataDisk : provisionedVM.storageProfile().dataDisks()) {
 
-            DiskState dataDiskState = findDiskStateByName.apply(azureDataDisk.name());
+            Optional<DiskState> dataDiskOpt = findDiskStateByName.apply(azureDataDisk.name());
 
-            assertNotNull("Azure Data Disk with name '" + azureDataDisk.name()
-                    + "' does not match any DiskState by name", dataDiskState);
+            if (dataDiskOpt.isPresent()) {
+                DiskState dataDiskState = dataDiskOpt.get();
+                assertNotNull("Azure Data Disk with name '" + azureDataDisk.name()
+                        + "' does not match any DiskState by name", dataDiskState);
 
-            if (dataDiskState.customProperties != null && dataDiskState.customProperties
-                    .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
-                assertEquals("Boot DiskState.id does not match Azure managed disk id.",
-                        azureDataDisk.managedDisk().id(), dataDiskState.id);
+                if (dataDiskState.customProperties != null && dataDiskState.customProperties
+                        .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
+                    assertEquals("Boot DiskState.id does not match Azure managed disk id.",
+                            azureDataDisk.managedDisk().id(), dataDiskState.id);
+                } else {
+                    assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
+                            azureDataDisk.vhd().uri(), dataDiskState.id);
+                }
+
+                // assert size of each of the attached disks only in case of public image
+                if (numberOfDataDisksOnImage == 0) {
+                    assertEquals("Mismatch in intended size of data disks " + azureDataDisk.name(),
+                            AZURE_CUSTOM_DATA_DISK_SIZE, azureDataDisk.diskSizeGB().longValue() * 1024);
+
+                }
+
+                assertEquals("LUN of DiskState does not match Azure.dataDisk.lun",
+                        String.valueOf(azureDataDisk.lun()), dataDiskState.customProperties.get(
+                        DISK_CONTROLLER_NUMBER));
+
             } else {
-                assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
-                        azureDataDisk.vhd().uri(), dataDiskState.id);
+                fail("Data Disks not found.");
             }
-
-            // assert size of each of the attached disks
-            assertEquals("Mismatch in intended size of data disks " + azureDataDisk.name(),
-                    AZURE_CUSTOM_DATA_DISK_SIZE, azureDataDisk.diskSizeGB().longValue() * 1024);
-
-            assertEquals("LUN of DiskState does not match Azure.dataDisk.lun",
-                    String.valueOf(azureDataDisk.lun()), dataDiskState.customProperties.get(DISK_CONTROLLER_NUMBER));
         }
+
+        assertEquals("Mismatch in number of data disks found on VM in azure",
+                numberOfAdditionalDisks + numberOfDataDisksOnImage, provisionedVM.storageProfile().dataDisks().size());
+
     }
 
     /**

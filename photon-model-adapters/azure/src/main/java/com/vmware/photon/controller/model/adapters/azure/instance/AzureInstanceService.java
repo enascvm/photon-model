@@ -15,7 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DATA_DISK_CACHING;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_BLOB_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_MANAGED_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
@@ -45,7 +45,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -55,7 +55,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -70,7 +69,6 @@ import com.microsoft.azure.management.compute.HardwareProfile;
 import com.microsoft.azure.management.compute.NetworkProfile;
 import com.microsoft.azure.management.compute.OSDisk;
 import com.microsoft.azure.management.compute.OSProfile;
-import com.microsoft.azure.management.compute.OperatingSystemTypes;
 import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.compute.StorageProfile;
 import com.microsoft.azure.management.compute.VirtualHardDisk;
@@ -600,55 +598,6 @@ public class AzureInstanceService extends StatelessService {
                 .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
     }
 
-    private DeferredResult<AzureInstanceContext> resolveStorageAccountForPrivateImage(
-            AzureInstanceContext ctx) {
-
-        DiskConfiguration imageOsDisk = ctx.imageOsDisk();
-        if (imageOsDisk == null) {
-            return DeferredResult.failed(new IllegalArgumentException(
-                    "Image OS DiskConfiguration is missing from ImageState"));
-        }
-
-        final String imageOsDiskUri = imageOsDisk.properties.get(AZURE_OSDISK_BLOB_URI);
-        if (imageOsDiskUri == null) {
-            return DeferredResult.failed(new IllegalArgumentException(
-                    "OS DiskConfiguration is missing 'blob URI' property"));
-        }
-
-        final Matcher matcher = VHD_URI_PATTERN.matcher(imageOsDiskUri);
-        if (!matcher.matches()) {
-            return DeferredResult.failed(new IllegalArgumentException(
-                    "Invalid VHD URI format of image OS DiskConfiguration: " + imageOsDiskUri));
-        }
-
-        // Override StorageAccount from request with the SA of the private VM image
-        ctx.storageAccountName = matcher.group(1);
-
-        String msg = "Getting Resource Group for [" + ctx.storageAccountName + "] SA for ["
-                + ctx.vmName + "] VM";
-
-        AzureDeferredResultServiceCallback<List<StorageAccountInner>> handler = new AzureDeferredResultServiceCallback<List<StorageAccountInner>>(
-                this, msg) {
-
-            @Override
-            protected DeferredResult<List<StorageAccountInner>> consumeSuccess(
-                    List<StorageAccountInner> result) {
-                // Filter by StorageAccount name
-                for (StorageAccountInner sA : result) {
-                    if (Objects.equals(ctx.storageAccountName, sA.name())) {
-                        ctx.storageAccountRGName = AzureUtils.getResourceGroupName(sA.id());
-                        return DeferredResult.completed(result);
-                    }
-                }
-                return DeferredResult.failed(new IllegalArgumentException(
-                        "Unable to find SA with name: " + ctx.storageAccountName));
-            }
-        };
-
-        getStorageManagementClientImpl(ctx).storageAccounts().listAsync(handler);
-
-        return handler.toDeferredResult().thenApply(ignore -> ctx);
-    }
 
     /**
      * Init storage account name and resource group, using the following approach:
@@ -685,13 +634,6 @@ public class AzureInstanceService extends StatelessService {
      * </table>
      */
     private DeferredResult<AzureInstanceContext> createStorageAccountRG(AzureInstanceContext ctx) {
-
-        if (ctx.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
-            // Special handling for Private images which implies that the VM storage account
-            // must be same as the storage account the Custom/Private VM image resides.
-            return DeferredResult.completed(ctx)
-                    .thenCompose(this::resolveStorageAccountForPrivateImage);
-        }
 
         // No need for resource group for storage account.
         // Either we are reusing an existing storage account or using managed disks.
@@ -1210,8 +1152,12 @@ public class AzureInstanceService extends StatelessService {
 
         final StorageProfile storageProfile = new StorageProfile();
 
-        // Apply Public/Private images specifics
+        storageProfile.withOsDisk(osDisk);
 
+        List<DataDisk> dataDisks = new ArrayList<>();
+        List<Integer> LUNsOnImage = new ArrayList<>();
+
+        // Apply Public/Private images specifics
         if (ctx.imageSource.type == ImageSource.Type.PUBLIC_IMAGE
                 || ctx.imageSource.type == ImageSource.Type.IMAGE_REFERENCE) {
 
@@ -1220,19 +1166,31 @@ public class AzureInstanceService extends StatelessService {
         } else if (ctx.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
 
             final ImageState privateImage = ctx.imageSource.asImageState();
+            ImageReferenceInner img = new ImageReferenceInner();
+            img.withId(privateImage.id);
+            storageProfile.withImageReference(img);
 
-            // In case of PRIVATE images do EXTRA OSDisk configuration
+            // set LUNs of data disks present on the custom image.
+            for (DiskConfiguration diskConfig: privateImage.diskConfigs) {
+                if (diskConfig.properties != null && diskConfig.properties.containsKey
+                        (AzureConstants.AZURE_DISK_LUN)) {
+                    DataDisk imageDataDisk = new DataDisk();
+                    int lun = Integer.parseInt(diskConfig.properties.get(AzureConstants
+                            .AZURE_DISK_LUN));
+                    LUNsOnImage.add(lun);
+                    imageDataDisk.withLun(lun);
+                    imageDataDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
+                    dataDisks.add(imageDataDisk);
+                }
+            }
 
-            // Image OS type
-            osDisk.withOsType(OperatingSystemTypes.fromString(privateImage.osFamily));
-
-            // Ref to OS disk (VHD) of the image
-            osDisk.withImage(new VirtualHardDisk().withUri(
-                    ctx.imageOsDisk().properties.get(AZURE_OSDISK_BLOB_URI)));
         }
 
-        storageProfile.withOsDisk(osDisk);
-        storageProfile.withDataDisks(newAzureDataDisks(ctx));
+        // choose LUN greater than the one specified in case of custom image. Else start from zero.
+        int LUNForAdditionalDisk = LUNsOnImage.size() == 0 ? 0 : Collections.max(LUNsOnImage) + 1;
+
+        dataDisks.addAll(newAzureDataDisks(ctx, LUNForAdditionalDisk));
+        storageProfile.withDataDisks(dataDisks);
 
         request.withStorageProfile(storageProfile);
 
@@ -1355,9 +1313,10 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Converts Photon model data DiskState to underlying Azure DataDisk model.
      */
-    private List<DataDisk> newAzureDataDisks(AzureInstanceContext ctx) {
+    private List<DataDisk> newAzureDataDisks(AzureInstanceContext ctx, int
+            startLUNForAdditionalDisks) {
 
-        int lunIndex = 0;
+        int lunIndex = startLUNForAdditionalDisks;
 
         final List<DataDisk> azureDataDisks = new ArrayList<>();
 
@@ -1520,9 +1479,10 @@ public class AzureInstanceService extends StatelessService {
             return DeferredResult.completed(ctx);
         }
 
-        List<DeferredResult<Operation>> updateDiskStateDRs = new ArrayList<>();
+        List<DeferredResult<Operation>> diskStateDRs = new ArrayList<>();
 
-        // Update boot DiskState with Azure osDisk VHD URI
+        // Update boot DiskState with Azure osDisk VHD URI in case of unmanaged disks and
+        // disks id in case of managed disks
         {
             final OSDisk azureOsDisk = ctx.provisionedVm.storageProfile().osDisk();
 
@@ -1553,53 +1513,109 @@ public class AzureInstanceService extends StatelessService {
                         }
                     });
 
-            updateDiskStateDRs.add(updateDR);
+            diskStateDRs.add(updateDR);
         }
 
         for (DataDisk azureDataDisk : ctx.provisionedVm.storageProfile().dataDisks()) {
 
             // Find corresponding DiskState by name
-            DiskState dataDiskState = ctx.dataDiskStates.stream()
+            Optional<DiskState> dataDiskOpt = ctx.dataDiskStates.stream()
+                    .map(DiskState.class::cast)
                     .filter(dS -> azureDataDisk.name().equals(dS.name))
-                    .findFirst()
-                    .get();
+                    .findFirst();
 
-            final DiskState diskStateToUpdate = new DiskState();
-            diskStateToUpdate.documentSelfLink = dataDiskState.documentSelfLink;
-            // The actual value being updated
-            if (ctx.useManagedDisks()) {
-                diskStateToUpdate.id = azureDataDisk.managedDisk().id();
+            // update disk state
+            if (dataDiskOpt.isPresent()) {
+                // update VHD uri or disk id respectively for un-managed and managed disks
+                DiskState dataDiskState = dataDiskOpt.get();
+                final DiskState diskStateToUpdate = new DiskState();
+                diskStateToUpdate.documentSelfLink = dataDiskState.documentSelfLink;
+
+                if (ctx.useManagedDisks()) {
+                    diskStateToUpdate.id = azureDataDisk.managedDisk().id();
+                } else {
+                    diskStateToUpdate.id = azureDataDisk.vhd().uri();
+                }
+
+                // The LUN value of disk
+                if (diskStateToUpdate.customProperties == null) {
+                    diskStateToUpdate.customProperties = new HashMap<>();
+                }
+                diskStateToUpdate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
+
+                Operation updateDiskState = Operation
+                        .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
+                        .setBody(diskStateToUpdate);
+
+                DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)
+                        .whenComplete((op, exc) -> {
+                            if (exc != null) {
+                                logSevere(() -> String.format(
+                                        "Updating data DiskState [%s] with VHD URI [%s]: FAILED with %s",
+                                        dataDiskState.name, diskStateToUpdate.id, Utils.toString(exc)));
+
+                            } else {
+                                logFine(() -> String.format(
+                                        "Updating data DiskState [%s] with VHD URI [%s]: SUCCESS",
+                                        dataDiskState.name, diskStateToUpdate.id));
+                            }
+                        });
+
+                diskStateDRs.add(updateDR);
             } else {
-                diskStateToUpdate.id = azureDataDisk.vhd().uri();
+                // additional disks were created by the custom image. Will always be of
+                // managed disk type. Create new disk state.
+
+                DiskState diskStateToCreate = new DiskState();
+                diskStateToCreate.id = azureDataDisk.managedDisk().id();
+                diskStateToCreate.name = azureDataDisk.name();
+                diskStateToCreate.customProperties = new HashMap<>();
+                diskStateToCreate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf
+                        (azureDataDisk.lun()));
+                diskStateToCreate.customProperties.put(AZURE_MANAGED_DISK_TYPE, azureDataDisk
+                        .managedDisk().storageAccountType().toString());
+                diskStateToCreate.customProperties.put(AZURE_DATA_DISK_CACHING, azureDataDisk
+                        .caching().toString());
+                diskStateToCreate.capacityMBytes = azureDataDisk.diskSizeGB() * 1024;
+                diskStateToCreate.status = DiskService.DiskStatus.ATTACHED;
+
+                Operation createDiskState = Operation
+                        .createPost(ctx.service, DiskService.FACTORY_LINK)
+                        .setBody(diskStateToCreate);
+
+                DeferredResult<Operation> createDR = ctx.service.sendWithDeferredResult
+                        (createDiskState)
+                        .whenComplete((op, exc) -> {
+                            if (exc != null) {
+                                logSevere(() -> String.format(
+                                        "Creating data DiskState [%s] with disk id [%s]: FAILED "
+                                                + "with %s", azureDataDisk.name(), azureDataDisk
+                                                .managedDisk().id(), Utils.toString(exc)));
+                            } else {
+                                logFine(() -> String.format(
+                                        "Creating data DiskState [%s] with disk id [%s]: SUCCESS",
+                                        azureDataDisk.name(), azureDataDisk.managedDisk().id()));
+                                //update compute state with data disks present on custom image
+                                ComputeState cs = new ComputeState();
+                                List<String> disksLinks =  new ArrayList<>();
+                                DiskState diskState = op.getBody(DiskState.class);
+                                disksLinks.add(diskState.documentSelfLink);
+                                cs.diskLinks = disksLinks;
+                                Operation.CompletionHandler completionHandler = (ox, ex) -> {
+                                    if (ex != null) {
+                                        handleError(ctx, ex);
+                                        return;
+                                    }
+                                };
+                                sendRequest(Operation.createPatch(ctx.computeRequest.resourceReference).setBody(cs).setCompletion(completionHandler));
+                            }
+                        });
+                diskStateDRs.add(createDR);
             }
 
-            // The LUN value of disk
-            if (diskStateToUpdate.customProperties == null) {
-                diskStateToUpdate.customProperties = new HashMap<>();
-            }
-            diskStateToUpdate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
-
-            Operation updateDiskState = Operation
-                    .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
-                    .setBody(diskStateToUpdate);
-
-            DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)
-                    .whenComplete((op, exc) -> {
-                        if (exc != null) {
-                            logSevere(() -> String.format(
-                                    "Updating data DiskState [%s] with VHD URI [%s]: FAILED with %s",
-                                    dataDiskState.name, diskStateToUpdate.id, Utils.toString(exc)));
-                        } else {
-                            logFine(() -> String.format(
-                                    "Updating data DiskState [%s] with VHD URI [%s]: SUCCESS",
-                                    dataDiskState.name, diskStateToUpdate.id));
-                        }
-                    });
-
-            updateDiskStateDRs.add(updateDR);
         }
 
-        return DeferredResult.allOf(updateDiskStateDRs).thenApply(ignored -> ctx);
+        return DeferredResult.allOf(diskStateDRs).thenApply(ignored -> ctx);
     }
 
     /**
