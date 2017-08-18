@@ -28,7 +28,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.IPAddressService;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
-import com.vmware.photon.controller.model.resources.ResourceUtils;
 import com.vmware.photon.controller.model.resources.SubnetRangeService.SubnetRangeState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.IPVersion;
@@ -56,6 +55,8 @@ public class IPAddressAllocationTaskService extends
     public static final String FACTORY_LINK = UriPaths.TASKS + "/ip-address-allocation-tasks";
     public static final String ID_SEPARATOR = "_";
 
+    public static final String CUSTOM_PROPERTY_SUFFIX_IP_ADDRESS_LINK = "-IPAddressLink";
+
     /**
      * Service context that is created for passing subnet and ip range information between async calls.
      * Used only during allocation.
@@ -82,10 +83,10 @@ public class IPAddressAllocationTaskService extends
         // Resource link of the IP address being allocated.
         public List<String> ipAddressLinks;
 
-         // IP addresses being allocated.
+        // IP addresses being allocated.
         public List<String> ipAddresses;
 
-         // IP ranges from which IP address is allocated.
+        // IP ranges from which IP address is allocated.
         public List<String> subnetRangeLinks;
 
         /**
@@ -369,30 +370,31 @@ public class IPAddressAllocationTaskService extends
      */
     private void deallocateIpAddress(IPAddressAllocationTaskState state) {
         IPAddressState addressState = new IPAddressState();
+        addressState.connectedResourceLink = state.connectedResourceLink;
         addressState.ipAddressStatus = IPAddressState.IPAddressStatus.RELEASED;
-        addressState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
 
         List<DeferredResult<Operation>> deferredResults = new ArrayList<>();
         for (int i = 0; i < state.ipAddressLinks.size(); i++) {
             String ipAddressResourceLink = state.ipAddressLinks.get(i);
             Operation patchOp = Operation.createPatch(this, ipAddressResourceLink)
-                    .setBody(addressState)
-                    .setCompletion((o, e) -> {
-                        if (e != null) {
-                            failTask(e, "Failed to de-allocate IP address resource %s due to failure %s",
-                                    ipAddressResourceLink, e.getMessage());
-                            return;
-                        }
-                    });
+                    .setBody(addressState);
             deferredResults.add(this.sendWithDeferredResult(patchOp));
         }
 
         DeferredResult.allOf(deferredResults).thenAccept(
-                dr -> proceedTo(IPAddressAllocationTaskState.SubStage.FINISHED, null));
+                dr -> proceedTo(IPAddressAllocationTaskState.SubStage.FINISHED, null))
+                .exceptionally(e -> {
+                    if (e != null) {
+                        failTask(e, "Failed to de-allocate IP addresses due to failure %s",
+                                e.getMessage());
+                    }
+                    return null;
+                });
     }
 
     /**
      * Allocates IP Address for a subnet
+     *
      * @param state IP Address allocation task state.
      */
     private void allocateIpAddress(IPAddressAllocationTaskState state) {
@@ -403,7 +405,7 @@ public class IPAddressAllocationTaskService extends
                 .thenAccept(ctxt -> {
                     if (!ctxt.subnetRangeStatesIterator.hasNext()) {
                         logWarning(() -> String.format("No IP address ranges are available for "
-                                        + "subnet %s", context.subnetState.documentSelfLink));
+                                + "subnet %s", context.subnetState.documentSelfLink));
                         // ignore this particular error for now and complete task
                         // TODO: this task would eventually need to delegate IP address allocation to an
                         // adapter, which will take the appropriate action based on the adapter type
@@ -418,7 +420,7 @@ public class IPAddressAllocationTaskService extends
      * Retrieves ip range documents, that parent to a specific subnet link.
      *
      * @param context Allocation context information.
-     * @return        Sets list of subnet range states for the subnet resource link and returns the context.
+     * @return Sets list of subnet range states for the subnet resource link and returns the context.
      */
     private DeferredResult<IPAddressAllocationContext> retrieveIpRanges(IPAddressAllocationContext context) {
         Builder builder = Builder.create()
@@ -440,9 +442,10 @@ public class IPAddressAllocationTaskService extends
      * Retrieves the subnet document that a resource link is pointing to.
      *
      * @param subnetResourceLink Resource link of the subnet document to be retrieved.
-     * @return                   Subnet range document.
+     * @return Subnet range document.
      */
-    private DeferredResult<IPAddressAllocationContext> retrieveSubnet(String subnetResourceLink, IPAddressAllocationContext context) {
+    private DeferredResult<IPAddressAllocationContext> retrieveSubnet(String subnetResourceLink,
+            IPAddressAllocationContext context) {
         return this.sendWithDeferredResult(Operation.createGet(this, subnetResourceLink))
                 .thenApply(o -> {
                     context.subnetState = o.getBody(SubnetState.class);
@@ -453,7 +456,7 @@ public class IPAddressAllocationTaskService extends
     /**
      * Allocates IP address for a subnet, by recursively checking all the IP address subnet ranges
      * associated to the subnet.
-
+     *
      * @param context Allocation context information.
      */
     private void allocateIpAddressForSubnet(IPAddressAllocationContext context) {
@@ -478,11 +481,13 @@ public class IPAddressAllocationTaskService extends
      * Retrieves existing IP address resources created with different status within a specific range
      *
      * @param rangeState Subnet range information.
-     * @return           List of IP Addresses created within that range.
+     * @return List of IP Addresses created within that range.
      */
-    private DeferredResult<List<IPAddressState>> retrieveExistingIpAddressesFromRange(SubnetRangeState rangeState) {
+    private DeferredResult<List<IPAddressState>> retrieveExistingIpAddressesFromRange(
+            SubnetRangeState rangeState) {
         QueryTask.Query getIpAddressQuery = QueryTask.Query.Builder.create()
-                .addFieldClause(IPAddressState.FIELD_NAME_SUBNET_RANGE_LINK, rangeState.documentSelfLink)
+                .addFieldClause(IPAddressState.FIELD_NAME_SUBNET_RANGE_LINK,
+                        rangeState.documentSelfLink)
                 .build();
 
         QueryUtils.QueryByPages<IPAddressState> queryByPages = new QueryUtils.QueryByPages<>(
@@ -505,7 +510,7 @@ public class IPAddressAllocationTaskService extends
             List<IPAddressState> existingIpAddressStates, String resourceLink) {
         if (!IPVersion.IPv4.equals(subnetRangeState.ipVersion)) {
             logWarning(() -> String.format("Not allocating from IP address range %s. Currently, "
-                            + "only IPv4 is supported", subnetRangeState.documentSelfLink));
+                    + "only IPv4 is supported", subnetRangeState.documentSelfLink));
             return false;
         }
 
@@ -617,8 +622,8 @@ public class IPAddressAllocationTaskService extends
      * @return True if transition is invalid. False otherwise.
      */
     private boolean validateTransitionAndUpdateState(Operation patch,
-                                                     IPAddressAllocationTaskState body,
-                                                     IPAddressAllocationTaskState currentState) {
+            IPAddressAllocationTaskState body,
+            IPAddressAllocationTaskState currentState) {
 
         TaskState.TaskStage currentStage = currentState.taskInfo.stage;
         IPAddressAllocationTaskState.SubStage currentSubStage = currentState.taskSubStage;
@@ -715,10 +720,14 @@ public class IPAddressAllocationTaskService extends
     private void sendCallbackResponse(IPAddressAllocationTaskState state) {
         IPAddressAllocationTaskResult result;
         if (state.taskInfo.stage == TaskState.TaskStage.FAILED) {
-            result = new IPAddressAllocationTaskResult(state.serviceTaskCallback.getFailedResponse(state.taskInfo.failure).taskInfo.stage,
-                    state.serviceTaskCallback.getFailedResponse(state.taskInfo.failure).taskSubStage, state.taskInfo.failure);
+            result = new IPAddressAllocationTaskResult(state.serviceTaskCallback
+                    .getFailedResponse(state.taskInfo.failure).taskInfo.stage,
+                    state.serviceTaskCallback
+                            .getFailedResponse(state.taskInfo.failure).taskSubStage,
+                    state.taskInfo.failure);
         } else {
-            result = new IPAddressAllocationTaskResult(state.serviceTaskCallback.getFinishedResponse().taskInfo.stage,
+            result = new IPAddressAllocationTaskResult(
+                    state.serviceTaskCallback.getFinishedResponse().taskInfo.stage,
                     state.serviceTaskCallback.getFinishedResponse().taskSubStage, null);
         }
 
@@ -728,11 +737,17 @@ public class IPAddressAllocationTaskService extends
         result.connectedResourceLink = state.connectedResourceLink;
         if (state.ipAddresses != null && state.ipAddresses.size() > 0) {
             result.customProperties.put(state.connectedResourceLink, state.ipAddresses.get(0));
+            result.customProperties
+                    .put(state.connectedResourceLink + CUSTOM_PROPERTY_SUFFIX_IP_ADDRESS_LINK,
+                            state.ipAddressLinks.get(0));
         }
 
-        logInfo(String.format("Allocated IP addresses [%s] for resource [%s]",
+        logInfo(String.format("%s IP addresses [%s] for resource [%s]",
+                state.requestType == IPAddressAllocationTaskState.RequestType.ALLOCATE ?
+                        "Allocated" :
+                        "Deallocated",
                 result.ipAddresses != null ?
-                String.join(",", result.ipAddresses) : "", result.connectedResourceLink));
+                        String.join(",", result.ipAddresses) : "", result.connectedResourceLink));
 
         sendRequest(Operation.createPatch(state.serviceTaskCallback.serviceURI).setBody(result));
     }

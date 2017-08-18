@@ -163,10 +163,22 @@ public class IPAddressService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        IPAddressState newState = processInput(put);
+        if (!put.hasBody()) {
+            throw (new IllegalArgumentException("body is required"));
+        }
+        IPAddressState newState = put.getBody(IPAddressState.class);
 
         // Verify valid status changes
         IPAddressState currentState = getState(put);
+        if (isNoOperation(currentState, newState)) {
+            put.complete();
+            return;
+        }
+        // Clear connected resource when releasing the ip address
+        if (IPAddressStatus.RELEASED.equals(newState.ipAddressStatus)) {
+            newState.connectedResourceLink = null;
+        }
+        validateState(newState);
         validateIPAddressStatusTransition(currentState, newState);
         setState(put, newState);
         put.complete();
@@ -179,10 +191,17 @@ public class IPAddressService extends StatefulService {
         }
 
         IPAddressState currentState = getState(patch);
+        IPAddressState patchState = patch.getBody(IPAddressState.class);
 
+        if (isNoOperation(currentState, patchState)) {
+            patch.complete();
+            return;
+        }
+        if (IPAddressStatus.RELEASED.equals(patchState.ipAddressStatus)) {
+            patchState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
+        }
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
                 IPAddressState.class, op -> {
-                    IPAddressState patchState = patch.getBody(IPAddressState.class);
                     boolean hasChanged = false;
 
                     // Verify valid status changes
@@ -275,7 +294,49 @@ public class IPAddressService extends StatefulService {
                 "ConnectedResourceLink is required if IP address status is ALLOCATED");
         AssertUtil.assertFalse((ipAddressState.ipAddressStatus == IPAddressStatus.RELEASED
                         || ipAddressState.ipAddressStatus == IPAddressStatus.AVAILABLE)
-                        && !StringUtil.isNullOrEmpty(ipAddressState.connectedResourceLink),
-                "ConnectedResourceLink must be null if IP address status is RELEASED");
+                        && linkHasValue(ipAddressState.connectedResourceLink),
+                "ConnectedResourceLink must be null if IP address status is AVAILABLE or RELEASED");
+    }
+
+    /**
+     * Checks if a link has value.
+     *
+     * @param link
+     * @return true when a link field has a value
+     */
+    private boolean linkHasValue(String link) {
+        return (!ResourceUtils.NULL_LINK_VALUE.equals(link) &&
+                !StringUtil.isNullOrEmpty(link));
+    }
+
+    /**
+     * Used for PUT or PATCH. Handle the case of two consecutive release calls of the same IP address document.
+     * Avoid modifying currentResourceLink.
+     *
+     * @param currentState
+     * @param newState
+     * @return
+     */
+    private boolean isNoOperation(IPAddressState currentState, IPAddressState newState) {
+        // Avoid changing status if the connected resource has changed
+        // Since deallocate can be called twice (for retry) - make sure
+        // it is ignored if the resource has changed
+        if (linkHasValue(newState.connectedResourceLink) &&
+                linkHasValue(currentState.connectedResourceLink) &&
+                !newState.connectedResourceLink.equals(currentState.connectedResourceLink)) {
+            logWarning("Cannot modify IP address [%s] and change the connected resource link. Operation ignored (current state: [%s] new state: [%s]).",
+                    currentState.documentSelfLink, currentState, newState);
+            return true;
+        }
+
+        // Ignore change from AVAILABLE to RELEASED, can happen when deallocation called twice
+        if (IPAddressStatus.RELEASED.equals(newState.ipAddressStatus) &&
+                IPAddressStatus.AVAILABLE.equals(currentState.ipAddressStatus)) {
+            logInfo("IP address [%s] is already available, and need not be released. Operation ignored.",
+                    currentState.documentSelfLink);
+            return true;
+        }
+
+        return false;
     }
 }

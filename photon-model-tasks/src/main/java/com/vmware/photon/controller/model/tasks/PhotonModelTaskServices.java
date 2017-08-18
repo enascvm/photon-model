@@ -43,6 +43,8 @@ public class PhotonModelTaskServices {
                     () -> TaskFactoryService.create(ScheduledTaskService.class)),
             factoryService(ResourceRemovalTaskService.class,
                     () -> TaskFactoryService.create(ResourceRemovalTaskService.class)),
+            factoryService(ResourceIPDeallocationTaskService.class,
+                    () -> TaskFactoryService.create(ResourceIPDeallocationTaskService.class)),
             factoryService(ProvisionComputeTaskService.class,
                     () -> TaskFactoryService.create(ProvisionComputeTaskService.class)),
             factoryService(ProvisionNetworkTaskService.class,

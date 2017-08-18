@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -27,12 +29,19 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.IPAddressService;
+import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.SubnetRangeService;
+import com.vmware.photon.controller.model.resources.SubnetRangeService.SubnetRangeState;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.xenon.common.UriUtils;
 
 /**
@@ -109,15 +118,69 @@ public class ModelUtils {
     public static NetworkInterfaceState createNetworkInterface(BaseModelTest test, String name)
             throws Throwable {
         NetworkInterfaceState nis = new NetworkInterfaceState();
-        nis.id = UUID.randomUUID().toString();
         nis.name = name;
-        nis.documentSelfLink = nis.id;
-        nis.address = "10.0.0.0";
-        nis.subnetLink = "/resources/subnet/subnet9";
+        // Populate IP addresses for this network interface
+        SubnetState subnetState = createSubnet(test);
+        nis.subnetLink = subnetState.documentSelfLink;
 
-        NetworkInterfaceState returnState = test.postServiceSynchronously(
+        NetworkInterfaceState networkInterfaceState = test.postServiceSynchronously(
                 NetworkInterfaceService.FACTORY_LINK, nis, NetworkInterfaceState.class);
+
+        List<IPAddressState> ips = createSubnetRangeWithIpAddresses(test, subnetState.documentSelfLink,
+                networkInterfaceState.documentSelfLink, 1);
+
+        networkInterfaceState.address = ips.get(0).ipAddress;
+        networkInterfaceState.addressLink = ips.get(0).documentSelfLink;
+        test.putServiceSynchronously(networkInterfaceState.documentSelfLink, networkInterfaceState);
+
+        return networkInterfaceState;
+    }
+
+    public static SubnetState createSubnet(BaseModelTest test) throws Throwable {
+        SubnetState subnetState = new SubnetState();
+        subnetState.id = UUID.randomUUID().toString();
+        subnetState.documentSelfLink = subnetState.id;
+        subnetState.networkLink = UUID.randomUUID().toString();
+        subnetState.gatewayAddress = "12.12.12.1";
+        subnetState.domain = "vmware.com";
+        subnetState.dnsServerAddresses = new HashSet<String>();
+        subnetState.dnsServerAddresses.add("192.12.12.12");
+        subnetState.subnetCIDR = "12.12.12.0/24";
+
+        SubnetState returnState = test.postServiceSynchronously(SubnetService.FACTORY_LINK,
+                subnetState, SubnetState.class);
+
         return returnState;
+    }
+
+    public static List<IPAddressState> createSubnetRangeWithIpAddresses(BaseModelTest test, String subnetLink,
+                                                                        String connectedResourceLink, int ipAddressCount)
+        throws Throwable {
+
+        SubnetRangeState subnetRange = new SubnetRangeService.SubnetRangeState();
+        subnetRange.startIPAddress = "12.12.12.2";
+        subnetRange.endIPAddress = "12.12.12.120";
+        subnetRange.ipVersion = IPVersion.IPv4;
+        subnetRange.subnetLink = subnetLink;
+
+        SubnetRangeState subnetRangeState = test.postServiceSynchronously(SubnetRangeService.FACTORY_LINK,
+                subnetRange, SubnetRangeState.class);
+
+        List<IPAddressState> returnStates = new ArrayList<>();
+        String prefix = "12.12.12.";
+        int initialValue = 3;
+        for (int i = 0; i < ipAddressCount; i++) {
+            IPAddressState ipAddressState = new IPAddressState();
+            ipAddressState.ipAddress = prefix + (initialValue + i);
+            ipAddressState.ipVersion = IPVersion.IPv4;
+            ipAddressState.ipAddressStatus = IPAddressState.IPAddressStatus.ALLOCATED;
+            ipAddressState.subnetRangeLink = subnetRangeState.documentSelfLink;
+            ipAddressState.connectedResourceLink = connectedResourceLink;
+
+            returnStates.add(test.postServiceSynchronously(IPAddressService.FACTORY_LINK, ipAddressState, IPAddressState.class));
+        }
+
+        return returnStates;
     }
 
     public static ComputeService.ComputeStateWithDescription createComputeWithDescription(

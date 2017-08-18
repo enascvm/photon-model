@@ -27,6 +27,7 @@ import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.tasks.ResourceIPDeallocationTaskService.ResourceIPDeallocationTaskState;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -57,6 +58,7 @@ public class ResourceRemovalTaskService
     public static enum SubStage {
         WAITING_FOR_QUERY_COMPLETION,
         ISSUE_ADAPTER_DELETES,
+        DEALLOCATE_IP_ADDRESSES,
         DELETE_DOCUMENTS,
         FINISHED,
         FAILED
@@ -234,8 +236,8 @@ public class ResourceRemovalTaskService
                         sendSelfPatch(TaskState.TaskStage.STARTED,
                                 currentState.options != null && currentState.options
                                         .contains(TaskOption.DOCUMENT_CHANGES_ONLY)
-                                                ? SubStage.DELETE_DOCUMENTS
-                                                : SubStage.ISSUE_ADAPTER_DELETES,
+                                        ? SubStage.DELETE_DOCUMENTS
+                                        : SubStage.ISSUE_ADAPTER_DELETES,
                                 s -> s.nextPageLink = queryTask.results.nextPageLink);
                     }
                     return;
@@ -249,6 +251,21 @@ public class ResourceRemovalTaskService
             getQueryResults(currentState.nextPageLink, queryTask -> {
                 doInstanceDeletes(currentState, queryTask, null);
             });
+            break;
+        case DEALLOCATE_IP_ADDRESSES:
+            // if next page is not set, execute the original paged query again
+            if (currentState.nextPageLink == null) {
+                getQueryResults(currentState.resourceQueryLink, queryTask -> {
+                    sendSelfPatch(currentState.taskInfo.stage, currentState.taskSubStage, s -> {
+                        s.nextPageLink = queryTask.results.nextPageLink;
+                    });
+                });
+            } else {
+                // handle current page
+                getQueryResults(currentState.nextPageLink, queryTask -> {
+                    deallocateIpAddressesForResources(currentState, queryTask, null);
+                });
+            }
             break;
         case DELETE_DOCUMENTS:
             // if next page is not set, execute the original paged query again
@@ -302,7 +319,7 @@ public class ResourceRemovalTaskService
                     sendRequest(Operation.createDelete(this, currentState.resourceQueryLink));
                     if (exc != null) {
                         logSevere(() -> String.format("Failure deleting compute states from the"
-                                        + " local system", Utils.toString(exc)));
+                                + " local system", Utils.toString(exc)));
                         sendFailureSelfPatch(exc.values().iterator().next());
                         return;
                     }
@@ -323,7 +340,7 @@ public class ResourceRemovalTaskService
 
         // handle empty pages
         if (queryTask.results.documentCount == 0) {
-            sendSelfPatch(currentState.taskInfo.stage, SubStage.DELETE_DOCUMENTS, s -> {
+            sendSelfPatch(currentState.taskInfo.stage, SubStage.DEALLOCATE_IP_ADDRESSES, s -> {
                 s.nextPageLink = null;
             });
             return;
@@ -340,7 +357,6 @@ public class ResourceRemovalTaskService
         // for each compute resource link in the results, expand it with the
         // description, and issue
         // a DELETE request to its associated instance service.
-
         for (String resourceLink : queryTask.results.documentLinks) {
             URI u = ComputeStateWithDescription
                     .buildUri(UriUtils.buildUri(getHost(), resourceLink));
@@ -379,7 +395,7 @@ public class ResourceRemovalTaskService
                     .addProperty(ResourceRemovalTaskState.FIELD_NAME_NEXT_PAGE_LINK,
                             queryTask.results.nextPageLink);
         } else {
-            callback.onSuccessTo(SubStage.DELETE_DOCUMENTS);
+            callback.onSuccessTo(SubStage.DEALLOCATE_IP_ADDRESSES);
         }
 
         SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
@@ -441,6 +457,94 @@ public class ResourceRemovalTaskService
                     .finish(resourceLink);
             sendPatch(subTaskLink, subTaskPatchBody);
         }
+    }
+
+    private void deallocateIpAddressesForResources(ResourceRemovalTaskState currentState,
+            QueryTask queryTask, String subTaskLink) {
+        // handle empty pages
+        if (queryTask.results.documentCount == 0) {
+            sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
+            return;
+        }
+
+        if (subTaskLink == null) {
+            createSubTaskForIpDeallocationCallbacks(currentState, queryTask,
+                    link -> deallocateIpAddressesForResources(currentState, queryTask, link));
+            return;
+        }
+
+        logFine("Starting ip deallocation of %d compute resources using sub task",
+                        queryTask.results.documentCount);
+        // for each compute resource link in the results, call ResourceIPDeallocationTaskService
+        for (String resourceLink : queryTask.results.documentLinks) {
+            ResourceIPDeallocationTaskState deallocateTask = new ResourceIPDeallocationTaskState();
+            deallocateTask.resourceLink = resourceLink;
+            deallocateTask.serviceTaskCallback = ServiceTaskCallback
+                    .create(UriUtils.buildPublicUri(getHost(), subTaskLink));
+            deallocateTask.serviceTaskCallback.onSuccessFinishTask();
+            // Similar to instance deletes - a failure for one network interface deallocate will fail the task
+            deallocateTask.serviceTaskCallback.onErrorFailTask();
+            this.sendRequest(Operation
+                    .createPost(this, ResourceIPDeallocationTaskService.FACTORY_LINK)
+                    .setBody(deallocateTask)
+                    .setCompletion((o, ex) -> {
+                        if (ex != null) {
+                            logSevere("Failure deallocating IPs for resource: [%s]: %s",
+                                    resourceLink, ex);
+                            ResourceOperationResponse subTaskPatchBody = ResourceOperationResponse
+                                    .finish(resourceLink);
+                            sendPatch(subTaskLink, subTaskPatchBody);
+                        } else {
+                            logFine("Sent deallocation IPs request for resource [%s]",
+                                    resourceLink);
+                        }
+                    }));
+        }
+    }
+
+    /**
+     * Before we proceed with issuing IP deallocation requests to the instance services we must create a sub
+     * task that will track the IP dealloaction completions. The instance service will issue a PATCH with
+     * TaskStage.FINISHED, for every PATCH we send it
+     */
+    private void createSubTaskForIpDeallocationCallbacks(ResourceRemovalTaskState currentState,
+            QueryTask queryTask, Consumer<String> subTaskLinkConsumer) {
+
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
+        if (queryTask.results.nextPageLink != null) {
+            callback.onSuccessTo(SubStage.DEALLOCATE_IP_ADDRESSES)
+                    .addProperty(ResourceRemovalTaskState.FIELD_NAME_NEXT_PAGE_LINK,
+                            queryTask.results.nextPageLink);
+        } else {
+            callback.onSuccessTo(SubStage.DELETE_DOCUMENTS);
+        }
+
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
+
+        // tell the sub task with what to patch us, on completion
+        subTaskInitState.serviceTaskCallback = callback;
+        subTaskInitState.completionsRemaining = queryTask.results.documentLinks.size();
+        subTaskInitState.errorThreshold = currentState.errorThreshold;
+        subTaskInitState.tenantLinks = currentState.tenantLinks;
+        subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
+        Operation startPost = Operation
+                .createPost(this, SubTaskService.FACTORY_LINK)
+                .setBody(subTaskInitState)
+                .setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                logWarning("Failure creating sub task: %s",
+                                        Utils.toString(e));
+                                sendFailureSelfPatch(e);
+                                return;
+                            }
+                            SubTaskService.SubTaskState<?> body = o
+                                    .getBody(SubTaskService.SubTaskState.class);
+
+                            subTaskLinkConsumer.accept(body.documentSelfLink);
+                        });
+        sendRequest(startPost);
     }
 
     public void getQueryResults(String resultsLink, Consumer<QueryTask> consumer) {

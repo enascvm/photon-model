@@ -35,6 +35,10 @@ import com.vmware.photon.controller.model.ModelUtils;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
+import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.SubStage;
 import com.vmware.xenon.common.Service;
@@ -65,7 +69,7 @@ public class ResourceRemovalTaskServiceTest extends Suite {
         startState.resourceQuerySpec = new QueryTask.QuerySpecification();
         QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
                 ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(
-                        Utils.buildKind(ComputeService.ComputeState.class));
+                Utils.buildKind(ComputeService.ComputeState.class));
         startState.resourceQuerySpec.query.addBooleanClause(kindClause);
         startState.isMockRequest = true;
 
@@ -287,10 +291,123 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
         @Test
         public void testPaginatedLocalResourceRemovalSuccess() throws Throwable {
-            testPaginatedResourceRemoval(EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY));
+            testPaginatedResourceRemoval(EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY), false);
         }
 
-        private void testPaginatedResourceRemoval(EnumSet<TaskOption> taskOptions) throws Throwable {
+        @Test
+        public void testResourceRemovalFailureWithPagination() throws Throwable {
+            final int pageSize = 2;
+            final int totalComputeCount = 10;
+
+            ResourceRemovalTaskState startState = buildValidStartState();
+            startState.resourceQuerySpec.resultLimit = pageSize;
+
+            List<ComputeService.ComputeStateWithDescription> computes =
+                    new ArrayList<>(totalComputeCount);
+            for (int i = 0; i < totalComputeCount; i++) {
+                if (i == 3) {
+                    computes.add(ModelUtils
+                            .createComputeWithDescription(this,
+                                    MockAdapter.MockFailureInstanceAdapter.SELF_LINK,
+                                    null));
+                } else {
+                    computes.add(ModelUtils.createComputeWithDescription(this,
+                            MockAdapter.MockSuccessInstanceAdapter.SELF_LINK,
+                            null));
+                }
+            }
+
+            assertDocumentCount(totalComputeCount,
+                    computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
+
+            ResourceRemovalTaskState returnState = this
+                    .postServiceSynchronously(
+                            ResourceRemovalTaskService.FACTORY_LINK,
+                            startState,
+                            ResourceRemovalTaskState.class);
+
+            returnState = this
+                    .waitForServiceState(
+                            ResourceRemovalTaskState.class,
+                            returnState.documentSelfLink,
+                            //state -> state.taskInfo.stage == TaskStage.FAILED);
+                            state -> state.taskInfo.stage == TaskState.TaskStage.FAILED);
+
+            assertDocumentCount(totalComputeCount,
+                    computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
+
+            // Clean up the compute and description documents
+            for (ComputeState computeState : computes) {
+                this.deleteServiceSynchronously(computeState.documentSelfLink);
+                this.deleteServiceSynchronously(computeState.descriptionLink);
+            }
+
+            // Stop factory service.
+            this.deleteServiceSynchronously(ResourceRemovalTaskService.FACTORY_LINK);
+
+            // stop the removal task
+            this.stopServiceSynchronously(returnState.documentSelfLink);
+        }
+
+        @Test
+        public void testNegativeIpReleaseWithPagination() throws Throwable {
+            final int pageSize = 2;
+            final int totalComputeCount = 10;
+
+            ResourceRemovalTaskState startState = buildValidStartState();
+            startState.resourceQuerySpec.resultLimit = pageSize;
+
+            List<ComputeService.ComputeStateWithDescription> computes =
+                    new ArrayList<>(totalComputeCount);
+            for (int i = 0; i < totalComputeCount; i++) {
+                computes.add(ModelUtils.createComputeWithDescription(this,
+                        MockAdapter.MockSuccessInstanceAdapter.SELF_LINK,
+                        null));
+            }
+
+            // Make one of the ip address links invalid, deallocation should fail
+            modifyToInvalidAddressLink(computes.get(9));
+
+            assertDocumentCount(totalComputeCount,
+                    computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
+
+            ResourceRemovalTaskState returnState = this
+                    .postServiceSynchronously(
+                            ResourceRemovalTaskService.FACTORY_LINK,
+                            startState,
+                            ResourceRemovalTaskState.class);
+
+            // Should be fail instead of finish !!!
+            // Even with an error we finish the task
+            returnState = this
+                    .waitForServiceState(
+                            ResourceRemovalTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> state.taskInfo.stage == TaskState.TaskStage.FAILED); // SHOULD BE FAILED
+
+            assertDocumentCount(totalComputeCount,
+                    computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
+
+            // Clean up the compute and description documents
+            for (ComputeState computeState : computes) {
+                this.deleteServiceSynchronously(computeState.documentSelfLink);
+                this.deleteServiceSynchronously(computeState.descriptionLink);
+            }
+
+            // Stop factory service.
+            this.deleteServiceSynchronously(ResourceRemovalTaskService.FACTORY_LINK);
+
+            // stop the removal task
+            this.stopServiceSynchronously(returnState.documentSelfLink);
+        }
+
+        private void testPaginatedResourceRemoval(EnumSet<TaskOption> taskOptions)
+                throws Throwable {
+            testPaginatedResourceRemoval(taskOptions, true);
+        }
+
+        private void testPaginatedResourceRemoval(EnumSet<TaskOption> taskOptions,
+                boolean verifyIpRelease) throws Throwable {
             final int pageSize = 2;
             final int totalComputeCount = 10;
 
@@ -308,6 +425,11 @@ public class ResourceRemovalTaskServiceTest extends Suite {
             assertDocumentCount(totalComputeCount,
                     computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
 
+            // Get the list of allocated IP addresses, to verify those are released as part of the resource removal
+            List<String> ipAddressLinks = new ArrayList<>();
+            if (verifyIpRelease) {
+                ipAddressLinks = getAllocatedIpAddressLinks(computes);
+            }
 
             ResourceRemovalTaskState returnState = this
                     .postServiceSynchronously(
@@ -326,6 +448,10 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
             assertDocumentCount(0,
                     computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
+
+            if (verifyIpRelease) {
+                assertReleasedIpAddresses(ipAddressLinks);
+            }
 
             // Clean up the compute and description documents
             for (ComputeState computeState : computes) {
@@ -348,6 +474,44 @@ public class ResourceRemovalTaskServiceTest extends Suite {
                     .addOption(QueryOption.COUNT).build();
             QueryTask returnedTask = querySynchronously(queryTask);
             assertThat(returnedTask.results.documentCount, is(expectedCount));
+        }
+
+        private List<String> getAllocatedIpAddressLinks(
+                Collection<ComputeStateWithDescription> computes) throws Throwable {
+            List<String> ipAddressLinks = new ArrayList<>();
+            for (ComputeState compute : computes) {
+                for (String networkInterfaceLink : compute.networkInterfaceLinks) {
+                    NetworkInterfaceState nis = getServiceSynchronously(networkInterfaceLink,
+                            NetworkInterfaceState.class);
+                    if (nis != null && nis.addressLink != null) {
+                        ipAddressLinks.add(nis.addressLink);
+                    }
+                }
+            }
+            return ipAddressLinks;
+        }
+
+        private void modifyToInvalidAddressLink(ComputeService.ComputeStateWithDescription compute)
+                throws Throwable {
+
+            NetworkInterfaceState nis = getServiceSynchronously(
+                    compute.networkInterfaceLinks.get(0), NetworkInterfaceState.class);
+            assertThat("Network interface cannot be null", nis != null);
+            nis.addressLink = "InvalidAddressLink";
+            putServiceSynchronously(nis.documentSelfLink, nis);
+        }
+
+        private void assertReleasedIpAddresses(Collection<String> ipAddressLinks)
+                throws Throwable {
+            for (String ipAddressLink : ipAddressLinks) {
+                IPAddressState ipAddressState = getServiceSynchronously(ipAddressLink,
+                        IPAddressState.class);
+                assertThat("IP address cannot be null", ipAddressState != null);
+                assertThat("IP address should be released", ipAddressState.ipAddressStatus,
+                        is(IPAddressStatus.RELEASED));
+                assertThat("No connected resource for released IP address", ipAddressState.connectedResourceLink == null);
+
+            }
         }
     }
 }

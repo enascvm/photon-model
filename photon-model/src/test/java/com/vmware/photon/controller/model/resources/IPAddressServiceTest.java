@@ -126,7 +126,6 @@ public class IPAddressServiceTest extends Suite {
 
             assertThat(returnState.tenantLinks.get(0),
                     is(startState.tenantLinks.get(0)));
-
         }
 
         @Test
@@ -262,14 +261,9 @@ public class IPAddressServiceTest extends Suite {
 
             assertEquals(returnState.ipAddressStatus, IPAddressStatus.AVAILABLE);
 
-            // Invalid: AVAILABLE -> RELEASED
+            // AVAILABLE -> RELEASED -> NO OP
             returnState.ipAddressStatus = IPAddressStatus.RELEASED;
-            try {
-                putServiceSynchronously(returnState.documentSelfLink, returnState);
-                assertThat("exception expected for invalid status transition", false);
-            } catch (Exception e) {
-                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
-            }
+            putServiceSynchronously(returnState.documentSelfLink, returnState);
 
             // Verify no transition
             returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
@@ -319,15 +313,8 @@ public class IPAddressServiceTest extends Suite {
             // Verify no transition
             returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
             assertEquals(returnState.ipAddressStatus, IPAddressStatus.RELEASED);
-
-            // Valid: RELEASED -> AVAILABLE
-            returnState.ipAddressStatus = IPAddressStatus.AVAILABLE;
-            putServiceSynchronously(returnState.documentSelfLink, returnState);
-
-            // Verify transition
             returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
-            assertEquals(returnState.ipAddressStatus, IPAddressStatus.AVAILABLE);
-
+            assertEquals(returnState.ipAddressStatus, IPAddressState.IPAddressStatus.RELEASED);
         }
 
         @Test
@@ -337,20 +324,19 @@ public class IPAddressServiceTest extends Suite {
             IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
                     IPAddressState.class);
 
-            // Invalid: ALLOCATED -> RELEASED, connectedResourceLink still set
+            // ALLOCATED -> RELEASED, connectedResourceLink still set, verify it is being nulled
             returnState.ipAddressStatus = IPAddressStatus.RELEASED;
-            try {
-                putServiceSynchronously(returnState.documentSelfLink, returnState);
-                assertThat("exception expected for invalid status transition", false);
-            } catch (Exception e) {
-                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
-            }
+            putServiceSynchronously(returnState.documentSelfLink, returnState);
 
-            // Release IP address
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(null, returnState.connectedResourceLink);
+            assertThat(returnState.ipAddressStatus, is(IPAddressStatus.RELEASED));
+
+            // Release IP address with connectedResourceLink not set
             returnState.connectedResourceLink = null;
             putServiceSynchronously(returnState.documentSelfLink, returnState);
 
-            // Invalid: RELEASED -> AVAILABLE, connectedResourceLink set
+            // RELEASED -> AVAILABLE, connectedResourceLink is being reset
             returnState.ipAddressStatus = IPAddressStatus.AVAILABLE;
             returnState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
             try {
@@ -406,6 +392,7 @@ public class IPAddressServiceTest extends Suite {
             patchState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
+            // Verify the ip was released
             IPAddressState afterPatchState = getServiceSynchronously(
                     returnState.documentSelfLink,
                     IPAddressState.class);
@@ -414,6 +401,23 @@ public class IPAddressServiceTest extends Suite {
             assertThat(afterPatchState.ipAddress, is(startState.ipAddress));
             assertThat(afterPatchState.subnetRangeLink, is(startState.subnetRangeLink));
             assertThat(afterPatchState.ipAddressStatus, is(patchState.ipAddressStatus));
+            assertThat("Document version increased", afterPatchState.documentVersion > returnState.documentVersion);
+
+            // Patch to release again (simulate deallocate twice, should not fail)
+            // Patch the ip address status
+            patchState = new IPAddressState();
+            patchState.ipAddressStatus = IPAddressStatus.RELEASED;
+            patchState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            IPAddressState afterPatch2State = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    IPAddressState.class);
+
+            assertThat(afterPatch2State.name, is(startState.name));
+            assertThat(afterPatch2State.ipAddress, is(startState.ipAddress));
+            assertThat(afterPatch2State.subnetRangeLink, is(startState.subnetRangeLink));
+            assertThat(afterPatch2State.ipAddressStatus, is(patchState.ipAddressStatus));
             assertThat("Document version increased", afterPatchState.documentVersion > returnState.documentVersion);
         }
 
@@ -444,18 +448,14 @@ public class IPAddressServiceTest extends Suite {
             IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
                     IPAddressState.class);
 
-            // Invalid: ALLOCATED -> RELEASED, connectedResourceLink still set
+            // ALLOCATED -> RELEASED, connectedResourceLink will be cleared
             returnState.ipAddressStatus = IPAddressStatus.RELEASED;
-            try {
-                patchServiceSynchronously(returnState.documentSelfLink, returnState);
-                assertThat("exception expected for invalid status transition", false);
-            } catch (Exception e) {
-                assertThat("exception expected for invalid status transition", e instanceof IllegalArgumentException);
-            }
-
-            // Release IP address
-            returnState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
             patchServiceSynchronously(returnState.documentSelfLink, returnState);
+
+            // Verify connectedResourceLink is clear and IP released
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(IPAddressStatus.RELEASED, returnState.ipAddressStatus);
+            assertEquals(null, returnState.connectedResourceLink);
 
             // Invalid: RELEASED -> AVAILABLE, connectedResourceLink set
             returnState.ipAddressStatus = IPAddressStatus.AVAILABLE;
@@ -483,6 +483,52 @@ public class IPAddressServiceTest extends Suite {
             // Mark IP address ALLOCATED
             returnState.connectedResourceLink = ComputeService.FACTORY_LINK + "/machine-1";
             patchServiceSynchronously(returnState.documentSelfLink, returnState);
+        }
+
+        @Test
+        public void testReleaseAvailabeIpAddressNoOp() throws Throwable {
+            // When calling deallocate twice ip was deallocated and then became available by the maintainace thread
+            // Patch should be ignored
+            IPAddressState startState = buildValidStartState();
+            startState.connectedResourceLink  = null;
+            startState.ipAddressStatus = IPAddressState.IPAddressStatus.AVAILABLE;
+            IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
+                    IPAddressState.class);
+
+            assertEquals(IPAddressState.IPAddressStatus.AVAILABLE, returnState.ipAddressStatus);
+
+            // Modify from AVAILABLE to RELEASED  -> NO change
+            IPAddressState patchState = new IPAddressState();
+            patchState.connectedResourceLink = UUID.randomUUID().toString();
+            patchState.ipAddressStatus = IPAddressStatus.RELEASED;
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            // Verify no change and state for resource remains AVAILABLE
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(IPAddressState.IPAddressStatus.AVAILABLE, returnState.ipAddressStatus);
+            assertEquals(null, returnState.connectedResourceLink);
+        }
+
+        @Test
+        public void testReleaseAllocatedDifferentResourceNoOp() throws Throwable {
+            // When deallocating IP twice. It is possible the IP was actually released the first time
+            // and was reassigned to a different resource.
+            IPAddressState startState = buildValidStartState();
+            IPAddressState returnState = postServiceSynchronously(IPAddressService.FACTORY_LINK, startState,
+                    IPAddressState.class);
+
+            assertEquals(IPAddressStatus.ALLOCATED, returnState.ipAddressStatus);
+
+            // Modify from ALLOCATED to RELEASED with different resource -> NO change
+            IPAddressState patchState = new IPAddressState();
+            patchState.connectedResourceLink = UUID.randomUUID().toString();
+            patchState.ipAddressStatus = IPAddressStatus.RELEASED;
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            // Verify no change and state for resource remains AVAILABLE
+            returnState = getServiceSynchronously(returnState.documentSelfLink, IPAddressState.class);
+            assertEquals(IPAddressStatus.ALLOCATED, returnState.ipAddressStatus);
+            assertEquals(startState.connectedResourceLink, returnState.connectedResourceLink);
         }
     }
 

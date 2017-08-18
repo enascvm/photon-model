@@ -72,6 +72,13 @@ public class NetworkInterfaceService extends StatefulService {
         public String address;
 
         /**
+         * Link to the IP address state link, if allocated.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String addressLink;
+
+        /**
          * Firewalls with which this network interface is associated.
          * @deprecated Use {@link #securityGroupLinks} instead.
          */
