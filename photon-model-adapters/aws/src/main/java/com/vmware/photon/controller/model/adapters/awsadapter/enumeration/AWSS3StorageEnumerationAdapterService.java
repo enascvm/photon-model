@@ -82,7 +82,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     private ExecutorService executorService;
 
     public enum S3StorageEnumerationStages {
-        CLIENT, ENUMERATE, ERROR
+        CLIENT, ENUMERATE, ERROR, FINISHED
     }
 
     public enum S3StorageEnumerationSubStage {
@@ -200,12 +200,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 enumerateS3Buckets(aws);
                 break;
             case STOP:
-                AWSClientManagerFactory.returnClientManager(aws.clientManager,
-                        AWSConstants.AwsClientType.S3);
-                logInfo(() -> String.format("Stopping S3 enumeration for %s",
-                        aws.request.original.resourceReference));
-                setOperationDurationStat(aws.operation);
-                aws.operation.complete();
+                aws.stage = S3StorageEnumerationStages.FINISHED;
+                handleEnumerationRequest(aws);
                 break;
             default:
                 break;
@@ -214,7 +210,18 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         case ERROR:
             AWSClientManagerFactory.returnClientManager(aws.clientManager,
                     AWSConstants.AwsClientType.S3);
+            logSevere("Failure during S3 enumeration: %s", aws.error == null
+                    ? "No additional details provided."
+                    : aws.error.getMessage());
             aws.operation.fail(aws.error);
+            break;
+        case FINISHED:
+            AWSClientManagerFactory.returnClientManager(aws.clientManager,
+                    AWSConstants.AwsClientType.S3);
+            logInfo(() -> String.format("Stopping S3 enumeration for %s",
+                    aws.request.original.resourceReference));
+            setOperationDurationStat(aws.operation);
+            aws.operation.complete();
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
@@ -234,18 +241,15 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         aws.amazonS3Client = aws.clientManager.getOrCreateS3Client
                 (aws.parentAuth, aws.request.regionId, this, t -> aws.error = t);
 
-        // If S3 client obtained is invalid complete the operation.
-        if (aws.clientManager.isS3ClientInvalid(aws.parentAuth, aws.request.regionId)) {
-            aws.operation.complete();
-            aws.subStage = S3StorageEnumerationSubStage.ENUMERATION_STOP;
-            handleReceivedEnumerationData(aws);
-        }
-
-        if (aws.error != null) {
-            aws.stage = S3StorageEnumerationStages.ERROR;
+        if (aws.clientManager.isS3ClientInvalid(aws.parentAuth, aws.request.regionId)
+                || (aws.error != null)) {
+            logWarning("AWS client is invalid for [endpoint=%s]",
+                    aws.request.original.endpointLink);
+            aws.stage = S3StorageEnumerationStages.FINISHED;
             handleEnumerationRequest(aws);
             return;
         }
+
         aws.stage = next;
         handleEnumerationRequest(aws);
     }
@@ -300,11 +304,12 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      * @param aws
      */
     private void markClientInvalid(S3StorageEnumerationContext aws) {
+        logWarning("AWS client is invalid for [endpoint=%s]",
+                aws.request.original.endpointLink);
         aws.clientManager
                 .markS3ClientInvalid(this, aws.parentAuth, aws.request.regionId);
-        aws.operation.complete();
-        aws.subStage = S3StorageEnumerationSubStage.ENUMERATION_STOP;
-        handleReceivedEnumerationData(aws);
+        aws.stage = S3StorageEnumerationStages.FINISHED;
+        handleEnumerationRequest(aws);
     }
 
     /**
@@ -741,7 +746,10 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
-                        signalErrorToEnumerationAdapter(aws, e);
+                        this.logWarning("Failure querying S3 disks for deletion for [endpoint=%s]",
+                                aws.request.original.endpointLink);
+                        aws.subStage = next;
+                        handleReceivedEnumerationData(aws);
                         return;
                     }
 
@@ -772,7 +780,10 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 Operation.createGet(this, aws.deletionNextPageLink)
                         .setCompletion((o, e) -> {
                             if (e != null) {
-                                signalErrorToEnumerationAdapter(aws, e);
+                                this.logWarning("Failure querying S3 disks for deletion for [endpoint=%s]",
+                                        aws.request.original.endpointLink);
+                                aws.subStage = next;
+                                handleReceivedEnumerationData(aws);
                                 return;
                             }
                             QueryTask queryTask = o.getBody(QueryTask.class);
