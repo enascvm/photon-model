@@ -24,6 +24,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.DETAILED_CSV_BILL_NAME_MID;
 import static com.vmware.photon.controller.model.adapters.azure.constants
+        .AzureCostConstants.OLD_EA_BILL_AVAILABLE_MONTHS;
+import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.OLD_EA_USAGE_REPORT;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.PATH_PARAM_BILLING_PERIODS;
@@ -40,6 +42,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_JSON;
 import static com.vmware.photon.controller.model.adapters.azure.constants
+        .AzureCostConstants.REQUEST_EXPIRATION_SECONDS;
+import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.SUMMARIZED_BILL;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.THRESHOLD_FOR_TIME_IN_SECONDS;
@@ -49,8 +53,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_HYPHEN_MM;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_MM;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.TWO_MINUTES_IN_MILLISECONDS;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.UNKNOWN_SERVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants
@@ -105,6 +107,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import com.google.gson.JsonParser;
+
 import okhttp3.Request;
 import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTime;
@@ -122,18 +125,19 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Utility class for Azure cost stats service.
  */
-public interface AzureCostStatsServiceHelper {
+public interface AzureCostHelper {
 
-    Logger logger = Logger.getLogger("AzureCostStatsServiceHelper");
+    Logger logger = Logger.getLogger(AzureCostHelper.class.getName());
 
     String TEMP_DIR_LOCATION = "java.io.tmpdir";
     String AZURE_BILLS = "azure-bills";
 
-    static Operation getSummarizedBillOperation(String enrollmentNumber, String accessToken,
+    static Operation getSummarizedBillOp(String enrollmentNumber, String accessToken,
             LocalDate billMonthToDownload) {
         String baseUri = AdapterUriUtil
                 .expandUriPathTemplate(SUMMARIZED_BILL, enrollmentNumber,
@@ -145,10 +149,7 @@ public interface AzureCostStatsServiceHelper {
         addDefaultRequestHeaders(operation, accessToken);
         // Retry thrice on failure.
         operation = operation.setRetryCount(3);
-        // Set expiration to be 60 secs from the time the operation is created. This is being
-        // done since we have seen instances when the detailed bill takes extremely long
-        // time to respond for large bills.
-        operation = operation.setExpiration((getMillisNow() + TWO_MINUTES_IN_MILLISECONDS) * 1000);
+        operation = setExpiration(operation);
         return operation;
     }
 
@@ -194,10 +195,24 @@ public interface AzureCostStatsServiceHelper {
         addDefaultRequestHeaders(operation, accessToken);
         // Retry thrice on failure.
         operation = operation.setRetryCount(3);
-        // Set expiration to be 60 secs from the time the operation is created. This is being
-        // done since we have seen instances when the detailed bill takes extremely long
-        // time to respond for large bills.
-        operation = operation.setExpiration((getMillisNow() + TWO_MINUTES_IN_MILLISECONDS) * 1000);
+        operation = setExpiration(operation);
+        return operation;
+    }
+
+    @OldApi
+    static Operation getOldBillAvailableMonths(String enrollmentNumber, String accessToken) {
+        String baseUri = AdapterUriUtil
+                .expandUriPathTemplate(OLD_EA_BILL_AVAILABLE_MONTHS, enrollmentNumber);
+        // Get the summarized bill in JSON format and detailed bill in CSV format.
+        URI uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(baseUri));
+
+        logger.info(String.format("Request: %s", uri.toString()));
+
+        Operation operation = Operation.createGet(uri);
+        addDefaultRequestHeaders(operation, accessToken);
+        // Retry thrice on failure.
+        operation = operation.setRetryCount(3);
+        operation = setExpiration(operation);
         return operation;
     }
 
@@ -530,5 +545,14 @@ public interface AzureCostStatsServiceHelper {
                 requestUri.substring(monthParamEndIndex, monthParamEndIndex + 6)).withDayOfMonth(1);
     }
 
+    /**
+     * Extending expiration for slow APIs. This is being done since we have seen instances
+     * when the detailed bill takes extremely long time to respond for large bills.
+     * @param op operation whose expiration has to be increased.
+     */
+    static Operation setExpiration(Operation op) {
+        return op.setExpiration(
+                Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(REQUEST_EXPIRATION_SECONDS)));
+    }
 
 }

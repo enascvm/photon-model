@@ -41,9 +41,7 @@ public class AzureCostConstants {
     // By default we will collect the following number of months bills from Azure.
     public static final int DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS = 11;
 
-    public static final int TWO_MINUTES_IN_MILLISECONDS = 120000;
-
-    public static final int READ_TIMEOUT_FOR_REQUESTS = TWO_MINUTES_IN_MILLISECONDS;
+    public static final int REQUEST_EXPIRATION_SECONDS = 120;
 
     public static final int DOWNLOAD_CHUNK_SIZE = 2048; //Same as Okio Segment.SIZE
 
@@ -55,6 +53,9 @@ public class AzureCostConstants {
     private static final String OLD_EA_BASE_URI_FOR_REST = "https://ea.azure.com/rest/{enrollmentNumber}";
     // Usage report
     public static final String OLD_EA_USAGE_REPORT = OLD_EA_BASE_URI_FOR_REST + "/usage-report";
+    // Bill available months
+    public static final String OLD_EA_BILL_AVAILABLE_MONTHS =
+            OLD_EA_BASE_URI_FOR_REST + "/usage-reports";
     // Query parameters
     // month for which bill is required (2016-01 for the bill month January, 2016)
     public static final String QUERY_PARAM_BILL_MONTH = "month";

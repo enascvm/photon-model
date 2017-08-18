@@ -17,14 +17,13 @@ import static com.vmware.photon.controller.model.util.AssertUtil.assertNotNull;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
@@ -79,7 +78,6 @@ public class TestAzureCostStatsService extends BaseModelTest {
     }
 
     @Test
-    @Ignore("VSYM-7696")
     public void testAzureCostStatsServiceEndToEnd() throws Throwable {
         if (this.isMock) {
             return;
@@ -91,6 +89,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
         endpointState.resourcePoolLink = resourcePool.documentSelfLink;
         endpointState.endpointType = PhotonModelConstants.EndpointType.azure_ea.name();
         endpointState.name = "test-azure-endpoint";
+        endpointState.tenantLinks = Collections.singletonList("project-01");
         endpointState.endpointProperties = new HashMap<>();
         endpointState.endpointProperties
                 .put(EndpointConfigRequest.PRIVATE_KEYID_KEY, this.enrollmentNumber);
@@ -120,20 +119,13 @@ public class TestAzureCostStatsService extends BaseModelTest {
                 Integer.toString(NO_OF_MONTHS_COST_REQUIRED - 1));
 
         triggerStatsCollection(resourcePool);
-        verifyPersistedStats(completeState, AzureCostConstants.USAGE_COST,
-                NO_OF_MONTHS_COST_REQUIRED);
         verifyPersistedStats(completeState,
                 PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 1);
 
         //Check if second iteration of adapter succeeds.
         triggerStatsCollection(resourcePool);
-        // Expected count is same since the second run is not supposed to persist any stat
-        // since the second run is running almost immediately after the first and Azure
-        // may not (99.9% of the time) have updated the cost during this time.
-        verifyPersistedStats(completeState, AzureCostConstants.USAGE_COST,
-                NO_OF_MONTHS_COST_REQUIRED);
         verifyPersistedStats(completeState,
-                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 1);
+                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 2);
 
         System.clearProperty(AzureCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
     }

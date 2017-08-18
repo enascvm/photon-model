@@ -105,7 +105,7 @@ public class AzureDetailedBillHandler {
             }
             logger.fine(() -> String.format("Beginning to process row: %s", Arrays.toString(finalNextRow)));
 
-            EaDetailedBillElement detailedBillElement = AzureCostStatsServiceHelper
+            EaDetailedBillElement detailedBillElement = AzureCostHelper
                     .sanitizeDetailedBillElement(nextRow, currency);
             AzureSubscription subscription = populateSubscriptionCost(monthlyBill,
                     detailedBillElement);
@@ -149,7 +149,7 @@ public class AzureDetailedBillHandler {
      */
     private boolean shouldCreateServiceAndResourceCost(EaDetailedBillElement bRow,
             Set<String> newSubscriptions, Long timeToStartBillProcessing) {
-        return AzureCostStatsServiceHelper.getMillisForDateString(bRow.date)
+        return AzureCostHelper.getMillisForDateString(bRow.date)
                 > timeToStartBillProcessing || newSubscriptions.contains(bRow.subscriptionGuid);
     }
 
