@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -35,6 +37,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.g
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -146,6 +149,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     public int enumerationFrequencyInMinutes = 1;
     public int testRunDurationInMinutes = 3;
     public int numberOfInstancesToProvision = 4;
+
+    private String nicDeletedLink;
 
     private Map<String, Object> awsTestContext;
     private String subnetId;
@@ -356,6 +361,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             generateResourcesCounts();
             // assert check on resources count after first and last enumeration.
             verifyResourcesCount();
+            // delete a nic and test use cases
+            deleteNetworkInterface();
         }, 0, this.enumerationFrequencyInMinutes, TimeUnit.MINUTES);
     }
 
@@ -690,6 +697,68 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                     response.getStatusCode() == 200);
         }
         this.host.log(Level.INFO, "All compute states have valid compute description links");
+    }
+
+    /**
+     * Delete a Network Interface. Verify that NIC has associated compute state before deletion
+     * and after NIC is deleted its no more associated with compute state as its nic links.
+     */
+    private void deleteNetworkInterface() {
+        if (this.numOfEnumerationsRan == 1) {
+            List<String> nicLinks = getDocumentLinks(NetworkInterfaceState.class);
+            this.host.log("total nic links = %d", nicLinks.size());
+            this.nicDeletedLink = nicLinks.get(0);
+            // network interface will have an associated compute state.
+            assertNotNull(getComputeStateForNic(Collections.singletonList(this.nicDeletedLink)));
+            // delete network interface
+            this.host.sendAndWaitExpectSuccess(
+                    Operation.createDelete(UriUtils.buildUri(this.host.getUri(), this.nicDeletedLink)));
+        } else {
+            // during second enumeration run, deleted network interface link should not have any
+            // associated compute state.
+            assertNull(getComputeStateForNic(Collections.singletonList(this.nicDeletedLink)));
+        }
+    }
+
+    /**
+     * Get document self links for a resource.
+     */
+    private List<String> getDocumentLinks(Class <? extends ServiceDocument> T) {
+        QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(T);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .setQuery(qBuilder.build())
+                .build();
+
+        this.host.createQueryTaskService(queryTask, false, true, queryTask, null);
+        return queryTask.results.documentLinks;
+    }
+
+    /**
+     * Fetch compute state that has NIC as one of its associated nic links.
+     */
+    private ComputeState getComputeStateForNic(List<String> nicLinks) {
+        QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addInCollectionItemClause(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS, nicLinks);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .setQuery(qBuilder.build())
+                .build();
+
+        this.host.createQueryTaskService(queryTask, false, true, queryTask, null);
+        String computeLink = queryTask.results.documentLinks.get(0);
+
+        Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), computeLink))
+                .setReferer(this.host.getUri());
+        Operation response = this.host.waitForResponse(op);
+        Assert.assertTrue("Error retrieving compute state",
+                response.getStatusCode() == 200);
+        ComputeState state = response.getBody(ComputeState.class);
+        return state;
     }
 
     /**

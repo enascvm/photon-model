@@ -108,6 +108,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public Map<String, ComputeState> computeStatesToBeUpdated;
         // Expands computeStatesToBeUpdated with corresponding NICs
         public Map<String, List<NetworkInterfaceState>> nicStatesToBeUpdated;
+        public Map<String, List<String>> nicStatesToBeDeleted;
 
         /**
          * Discovered/Enumerated networks in Amazon.
@@ -788,6 +789,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
                 // create NIC patch operation for update
                 .forEach(existingNicState -> updateNICState(context, instance, existingNicState));
+
+        if (context.request.nicStatesToBeDeleted.size() > 0 &&
+                context.request.nicStatesToBeDeleted.get(instance.getInstanceId()) != null) {
+            this.logInfo(() -> String.format("Compute %s failed to discover %d nics", instance.getInstanceId(),
+                    context.request.nicStatesToBeDeleted.get(instance.getInstanceId()).size()));
+            networkInterfaceLinksToBeRemoved
+                    .addAll(context.request.nicStatesToBeDeleted.get(instance.getInstanceId()));
+        }
 
         Map<String, Map<String, Collection<Object>>> nicsDeltaMap = new HashMap<>();
         // only add the collections to the delta map in case there is something to add/remove

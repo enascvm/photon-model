@@ -111,6 +111,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         // Mappings of the instanceId ,the local compute state and the associated instance on AWS.
         public Map<String, Instance> instancesToBeUpdated;
         public Map<String, List<NetworkInterfaceState>> nicStatesToBeUpdated;
+        // Mapping of compute state and its NICs to be deleted.
+        public Map<String, List<String>> nicStatesToBeDeleted;
         public Map<String, ComputeState> computeStatesToBeUpdated;
         // The request object that is populated and sent to AWS to get the list of instances.
         public DescribeInstancesRequest describeInstancesRequest;
@@ -139,6 +141,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             this.localAWSInstanceMap = new ConcurrentSkipListMap<>();
             this.instancesToBeUpdated = new ConcurrentSkipListMap<>();
             this.nicStatesToBeUpdated = new ConcurrentSkipListMap<>();
+            this.nicStatesToBeDeleted = new ConcurrentSkipListMap<>();
             this.computeStatesToBeUpdated = new ConcurrentSkipListMap<>();
             this.remoteAWSInstances = new ConcurrentSkipListMap<>();
             this.instancesToBeCreated = new ArrayList<>();
@@ -526,24 +529,40 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     // Merge NICs across all computes
                     .flatMap(
                             en -> {
-                                this.context.nicStatesToBeUpdated.put(en.getKey(),
-                                        new ArrayList<>());
+                                this.context.nicStatesToBeUpdated
+                                        .put(en.getKey(), new ArrayList<>());
 
                                 Stream<DeferredResult<Void>> getNICsPerComputeDRs = en
                                         .getValue().networkInterfaceLinks
-                                                .stream()
-                                                .map(nicLink -> {
-                                                    Operation op = Operation.createGet(
-                                                            this.service.getHost(), nicLink);
+                                        .stream()
+                                        .map(nicLink -> {
+                                            Operation op = Operation
+                                                    .createGet(this.service.getHost(), nicLink);
 
-                                                    return this.service
-                                                            .sendWithDeferredResult(op,
-                                                                    NetworkInterfaceState.class)
-                                                            .thenAccept(
-                                                                    nic -> this.context.nicStatesToBeUpdated
-                                                                            .get(en.getKey())
-                                                                            .add(nic));
-                                                });
+                                            return this.service
+                                                    .sendWithDeferredResult(op,
+                                                            NetworkInterfaceState.class)
+                                                    .thenAccept(
+                                                            nic -> this.context.nicStatesToBeUpdated
+                                                                    .get(en.getKey()).add(nic))
+                                                    .whenComplete((nic, e) -> {
+                                                        // if an exception occurs while fetching an
+                                                        // existing NIC for a compute state, mark it
+                                                        // for deletion as enumeration logic will re-create it.
+                                                        if (e != null) {
+                                                            this.service.logSevere(() -> String
+                                                                    .format("GET Operation %s failed, %s",
+                                                                            nicLink,
+                                                                            e.getMessage()));
+                                                            this.context.nicStatesToBeDeleted
+                                                                    .computeIfAbsent(en.getKey(),
+                                                                            k -> new ArrayList<>());
+                                                            this.context.nicStatesToBeDeleted
+                                                                    .get(en.getKey()).add(nicLink);
+                                                        }
+                                                    });
+                                        });
+
                                 return getNICsPerComputeDRs;
                             })
                     .collect(Collectors.toList());
@@ -607,6 +626,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.instancesToBeCreated = this.context.instancesToBeCreated;
             awsComputeState.instancesToBeUpdated = this.context.instancesToBeUpdated;
             awsComputeState.nicStatesToBeUpdated = this.context.nicStatesToBeUpdated;
+            awsComputeState.nicStatesToBeDeleted = this.context.nicStatesToBeDeleted;
             awsComputeState.computeStatesToBeUpdated = this.context.computeStatesToBeUpdated;
             awsComputeState.parentComputeLink = this.context.parentCompute.documentSelfLink;
             awsComputeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
@@ -663,6 +683,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             this.context.instancesToBeCreated.clear();
             this.context.instancesToBeUpdated.clear();
             this.context.nicStatesToBeUpdated.clear();
+            this.context.nicStatesToBeDeleted.clear();
             this.context.computeStatesToBeUpdated.clear();
             this.context.localAWSInstanceMap.clear();
             this.context.describeInstancesRequest.setNextToken(this.context.nextToken);
