@@ -767,6 +767,8 @@ public class BaseVSphereAdapterTest {
                 VSphereUriPaths.STATS_SERVICE);
         computeDesc.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
                 VSphereUriPaths.POWER_SERVICE);
+        computeDesc.diskAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
+                VSphereUriPaths.DISK_SERVICE);
 
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
 

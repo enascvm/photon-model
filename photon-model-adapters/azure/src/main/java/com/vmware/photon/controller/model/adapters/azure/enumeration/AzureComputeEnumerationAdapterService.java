@@ -949,6 +949,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
             computeDescription.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
             computeDescription.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
+            computeDescription.diskAdapterReference = ctx.parentCompute.description.diskAdapterReference;
             computeDescription.customProperties = new HashMap<>();
 
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268

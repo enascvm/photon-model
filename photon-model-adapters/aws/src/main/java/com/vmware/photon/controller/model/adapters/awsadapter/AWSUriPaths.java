@@ -35,6 +35,8 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_NETWORK_ADAPTER = AdapterTypePath.NETWORK_ADAPTER
             .adapterLink(EndpointType.aws.name());
+    public static final String AWS_DISK_ADAPTER = AdapterTypePath.DISK_ADAPTER
+            .adapterLink(EndpointType.aws.name());
     public static final String AWS_SUBNET_ADAPTER = AdapterTypePath.SUBNET_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_SECURITY_GROUP_ADAPTER = AdapterTypePath.SECURITY_GROUP_ADAPTER

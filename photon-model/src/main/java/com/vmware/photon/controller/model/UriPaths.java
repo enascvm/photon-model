@@ -45,6 +45,7 @@ public class UriPaths {
     public enum AdapterTypePath {
         INSTANCE_ADAPTER("instanceAdapter", "instance-adapter"),
         NETWORK_ADAPTER("networkAdapter", "network-adapter"),
+        DISK_ADAPTER("diskAdapter", "disk-adapter"),
         SUBNET_ADAPTER("subnetAdapter", "sub-network-adapter"),
         SECURITY_GROUP_ADAPTER("securityGroupAdapter", "security-group-adapter"),
         LOAD_BALANCER_ADAPTER("loadBalancerAdapter", "load-balancer-adapter"),

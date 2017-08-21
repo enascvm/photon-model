@@ -163,6 +163,8 @@ public class AWSEndpointAdapterService extends StatelessService {
                     AWSUriPaths.AWS_ENUMERATION_ADAPTER);
             cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_POWER_ADAPTER);
+            cd.diskAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+                    AWSUriPaths.AWS_DISK_ADAPTER);
 
             URI statsAdapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_STATS_ADAPTER);

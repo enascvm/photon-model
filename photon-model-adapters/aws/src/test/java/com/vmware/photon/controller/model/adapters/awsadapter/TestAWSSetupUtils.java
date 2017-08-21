@@ -809,6 +809,8 @@ public class TestAWSSetupUtils {
                 AWSUriPaths.AWS_ENUMERATION_ADAPTER);
         awsComputeHostDesc.statsAdapterReference = UriUtils.buildUri(host,
                 AWSUriPaths.AWS_STATS_ADAPTER);
+        awsComputeHostDesc.diskAdapterReference = UriUtils.buildUri(host,
+                AWSUriPaths.AWS_DISK_ADAPTER);
 
         awsComputeHostDesc.zoneId = zoneId;
         awsComputeHostDesc.regionId = regionId;

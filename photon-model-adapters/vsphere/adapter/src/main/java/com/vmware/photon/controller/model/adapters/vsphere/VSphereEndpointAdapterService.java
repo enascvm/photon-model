@@ -202,6 +202,8 @@ public class VSphereEndpointAdapterService extends StatelessService {
                     VSphereUriPaths.STATS_SERVICE);
             cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     VSphereUriPaths.POWER_SERVICE);
+            cd.diskAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    VSphereUriPaths.DISK_SERVICE);
         };
     }
 

@@ -237,6 +237,8 @@ public class AzureEndpointAdapterService extends StatelessService {
                     AzureUriPaths.AZURE_STATS_ADAPTER);
             cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     AzureUriPaths.AZURE_POWER_ADAPTER);
+            cd.diskAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    AzureUriPaths.AZURE_DISK_ADAPTER);
         };
     }
 

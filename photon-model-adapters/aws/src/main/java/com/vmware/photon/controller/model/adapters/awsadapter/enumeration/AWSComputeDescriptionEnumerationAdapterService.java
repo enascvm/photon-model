@@ -305,6 +305,8 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                 AWSUriPaths.AWS_ENUMERATION_CREATION_ADAPTER);
         computeDescription.statsAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                 AWSUriPaths.AWS_STATS_ADAPTER);
+        computeDescription.diskAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+                AWSUriPaths.AWS_DISK_ADAPTER);
         // We don't want cost adapter to run for each instance. Remove it from the list of stats adapter.
         if (cdState.parentDescription.statsAdapterReferences != null) {
             computeDescription.statsAdapterReferences = cdState.parentDescription.statsAdapterReferences

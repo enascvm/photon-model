@@ -173,6 +173,12 @@ public class ComputeDescriptionService extends StatefulService {
         public URI bootAdapterReference;
 
         /**
+         * URI reference to the adapter used to create a disk.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public URI diskAdapterReference;
+
+        /**
          * URI reference to the adapter used to get the health status of this host.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -424,6 +430,8 @@ public class ComputeDescriptionService extends StatefulService {
                 "/powerAdapterReference");
         template.instanceAdapterReference = UriUtils.buildUri(this.getHost(),
                 "/instanceAdapterReference");
+        template.diskAdapterReference = UriUtils.buildUri(this.getHost(),
+                "/diskAdapterReference");
         template.healthAdapterReference = UriUtils.buildUri(this.getHost(),
                 "/healthAdapterReference");
         template.statsAdapterReference = UriUtils.buildUri(this.getHost(),

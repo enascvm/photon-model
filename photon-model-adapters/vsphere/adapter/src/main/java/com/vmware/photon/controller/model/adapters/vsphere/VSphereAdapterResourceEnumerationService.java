@@ -1371,6 +1371,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationProgress
                 .getParent().description.statsAdapterReference;
+        res.diskAdapterReference = enumerationProgress
+                .getParent().description.diskAdapterReference;
         res.regionId = enumerationProgress.getRegionId();
 
         return res;
@@ -1395,6 +1397,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationProgress
                 .getParent().description.statsAdapterReference;
+        res.diskAdapterReference = enumerationProgress
+                .getParent().description.diskAdapterReference;
         res.regionId = enumerationProgress.getRegionId();
 
         return res;
@@ -1630,6 +1634,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationProgress
                 .getParent().description.statsAdapterReference;
+        res.diskAdapterReference = enumerationProgress
+                .getParent().description.diskAdapterReference;
         res.regionId = enumerationProgress.getRegionId();
 
         return res;
@@ -1798,6 +1804,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getParent().description.statsAdapterReference;
         res.powerAdapterReference = enumerationProgress
                 .getParent().description.powerAdapterReference;
+        res.diskAdapterReference = enumerationProgress
+                .getParent().description.diskAdapterReference;
 
         res.regionId = enumerationProgress.getRegionId();
 
