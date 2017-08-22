@@ -176,6 +176,7 @@ public class ComputeDescriptionService extends StatefulService {
          * URI reference to the adapter used to create a disk.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_33)
         public URI diskAdapterReference;
 
         /**
