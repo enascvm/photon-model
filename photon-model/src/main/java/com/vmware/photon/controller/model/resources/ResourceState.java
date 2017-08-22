@@ -131,6 +131,7 @@ public class ResourceState extends ServiceDocument {
 
         target.id = this.id;
         target.name = this.name;
+        target.desc = this.desc;
         target.customProperties = this.customProperties;
         target.tenantLinks = this.tenantLinks;
         target.groupLinks = this.groupLinks;
