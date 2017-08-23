@@ -227,11 +227,11 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                         if (e != null) {
                             if (e instanceof ServiceNotFoundException) {
                                 logInfo(() -> String.format(
-                                        "Resource pool %d seems to have been deleted",
+                                        "Resource pool %s seems to have been deleted",
                                         currentState.resourcePoolLink));
                             } else {
                                 logWarning(
-                                        () -> String.format("Error retrieving resource pool %d: %s",
+                                        () -> String.format("Error retrieving resource pool %s: %s",
                                                 currentState.resourcePoolLink, Utils.toString(e)));
                             }
                             sendSelfPatch(new StatsCollectionTaskState(), TaskStage.FAILED,
