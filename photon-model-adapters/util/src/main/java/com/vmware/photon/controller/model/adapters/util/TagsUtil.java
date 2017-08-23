@@ -205,6 +205,9 @@ public class TagsUtil {
                     removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
 
                 } else {
+                    if (tagLinksToRemove.contains(null)) {
+                        tagLinksToRemove.remove(null);
+                    }
 
                     // identify which of the local tag states to remove are external
                     Query.Builder qBuilder = Query.Builder.create()
