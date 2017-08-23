@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.34-SNAPSHOT
+
 ## 0.6.33
 * Upgraded AWS SDK version to 1.11.170.
 * Added Set 'endPointLinks' in ResourceState.
