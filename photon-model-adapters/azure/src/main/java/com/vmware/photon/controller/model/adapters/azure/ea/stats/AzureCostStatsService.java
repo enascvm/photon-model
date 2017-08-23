@@ -507,6 +507,7 @@ public class AzureCostStatsService extends StatelessService {
                                 ServiceDocumentDescription.TypeName.LONG)
                         .setResultLimit(1)
                         .setQuery(builder.build()).build())
+                .setConnectionSharing(true)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         handleError(context, Stages.DOWNLOAD_DETAILED_BILL,
@@ -563,6 +564,7 @@ public class AzureCostStatsService extends StatelessService {
                                 ServiceDocumentDescription.TypeName.STRING)
                         .setResultLimit(1)
                         .setQuery(builder.build()).build())
+                .setConnectionSharing(true)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         handleError(context, Stages.GET_HISTORICAL_COSTS,

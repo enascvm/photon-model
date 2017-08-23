@@ -1978,6 +1978,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
         Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task)
+                .setConnectionSharing(true)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logWarning(() -> String.format("Error processing task %s",

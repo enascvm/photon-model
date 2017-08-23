@@ -153,6 +153,7 @@ public class ResourceRemovalTaskService
             sendRequest(Operation
                     .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                     .setBody(q)
+                    .setConnectionSharing(true)
                     .setCompletion((o, e) -> {
                         if (e != null) {
                             // the task might have expired, with no results

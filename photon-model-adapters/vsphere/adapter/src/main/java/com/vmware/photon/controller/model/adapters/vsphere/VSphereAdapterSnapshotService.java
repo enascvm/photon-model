@@ -238,7 +238,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                 .build();
 
         return this.sendWithDeferredResult(Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask))
+                .setBody(qTask).setConnectionSharing(true))
                 .thenApply(op -> {
                     QueryResultsProcessor rp = QueryResultsProcessor.create(op);
                     if (rp.hasResults()) {
@@ -550,6 +550,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
         Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(qTask)
+                .setConnectionSharing(true)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logInfo(String.format("Failure getting snapshot state: %s", Utils.toString(e)));
@@ -577,6 +578,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
         Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(qTask)
+                .setConnectionSharing(true)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logWarning(String.format("Failure retrieving the child snapshots %s", Utils.toString(e)));

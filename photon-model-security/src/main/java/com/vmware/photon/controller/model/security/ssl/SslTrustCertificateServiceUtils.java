@@ -65,6 +65,7 @@ class SslTrustCertificateServiceUtils {
         Operation.createPost(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(task)
                 .setReferer(host.getUri())
+                .setConnectionSharing(true)
                 .setCompletion((o, e) -> {
                     if (e != null && o.getStatusCode() != Operation.STATUS_CODE_CONFLICT) {
                         host.log(Level.SEVERE, Utils.toString(e));
@@ -75,6 +76,7 @@ class SslTrustCertificateServiceUtils {
                             ServiceUriPaths.CORE_LOCAL_QUERY_TASKS, task.documentSelfLink);
                     Operation subscribePost = Operation.createPost(host, taskUriPath)
                             .setReferer(host.getUri())
+                            .setConnectionSharing(true)
                             .setCompletion((op, ex) -> {
                                 if (ex != null) {
                                     host.log(Level.SEVERE, Utils.toString(ex));

@@ -1620,7 +1620,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         return sendWithDeferredResult(
                 Operation.createPost(
                         context.request.buildUri(ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                        .setBody(queryTask),
+                        .setBody(queryTask)
+                        .setConnectionSharing(true),
                 QueryTask.class)
                 .thenCompose(result -> {
                     if (result.results != null && result.results.documentCount != 0) {

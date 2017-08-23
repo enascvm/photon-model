@@ -66,7 +66,7 @@ public class VSphereListComputeSnapshotService extends StatelessService {
                 .build();
 
         sendWithDeferredResult(Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask))
+                .setBody(qTask).setConnectionSharing(true))
                 .thenApply(op -> {
                     QueryResultsProcessor rp = QueryResultsProcessor.create(op);
                     List<SnapshotService.SnapshotState> snapshots = new ArrayList<>();

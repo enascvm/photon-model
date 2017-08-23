@@ -239,7 +239,8 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
                         ClusterUtil.getClusterUri(this.getHost(),
                                 ServiceTypeCluster.METRIC_SERVICE),
                         ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(queryTask);
+                .setBody(queryTask)
+                .setConnectionSharing(true);
     }
 
     /**

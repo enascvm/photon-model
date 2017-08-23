@@ -259,6 +259,7 @@ public class ProvisionContext {
 
             Operation.createPost(service, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                     .setBody(qt)
+                    .setConnectionSharing(true)
                     .setCompletion((o, e) -> {
                         if (e != null) {
                             ctx.errorHandler.accept(e);

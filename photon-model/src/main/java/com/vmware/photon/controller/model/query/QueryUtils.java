@@ -388,6 +388,7 @@ public class QueryUtils {
             final Operation createQueryTaskOp = Operation
                     .createPost(uri)
                     .setReferer(this.referer)
+                    .setConnectionSharing(true)
                     .setBody(queryTask);
 
             this.host.log(this.level,

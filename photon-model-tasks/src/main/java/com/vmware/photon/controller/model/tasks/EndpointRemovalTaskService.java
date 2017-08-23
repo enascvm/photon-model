@@ -338,6 +338,7 @@ public class EndpointRemovalTaskService
 
         Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(resourceQueryTask)
+                .setConnectionSharing(true)
                 .setCompletion(
                         (queryOp, throwable) -> {
                             if (throwable != null) {
