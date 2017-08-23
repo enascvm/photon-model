@@ -441,6 +441,14 @@ public class ComputeService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patch) {
+        // If patch adds a null in tagLinks, fail the patch.
+        ComputeState patchState = patch.getBody(ComputeState.class);
+        if (patchState.tagLinks != null && patchState.tagLinks.contains(null)) {
+            patch.fail(new IllegalArgumentException("tagLink cannot have null elements. "
+                    + "computeLink = " + patchState.documentSelfLink));
+            return;
+        }
+
         ComputeState currentState = getState(patch);
         Function<Operation, Boolean> customPatchHandler = t -> {
             boolean hasStateChanged = false;

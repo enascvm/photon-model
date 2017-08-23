@@ -430,6 +430,14 @@ public class DiskService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patch) {
+        // If patch adds a null in tagLinks, fail the patch.
+        DiskState patchState = patch.getBody(DiskState.class);
+        if (patchState.tagLinks != null && patchState.tagLinks.contains(null)) {
+            patch.fail(new IllegalArgumentException("tagLink cannot have null elements. "
+                    + "diskLink = " + patchState.documentSelfLink));
+            return;
+        }
+
         DiskState currentState = getState(patch);
         Function<Operation, Boolean> customPatchHandler = new Function<Operation, Boolean>() {
             @Override
