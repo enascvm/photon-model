@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## 0.6.33-SNAPSHOT
+## 0.6.33
+* Upgraded AWS SDK version to 1.11.170.
+* Added Set 'endPointLinks' in ResourceState.
+* Set azure-client-* library to latest version 1.0.4.
+* Added 'Resize Compute' operation for vSphere compute resources.
 
 ## 0.6.32
 * Adding document option INDEX_METADATA to services.
