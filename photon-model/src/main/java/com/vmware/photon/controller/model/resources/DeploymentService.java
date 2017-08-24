@@ -17,11 +17,8 @@ import java.util.EnumSet;
 import java.util.Set;
 import java.util.function.Function;
 
-import org.apache.commons.lang3.tuple.Pair;
-
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
@@ -46,11 +43,13 @@ public class DeploymentService extends StatefulService {
      * use to maintain bidirectional link in resource member of a
      * deployment.
      */
-    public static final String CUSTOM_PROPERTY_DEPLOYMENT_LINK = "deploymentLink";
+    public static final String CUSTOM_PROPERTY_DEPLOYMENT_LINK = "__deploymentLink";
 
     public static final String FACTORY_LINK = UriPaths.RESOURCES + "/deployments";
 
-    public static class DeploymentServiceState extends ResourceState {
+    public static class DeploymentState extends ResourceState {
+        public static final String FIELD_DESCRIPTION_LINK = "descriptionLink";
+        public static final String FIELD_COMPONENTS_LINKS = "componentLinks";
 
         @Documentation(description = "Optional description link (i.e. template).")
         @PropertyOptions(usage = { PropertyUsageOption.LINK, PropertyUsageOption.OPTIONAL,
@@ -58,13 +57,14 @@ public class DeploymentService extends StatefulService {
         public String descriptionLink;
 
         @Documentation(description = "Component links.")
-        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+                PropertyUsageOption.OPTIONAL })
         public Set<String> componentLinks;
 
     }
 
     public DeploymentService() {
-        super(DeploymentServiceState.class);
+        super(DeploymentState.class);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
@@ -78,7 +78,7 @@ public class DeploymentService extends StatefulService {
                 throw new IllegalArgumentException("body is required");
             }
 
-            DeploymentServiceState state = start.getBody(DeploymentServiceState.class);
+            DeploymentState state = start.getBody(DeploymentState.class);
             Utils.validateState(getStateDescription(), state);
             if (state.creationTimeMicros == null) {
                 state.creationTimeMicros = System.currentTimeMillis();
@@ -97,10 +97,10 @@ public class DeploymentService extends StatefulService {
                 throw new IllegalArgumentException("body is required");
             }
 
-            DeploymentServiceState newState = put.getBody(DeploymentServiceState.class);
-            DeploymentServiceState previousState = getState(put);
+            DeploymentState newState = put.getBody(DeploymentState.class);
+            DeploymentState previousState = getState(put);
             Utils.validateState(getStateDescription(), newState);
-            if (newState.descriptionLink != null && previousState.descriptionLink != null
+            if (previousState.descriptionLink != null
                     && newState.descriptionLink != previousState.descriptionLink) {
                 throw new IllegalArgumentException("descriptionLink type can not be changed");
             }
@@ -115,10 +115,10 @@ public class DeploymentService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patch) {
-        DeploymentServiceState currentState = getState(patch);
+        DeploymentState currentState = getState(patch);
         Function<Operation, Boolean> customPatchHandler = t -> {
             boolean hasStateChanged = false;
-            DeploymentServiceState patchBody = patch.getBody(DeploymentServiceState.class);
+            DeploymentState patchBody = patch.getBody(DeploymentState.class);
 
             if (patchBody.descriptionLink != null) {
                 if (currentState.descriptionLink == null) {
@@ -129,15 +129,10 @@ public class DeploymentService extends StatefulService {
                 }
             }
 
-            Pair<Set<String>, Boolean> mergeResult = PhotonModelUtils.mergeLists(
-                    currentState.componentLinks, patchBody.componentLinks);
-            currentState.componentLinks = mergeResult.getLeft();
-            hasStateChanged = hasStateChanged || mergeResult.getRight();
-
             return hasStateChanged;
         };
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                DeploymentServiceState.class, customPatchHandler);
+                DeploymentState.class, customPatchHandler);
     }
 
     @Override

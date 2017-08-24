@@ -37,7 +37,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.resources.DeploymentService.DeploymentServiceState;
+import com.vmware.photon.controller.model.resources.DeploymentService.DeploymentState;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.Utils;
@@ -61,8 +61,8 @@ public class DeploymentServiceTest extends Suite {
         super(klass, builder);
     }
 
-    public static DeploymentServiceState buildValidStartState() throws Throwable {
-        DeploymentServiceState cs = new DeploymentServiceState();
+    public static DeploymentState buildValidStartState() throws Throwable {
+        DeploymentState cs = new DeploymentState();
         cs.id = UUID.randomUUID().toString();
         cs.name = "my app";
         cs.componentLinks = new HashSet<>();
@@ -109,28 +109,28 @@ public class DeploymentServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            DeploymentServiceState startState = DeploymentServiceTest
+            DeploymentState startState = DeploymentServiceTest
                     .buildValidStartState();
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK, startState,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.desc, is(startState.desc));
             startState.desc = "new-address";
             returnState = postServiceSynchronously(DeploymentService.FACTORY_LINK,
-                    startState, DeploymentServiceState.class);
+                    startState, DeploymentState.class);
             assertThat(returnState.desc, is(startState.desc));
         }
 
         @Test
         public void testMissingId() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
             startState.id = null;
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK, startState,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             assertNotNull(returnState);
             assertNotNull(returnState.id);
@@ -138,12 +138,12 @@ public class DeploymentServiceTest extends Suite {
 
         @Test
         public void testMissingCreationTimeMicros() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
             startState.creationTimeMicros = null;
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK, startState,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             assertNotNull(returnState);
             assertNotNull(returnState.creationTimeMicros);
@@ -151,12 +151,12 @@ public class DeploymentServiceTest extends Suite {
 
         @Test
         public void testProvidedCreationTimeMicros() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
             startState.creationTimeMicros = Long.MIN_VALUE;
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK, startState,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             assertNotNull(returnState);
             assertNotNull(returnState.creationTimeMicros);
@@ -170,15 +170,15 @@ public class DeploymentServiceTest extends Suite {
     public static class HandleGetTest extends BaseModelTest {
         @Test
         public void testGet() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK, startState,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
             assertNotNull(returnState);
 
-            DeploymentServiceState getState = getServiceSynchronously(
-                    returnState.documentSelfLink, DeploymentServiceState.class);
+            DeploymentState getState = getServiceSynchronously(
+                    returnState.documentSelfLink, DeploymentState.class);
 
             assertThat(getState.id, is(startState.id));
             assertThat(getState.descriptionLink, is(startState.descriptionLink));
@@ -194,15 +194,15 @@ public class DeploymentServiceTest extends Suite {
 
         @Test
         public void testPatch() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
             startState.creationTimeMicros = Long.MIN_VALUE;
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK,
-                    startState, DeploymentServiceState.class);
+                    startState, DeploymentState.class);
             assertNotNull(returnState);
 
-            DeploymentServiceState patchBody = new DeploymentServiceState();
+            DeploymentState patchBody = new DeploymentState();
             patchBody.id = UUID.randomUUID().toString();
             patchBody.desc = "10.0.0.2";
             patchBody.tenantLinks = new ArrayList<>();
@@ -212,9 +212,9 @@ public class DeploymentServiceTest extends Suite {
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
 
-            DeploymentServiceState getState = getServiceSynchronously(
+            DeploymentState getState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             assertThat(getState.id, is(patchBody.id));
             assertThat(getState.desc, is(patchBody.desc));
@@ -226,14 +226,14 @@ public class DeploymentServiceTest extends Suite {
 
         @Test(expected = IllegalArgumentException.class)
         public void testPatchFailOnDescriptionLinkChange() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK,
-                    startState, DeploymentServiceState.class);
+                    startState, DeploymentState.class);
             assertNotNull(returnState);
 
-            DeploymentServiceState patchBody = new DeploymentServiceState();
+            DeploymentState patchBody = new DeploymentState();
             patchBody.descriptionLink = "should not be updated";
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
@@ -241,36 +241,36 @@ public class DeploymentServiceTest extends Suite {
 
         @Test
         public void testPatchNoChange() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK,
-                    startState, DeploymentServiceState.class);
+                    startState, DeploymentState.class);
             assertNotNull(returnState);
 
-            DeploymentServiceState patchBody = new DeploymentServiceState();
+            DeploymentState patchBody = new DeploymentState();
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
 
-            DeploymentServiceState getState = getServiceSynchronously(
+            DeploymentState getState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             assertEquals(0L, getState.documentVersion);
         }
 
         @Test
         public void testPatchRemoveComponentsLinks() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
             startState.componentLinks.clear();
             startState.componentLinks.add("http://network0");
             startState.componentLinks.add("http://network1");
             startState.componentLinks.add("http://network2");
             startState.componentLinks.add("http://network3");
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK,
-                    startState, DeploymentServiceState.class);
+                    startState, DeploymentState.class);
             assertNotNull(returnState);
 
             Map<String, Collection<Object>> collectionsMap = new HashMap<>();
@@ -284,9 +284,9 @@ public class DeploymentServiceTest extends Suite {
             patchServiceSynchronously(returnState.documentSelfLink,
                     collectionRemovalBody);
 
-            DeploymentServiceState getState = getServiceSynchronously(
+            DeploymentState getState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             Set<String> expectedCompLinks = new HashSet<String>(Arrays.asList(
                     "http://network0", "http://network2"));
@@ -303,15 +303,15 @@ public class DeploymentServiceTest extends Suite {
 
         @Test
         public void testPut() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
             startState.creationTimeMicros = Long.MIN_VALUE;
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK,
-                    startState, DeploymentServiceState.class);
+                    startState, DeploymentState.class);
             assertNotNull(returnState);
 
-            DeploymentServiceState newState = new DeploymentServiceState();
+            DeploymentState newState = new DeploymentState();
             newState.id = UUID.randomUUID().toString();
             newState.desc = "10.0.0.2";
             newState.creationTimeMicros = Long.MIN_VALUE;
@@ -326,9 +326,9 @@ public class DeploymentServiceTest extends Suite {
             putServiceSynchronously(returnState.documentSelfLink,
                     newState);
 
-            DeploymentServiceState getState = getServiceSynchronously(
+            DeploymentState getState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    DeploymentServiceState.class);
+                    DeploymentState.class);
 
             assertEquals(getState.id, newState.id);
             assertEquals(getState.desc, newState.desc);
@@ -342,11 +342,11 @@ public class DeploymentServiceTest extends Suite {
 
         @Test(expected = IllegalArgumentException.class)
         public void testPutFailOnDescriptionLinkChange() throws Throwable {
-            DeploymentServiceState startState = buildValidStartState();
+            DeploymentState startState = buildValidStartState();
 
-            DeploymentServiceState returnState = postServiceSynchronously(
+            DeploymentState returnState = postServiceSynchronously(
                     DeploymentService.FACTORY_LINK,
-                    startState, DeploymentServiceState.class);
+                    startState, DeploymentState.class);
             assertNotNull(returnState);
 
             returnState.descriptionLink = "/foobarUpdated";
