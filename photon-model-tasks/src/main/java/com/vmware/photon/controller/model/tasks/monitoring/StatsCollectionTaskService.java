@@ -115,6 +115,8 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     public StatsCollectionTaskService() {
         super(StatsCollectionTaskState.class);
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
+        super.toggleOption(ServiceOption.OWNER_SELECTION, true);
+        super.toggleOption(ServiceOption.REPLICATION, true);
     }
 
     @Override
