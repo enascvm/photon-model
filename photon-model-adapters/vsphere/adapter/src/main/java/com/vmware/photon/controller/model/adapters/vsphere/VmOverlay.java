@@ -29,11 +29,13 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.vim25.ArrayOfGuestNicInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
+import com.vmware.vim25.ArrayOfVirtualMachineSnapshotTree;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualMachinePowerState;
+import com.vmware.vim25.VirtualMachineSnapshotTree;
 
 /**
  * Type-safe wrapper of a VM represented by a set of fetched properties.
@@ -196,5 +198,14 @@ public class VmOverlay extends AbstractOverlay {
 
     public String getGuestId() {
         return (String) getOrDefault(VimPath.vm_config_guestId, null);
+    }
+
+    public List<VirtualMachineSnapshotTree> getRootSnapshotList() {
+        ArrayOfVirtualMachineSnapshotTree arrayOfVirtualMachineSnapshotTree = (ArrayOfVirtualMachineSnapshotTree) getOrDefault(
+                VimPath.vm_snapshot_rootSnapshotList, null);
+        if (arrayOfVirtualMachineSnapshotTree != null) {
+            return arrayOfVirtualMachineSnapshotTree.getVirtualMachineSnapshotTree();
+        }
+        return null;
     }
 }

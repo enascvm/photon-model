@@ -38,6 +38,7 @@ public class EnumerationProgress {
     private ResourceTracker computeResourceTracker;
     private ResourceTracker resourcePoolTracker;
     private ResourceTracker storagePolicyTracker;
+    private ResourceTracker snapshotTracker;
 
     private final MoRefKeyedMap<AbstractOverlay> overlays;
 
@@ -79,6 +80,10 @@ public class EnumerationProgress {
 
     public ResourceTracker getNetworkTracker() {
         return this.networkTracker;
+    }
+
+    public ResourceTracker getSnapshotTracker() {
+        return this.snapshotTracker;
     }
 
     public void expectStoragePolicyCount(int count) {
