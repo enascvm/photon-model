@@ -1184,6 +1184,19 @@ public class AzureInstanceService extends StatelessService {
                 }
             }
 
+            String dataDiskCaching = ctx.bootDiskState.customProperties.get(AZURE_DATA_DISK_CACHING);
+            if (dataDiskCaching != null) {
+                dataDisks.stream().forEach(dataDisk -> dataDisk.withCaching(CachingTypes
+                        .fromString(dataDiskCaching)));
+            }
+
+            String diskType = ctx.bootDiskState.customProperties.get(AZURE_MANAGED_DISK_TYPE);
+            if (diskType != null) {
+                ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
+                managedDiskParams.withStorageAccountType(StorageAccountTypes.fromString(diskType));
+
+                dataDisks.stream().forEach(dataDisk -> dataDisk.withManagedDisk(managedDiskParams));
+            }
         }
 
         // choose LUN greater than the one specified in case of custom image. Else start from zero.
