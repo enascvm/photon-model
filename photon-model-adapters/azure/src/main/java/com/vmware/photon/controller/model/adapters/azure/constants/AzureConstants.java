@@ -79,6 +79,8 @@ public class AzureConstants {
     public static final String INVALID_RESOURCE_GROUP = "InvalidResourceGroup";
     public static final String STORAGE_ACCOUNT_ALREADY_EXIST = "StorageAccountAlreadyExists";
 
+    public static final String COMPUTER_NAME = "computerName";
+
     // Azure constants
     public static final String AZURE_VM_POWER_STATE_RUNNING = "PowerState/running";
     public static final String AZURE_VM_POWER_STATE_DEALLOCATED = "PowerState/deallocated";

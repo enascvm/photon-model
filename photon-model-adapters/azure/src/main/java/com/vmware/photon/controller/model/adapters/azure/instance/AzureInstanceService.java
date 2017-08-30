@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTER_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
@@ -172,6 +173,7 @@ public class AzureInstanceService extends StatelessService {
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
     private static final int RETRY_INTERVAL_SECONDS = 30;
     private static final long AZURE_MAXIMUM_OS_DISK_SIZE_MB = 1023 * 1024; // Maximum allowed OS
+    public static final int WINDOWS_COMPUTER_NAME_MAX_LENGTH = 15;
     // disk size on Azure is 1023 GB
 
     private ExecutorService executorService;
@@ -1223,51 +1225,93 @@ public class AzureInstanceService extends StatelessService {
 
         logFine(() -> String.format("Creating virtual machine with name [%s]", ctx.vmName));
 
+        AzureAsyncCallback<VirtualMachineInner> callback = new AzureAsyncCallback<VirtualMachineInner>() {
+            @Override
+            public void onError(Throwable e) {
+
+                // Computer names for windows machines are restricted to 15 characters. Check the
+                // exception and try again with a shorter name
+                if (isIncorrectNameLength(e)) {
+                    request.osProfile().withComputerName(generateWindowsComputerName(ctx.vmName));
+
+                    getComputeManagementClientImpl(ctx).virtualMachines().createOrUpdateAsync(
+                            ctx.resourceGroup.name(), ctx.vmName, request, this);
+                    return;
+                }
+
+                handleCloudError(
+                        String.format("Provisioning VM %s: FAILED. Details:", ctx.vmName),
+                        ctx,
+                        COMPUTE_NAMESPACE, e);
+            }
+
+
+            // Cannot tell for sure, but these checks should be enough
+            private boolean isIncorrectNameLength(Throwable e) {
+                if (e instanceof CloudException) {
+                    CloudException ce = (CloudException) e;
+                    CloudError body = ce.body();
+                    if (body != null) {
+                        String code = body.code();
+                        String target = body.target();
+
+                        return INVALID_PARAMETER.equals(code) && COMPUTER_NAME.equals(target)
+                                && request.osProfile().computerName().length()
+                                > WINDOWS_COMPUTER_NAME_MAX_LENGTH
+                                && body.message().toLowerCase().contains("windows");
+                    }
+                }
+                return false;
+            }
+
+            private String generateWindowsComputerName(String vmName) {
+                String computerName = vmName;
+                if (vmName.length() > WINDOWS_COMPUTER_NAME_MAX_LENGTH) {
+                    // Take the first 12 and the last 3 chars of the generated VM name
+                    computerName = vmName.substring(0, 12) + vmName
+                            .substring(vmName.length() - 3, vmName.length());
+                }
+                return computerName;
+            }
+
+
+            @Override
+            public void onSuccess(VirtualMachineInner result) {
+                logFine(() -> String.format("Successfully created vm [%s]", result.name()));
+
+                ctx.provisionedVm = result;
+
+                ComputeState cs = new ComputeState();
+                // Azure for some case changes the case of the vm id.
+                ctx.vmId = result.id().toLowerCase();
+                cs.id = ctx.vmId;
+                cs.type = ComputeType.VM_GUEST;
+                cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+                cs.lifecycleState = LifecycleState.READY;
+                if (ctx.child.customProperties == null) {
+                    cs.customProperties = new HashMap<>();
+                } else {
+                    cs.customProperties = ctx.child.customProperties;
+                }
+                cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.name());
+
+                Operation.CompletionHandler completionHandler = (ox, exc) -> {
+                    if (exc != null) {
+                        handleError(ctx, exc);
+                        return;
+                    }
+                    handleAllocation(ctx, nextStage);
+                };
+
+                sendRequest(
+                        Operation.createPatch(ctx.computeRequest.resourceReference)
+                                .setBody(cs)
+                                .setCompletion(completionHandler));
+            }
+        };
+
         getComputeManagementClientImpl(ctx).virtualMachines().createOrUpdateAsync(
-                ctx.resourceGroup.name(), ctx.vmName, request,
-                new AzureAsyncCallback<VirtualMachineInner>() {
-                    @Override
-                    public void onError(Throwable e) {
-                        handleCloudError(
-                                String.format("Provisioning VM %s: FAILED. Details:", ctx.vmName),
-                                ctx,
-                                COMPUTE_NAMESPACE, e);
-                    }
-
-                    @Override
-                    public void onSuccess(VirtualMachineInner result) {
-                        logFine(() -> String.format("Successfully created vm [%s]", result.name()));
-
-                        ctx.provisionedVm = result;
-
-                        ComputeState cs = new ComputeState();
-                        // Azure for some case changes the case of the vm id.
-                        ctx.vmId = result.id().toLowerCase();
-                        cs.id = ctx.vmId;
-                        cs.type = ComputeType.VM_GUEST;
-                        cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-                        cs.lifecycleState = LifecycleState.READY;
-                        if (ctx.child.customProperties == null) {
-                            cs.customProperties = new HashMap<>();
-                        } else {
-                            cs.customProperties = ctx.child.customProperties;
-                        }
-                        cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.name());
-
-                        Operation.CompletionHandler completionHandler = (ox, exc) -> {
-                            if (exc != null) {
-                                handleError(ctx, exc);
-                                return;
-                            }
-                            handleAllocation(ctx, nextStage);
-                        };
-
-                        sendRequest(
-                                Operation.createPatch(ctx.computeRequest.resourceReference)
-                                        .setBody(cs)
-                                        .setCompletion(completionHandler));
-                    }
-                });
+                ctx.resourceGroup.name(), ctx.vmName, request, callback);
     }
 
     /**
@@ -1447,6 +1491,7 @@ public class AzureInstanceService extends StatelessService {
      * Update {@code computeState.nicState[i].address} with Azure NICs' private IP.
      */
     private DeferredResult<AzureInstanceContext> updateNicStates(AzureInstanceContext ctx) {
+
         if (ctx.nics == null || ctx.nics.isEmpty()) {
             // Do nothing.
             return DeferredResult.completed(ctx);
