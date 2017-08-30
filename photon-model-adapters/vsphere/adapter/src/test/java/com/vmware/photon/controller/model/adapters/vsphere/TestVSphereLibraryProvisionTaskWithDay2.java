@@ -133,22 +133,4 @@ public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryP
             }
         }
     }
-
-    @Test
-    public void deployFromLibraryAndTestSnapshotCleanUp() throws Throwable {
-        ComputeService.ComputeState vm = provisionVMAndGetState();
-        try {
-            if (vm == null) {
-                return;
-            }
-            // Creating two snapshots
-            createSnapshotAndWait(vm, false);
-            createSnapshotAndWait(vm, true); // this will create a child to the snapshot created in
-                                             // above statement
-            verifySnapshotCleanUpAfterVmDelete(vm);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 }

@@ -717,34 +717,6 @@ public class BaseVSphereAdapterTest {
         this.host.log("Resize compute operation completed successfully");
     }
 
-    protected void verifySnapshotCleanUpAfterVmDelete(ComputeState computeState) {
-        this.host.log("Collecting Snapshot states before deleting Vm");
-        final List<SnapshotState> list = queryAllSnapshotStates(computeState.documentSelfLink);
-
-        this.host.waitFor("Snapshots not properly updated", () -> {
-            // As we created two snapshots
-            System.out.println(list.size());
-            if (list.size() == 2) {
-                return true;
-            } else {
-                return false;
-            }
-        });
-
-        deleteVmAndWait(computeState);
-
-        this.host.log("Collecting Snapshot states after deleting Vm");
-        final List<SnapshotState> list2 = queryAllSnapshotStates(computeState.documentSelfLink);
-
-        this.host.waitFor("Snapshots not properly deleted", () -> {
-            if (list2.isEmpty()) {
-                return true;
-            } else {
-                return false;
-            }
-        });
-    }
-
     private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink,
             String taskLink) {
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
@@ -1156,31 +1128,5 @@ public class BaseVSphereAdapterTest {
         } else {
             return null;
         }
-    }
-
-    private List<SnapshotState> queryAllSnapshotStates(String computeReferenceLink) {
-        List<SnapshotState> snapshotStates = new ArrayList<>();
-        QueryTask.Query querySnapshot = QueryTask.Query.Builder.create()
-                .addKindFieldClause(SnapshotState.class)
-                .addFieldClause(SnapshotState.FIELD_NAME_COMPUTE_LINK, computeReferenceLink)
-                .build();
-
-        QueryTask qTask = QueryTask.Builder.createDirectTask()
-                .setQuery(querySnapshot)
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .build();
-
-        Operation postOperation = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask);
-
-        TestRequestSender sender = new TestRequestSender(this.host);
-        Operation responseOp = sender.sendAndWait(postOperation);
-        QueryResultsProcessor rp = QueryResultsProcessor.create(responseOp);
-        if (rp.hasResults()) {
-            snapshotStates.addAll(rp.streamDocuments(SnapshotState.class)
-                    .collect(Collectors.toList()));
-        }
-        return snapshotStates;
     }
 }

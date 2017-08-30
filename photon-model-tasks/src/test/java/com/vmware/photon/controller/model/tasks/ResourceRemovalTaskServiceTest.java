@@ -39,7 +39,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.SubStage;
 import com.vmware.xenon.common.Service;
@@ -513,47 +512,6 @@ public class ResourceRemovalTaskServiceTest extends Suite {
                 assertThat("No connected resource for released IP address", ipAddressState.connectedResourceLink == null);
 
             }
-        }
-
-        @Test
-        public void testResourceRemovalWithSnapshotsSuccess() throws Throwable {
-            ResourceRemovalTaskState startState = buildValidStartState();
-            ComputeService.ComputeStateWithDescription cs = ModelUtils
-                    .createComputeWithDescription(this,
-                            MockAdapter.MockSuccessInstanceAdapter.SELF_LINK,
-                            null);
-
-            List<SnapshotService.SnapshotState> sl = ModelUtils.createSnapshotsWithHierarchy(this,
-                    cs.documentSelfLink);
-
-            assertDocumentCount(2,
-                    sl.stream().map(s -> s.documentSelfLink).collect(Collectors.toList()));
-            ResourceRemovalTaskState returnState = this
-                    .postServiceSynchronously(
-                            ResourceRemovalTaskService.FACTORY_LINK,
-                            startState,
-                            ResourceRemovalTaskState.class);
-
-            returnState = this
-                    .waitForServiceState(
-                            ResourceRemovalTaskState.class,
-                            returnState.documentSelfLink,
-                            state -> state.taskInfo.stage == TaskState.TaskStage.FINISHED);
-
-            assertThat(returnState.taskSubStage,
-                    is(SubStage.FINISHED));
-
-            assertDocumentCount(0,
-                    sl.stream().map(s -> s.documentSelfLink).collect(Collectors.toList()));
-
-            // Clean up the compute and description documents
-            this.deleteServiceSynchronously(cs.documentSelfLink);
-            this.deleteServiceSynchronously(cs.descriptionLink);
-            // Stop factory service.
-            this.deleteServiceSynchronously(ResourceRemovalTaskService.FACTORY_LINK);
-
-            // stop the removal task
-            this.stopServiceSynchronously(returnState.documentSelfLink);
         }
     }
 }

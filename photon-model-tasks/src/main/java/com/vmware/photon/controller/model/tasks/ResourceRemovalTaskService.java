@@ -19,17 +19,14 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.query.QueryUtils;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.tasks.ResourceIPDeallocationTaskService.ResourceIPDeallocationTaskState;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
@@ -41,7 +38,6 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
@@ -52,7 +48,6 @@ import com.vmware.xenon.services.common.TaskService;
 public class ResourceRemovalTaskService
         extends TaskService<ResourceRemovalTaskService.ResourceRemovalTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/resource-removal-tasks";
-    public static final String COMPUTE_CUSTOM_PROPERTY_HAS_SNAPSHOTS = "__hasSnapshots";
 
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);
@@ -65,7 +60,6 @@ public class ResourceRemovalTaskService
         ISSUE_ADAPTER_DELETES,
         DEALLOCATE_IP_ADDRESSES,
         DELETE_DOCUMENTS,
-        QUERY_AND_DELETE_SUPPORTING_DOCUMENTS,
         FINISHED,
         FAILED
     }
@@ -288,21 +282,6 @@ public class ResourceRemovalTaskService
                 });
             }
             break;
-        case QUERY_AND_DELETE_SUPPORTING_DOCUMENTS:
-            // if next page is not set, execute the original paged query again
-            if (currentState.nextPageLink == null) {
-                getQueryResults(currentState.resourceQueryLink, queryTask -> {
-                    sendSelfPatch(currentState.taskInfo.stage, currentState.taskSubStage, s -> {
-                        s.nextPageLink = queryTask.results.nextPageLink;
-                    });
-                });
-            } else {
-                // handle current page
-                getQueryResults(currentState.nextPageLink, queryTask -> {
-                    queryAndDeleteSupportingDocuments(currentState, queryTask);
-                });
-            }
-            break;
         case FAILED:
             break;
         case FINISHED:
@@ -315,10 +294,7 @@ public class ResourceRemovalTaskService
     private void deleteDocuments(ResourceRemovalTaskState currentState, QueryTask queryTask) {
         // handle empty pages
         if (queryTask.results.documentCount == 0) {
-            sendSelfPatch(currentState.taskInfo.stage,
-                    SubStage.QUERY_AND_DELETE_SUPPORTING_DOCUMENTS, s -> {
-                        s.nextPageLink = null;
-                    });
+            sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
             return;
         }
 
@@ -339,6 +315,8 @@ public class ResourceRemovalTaskService
                 });
         OperationJoin.create(deletes)
                 .setCompletion((ox, exc) -> {
+                    // delete query
+                    sendRequest(Operation.createDelete(this, currentState.resourceQueryLink));
                     if (exc != null) {
                         logSevere(() -> String.format("Failure deleting compute states from the"
                                 + " local system", Utils.toString(exc)));
@@ -351,78 +329,10 @@ public class ResourceRemovalTaskService
                             s.nextPageLink = queryTask.results.nextPageLink;
                         });
                     } else {
-                        sendSelfPatch(currentState.taskInfo.stage,
-                                SubStage.QUERY_AND_DELETE_SUPPORTING_DOCUMENTS, null);
+                        sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
                     }
                 })
                 .sendWith(this);
-    }
-
-    private void queryAndDeleteSupportingDocuments(ResourceRemovalTaskState currentState,
-            QueryTask queryTask) {
-        if (queryTask.results.documentCount == 0) {
-            sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
-            return;
-        }
-
-        List<String> computeLinks = queryTask.results.documents.values().stream()
-                .map(d -> Utils.fromJson(d, ComputeState.class))
-                .filter(c -> c.customProperties != null
-                        && c.customProperties.containsKey(COMPUTE_CUSTOM_PROPERTY_HAS_SNAPSHOTS))
-                .map(c -> c.documentSelfLink)
-                .collect(Collectors.toList());
-        if (computeLinks == null || computeLinks.isEmpty()) {
-            sendNextSelfStep(currentState, queryTask);
-            return;
-        }
-        Query.Builder queryBuilder = Query.Builder.create()
-                .addKindFieldClause(SnapshotService.SnapshotState.class)
-                .addInClause(SnapshotService.SnapshotState.FIELD_NAME_COMPUTE_LINK,
-                        computeLinks);
-
-        QueryByPages<SnapshotService.SnapshotState> queryResources = new QueryByPages<>(getHost(),
-                queryBuilder.build(), SnapshotService.SnapshotState.class,
-                currentState.tenantLinks);
-
-        queryResources.collectLinks(Collectors.toList()).whenComplete((ss, ex) -> {
-            if (ex != null) {
-                logWarning(() -> String.format(
-                        "Failure retrieving snapshot resources query results: %s. "
-                                + "\n Ignore the exception and move to next step.",
-                        ex.toString()));
-                sendNextSelfStep(currentState, queryTask);
-                return;
-            }
-            Stream<Operation> deletes = ss.stream()
-                    .flatMap(d -> {
-                        return Stream.of(Operation.createDelete(this, d));
-                    });
-            OperationJoin.create(deletes)
-                    .setCompletion((ox, exc) -> {
-                        // delete query
-                        sendRequest(Operation.createDelete(this,
-                                currentState.resourceQueryLink));
-                        if (exc != null) {
-                            logSevere(() -> String
-                                    .format("Failure deleting supported compute documents from the"
-                                            + " local system", Utils.toString(exc)));
-                        }
-                        sendNextSelfStep(currentState, queryTask);
-                    })
-                    .sendWith(this);
-        });
-    }
-
-    private void sendNextSelfStep(ResourceRemovalTaskState currentState, QueryTask queryTask) {
-        if (queryTask.results.nextPageLink != null) {
-            sendSelfPatch(currentState.taskInfo.stage,
-                    currentState.taskSubStage, s -> {
-                        s.nextPageLink = queryTask.results.nextPageLink;
-                    });
-        } else {
-            sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED,
-                    null);
-        }
     }
 
     private void doInstanceDeletes(ResourceRemovalTaskState currentState,
