@@ -39,7 +39,6 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_TAG_LINKS = "tagLinks";
     public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
     public static final String FIELD_NAME_REGION_ID = "regionId";
-    public static final String FIELD_NAME_CREATION_TIME_MICROS = "creationTimeMicros";
 
     /**
      * Identifier of this resource instance
@@ -63,8 +62,7 @@ public class ResourceState extends ServiceDocument {
             usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
             indexing = {
                     PropertyIndexingOption.CASE_INSENSITIVE,
-                    PropertyIndexingOption.SORT,
-                    PropertyIndexingOption.TEXT
+                    PropertyIndexingOption.SORT
             })
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_12)
     public String desc;
