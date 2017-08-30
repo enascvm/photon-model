@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -46,7 +47,6 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -367,29 +367,21 @@ public class ResourceAllocationTaskService
             q.querySpec.query.addBooleanClause(descriptionLinkClause);
         }
 
-        Operation.CompletionHandler c = (o, ex) -> {
+        QueryUtils.startQueryTask(this, q).whenComplete((o, ex) -> {
             if (ex != null) {
                 sendFailureSelfPatch(ex);
                 return;
             }
             this.processQueryResponse(o, currentState, desc,
                     computeDescriptionLinks);
-        };
-
-        Operation postQuery = Operation
-                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS).setBody(q)
-                .setConnectionSharing(true)
-                .setCompletion(c);
-
-        sendRequest(postQuery);
+        });
     }
 
-    private void processQueryResponse(Operation op,
+    private void processQueryResponse(QueryTask rsp,
             ResourceAllocationTaskState currentState,
             ComputeDescriptionService.ComputeDescription desc,
             Collection<String> computeDescriptionLinks) {
 
-        QueryTask rsp = op.getBody(QueryTask.class);
         String queryLink = rsp.documentSelfLink;
         long elapsed = Utils.getNowMicrosUtc()
                 - currentState.documentUpdateTimeMicros;
@@ -457,7 +449,7 @@ public class ResourceAllocationTaskService
                         sendFailureSelfPatch(e);
                         return;
                     }
-                    processQueryResponse(o, currentState, desc,
+                    processQueryResponse(o.getBody(QueryTask.class), currentState, desc,
                             computeDescriptionLinks);
                 }));
     }

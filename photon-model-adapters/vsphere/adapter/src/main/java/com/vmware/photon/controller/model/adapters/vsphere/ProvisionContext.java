@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.Inst
 import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -34,6 +35,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
@@ -48,7 +50,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  */
@@ -261,45 +262,40 @@ public class ProvisionContext {
                     .addLinkTerm(NetworkInterfaceState.FIELD_NAME_DESCRIPTION_LINK)
                     .build();
 
-            Operation.createPost(
-                    PhotonModelUriUtils.createDiscoveryUri(service.getHost(), ServiceUriPaths
-                    .CORE_LOCAL_QUERY_TASKS))
-                    .setBody(qt)
-                    .setConnectionSharing(true)
-                    .setCompletion((o, e) -> {
-                        if (e != null) {
-                            ctx.errorHandler.accept(e);
-                            return;
-                        }
-                        QueryResultsProcessor processor = QueryResultsProcessor.create(o);
-                        for (NetworkInterfaceStateWithDetails nic : processor
-                                .documents(NetworkInterfaceStateWithDetails.class)) {
+            QueryUtils.startQueryTask( service, qt, ClusterUtil.ServiceTypeCluster.DISCOVERY_SERVICE
+            ).whenComplete((o, e) -> {
+                if (e != null) {
+                    ctx.errorHandler.accept(e);
+                    return;
+                }
+                QueryResultsProcessor processor = QueryResultsProcessor.create(o);
+                for (NetworkInterfaceStateWithDetails nic : processor
+                        .documents(NetworkInterfaceStateWithDetails.class)) {
 
-                            if (nic.networkInterfaceDescriptionLink != null) {
-                                NetworkInterfaceDescription desc =
-                                        processor.selectedDocument(
-                                                nic.networkInterfaceDescriptionLink,
-                                                NetworkInterfaceDescription.class);
-                                nic.description = desc;
-                            }
+                    if (nic.networkInterfaceDescriptionLink != null) {
+                        NetworkInterfaceDescription desc =
+                                processor.selectedDocument(
+                                        nic.networkInterfaceDescriptionLink,
+                                        NetworkInterfaceDescription.class);
+                        nic.description = desc;
+                    }
 
-                            if (nic.subnetLink != null) {
-                                SubnetState subnet = processor
-                                        .selectedDocument(nic.subnetLink, SubnetState.class);
-                                nic.subnet = subnet;
-                            }
-                            if (nic.networkLink != null) {
-                                NetworkState network = processor
-                                        .selectedDocument(nic.networkLink, NetworkState.class);
-                                nic.network = network;
-                            }
+                    if (nic.subnetLink != null) {
+                        SubnetState subnet = processor
+                                .selectedDocument(nic.subnetLink, SubnetState.class);
+                        nic.subnet = subnet;
+                    }
+                    if (nic.networkLink != null) {
+                        NetworkState network = processor
+                                .selectedDocument(nic.networkLink, NetworkState.class);
+                        nic.network = network;
+                    }
 
-                            ctx.nics.add(nic);
-                        }
+                    ctx.nics.add(nic);
+                }
 
-                        populateContextThen(service, ctx, onSuccess);
-                    })
-                    .sendWith(service);
+                populateContextThen(service, ctx, onSuccess);
+            });
 
             return;
         }

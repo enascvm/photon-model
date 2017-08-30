@@ -123,7 +123,6 @@ import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Handles enumeration for vsphere endpoints. It supports up to
@@ -2116,20 +2115,17 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
         task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.INDEXED_METADATA);
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
-        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(task)
-                .setConnectionSharing(true)
-                .setCompletion((o, e) -> {
+
+        QueryUtils.startQueryTask(this, task, ServiceTypeCluster.DISCOVERY_SERVICE)
+                .whenComplete((o, e) -> {
                     if (e != null) {
                         logWarning(() -> String.format("Error processing task %s",
                                 task.documentSelfLink));
                         return;
                     }
 
-                    QueryTask body = o.getBody(QueryTask.class);
-                    handler.accept(body.results);
-                })
-                .sendWith(this);
+                    handler.accept(o.results);
+                });
     }
 
     /**

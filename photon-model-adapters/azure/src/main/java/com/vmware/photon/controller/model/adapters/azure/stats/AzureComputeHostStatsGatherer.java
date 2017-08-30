@@ -38,7 +38,6 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.Reso
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -51,7 +50,6 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * This service queries the per VM metrics stored in the local store and aggregates them at the
@@ -253,13 +251,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
                 .build();
         queryTask.tenantLinks = statsData.computeHost.tenantLinks;
 
-        return Operation
-                .createPost(UriUtils.buildUri(
-                        ClusterUtil.getClusterUri(this.getHost(),
-                                ServiceTypeCluster.METRIC_SERVICE),
-                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(queryTask)
-                .setConnectionSharing(true);
+        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.METRIC_SERVICE);
     }
 
     /**

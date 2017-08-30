@@ -109,7 +109,6 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Service to gather AWS Cost related stats
@@ -463,10 +462,9 @@ public class AWSCostStatsService extends StatelessService {
                 .setQuery(awsAccountsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeDesc.tenantLinks;
-        return Operation.createPost(UriUtils.extendUri(getInventoryServiceUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(queryTask)
-                .setConnectionSharing(true).setCompletion((o, e) -> {
+
+        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
+                .setCompletion((o, e) -> {
                     if (e != null) {
                         getFailureConsumer(context).accept(e);
                         return;
@@ -1136,38 +1134,39 @@ public class AWSCostStatsService extends StatelessService {
     private Operation getMarkerMetricsOp(AWSCostStatsCreationContext context, ComputeState accComputeState) {
 
         QueryTask qTask = getQueryTaskForMetric(accComputeState);
-        URI postUri = UriUtils.buildUri(ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
-        return Operation.createPost(postUri).setBody(qTask).setConnectionSharing(true)
-                .setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(INTERNAL_REQUEST_TIMEOUT_SECONDS)))
-                .setCompletion((operation, exception) -> {
-                    if (exception != null) {
-                        logWarning(() -> String.format(
-                                "Failed to get bill processed time for account: %s",
-                                accComputeState.documentSelfLink));
-                        getFailureConsumer(context).accept(exception);
-                        return;
-                    }
-                    QueryTask body = operation.getBody(QueryTask.class);
-                    String accountId = accComputeState.customProperties.get(AWS_ACCOUNT_ID_KEY);
-                    if (body.results.documentCount == 0) {
-                        ResourceMetrics markerMetrics = new ResourceMetrics();
-                        markerMetrics.timestampMicrosUtc = getCurrentMonthStartTimeMicros();
-                        markerMetrics.entries = new HashMap<>();
-                        markerMetrics.entries
-                                .put(AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, 0d);
-                        markerMetrics.documentSelfLink = StatsUtil.getMetricKey(
-                                accComputeState.documentSelfLink,
-                                Utils.getNowMicrosUtc());
-                        context.accountsMarkersMap.put(accountId, markerMetrics);
-                    } else {
-                        ResourceMetrics markerMetrics = body.results.documents.values().stream()
-                                .map(o -> Utils.fromJson(o, ResourceMetrics.class))
-                                .collect(Collectors.toList()).get(0);
-                        context.accountsMarkersMap.putIfAbsent(accountId, markerMetrics);
-                    }
-                });
+        Operation.CompletionHandler completionHandler = (operation, exception) -> {
+            if (exception != null) {
+                logWarning(() -> String.format(
+                        "Failed to get bill processed time for account: %s",
+                        accComputeState.documentSelfLink));
+                getFailureConsumer(context).accept(exception);
+                return;
+            }
+            QueryTask body = operation.getBody(QueryTask.class);
+            String accountId = accComputeState.customProperties.get(AWS_ACCOUNT_ID_KEY);
+            if (body.results.documentCount == 0) {
+                ResourceMetrics markerMetrics = new ResourceMetrics();
+                markerMetrics.timestampMicrosUtc = getCurrentMonthStartTimeMicros();
+                markerMetrics.entries = new HashMap<>();
+                markerMetrics.entries
+                        .put(AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, 0d);
+                markerMetrics.documentSelfLink = StatsUtil.getMetricKey(
+                        accComputeState.documentSelfLink,
+                        Utils.getNowMicrosUtc());
+                context.accountsMarkersMap.put(accountId, markerMetrics);
+            } else {
+                ResourceMetrics markerMetrics = body.results.documents.values().stream()
+                        .map(o -> Utils.fromJson(o, ResourceMetrics.class))
+                        .collect(Collectors.toList()).get(0);
+                context.accountsMarkersMap.putIfAbsent(accountId, markerMetrics);
+            }
+        };
+        return QueryUtils.createQueryTaskOperation(this, qTask, ServiceTypeCluster
+                .METRIC_SERVICE).setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros
+                (INTERNAL_REQUEST_TIMEOUT_SECONDS)))
+                .setCompletion(completionHandler);
     }
+
 
     private void joinOperationAndSendRequest(AWSCostStatsCreationContext context,
             AWSCostStatsCreationStages next, List<Operation> queryOps) {

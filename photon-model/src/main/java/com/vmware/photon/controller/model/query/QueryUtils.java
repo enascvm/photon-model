@@ -76,30 +76,12 @@ public class QueryUtils {
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask,
             ServiceTypeCluster cluster) {
-        // We don't want any unbounded queries. By default, we cap the query results to 10000.
-        if (queryTask.querySpec.resultLimit == null) {
-            service.getHost().log(Level.WARNING,
-                    "No result limit set on the query: %s. Defaulting to %d",
-                    Utils.toJson(queryTask), MAX_RESULT_LIMIT);
-            queryTask.querySpec.options.add(QueryOption.TOP_RESULTS);
-            queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
-        }
-        if (queryTask.documentExpirationTimeMicros == 0) {
-            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
-                    + QueryUtils.TEN_MINUTES_IN_MICROS;
-        }
 
-        URI buildUri = UriUtils.buildUri(
-                ClusterUtil.getClusterUri(service.getHost(), cluster),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
-
-        Operation createQueryTaskOp = Operation
-                .createPost(buildUri)
-                .setBody(queryTask)
-                .setConnectionSharing(true);
-
+        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster);
         return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
     }
+
+
 
     /**
      * Executes the given query task.
@@ -115,6 +97,47 @@ public class QueryUtils {
         }
         return startQueryTask(service, queryTask, null);
     }
+
+
+    /**
+     * Create a query queryTask operation with a URI
+     *
+     * @param service The service executing the query queryTask.
+     * @param queryTask The query queryTask.
+     * @param serviceEndpointLocator The Service Endpoint Locator.
+     */
+
+    public static Operation createQueryTaskOperation(Service service,
+                                                 QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator) {
+        // We don't want any unbounded queries. By default, we cap the query results to 10000.
+        if (queryTask.querySpec.resultLimit == null) {
+            service.getHost().log(Level.WARNING,
+                    "No result limit set on the query: %s. Defaulting to %d",
+                    Utils.toJson(queryTask), MAX_RESULT_LIMIT);
+            queryTask.querySpec.options.add(QueryOption.TOP_RESULTS);
+            queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
+        } else if (queryTask.querySpec.resultLimit > MAX_RESULT_LIMIT) {
+            service.getHost().log(Level.WARNING,
+                    "The result limit set on the query is too high: %s. Defaulting to %d",
+                    Utils.toJson(queryTask), MAX_RESULT_LIMIT);
+            queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
+        }
+
+        if (queryTask.documentExpirationTimeMicros == 0) {
+            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                    + QueryUtils.TEN_MINUTES_IN_MICROS;
+        }
+
+        URI buildUri = UriUtils.buildUri(
+                ClusterUtil.getClusterUri(service.getHost(), serviceEndpointLocator),
+                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+
+        return Operation
+                .createPost(buildUri)
+                .setBody(queryTask)
+                .setConnectionSharing(true);
+    }
+
 
     /**
      * Add {@code endpointLink} constraint to passed query builder depending on document class.
@@ -282,7 +305,7 @@ public class QueryUtils {
         /**
          * Each query strategy should provide its own {@link QueryTask} processing logic.
          *
-         * @param queryTask
+         * @param queryTaskOp
          *            The QueryTask instance as returned by post-QueryTask-operation.
          */
         @SuppressWarnings("rawtypes")

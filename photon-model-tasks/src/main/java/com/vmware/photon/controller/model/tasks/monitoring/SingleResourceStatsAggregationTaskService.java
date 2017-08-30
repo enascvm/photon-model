@@ -378,21 +378,18 @@ public class SingleResourceStatsAggregationTaskService extends
                         .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, rollupKey),
                         NumericRange.createDoubleRange(0.0, Double.MAX_VALUE, true, true));
 
-                Operation op = Operation.createPost(UriUtils.buildUri(
-                        ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
-                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                        .setBody(Builder.createDirectTask()
-                                .addOption(QueryOption.SORT)
-                                .addOption(QueryOption.TOP_RESULTS)
-                                // No-op in photon-model. Required for special handling of immutable documents.
-                                // This will prevent Lucene from holding the full result set in memory.
-                                .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
-                                .addOption(QueryOption.EXPAND_CONTENT)
-                                .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                        TypeName.STRING)
-                                .setResultLimit(1)
-                                .setQuery(builder.build()).build())
-                        .setConnectionSharing(true);
+                QueryTask queryTask = Builder.createDirectTask()
+                        .addOption(QueryOption.SORT)
+                        .addOption(QueryOption.TOP_RESULTS)
+                        // No-op in photon-model. Required for special handling of immutable documents.
+                        // This will prevent Lucene from holding the full result set in memory.
+                        .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
+                        .addOption(QueryOption.EXPAND_CONTENT)
+                        .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
+                                TypeName.STRING)
+                        .setResultLimit(1)
+                        .setQuery(builder.build()).build();
+                Operation op = QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.METRIC_SERVICE);
                 logInfo(() -> String.format("Invoking a query to obtain last rollup time for %s ", currentState.resourceLink));
                 operations.add(op);
             }

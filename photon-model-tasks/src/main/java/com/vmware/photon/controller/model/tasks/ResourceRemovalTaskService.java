@@ -157,21 +157,18 @@ public class ResourceRemovalTaskService
             }
             q.documentSelfLink = UUID.randomUUID().toString();
             q.tenantLinks = state.tenantLinks;
+
             // create the query to find resources
-            sendRequest(Operation
-                    .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                    .setBody(q)
-                    .setConnectionSharing(true)
-                    .setCompletion((o, e) -> {
+            QueryUtils.startQueryTask(this, q)
+                    .whenComplete((o, e) -> {
                         if (e != null) {
                             // the task might have expired, with no results
                             // every becoming available
                             logWarning(() -> String.format("Failure retrieving query results: %s",
                                     e.toString()));
                             sendFailureSelfPatch(e);
-                            return;
                         }
-                    }));
+                    });
 
             start.complete();
 

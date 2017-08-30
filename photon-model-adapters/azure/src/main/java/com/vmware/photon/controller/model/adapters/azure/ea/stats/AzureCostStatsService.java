@@ -116,7 +116,6 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Collects cost data for Azure EA accounts in the following stages:
@@ -502,33 +501,29 @@ public class AzureCostStatsService extends StatelessService {
                                 AzureCostConstants.USAGE_COST),
                 QueryTask.NumericRange
                         .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
-        URI queryUri = UriUtils.extendUri(getMetricsServiceUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
-        Operation.createPost(queryUri)
-                .setBody(QueryTask.Builder.createDirectTask()
-                        .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
-                        .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
-                        // No-op in photon-model. Required for special handling of immutable documents.
-                        // This will prevent Lucene from holding the full result set in memory.
-                        .addOption(QueryTask.QuerySpecification.QueryOption.INCLUDE_ALL_VERSIONS)
-                        .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                        .orderDescending(ResourceMetricsService.ResourceMetrics.FIELD_NAME_TIMESTAMP,
-                                ServiceDocumentDescription.TypeName.LONG)
-                        .setResultLimit(1)
-                        .setQuery(builder.build()).build())
-                .setConnectionSharing(true)
-                .setCompletion((operation, exception) -> {
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
+                .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
+                // No-op in photon-model. Required for special handling of immutable documents.
+                // This will prevent Lucene from holding the full result set in memory.
+                .addOption(QueryTask.QuerySpecification.QueryOption.INCLUDE_ALL_VERSIONS)
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .orderDescending(ResourceMetricsService.ResourceMetrics.FIELD_NAME_TIMESTAMP,
+                        ServiceDocumentDescription.TypeName.LONG)
+                .setResultLimit(1)
+                .setQuery(builder.build()).build();
+        QueryUtils.startQueryTask(this, queryTask, ServiceTypeCluster.METRIC_SERVICE)
+                .whenComplete((response, exception) -> {
                     if (exception != null) {
                         handleError(context, Stages.DOWNLOAD_DETAILED_BILL,
                                 exception, true);
                         return;
                     }
-                    QueryTask body = operation.getBody(QueryTask.class);
-                    if (body == null || body.results == null || body.results.documents == null) {
+                    if (response == null || response.results == null || response.results.documents == null) {
                         context.storedCurrentMonthEaUsageCost = null;
                         return;
                     }
-                    Collection<Object> values = body.results.documents.values();
+                    Collection<Object> values = response.results.documents.values();
                     if (!values.isEmpty()) {
                         if (values.iterator().next() == null) {
                             context.storedCurrentMonthEaUsageCost = null;
@@ -542,7 +537,7 @@ public class AzureCostStatsService extends StatelessService {
                     }
                     context.stage = next;
                     handleRequest(context);
-                }).sendWith(this);
+                });
     }
 
     private void getBillProcessedTime(Context context, Stages next) {
@@ -554,36 +549,35 @@ public class AzureCostStatsService extends StatelessService {
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
 
-        URI queryUri = UriUtils.extendUri(getMetricsServiceUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
+                .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
+                // No-op in photon-model. Required for special handling of immutable documents.
+                // This will prevent Lucene from holding the full result set in memory.
+                .addOption(QueryTask.QuerySpecification.QueryOption.INCLUDE_ALL_VERSIONS)
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
+                        ServiceDocumentDescription.TypeName.STRING)
+                .setResultLimit(1)
+                .setQuery(builder.build()).build();
 
-        Operation.createPost(queryUri)
-                .setBody(QueryTask.Builder.createDirectTask()
-                        .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
-                        .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
-                        // No-op in photon-model. Required for special handling of immutable documents.
-                        // This will prevent Lucene from holding the full result set in memory.
-                        .addOption(QueryTask.QuerySpecification.QueryOption.INCLUDE_ALL_VERSIONS)
-                        .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                        .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                ServiceDocumentDescription.TypeName.STRING)
-                        .setResultLimit(1)
-                        .setQuery(builder.build()).build())
-                .setConnectionSharing(true)
-                .setExpiration(Utils.fromNowMicrosUtc(
-                        TimeUnit.SECONDS.toMicros(INTERNAL_REQUEST_TIMEOUT_SECONDS)))
-                .setCompletion((operation, exception) -> {
+        Operation queryTaskOp = QueryUtils.createQueryTaskOperation(this, queryTask,
+                ServiceTypeCluster
+                .METRIC_SERVICE).setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros
+                (INTERNAL_REQUEST_TIMEOUT_SECONDS)));
+
+        this.sendWithDeferredResult(queryTaskOp, QueryTask.class)
+                .whenComplete((response, exception) -> {
                     if (exception != null) {
                         handleError(context, Stages.GET_HISTORICAL_COSTS,
                                 exception, true);
                         return;
                     }
-                    QueryTask body = operation.getBody(QueryTask.class);
-                    if (body == null || body.results == null || body.results.documents == null) {
+                    if (response == null || response.results == null || response.results.documents == null) {
                         context.billProcessedTimeMillis = 0;
                         return;
                     }
-                    Collection<Object> values = body.results.documents.values();
+                    Collection<Object> values = response.results.documents.values();
                     if (!values.isEmpty()) {
                         if (values.iterator().next() == null) {
                             context.billProcessedTimeMillis = 0;
@@ -599,7 +593,7 @@ public class AzureCostStatsService extends StatelessService {
                     }
                     context.stage = next;
                     handleRequest(context);
-                }).sendWith(this);
+                });
 
     }
 
@@ -991,10 +985,7 @@ public class AzureCostStatsService extends StatelessService {
                 .setQuery(azureSubscriptionsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeHostDesc.tenantLinks;
-        return Operation.createPost(UriUtils.extendUri(getInventoryServiceUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(queryTask)
-                .setConnectionSharing(true)
+        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         getFailureConsumer(context).accept(exception);

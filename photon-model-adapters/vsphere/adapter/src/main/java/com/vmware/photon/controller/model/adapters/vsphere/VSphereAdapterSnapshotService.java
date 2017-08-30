@@ -32,9 +32,11 @@ import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.TaskInfo;
@@ -49,7 +51,6 @@ import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Handles snapshot related operation for a vSphere compute resource
@@ -240,9 +241,8 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                 .addOption(QueryTask.QuerySpecification.QueryOption.INDEXED_METADATA)
                 .build();
 
-        return this.sendWithDeferredResult(Operation.createPost(
-                PhotonModelUriUtils.createDiscoveryUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask).setConnectionSharing(true))
+        return QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
+                .DISCOVERY_SERVICE)
                 .thenApply(op -> {
                     QueryResultsProcessor rp = QueryResultsProcessor.create(op);
                     if (rp.hasResults()) {
@@ -556,10 +556,8 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         // find if for the compute has only one snapshot (the one which is to be deleted)
         QueryTask qTask = getQueryWithFilters(context.snapshotState.computeLink, SnapshotState.FIELD_NAME_COMPUTE_LINK);
 
-        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask)
-                .setConnectionSharing(true)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
+                .DISCOVERY_SERVICE).whenComplete((o, e) -> {
                     if (e != null) {
                         logInfo(String.format("Failure getting snapshot state: %s", Utils.toString(e)));
                         dr.fail(e);
@@ -574,7 +572,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                                 .collect(Collectors.toList());
                         dr.complete(snapshotsFinal.size() == 1);
                     }
-                }).sendWith(this);
+                });
         return dr;
     }
 
@@ -584,12 +582,11 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         // find the child snapshots for the given snapshot document link
         QueryTask qTask = getQueryWithFilters(snapshotLink, SnapshotState.FIELD_NAME_PARENT_LINK);
 
-        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask)
-                .setConnectionSharing(true)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
+                .DISCOVERY_SERVICE).whenComplete((o, e) -> {
                     if (e != null) {
-                        logWarning(String.format("Failure retrieving the child snapshots %s", Utils.toString(e)));
+                        logWarning(String.format("Failure retrieving the child snapshots %s",
+                                Utils.toString(e)));
                         snapshotStates.fail(e);
                         return;
                     }
@@ -601,7 +598,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                                 .collect(Collectors.toList());
                     }
                     snapshotStates.complete(snapshotsTemp);
-                }).sendWith(this);
+                });
         return snapshotStates;
     }
 

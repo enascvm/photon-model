@@ -18,14 +18,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.SnapshotService;
-import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Service that returns a list of snapshot states given the computeLink. We need
@@ -66,9 +66,8 @@ public class VSphereListComputeSnapshotService extends StatelessService {
                 .addOption(QueryTask.QuerySpecification.QueryOption.INDEXED_METADATA)
                 .build();
 
-        sendWithDeferredResult(Operation.createPost(
-                PhotonModelUriUtils.createDiscoveryUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask).setConnectionSharing(true))
+        QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
+                .DISCOVERY_SERVICE)
                 .thenApply(op -> {
                     QueryResultsProcessor rp = QueryResultsProcessor.create(op);
                     List<SnapshotService.SnapshotState> snapshots = new ArrayList<>();
