@@ -18,6 +18,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -38,9 +39,14 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.DeploymentService.DeploymentState;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * This class implements tests for the {@link DeploymentService} class.
@@ -50,7 +56,8 @@ import com.vmware.xenon.common.Utils;
         DeploymentServiceTest.HandleStartTest.class,
         DeploymentServiceTest.HandleGetTest.class,
         DeploymentServiceTest.HandlePatchTest.class,
-        DeploymentServiceTest.HandlePutTest.class })
+        DeploymentServiceTest.HandlePutTest.class,
+        DeploymentServiceTest.HandleQueryTest.class })
 public class DeploymentServiceTest extends Suite {
     private static final String TEST_DESC_PROPERTY_NAME = "testDescProperty";
     private static final String TEST_DESC_PROPERTY_VALUE = UUID.randomUUID()
@@ -354,6 +361,47 @@ public class DeploymentServiceTest extends Suite {
 
             putServiceSynchronously(returnState.documentSelfLink,
                     returnState);
+        }
+    }
+
+    /**
+     * This class implements tests for the handlePut method.
+     */
+    public static class HandleQueryTest extends BaseModelTest {
+
+        @Test
+        public void testQueryDesc() throws Throwable {
+            createWithDesc("this is a maTch1 thanks to text index");
+            createWithDesc("match");
+            createWithDesc("this should notmatch");
+
+            URI queryuri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+            Query query = Query.Builder.create()
+                    .addKindFieldClause(DeploymentState.class)
+                    .addFieldClause(DeploymentState.FIELD_NAME_DESC, "match")
+                    .build();
+            QueryTask queryTask = QueryTask.Builder.createDirectTask().setQuery(query).build();
+
+            Operation response = host
+                    .waitForResponse(Operation.createPost(queryuri).setBody(queryTask));
+            assertNotNull(response);
+            assertEquals(Operation.STATUS_CODE_OK, response.getStatusCode());
+
+            QueryTask result = response.getBody(QueryTask.class);
+            assertNotNull(result);
+            assertNotNull(result.results);
+            assertNotNull(result.results.documentLinks);
+            assertEquals(2, result.results.documentLinks.size());
+        }
+
+        private void createWithDesc(String desc) throws Throwable {
+            DeploymentState startState = buildValidStartState();
+            startState.desc = desc;
+
+            DeploymentState returnState = postServiceSynchronously(
+                    DeploymentService.FACTORY_LINK,
+                    startState, DeploymentState.class);
+            assertNotNull(returnState);
         }
     }
 
