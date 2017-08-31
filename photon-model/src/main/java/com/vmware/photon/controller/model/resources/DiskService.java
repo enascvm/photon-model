@@ -435,6 +435,9 @@ public class DiskService extends StatefulService {
         if (patchState.tagLinks != null && patchState.tagLinks.contains(null)) {
             patch.fail(new IllegalArgumentException("tagLink cannot have null elements. "
                     + "diskLink = " + patchState.documentSelfLink));
+            logWarning("Failing attempt to PATCH null tagLinks element to DiskState "
+                    + "[Referrer:%s], [DiskLink:%s]", patch.getReferer(),
+                    patchState.documentSelfLink);
             return;
         }
 

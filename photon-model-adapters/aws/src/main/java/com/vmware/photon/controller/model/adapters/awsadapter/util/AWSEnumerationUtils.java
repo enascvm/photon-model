@@ -175,7 +175,7 @@ public class AWSEnumerationUtils {
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
             String endpointLink,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
             Set<String> internalTagLinks, String regionId, String zoneId, List<String> tenantLinks,
-            Boolean isNewState) {
+            List<Tag> createdExternalTags, Boolean isNewState) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
@@ -216,11 +216,13 @@ public class AWSEnumerationUtils {
         computeState.customProperties.put(AWS_VPC_ID, instance.getVpcId());
         computeState.tagLinks = new HashSet<>();
 
-        if (!instance.getTags().isEmpty()) {
+        // We only want to add tagLinks to new ComputeStates. We use a separate collection update
+        // PATCH to update tagLinks of existing disks.
+        if (!instance.getTags().isEmpty() && isNewState) {
 
             // we have already made sure that the tags exist and we can build their links ourselves
             computeState.tagLinks = instance.getTags().stream()
-                    .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
+                    .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()) && createdExternalTags.contains(t))
                     .map(t -> newTagState(t.getKey(), t.getValue(), true, tenantLinks))
                     .map(TagFactoryService::generateSelfLink)
                     .collect(Collectors.toSet());
@@ -231,12 +233,12 @@ public class AWSEnumerationUtils {
                 host.log(Level.SEVERE, "Removing null tag link from new ComputeState");
                 computeState.tagLinks.remove(null);
             }
+        }
 
-            // The name of the compute state is the value of the AWS_TAG_NAME tag
-            String nameTag = getTagValue(instance.getTags(), AWS_TAG_NAME);
-            if (nameTag != null && !nameTag.equals(EMPTY_STRING)) {
-                computeState.name = nameTag;
-            }
+        // The name of the compute state is the value of the AWS_TAG_NAME tag
+        String nameTag = getTagValue(instance.getTags(), AWS_TAG_NAME);
+        if (nameTag != null && !nameTag.equals(EMPTY_STRING)) {
+            computeState.name = nameTag;
         }
 
         // append internal tagLinks to any existing ones

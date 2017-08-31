@@ -148,6 +148,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         // The time stamp at which the enumeration started.
         public long enumerationStartTimeInMicros;
         public String internalTypeTagSelfLink;
+        // Holds tags of newly discovered instaces that got successfully POSTed (with 200 or 304)
         public List<Tag> createdExternalTags;
 
         public EBSStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
@@ -519,11 +520,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         this.context.volumeTagsToBeCreated.addAll(volume.getTags());
                     });
 
-            this.context.volumesToBeUpdated.values().stream()
-                    .forEach(volume -> {
-                        this.context.volumeTagsToBeCreated.addAll(volume.getTags());
-                    });
-
             this.context.volumeTagsToBeCreated.stream()
                     .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
                     .forEach(t -> {
@@ -681,8 +677,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                             .get(volumeId);
                     Map<String, String> remoteTags = new HashMap<>();
                     for (Tag awsVolumeTag : volume.getTags()) {
-                        if (!awsVolumeTag.getKey().equals(AWSConstants.AWS_TAG_NAME) &&
-                                this.context.createdExternalTags.contains(awsVolumeTag)) {
+                        if (!awsVolumeTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
                             remoteTags.put(awsVolumeTag.getKey(), awsVolumeTag.getValue());
                         }
                     }
@@ -742,7 +737,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             }
 
             // If we're creating a new DiskState, we've already created TagStates for it, so populate the
-            // tagLinks with appropriate links.
+            // tagLinks with appropriate links. We store tags got successfully created in createdExternalTags
+            // list and only add valid tagLinks to new disks.
             if (isNewDiskState) {
                 diskState.tagLinks = volume.getTags().stream()
                         .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME)

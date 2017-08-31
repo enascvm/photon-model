@@ -446,6 +446,9 @@ public class ComputeService extends StatefulService {
         if (patchState.tagLinks != null && patchState.tagLinks.contains(null)) {
             patch.fail(new IllegalArgumentException("tagLink cannot have null elements. "
                     + "computeLink = " + patchState.documentSelfLink));
+            logWarning("Failing attempt to PATCH null tagLinks element to ComputeState "
+                    + "[Referrer:%s], [ComputeLink:%s]", patch.getReferer(),
+                    patchState.documentSelfLink);
             return;
         }
 

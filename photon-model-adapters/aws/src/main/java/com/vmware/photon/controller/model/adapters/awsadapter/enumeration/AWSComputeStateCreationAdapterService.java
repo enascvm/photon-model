@@ -145,6 +145,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // maintains internal tagLinks Example, link for tagState for type=ec2_instances or
         // type=ec2_net_interface
         public Map<String, Set<String>> internalTagLinksMap = new HashMap<>();
+        // Holds tags of newly discovered instaces that got successfully POSTed (with 200 or 304)
         List<Tag> createdExternalTags;
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
@@ -319,6 +320,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 }).sendWith(this);
     }
 
+    /**
+     * POSTs all tags for newly discovered instances. Even if some tags already exist we rely on
+     * IDEMPOTENT_POST behaviour and POST them again. All tags that got created successfully are
+     * stored in createdExternalTags list.
+     */
     private void createTags(AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
         // Get all tags from the instances to be created
@@ -459,7 +465,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.internalTagLinksMap.get(ec2_instance.toString()),
                         regionId, zoneId,
                         context.request.tenantLinks,
-                        true);
+                        context.createdExternalTags, true);
                 computeStateToBeCreated.networkInterfaceLinks = new ArrayList<>();
 
                 if (!AWSEnumerationUtils.instanceIsInStoppedState(instance)) {
@@ -545,6 +551,9 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         return nicState;
     }
 
+    /**
+     * Updates tag links of existing computes using TagsUtil.
+     */
     private DeferredResult<AWSComputeStateCreationContext> updateTagLinks(
             AWSComputeStateCreationContext context) {
         if (context.request.instancesToBeUpdated == null
@@ -561,8 +570,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         .get(instanceId);
                 Map<String, String> remoteTags = new HashMap<>();
                 for (Tag awsInstanceTag : instance.getTags()) {
-                    if (!awsInstanceTag.getKey().equals(AWSConstants.AWS_TAG_NAME)
-                            && context.createdExternalTags.contains(awsInstanceTag)) {
+                    if (!awsInstanceTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
                         remoteTags.put(awsInstanceTag.getKey(), awsInstanceTag.getValue());
                     }
                 }
@@ -639,6 +647,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.internalTagLinksMap.get(ec2_instance.toString()),
                         zoneData.regionId, zoneId,
                         context.request.tenantLinks,
+                        null,
                         false);
                 computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;
 
