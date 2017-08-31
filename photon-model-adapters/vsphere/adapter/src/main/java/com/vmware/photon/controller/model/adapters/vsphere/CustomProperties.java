@@ -110,6 +110,16 @@ public class CustomProperties {
     public static final String LIMIT_IOPS = "limitIops";
 
     /**
+     * Full path of the disk
+     */
+    public static final String DISK_FULL_PATH = "__diskFullPath";
+
+    /**
+     * Disk parent directory
+     */
+    public static final String DISK_PARENT_DIRECTORY = "__diskParentDir";
+
+    /**
      * Disk controller (ex: SCSI) unit number which will be used to identify the disk uniquely
      */
     public static final String DISK_CONTROLLER_NUMBER = "__controllerUnitNumber";

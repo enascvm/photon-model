@@ -46,7 +46,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
          * SubStage.
          */
         public enum SubStage {
-            CREATING_DISK, VALIDATE_DISK, DONE, FAILED
+            CREATING_DISK, DELETING_DISK, VALIDATE_DISK, VALIDATE_DISK_CLEANUP, DONE, FAILED
         }
 
         /**
@@ -151,12 +151,18 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
 
         switch (newStage) {
         case CREATING_DISK:
-            ProvisionDiskTaskState.SubStage nextStageOnSuccess = SubStage.VALIDATE_DISK;
-
-            doSubStageCreateDisk(updatedState, nextStageOnSuccess);
+            doSubStageDiskOperation(updatedState, SubStage.VALIDATE_DISK,
+                    DiskInstanceRequest.DiskRequestType.CREATE);
+            return;
+        case DELETING_DISK:
+            doSubStageDiskOperation(updatedState, SubStage.VALIDATE_DISK_CLEANUP,
+                    DiskInstanceRequest.DiskRequestType.DELETE);
             return;
         case VALIDATE_DISK:
             doSubStageValidateDiskState(updatedState);
+            return;
+        case VALIDATE_DISK_CLEANUP:
+            doSubStageValidateDiskStateCleanup(updatedState);
             return;
         case DONE:
             sendSelfPatch(TaskStage.FINISHED,
@@ -197,8 +203,22 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
                 }));
     }
 
-    private void doSubStageCreateDisk(ProvisionDiskTaskState updatedState,
-            ProvisionDiskTaskState.SubStage nextStage) {
+    private void doSubStageValidateDiskStateCleanup(ProvisionDiskTaskState updatedState) {
+        sendRequest(Operation
+                .createGet(this, updatedState.diskLink)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        // Disk state should have been deleted as part of the delete disk
+                        sendSelfPatch(TaskStage.FINISHED, ProvisionDiskTaskState.SubStage.DONE,
+                                null);
+                        return;
+                    }
+                    failTask(e);
+                }));
+    }
+
+    private void doSubStageDiskOperation(ProvisionDiskTaskState updatedState,
+            ProvisionDiskTaskState.SubStage nextStage, DiskInstanceRequest.DiskRequestType diskRequestType) {
         Operation.CompletionHandler c = (o, e) -> {
             if (e != null) {
                 failTask(e);
@@ -208,7 +228,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
             DiskInstanceRequest cr = new DiskInstanceRequest();
             cr.resourceReference = UriUtils.buildUri(getHost(),
                     updatedState.diskLink);
-            cr.requestType = DiskInstanceRequest.DiskRequestType.CREATE;
+            cr.requestType = diskRequestType;
 
             ServiceDocument subTask = o.getBody(ServiceDocument.class);
             cr.taskReference = UriUtils.buildUri(this.getHost(), subTask.documentSelfLink);

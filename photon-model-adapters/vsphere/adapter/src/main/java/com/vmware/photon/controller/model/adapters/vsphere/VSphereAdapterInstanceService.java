@@ -316,8 +316,10 @@ public class VSphereAdapterInstanceService extends StatelessService {
      * Capture virtual disk attributes in the disk state for reference.
      */
     private void updateDiskStateFromVirtualDisk(VirtualDisk vd, DiskState disk) {
+        disk.status = DiskService.DiskStatus.ATTACHED;
+        disk.id = vd.getDiskObjectId();
         CustomProperties.of(disk)
-                .put(PROVIDER_DISK_UNIQUE_ID, vd.getDiskObjectId());
+                .put(PROVIDER_DISK_UNIQUE_ID, vd.getDeviceInfo().getLabel());
     }
 
     private DiskStateExpanded findMatchingDiskState(VirtualDisk vd, List<DiskStateExpanded> disks) {

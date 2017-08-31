@@ -1069,7 +1069,7 @@ public class BaseVSphereAdapterTest {
         return sd;
     }
 
-    private DiskState constructDiskState(String alias, DiskService.DiskType type, int bootOrder,
+    protected DiskState constructDiskState(String alias, DiskService.DiskType type, int bootOrder,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String> customProperties) {
         DiskState res = new DiskState();
         res.capacityMBytes = capacityMBytes;
