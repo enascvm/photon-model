@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,6 +38,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SubnetRangeService;
 import com.vmware.photon.controller.model.resources.SubnetRangeService.SubnetRangeState;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -49,6 +51,7 @@ import com.vmware.xenon.common.UriUtils;
  */
 public class ModelUtils {
     private static final String TEST_DESC_PROPERTY_NAME = "testDescProperty";
+    public static final String COMPUTE_CUSTOM_PROPERTY_HAS_SNAPSHOTS = "__hasSnapshots";
     private static final String TEST_DESC_PROPERTY_VALUE = UUID.randomUUID()
             .toString();
 
@@ -189,6 +192,43 @@ public class ModelUtils {
         return ModelUtils.createCompute(test, ModelUtils
                 .createComputeDescription(test, instanceAdapterLink,
                         bootAdapterLink));
+    }
+
+    public static List<SnapshotService.SnapshotState> createSnapshotsWithHierarchy(
+            BaseModelTest test,
+            String computeLink)
+            throws Throwable {
+        SnapshotService.SnapshotState snapshot1 = new SnapshotService.SnapshotState();
+        snapshot1.computeLink = computeLink;
+        snapshot1.name = "parent";
+        snapshot1.parentLink = null;
+        snapshot1.isCurrent = false;
+
+        snapshot1 = test.postServiceSynchronously(SnapshotService.FACTORY_LINK, snapshot1,
+                SnapshotService.SnapshotState.class);
+
+        SnapshotService.SnapshotState snapshot2 = new SnapshotService.SnapshotState();
+        snapshot2.computeLink = computeLink;
+        snapshot2.name = "child";
+        snapshot2.parentLink = snapshot1.documentSelfLink;
+        snapshot2.isCurrent = true;
+
+        snapshot2 = test.postServiceSynchronously(SnapshotService.FACTORY_LINK, snapshot2,
+                SnapshotService.SnapshotState.class);
+
+        ComputeService.ComputeState cs = new ComputeService.ComputeStateWithDescription();
+        cs.customProperties = new HashMap<>();
+        cs.customProperties.put(COMPUTE_CUSTOM_PROPERTY_HAS_SNAPSHOTS,
+                "true");
+
+        cs = test.patchServiceSynchronously(computeLink, cs,
+                ComputeService.ComputeState.class);
+
+        List<SnapshotService.SnapshotState> sl = new LinkedList<SnapshotService.SnapshotState>();
+        sl.add(snapshot1);
+        sl.add(snapshot2);
+
+        return sl;
     }
 
     public static ComputeService.ComputeStateWithDescription createComputeWithDescription(
