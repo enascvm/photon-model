@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.36-SNAPSHOT
+
+
 ## 0.6.35
 * Added enhancements for Azure provisioning.
 
