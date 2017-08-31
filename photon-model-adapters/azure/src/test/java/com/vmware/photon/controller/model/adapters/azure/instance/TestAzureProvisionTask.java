@@ -29,6 +29,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createImageSource;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createPrivateImageSource;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createVMResourceFromSpec;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
@@ -130,11 +131,12 @@ public class TestAzureProvisionTask extends AzureBaseTest {
      */
     @Test
     public void testProvision() throws Throwable {
+        ImageSource imageSource = createImageSource(getHost(), this.endpointState, IMAGE_REFERENCE);
 
         VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
                 this.endpointState, azureVMName)
                 .withNicSpecs(DEFAULT_NIC_SPEC)
-                .withImageReferenceId(IMAGE_REFERENCE);
+                .withImageSource(imageSource);
 
         // create Azure VM compute resource.
         this.vmState = createVMResourceFromSpec(vmResourceSpec);
@@ -168,13 +170,14 @@ public class TestAzureProvisionTask extends AzureBaseTest {
     @Ignore("This test does VM provisioning with additional disks. Ignored for timeouts of "
             + "preflights")
     public void testProvisionWithDataDisks() throws Throwable {
+        ImageSource imageSource = createImageSource(getHost(), this.endpointState, IMAGE_REFERENCE);
 
         // Create a Azure VM compute resource with 2 additional disks.
         int numberOfAdditionalDisks = 2;
 
         VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
                 this.endpointState, azureVMName)
-                .withImageReferenceId(IMAGE_REFERENCE)
+                .withImageSource(imageSource)
                 .withNicSpecs(DEFAULT_NIC_SPEC)
                 .withNumberOfAdditionalDisks(numberOfAdditionalDisks);
 
@@ -198,10 +201,15 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         ImageSource privateImageSource = createPrivateImageSource(getHost(), this.endpointState);
 
         int numberOfAdditionalDisks = 1;
-        // create a Azure VM compute resource.
-        this.vmState = createDefaultVMResource(getHost(), azureVMName,
-                this.computeHost, this.endpointState, NO_PUBLIC_IP_NIC_SPEC,
-                null /* networkRGLink */, privateImageSource, numberOfAdditionalDisks);
+
+        VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
+                this.endpointState, azureVMName)
+                .withImageSource(privateImageSource)
+                .withNicSpecs(NO_PUBLIC_IP_NIC_SPEC)
+                .withNumberOfAdditionalDisks(numberOfAdditionalDisks);
+
+        // create Azure VM compute resource.
+        this.vmState = createVMResourceFromSpec(vmResourceSpec);
 
         kickOffProvisionTask();
 

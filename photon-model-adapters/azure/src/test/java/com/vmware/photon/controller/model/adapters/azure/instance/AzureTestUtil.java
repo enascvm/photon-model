@@ -743,7 +743,7 @@ public class AzureTestUtil {
         public final String azureVmName;
         public AzureTestUtil.AzureNicSpecs nicSpecs;
         public String networkRGLink;
-        public String imageReferenceId;
+        public ImageSource imageSource;
         public int numberOfAdditionalDisks;
 
         public VMResourceSpec(VerificationHost host, ComputeState computeHost, EndpointState endpointState,
@@ -759,8 +759,8 @@ public class AzureTestUtil {
             return this;
         }
 
-        public VMResourceSpec withImageReferenceId(String imageReferenceId) {
-            this.imageReferenceId = imageReferenceId;
+        public VMResourceSpec withImageSource(ImageSource imageSource) {
+            this.imageSource = imageSource;
             return this;
         }
 
@@ -770,10 +770,26 @@ public class AzureTestUtil {
         }
     }
 
+    public static ImageSource createImageSource(VerificationHost host,
+                                                EndpointState endpointState, String imageRefId) throws Throwable {
+        ImageSource imageSource;
+        ImageState bootImage = new ImageState();
+
+        bootImage.id = imageRefId;
+        bootImage.endpointType = endpointState.endpointType;
+
+        bootImage = TestUtils.doPost(host, bootImage, ImageState.class, UriUtils.buildUri(host, ImageService.FACTORY_LINK));
+
+        imageSource = ImageSource.fromImageState(bootImage);
+
+        return imageSource;
+    }
+
     /**
      * Separate method to create VM from given spec
      */
     public static ComputeState createVMResourceFromSpec(VMResourceSpec spec) throws Throwable {
+
         final String defaultVmRGName = spec.azureVmName;
 
         // TODO Modify createDefaultResourceGroupState() to have only spec parameter passed
@@ -839,27 +855,9 @@ public class AzureTestUtil {
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.type = DiskType.HDD;
 
-        ImageState bootImage = new ImageState();
-
-        if (null != spec.imageReferenceId) {
-            bootImage.id = spec.imageReferenceId;
-        } else {
-            bootImage.id = IMAGE_REFERENCE;
-        }
-
-        bootImage.endpointType = spec.endpointState.endpointType;
-        bootImage = TestUtils.doPost(spec.host, bootImage, ImageState.class,
-                UriUtils.buildUri(spec.host, ImageService.FACTORY_LINK));
-
-        ImageSource imageSource = ImageSource.fromImageState(bootImage);
-
         // Custom OSDisk size of 32 GBs
         rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE;
-        if (imageSource.type == Type.PRIVATE_IMAGE || imageSource.type == Type.PUBLIC_IMAGE) {
-            rootDisk.imageLink = imageSource.asImageState().documentSelfLink;
-        } else if (imageSource.type == Type.IMAGE_REFERENCE) {
-            rootDisk.sourceImageReference = URI.create(imageSource.asRef());
-        }
+
         rootDisk.bootOrder = 1;
 
         rootDisk.endpointLink = spec.endpointState.documentSelfLink;
@@ -868,15 +866,25 @@ public class AzureTestUtil {
         rootDisk.customProperties = new HashMap<>();
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING.name());
 
-        rootDisk.customProperties.put(
-                AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
-                (spec.azureVmName + "sa").replaceAll("[_-]", "").toLowerCase());
-        rootDisk.customProperties.put(
-                AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
-                defaultVmRGName);
-        rootDisk.customProperties.put(
-                AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
-                AZURE_STORAGE_ACCOUNT_TYPE);
+        boolean isManagedDisk = false;
+        if (spec.imageSource.type == Type.PRIVATE_IMAGE) {
+            rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
+            rootDisk.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE, "Standard_LRS");
+            isManagedDisk = true;
+        } else if (spec.imageSource.type == Type.PUBLIC_IMAGE) {
+            rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
+            rootDisk.customProperties.put(
+                    AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
+                    (spec.azureVmName + "sa").replaceAll("[_-]", "").toLowerCase());
+            rootDisk.customProperties.put(
+                    AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                    defaultVmRGName);
+            rootDisk.customProperties.put(
+                    AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
+                    AZURE_STORAGE_ACCOUNT_TYPE);
+        } else if (spec.imageSource.type == Type.IMAGE_REFERENCE) {
+            rootDisk.sourceImageReference = URI.create(spec.imageSource.asRef());
+        }
 
         rootDisk = TestUtils.doPost(spec.host, rootDisk, DiskState.class,
                 UriUtils.buildUri(spec.host, DiskService.FACTORY_LINK));
@@ -888,7 +896,7 @@ public class AzureTestUtil {
         if (spec.numberOfAdditionalDisks > 0) {
             // TODO Need to modify createAdditionalDisks() to have only spec passed as parameter
             vmDisks.addAll(createAdditionalDisks(spec.host, spec.azureVmName,
-                    spec.endpointState, spec.numberOfAdditionalDisks));
+                    spec.endpointState, spec.numberOfAdditionalDisks, isManagedDisk));
         }
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
@@ -1012,14 +1020,13 @@ public class AzureTestUtil {
                 AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
 
-
         rootDisk = TestUtils.doPost(host, rootDisk, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
         vmDisks.add(rootDisk.documentSelfLink);
 
         //create additional disks
-        vmDisks.addAll(createAdditionalDisks(host,azureVMName,endpointState,numberOfAdditionalDisks));
+        vmDisks.addAll(createAdditionalDisks(host,azureVMName,endpointState,numberOfAdditionalDisks, false));
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
                 host, computeHost, endpointState, networkRGLinks, sgRGLinks, nicSpecs)
@@ -1048,7 +1055,7 @@ public class AzureTestUtil {
     }
 
     public static List<String> createAdditionalDisks(VerificationHost host,String azureVMName,
-            EndpointState endpointState,  int numberOfDisks) throws Throwable {
+            EndpointState endpointState,  int numberOfDisks, boolean isManagedDisk) throws Throwable {
 
         List<String> diskStateArrayList = new ArrayList<>();
         for (int i = 0; i < numberOfDisks; i++ ) {
@@ -1065,12 +1072,17 @@ public class AzureTestUtil {
             dataDisk.customProperties = new HashMap<>();
             dataDisk.customProperties.put(AZURE_DATA_DISK_CACHING, DEFAULT_DATA_DISK_CACHING.toString());
 
-            dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
-                    (azureVMName + "sa").replace("-", "").toLowerCase());
-            dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
-                    azureVMName);
-            dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
-                    AZURE_STORAGE_ACCOUNT_TYPE);
+            if (!isManagedDisk) {
+                dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
+                        (azureVMName + "sa").replace("-", "").toLowerCase());
+                dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                        azureVMName);
+                dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
+                        AZURE_STORAGE_ACCOUNT_TYPE);
+            } else {
+                dataDisk.customProperties.put(
+                        AzureConstants.AZURE_MANAGED_DISK_TYPE, "Standard_LRS");
+            }
 
             dataDisk = TestUtils.doPost(host, dataDisk, DiskState.class,
                     UriUtils.buildUri(host, DiskService.FACTORY_LINK));
@@ -1385,17 +1397,30 @@ public class AzureTestUtil {
 
         ImageState bootImage = new ImageState();
 
+        // Change id and name according to your custom image details
         bootImage.id = "/subscriptions/817776f9-ef2a-4681-9774-a66f9be11e22/resourceGroups/Images/providers/Microsoft.Compute/images/SourceImageLinuxUnmanagedAPI";
         bootImage.name = "SourceImageLinuxUnmanagedAPI";
         bootImage.osFamily = "Linux";
         bootImage.tenantLinks = endpointState.tenantLinks;
         bootImage.endpointLink = endpointState.documentSelfLink;
 
+        List<DiskConfiguration> imageDisks = new ArrayList<>();
         DiskConfiguration osDiskConfig = new DiskConfiguration();
 
-        osDiskConfig.properties = Collections.singletonMap(
-                AzureConstants.AZURE_OSDISK_BLOB_URI,
-                "https://stg4339322451611.blob.core.windows.net/vhds/SourceVMLinuxUnmanagedAPI-os-disk-f57d8371-8f45-4d8e-a8b3-84865aaf3f99.vhd");
+        imageDisks.add(osDiskConfig);
+
+        // Add/Remove data disks and also map correct LUN values based on your private image configuration
+        DiskConfiguration dataDiskConfig1 = new DiskConfiguration();
+        dataDiskConfig1.properties = new HashMap<>();
+        dataDiskConfig1.properties.put(AzureConstants.AZURE_DISK_LUN, "0");
+
+        imageDisks.add(dataDiskConfig1);
+
+        DiskConfiguration dataDiskConfig2 = new DiskConfiguration();
+        dataDiskConfig2.properties = new HashMap<>();
+        dataDiskConfig2.properties.put(AzureConstants.AZURE_DISK_LUN, "1");
+
+        imageDisks.add(dataDiskConfig2);
 
         bootImage.diskConfigs = Collections.singletonList(osDiskConfig);
 
