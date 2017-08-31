@@ -209,6 +209,7 @@ public class DeploymentServiceTest extends Suite {
             patchBody.tenantLinks.add("tenant1");
             patchBody.groupLinks = new HashSet<>();
             patchBody.groupLinks.add("group1");
+            patchBody.descriptionLink = new String(startState.descriptionLink);
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
 
@@ -315,7 +316,7 @@ public class DeploymentServiceTest extends Suite {
             newState.id = UUID.randomUUID().toString();
             newState.desc = "10.0.0.2";
             newState.creationTimeMicros = Long.MIN_VALUE;
-            newState.descriptionLink = startState.descriptionLink;
+            newState.descriptionLink = new String(startState.descriptionLink);
             newState.tenantLinks = new ArrayList<>();
             newState.tenantLinks.add("tenant1");
             newState.groupLinks = new HashSet<>();

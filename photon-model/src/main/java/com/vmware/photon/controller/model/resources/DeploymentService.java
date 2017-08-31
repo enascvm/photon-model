@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.util.EnumSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -101,7 +102,7 @@ public class DeploymentService extends StatefulService {
             DeploymentState previousState = getState(put);
             Utils.validateState(getStateDescription(), newState);
             if (previousState.descriptionLink != null
-                    && newState.descriptionLink != previousState.descriptionLink) {
+                    && !Objects.equals(newState.descriptionLink, previousState.descriptionLink)) {
                 throw new IllegalArgumentException("descriptionLink type can not be changed");
             }
             newState.creationTimeMicros = previousState.creationTimeMicros;
@@ -124,7 +125,8 @@ public class DeploymentService extends StatefulService {
                 if (currentState.descriptionLink == null) {
                     currentState.descriptionLink = patchBody.descriptionLink;
                     hasStateChanged = true;
-                } else if (patchBody.descriptionLink != currentState.descriptionLink) {
+                } else if (!Objects.equals(patchBody.descriptionLink,
+                        currentState.descriptionLink)) {
                     throw new IllegalArgumentException("descriptionLink type can not be changed");
                 }
             }
