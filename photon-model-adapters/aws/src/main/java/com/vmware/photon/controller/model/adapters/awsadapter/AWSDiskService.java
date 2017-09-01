@@ -112,8 +112,7 @@ public class AWSDiskService extends StatelessService {
 
         op.complete();
 
-        if (ctx.diskRequest.isMockRequest
-                && ctx.diskRequest.requestType == DiskInstanceRequest.DiskRequestType.CREATE) {
+        if (ctx.diskRequest.isMockRequest) {
             ctx.taskManager.finishTask();
             return;
         }
