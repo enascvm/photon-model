@@ -100,6 +100,7 @@ public class AzureUriPaths {
         adapterLinksByType.put(AZURE_SECURITY_GROUP_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER.key);
         adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER.key);
         adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER.key);
+        adapterLinksByType.put(AZURE_DISK_ADAPTER, AdapterTypePath.DISK_ADAPTER.key);
 
         AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }
