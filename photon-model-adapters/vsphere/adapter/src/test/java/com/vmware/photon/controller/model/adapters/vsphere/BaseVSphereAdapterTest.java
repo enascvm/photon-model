@@ -618,6 +618,33 @@ public class BaseVSphereAdapterTest {
         this.host.log("Create snapshot operation completed successfully");
     }
 
+    protected void createSnapshotAndWaitFailure(ComputeState vm) throws Throwable {
+        String taskLink = UUID.randomUUID().toString();
+        ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest(ResourceOperation.CREATE_SNAPSHOT.operation,
+                vm.documentSelfLink, taskLink);
+
+        Operation createSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
+                .setBody(snapshotRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> Assert.assertNull(e));
+        TestContext ctx2 = this.host.testCreate(1);
+        createTaskResultListener(this.host, taskLink, (u) -> {
+            if (u.getAction() != Service.Action.PATCH) {
+                return false;
+            }
+            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
+            if (TaskState.isFailed(response.taskInfo)) {
+                ctx2.completeIteration();
+                return true;
+            } else {
+                ctx2.completeIteration();
+                return false;
+            }
+        });
+        this.host.send(createSnapshotOp);
+        ctx2.await();
+    }
+
     protected SnapshotState getSnapshots(ComputeState computeState) throws Throwable {
         return querySnapshotState(computeState.documentSelfLink, true);
     }

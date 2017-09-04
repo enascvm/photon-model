@@ -126,6 +126,11 @@ public class CustomProperties {
 
     public static final String PROVIDER_DISK_UNIQUE_ID = "__providerUniqueIdentifier";
 
+    /**
+     * Snapshot limit: maximum permissible snapshots for this vSphere compute
+     */
+    public static final String SNAPSHOT_MAXIMUM_LIMIT = "__snapshotLimit"; // the specified limit of snapshots allowed
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

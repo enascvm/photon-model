@@ -40,4 +40,20 @@ public class TestVSphereLibraryProvisionTask extends TestVSphereLibraryProvision
             }
         }
     }
+
+    @Test
+    public void deployFromLibraryCreateSnapshotsAndCheckSnapshotLimit() throws Throwable {
+        ComputeState vm = provisionVMWithSnapshotLimitAndGetState();
+        try {
+            if (vm == null) {
+                return;
+            }
+            createSnapshotAndWait(vm, false); // 1st snapshot will succeed
+            createSnapshotAndWaitFailure(vm); // 2nd snapshot will fail, since snapshot limit is set to "1"
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
 }

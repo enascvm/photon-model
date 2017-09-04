@@ -157,6 +157,7 @@ public class InstanceClient extends BaseHelper {
     private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
     private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
     private static final String EXTRA_CONFIG_CREATED = "photon-model-created-millis";
+    private static final String SNAPSHOT_LIMIT_CONFIG_STRING = "snapshot.maxSnapshots";
 
     private final GetMoRef get;
     private final Finder finder;
@@ -330,6 +331,10 @@ public class InstanceClient extends BaseHelper {
             spec.getDeviceChange().addAll(getCustomizationConfigSpecs(devices, this.imageDisks));
         }
 
+        // set the maximum snapshot limit if specified
+        final String snapshotLimit = CustomProperties.of(this.ctx.child).getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
+        recordSnapshotLimit(spec.getExtraConfig(), snapshotLimit);
+
         ManagedObjectReference task = getVimPort().reconfigVMTask(this.vm, spec);
         TaskInfo info = waitTaskEnd(task);
 
@@ -392,6 +397,22 @@ public class InstanceClient extends BaseHelper {
         ov.setKey(EXTRA_CONFIG_CREATED);
         ov.setValue(Long.toString(System.currentTimeMillis()));
         extraConfig.add(ov);
+    }
+
+    private void recordSnapshotLimit(List<OptionValue> extraConfig, String snapshotLimitValue) {
+        if (snapshotLimitValue != null && !snapshotLimitValue.isEmpty()) {
+            if (extraConfig == null) {
+                extraConfig = new ArrayList<>();
+            }
+            extraConfig.add(populateSnapshotLimitValue(snapshotLimitValue));
+        }
+    }
+
+    private OptionValue populateSnapshotLimitValue(String snapshotLimitValue) {
+        OptionValue ov = new OptionValue();
+        ov.setKey(SNAPSHOT_LIMIT_CONFIG_STRING);
+        ov.setValue(snapshotLimitValue);
+        return ov;
     }
 
     private ManagedObjectReference cloneVm(ManagedObjectReference template) throws Exception {
@@ -880,6 +901,9 @@ public class InstanceClient extends BaseHelper {
         populateVAppProperties(spec, infos);
         populateCloudConfig(spec, infos);
         recordTimestamp(spec.getExtraConfig());
+        // set the maximum snapshot limit if specified
+        final String snapshotLimit = CustomProperties.of(this.ctx.child).getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
+        recordSnapshotLimit(spec.getExtraConfig(), snapshotLimit);
         // add disks one at a time
         for (VirtualDeviceConfigSpec newDisk : newDisks) {
             spec.getDeviceChange().add(newDisk);
@@ -1515,6 +1539,10 @@ public class InstanceClient extends BaseHelper {
 
         populateCloudConfig(spec, null);
         recordTimestamp(spec.getExtraConfig());
+        // set the maximum snapshot limit if specified
+        final String snapshotLimit = CustomProperties.of(this.ctx.child).getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
+        recordSnapshotLimit(spec.getExtraConfig(), snapshotLimit);
+
         ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool,
                 host);
 
