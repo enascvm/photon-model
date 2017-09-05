@@ -49,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
+import com.vmware.pbm.PbmProfileId;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NetworkDeviceBackingFactory;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
@@ -2009,6 +2010,13 @@ public class InstanceClient extends BaseHelper {
             return this.resourcePool;
         }
 
+        // This would happen only when there is datastore specified for boot disk, in that case
+        // even the resource pool should be picked from the host which mounts this datastore.
+        this.resourcePool = getResourcePoolBasedOnDatastoreOrStoragePolicy(datastoreForDisk, pbmSpec);
+        if (this.resourcePool != null) {
+            return this.resourcePool;
+        }
+
         if (VimNames.TYPE_HOST.equals(this.ctx.computeMoRef.getType())) {
             // find the ComputeResource representing this host and use its root resource pool
             ManagedObjectReference parentCompute = this.get.entityProp(this.ctx.computeMoRef,
@@ -2033,7 +2041,38 @@ public class InstanceClient extends BaseHelper {
         return this.resourcePool;
     }
 
-
+    // TODO This code could be removed if the TYPE_HOST is properly filtered in the upper
+    // layer itself.
+    private ManagedObjectReference getResourcePoolBasedOnDatastoreOrStoragePolicy(
+            ManagedObjectReference datastoreForDisk, List<VirtualMachineDefinedProfileSpec> pbmSpec)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (this.datastore != null) {
+            return null;
+        }
+        // Then pick from one of the compatible datastore
+        if (datastoreForDisk == null && pbmSpec != null) {
+            for (VirtualMachineDefinedProfileSpec sp : pbmSpec) {
+                try {
+                    PbmProfileId pbmProfileId = new PbmProfileId();
+                    pbmProfileId.setUniqueId(sp.getProfileId());
+                    List<String> datastoreNames = ClientUtils.getDatastores(this.connection,
+                            pbmProfileId);
+                    for (String dsName : datastoreNames) {
+                        ManagedObjectReference dsFromSp = new ManagedObjectReference();
+                        dsFromSp.setType(VimNames.TYPE_DATASTORE);
+                        dsFromSp.setValue(dsName);
+                        ManagedObjectReference rsPool = getResourcePoolForDatastore(dsFromSp);
+                        if (rsPool != null) {
+                            return rsPool;
+                        }
+                    }
+                } catch (Exception runtimeFaultFaultMsg) {
+                    // Just ignore. No need to log, as there are alternative paths.
+                }
+            }
+        }
+        return getResourcePoolForDatastore(datastoreForDisk);
+    }
 
     /**
      * Get resource pool based on the datastore chosen to place the VM

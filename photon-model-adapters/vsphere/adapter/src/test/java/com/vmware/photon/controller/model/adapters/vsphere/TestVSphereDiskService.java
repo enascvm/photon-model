@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
@@ -38,15 +39,20 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Test case to verify all disk related operations on vSphere adapter.
@@ -59,7 +65,30 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
     private EndpointService.EndpointState endpointState;
 
     @Test
-    public void testDiskCreateAndDelete() throws Throwable {
+    public void testDiskCreateAndDeleteWithDatastore() throws Throwable {
+        prepareEnvironment();
+        DiskState diskState = createDiskWithDatastore("AdditionalDisk1",
+                DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
+        testDiskCreateAndDelete(diskState);
+    }
+
+    @Test
+    public void testDiskCreateAndDeleteWithStoragePolicy() throws Throwable {
+        prepareEnvironment();
+        DiskState diskState = createDiskWithStoragePolicy("AdditionalDisk1",
+                DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
+        testDiskCreateAndDelete(diskState);
+    }
+
+    @Test
+    public void testDiskCreateAndDeleteWithNoDatastore() throws Throwable {
+        prepareEnvironment();
+        DiskState diskState = createDisk("AdditionalDisk1",
+                DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
+        testDiskCreateAndDelete(diskState);
+    }
+
+    private void prepareEnvironment() throws Throwable {
         this.auth = createAuth();
         this.resourcePool = createResourcePool();
 
@@ -68,9 +97,9 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
         this.endpointState = createEndpointState();
 
         enumerateComputes();
+    }
 
-        DiskState diskState = createDiskWithDatastore("AdditionalDisk1",
-                DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
+    private void testDiskCreateAndDelete(DiskState diskState) throws Throwable {
 
         // start provision task to do the actual disk creation
         String documentSelfLink = performDiskRequest(diskState, SubStage.CREATING_DISK);
@@ -173,14 +202,58 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
             long capacityMBytes, HashMap<String, String> customProperties) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, 0, null,
                 capacityMBytes, customProperties);
+        diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
+        return postDiskStateWithDetails(diskState);
+    }
+
+    private DiskState createDiskWithStoragePolicy(String alias, DiskService.DiskType type,
+            long capacityMBytes, HashMap<String, String>
+            customProperties) throws Throwable {
+        DiskState diskState = constructDiskState(alias, type, 0, null, capacityMBytes,
+                customProperties);
+        diskState.groupLinks = new HashSet<>();
+        if (isMock()) {
+            diskState.groupLinks.add(createResourceGroupState().documentSelfLink);
+        } else {
+            diskState.groupLinks.add(getStoragePolicyLink());
+        }
+        return postDiskStateWithDetails(diskState);
+    }
+
+    private DiskState createDisk(String alias, DiskService.DiskType type, long capacityMBytes,
+            HashMap<String, String> customProperties) throws Throwable {
+        DiskState diskState = constructDiskState(alias, type, 0, null,
+                capacityMBytes, customProperties);
+        return postDiskStateWithDetails(diskState);
+    }
+
+    private DiskState postDiskStateWithDetails(DiskState diskState) throws Throwable {
         diskState.authCredentialsLink = this.auth.documentSelfLink;
         diskState.endpointLink = this.endpointState.documentSelfLink;
         diskState.regionId = this.datacenterId;
         diskState.tenantLinks = this.computeHost.tenantLinks;
         diskState.diskAdapterReference = UriUtils.buildUri(host, VSphereDiskService.SELF_LINK);
-
-        diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+    private String getStoragePolicyLink() {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ResourceGroupState.class);
+        builder.addFieldClause(ResourceGroupState.FIELD_NAME_ID, this.spId);
+        builder.addCaseInsensitiveFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_NAME,
+                this.spName,
+                QueryTask.QueryTerm.MatchType.TERM, QueryTask.Query.Occurance.MUST_OCCUR);
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+
+        Operation op = Operation.createPost(
+                UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                .setBody(task);
+
+        QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
+        return result.results.documentLinks.get(0);
     }
 }

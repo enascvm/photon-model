@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.VM_PATH_FORMAT;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDatastoreFromStoragePolicy;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDiskProvisioningType;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getPbmProfileSpec;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.toKb;
@@ -57,7 +56,7 @@ public class DiskClient extends BaseHelper {
             .getTime().getTime();
     public static final String TOKEN_DELIMITER = "-";
     private final DiskContext diskContext;
-    private ManagedObjectReference defaultDatastore;
+    private String defaultDatastore;
     private final Finder finder;
     private final DiskService.DiskStateExpanded diskState;
 
@@ -76,7 +75,8 @@ public class DiskClient extends BaseHelper {
                 .getVirtualDiskManager();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.diskState);
 
-        String dsName = getDatastoreForDisk(pbmSpec);
+        String dsName = this.diskContext.datastoreName != null && !this.diskContext.datastoreName
+                .isEmpty() ? this.diskContext.datastoreName : getDefaultDatastore();
         String diskName = getUniqueDiskName();
 
         // Create the parent folder before creation of the disk file
@@ -174,29 +174,6 @@ public class DiskClient extends BaseHelper {
     }
 
     /**
-     * Datastore name if any specified for the disk, if not fall back to the default datastore.
-     */
-    private String getDatastoreForDisk(List<VirtualMachineDefinedProfileSpec> pbmSpec)
-            throws Exception {
-        String dsPath = null;
-        // If there is a datastore or storage policy defined pick the datastore from that.
-        if (this.diskState.storageDescription != null) {
-            dsPath = this.diskState.storageDescription.id;
-        } else if (pbmSpec != null) {
-            ManagedObjectReference dsFromSp = getDatastoreFromStoragePolicy(this.connection,
-                    pbmSpec);
-            if (dsFromSp != null) {
-                dsPath = dsFromSp.getValue();
-            }
-        }
-        if (dsPath == null) {
-            dsPath = getDefaultDatastore().getValue();
-        }
-
-        return dsPath;
-    }
-
-    /**
      * Get a unique name for the disk by appending the timestamp.
      */
     private String getUniqueDiskName() {
@@ -223,14 +200,16 @@ public class DiskClient extends BaseHelper {
      * Get default datastore from the server. Pick first available one. This will be used if there
      * are no customizations requested for the disk by the client.
      */
-    private ManagedObjectReference getDefaultDatastore()
+    private String getDefaultDatastore()
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         if (this.defaultDatastore != null) {
             return this.defaultDatastore;
         }
 
         List<Element> datastoreList = this.finder.datastoreList("*");
-        this.defaultDatastore = datastoreList.stream().map(o -> o.object).findFirst().orElse(null);
+        this.defaultDatastore = datastoreList.stream().map(o -> o.path.substring(o.path.lastIndexOf("/") + 1))
+                .findFirst()
+                .orElse(null);
         return this.defaultDatastore;
     }
 
