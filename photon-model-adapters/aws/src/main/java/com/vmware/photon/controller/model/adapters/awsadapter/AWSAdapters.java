@@ -51,6 +51,7 @@ public class AWSAdapters {
             service(AWSSecurityGroupService.class),
             service(AWSMissingResourcesEnumerationService.class),
             service(AWSRebootService.class),
+            service(AWSComputeDiskDay2Service.class),
             service(AWSResetService.class)
     };
 

@@ -25,7 +25,7 @@ import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class AwsDiskClient {
 
-    private final AmazonEC2AsyncClient client;
+    public final AmazonEC2AsyncClient client;
 
     public AwsDiskClient(AmazonEC2AsyncClient client) {
         this.client = client;

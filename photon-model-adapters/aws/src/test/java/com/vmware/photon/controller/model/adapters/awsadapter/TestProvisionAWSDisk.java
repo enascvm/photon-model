@@ -16,9 +16,9 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EBS_VOLUME_SIZE_IN_MEBI_BYTES;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.avalabilityZoneIdentifier;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
@@ -34,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
 import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
 import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.Volume;
@@ -65,7 +64,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 
 public class TestProvisionAWSDisk {
 
-    public static final int AWS_DISK_REQUEST_TIMEOUT_MINUTES = 5;
     private static final String VOLUMEID_PREFIX = "vol-";
     private static Boolean isEncrypted = true;
 
@@ -80,7 +78,6 @@ public class TestProvisionAWSDisk {
     private EndpointState endpointState;
     private AmazonEC2AsyncClient client;
     private DiskService.DiskState diskState;
-
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -130,6 +127,9 @@ public class TestProvisionAWSDisk {
                 TestAWSSetupUtils
                         .deleteDisks(this.diskState.documentSelfLink, this.isMock, this.host,
                                 false);
+
+                TestAWSSetupUtils
+                        .deleteEbsVolumeUsingEC2Client(this.client, this.host, this.diskState.id);
             } catch (Throwable deleteEx) {
                 this.host.log(Level.WARNING, "Exception deleting Disk - %s", deleteEx.getMessage());
             }
@@ -161,7 +161,7 @@ public class TestProvisionAWSDisk {
         createEndpoint();
 
         this.diskState = createAWSDiskState(this.host, this.endpointState,
-                this.currentTestName.getMethodName() + "_disk1", zoneId, regionId);
+                this.currentTestName.getMethodName() + "_disk1", null, regionId);
 
         // start provision task to do the actual disk creation
         ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskState();
@@ -211,13 +211,13 @@ public class TestProvisionAWSDisk {
                         volume.getIops().intValue());
             }
 
-            assertEquals("availability zones are not matching", disk.zoneId, volume.getAvailabilityZone());
+            assertEquals("availability zones are not matching", disk.zoneId,
+                    volume.getAvailabilityZone());
 
             assertTrue("disk status not matching", disk.status == DiskService.DiskStatus.AVAILABLE);
 
             assertEquals("disk is encrypted", 0, disk.encrypted.compareTo(isEncrypted));
 
-            deleteEbsVolumeOnAws(this.client, this.host, volumeId);
         }
 
         List<String> disksToDelete = new ArrayList<>();
@@ -249,20 +249,6 @@ public class TestProvisionAWSDisk {
         return new ArrayList<>(describeVolumesResult.getVolumes());
     }
 
-    /**
-     * Deletes ebs volume on AWS
-     *
-     */
-    public static void deleteEbsVolumeOnAws(AmazonEC2AsyncClient client,
-            VerificationHost host, String volumeId)
-            throws Throwable {
-
-        host.log("Deleting disk with id " + volumeId
-                + " from the AWS endpoint using the EC2 client.");
-
-        client.deleteVolume(new DeleteVolumeRequest().withVolumeId(volumeId));
-    }
-
     public static DiskState getDisk(VerificationHost host, String diskLink)
             throws Throwable {
         Operation response = host
@@ -281,7 +267,7 @@ public class TestProvisionAWSDisk {
         diskDesc.capacityMBytes = EBS_VOLUME_SIZE_IN_MEBI_BYTES;
         diskDesc.encrypted = isEncrypted;
 
-        diskDesc.zoneId = zoneId + avalabilityZoneIdentifier;
+        diskDesc.zoneId = zoneId;
         diskDesc.regionId = regionId;
 
         diskDesc.endpointLink = endpointState.documentSelfLink;

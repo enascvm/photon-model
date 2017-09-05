@@ -19,6 +19,8 @@ import java.util.Map;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.xenon.common.UriUtils;
 
@@ -37,6 +39,10 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_DISK_ADAPTER = AdapterTypePath.DISK_ADAPTER
             .adapterLink(EndpointType.aws.name());
+    public static final String AWS_DISK_DAY2_ADAPTER = ResourceOperationSpecService
+            .buildDefaultAdapterLink(
+                    PhotonModelConstants.EndpointType.aws.name(),
+                    ResourceOperationSpecService.ResourceType.COMPUTE, "disk-day2-adapter");
     public static final String AWS_SUBNET_ADAPTER = AdapterTypePath.SUBNET_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_SECURITY_GROUP_ADAPTER = AdapterTypePath.SECURITY_GROUP_ADAPTER

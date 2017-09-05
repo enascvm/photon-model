@@ -73,7 +73,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
         /**
          * Value indicating whether the service should treat this as a mock
          * request and complete the work flow without involving the underlying
-         * compute host infrastructure.
+         * disk infrastructure.
          */
         public boolean isMockRequest;
 
@@ -178,8 +178,6 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
                 .createGet(this, updatedState.diskLink)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        // the compute host is co-located so it is unexpected
-                        // that it failed the GET
                         logWarning(() -> String.format("GET to %s failed: %s", o.getUri(),
                                 Utils.toString(e)));
                         failTask(e);

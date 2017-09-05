@@ -250,6 +250,8 @@ public class TestAWSSetupUtils {
 
     public static final String LOAD_BALANCER_NAME_PREFIX = "pm-test-";
 
+    public static final String AWS_INSTANCE_ID_PREFIX = "i-";
+    public static final String AWS_VOLUME_ID_PREFIX = "vol-";
     /**
      * Return two-NIC spec where first NIC should be assigned to 'secondary' subnet and second NIC
      * should be assigned to a randomly generated subnet that should be created.
@@ -1004,12 +1006,14 @@ public class TestAWSSetupUtils {
         }
 
         // Create NIC States
-        List<String> nicLinks = createAWSNicStates(
-                host, computeHost, endpointState, awsVMDesc.name, nicSpecs, addNewSecurityGroup)
-                        .stream()
-                        .map(nic -> nic.documentSelfLink)
-                        .collect(Collectors.toList());
-
+        List<String> nicLinks = null;
+        if (nicSpecs != null) {
+            nicLinks = createAWSNicStates(
+                    host, computeHost, endpointState, awsVMDesc.name, nicSpecs, addNewSecurityGroup)
+                    .stream()
+                    .map(nic -> nic.documentSelfLink)
+                    .collect(Collectors.toList());
+        }
         // Create compute state
         ComputeState resource;
         {
@@ -2712,5 +2716,19 @@ public class TestAWSSetupUtils {
         endpointRemovalTaskState.endpointLink = endpoint.documentSelfLink;
         endpointRemovalTaskState.tenantLinks = endpoint.tenantLinks;
         return endpointRemovalTaskState;
+    }
+
+    /**
+     * Deletes ebs volume on AWS
+     *
+     */
+    public static void deleteEbsVolumeUsingEC2Client(AmazonEC2AsyncClient client,
+            VerificationHost host, String volumeId)
+            throws Throwable {
+
+        host.log("Deleting disk with id " + volumeId
+                + " from the AWS endpoint using the EC2 client.");
+
+        client.deleteVolume(new DeleteVolumeRequest().withVolumeId(volumeId));
     }
 }

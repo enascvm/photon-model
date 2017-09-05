@@ -29,8 +29,11 @@ import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeNatGatewaysRequest;
 import com.amazonaws.services.ec2.model.DescribeNatGatewaysResult;
+import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
+import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.NatGateway;
+import com.amazonaws.services.ec2.model.Volume;
 
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.xenon.common.StatelessService;
@@ -80,9 +83,14 @@ public class AWSTaskStatusChecker<T> {
 
     public void start(T type) {
         if (this.expirationTimeMicros > 0 && Utils.getNowMicrosUtc() > this.expirationTimeMicros) {
+            String resource = "Compute";
+            if (type instanceof Volume) {
+                resource = "Volume";
+            }
+
             String msg = String
-                    .format("Compute with instance id %s did not reach desired %s state in the required time interval.",
-                            this.instanceId, this.desiredState);
+                    .format("%s with instance id %s did not reach desired %s state in the required time interval.",
+                            resource, this.instanceId, this.desiredState);
             this.service.logSevere(() -> msg);
             this.taskManager.patchTaskToFailure(new RuntimeException(msg));
             return;
@@ -100,6 +108,9 @@ public class AWSTaskStatusChecker<T> {
         } else if (type instanceof NatGateway) {
             this.amazonEC2Client.describeNatGatewaysAsync(
                     (DescribeNatGatewaysRequest) descRequest, describeHandler);
+        } else if (type instanceof Volume) {
+            this.amazonEC2Client.describeVolumesAsync(
+                    (DescribeVolumesRequest)descRequest, describeHandler);
         } else {
             AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
                     new IllegalArgumentException("Invalid type " + type));
@@ -120,6 +131,12 @@ public class AWSTaskStatusChecker<T> {
             instanceIdList.add(this.instanceId);
             descRequest.setNatGatewayIds(instanceIdList);
 
+            return descRequest;
+        } else if (type instanceof Volume) {
+            DescribeVolumesRequest descRequest = new DescribeVolumesRequest();
+            List<String> volumeIdList = new ArrayList<>();
+            volumeIdList.add(this.instanceId);
+            descRequest.setVolumeIds(volumeIdList);
             return descRequest;
         } else {
             AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
@@ -171,6 +188,9 @@ public class AWSTaskStatusChecker<T> {
                     // rather than keep checking for status and eventually time out, get the
                     // failure message and fail the task
                     failureMessage = ((NatGateway)instance).getFailureMessage();
+                } else if (result instanceof DescribeVolumesResult) {
+                    instance = ((DescribeVolumesResult)result).getVolumes().get(0);
+                    status = ((Volume)instance).getState().toLowerCase();
                 } else {
                     AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(
                             new IllegalArgumentException("Invalid type " + result));

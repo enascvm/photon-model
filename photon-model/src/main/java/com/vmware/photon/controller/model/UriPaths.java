@@ -46,6 +46,7 @@ public class UriPaths {
         INSTANCE_ADAPTER("instanceAdapter", "instance-adapter"),
         NETWORK_ADAPTER("networkAdapter", "network-adapter"),
         DISK_ADAPTER("diskAdapter", "disk-adapter"),
+        DISK_DAY2_ADAPTER("diskDay2Adapter", "disk-day2-adapter"),
         SUBNET_ADAPTER("subnetAdapter", "sub-network-adapter"),
         SECURITY_GROUP_ADAPTER("securityGroupAdapter", "security-group-adapter"),
         LOAD_BALANCER_ADAPTER("loadBalancerAdapter", "load-balancer-adapter"),

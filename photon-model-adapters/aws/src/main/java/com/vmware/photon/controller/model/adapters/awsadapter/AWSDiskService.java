@@ -13,13 +13,17 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 
+import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.model.AvailabilityZone;
@@ -37,6 +41,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -77,12 +82,15 @@ public class AWSDiskService extends StatelessService {
         public AwsDiskClient client;
         public TaskManager taskManager;
         public Operation operation;
+        public long taskExpirationMicros;
         public Throwable error;
 
         AWSDiskContext(StatelessService service, DiskInstanceRequest diskRequest) {
             this.diskRequest = diskRequest;
             this.taskManager = new TaskManager(service, diskRequest.taskReference,
                     diskRequest.resourceLink());
+            this.taskExpirationMicros = Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
+                    AWS_DISK_REQUEST_TIMEOUT_MINUTES);
         }
     }
 
@@ -182,6 +190,12 @@ public class AWSDiskService extends StatelessService {
      */
     private void createDisk(AWSDiskContext context) {
 
+        if (context.diskRequest.isMockRequest) {
+            Volume vol = getMockVolume();
+            updateDiskState(vol, context, AwsDiskStage.FINISHED);
+            return;
+        }
+
         DiskState diskState = context.disk;
 
         if (diskState.capacityMBytes <= 0) {
@@ -192,21 +206,26 @@ public class AWSDiskService extends StatelessService {
 
         CreateVolumeRequest req = new CreateVolumeRequest();
 
-        //set availability zone
-        List<AvailabilityZone> availabilityZoneList = context.client.getAvailabilityZones();
-        if (availabilityZoneList.isEmpty()) {
-            String message = String.format("No zones are available in the region %s:", diskState.regionId);
-            this.logSevere(() -> "[AWSDiskService] " + message);
-            throw new IllegalArgumentException(message);
+        String zoneId = diskState.zoneId;
+        if (zoneId == null) {
+            List<AvailabilityZone> availabilityZoneList = context.client.getAvailabilityZones();
+            if (availabilityZoneList.isEmpty()) {
+                String message = String
+                        .format("No zones are available in the region %s:", diskState.regionId);
+                this.logSevere(() -> "[AWSDiskService] " + message);
+                throw new IllegalArgumentException(message);
+            }
+            zoneId = availabilityZoneList.get(0).getZoneName();
         }
 
-        req.withAvailabilityZone(availabilityZoneList.get(0).getZoneName());
+        //set availability zone
+        req.withAvailabilityZone(zoneId);
 
         //set volume size
         int diskSize = (int) diskState.capacityMBytes / 1024;
         req.withSize(diskSize);
 
-        //enable encryption on disk
+        //set encrypted field
         Boolean encrypted = diskState.encrypted == null ? false : diskState.encrypted;
         req.withEncrypted(encrypted);
 
@@ -239,7 +258,14 @@ public class AWSDiskService extends StatelessService {
                 new AWSDiskCreationHandler(this, context);
 
         context.client.createVolume(req, creationHandler);
+    }
 
+    private Volume getMockVolume() {
+        return new Volume()
+                .withVolumeId("i-" + UUID.randomUUID())
+                .withEncrypted(false)
+                .withAvailabilityZone("")
+                .withCreateTime(new Date());
     }
 
     /**
@@ -340,9 +366,28 @@ public class AWSDiskService extends StatelessService {
 
             this.service.logInfo(() -> message);
 
-            updateDiskState(result.getVolume(), this.context,
-                    AwsDiskStage.FINISHED);
+            //consumer to be invoked once a volume is available
+            Consumer<Object> consumer = volume -> {
+                updateDiskState((Volume) volume, this.context, AwsDiskStage.FINISHED);
+            };
 
+            Volume volume = result.getVolume();
+            String volumeId = volume.getVolumeId();
+            startStatusChecker(volumeId, consumer);
+        }
+
+        private void startStatusChecker(String volumeId, Consumer<Object> consumer) {
+
+            Runnable proceed = () -> {
+                AWSTaskStatusChecker
+                        .create(this.context.client.client, volumeId,
+                                AWSTaskStatusChecker.AWS_AVAILABLE_NAME, consumer,
+                                this.context.taskManager,
+                                this.service, this.context.taskExpirationMicros)
+                        .start(new Volume());
+            };
+
+            proceed.run();
         }
     }
 }
