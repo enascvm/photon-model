@@ -50,6 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.Page;
@@ -102,6 +103,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -562,19 +564,28 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Enumerate VMs from Azure.
      */
     private void getVmList(EnumerationContext ctx, ComputeEnumerationSubStages next) {
-        logFine(() -> "Enumerating VMs from Azure");
+        Consumer<Throwable> failure = e -> {
+            logWarning("Failure retrieving Azure VMs for [endpoint=%s] [Exception:%s]",
+                    ctx.request.endpointLink, e.getMessage());
+            handleError(ctx, e);
+            return;
+        };
 
-        Azure azureClient = getAzureClient(ctx);
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            logFine(() -> "Enumerating VMs from Azure");
 
-        ctx.virtualMachines.clear();
+            Azure azureClient = getAzureClient(ctx);
 
-        if (ctx.enumNextPageLink == null) {
-            azureClient.virtualMachines().inner().listAsync()
-                    .subscribe(vmEnumerationCompletion(ctx, next));
-        } else {
-            azureClient.virtualMachines().inner().listNextAsync(ctx.enumNextPageLink)
-                    .subscribe(vmEnumerationCompletion(ctx, next));
-        }
+            ctx.virtualMachines.clear();
+
+            if (ctx.enumNextPageLink == null) {
+                azureClient.virtualMachines().inner().listAsync()
+                        .subscribe(vmEnumerationCompletion(ctx, next));
+            } else {
+                azureClient.virtualMachines().inner().listNextAsync(ctx.enumNextPageLink)
+                        .subscribe(vmEnumerationCompletion(ctx, next));
+            }
+        }, failure);
     }
 
     /**
@@ -1078,23 +1089,32 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void createNetworkInterfaceStates(EnumerationContext ctx,
             ComputeEnumerationSubStages next) {
+        Consumer<Throwable> failure = e -> {
+            logWarning("Failure getting Azure network interface states [endpointLink:%s] [Exception:%s]",
+                    ctx.request.endpointLink, e.getMessage());
+            handleError(ctx, e);
+            return;
+        };
 
-        Azure azureClient = getAzureClient(ctx);
-        NetworkInterfacesInner netOps = azureClient.networkInterfaces().inner();
-        List<DeferredResult<Pair<NetworkInterfaceInner, String>>> remoteNics = ctx.virtualMachines
-                .values().stream()
-                .filter(vm -> vm.networkProfile() != null && !vm.networkProfile()
-                        .networkInterfaces().isEmpty())
-                .flatMap(vm -> vm.networkProfile().networkInterfaces().stream()
-                        .map(nic -> Pair.of(nic, vm.id())))
-                .map(pair -> loadRemoteNic(pair, netOps))
-                .collect(Collectors.toList());
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            Azure azureClient = getAzureClient(ctx);
+            NetworkInterfacesInner netOps = azureClient.networkInterfaces().inner();
+            List<DeferredResult<Pair<NetworkInterfaceInner, String>>> remoteNics = ctx.virtualMachines
+                    .values().stream()
+                    .filter(vm -> vm.networkProfile() != null && !vm.networkProfile()
+                            .networkInterfaces().isEmpty())
+                    .flatMap(vm -> vm.networkProfile().networkInterfaces().stream()
+                            .map(nic -> Pair.of(nic, vm.id())))
+                    .map(pair -> loadRemoteNic(pair, netOps))
+                    .collect(Collectors.toList());
 
-        DeferredResult.allOf(remoteNics)
-                .thenCompose(rnics -> loadSubnets(ctx, rnics)
-                        .thenCompose(subnetPerNicId -> doCreateUpdateDeleteNics(ctx, subnetPerNicId,
-                                rnics)))
-                .whenComplete(thenHandleSubStage(ctx, next));
+            DeferredResult.allOf(remoteNics)
+                    .thenCompose(rnics -> loadSubnets(ctx, rnics)
+                            .thenCompose(subnetPerNicId -> doCreateUpdateDeleteNics(ctx, subnetPerNicId,
+                                    rnics)))
+                    .whenComplete(thenHandleSubStage(ctx, next));
+        }, failure);
+
 
     }
 
@@ -1249,19 +1269,28 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
         // It is available as a SubResource, We use the SubResource ID of IP address from
         // NetworkInterfaceIPConfigurationInner to obtain the IP address.
-        Azure azure = getAzureClient(ctx);
-        azure.publicIPAddresses()
-                .getByIdAsync(nicIPConf.publicIPAddress().id())
-                .subscribe(new Action1<PublicIPAddress>() {
-                    @Override
-                    public void call(PublicIPAddress publicIPAddress) {
-                        nicMeta.publicIp = publicIPAddress.ipAddress();
-                        if (publicIPAddress.inner().dnsSettings() != null) {
-                            nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
+        Consumer<Throwable> failure = e -> {
+            logWarning("Error getting public IP address from Azure [endpointLink:%s], [Exception:%s]",
+                    ctx.request.endpointLink, e.getMessage());
+            return;
+        };
+
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            Azure azure = getAzureClient(ctx);
+            azure.publicIPAddresses()
+                    .getByIdAsync(nicIPConf.publicIPAddress().id())
+                    .subscribe(new Action1<PublicIPAddress>() {
+                        @Override
+                        public void call(PublicIPAddress publicIPAddress) {
+                            nicMeta.publicIp = publicIPAddress.ipAddress();
+                            if (publicIPAddress.inner().dnsSettings() != null) {
+                                nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
+                            }
+                            executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta, isCreate);
                         }
-                        executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta, isCreate);
-                    }
-                });
+                    });
+        }, failure);
+
     }
 
     private void executeNicCreateUpdateRequest(NetworkInterfaceState nic,
@@ -1334,10 +1363,20 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     "VM resource group %s is different from nic resource group %s, for nic %s",
                     resourceGroupName, nicRG, pair.getLeft().id());
         }
-        netOps.getByResourceGroupAsync(resourceGroupName, networkInterfaceName, "ipConfigurations/publicIPAddress",
-                handler);
+
+        Consumer<Throwable> failure = e -> {
+            logWarning("Error getting Azure NIC [Exception:%s]", e.getMessage());
+            return;
+        };
+
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            netOps.getByResourceGroupAsync(resourceGroupName, networkInterfaceName,
+                    "ipConfigurations/publicIPAddress", handler);
+        }, failure);
+
         return handler.toDeferredResult()
                 .thenApply(loaded -> Pair.of(loaded, pair.getRight()));
+
     }
 
     private DeferredResult<Map<String, String>> loadSubnets(EnumerationContext ctx,
@@ -1494,29 +1533,35 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         // Patching power state and network Information. Hence 2.
         // If we patch more fields, this number should be increased accordingly.
-        Azure azureClient = getAzureClient(ctx);
-        VirtualMachinesInner vmOps = azureClient
-                .virtualMachines().inner();
-        DeferredResult.allOf(ctx.computeStatesForPatching
-                .values().stream()
-                .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
-                .map(dr -> dr.thenCompose(c -> sendWithDeferredResult(
-                        Operation.createPatch(ctx.request.buildUri(c.documentSelfLink)).setBody(c)
-                                .setCompletion((o, e) -> {
-                                    if (e != null) {
-                                        logWarning(() -> String.format(
-                                                "Error updating VM:[%s], reason: %s", c.name, e));
-                                    }
-                                }))))
-                .collect(Collectors.toList()))
-                .whenComplete((all, e) -> {
-                    if (e != null) {
-                        logWarning(() -> String.format("Error: %s", e));
-                    }
-                    ctx.subStage = next;
-                    handleSubStage(ctx);
-                });
+        Consumer<Throwable> failure = e -> {
+            logWarning("Failure getting Azure Virtual Machines");
+            return;
+        };
 
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            Azure azureClient = getAzureClient(ctx);
+            VirtualMachinesInner vmOps = azureClient
+                    .virtualMachines().inner();
+            DeferredResult.allOf(ctx.computeStatesForPatching
+                    .values().stream()
+                    .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
+                    .map(dr -> dr.thenCompose(c -> sendWithDeferredResult(
+                            Operation.createPatch(ctx.request.buildUri(c.documentSelfLink)).setBody(c)
+                                    .setCompletion((o, e) -> {
+                                        if (e != null) {
+                                            logWarning(() -> String.format(
+                                                    "Error updating VM:[%s], reason: %s", c.name, e));
+                                        }
+                                    }))))
+                    .collect(Collectors.toList()))
+                    .whenComplete((all, e) -> {
+                        if (e != null) {
+                            logWarning(() -> String.format("Error: %s", e));
+                        }
+                        ctx.subStage = next;
+                        handleSubStage(ctx);
+                    });
+        }, failure);
     }
 
     private DeferredResult<ComputeState> patchVMInstanceDetails(EnumerationContext ctx,
@@ -1533,7 +1578,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 return DeferredResult.completed(vm);
             }
         };
-        vmOps.getByResourceGroupAsync(resourceGroupName, vmName, InstanceViewTypes.INSTANCE_VIEW, handler);
+
+        Consumer<Throwable> failure = e -> {
+            logWarning("Error getting Azure VM instance view [endpointLink:%s] [Exception:%s]",
+                    ctx.request.endpointLink, e.getMessage());
+            return;
+        };
+
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            vmOps.getByResourceGroupAsync(resourceGroupName, vmName, InstanceViewTypes.INSTANCE_VIEW, handler);
+        }, failure);
+
         return handler.toDeferredResult().thenApply(vm -> {
             for (InstanceViewStatus status : vm.instanceView().statuses()) {
                 if (status.code()

@@ -55,6 +55,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -104,6 +105,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -625,21 +627,30 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         logFine(() -> String.format("%d storage description to be created",
                 context.storageAccountsToUpdateCreate.size()));
 
-        StorageAccountsInner stOps = getAzureClient(
-                context).storageAccounts().inner();
+        Consumer<Throwable> failure = e -> {
+            logWarning("Failure getting Azure storage accounts [EndpointLink:%s] [Exception:%s]",
+                    context.request.endpointLink, e.getMessage());
+            handleError(context, e);
+            return;
+        };
 
-        List<DeferredResult<StorageDescription>> results = context.storageAccountsToUpdateCreate
-                .values().stream()
-                .map(sa -> createStorageDescription(context, sa, stOps))
-                .collect(java.util.stream.Collectors.toList());
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            StorageAccountsInner stOps = getAzureClient(
+                    context).storageAccounts().inner();
 
-        DeferredResult.allOf(results).whenComplete((sds, e) -> {
-            if (e != null) {
-                logWarning(() -> String.format("Error: %s", e.getMessage()));
-            }
-            context.subStage = next;
-            handleSubStage(context);
-        });
+            List<DeferredResult<StorageDescription>> results = context.storageAccountsToUpdateCreate
+                    .values().stream()
+                    .map(sa -> createStorageDescription(context, sa, stOps))
+                    .collect(java.util.stream.Collectors.toList());
+
+            DeferredResult.allOf(results).whenComplete((sds, e) -> {
+                if (e != null) {
+                    logWarning(() -> String.format("Error: %s", e.getMessage()));
+                }
+                context.subStage = next;
+                handleSubStage(context);
+            });
+        }, failure);
     }
 
     private DeferredResult<StorageDescription> createStorageDescription(StorageEnumContext context,
@@ -656,7 +667,17 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 return DeferredResult.completed(keys);
             }
         };
-        stOps.listKeysAsync(resourceGroupName, storageAccount.name, handler);
+
+        Consumer<Throwable> failure = e -> {
+            logWarning("Failure getting Azure storage account keys [EndpointLink:%s] [Exception:%s]",
+                    context.request.endpointLink, e.getMessage());
+            return;
+        };
+
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            stOps.listKeysAsync(resourceGroupName, storageAccount.name, handler);
+        }, failure);
+
         return handler.toDeferredResult()
                 .thenCompose(keys -> AzureUtils.storeKeys(getHost(), keys,
                         context.request.endpointLink, context.parentCompute.tenantLinks))
@@ -704,32 +725,40 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         // Patching power state and network Information. Hence 2.
         // If we patch more fields, this number should be increased accordingly.
-        Azure azureClient = getAzureClient(context);
-        StorageAccountsInner stOps = azureClient
-                .storageAccounts().inner();
-        DeferredResult.allOf(context.storageDescriptionsForPatching
-                .values().stream()
-                .map(storageDescription -> patchStorageDetails(stOps, storageDescription))
-                .map(dr -> dr.thenCompose(storageDescription -> sendWithDeferredResult(
-                        Operation.createPatch(
-                                context.request.buildUri(storageDescription.documentSelfLink))
-                                .setBody(storageDescription)
-                                .setCompletion((o, e) -> {
-                                    if (e != null) {
-                                        logWarning(() -> String.format(
-                                                "Error updating Storage:[%s], reason: %s",
-                                                storageDescription.name, e));
-                                    }
-                                }))))
-                .collect(Collectors.toList()))
-                .whenComplete((all, e) -> {
-                    if (e != null) {
-                        logWarning(() -> String.format("Error: %s", e));
-                    }
-                    context.subStage = next;
-                    handleSubStage(context);
-                });
+        Consumer<Throwable> failure = e -> {
+            logWarning("Failure getting Azure storage accounts [EndpointLink:%s] [Exception:%s]",
+                    context.request.endpointLink, e.getMessage());
+            handleError(context, e);
+            return;
+        };
 
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            Azure azureClient = getAzureClient(context);
+            StorageAccountsInner stOps = azureClient
+                    .storageAccounts().inner();
+            DeferredResult.allOf(context.storageDescriptionsForPatching
+                    .values().stream()
+                    .map(storageDescription -> patchStorageDetails(stOps, storageDescription))
+                    .map(dr -> dr.thenCompose(storageDescription -> sendWithDeferredResult(
+                            Operation.createPatch(
+                                    context.request.buildUri(storageDescription.documentSelfLink))
+                                    .setBody(storageDescription)
+                                    .setCompletion((o, e) -> {
+                                        if (e != null) {
+                                            logWarning(() -> String.format(
+                                                    "Error updating Storage:[%s], reason: %s",
+                                                    storageDescription.name, e));
+                                        }
+                                    }))))
+                    .collect(Collectors.toList()))
+                    .whenComplete((all, e) -> {
+                        if (e != null) {
+                            logWarning(() -> String.format("Error: %s", e));
+                        }
+                        context.subStage = next;
+                        handleSubStage(context);
+                    });
+        }, failure);
     }
 
     private DeferredResult<StorageDescription> patchStorageDetails(StorageAccountsInner stOps,
@@ -748,7 +777,17 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return DeferredResult.completed(sa);
                     }
                 };
-        stOps.getByResourceGroupAsync(resourceGroupName, storageName, handler);
+
+        Consumer<Throwable> failure = e -> {
+            logWarning("Error getting Azure storage account isntance view [Exception:%s]",
+                    e.getMessage());
+            return;
+        };
+
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            stOps.getByResourceGroupAsync(resourceGroupName, storageName, handler);
+        }, failure);
+
         return handler.toDeferredResult().thenApply(sa -> {
             if (sa.creationTime() != null) {
                 storageDescription.creationTimeMicros = TimeUnit.MILLISECONDS
@@ -830,83 +869,91 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        for (String id : context.storageAccountIds) {
-            String storageConnectionString = context.storageConnectionStrings
-                    .get(id);
-            if (storageConnectionString == null) {
-                continue;
-            }
+        Consumer<Throwable> failure = e -> {
+            logWarning("Failure getting Azure storage containers [EndpointLink:%s] [Exception:%s]",
+                    context.request.endpointLink, e.getMessage());
+            return;
+        };
 
-            try {
-                CloudStorageAccount storageAccount = CloudStorageAccount
-                        .parse(storageConnectionString);
-                CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
+        PhotonModelUtils.runInExecutor(this.executorService, () -> {
+            for (String id : context.storageAccountIds) {
+                String storageConnectionString = context.storageConnectionStrings
+                        .get(id);
+                if (storageConnectionString == null) {
+                    continue;
+                }
 
-                ResultContinuation nextContainerResults = null;
-                do {
-                    try {
-                        ResultSegment<CloudBlobContainer> contSegment = blobClient
-                                .listContainersSegmented(null,
-                                        ContainerListingDetails.NONE,
-                                        getQueryResultLimit(), nextContainerResults, null,
-                                        null);
+                try {
+                    CloudStorageAccount storageAccount = CloudStorageAccount
+                            .parse(storageConnectionString);
+                    CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
 
-                        context.apiListStorageContainers++;
+                    ResultContinuation nextContainerResults = null;
+                    do {
+                        try {
+                            ResultSegment<CloudBlobContainer> contSegment = blobClient
+                                    .listContainersSegmented(null,
+                                            ContainerListingDetails.NONE,
+                                            getQueryResultLimit(), nextContainerResults, null,
+                                            null);
 
-                        nextContainerResults = contSegment.getContinuationToken();
-                        for (CloudBlobContainer container : contSegment.getResults()) {
-                            String uri = container.getUri().toString();
-                            context.containerIds.add(uri);
-                            context.storageContainers.put(uri, container);
-                            ResultContinuation nextBlobResults = null;
-                            do {
-                                ResultSegment<ListBlobItem> blobsSegment = container
-                                        .listBlobsSegmented(
-                                                null, false,
-                                                EnumSet.noneOf(BlobListingDetails.class),
-                                                getQueryResultLimit(), nextBlobResults, null,
-                                                null);
-                                context.apiListBlobs++;
+                            context.apiListStorageContainers++;
 
-                                nextBlobResults = blobsSegment.getContinuationToken();
-                                for (ListBlobItem blobItem : blobsSegment.getResults()) {
-                                    String blobId = blobItem.getUri().toString();
-                                    context.storageBlobs.put(blobId, blobItem);
-                                    // populate mapping of blob uri and storage account for all storage
-                                    // accounts as new disks can be added to already existing blobs
-                                    StorageAccount blobStorageAccount = context.storageAccountMap
-                                            .get(id);
-                                    if (blobStorageAccount != null) {
-                                        context.storageAccountBlobUriMap
-                                                .put(blobId, blobStorageAccount);
+                            nextContainerResults = contSegment.getContinuationToken();
+                            for (CloudBlobContainer container : contSegment.getResults()) {
+                                String uri = container.getUri().toString();
+                                context.containerIds.add(uri);
+                                context.storageContainers.put(uri, container);
+                                ResultContinuation nextBlobResults = null;
+                                do {
+                                    ResultSegment<ListBlobItem> blobsSegment = container
+                                            .listBlobsSegmented(
+                                                    null, false,
+                                                    EnumSet.noneOf(BlobListingDetails.class),
+                                                    getQueryResultLimit(), nextBlobResults, null,
+                                                    null);
+                                    context.apiListBlobs++;
+
+                                    nextBlobResults = blobsSegment.getContinuationToken();
+                                    for (ListBlobItem blobItem : blobsSegment.getResults()) {
+                                        String blobId = blobItem.getUri().toString();
+                                        context.storageBlobs.put(blobId, blobItem);
+                                        // populate mapping of blob uri and storage account for all storage
+                                        // accounts as new disks can be added to already existing blobs
+                                        StorageAccount blobStorageAccount = context.storageAccountMap
+                                                .get(id);
+                                        if (blobStorageAccount != null) {
+                                            context.storageAccountBlobUriMap
+                                                    .put(blobId, blobStorageAccount);
+                                        }
+                                        context.blobIds.add(blobId);
                                     }
-                                    context.blobIds.add(blobId);
-                                }
-                            } while (nextBlobResults != null);
-                        }
-                    } catch (StorageException err) {
-                        if (err.getCause() instanceof UnknownHostException) {
-                            String msg = "Probably trying to process a storage account that was "
-                                    + "just deleted. Skipping it and continue with the next "
-                                    + "storage account. Storage account id: [" + id + "], "
-                                    + "storage account connection string: ["
-                                    + storageConnectionString + "]. Error: %s";
+                                } while (nextBlobResults != null);
+                            }
+                        } catch (StorageException err) {
+                            if (err.getCause() instanceof UnknownHostException) {
+                                String msg = "Probably trying to process a storage account that was "
+                                        + "just deleted. Skipping it and continue with the next "
+                                        + "storage account. Storage account id: [" + id + "], "
+                                        + "storage account connection string: ["
+                                        + storageConnectionString + "]. Error: %s";
 
-                            logInfo(msg, Utils.toString(err));
-                        } else {
-                            throw err;
+                                logInfo(msg, Utils.toString(err));
+                            } else {
+                                throw err;
+                            }
                         }
-                    }
-                } while (nextContainerResults != null);
-                logFine(() -> String.format("Processing %d storage containers",
-                        context.containerIds.size()));
-            } catch (Exception e) {
-                handleError(context, e);
-                return;
+                    } while (nextContainerResults != null);
+                    logFine(() -> String.format("Processing %d storage containers",
+                            context.containerIds.size()));
+                } catch (Exception e) {
+                    handleError(context, e);
+                    return;
+                }
             }
-        }
-        context.subStage = next;
-        handleSubStage(context);
+            context.subStage = next;
+            handleSubStage(context);
+        }, failure);
 
     }
 

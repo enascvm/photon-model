@@ -19,6 +19,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -39,6 +41,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ReflectionUtils;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
@@ -165,5 +168,20 @@ public class PhotonModelUtils {
             }
         }
         return new ImmutablePair<>(result, Boolean.valueOf(hasChanged));
+    }
+
+    public static void runInExecutor(ExecutorService executor, Runnable runnable,
+            Consumer<Throwable> failure) {
+        try {
+            OperationContext operationContext = OperationContext.getOperationContext();
+            executor.submit(new Runnable() {
+                @Override public void run() {
+                    OperationContext.restoreOperationContext(operationContext);
+                    runnable.run();
+                }
+            });
+        } catch (Exception e) {
+            failure.accept(e);
+        }
     }
 }
