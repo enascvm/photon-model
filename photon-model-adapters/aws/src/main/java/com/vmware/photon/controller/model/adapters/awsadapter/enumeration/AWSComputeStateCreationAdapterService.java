@@ -505,8 +505,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             nicState.id = awsNic.getNetworkInterfaceId();
             nicState.name = nicState.id;
             nicState.address = awsNic.getPrivateIpAddress();
-            nicState.subnetLink = context.request.enumeratedNetworks.subnets
-                    .get(awsNic.getSubnetId());
+            if (context.request.enumeratedNetworks != null &&
+                    context.request.enumeratedNetworks.subnets != null) {
+                nicState.subnetLink = context.request.enumeratedNetworks.subnets
+                        .get(awsNic.getSubnetId());
+            }
             nicState.tenantLinks = context.request.tenantLinks;
             nicState.endpointLink = context.request.endpointLink;
             nicState.regionId = context.request.regionId;
