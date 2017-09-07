@@ -570,9 +570,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                             bucketTaggingConfiguration = s3Client
                                     .getBucketTaggingConfiguration(bucket.getName());
 
-                            logInfo("[EndpointLink=%s], [bucketName=%s], [region=%s]",
-                                    aws.request.original.endpointLink, bucket.getName(),
-                                    region.getName());
                             aws.regionsByBucketName.put(bucket.getName(), region.getName());
 
                             if (bucketTaggingConfiguration != null) {
