@@ -14,10 +14,18 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +47,10 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.vim25.SharesLevel;
 import com.vmware.vim25.VirtualDisk;
+import com.vmware.vim25.VirtualDiskFlatVer2BackingInfo;
+import com.vmware.vim25.VirtualDiskType;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -110,7 +121,7 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
 
             String descriptionLink = findFirstOvfDescriptionLink();
 
-            this.bootDisk = createBootDisk(CLOUD_CONFIG_DATA, isStoragePolicyBased);
+            this.bootDisk = createBootDiskWithCustomProperties(CLOUD_CONFIG_DATA, isStoragePolicyBased, customProperties);
             vm = createVmState(descriptionLink, withAdditionalDisks, customProperties);
 
             // set timeout for the next step, vmdk upload may take some time
@@ -122,11 +133,32 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
             vm = getComputeState(vm);
 
             snapshotFactoryState("ovf", ComputeService.class);
-            if (!isMock() && withAdditionalDisks) {
+            if (!isMock() && withAdditionalDisks || customProperties.get(PROVISION_TYPE) != null) {
                 BasicConnection connection = createConnection();
                 GetMoRef get = new GetMoRef(connection);
                 List<VirtualDisk> virtualDisks = fetchAllVirtualDisks(vm, get);
-                assertEquals(3, virtualDisks.size());
+
+                if (customProperties.get(PROVISION_TYPE) != null) {
+                    VirtualDiskType diskProvisionType = VirtualDiskType.fromValue(customProperties.get(PROVISION_TYPE));
+                    VirtualDisk bootDisk = virtualDisks.stream()
+                            .filter(vd -> vd.getUnitNumber() == 0)
+                            .findFirst().orElse(null);
+
+                    VirtualDiskFlatVer2BackingInfo backing = (VirtualDiskFlatVer2BackingInfo) bootDisk.getBacking();
+
+                    if (VirtualDiskType.THIN == diskProvisionType) {
+                        assertTrue(backing.isThinProvisioned());
+                    } else if (VirtualDiskType.THICK == diskProvisionType) {
+                        assertFalse(backing.isThinProvisioned());
+                    } else if (VirtualDiskType.EAGER_ZEROED_THICK == diskProvisionType) {
+                        assertFalse(backing.isThinProvisioned());
+                        assertTrue(backing.isEagerlyScrub());
+                    }
+                }
+
+                if (withAdditionalDisks) {
+                    assertEquals(3, virtualDisks.size());
+                }
             }
         } finally {
             if (vm != null) {
@@ -225,6 +257,28 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
         return res;
     }
 
+    private DiskService.DiskState buildBootDiskWithCustomProperties(String cloudConfig,
+            Map<String, String> customProperties) throws Throwable {
+        HashMap<String, String> diskCustomProperties = new HashMap<>();
+
+        VirtualDiskType diskProvisionType = customProperties.get(PROVISION_TYPE) != null ?
+                VirtualDiskType.fromValue(customProperties.get(PROVISION_TYPE)) : null;
+
+        if (diskProvisionType == null) {
+            diskProvisionType = VirtualDiskType.THIN;
+        }
+
+        diskCustomProperties.put(DISK_MODE_PERSISTENT, "true");
+        diskCustomProperties.put(PROVISION_TYPE, diskProvisionType.value());
+        diskCustomProperties.put(SHARES_LEVEL, SharesLevel.HIGH.value());
+        diskCustomProperties.put(LIMIT_IOPS, "100");
+
+        DiskService.DiskState res = buildBootDisk(cloudConfig);
+        res.customProperties = diskCustomProperties;
+
+        return res;
+    }
+
     protected DiskService.DiskState createBootDisk(String cloudConfig) throws
             Throwable {
         DiskService.DiskState res = buildBootDisk(cloudConfig);
@@ -256,6 +310,32 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
         return TestUtils.doPost(this.host, res,
                 DiskService.DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+    private DiskService.DiskState createBootDiskWithCustomProperties(String cloudConfig,
+            boolean isStoragePolicyBased, Map<String, String> customProperties) throws
+          Throwable {
+        DiskService.DiskState res = buildBootDiskWithCustomProperties(cloudConfig, customProperties);
+        if (!isStoragePolicyBased) {
+            // Create storage description
+            StorageDescriptionService.StorageDescription sd = new StorageDescriptionService
+                    .StorageDescription();
+            sd.id = sd.name = this.dataStoreId;
+            sd = TestUtils.doPost(this.host, sd,
+                  StorageDescriptionService.StorageDescription.class,
+                  UriUtils.buildUri(this.host, StorageDescriptionService.FACTORY_LINK));
+
+            res.storageDescriptionLink = sd.documentSelfLink;
+        } else {
+            // Create Resource group state
+            ResourceGroupService.ResourceGroupState rg = createResourceGroupState();
+            res.groupLinks = new HashSet<>();
+            res.groupLinks.add(rg.documentSelfLink);
+        }
+
+        return TestUtils.doPost(this.host, res,
+              DiskService.DiskState.class,
+              UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
 
     protected ComputeDescriptionService.ComputeDescription createTemplate() {

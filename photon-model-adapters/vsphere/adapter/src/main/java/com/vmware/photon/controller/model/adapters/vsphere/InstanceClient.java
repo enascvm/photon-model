@@ -123,6 +123,7 @@ import com.vmware.vim25.VirtualMachineFileInfo;
 import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.vim25.VirtualMachineRelocateDiskMoveOptions;
 import com.vmware.vim25.VirtualMachineRelocateSpec;
+import com.vmware.vim25.VirtualMachineRelocateSpecDiskLocator;
 import com.vmware.vim25.VirtualMachineSnapshotInfo;
 import com.vmware.vim25.VirtualPCIController;
 import com.vmware.vim25.VirtualSCSIController;
@@ -272,7 +273,7 @@ public class InstanceClient extends BaseHelper {
         // store reference to created vm for further processing
         this.vm = clonedVM;
 
-        //customizeAfterClone();
+        customizeAfterClone();
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
@@ -421,6 +422,15 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
         ManagedObjectReference resourcePool = getResourcePool(datastore, pbmSpec);
 
+        Map<String, Object> props = this.get.entityProps(template, VimPath.vm_config_hardware_device);
+
+        ArrayOfVirtualDevice devices = (ArrayOfVirtualDevice) props
+                .get(VimPath.vm_config_hardware_device);
+
+        VirtualDisk vd = devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d).findFirst().orElse(null);
+
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
         relocSpec.setDatastore(datastore);
         if (pbmSpec != null) {
@@ -434,6 +444,14 @@ public class InstanceClient extends BaseHelper {
 
         VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
         cloneSpec.setLocation(relocSpec);
+
+        //Set the provisioning type of the parent disk.
+        VirtualMachineRelocateSpecDiskLocator diskProvisionTypeLocator = setProvisioningType(vd, datastore,
+                computeDiskMoveType());
+        if (diskProvisionTypeLocator != null) {
+            cloneSpec.getLocation().getDisk().add(diskProvisionTypeLocator);
+        }
+
         cloneSpec.setPowerOn(false);
         cloneSpec.setTemplate(false);
 
@@ -839,6 +857,9 @@ public class InstanceClient extends BaseHelper {
         VirtualMachineRelocateDiskMoveOptions diskMoveOption = computeDiskMoveType();
         boolean customizeImageDisk = false;
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
+        VirtualMachineRelocateSpecDiskLocator bootDiskLocator = null;
+
+        List<VirtualDisk> vDisks = null;
         if (this.bootDisk != null) {
             if (vd == null) {
                 String datastoreName = this.get.entityProp(datastore, VimPath.ds_summary_name);
@@ -851,18 +872,19 @@ public class InstanceClient extends BaseHelper {
                 // if any one of the image disk is requesting for resize, then change the clone
                 // strategy
                 if (this.imageDisks != null && !this.imageDisks.isEmpty()) {
-                    long count = devices.getVirtualDevice().stream()
+                    vDisks = devices.getVirtualDevice().stream()
                             .filter(d -> d instanceof VirtualDisk)
                             .map(d -> (VirtualDisk) d)
                             .filter(d -> {
                                 DiskStateExpanded ds = findMatchingImageDiskState(d, this.imageDisks);
                                 return toKb(ds.capacityMBytes) > d.getCapacityInKB() || ds.customProperties != null;
-                            }).count();
-                    if (count > 0) {
+                            }).collect(Collectors.toList());
+                    if (vDisks.size() > 0) {
                         diskMoveOption = VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING;
                         logger.warn(
                                 "Changing clone strategy to MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING, as there is disk resize requested");
                         customizeImageDisk = true;
+                        bootDiskLocator = setProvisioningType(vDisks.get(0), datastore, diskMoveOption);
                     }
                 }
             }
@@ -938,6 +960,10 @@ public class InstanceClient extends BaseHelper {
         cloneSpec.setTemplate(false);
         cloneSpec.setSnapshot(snapshot.getCurrentSnapshot());
         cloneSpec.setConfig(spec);
+
+        if (bootDiskLocator != null) {
+            cloneSpec.getLocation().getDisk().add(bootDiskLocator);
+        }
 
         ManagedObjectReference cloneTask = getVimPort().cloneVMTask(vmTempl, folder, vmName,
                 cloneSpec);
@@ -1219,6 +1245,45 @@ public class InstanceClient extends BaseHelper {
         return spec;
     }
 
+    private VirtualMachineRelocateSpecDiskLocator setProvisioningType(VirtualDisk vDisk,
+            ManagedObjectReference datastore, VirtualMachineRelocateDiskMoveOptions diskMoveOption) {
+
+        if (vDisk == null) {
+            return null;
+        }
+
+        DiskStateExpanded ds = findMatchingImageDiskState(vDisk, this.imageDisks);
+        VirtualDiskFlatVer2BackingInfo flatBacking = (VirtualDiskFlatVer2BackingInfo) vDisk.getBacking();
+
+        VirtualDiskType provisioningType = getDiskProvisioningType(ds);
+
+        boolean wasThinProvision = flatBacking.isThinProvisioned();
+        Boolean wasEagerScrubbed = flatBacking.isEagerlyScrub() != null ?
+                flatBacking.isEagerlyScrub() : false;
+
+        if (provisioningType != null) {
+            flatBacking.setThinProvisioned(provisioningType == VirtualDiskType.THIN);
+            flatBacking.setEagerlyScrub(provisioningType == VirtualDiskType.EAGER_ZEROED_THICK);
+        }
+
+        VirtualMachineRelocateSpecDiskLocator diskLocator = new VirtualMachineRelocateSpecDiskLocator();
+        diskLocator.setDiskId(vDisk.getKey());
+        diskLocator.setDiskBackingInfo(flatBacking);
+        diskLocator.setDatastore(datastore);
+
+        Boolean isEagerScrub = flatBacking.isEagerlyScrub() != null ?
+                flatBacking.isEagerlyScrub() : false;
+
+        //If there is a change from thin to thick or vice-versa then we need to change the DiskMoveType
+        //to MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING
+        if (wasThinProvision != flatBacking.isThinProvisioned() || !wasEagerScrubbed.equals(isEagerScrub)) {
+            diskLocator.setDiskMoveType(VirtualMachineRelocateDiskMoveOptions
+                    .MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING.value());
+        }
+
+        return diskLocator;
+    }
+
     private VirtualDeviceConfigSpec reconfigureCdrom(VirtualCdrom vcd) {
         VirtualCdrom cdrom = new VirtualCdrom();
 
@@ -1412,6 +1477,7 @@ public class InstanceClient extends BaseHelper {
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
         backing.setDiskMode(getDiskMode(ds));
         backing.setThinProvisioned(oldbacking.isThinProvisioned());
+        backing.setEagerlyScrub(oldbacking.isEagerlyScrub());
         backing.setFileName(oldbacking.getFileName());
 
         VirtualDisk disk = new VirtualDisk();

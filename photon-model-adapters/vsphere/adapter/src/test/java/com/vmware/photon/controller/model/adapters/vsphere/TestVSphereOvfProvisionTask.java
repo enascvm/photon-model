@@ -14,11 +14,14 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.CLONE_STRATEGY;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
+
+import com.vmware.vim25.VirtualDiskType;
 
 /**
  * This test deploys a CoreOS ova. The location of the OVF must be passed as a vc.ovfUri system
@@ -34,6 +37,20 @@ public class TestVSphereOvfProvisionTask extends TestVSphereOvfProvisionTaskBase
     public void deployOvfWithFullClone() throws Throwable {
         Map<String, String> customProperties = new HashMap<>();
         customProperties.put(CLONE_STRATEGY, InstanceClient.CLONE_STRATEGY_FULL);
+        deployOvf(false, false, customProperties);
+    }
+
+    @Test
+    public void deployOvfWithThickProvision() throws Throwable {
+        Map<String, String> customProperties = new HashMap<>();
+        customProperties.put(PROVISION_TYPE, VirtualDiskType.THICK.value());
+        deployOvf(false, false, customProperties);
+    }
+
+    @Test
+    public void deployOvfWithThickEagerZeroedProvision() throws Throwable {
+        Map<String, String> customProperties = new HashMap<>();
+        customProperties.put(PROVISION_TYPE, VirtualDiskType.EAGER_ZEROED_THICK.value());
         deployOvf(false, false, customProperties);
     }
 }
