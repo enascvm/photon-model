@@ -933,22 +933,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .addCompositeFieldClause(
                         ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                         ComputeProperties.RESOURCE_TYPE_KEY,
-                        ResourceGroupStateType.AzureStorageContainer.name());
-
-        Query.Builder instanceIdFilterParentQuery = Query.Builder
-                .create(Occurance.MUST_OCCUR);
-
-        for (Map.Entry<String, CloudBlobContainer> container : context.storageContainers
-                .entrySet()) {
-            Query instanceIdFilter = Query.Builder
-                    .create(Occurance.SHOULD_OCCUR)
-                    .addFieldClause(ResourceGroupState.FIELD_NAME_ID,
-                            container.getKey())
-                    .build();
-            instanceIdFilterParentQuery.addClause(instanceIdFilter);
-        }
-
-        qBuilder.addClause(instanceIdFilterParentQuery.build());
+                        ResourceGroupStateType.AzureStorageContainer.name())
+                .addInClause(ResourceGroupState.FIELD_NAME_ID,
+                        context.storageContainers.keySet());
 
         QueryStrategy<ResourceGroupState> queryLocalStates = new QueryByPages<>(
                 getHost(),
