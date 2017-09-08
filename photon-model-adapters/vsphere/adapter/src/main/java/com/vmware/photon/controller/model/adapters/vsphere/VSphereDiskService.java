@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.StatelessService;
@@ -156,7 +157,7 @@ public class VSphereDiskService extends StatelessService {
      * Create disk patch request to update the details of the disk.
      */
     private Operation createDiskPatch(DiskService.DiskState ds) {
-        return Operation.createPatch(this, ds.documentSelfLink)
+        return Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ds.documentSelfLink))
                 .setBody(ds);
     }
 
@@ -165,7 +166,8 @@ public class VSphereDiskService extends StatelessService {
      * server.
      */
     private Operation deleteDisk(String documentSelfLink) {
-        return Operation.createDelete(this, documentSelfLink);
+        return Operation.createDelete(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), documentSelfLink));
     }
 
     private void handleMockRequest(TaskManager mgr) {

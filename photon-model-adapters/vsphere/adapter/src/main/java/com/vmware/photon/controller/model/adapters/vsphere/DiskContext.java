@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -220,7 +221,7 @@ public class DiskContext {
         task.querySpec.options = EnumSet
                 .of(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
         Operation.createPost(
-                UriUtils.buildUri(service.getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                PhotonModelUriUtils.createDiscoveryUri(service.getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task)
                 .setConnectionSharing(true)
                 .setCompletion((o, e) -> {

@@ -23,6 +23,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.InsufficientResourcesFaultFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.TaskInfo;
@@ -148,7 +149,7 @@ public class VSphereAdapterResizeComputeService extends StatelessService {
     private void patchComputeAndCompleteRequest(VSphereVMContext ctx, final int cpuCount, final long memoryInMBytes) {
         ctx.child.description.cpuCount = Long.valueOf(cpuCount);
         ctx.child.description.totalMemoryBytes = memoryInMBytes * MEGA_BYTES_TO_BYTES_CONSTANT;
-        Operation.createPatch(this, ctx.child.descriptionLink)
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ctx.child.descriptionLink))
                 .setBody(ctx.child.description)
                 .setCompletion((o, e) -> {
                     if (e != null) {

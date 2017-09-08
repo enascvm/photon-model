@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.resources.SnapshotService;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.StatelessService;
@@ -65,7 +66,8 @@ public class VSphereListComputeSnapshotService extends StatelessService {
                 .addOption(QueryTask.QuerySpecification.QueryOption.INDEXED_METADATA)
                 .build();
 
-        sendWithDeferredResult(Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+        sendWithDeferredResult(Operation.createPost(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(qTask).setConnectionSharing(true))
                 .thenApply(op -> {
                     QueryResultsProcessor rp = QueryResultsProcessor.create(op);

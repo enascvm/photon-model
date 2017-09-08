@@ -19,6 +19,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
@@ -109,7 +110,8 @@ public class VSphereAdapterPowerService extends StatelessService {
     }
 
     private Operation patchComputeResource(ComputeState state, URI computeReference) {
-        return Operation.createPatch(computeReference)
+        return Operation.createPatch(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), computeReference))
                 .setBody(state);
     }
 

@@ -26,11 +26,11 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
 import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -105,7 +105,7 @@ public class VSphereIOThreadPool {
      */
     public void submit(Service sender, URI adapterReference, String authLink,
             ConnectionCallback callback) {
-        URI authUri = UriUtils.buildUri(this.host, authLink);
+        URI authUri = PhotonModelUriUtils.createDiscoveryUri(this.host, authLink);
 
         Operation op = Operation.createGet(authUri)
                 .setCompletion((o, e) -> {

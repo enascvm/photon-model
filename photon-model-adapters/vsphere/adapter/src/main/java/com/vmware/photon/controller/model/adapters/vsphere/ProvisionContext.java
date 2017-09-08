@@ -34,6 +34,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -41,7 +42,6 @@ import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceRequestSender;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -84,7 +84,7 @@ public class ProvisionContext {
         public NetworkInterfaceDescription description;
     }
 
-    public ProvisionContext(ServiceRequestSender service, ResourceRequest req) {
+    public ProvisionContext(Service service, ResourceRequest req) {
         this.computeReference = req.resourceReference;
         this.instanceRequestType = req instanceof ComputeInstanceRequest ?
                 ((ComputeInstanceRequest) req).requestType : null;
@@ -257,7 +257,9 @@ public class ProvisionContext {
                     .addLinkTerm(NetworkInterfaceState.FIELD_NAME_DESCRIPTION_LINK)
                     .build();
 
-            Operation.createPost(service, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+            Operation.createPost(
+                    PhotonModelUriUtils.createDiscoveryUri(service.getHost(), ServiceUriPaths
+                    .CORE_LOCAL_QUERY_TASKS))
                     .setBody(qt)
                     .setConnectionSharing(true)
                     .setCompletion((o, e) -> {
@@ -312,7 +314,7 @@ public class ProvisionContext {
             }
 
             URI expandedPlacementUri = UriUtils.extendUriWithQuery(
-                    UriUtils.buildUri(service.getHost(), placementLink),
+                    PhotonModelUriUtils.createDiscoveryUri(service.getHost(), placementLink),
                     UriUtils.URI_PARAM_ODATA_EXPAND,
                     Boolean.TRUE.toString());
             Operation.createGet(expandedPlacementUri).setCompletion((o, e) -> {
@@ -370,7 +372,8 @@ public class ProvisionContext {
             Stream<Operation> opsGetDisk = ctx.child.diskLinks.stream()
                     .map(link -> {
                         URI diskStateUri = UriUtils.buildUri(service.getHost(), link);
-                        return Operation.createGet(DiskStateExpanded.buildUri(diskStateUri));
+                        return Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+                                DiskStateExpanded.buildUri(diskStateUri)));
                     });
 
             OperationJoin join = OperationJoin.create(opsGetDisk)

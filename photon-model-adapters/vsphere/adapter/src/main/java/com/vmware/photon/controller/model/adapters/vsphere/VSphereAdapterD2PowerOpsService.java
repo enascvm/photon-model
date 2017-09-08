@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -100,7 +101,7 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
             ctx.taskManager.patchTaskToFailure(new IllegalArgumentException(warnStr));
             return;
         }
-        Operation.createPatch(ctx.resourceReference)
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ctx.resourceReference))
                 .setBody(ctx.child)
                 .setCompletion((o, e) -> {
                     if (e != null) {

@@ -19,6 +19,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool.C
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
@@ -52,7 +53,8 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
             return DeferredResult.failed(new IllegalArgumentException("Portgroup must be linked to a parent DVS"));
         }
 
-        Operation op = Operation.createGet(getService().getHost(), dvsLink);
+        Operation op = Operation.createGet(
+                PhotonModelUriUtils.createDiscoveryUri(getService().getHost(), dvsLink));
         return getService().sendWithDeferredResult(op);
     }
 
@@ -116,7 +118,9 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
     }
 
     private DeferredResult<Operation> fetchSubnet(Void start) {
-        Operation op = Operation.createGet(getRequest().resourceReference);
+        Operation op = Operation.createGet(
+                PhotonModelUriUtils.createDiscoveryUri(getService().getHost(),getRequest()
+                .resourceReference));
         return getService().sendWithDeferredResult(op);
     }
 }

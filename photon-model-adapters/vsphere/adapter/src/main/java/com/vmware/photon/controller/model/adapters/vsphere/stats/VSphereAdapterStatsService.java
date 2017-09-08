@@ -27,6 +27,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.VSphereUriPaths;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
@@ -136,7 +137,8 @@ public class VSphereAdapterStatsService extends StatelessService {
         respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsRequest.nextStage);
         respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
 
-        this.sendRequest(Operation.createPatch(statsRequest.taskReference)
+        this.sendRequest(Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                statsRequest.taskReference))
                 .setBody(respBody));
     }
 

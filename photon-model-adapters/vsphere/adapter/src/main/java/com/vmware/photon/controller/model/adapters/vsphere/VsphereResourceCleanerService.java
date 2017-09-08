@@ -21,6 +21,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.StatelessService;
@@ -56,7 +58,7 @@ public class VsphereResourceCleanerService extends StatelessService {
             return;
         }
 
-        Operation.createGet(this, req.resourceLink)
+        Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), req.resourceLink))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         patch.complete();
@@ -81,7 +83,7 @@ public class VsphereResourceCleanerService extends StatelessService {
         update.powerState = PowerState.OFF;
         update.lifecycleState = LifecycleState.RETIRED;
 
-        return Operation.createPatch(this, computeLink)
+        return Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
                 .setBody(update);
     }
 
@@ -97,25 +99,27 @@ public class VsphereResourceCleanerService extends StatelessService {
                 .setResultLimit(1)
                 .build();
 
-        QueryUtils.startQueryTask(this, task).handle((qt, e) -> {
-            if (e != null) {
-                patch.complete();
-                return null;
-            }
+        QueryUtils.startQueryTask(this, task, ServiceTypeCluster.DISCOVERY_SERVICE)
+                .handle((qt, e) -> {
+                    if (e != null) {
+                        patch.complete();
+                        return null;
+                    }
 
-            if (qt.results.nextPageLink == null) {
-                // no resource placed here, safe to delete
-                Operation.createDelete(this, computeLink)
-                        .setCompletion(justComplete(patch))
-                        .sendWith(this);
-            } else {
-                patchToRetired(computeLink)
-                        .setCompletion(justComplete(patch))
-                        .sendWith(this);
-            }
+                    if (qt.results.nextPageLink == null) {
+                        // no resource placed here, safe to delete
+                        Operation.createDelete(
+                                PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
+                                .setCompletion(justComplete(patch))
+                                .sendWith(this);
+                    } else {
+                        patchToRetired(computeLink)
+                                .setCompletion(justComplete(patch))
+                                .sendWith(this);
+                    }
 
-            return null;
-        });
+                    return null;
+                });
     }
 
     private CompletionHandler justComplete(Operation patch) {

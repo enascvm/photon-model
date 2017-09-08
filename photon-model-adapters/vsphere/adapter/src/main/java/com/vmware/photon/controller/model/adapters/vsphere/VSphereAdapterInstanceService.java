@@ -41,6 +41,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpande
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.CustomizationSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
@@ -240,7 +241,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                     ComputeState state = new ComputeState();
                     state.address = ip;
                     // update compute
-                    Operation.createPatch(VSphereAdapterInstanceService.this, computeLink)
+                    Operation.createPatch(
+                            PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
                             .setBody(state)
                             .setCompletion((o, e) -> {
                                 // finish task
@@ -347,19 +349,20 @@ public class VSphereAdapterInstanceService extends StatelessService {
     }
 
     private void createDiskOnDemand(DiskState ds) {
-        Operation.createPost(this, DiskService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), DiskService.FACTORY_LINK))
                 .setBody(ds)
                 .sendWith(this);
     }
 
     private void createDiskPatch(DiskState ds) {
-        Operation.createPatch(this, ds.documentSelfLink)
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ds.documentSelfLink))
                 .setBody(ds)
                 .sendWith(this);
     }
 
     private Operation createComputeResourcePatch(ComputeState state, URI computeReference) {
-        return Operation.createPatch(computeReference)
+        return Operation.createPatch(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), computeReference))
                 .setBody(state);
     }
 

@@ -36,6 +36,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
@@ -77,9 +79,10 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             return;
         }
 
-        Operation.createGet(request.resourceReference)
+        Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), request.resourceReference))
                 .setCompletion(
-                        o -> thenWithEndpointState(request, o.getBody(EndpointState.class), mgr), mgr)
+                        o -> thenWithEndpointState(request, o.getBody(EndpointState.class), mgr),
+                        mgr)
                 .sendWith(this);
     }
 
@@ -87,7 +90,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             TaskManager mgr) {
         URI parentUri = ComputeStateWithDescription
                 .buildUri(UriUtils.buildUri(getHost(), endpoint.computeLink));
-        Operation.createGet(parentUri)
+        Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), parentUri))
                 .setCompletion(o -> thenWithParentState(request,
                         o.getBody(ComputeStateWithDescription.class), mgr),
                         mgr)
@@ -173,7 +176,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 oldImages.remove(state.documentSelfLink);
                 phaser.register();
 
-                Operation.createPost(this, ImageService.FACTORY_LINK)
+                Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ImageService.FACTORY_LINK))
                         .setBody(state)
                         .setCompletion((o, e) -> phaser.arrive())
                         .sendWith(this);
@@ -209,21 +212,23 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         DeferredResult<Set<String>> res = new DeferredResult<>();
         Set<String> imageLinks = new ConcurrentSkipListSet<>();
 
-        QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
-            if (e != null) {
-                res.complete(new HashSet<>());
-                return;
-            }
+        QueryUtils.startQueryTask(this, task, ServiceTypeCluster.DISCOVERY_SERVICE)
+                .whenComplete((result, e) -> {
+                    if (e != null) {
+                        res.complete(new HashSet<>());
+                        return;
+                    }
 
-            if (result.results.nextPageLink == null) {
-                res.complete(imageLinks);
-                return;
-            }
+                    if (result.results.nextPageLink == null) {
+                        res.complete(imageLinks);
+                        return;
+                    }
 
-            Operation.createGet(UriUtils.buildUri(getHost(), result.results.nextPageLink))
-                    .setCompletion(makeCompletion(imageLinks, res))
-                    .sendWith(this);
-        });
+                    Operation.createGet(PhotonModelUriUtils
+                            .createDiscoveryUri(getHost(), result.results.nextPageLink))
+                            .setCompletion(makeCompletion(imageLinks, res))
+                            .sendWith(this);
+                });
 
         return res;
     }
@@ -241,7 +246,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             if (qt.results.nextPageLink == null) {
                 res.complete(imageLinks);
             } else {
-                Operation.createGet(UriUtils.buildUri(getHost(), qt.results.nextPageLink))
+                Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), qt.results.nextPageLink))
                         .setCompletion(makeCompletion(imageLinks, res))
                         .sendWith(this);
             }
@@ -250,7 +255,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
 
     private void garbageCollectUntouchedImages(Set<String> untouchedImages) {
         untouchedImages.forEach(link -> {
-            Operation.createDelete(UriUtils.buildUri(getHost(), link))
+            Operation.createDelete(PhotonModelUriUtils.createDiscoveryUri(getHost(), link))
                     .sendWith(this);
         });
     }
@@ -279,7 +284,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 oldImages.remove(state.documentSelfLink);
                 phaser.register();
 
-                Operation.createPost(this, ImageService.FACTORY_LINK)
+                Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ImageService.FACTORY_LINK))
                         .setBody(state)
                         .setCompletion((o, e) -> phaser.arrive())
                         .sendWith(this);

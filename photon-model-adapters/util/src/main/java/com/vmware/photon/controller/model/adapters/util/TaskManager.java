@@ -17,10 +17,13 @@ import java.net.URI;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
-import com.vmware.xenon.common.ServiceRequestSender;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState.TaskStage;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -28,11 +31,11 @@ import com.vmware.xenon.common.Utils;
  * can be passed to {@link Operation#setCompletion(java.util.function.Consumer, CompletionHandler)}
  */
 public class TaskManager implements CompletionHandler {
-    private final ServiceRequestSender service;
+    private final Service service;
     private final URI taskReference;
     private String resourceLink;
 
-    public TaskManager(ServiceRequestSender service, URI taskReference, String resourceLink) {
+    public TaskManager(Service service, URI taskReference, String resourceLink) {
         this.service = service;
         this.taskReference = taskReference;
         this.resourceLink = resourceLink;
@@ -65,7 +68,12 @@ public class TaskManager implements CompletionHandler {
     public Operation createTaskPatch(TaskStage stage) {
         ResourceOperationResponse body = ResourceOperationResponse.finish(this.resourceLink);
         body.taskInfo.stage = stage;
-        return Operation.createPatch(this.taskReference).setBody(body);
+        return Operation.createPatch(getDiscoveryUri()).setBody(body);
+    }
+
+    protected URI getDiscoveryUri() {
+        return UriUtils.buildUri(ClusterUtil.getClusterUri(this.service.getHost(),
+                ServiceTypeCluster.DISCOVERY_SERVICE), this.taskReference.getPath());
     }
 
     public void patchTaskToFailure(Throwable failure) {
@@ -88,7 +96,7 @@ public class TaskManager implements CompletionHandler {
         body.failureMessage = failure.getClass().getName() + ": " + msg;
 
         return Operation
-                .createPatch(this.taskReference)
+                .createPatch(getDiscoveryUri())
                 .setBody(body);
     }
 

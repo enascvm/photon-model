@@ -95,6 +95,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCo
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.OpaqueNetworkSummary;
@@ -189,7 +190,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        URI parentUri = ComputeStateWithDescription.buildUri(request.resourceReference);
+        URI parentUri = ComputeStateWithDescription.buildUri(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                request.resourceReference));
 
         Operation.createGet(parentUri)
                 .setCompletion(o -> {
@@ -264,7 +266,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         DeferredResult<Set<String>> res = new DeferredResult<>();
         Set<String> links = new ConcurrentSkipListSet<>();
 
-        QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
+        QueryUtils.startQueryTask(this, task, ServiceTypeCluster.DISCOVERY_SERVICE).whenComplete((result, e) -> {
             if (e != null) {
                 res.complete(new HashSet<>());
                 return;
@@ -275,7 +277,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 return;
             }
 
-            Operation.createGet(UriUtils.buildUri(getHost(), result.results.nextPageLink))
+            Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), result.results.nextPageLink))
                     .setCompletion(makeCompletion(links, res))
                     .sendWith(this);
         });
@@ -296,7 +298,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (qt.results.nextPageLink == null) {
                 res.complete(imageLinks);
             } else {
-                Operation.createGet(UriUtils.buildUri(getHost(), qt.results.nextPageLink))
+                Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), qt.results.nextPageLink))
                         .setCompletion(makeCompletion(imageLinks, res))
                         .sendWith(this);
             }
@@ -649,7 +651,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (!request.preserveMissing) {
             // delete dependent resources without waiting for response
             for (String resourceLink : progress.getResourceLinks()) {
-                Operation.createDelete(this, resourceLink)
+                Operation.createDelete(
+                        PhotonModelUriUtils.createDiscoveryUri(getHost(), resourceLink))
                         .sendWith(this);
             }
             mgr.patchTask(TaskStage.FINISHED);
@@ -661,10 +664,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (resourceLink.startsWith(ComputeService.FACTORY_LINK)) {
                 ResourceCleanRequest patch = new ResourceCleanRequest();
                 patch.resourceLink = resourceLink;
-                deleteOps.add(Operation.createPatch(this, VSphereUriPaths.RESOURCE_CLEANER)
+                deleteOps.add(Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                        VSphereUriPaths.RESOURCE_CLEANER))
                         .setBody(patch));
             } else {
-                deleteOps.add(Operation.createDelete(this, resourceLink));
+                deleteOps.add(Operation.createDelete(
+                        PhotonModelUriUtils.createDiscoveryUri(getHost(), resourceLink)));
             }
         }
 
@@ -714,7 +719,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing Subnet(Portgroup) %s", net.getName()));
-        Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
@@ -726,7 +731,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.customProperties.put(DvsProperties.DVS_UUID, parentSwitch.getDvsUuid());
 
         state.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(this, SubnetService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), SubnetService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
@@ -781,7 +786,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing Network %s", net.getName()));
-        Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(networkState)
                 .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
@@ -804,7 +809,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
-        Operation.createPost(this, SubnetService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), SubnetService.FACTORY_LINK))
                 .setBody(subnet)
                 .sendWith(this);
     }
@@ -812,11 +817,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void createNewNetwork(EnumerationProgress enumerationProgress, NetworkOverlay net) {
         NetworkState networkState = makeNetworkStateFromResults(enumerationProgress, net);
         networkState.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(this, NetworkService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), NetworkService.FACTORY_LINK))
                 .setBody(networkState)
                 .setCompletion((o, e) -> {
                     trackNetwork(enumerationProgress, net).handle(o, e);
-                    Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
+                    Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                            ResourceGroupService.FACTORY_LINK))
                             .setBody(makeNetworkGroup(net, enumerationProgress))
                             .sendWith(this);
                 })
@@ -840,7 +846,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
-        Operation.createPost(this, SubnetService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), SubnetService.FACTORY_LINK))
                 .setBody(subnet)
                 .sendWith(this);
     }
@@ -1019,7 +1025,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         rgState.tenantLinks = enumerationProgress.getTenantLinks();
         logFine(() -> String.format("Found new Storage Policy %s", sp.getName()));
 
-        Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ResourceGroupService.FACTORY_LINK))
                 .setBody(rgState)
                 .setCompletion((o, e) -> {
                     trackStoragePolicy(enumerationProgress, sp).handle(o, e);
@@ -1044,7 +1050,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing Storage %s", sp.getName()));
-        Operation.createPatch(UriUtils.buildUri(getHost(), rgState.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), rgState.documentSelfLink))
                 .setBody(rgState)
                 .setCompletion((o, e) -> {
                     trackStoragePolicy(enumerationProgress, sp).handle(o, e);
@@ -1079,7 +1085,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             String dataStoreLink = ctx.getDatastoreTracker()
                     .getSelfLink(name, VimNames.TYPE_DATASTORE);
             if (dataStoreLink != null && !ResourceTracker.ERROR.equals(dataStoreLink)) {
-                getOps.add(Operation.createGet(UriUtils.buildUri(getHost(), dataStoreLink)));
+                getOps.add(Operation.createGet(
+                        PhotonModelUriUtils.createDiscoveryUri(getHost(), dataStoreLink)));
             }
         });
 
@@ -1120,7 +1127,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     storageDescription.groupLinks = new HashSet<>();
                 }
                 storageDescription.groupLinks.add(spSelfLink);
-                patchOps.add(Operation.createPatch(UriUtils.buildUri(getHost(),
+                patchOps.add(Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(),
                         storageDescription.documentSelfLink))
                         .setBody(storageDescription));
             }
@@ -1134,7 +1141,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 if (storageDescription.groupLinks != null) {
                     storageDescription.groupLinks.remove(spSelfLink);
                 }
-                patchOps.add(Operation.createPatch(UriUtils.buildUri(getHost(),
+                patchOps.add(Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(),
                         storageDescription.documentSelfLink))
                         .setBody(storageDescription));
             });
@@ -1179,7 +1186,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing Storage %s", ds.getName()));
-        Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .setCompletion((o, e) -> {
                     trackDatastore(enumerationProgress, ds).handle(o, e);
@@ -1199,11 +1206,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         logFine(() -> String.format("Found new Datastore %s", ds.getName()));
         populateTags(enumerationProgress, ds, desc);
 
-        Operation.createPost(this, StorageDescriptionService.FACTORY_LINK)
+        Operation.createPost(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), StorageDescriptionService.FACTORY_LINK))
                 .setBody(desc)
                 .setCompletion((o, e) -> {
                     trackDatastore(enumerationProgress, ds).handle(o, e);
-                    Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
+                    Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                            ResourceGroupService.FACTORY_LINK))
                             .setBody(makeStorageGroup(ds, enumerationProgress))
                             .sendWith(this);
                     updateStorageStats(ds, o.getBody(ServiceDocument.class).documentSelfLink);
@@ -1340,7 +1349,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing ComputeResource %s", oldDocument.documentSelfLink));
-        Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     trackComputeResource(enumerationProgress, cr).handle(o, e);
@@ -1352,7 +1361,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ComputeDescription desc = makeDescriptionForCluster(enumerationProgress, cr);
         desc.documentSelfLink = oldDocument.descriptionLink;
-        Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .sendWith(this);
     }
@@ -1411,7 +1420,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void createNewComputeResource(EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
         ComputeDescription desc = makeDescriptionForCluster(enumerationProgress, cr);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
+        Operation.createPost(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeDescriptionService.FACTORY_LINK))
                 .setBody(desc)
                 .sendWith(this);
 
@@ -1421,7 +1431,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         populateTags(enumerationProgress, cr, state);
 
         logFine(() -> String.format("Found new ComputeResource %s", cr.getId().getValue()));
-        Operation.createPost(this, ComputeService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion(trackComputeResource(enumerationProgress, cr))
                 .sendWith(this);
@@ -1579,7 +1589,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing HostSystem %s", oldDocument.documentSelfLink));
-        Operation.createPatch(UriUtils.buildUri(getHost(), state.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), state.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     trackHostSystem(enumerationProgress, hs).handle(o, e);
@@ -1591,7 +1601,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ComputeDescription desc = makeDescriptionForHost(enumerationProgress, hs);
         desc.documentSelfLink = oldDocument.descriptionLink;
-        Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .sendWith(this);
     }
@@ -1599,7 +1609,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void createNewHostSystem(EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
         ComputeDescription desc = makeDescriptionForHost(enumerationProgress, hs);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
+        Operation.createPost(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeDescriptionService.FACTORY_LINK))
                 .setBody(desc)
                 .sendWith(this);
 
@@ -1609,7 +1620,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         populateTags(enumerationProgress, hs, state);
 
         logFine(() -> String.format("Found new HostSystem %s", hs.getName()));
-        Operation.createPost(this, ComputeService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion(trackHostSystem(enumerationProgress, hs))
                 .sendWith(this);
@@ -1720,7 +1731,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
-        Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     trackVm(enumerationProgress).handle(o, e);
@@ -1754,7 +1765,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void createNewVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
         ComputeDescription desc = makeDescriptionForVm(enumerationProgress, vm);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
+        Operation.createPost(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeDescriptionService.FACTORY_LINK))
                 .setBody(desc)
                 .sendWith(this);
 
@@ -1776,7 +1788,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                         getHost().nextUUID());
 
-                Operation.createPost(this, NetworkInterfaceService.FACTORY_LINK)
+                Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                        NetworkInterfaceService.FACTORY_LINK))
                         .setBody(iface)
                         .sendWith(this);
 
@@ -1789,7 +1802,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
-        Operation.createPost(this, ComputeService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion(trackVm(enumerationProgress))
                 .sendWith(this);
@@ -1945,7 +1958,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         String selfLink = buildStableResourcePoolLink(rp.getId(), request.endpointLink);
 
-        Operation.createGet(this, selfLink)
+        Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), selfLink))
                 .setCompletion((o, e) -> {
                     if (e == null) {
                         updateResourcePool(enumerationProgress, ownerName, selfLink, rp);
@@ -1969,12 +1982,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.descriptionLink = desc.documentSelfLink;
 
         logFine(() -> String.format("Refreshed ResourcePool %s", state.name));
-        Operation.createPatch(this, selfLink)
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), selfLink))
                 .setBody(state)
                 .setCompletion(trackResourcePool(enumerationProgress, rp))
                 .sendWith(this);
 
-        Operation.createPatch(this, desc.documentSelfLink)
+        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .sendWith(this);
     }
@@ -1990,12 +2003,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.descriptionLink = desc.documentSelfLink;
 
         logFine(() -> String.format("Found new ResourcePool %s", state.name));
-        Operation.createPost(this, ComputeService.FACTORY_LINK)
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion(trackResourcePool(enumerationProgress, rp))
                 .sendWith(this);
 
-        Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
+        Operation.createPost(
+                PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeDescriptionService.FACTORY_LINK))
                 .setBody(desc)
                 .sendWith(this);
     }
@@ -2102,7 +2116,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
         task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.INDEXED_METADATA);
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
-        Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task)
                 .setConnectionSharing(true)
                 .setCompletion((o, e) -> {

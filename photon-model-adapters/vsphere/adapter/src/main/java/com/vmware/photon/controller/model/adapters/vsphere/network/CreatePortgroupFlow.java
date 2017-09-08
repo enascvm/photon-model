@@ -20,6 +20,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.DVPortgroupConfigSpec;
 import com.vmware.vim25.DistributedVirtualPortgroupPortgroupType;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -58,7 +59,8 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
             return DeferredResult.failed(new IllegalArgumentException("Portgroup must be linked to a parent DVS"));
         }
 
-        Operation op = Operation.createGet(getService().getHost(), dvsLink);
+        Operation op = Operation.createGet(
+                PhotonModelUriUtils.createDiscoveryUri(getService().getHost(), dvsLink));
         return getService().sendWithDeferredResult(op);
     }
 
@@ -125,7 +127,8 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
                     .put(DvsProperties.PORT_GROUP_KEY, pgKey);
 
             OperationContext.setFrom(getOperationContext());
-            Operation.createPatch(getService().getHost(), this.subnetState.documentSelfLink)
+            Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getService().getHost(),
+                    this.subnetState.documentSelfLink))
                     .setBody(this.subnetState)
                     .setCompletion((o, e) -> {
                         if (e != null) {
@@ -149,7 +152,9 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
     }
 
     private DeferredResult<Operation> fetchSubnet(Void start) {
-        Operation op = Operation.createGet(getRequest().resourceReference);
+        Operation op = Operation.createGet(
+                PhotonModelUriUtils.createDiscoveryUri(getService().getHost(), getRequest()
+                .resourceReference));
         return getService().sendWithDeferredResult(op);
     }
 }
