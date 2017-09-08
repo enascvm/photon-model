@@ -79,9 +79,17 @@ public class DiskContext {
             Consumer<DiskContext> onSuccess) {
         // Step 1: Get disk details
         if (ctx.diskState == null) {
-            URI diskUri = DiskService.DiskStateExpanded.buildUri(ctx.diskReference);
+            URI diskUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+                    DiskService.DiskStateExpanded.buildUri(ctx.diskReference));
             AdapterUtils.getServiceState(service, diskUri, op -> {
                 ctx.diskState = op.getBody(DiskService.DiskStateExpanded.class);
+                EnumSet<DiskService.DiskType> notSupportedTypes = EnumSet
+                        .of(DiskService.DiskType.SSD, DiskService.DiskType.NETWORK);
+                if (notSupportedTypes.contains(ctx.diskState.type)) {
+                    ctx.fail(new IllegalStateException(
+                            String.format("Not supported disk type %s.", ctx.diskState.type)));
+                    return;
+                }
                 populateContextThen(service, ctx, onSuccess);
             }, ctx.errorHandler);
             return;
@@ -128,8 +136,8 @@ public class DiskContext {
                 return;
             }
 
-            URI credUri = UriUtils
-                    .buildUri(service.getHost(), ctx.diskState.authCredentialsLink);
+            URI credUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+                    UriUtils.buildUri(service.getHost(), ctx.diskState.authCredentialsLink));
             AdapterUtils.getServiceState(service, credUri, op -> {
                 ctx.vSphereCredentials = op
                         .getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
@@ -140,8 +148,8 @@ public class DiskContext {
 
         // Step 4: Get the endpoint compute link
         if (ctx.endpointComputeLink == null) {
-            URI endpointUri = UriUtils
-                    .buildUri(service.getHost(), ctx.diskState.endpointLink);
+            URI endpointUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+                    UriUtils.buildUri(service.getHost(), ctx.diskState.endpointLink));
             AdapterUtils.getServiceState(service, endpointUri, op -> {
                 EndpointService.EndpointState endpointState = op
                         .getBody(EndpointService.EndpointState.class);
@@ -153,8 +161,8 @@ public class DiskContext {
 
         // Step 5: Get the adapter reference to from the endpoint compute link
         if (ctx.adapterManagementReference == null) {
-            URI computeUri = UriUtils
-                    .buildUri(service.getHost(), ctx.endpointComputeLink);
+            URI computeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+                    UriUtils.buildUri(service.getHost(), ctx.endpointComputeLink));
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ComputeService.ComputeState computeState = op
                         .getBody(ComputeService.ComputeState.class);

@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.VM
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDiskProvisioningType;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getPbmProfileSpec;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.toKb;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
 
@@ -70,7 +71,7 @@ public class DiskClient extends BaseHelper {
     /**
      * Create Virtual Disk
      */
-    public DiskService.DiskState createVirtualDisk() throws Exception {
+    public void createVirtualDisk() throws Exception {
         ManagedObjectReference diskManager = this.connection.getServiceContent()
                 .getVirtualDiskManager();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.diskState);
@@ -96,10 +97,10 @@ public class DiskClient extends BaseHelper {
         // Update the details of the disk
         CustomProperties.of(this.diskState)
                 .put(DISK_FULL_PATH, diskFullPath)
-                .put(DISK_PARENT_DIRECTORY, parentDir);
+                .put(DISK_PARENT_DIRECTORY, parentDir)
+                .put(DISK_DATASTORE_NAME, dsName);
         this.diskState.status = DiskService.DiskStatus.AVAILABLE;
         this.diskState.id = diskName;
-        return this.diskState;
     }
 
     /**

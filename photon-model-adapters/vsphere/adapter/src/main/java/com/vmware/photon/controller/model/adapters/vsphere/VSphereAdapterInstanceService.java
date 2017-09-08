@@ -13,9 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
-import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVIDER_DISK_UNIQUE_ID;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 
@@ -84,7 +84,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
         TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
 
         if (request.isMockRequest) {
-            handleMockRequest(mgr, request);
+            handleMockRequest(mgr);
             return;
         }
 
@@ -334,6 +334,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
         // disk as well. For ex, Floppy or CD-Rom
         ctx.disks.stream().forEach(ds -> diskLinks.add(ds.documentSelfLink));
 
+        // Handle all the HDD disk
         for (VirtualDisk disk : disks) {
             if (!(disk.getBacking() instanceof VirtualDeviceFileBackingInfo)) {
                 continue;
@@ -368,19 +369,11 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 updateDiskStateFromVirtualDisk(disk, matchedDs);
                 createDiskPatch(matchedDs);
             }
-
         }
+        // Handle patch on CD-ROM / FLOPPY disk so that it is updated as ATTACHED
+        ctx.disks.stream().filter(ds -> ds.type == DiskType.CDROM || ds.type == DiskType.FLOPPY)
+                .forEach(ds -> createDiskPatch(ds));
         state.diskLinks = diskLinks;
-    }
-
-    /**
-     * Capture virtual disk attributes in the disk state for reference.
-     */
-    private void updateDiskStateFromVirtualDisk(VirtualDisk vd, DiskState disk) {
-        disk.status = DiskService.DiskStatus.ATTACHED;
-        disk.id = vd.getDiskObjectId();
-        CustomProperties.of(disk)
-                .put(PROVIDER_DISK_UNIQUE_ID, vd.getDeviceInfo().getLabel());
     }
 
     private DiskStateExpanded findMatchingDiskState(VirtualDisk vd, List<DiskStateExpanded> disks) {
@@ -444,7 +437,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 });
     }
 
-    private void handleMockRequest(TaskManager mgr, ComputeInstanceRequest req) {
+    private void handleMockRequest(TaskManager mgr) {
         mgr.patchTask(TaskStage.FINISHED);
     }
 }

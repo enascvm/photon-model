@@ -171,7 +171,7 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 
-    private ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription
+    protected ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription
             vmDescription, boolean
             diskCustomization, String bootDiskSelfLink, boolean withAdditionalDisks)
             throws Throwable {

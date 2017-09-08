@@ -19,6 +19,7 @@ import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
@@ -116,6 +117,7 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
             assertNotNull(disk.customProperties.get(DISK_FULL_PATH));
             assertEquals(DiskService.DiskStatus.AVAILABLE, disk.status);
             assertNotNull(disk.customProperties.get(DISK_PARENT_DIRECTORY));
+            assertNotNull(disk.customProperties.get(DISK_DATASTORE_NAME));
             assertTrue(disk.id.startsWith(diskState.name));
         }
 

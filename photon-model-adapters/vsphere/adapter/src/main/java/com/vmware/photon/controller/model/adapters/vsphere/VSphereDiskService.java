@@ -13,6 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
+
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -27,6 +31,7 @@ import com.vmware.xenon.common.TaskState;
  */
 public class VSphereDiskService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.DISK_SERVICE;
+    private static final String MOCK_VALUE = "mock";
 
     @Override
     public void handlePatch(Operation op) {
@@ -49,12 +54,6 @@ public class VSphereDiskService extends StatelessService {
         TaskManager taskManager = new TaskManager(this, request.taskReference,
                 request.resourceLink());
 
-        if (request.isMockRequest
-                && request.requestType != DiskInstanceRequest.DiskRequestType.DELETE) {
-            handleMockRequest(taskManager);
-            return;
-        }
-
         DiskContext.populateContextThen(this, createInitialContext(taskManager, request), ctx -> {
             switch (request.requestType) {
             case CREATE:
@@ -76,6 +75,11 @@ public class VSphereDiskService extends StatelessService {
      * of the created disk.
      */
     private void handleCreateDisk(DiskContext ctx) {
+        if (ctx.diskInstanceRequest.isMockRequest) {
+            updateMockDiskState(ctx.diskState);
+            finishDiskCreateOperation(ctx);
+            return;
+        }
         ctx.pool.submit(this, ctx.adapterManagementReference, ctx.vSphereCredentials,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
@@ -84,18 +88,20 @@ public class VSphereDiskService extends StatelessService {
 
                     DiskClient diskClient = new DiskClient(connection, ctx);
                     try {
-                        DiskService.DiskState resultDiskState = diskClient.createVirtualDisk();
-
-                        // Call patch on the disk to update the details of the disk and then
-                        // finish the task
-                        OperationSequence.create(createDiskPatch(resultDiskState))
-                                .next(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED))
-                                .setCompletion(ctx.failTaskOnError())
-                                .sendWith(this);
+                        diskClient.createVirtualDisk();
+                        finishDiskCreateOperation(ctx);
                     } catch (Exception e) {
                         ctx.fail(e);
                     }
                 });
+    }
+
+    private void updateMockDiskState(DiskService.DiskStateExpanded diskState) {
+        CustomProperties.of(diskState)
+                .put(DISK_FULL_PATH, MOCK_VALUE)
+                .put(DISK_PARENT_DIRECTORY, MOCK_VALUE)
+                .put(DISK_DATASTORE_NAME, MOCK_VALUE);
+        diskState.status = DiskService.DiskStatus.AVAILABLE;
     }
 
     /**
@@ -122,6 +128,18 @@ public class VSphereDiskService extends StatelessService {
                         ctx.fail(e);
                     }
                 });
+    }
+
+    /**
+     * Finish the disk create operation by updating the details of the disk
+     */
+    private void finishDiskCreateOperation(DiskContext ctx) {
+        // Call patch on the disk to update the details of the disk and then
+        // finish the task
+        OperationSequence.create(createDiskPatch(ctx.diskState))
+                .next(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED))
+                .setCompletion(ctx.failTaskOnError())
+                .sendWith(this);
     }
 
     /**
@@ -168,9 +186,5 @@ public class VSphereDiskService extends StatelessService {
     private Operation deleteDisk(String documentSelfLink) {
         return Operation.createDelete(
                 PhotonModelUriUtils.createDiscoveryUri(getHost(), documentSelfLink));
-    }
-
-    private void handleMockRequest(TaskManager mgr) {
-        mgr.patchTask(TaskState.TaskStage.FINISHED);
     }
 }

@@ -216,6 +216,11 @@ public class BaseVSphereAdapterTest {
             this.dataStoreId = this.dataStoreId
                     .substring(this.dataStoreId.lastIndexOf("/") + 1, this.dataStoreId.length());
         }
+        doSetup();
+    }
+
+    protected void doSetup() {
+
     }
 
     @After
@@ -783,7 +788,7 @@ public class BaseVSphereAdapterTest {
         return resourceOperationRequest;
     }
 
-    private void createTaskResultListener(VerificationHost host, String taskLink,
+    protected void createTaskResultListener(VerificationHost host, String taskLink,
                                           Function<Operation, Boolean> h) {
         StatelessService service = new StatelessService() {
             @Override
