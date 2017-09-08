@@ -14,9 +14,11 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import com.microsoft.azure.management.compute.Disk;
 import com.microsoft.azure.management.compute.StorageAccountTypes;
@@ -37,22 +39,16 @@ import com.vmware.xenon.common.Utils;
 public class AzureDiskServiceTest extends AzureBaseTest {
 
     public static final String DISK_NAME_PREFIX = "azuredisk";
-    public static final long DISK_SIZE = 25 * 1024; // 25 GBs
+    public static final long DISK_SIZE = 25 * 1024; // 25 GiBs
 
     private DiskService.DiskState diskState;
 
-    @Override
-    protected void startRequiredServices() throws Throwable {
-
-        super.startRequiredServices();
-
-    }
 
     /**
-     * Creates a Azure instance via a provision task.
+     * Creates a Azure Disk and attempts to delete it.
      */
     @Test
-    public void testDiskProvision() throws Throwable {
+    public void testDiskDelete() throws Throwable {
 
         createDiskStateDesc();
 
@@ -60,13 +56,16 @@ public class AzureDiskServiceTest extends AzureBaseTest {
 
         assertDiskProperties();
 
+        kickOffDiskDeletion();
+
+        assertDiskDeletion();
+
     }
 
     private void assertDiskProperties() {
 
         // Get updated disk state
-        this.diskState = getHost().getServiceState(null,
-                DiskService.DiskState.class, UriUtils.buildUri(getHost(), this.diskState.documentSelfLink));
+        refreshDiskState();
 
         assertEquals("Disk status not matching", this.diskState.status, DiskService.DiskStatus
                 .AVAILABLE);
@@ -87,11 +86,45 @@ public class AzureDiskServiceTest extends AzureBaseTest {
         }
     }
 
+    private void assertDiskDeletion() {
+
+        if (!this.isMock) {
+            // Get provisioned disk from azure
+            Disk deletedAzureDisk = getAzureSdkClients().getComputeManager().disks().getById
+                    (this.diskState.id);
+            assertNull(deletedAzureDisk);
+        }
+
+
+    }
+
     private void kickOffDiskProvisioning() throws Throwable {
 
         // start provision task to do the actual disk creation
         ProvisionDiskTaskService.ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskService.ProvisionDiskTaskState();
         provisionTask.taskSubStage = ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.CREATING_DISK;
+
+        provisionTask.diskLink = this.diskState.documentSelfLink;
+        provisionTask.isMockRequest = this.isMock;
+
+        provisionTask.documentExpirationTimeMicros =
+                Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
+                        20);
+        provisionTask.tenantLinks = this.endpointState.tenantLinks;
+
+        provisionTask = TestUtils.doPost(this.host,
+                provisionTask, ProvisionDiskTaskService.ProvisionDiskTaskState.class,
+                UriUtils.buildUri(this.host, ProvisionDiskTaskService.FACTORY_LINK));
+
+        this.host.waitForFinishedTask(ProvisionDiskTaskService.ProvisionDiskTaskState.class,
+                provisionTask.documentSelfLink);
+    }
+
+    private void kickOffDiskDeletion() throws Throwable {
+
+        // start provision task to do the disk deletion
+        ProvisionDiskTaskService.ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskService.ProvisionDiskTaskState();
+        provisionTask.taskSubStage = ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.DELETING_DISK;
 
         provisionTask.diskLink = this.diskState.documentSelfLink;
         provisionTask.isMockRequest = this.isMock;
@@ -126,20 +159,56 @@ public class AzureDiskServiceTest extends AzureBaseTest {
         diskDesc.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE, StorageAccountTypes
                 .STANDARD_LRS.toString());
         // Uncomment below to create the disk in a specific ResourceGroup
-        //diskDesc.customProperties.put(AzureConstants.AZURE_RESOURCE_GROUP_NAME, "SpecifyYourRG");
+        // diskDesc.customProperties.put(AzureConstants.AZURE_RESOURCE_GROUP_NAME, "SpecifyYourRG");
 
         this.diskState = TestUtils.doPost(host, diskDesc, DiskService
                         .DiskState.class, UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
     }
 
-    @After
-    public final void doDelete() throws Throwable {
 
-        if (!this.isMock) {
-            getAzureSdkClients().getComputeManager().resourceManager().resourceGroups()
-                    .deleteByName(this.diskState.customProperties.get(AzureConstants.AZURE_RESOURCE_GROUP_NAME));
+    @After
+    public final void doDelete() {
+
+        // Try to delete the Azure Disk RG
+        String resourceDroupToDelete = "";
+        try {
+            if (!this.isMock) {
+
+                resourceDroupToDelete = this.diskState.customProperties.get(AzureConstants
+                        .AZURE_RESOURCE_GROUP_NAME);
+                getAzureSdkClients().getComputeManager().resourceManager().resourceGroups()
+                        .deleteByName(resourceDroupToDelete);
+                getHost().log(Level.INFO,
+                        "[" + this.currentTestName.getMethodName() + "] Deleted resource group "
+                                + "[" + resourceDroupToDelete + "]");
+            }
+        } catch (Exception ex) {
+            getHost().log(Level.WARNING,
+                    "[" + this.currentTestName.getMethodName() + "] unable to delete resource "
+                            + "group " + "[" + resourceDroupToDelete + "] " + ex.getMessage());
+
         }
-        AzureTestUtil.deleteServiceDocument(getHost(), this.diskState.documentSelfLink);
+
+        // Try to delete local disk state
+        try {
+            AzureTestUtil.deleteServiceDocument(getHost(), this.diskState.documentSelfLink);
+            getHost().log(Level.INFO,
+                    "[" + this.currentTestName.getMethodName() + "] Deleted local disk state "
+                            + "[" + this.diskState.name + "]");
+        } catch (Throwable throwable) {
+            getHost().log(Level.WARNING,
+                    "[" + this.currentTestName.getMethodName() + "] unable to delete local disk state "
+                            + "[" + this.diskState.name + "]");
+        }
+
+
+
+    }
+
+    private void refreshDiskState() {
+
+        this.diskState = getHost().getServiceState(null,
+                DiskService.DiskState.class, UriUtils.buildUri(getHost(), this.diskState.documentSelfLink));
     }
 }

@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.logging.Level;
 
 import com.microsoft.azure.management.compute.Disk;
 import com.microsoft.azure.management.compute.DiskSkuTypes;
@@ -23,6 +24,7 @@ import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.resources.fluentcore.utils.SdkContext;
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
+import rx.Completable;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -179,8 +181,13 @@ public class AzureDiskService extends StatelessService {
                 execution = execution
                         .thenCompose(this::createDisk);
             }
-
             return execution.thenCompose(this::updateDiskState);
+        case DELETE:
+            if (!context.diskRequest.isMockRequest) {
+                execution = execution
+                        .thenCompose(this::deleteDiskOnAzure);
+            }
+            return execution.thenCompose(this::deleteDiskState);
         default:
             IllegalStateException ex = new IllegalStateException("unsupported request type");
             return DeferredResult.failed(ex);
@@ -190,8 +197,8 @@ public class AzureDiskService extends StatelessService {
     }
 
     /**
-     *  Method to define the data disk to be created. We also specify to handle call backs from
-     *  Azure
+     * Method to define the data disk to be created. We also specify to handle call backs from
+     * Azure
      */
     private DeferredResult<AzureDiskContext> createDisk(AzureDiskContext context) {
 
@@ -202,7 +209,8 @@ public class AzureDiskService extends StatelessService {
                     .AZURE_RESOURCE_GROUP_NAME);
         } else {
             context.resourceGroupName = SdkContext.randomResourceName
-                    (PREFIX_OF_RESOURCE_GROUP_FOR_DISK, PREFIX_OF_RESOURCE_GROUP_FOR_DISK.length() + 5);
+                    (PREFIX_OF_RESOURCE_GROUP_FOR_DISK,
+                            PREFIX_OF_RESOURCE_GROUP_FOR_DISK.length() + 5);
         }
 
         final String msg = "Creating new independent disk with name [" + context.diskState.name +
@@ -241,7 +249,8 @@ public class AzureDiskService extends StatelessService {
                     (AzureConstants.AZURE_MANAGED_DISK_TYPE));
         }
 
-        Disk.DefinitionStages.WithGroup basicDiskDefinition = context.azureSdkClients.getComputeManager().disks()
+        Disk.DefinitionStages.WithGroup basicDiskDefinition = context.azureSdkClients
+                .getComputeManager().disks()
                 .define(context.diskState.name)
                 .withRegion(context.diskState.regionId);
 
@@ -249,15 +258,17 @@ public class AzureDiskService extends StatelessService {
         // Create new resource group or resuse existing one
         if (context.diskState.customProperties != null && context.diskState.customProperties
                 .containsKey(AzureConstants.AZURE_RESOURCE_GROUP_NAME)) {
-            diskDefinitionIncludingResourceGroup = basicDiskDefinition.withExistingResourceGroup(context.resourceGroupName);
+            diskDefinitionIncludingResourceGroup = basicDiskDefinition
+                    .withExistingResourceGroup(context.resourceGroupName);
         } else {
-            diskDefinitionIncludingResourceGroup = basicDiskDefinition.withNewResourceGroup(context.resourceGroupName);
+            diskDefinitionIncludingResourceGroup = basicDiskDefinition
+                    .withNewResourceGroup(context.resourceGroupName);
         }
 
         diskDefinitionIncludingResourceGroup.withData()
-            .withSizeInGB((int) context.diskState.capacityMBytes / 1024)
-            .withSku(new DiskSkuTypes(accountType))
-            .createAsync(handler);
+                .withSizeInGB((int) context.diskState.capacityMBytes / 1024)
+                .withSku(new DiskSkuTypes(accountType))
+                .createAsync(handler);
 
         return handler.toDeferredResult()
                 .thenApply(ignore -> context);
@@ -273,7 +284,8 @@ public class AzureDiskService extends StatelessService {
         if (context.diskState.customProperties == null) {
             context.diskState.customProperties = new HashMap<>();
         }
-        context.diskState.customProperties.put(AzureConstants.AZURE_RESOURCE_GROUP_NAME, context.resourceGroupName);
+        context.diskState.customProperties
+                .put(AzureConstants.AZURE_RESOURCE_GROUP_NAME, context.resourceGroupName);
 
         return this.sendWithDeferredResult(
                 Operation.createPatch(this, context.diskState.documentSelfLink)
@@ -281,5 +293,39 @@ public class AzureDiskService extends StatelessService {
                 .thenApply(op -> context);
     }
 
+    /**
+     * Method to delete a detached disk on Azure
+     */
+    private DeferredResult<AzureDiskContext> deleteDiskOnAzure(AzureDiskContext context) {
+
+//  TODO unable to use serviceCallback with Void type due to bug in Azure Java SDK
+//  TODO refer https://github.com/Azure/azure-sdk-for-java/issues/1905
+
+        DeferredResult<AzureDiskContext> DR = new DeferredResult<>();
+        Completable c = context.azureSdkClients.getComputeManager().disks().deleteByIdAsync(context
+                .diskState.id);
+        c.subscribe(() -> {
+            // handle completion
+            getHost().log(Level.INFO, "Deleted disk with name [" + context.diskState.name + "]");
+            DR.complete(context);
+
+        }, throwable -> {
+            //handle error
+                DR.fail(throwable);
+            }
+        );
+
+        return DR;
+    }
+
+    /**
+     * delete disk state locally
+     */
+    private DeferredResult<AzureDiskContext> deleteDiskState(AzureDiskContext context) {
+
+        return this.sendWithDeferredResult(
+                Operation.createDelete(this, context.diskState.documentSelfLink)).thenApply(op ->
+                context);
+    }
 
 }
