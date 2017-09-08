@@ -87,6 +87,7 @@ public class MockStatsAdapter extends StatelessService {
         ComputeStats cStat = new ComputeStats();
         cStat.statValues = statValues;
         cStat.computeLink = statsRequest.resourceReference.getPath();
+        cStat.addCustomProperty("prop1", "val1");
         statsResponse.statsList = new ArrayList<>();
         statsResponse.statsList.add(cStat);
         statsResponse.taskStage = SingleResourceTaskCollectionStage.valueOf(statsRequest.nextStage);

@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
@@ -372,7 +373,7 @@ public class SingleResourceStatsCollectionTaskService
         operations.add(Operation.createPost(inMemoryStatsUri).setBody(minuteStats));
         populateResourceMetrics(metricsList,
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
-                minuteStats, currentState.computeLink, expirationTime);
+                minuteStats, currentState.computeLink, expirationTime, null);
 
         for (ComputeStats stats : currentState.statsList) {
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
@@ -399,7 +400,7 @@ public class SingleResourceStatsCollectionTaskService
                     updateInMemoryStats(hourlyMemoryState, entries.getKey(), serviceStat,
                             StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
                     populateResourceMetrics(metricsList, entries.getKey(),
-                            serviceStat, computeLink, expirationTime);
+                            serviceStat, computeLink, expirationTime, stats.getCustomProperties());
                 }
             }
         }
@@ -481,7 +482,7 @@ public class SingleResourceStatsCollectionTaskService
     private void populateResourceMetrics(List<ResourceMetrics> metricsList,
             String metricName,
             ServiceStat serviceStat,
-            String computeLink, long expirationTime) {
+            String computeLink, long expirationTime, Map<String, String> props) {
         if (Double.isNaN(serviceStat.latestValue)) {
             return;
         }
@@ -500,8 +501,10 @@ public class SingleResourceStatsCollectionTaskService
             metricsObjToUpdate.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
             metricsObjToUpdate.documentExpirationTimeMicros = expirationTime;
             metricsObjToUpdate.customProperties = new HashMap<>();
-            metricsObjToUpdate.customProperties
-                    .put(ResourceMetrics.PROPERTY_RESOURCE_LINK, computeLink);
+            metricsObjToUpdate.customProperties.put(ResourceMetrics.PROPERTY_RESOURCE_LINK, computeLink);
+            if (props != null) {
+                metricsObjToUpdate.customProperties.putAll(props);
+            }
             metricsList.add(metricsObjToUpdate);
         }
         metricsObjToUpdate.entries.put(metricName, serviceStat.latestValue);

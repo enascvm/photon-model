@@ -13,15 +13,20 @@
 
 package com.vmware.photon.controller.model.adapterapi;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 
 /**
  * Defines the response body for getting health status of a Compute instance.
  */
 public class ComputeStatsResponse {
+
+    public static final int CUSTOM_PROPERTIES_LIMIT = Integer.getInteger(
+            UriPaths.PROPERTY_PREFIX + "ComputeStatsResponse.customProperties.maxLimit", 1);
 
     /**
      * List of stats
@@ -43,5 +48,26 @@ public class ComputeStatsResponse {
          * Stats values are of type ServiceStat
          */
         public Map<String, List<ServiceStat>> statValues;
+
+        /**
+         * These custom properties will be added to the custom properties of each resource metric
+         * document created
+         */
+        private Map<String, String> customProperties;
+
+        public void addCustomProperty(String key, String value) {
+            if (this.customProperties == null) {
+                this.customProperties = new HashMap<>();
+            }
+            this.customProperties.put(key, value);
+            if (this.customProperties.size() > CUSTOM_PROPERTIES_LIMIT) {
+                throw new IllegalStateException("ComputeStats can't have custom properties more than " +
+                        "permitted limit of " + CUSTOM_PROPERTIES_LIMIT);
+            }
+        }
+
+        public Map<String, String> getCustomProperties() {
+            return this.customProperties;
+        }
     }
 }

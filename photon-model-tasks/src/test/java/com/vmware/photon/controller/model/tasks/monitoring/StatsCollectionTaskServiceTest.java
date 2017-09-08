@@ -34,6 +34,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -206,6 +207,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_1 +
                     " should not be null ", metric);
             assertEquals(metric.entries.size(), 1);
+            assertEquals(metric.customProperties.get("prop1"), "val1");
 
             ResourceMetrics metric2 = getResourceMetrics(verificationHost, computeLink,
                     MockStatsAdapter.KEY_2);
@@ -564,6 +566,14 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
 
         //clean up
         deleteServiceSynchronously(statsCollectionTaskState.documentSelfLink);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testComputeStatsResponseCustomPropertiesLimit() {
+        ComputeStats stats = new ComputeStats();
+        for (int i = 0; i <= ComputeStatsResponse.CUSTOM_PROPERTIES_LIMIT; ++i) {
+            stats.addCustomProperty("key" + i, "val" + i);
+        }
     }
 
     public static class CustomStatsAdapter extends StatelessService {
