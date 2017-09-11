@@ -13,12 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -164,10 +166,25 @@ public class VmOverlay extends AbstractOverlay {
         if (arr == null) {
             return Collections.emptyList();
         }
-
         return arr.getGuestNicInfo()
-                .stream()
-                .flatMap(gni -> gni.getIpAddress().stream()).collect(Collectors.toList());
+               .stream()
+               .flatMap(gni -> gni.getIpAddress().stream()).collect(Collectors.toList());
+    }
+
+    public Map<Integer, List<String>> getMapNic2IpV4Addresses() {
+        ArrayOfGuestNicInfo arr = (ArrayOfGuestNicInfo) getOrDefault(VimPath.vm_guest_net, null);
+        if (arr == null) {
+            return Collections.emptyMap();
+        }
+        HashMap<Integer, List<String>> mapNicIpAddresses = new HashMap<>();
+        if (arr.getGuestNicInfo() != null) {
+            for (int index = 0; index < arr.getGuestNicInfo().size(); index++) {
+                List<String> ips = arr.getGuestNicInfo().get(index).getIpAddress().stream()
+                        .filter(s -> !s.contains(":")).collect(Collectors.toList());
+                mapNicIpAddresses.put(index, ips);
+            }
+        }
+        return mapNicIpAddresses;
     }
 
     /**

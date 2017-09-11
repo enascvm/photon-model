@@ -21,10 +21,12 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -40,6 +42,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.CustomizationSpec;
@@ -52,6 +55,7 @@ import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -181,7 +185,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                             Runnable runnable = createCheckForIpTask(ctx.pool, op, client.getVm(),
                                     connection.createUnmanagedCopy(),
-                                    ctx.child.documentSelfLink);
+                                    ctx.child.documentSelfLink, ctx);
 
                             ctx.pool.schedule(runnable,
                                     IP_CHECK_INTERVAL_SECONDS,
@@ -210,23 +214,61 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 });
     }
 
+    private List<Operation> createUpdateIPOperationsForComputeAndNics(String computeLink,
+            String ip, Map<Integer, List<String>> ipV4Addresses, ProvisionContext ctx) {
+        List<Operation> updateIpAddressOperations = new ArrayList<>();
+
+        if (ip != null) {
+            ComputeState state = new ComputeState();
+            state.address = ip;
+            // update compute
+            Operation updateIpAddress = Operation
+                    .createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
+                    .setBody(state);
+            updateIpAddressOperations.add(updateIpAddress);
+        }
+
+        if (ipV4Addresses != null) {
+            int sizeIpV4Addresses = ipV4Addresses.size();
+            for (NetworkInterfaceStateWithDetails nic : ctx.nics) {
+                int deviceIndex = nic.deviceIndex;
+                if (deviceIndex < sizeIpV4Addresses) {
+                    List<String> ipsV4 = ipV4Addresses.containsKey(deviceIndex) ? ipV4Addresses
+                            .get(deviceIndex) : Collections.emptyList();
+                    if (ipsV4.size() > 0) {
+                        NetworkInterfaceState patchNic = new NetworkInterfaceState();
+                        // if nic has multiple ip addresses for ipv4 only pick 1st ip address
+                        patchNic.address = ipsV4.get(0);
+                        Operation updateAddressNetWorkInterface = Operation
+                                .createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                                        nic.documentSelfLink)).setBody(patchNic);
+                        updateIpAddressOperations.add(updateAddressNetWorkInterface);
+                    }
+                }
+            }
+        }
+        return updateIpAddressOperations;
+    }
+
     private Runnable createCheckForIpTask(VSphereIOThreadPool pool,
             Operation taskFinisher,
             ManagedObjectReference vmRef,
             Connection connection,
-            String computeLink) {
+            String computeLink, ProvisionContext ctx) {
         return new Runnable() {
             int attemptsLeft = IP_CHECK_TOTAL_WAIT_SECONDS / IP_CHECK_INTERVAL_SECONDS - 1;
 
             @Override
             public void run() {
                 String ip;
+                Map<Integer, List<String>> ipV4Addresses = null;
                 try {
                     GetMoRef get = new GetMoRef(connection);
                     // fetch enough to make guessPublicIpV4Address() work
                     Map<String, Object> props = get.entityProps(vmRef, VimPath.vm_guest_net);
                     VmOverlay vm = new VmOverlay(vmRef, props);
                     ip = vm.guessPublicIpV4Address();
+                    ipV4Addresses = vm.getMapNic2IpV4Addresses();
                 } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
                     log(Level.WARNING, "Error getting IP of vm %s, %s, aborting ",
                             VimUtils.convertMoRefToString(vmRef),
@@ -237,29 +279,46 @@ public class VSphereAdapterInstanceService extends StatelessService {
                     return;
                 }
 
-                if (ip != null) {
-                    ComputeState state = new ComputeState();
-                    state.address = ip;
-                    // update compute
-                    Operation.createPatch(
-                            PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
-                            .setBody(state)
+                if (ip != null && ipV4Addresses.entrySet()
+                        .stream()
+                        .allMatch(entry -> !entry.getValue().isEmpty())) {
+                    connection.close();
+                    List<String> ips = ipV4Addresses.values().stream().flatMap(List::stream).collect(Collectors.toList());
+                    List<Operation> updateIpAddressOperations = createUpdateIPOperationsForComputeAndNics(computeLink, ip, ipV4Addresses, ctx);
+                    OperationJoin.create(updateIpAddressOperations)
                             .setCompletion((o, e) -> {
+
+                                log(Level.INFO, "Update compute IP [%s] and networkInterfaces ip"
+                                        + " addresses [%s] for computeLink [%s]: ", ip, ips, computeLink);
                                 // finish task
                                 taskFinisher.sendWith(VSphereAdapterInstanceService.this);
                             })
                             .sendWith(VSphereAdapterInstanceService.this);
-                    connection.close();
                 } else if (attemptsLeft > 0) {
                     attemptsLeft--;
                     log(Level.INFO, "IP of %s not ready, retrying", computeLink);
                     // reschedule
                     pool.schedule(this, IP_CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
                 } else {
-                    // still no IP after all
-                    log(Level.INFO, "IP of %s not ready, giving up", computeLink);
-                    taskFinisher.sendWith(VSphereAdapterInstanceService.this);
                     connection.close();
+                    if (ip == null && ipV4Addresses.entrySet().stream()
+                            .allMatch(entry -> entry.getValue().isEmpty())) {
+                        log(Level.INFO, "IP of %s are not ready, giving up", computeLink);
+                        taskFinisher.sendWith(VSphereAdapterInstanceService.this);
+                    } else {
+                        // not all ips are ready still update the ones that are ready
+                        List<Operation> updateIpAddressOperations = createUpdateIPOperationsForComputeAndNics(
+                                computeLink, ip, ipV4Addresses, ctx);
+                        List<String> ips = ipV4Addresses.values().stream().flatMap(List::stream).collect(Collectors.toList());
+                        OperationJoin.create(updateIpAddressOperations)
+                                .setCompletion((o, e) -> {
+                                    log(Level.INFO, "Not all ips are ready. Update compute IP [%s] and "
+                                            + "networkInterfaces ip addresses [%s] for "
+                                            + "computeLink [%s]: ", ip != null ? ip : "", ips, computeLink);
+                                    taskFinisher.sendWith(VSphereAdapterInstanceService.this);
+                                })
+                                .sendWith(VSphereAdapterInstanceService.this);
+                    }
                 }
             }
         };

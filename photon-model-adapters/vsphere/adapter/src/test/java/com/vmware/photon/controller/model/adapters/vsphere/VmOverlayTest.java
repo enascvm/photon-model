@@ -16,13 +16,20 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-import java.util.Arrays;
-import java.util.List;
+import static com.vmware.photon.controller.model.adapters.vsphere.util.VimPath.vm_guest_net;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.vim25.ArrayOfGuestNicInfo;
+import com.vmware.vim25.GuestNicInfo;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 
@@ -36,7 +43,22 @@ public class VmOverlayTest {
         ref.setType(VimNames.TYPE_VM);
         ref.setValue("vm-123");
         cont.setObj(ref);
-        this.overlay = new VmOverlay(cont);
+
+        Map<String, Object> props = new HashMap<>();
+        ArrayOfGuestNicInfo arrayOfGuestNicInfo = new ArrayOfGuestNicInfo();
+        List<GuestNicInfo> listGuestNicInfo = arrayOfGuestNicInfo.getGuestNicInfo();
+        GuestNicInfo nic1 = new GuestNicInfo();
+        List<String> ipsNic1 = nic1.getIpAddress();
+        ipsNic1.add("192.168.1.10");
+        ipsNic1.add("192.168.1.11");
+        GuestNicInfo nic2 = new GuestNicInfo();
+        List<String> ipsNic2 = nic2.getIpAddress();
+        ipsNic2.add("10.10.10.20");
+        listGuestNicInfo.add(nic1);
+        listGuestNicInfo.add(nic2);
+        props.put(vm_guest_net, arrayOfGuestNicInfo);
+
+        this.overlay = new VmOverlay(ref, props);
     }
 
     @Test
@@ -109,6 +131,19 @@ public class VmOverlayTest {
 
         String p = this.overlay.guessPublicIpV4Address(ips);
         assertEquals("172.17.0.1", p);
+    }
+
+    @Test
+    public void getMapNic2IpV4Addresses() {
+        Map<Integer, List<String>> mapNics = this.overlay.getMapNic2IpV4Addresses();
+        Assert.assertTrue("mapNic2IpV4Addresses size is different from 2",mapNics.size() == 2);
+        List<String> nic1Ips = mapNics.get(0);
+        List<String> nic2Ips = mapNics.get(1);
+        Assert.assertTrue("nic ips size is different from 2", nic1Ips.size() == 2);
+        Assert.assertTrue("nic ips size is different from 1", nic2Ips.size() == 1);
+        Assert.assertTrue("ip is different from 192.168.1.10", nic1Ips.get(0).equals("192.168.1.10"));
+        Assert.assertTrue("ip is different from 192.168.1.11", nic1Ips.get(1).equals("192.168.1.11"));
+        Assert.assertTrue("ip is different from 10.10.10.20", nic2Ips.get(0).equals("10.10.10.20"));
     }
 
 }
