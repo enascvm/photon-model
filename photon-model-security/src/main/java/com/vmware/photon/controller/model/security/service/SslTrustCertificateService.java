@@ -160,17 +160,21 @@ public class SslTrustCertificateService extends StatefulService {
             return;
         }
 
-        SslTrustCertificateState state = post.getBody(SslTrustCertificateState.class);
-        if (state.documentVersion > 0) {
-            post.complete();
-            return;
-        }
+        try {
+            SslTrustCertificateState state = post.getBody(SslTrustCertificateState.class);
+            if (state.documentVersion > 0) {
+                post.complete();
+                return;
+            }
 
-        boolean validated = validate(post, () -> validateStateOnStart(state));
-        if (!validated) {
-            return;
+            boolean validated = validate(post, () -> validateStateOnStart(state));
+            if (!validated) {
+                return;
+            }
+            post.complete();
+        } catch (Throwable t) {
+            post.fail(t);
         }
-        post.complete();
     }
 
     @Override
@@ -204,19 +208,23 @@ public class SslTrustCertificateService extends StatefulService {
             return;
         }
 
-        SslTrustCertificateState body = put.getBody(SslTrustCertificateState.class);
-        SslTrustCertificateState state = getState(put);
-        // these properties can't be modified once set:
-        body.subscriptionLink = state.subscriptionLink;
+        try {
+            SslTrustCertificateState body = put.getBody(SslTrustCertificateState.class);
+            SslTrustCertificateState state = getState(put);
+            // these properties can't be modified once set:
+            body.subscriptionLink = state.subscriptionLink;
 
-        boolean validated = validate(put, () -> validateStateOnStart(body));
-        if (!validated) {
-            return;
+            boolean validated = validate(put, () -> validateStateOnStart(body));
+            if (!validated) {
+                return;
+            }
+
+            this.setState(put, body);
+            put.setBody(body);
+            put.complete();
+        } catch (Throwable t) {
+            put.fail(t);
         }
-
-        this.setState(put, body);
-        put.setBody(body);
-        put.complete();
     }
 
     @Override

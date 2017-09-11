@@ -150,38 +150,52 @@ public class IPAddressService extends StatefulService {
 
     @Override
     public void handleStart(Operation start) {
-        processInput(start);
-        start.complete();
+        try {
+            processInput(start);
+            start.complete();
+        } catch (Throwable t) {
+            start.fail(t);
+        }
     }
 
     @Override
     public void handlePost(Operation post) {
-        IPAddressState returnState = processInput(post);
-        setState(post, returnState);
-        post.complete();
+        try {
+            IPAddressState returnState = processInput(post);
+            setState(post, returnState);
+            post.complete();
+        } catch (Throwable t) {
+            post.fail(t);
+        }
     }
 
     @Override
     public void handlePut(Operation put) {
         if (!put.hasBody()) {
-            throw (new IllegalArgumentException("body is required"));
+            put.fail(new IllegalArgumentException("body is required"));
         }
-        IPAddressState newState = put.getBody(IPAddressState.class);
 
-        // Verify valid status changes
-        IPAddressState currentState = getState(put);
-        if (isNoOperation(currentState, newState)) {
+        try {
+            IPAddressState newState = put.getBody(IPAddressState.class);
+
+            // Verify valid status changes
+            IPAddressState currentState = getState(put);
+            if (isNoOperation(currentState, newState)) {
+                put.complete();
+                return;
+            }
+            // Clear connected resource when releasing the ip address
+            if (IPAddressStatus.RELEASED.equals(newState.ipAddressStatus)) {
+                newState.connectedResourceLink = null;
+            }
+
+            validateState(newState);
+            validateIPAddressStatusTransition(currentState, newState);
+            setState(put, newState);
             put.complete();
-            return;
+        } catch (Throwable t) {
+            put.fail(t);
         }
-        // Clear connected resource when releasing the ip address
-        if (IPAddressStatus.RELEASED.equals(newState.ipAddressStatus)) {
-            newState.connectedResourceLink = null;
-        }
-        validateState(newState);
-        validateIPAddressStatusTransition(currentState, newState);
-        setState(put, newState);
-        put.complete();
     }
 
     @Override

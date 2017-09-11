@@ -236,22 +236,34 @@ public class LoadBalancerDescriptionService extends StatefulService {
 
     @Override
     public void handleStart(Operation start) {
-        processInput(start);
-        start.complete();
+        try {
+            processInput(start);
+            start.complete();
+        } catch (Throwable t) {
+            start.fail(t);
+        }
     }
 
     @Override
     public void handlePut(Operation put) {
-        LoadBalancerDescription returnState = processInput(put);
-        setState(put, returnState);
-        put.complete();
+        try {
+            LoadBalancerDescription returnState = processInput(put);
+            setState(put, returnState);
+            put.complete();
+        } catch (Throwable t) {
+            put.fail(t);
+        }
     }
 
     @Override
     public void handlePost(Operation post) {
-        LoadBalancerDescription returnState = processInput(post);
-        setState(post, returnState);
-        post.complete();
+        try {
+            LoadBalancerDescription returnState = processInput(post);
+            setState(post, returnState);
+            post.complete();
+        } catch (Throwable t) {
+            post.fail(t);
+        }
     }
 
     private LoadBalancerDescription processInput(Operation op) {

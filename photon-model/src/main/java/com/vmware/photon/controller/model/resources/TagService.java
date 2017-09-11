@@ -116,28 +116,32 @@ public class TagService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        TagState currentState = getState(put);
-        TagState newTagState = put.getBody(TagState.class);
+        try {
+            TagState currentState = getState(put);
+            TagState newTagState = put.getBody(TagState.class);
 
-        if (!ServiceDocument.equals(getStateDescription(), currentState, newTagState)) {
-            put.fail(new UnsupportedOperationException("Tags may not be modified"));
-            return;
-        }
-
-        // check if the tag has to be turned from external to local
-        boolean modified = false;
-        if (newTagState.external != null) {
-            if (currentState.external == null || (Boolean.TRUE.equals(currentState.external)
-                    && Boolean.FALSE.equals(newTagState.external))) {
-                currentState.external = newTagState.external;
-                modified = true;
+            if (!ServiceDocument.equals(getStateDescription(), currentState, newTagState)) {
+                put.fail(new UnsupportedOperationException("Tags may not be modified"));
+                return;
             }
+
+            // check if the tag has to be turned from external to local
+            boolean modified = false;
+            if (newTagState.external != null) {
+                if (currentState.external == null || (Boolean.TRUE.equals(currentState.external)
+                        && Boolean.FALSE.equals(newTagState.external))) {
+                    currentState.external = newTagState.external;
+                    modified = true;
+                }
+            }
+            if (!modified) {
+                put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+            }
+            put.setBody(currentState);
+            put.complete();
+        } catch (Throwable t) {
+            put.fail(t);
         }
-        if (!modified) {
-            put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
-        }
-        put.setBody(currentState);
-        put.complete();
     }
 
     @Override

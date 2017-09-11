@@ -64,21 +64,33 @@ public class RouterService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
-        processInput(start);
-        start.complete();
+        try {
+            processInput(start);
+            start.complete();
+        } catch (Throwable t) {
+            start.fail(t);
+        }
     }
 
     @Override
     public void handlePut(Operation put) {
-        RouterState returnState = processInput(put);
-        setState(put, returnState);
-        put.complete();
+        try {
+            RouterState returnState = processInput(put);
+            setState(put, returnState);
+            put.complete();
+        } catch (Throwable t) {
+            put.fail(t);
+        }
     }
 
     @Override
     public void handlePatch(Operation patchOp) {
-        ResourceUtils.handlePatch(
-                patchOp, getState(patchOp), getStateDescription(), RouterState.class, null);
+        try {
+            ResourceUtils.handlePatch(
+                    patchOp, getState(patchOp), getStateDescription(), RouterState.class, null);
+        } catch (Throwable t) {
+            patchOp.fail(t);
+        }
     }
 
     private RouterState processInput(Operation op) {

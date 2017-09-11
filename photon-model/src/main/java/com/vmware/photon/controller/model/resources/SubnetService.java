@@ -161,15 +161,23 @@ public class SubnetService extends StatefulService {
 
     @Override
     public void handleStart(Operation start) {
-        processInput(start);
-        start.complete();
+        try {
+            processInput(start);
+            start.complete();
+        } catch (Throwable t) {
+            start.fail(t);
+        }
     }
 
     @Override
     public void handlePut(Operation put) {
-        SubnetState returnState = processInput(put);
-        setState(put, returnState);
-        put.complete();
+        try {
+            SubnetState returnState = processInput(put);
+            setState(put, returnState);
+            put.complete();
+        } catch (Throwable t) {
+            put.fail(t);
+        }
     }
 
     private SubnetState processInput(Operation op) {
