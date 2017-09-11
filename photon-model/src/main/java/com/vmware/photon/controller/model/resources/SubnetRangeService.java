@@ -57,6 +57,12 @@ public class SubnetRangeService extends StatefulService {
     public static class SubnetRangeState extends ResourceState {
 
         public static final String FIELD_NAME_SUBNET_LINK = "subnetLink";
+        public static final String FIELD_NAME_START_IP_ADDRESS = "startIPAddress";
+        public static final String FIELD_NAME_END_IP_ADDRESS = "endIPAddress";
+        public static final String FIELD_NAME_IP_VERSION = "ipVersion";
+        public static final String FIELD_NAME_IP_IS_DHCP = "isDHCP";
+        public static final String FIELD_NAME_DNS_SERVERS = "dnsServerAddresses";
+        public static final String FIELD_NAME_DOMAIN = "domain";
 
         /**
          * Link to the subnet this subnet range is part of.

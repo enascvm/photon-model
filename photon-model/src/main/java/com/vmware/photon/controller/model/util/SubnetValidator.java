@@ -92,6 +92,7 @@ public class SubnetValidator {
         }
 
         SubnetUtils utils = new SubnetUtils(cidr);
+        utils.setInclusiveHostCount(true);
 
         if (!utils.getInfo().getAddress().equals(utils.getInfo().getNetworkAddress())) {
             String err = String.format("Invalid CIDR: %s. Host identifier of the"
