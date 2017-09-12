@@ -79,8 +79,10 @@ import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.DatastoreHostMount;
 import com.vmware.vim25.DuplicateName;
+import com.vmware.vim25.DuplicateNameFaultMsg;
 import com.vmware.vim25.FileAlreadyExists;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
+import com.vmware.vim25.InvalidNameFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
@@ -1870,11 +1872,26 @@ public class InstanceClient extends BaseHelper {
                     .getString(RESOURCE_GROUP_NAME);
         }
 
+        Element vmFolderElement = this.finder.vmFolder();
         if (folderPath == null) {
-            return this.finder.vmFolder().object;
+            return vmFolderElement.object;
         } else {
-            return this.finder.folder(folderPath).object;
+            return getExistingOrCreateNewFolder(vmFolderElement, folderPath);
         }
+    }
+
+    private ManagedObjectReference getExistingOrCreateNewFolder(Element folderElement, String folderPath) throws
+            InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, FinderException {
+        try {
+            folderElement = this.finder.folder(folderPath);
+        } catch (FinderException finderEx) {
+            try {
+                return this.get.createFolder(folderElement, folderPath);
+            } catch (InvalidNameFaultMsg | DuplicateNameFaultMsg faultMsg) {
+                throw new FinderException(String.format("Unable to create folder in the path: '%s'", folderPath), faultMsg.getCause());
+            }
+        }
+        return folderElement.object;
     }
 
     /**

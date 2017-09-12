@@ -56,4 +56,20 @@ public class TestVSphereLibraryProvisionTask extends TestVSphereLibraryProvision
             }
         }
     }
+
+    @Test
+    public void deployFromLibraryToNewFolder() throws Throwable {
+        final String vmFolder = "/Datacenters/Datacenter/vm/test-folder";
+        this.vcFolder = vmFolder; // setting an explicit folder for this vm, if folder is not present it will  be created
+        ComputeState vm = provisionVMAndGetState();
+        try {
+            if (vm == null) {
+                return;
+            }
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
 }

@@ -304,7 +304,7 @@ public class Finder extends Recurser {
 
     private Element uniqueResultOrFail(List<Element> found) throws FinderException {
         if (found.isEmpty()) {
-            throw new FinderException("No elements matching the pattern found");
+            throw new FinderException("No elements matching the input pattern found");
         }
 
         if (found.size() > 1) {

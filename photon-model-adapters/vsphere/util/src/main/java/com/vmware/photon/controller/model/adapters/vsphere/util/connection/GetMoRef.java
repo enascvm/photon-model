@@ -24,7 +24,10 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.builders.Propert
 import com.vmware.photon.controller.model.adapters.vsphere.util.builders.PropertySpecBuilder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.builders.SelectionSpecBuilder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.builders.TraversalSpecBuilder;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
+import com.vmware.vim25.DuplicateNameFaultMsg;
 import com.vmware.vim25.DynamicProperty;
+import com.vmware.vim25.InvalidNameFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
@@ -570,5 +573,12 @@ public class GetMoRef extends BaseHelper {
             ManagedObjectReference container, String morefType, String[] strings)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         return inContainerByType(container, morefType, strings, new RetrieveOptions());
+    }
+
+    public ManagedObjectReference createFolder(Element folderElement, String path)
+            throws InvalidNameFaultMsg, RuntimeFaultFaultMsg, DuplicateNameFaultMsg, InvalidPropertyFaultMsg {
+        init();
+        final String folderRelativePath = path.replace(folderElement.path + "/", "");
+        return this.vimPort.createFolder(folderElement.object, folderRelativePath);
     }
 }
