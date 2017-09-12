@@ -750,7 +750,7 @@ public class TestAWSSetupUtils {
     public static final String AWS_INSTANCE_PREFIX = "i-";
 
     public static final String EC2_LINUX_AMI = "ami-0d4cfd66";
-    public static final String EC2_WINDOWS_AMI = "ami-b6af04a0";
+    public static final String EC2_WINDOWS_AMI = "ami-27a58d5c";
 
     /**
      * Class to hold the baseline counts for the compute states and the compute descriptions that
