@@ -920,8 +920,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             VirtualMachineInner virtualMachine = vmEntry.getValue();
 
             AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
-            auth.userEmail = virtualMachine.osProfile().adminUsername();
-            auth.privateKey = virtualMachine.osProfile().adminPassword();
+            if (virtualMachine.osProfile() != null) {
+                auth.userEmail = virtualMachine.osProfile().adminUsername();
+                auth.privateKey = virtualMachine.osProfile().adminPassword();
+            }
             auth.documentSelfLink = UUID.randomUUID().toString();
             auth.tenantLinks = ctx.parentCompute.tenantLinks;
             auth.customProperties = new HashMap<>();
@@ -946,7 +948,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.endpointLink = ctx.request.endpointLink;
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
-            computeDescription.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
+            if (virtualMachine.hardwareProfile() != null
+                    && virtualMachine.hardwareProfile().vmSize() != null) {
+                computeDescription.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
+            }
             computeDescription.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
             computeDescription.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
             computeDescription.diskAdapterReference = ctx.parentCompute.description.diskAdapterReference;
@@ -1431,7 +1436,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.endpointLink = ctx.request.endpointLink;
         computeState.resourcePoolLink = ctx.request.resourcePoolLink;
         computeState.diskLinks = vmDisks;
-        if (virtualMachine.hardwareProfile().vmSize() != null) {
+        if (virtualMachine.hardwareProfile() != null
+                && virtualMachine.hardwareProfile().vmSize() != null) {
             computeState.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
         }
         computeState.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
