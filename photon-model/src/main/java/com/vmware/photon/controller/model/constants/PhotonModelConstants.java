@@ -172,6 +172,9 @@ public class PhotonModelConstants {
     public static final String TAG_ENUMERATION_PREFIX = "vmware.enumeration.";
     public static final String TAG_KEY_TYPE = TAG_ENUMERATION_PREFIX + "type";
 
+    public static final String OTHER_CHARGES = "OtherCharges";
+    public static final String ACCOUNT_ONE_TIME_CHARGES = "AccountOneTimeCharges";
+
     // Key to be inserted while persisting service metrics of AWS,Azure
     public static final String DOES_CONTAIN_SERVICE_STATS = "containsServiceStats";
 

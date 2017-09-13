@@ -82,6 +82,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         statsData.computeDesc = account1ComputeState;
         statsData.awsAccountIdToComputeStates.put(TestAWSCostAdapterService.account1Id,
                 Collections.singletonList(account1ComputeState));
+        inferEndpointLink(statsData);
         getParentAuth(statsData, next);
     }
 

@@ -189,6 +189,15 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                 }
                 statsCollected = false;
             }
+            if (metric.equalsIgnoreCase(AWSConstants.COST)) {
+                List<ResourceMetrics> accountOneTimeCharges = result.documents.values().stream()
+                        .map(o -> Utils.fromJson(o, ResourceMetrics.class))
+                        .filter(m -> m.entries.containsKey(PhotonModelConstants.ACCOUNT_ONE_TIME_CHARGES))
+                        .collect(Collectors.toList());
+                if (accountOneTimeCharges.size() != result.documentCount) {
+                    statsCollected = false;
+                }
+            }
             return statsCollected;
         });
     }

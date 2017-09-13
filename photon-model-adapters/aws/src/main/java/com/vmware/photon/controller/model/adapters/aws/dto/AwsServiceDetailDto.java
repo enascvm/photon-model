@@ -21,13 +21,15 @@ public class AwsServiceDetailDto {
     public String id;
     public Map<Long, Double> directCosts = new HashMap<>();
     public Map<Long, Double> otherCosts = new HashMap<>();
-    public Double remainingCost = 0d;
-    public Double reservedRecurringCost = 0d;
+    public Map<Long, Double> remainingCosts = new HashMap<>();
+    public Map<Long, Double> reservedRecurringCosts = new HashMap<>();
     public Map<String, AwsResourceDetailDto> resourceDetailsMap = new HashMap<>();
     public String type;
 
-    public void addToRemainingCost(Double otherCost) {
-        this.remainingCost += otherCost;
+    public void addToRemainingCosts(Long time, Double remainingCost) {
+        Double daysRemainingCost = this.remainingCosts.get(time);
+        daysRemainingCost = daysRemainingCost == null ? remainingCost : daysRemainingCost + remainingCost;
+        this.remainingCosts.put(time, daysRemainingCost);
     }
 
     public void addToOtherCosts(Long time, Double otherCost) {
@@ -42,8 +44,10 @@ public class AwsServiceDetailDto {
         this.directCosts.put(time, daysDirectCost);
     }
 
-    public void addToReservedRecurringCost(Double reservedRecurringCost) {
-        this.reservedRecurringCost += reservedRecurringCost;
+    public void addToReservedRecurringCosts(Long time, Double recurringCost) {
+        Double daysRecurringCost = this.reservedRecurringCosts.get(time);
+        daysRecurringCost = daysRecurringCost == null ? recurringCost : daysRecurringCost + recurringCost;
+        this.reservedRecurringCosts.put(time, daysRecurringCost);
     }
 
     public AwsResourceDetailDto getResourceDetail(String resourceId) {

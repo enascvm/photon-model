@@ -35,9 +35,11 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 import org.joda.time.LocalDateTime;
@@ -69,6 +71,13 @@ public class AWSCsvBillParser {
     public static final String DETAILED_CSV_DATE_FORMAT_YYYY_MM_DD_HH_MM_SS = "yyyy-MM-dd HH:mm:ss";
     public static final String INVOICE_TOTAL = "InvoiceTotal";
     public static final String ACCOUNT_TOTAL = "AccountTotal";
+    private static Logger logger = Logger.getLogger(AWSCsvBillParser.class.getName());
+
+    private Long monthStartMillis = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1)
+            .toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis();
+    private Long monthEndMillis = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1)
+            .toDateTimeAtStartOfDay(DateTimeZone.UTC).plusMonths(1).getMillis();
+    private String billInvoiceId = null;
 
     public void parseDetailedCsvBill(List<String> ignorableInvoiceCharge,
             Path csvBillZipFilePath, Set<String> configuredAccounts,
@@ -92,7 +101,6 @@ public class AWSCsvBillParser {
     private void parseDetailedCsvBill(InputStream inputStream, Collection<String> ignorableInvoiceCharge,
             Set<String> configuredAccounts, BiConsumer<Map<String, AwsAccountDetailDto>, String> hourlyStatsConsumer,
             Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer) throws IOException {
-
         final CsvPreference STANDARD_SKIP_COMMENTS = new CsvPreference.Builder(
                 CsvPreference.STANDARD_PREFERENCE)
                 .skipComments(new CommentStartsWith(AWS_SKIP_COMMENTS))
@@ -128,12 +136,18 @@ public class AWSCsvBillParser {
                 LocalDateTime currRowLocalDateTime = (LocalDateTime) rowMap
                         .get(DetailedCsvHeaders.USAGE_START_DATE);
                 Long curRowTime = getMillisForHour(currRowLocalDateTime);
-                if (prevRowTime != null && curRowTime != null && !prevRowTime.equals(curRowTime)) {
+                if (prevRowTime != null && curRowTime != null && !prevRowTime.equals(curRowTime)
+                        && !StringUtils.contains(interval, "-")) {
                     // This indicates that we have processed all rows belonging to a corresponding hour in the
                     // current month bill. Consume the batch
                     hourlyStatsConsumer.accept(monthlyBill, interval);
                 }
-                readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge,configuredAccounts);
+                try {
+                    readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge, configuredAccounts);
+                } catch (Exception e) {
+                    this.logger.warning(String.format("Got error while parsing a row in aws bill of %s",
+                            getStringFieldValue(rowMap, DetailedCsvHeaders.PAYER_ACCOUNT_ID) + e));
+                }
                 if (curRowTime != null) {
                     prevRowTime = curRowTime;
                     prevRowEndTime = getMillisForHour((LocalDateTime) rowMap.get(DetailedCsvHeaders.USAGE_END_DATE));
@@ -220,12 +234,16 @@ public class AWSCsvBillParser {
 
         //------------------------------------------------------------------------------------
         // Non-summary rows.
+        if (this.billInvoiceId == null) {
+            this.billInvoiceId = getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID);
+        }
         LocalDateTime usageStartTimeFromCsv = (LocalDateTime) rowMap.get(DetailedCsvHeaders.USAGE_START_DATE);
         Long millisForBillHour = getMillisForHour(usageStartTimeFromCsv);
+        boolean isRowMarkedAsReserved = isRowReservedInstanceRecurringCost(rowMap);
 
         // Populate hourly resource and service stats only for current month since they are not needed
         // for previous months.
-        if (millisForBillHour == null || (millisForBillHour >= getMonthStartMillis())) {
+        if (millisForBillHour == null || (millisForBillHour >= this.monthStartMillis)) {
 
             String resourceId = getStringFieldValue(rowMap, DetailedCsvHeaders.RESOURCE_ID);
             AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails, serviceName, resourceId);
@@ -237,12 +255,14 @@ public class AWSCsvBillParser {
                 // Check if this row has usageStartTime, if so set otherCost for
                 // day, otherwise set it as common for month, can divide later for all days
                 if (millisForBillHour != null) {
-                    serviceDetail.addToOtherCosts(millisForBillHour, resourceCost);
-                    // Adding zero as direct cost for this entity to allow
-                    // populating this as a resource while getting services
-                    serviceDetail.addToDirectCosts(millisForBillHour, 0d);
-                } else {
-                    serviceDetail.addToRemainingCost(resourceCost);
+                    if (isRowMarkedAsReserved && matchFieldValue(rowMap, DetailedCsvHeaders.OPERATION, RUN_INSTANCES)) {
+                        serviceDetail.addToReservedRecurringCosts(millisForBillHour, resourceCost);
+                    } else {
+                        serviceDetail.addToOtherCosts(millisForBillHour, resourceCost);
+                        // Adding zero as direct cost for this entity to allow
+                        // populating this as a resource while getting services
+                        serviceDetail.addToDirectCosts(millisForBillHour, 0d);
+                    }
                 }
             } else {
                 if (millisForBillHour != null) {
@@ -259,7 +279,8 @@ public class AWSCsvBillParser {
             }
         }
 
-        if (millisForBillHour != null && millisForBillHour > accountDetails.billProcessedTimeMillis) {
+        if (millisForBillHour != null && millisForBillHour > accountDetails.billProcessedTimeMillis
+                && millisForBillHour < System.currentTimeMillis()) {
             accountDetails.billProcessedTimeMillis = millisForBillHour;
         }
 
@@ -273,16 +294,15 @@ public class AWSCsvBillParser {
         }
     }
 
+    private boolean isRowReservedInstanceRecurringCost(Map<String, Object> rowMap) {
+        return convertReservedInstance(getStringFieldValue(rowMap, DetailedCsvHeaders.IS_RESERVED_INSTANCE));
+    }
+
     private String createInterval(Long startMillis, Long endMillis) {
         if (endMillis.compareTo(startMillis + TimeUnit.HOURS.toMillis(1)) == 0) {
             return Long.toString(startMillis);
         }
-        return String.format("%d-%d", startMillis, endMillis);
-    }
-
-    private long getMonthStartMillis() {
-        return LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1)
-                .toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis();
+        return String.format("%d-%d", this.monthStartMillis, this.monthEndMillis);
     }
 
     private Long getMillisForHour(LocalDateTime localDateTime) {
@@ -316,8 +336,7 @@ public class AWSCsvBillParser {
                     DetailedCsvHeaders.ITEM_DESCRIPTION);
             resourceDetail.usageStartTime = usageStartTimeFromCsv.toDate().getTime();
             resourceDetail.tags = getTagsForResources(rowMap, tagHeaders);
-            boolean isRowMarkedAsReserved = convertReservedInstance(
-                    getStringFieldValue(rowMap, DetailedCsvHeaders.IS_RESERVED_INSTANCE));
+            boolean isRowMarkedAsReserved = isRowReservedInstanceRecurringCost(rowMap);
             boolean isResourceReservedForThisHour;
             Long millisForBillDay = getMillisForHour(usageStartTimeFromCsv);
             if (existingUsageStartTime != null
@@ -452,33 +471,40 @@ public class AWSCsvBillParser {
         } else {
             awsAccountDetail = createOrGetAccountDetailObject(accountDetails, linkedAccountId);
         }
-        String invoiceId = getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID);
+        String lineInvoiceId = getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID);
+        Double resourceCost = getResourceCost(rowMap);
+
         if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, DetailedCsvHeaders.LINE_ITEM)) {
+
+            LocalDateTime usageStartTimeFromCsv = (LocalDateTime) rowMap.get(DetailedCsvHeaders.USAGE_START_DATE);
+            Long millisForBillHour = getMillisForHour(usageStartTimeFromCsv);
             AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(awsAccountDetail, productName, null);
-            // If the RecordType is LineItem then it is either sign up charge or
-            // recurring charges for reserved purchase
-            if (matchFieldValue(rowMap, DetailedCsvHeaders.OPERATION, RUN_INSTANCES)) {
-                // If the Operation is RunInstances, it is recurring charge
-                serviceDetail.addToReservedRecurringCost(getResourceCost(rowMap));
-            } else if (invoiceId.matches("[0-9]+")) {
-                if (serviceDetail != null) {
-                    serviceDetail.addToRemainingCost(getResourceCost(rowMap));
-                } else {
-                    awsAccountDetail.otherCharges += getResourceCost(rowMap);
+
+            if (serviceDetail != null && millisForBillHour != null) {
+                if (matchFieldValue(rowMap, DetailedCsvHeaders.OPERATION, RUN_INSTANCES)) {
+                    serviceDetail.addToReservedRecurringCosts(millisForBillHour, resourceCost);
+                    return;
                 }
-                ignorableInvoiceCharge.add(invoiceId);
-            } else {
-                awsAccountDetail.otherCharges += getResourceCost(rowMap);
+                serviceDetail.addToRemainingCosts(millisForBillHour, resourceCost);
+
+                if (StringUtils.isNotEmpty(lineInvoiceId) && StringUtils.isNotEmpty(this.billInvoiceId)
+                        && !StringUtils.equals(lineInvoiceId, this.billInvoiceId)) {
+                    awsAccountDetail.accountOneTimeCharges += resourceCost; //service subscriptions/renewals
+                    ignorableInvoiceCharge.add(lineInvoiceId);
+                }
+                return;
             }
-        } else if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, INVOICE_TOTAL)
-                || matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, ACCOUNT_TOTAL)) {
-            // If the RecordType is InvoiceTotal, this is the account monthly
-            // cost for non-consolidated bills, ie, for primary accounts with no
-            // linked accounts
-            // If the RecordType is AccountTotal, this is the account monthly
-            // cost for consolidated bills
-            if (!ignorableInvoiceCharge.contains(invoiceId)) {
-                awsAccountDetail.cost = getResourceCost(rowMap);
+
+            awsAccountDetail.otherCharges += resourceCost;
+
+        } else if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, ACCOUNT_TOTAL)) {
+            // If the RecordType is AccountTotal, this is the account monthly cost for consolidated bills
+            awsAccountDetail.cost = resourceCost;
+        } else if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, INVOICE_TOTAL)) {
+            // If the RecordType is InvoiceTotal, this is the account monthly cost for non-consolidated bills
+            // ie, for primary accounts with no linked accounts
+            if (!ignorableInvoiceCharge.contains(lineInvoiceId)) {
+                awsAccountDetail.cost = resourceCost;
             }
         }
     }
