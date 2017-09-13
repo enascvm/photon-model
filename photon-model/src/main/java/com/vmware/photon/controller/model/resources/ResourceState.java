@@ -38,6 +38,7 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_GROUP_LINKS = "groupLinks";
     public static final String FIELD_NAME_TAG_LINKS = "tagLinks";
     public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
+    public static final String FIELD_NAME_ENDPOINT_LINKS = "endpointLinks";
     public static final String FIELD_NAME_REGION_ID = "regionId";
     public static final String FIELD_NAME_CREATION_TIME_MICROS = "creationTimeMicros";
 

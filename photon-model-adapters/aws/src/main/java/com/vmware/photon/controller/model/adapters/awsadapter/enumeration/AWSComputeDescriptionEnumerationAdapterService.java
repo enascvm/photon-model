@@ -321,6 +321,10 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         computeDescription.instanceType = cd.instanceType;
         computeDescription.name = cd.instanceType;
         computeDescription.endpointLink = cdState.endpointLink;
+        if (computeDescription.endpointLinks == null) {
+            computeDescription.endpointLinks = new HashSet<String>();
+        }
+        computeDescription.endpointLinks.add(cdState.endpointLink);
         computeDescription.tenantLinks = cdState.tenantLinks;
         // Book keeping information about the creation of the compute description in the system.
         computeDescription.customProperties = new HashMap<>();

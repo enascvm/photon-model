@@ -839,6 +839,8 @@ public class TestAWSSetupUtils {
 
         awsComputeHost.regionId = regionId;
         awsComputeHost.endpointLink = endpointState.documentSelfLink;
+        awsComputeHost.endpointLinks = new HashSet<String>();
+        awsComputeHost.endpointLinks.add(endpointState.documentSelfLink);
         awsComputeHost.tenantLinks = endpointState.tenantLinks;
 
         if (isAwsClientMock) {
@@ -943,6 +945,8 @@ public class TestAWSSetupUtils {
         awsVMDesc.authCredentialsLink = auth.documentSelfLink;
         awsVMDesc.tenantLinks = endpointState.tenantLinks;
         awsVMDesc.endpointLink = endpointState.documentSelfLink;
+        awsVMDesc.endpointLinks = new HashSet<String>();
+        awsVMDesc.endpointLinks.add(endpointState.documentSelfLink);
 
         // set the create service to the aws instance service
         awsVMDesc.instanceAdapterReference = UriUtils.buildUri(host,
@@ -993,6 +997,8 @@ public class TestAWSSetupUtils {
 
         rootDisk.regionId = regionId;
         rootDisk.endpointLink = endpointState.documentSelfLink;
+        rootDisk.endpointLinks = new HashSet<String>();
+        rootDisk.endpointLinks.add(endpointState.documentSelfLink);
         rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk = TestUtils.doPost(host, rootDisk,
@@ -1031,6 +1037,8 @@ public class TestAWSSetupUtils {
 
             resource.regionId = awsVMDesc.regionId;
             resource.endpointLink = endpointState.documentSelfLink;
+            resource.endpointLinks = new HashSet<String>();
+            resource.endpointLinks.add(endpointState.documentSelfLink);
             resource.tenantLinks = endpointState.tenantLinks;
         }
 
@@ -1067,6 +1075,8 @@ public class TestAWSSetupUtils {
 
             disk.regionId = regionId;
             disk.endpointLink = endpointState.documentSelfLink;
+            disk.endpointLinks = new HashSet<String>();
+            disk.endpointLinks.add(endpointState.documentSelfLink);
             disk.tenantLinks = endpointState.tenantLinks;
 
             disk.encrypted = (i == 0) ? true : null;
@@ -1121,6 +1131,8 @@ public class TestAWSSetupUtils {
 
             networkState.regionId = regionId;
             networkState.endpointLink = endpointState.documentSelfLink;
+            networkState.endpointLinks = new HashSet<String>();
+            networkState.endpointLinks.add(endpointState.documentSelfLink);
             networkState.tenantLinks = endpointState.tenantLinks;
 
             networkState = TestUtils.doPost(host, networkState,
@@ -1146,6 +1158,8 @@ public class TestAWSSetupUtils {
 
                 subnetState.regionId = regionId;
                 subnetState.endpointLink = endpointState.documentSelfLink;
+                subnetState.endpointLinks = new HashSet<String>();
+                subnetState.endpointLinks.add(endpointState.documentSelfLink);
                 subnetState.tenantLinks = endpointState.tenantLinks;
 
                 subnetState = TestUtils.doPost(host, subnetState,
@@ -1168,6 +1182,8 @@ public class TestAWSSetupUtils {
 
                 nicDescription.regionId = regionId;
                 nicDescription.endpointLink = endpointState.documentSelfLink;
+                nicDescription.endpointLinks = new HashSet<String>();
+                nicDescription.endpointLinks.add(endpointState.documentSelfLink);
                 nicDescription.tenantLinks = endpointState.tenantLinks;
 
                 nicDescription = TestUtils.doPost(host, nicDescription,
@@ -1191,6 +1207,8 @@ public class TestAWSSetupUtils {
 
             nicState.regionId = regionId;
             nicState.endpointLink = endpointState.documentSelfLink;
+            nicState.endpointLinks = new HashSet<String>();
+            nicState.endpointLinks.add(endpointState.documentSelfLink);
             nicState.tenantLinks = endpointState.tenantLinks;
 
             nicState.securityGroupLinks = new ArrayList<>();
@@ -1230,6 +1248,8 @@ public class TestAWSSetupUtils {
 
         securityGroupState.regionId = regionId;
         securityGroupState.endpointLink = endpointState.documentSelfLink;
+        securityGroupState.endpointLinks = new HashSet<String>();
+        securityGroupState.endpointLinks.add(endpointState.documentSelfLink);
         securityGroupState.tenantLinks = endpointState.tenantLinks;
 
         Rule ssh = new Rule();

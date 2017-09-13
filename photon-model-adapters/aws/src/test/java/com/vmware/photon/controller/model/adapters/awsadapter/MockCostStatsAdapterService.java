@@ -65,6 +65,8 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         account1ComputeState.documentSelfLink = TestAWSCostAdapterService.account1SelfLink;
         account1ComputeState.type = ComputeType.VM_HOST;
         account1ComputeState.endpointLink = "endpoint1";
+        account1ComputeState.endpointLinks = new HashSet<String>();
+        account1ComputeState.endpointLinks.add("endpoint1");
         account1ComputeState.name = "account1";
         account1ComputeState.descriptionLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, generateUuidFromStr("123"));

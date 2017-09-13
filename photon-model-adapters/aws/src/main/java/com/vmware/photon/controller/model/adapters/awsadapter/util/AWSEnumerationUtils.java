@@ -195,6 +195,10 @@ public class AWSEnumerationUtils {
         computeState.statsAdapterReferences = parentCDStatsAdapterReferences;
 
         computeState.resourcePoolLink = resourcePoolLink;
+        if (computeState.endpointLinks == null) {
+            computeState.endpointLinks = new HashSet<String>();
+        }
+        computeState.endpointLinks.add(endpointLink);
         computeState.endpointLink = endpointLink;
         // Compute descriptions are looked up by the instanceType in the local list of CDs.
         computeState.descriptionLink = computeDescriptionLink;

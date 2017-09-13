@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -197,6 +198,10 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
             stateHolder.localState.name = remoteResource.getLoadBalancerName();
             stateHolder.localState.address = remoteResource.getDNSName();
             stateHolder.localState.endpointLink = this.request.original.endpointLink;
+            if (stateHolder.localState.endpointLinks == null) {
+                stateHolder.localState.endpointLinks = new HashSet<String>();
+            }
+            stateHolder.localState.endpointLinks.add(this.request.original.endpointLink);
             stateHolder.localState.internetFacing = !"internal".equals(remoteResource.getScheme());
 
             stateHolder.localState.routes = getRouteConfigurations(remoteResource);

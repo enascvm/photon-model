@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLA
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -717,6 +718,8 @@ public class ResourceAllocationTaskService
         nic.tagLinks = nid.tagLinks;
         nic.tenantLinks = state.tenantLinks;
         nic.endpointLink = nid.endpointLink;
+        nic.endpointLinks = new HashSet<String>();
+        nic.endpointLinks.add(nid.endpointLink);
         nic.regionId = nid.regionId;
         nic.customProperties = nid.customProperties;
 

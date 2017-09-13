@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -82,6 +83,10 @@ public class AWSNetworkUtils {
         networkState.regionId = regionId;
         networkState.resourcePoolLink = resourcePoolLink;
         networkState.endpointLink = endpointLink;
+        if (networkState.endpointLinks == null) {
+            networkState.endpointLinks = new HashSet<String>();
+        }
+        networkState.endpointLinks.add(endpointLink);
         networkState.authCredentialsLink = authCredentialsLink;
         networkState.instanceAdapterReference = adapterUri;
         networkState.tenantLinks = tenantLinks;
@@ -109,6 +114,10 @@ public class AWSNetworkUtils {
         subnetState.zoneId = subnet.getAvailabilityZone();
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
+        if (subnetState.endpointLinks == null) {
+            subnetState.endpointLinks = new HashSet<String>();
+        }
+        subnetState.endpointLinks.add(endpointLink);
         subnetState.customProperties = new HashMap<>();
         subnetState.regionId = regionId;
 

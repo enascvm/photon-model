@@ -36,6 +36,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNet
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -380,6 +381,8 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
         subnetState.instanceAdapterReference = UriUtils.buildUri(this.host,
                 AWSSubnetService.SELF_LINK);
         subnetState.endpointLink = this.endpointState.documentSelfLink;
+        subnetState.endpointLinks = new HashSet<>();
+        subnetState.endpointLinks.add(this.endpointState.documentSelfLink);
         subnetState.externalSubnetLink = publicSubnetLink;
 
         return postServiceSynchronously(
@@ -391,6 +394,8 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
         networkState.id = AWS_DEFAULT_VPC_ID;
         networkState.subnetCIDR = AWS_DEFAULT_VPC_CIDR;
         networkState.endpointLink = this.endpointState.documentSelfLink;
+        networkState.endpointLinks = new HashSet<String>();
+        networkState.endpointLinks.add(this.endpointState.documentSelfLink);
         networkState.resourcePoolLink = "dummyResourcePoolLink";
         networkState.regionId = this.regionId;
         networkState.instanceAdapterReference =

@@ -104,6 +104,16 @@ public class PhotonModelUtils {
                     state,
                     endpointLink);
 
+            Set<String> endpointLinks = new HashSet<>();
+            endpointLinks.add(endpointLink);
+
+            //This method will assign the value of the endpointLinks  created above if it does not exist for the given
+            //resource OR it will merge it with the existing collection if already set.
+            ReflectionUtils.setOrUpdatePropertyValue(
+                    sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS),
+                    state,
+                    endpointLinks);
+
         } else if (ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(state.getClass())) {
 
             ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()

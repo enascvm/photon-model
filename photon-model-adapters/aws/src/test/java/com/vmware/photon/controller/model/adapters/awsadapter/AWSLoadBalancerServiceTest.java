@@ -324,6 +324,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         networkState.name = id;
         networkState.id = id;
         networkState.endpointLink = this.endpointState.documentSelfLink;
+        networkState.endpointLinks = new HashSet<String>();
+        networkState.endpointLinks.add(this.endpointState.documentSelfLink);
         networkState.tenantLinks = this.endpointState.tenantLinks;
         networkState.instanceAdapterReference = UriUtils
                 .buildUri(this.host, AWSNetworkService.SELF_LINK);
@@ -339,6 +341,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         subnetState.name = id;
         subnetState.id = id;
         subnetState.endpointLink = this.endpointState.documentSelfLink;
+        subnetState.endpointLinks = new HashSet<String>();
+        subnetState.endpointLinks.add(this.endpointState.documentSelfLink);
         subnetState.networkLink = networkLink;
         subnetState.subnetCIDR = "10.10.10.10/24";
         subnetState.tenantLinks = this.endpointState.tenantLinks;
@@ -350,6 +354,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         LoadBalancerState state = new LoadBalancerState();
         state.name = name;
         state.endpointLink = this.endpointState.documentSelfLink;
+        state.endpointLinks = new HashSet<String>();
+        state.endpointLinks.add(this.endpointState.documentSelfLink);
         state.regionId = this.regionId;
         state.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
         state.subnetLinks = new HashSet<>();

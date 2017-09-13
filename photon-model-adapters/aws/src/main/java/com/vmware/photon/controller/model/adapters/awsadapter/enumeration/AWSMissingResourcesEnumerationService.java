@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -156,6 +157,10 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
         cd.documentSelfLink = UriUtils.buildUriPath(ComputeDescriptionService.FACTORY_LINK, cd.id);
         cd.name = primaryAccountCompute.name + "_" + linkedAccountId;
         cd.endpointLink = primaryAccountCompute.endpointLink;
+        if (cd.endpointLinks == null) {
+            cd.endpointLinks = new HashSet<String>();
+        }
+        cd.endpointLinks.add(primaryAccountCompute.endpointLink);
         return cd;
     }
 
@@ -184,6 +189,10 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
         computeState.documentSelfLink = UriUtils
                 .buildUriPath(ComputeService.FACTORY_LINK, computeState.id);
         computeState.endpointLink = primaryAccountCompute.endpointLink;
+        if (computeState.endpointLinks == null) {
+            computeState.endpointLinks = new HashSet<String>();
+        }
+        computeState.endpointLinks.add(primaryAccountCompute.endpointLink);
         return computeState;
     }
 

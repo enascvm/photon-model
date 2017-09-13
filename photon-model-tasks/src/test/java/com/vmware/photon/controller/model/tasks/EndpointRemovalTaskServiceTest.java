@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -280,6 +281,8 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         cs.descriptionLink = "descriptionLink";
         cs.tenantLinks = tenantLinks;
         cs.endpointLink = endpointLink;
+        cs.endpointLinks = new HashSet<String>();
+        cs.endpointLinks.add(endpointLink);
 
         test.postServiceSynchronously(ComputeService.FACTORY_LINK, cs,
                 ComputeService.ComputeState.class);
@@ -294,6 +297,8 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         d.capacityMBytes = 100L;
         d.tenantLinks = tenantLinks;
         d.endpointLink = endpointLink;
+        d.endpointLinks = new HashSet<String>();
+        d.endpointLinks.add(endpointLink);
         test.postServiceSynchronously(DiskService.FACTORY_LINK, d, DiskState.class);
     }
 
@@ -303,6 +308,8 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         image.name = "disk";
         image.tenantLinks = tenantLinks;
         image.endpointLink = endpointLink;
+        image.endpointLinks = new HashSet<String>();
+        image.endpointLinks.add(endpointLink);
         test.postServiceSynchronously(ImageService.FACTORY_LINK, image, ImageState.class);
     }
 
@@ -312,6 +319,8 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         router.name = "router";
         router.tenantLinks = tenantLinks;
         router.endpointLink = endpointLink;
+        router.endpointLinks = new HashSet<String>();
+        router.endpointLinks.add(endpointLink);
         router.type = "type";
 
         test.postServiceSynchronously(RouterService.FACTORY_LINK, router, RouterState.class);
@@ -324,6 +333,8 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         net.subnetCIDR = "0.0.0.0/0";
         net.tenantLinks = tenantLinks;
         net.endpointLink = endpointLink;
+        net.endpointLinks = new HashSet<String>();
+        net.endpointLinks.add(endpointLink);
         net.authCredentialsLink = "authCredsLink";
         net.resourcePoolLink = "resourcePoolLink";
         net.regionId = "region-id";

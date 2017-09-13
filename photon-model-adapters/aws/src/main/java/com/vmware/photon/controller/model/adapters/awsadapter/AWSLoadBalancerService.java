@@ -21,6 +21,7 @@ import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -336,6 +337,10 @@ public class AWSLoadBalancerService extends StatelessService {
         SecurityGroupState state = new SecurityGroupState();
         state.authCredentialsLink = context.credentials.documentSelfLink;
         state.endpointLink = context.loadBalancerStateExpanded.endpointLink;
+        if (state.endpointLinks == null) {
+            state.endpointLinks = new HashSet<String>();
+        }
+        state.endpointLinks.add(context.loadBalancerStateExpanded.endpointLink);
         state.instanceAdapterReference = UriUtils.buildUri(getHost(), AWSSecurityGroupService
                 .SELF_LINK);
         state.resourcePoolLink = context.loadBalancerStateExpanded.endpointState.resourcePoolLink;

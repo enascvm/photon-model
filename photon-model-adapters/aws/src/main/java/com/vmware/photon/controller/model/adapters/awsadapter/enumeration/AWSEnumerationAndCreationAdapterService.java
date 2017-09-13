@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -289,6 +290,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.parentLink = this.context.parentCompute.documentSelfLink;
             computeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
             computeState.endpointLink = this.context.request.original.endpointLink;
+            if (computeState.endpointLinks == null) {
+                computeState.endpointLinks = new HashSet<String>();
+            }
+            computeState.endpointLinks.add(this.context.request.original.endpointLink);
             computeState.descriptionLink = cd.documentSelfLink;
             computeState.type = ComputeType.ZONE;
             computeState.regionId = cd.regionId;
@@ -316,6 +321,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.name = z.getZoneName();
             cd.regionId = z.getRegionName();
             cd.endpointLink = this.context.request.original.endpointLink;
+            if (cd.endpointLinks == null) {
+                cd.endpointLinks = new HashSet<>();
+            }
+            cd.endpointLinks.add(this.context.request.original.endpointLink);
             // Book keeping information about the creation of the compute description in the system.
             if (cd.customProperties == null) {
                 cd.customProperties = new HashMap<>();

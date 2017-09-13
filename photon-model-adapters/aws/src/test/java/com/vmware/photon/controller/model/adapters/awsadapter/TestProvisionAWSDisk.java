@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -271,6 +272,8 @@ public class TestProvisionAWSDisk {
         diskDesc.regionId = regionId;
 
         diskDesc.endpointLink = endpointState.documentSelfLink;
+        diskDesc.endpointLinks = new HashSet<String>();
+        diskDesc.endpointLinks.add(endpointState.documentSelfLink);
         diskDesc.tenantLinks = endpointState.tenantLinks;
         diskDesc.authCredentialsLink = endpointState.authCredentialsLink;
 

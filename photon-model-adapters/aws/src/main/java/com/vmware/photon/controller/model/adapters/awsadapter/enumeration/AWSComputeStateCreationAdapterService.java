@@ -518,6 +518,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             }
             nicState.tenantLinks = context.request.tenantLinks;
             nicState.endpointLink = context.request.endpointLink;
+            if (nicState.endpointLinks == null) {
+                nicState.endpointLinks = new HashSet<String>();
+            }
+            nicState.endpointLinks.add(nicState.endpointLink);
             nicState.regionId = context.request.regionId;
             Set<String> internalTagLinks = context.internalTagLinksMap
                     .get(ec2_net_interface.toString());
@@ -855,6 +859,16 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         // create a new NetworkInterfaceState for updating the address
         NetworkInterfaceState updateNicState = new NetworkInterfaceState();
+
+        // Use the endpointLinks from the existing state if present else initialize the collection and add the
+        // endpoint link.
+        if (existingNicState.endpointLinks == null) {
+            updateNicState.endpointLinks = new HashSet<String>();
+        } else {
+            updateNicState.endpointLinks = existingNicState.endpointLinks;
+        }
+        updateNicState.endpointLinks.add(context.request.endpointLink);
+
         updateNicState.address = awsNic.getPrivateIpAddress();
         if (context.request.enumeratedSecurityGroups != null) {
             for (GroupIdentifier awsSG : awsNic.getGroups()) {

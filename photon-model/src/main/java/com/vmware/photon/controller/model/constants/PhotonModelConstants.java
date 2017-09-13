@@ -133,6 +133,7 @@ public class PhotonModelConstants {
     }
 
     public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
+    public static final String FIELD_NAME_ENDPOINT_LINKS = "endpointLinks";
 
     public static final String CUSTOM_PROP_ENDPOINT_LINK = "__endpointLink";
 

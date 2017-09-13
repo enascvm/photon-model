@@ -722,6 +722,10 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             diskState.authCredentialsLink = authCredentialsLink;
             diskState.resourcePoolLink = resourcePoolLink;
             diskState.endpointLink = endpointLink;
+            if (diskState.endpointLinks == null) {
+                diskState.endpointLinks = new HashSet<String>();
+            }
+            diskState.endpointLinks.add(endpointLink);
             diskState.tenantLinks = tenantLinks;
             diskState.tagLinks = new HashSet<>();
 

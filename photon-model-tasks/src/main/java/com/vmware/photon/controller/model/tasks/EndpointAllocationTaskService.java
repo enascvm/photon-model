@@ -26,6 +26,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -838,6 +839,10 @@ public class EndpointAllocationTaskService
         ComputeDescription cd = new ComputeDescription();
         cd.tenantLinks = state.tenantLinks;
         cd.endpointLink = state.documentSelfLink;
+        if (cd.endpointLinks == null) {
+            cd.endpointLinks = new HashSet<String>();
+        }
+        cd.endpointLinks.add(state.documentSelfLink);
         cd.authCredentialsLink = state.authCredentialsLink;
         cd.name = state.name;
         cd.regionId = state.regionId;
@@ -866,6 +871,10 @@ public class EndpointAllocationTaskService
         computeHost.name = endpointRegionId != null ? endpointRegionId : state.name;
         computeHost.tenantLinks = state.tenantLinks;
         computeHost.endpointLink = state.documentSelfLink;
+        if (computeHost.endpointLinks == null) {
+            computeHost.endpointLinks = new HashSet<String>();
+        }
+        computeHost.endpointLinks.add(state.documentSelfLink);
         computeHost.regionId = state.regionId;
         computeHost.creationTimeMicros = Utils.getNowMicrosUtc();
         computeHost.customProperties = new HashMap<>();

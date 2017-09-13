@@ -14,7 +14,9 @@
 package com.vmware.photon.controller.model.resources.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -61,6 +63,7 @@ public class PhotonModelUtilsTest extends Suite {
     public static class SetEndpointLinkTest extends BaseModelTest {
 
         static final String EPL_VALUE = "testEndpointLink";
+        static final String ADDITIONAL_EPL_VALUE = "newTestEndpointLink";
 
         static final Map<String, String> EPL_VALUE_AS_CUSTOM_PROP = Collections.singletonMap(
                 PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK, EPL_VALUE);
@@ -68,31 +71,43 @@ public class PhotonModelUtilsTest extends Suite {
         @Test
         public void testSetExplicitProperty() {
             {
+                ComputeDescription cd = new ComputeDescription();
                 ComputeDescription state = PhotonModelUtils
-                        .setEndpointLink(new ComputeDescription(), EPL_VALUE);
-
+                        .setEndpointLink(cd, EPL_VALUE);
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
+                //Verify that during an update scenario the collection is updated as expected.
+                state = PhotonModelUtils
+                        .setEndpointLink(state, ADDITIONAL_EPL_VALUE);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.size() == 2);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
+                assertTrue(state.endpointLinks.contains(ADDITIONAL_EPL_VALUE));
             }
             {
                 ComputeState state = PhotonModelUtils.setEndpointLink(new ComputeState(),
                         EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 ComputeStateWithDescription state = PhotonModelUtils
                         .setEndpointLink(new ComputeStateWithDescription(), EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 DiskState state = PhotonModelUtils.setEndpointLink(new DiskState(), EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 NetworkInterfaceDescription state = PhotonModelUtils
@@ -100,47 +115,55 @@ public class PhotonModelUtilsTest extends Suite {
 
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 NetworkInterfaceState state = PhotonModelUtils
                         .setEndpointLink(new NetworkInterfaceState(), EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 NetworkInterfaceStateWithDescription state = PhotonModelUtils
                         .setEndpointLink(new NetworkInterfaceStateWithDescription(), EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 NetworkState state = PhotonModelUtils.setEndpointLink(new NetworkState(),
                         EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 SecurityGroupState state = PhotonModelUtils
                         .setEndpointLink(new SecurityGroupState(), EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 StorageDescription state = PhotonModelUtils
                         .setEndpointLink(new StorageDescription(), EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
             {
                 SubnetState state = PhotonModelUtils.setEndpointLink(new SubnetState(), EPL_VALUE);
-
                 assertEquals(state.endpointLink, EPL_VALUE);
                 assertNull(state.customProperties);
+                assertNotNull(state.endpointLinks);
+                assertTrue(state.endpointLinks.contains(EPL_VALUE));
             }
         }
 
