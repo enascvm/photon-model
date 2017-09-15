@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.37-SNAPSHOT
+
+
 ## 0.6.36
 * Added disk adapter to create an ebs volume on aws.
 * Added Vsphere disk adapter enhancements.
