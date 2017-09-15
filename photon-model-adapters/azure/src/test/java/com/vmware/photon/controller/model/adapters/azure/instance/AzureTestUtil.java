@@ -34,7 +34,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_CAPACITY;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CPU_UTILIZATION_PERCENT;
@@ -1191,7 +1190,6 @@ public class AzureTestUtil {
         diskState.type = DEFAULT_DISK_TYPE;
         diskState.storageType = AZURE_STORAGE_DISKS;
         diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
-        diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
 
         return TestUtils.doPost(host, diskState, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));

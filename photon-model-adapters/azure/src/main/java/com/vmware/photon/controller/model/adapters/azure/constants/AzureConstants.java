@@ -160,7 +160,6 @@ public class AzureConstants {
     public static final String UNIT_PERCENT = "Percent";
 
     // Azure Disk Properties
-    public static final String DEFAULT_DISK_SERVICE_REFERENCE = "defaultDiskServiceReference";
     public static final long DEFAULT_DISK_CAPACITY = 10000L;
     public static final DiskService.DiskType DEFAULT_DISK_TYPE = DiskService.DiskType.HDD;
     public static final String DISK_CONTROLLER_NUMBER = "__logicalUnitNumber";

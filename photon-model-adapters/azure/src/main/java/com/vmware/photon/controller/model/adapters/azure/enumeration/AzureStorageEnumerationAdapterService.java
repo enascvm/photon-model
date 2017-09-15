@@ -24,7 +24,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_DISKS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -1492,7 +1491,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         // following two properties are set to defaults - can't retrieve that information from
         // existing calls
         diskState.type = DEFAULT_DISK_TYPE;
-        diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
         if (oldDiskState != null) {
             if (diskState.storageDescriptionLink == null) {
                 diskState.storageDescriptionLink = oldDiskState.storageDescriptionLink;
