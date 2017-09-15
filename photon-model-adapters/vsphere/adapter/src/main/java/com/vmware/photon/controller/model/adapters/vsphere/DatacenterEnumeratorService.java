@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.DatacenterLister;
@@ -31,6 +32,7 @@ public class DatacenterEnumeratorService extends StatelessService {
         public String username;
         public String password;
         public boolean isMock;
+        public Map<String, String> customProperties;
     }
 
     public static class EnumerateDatacentersResponse {
