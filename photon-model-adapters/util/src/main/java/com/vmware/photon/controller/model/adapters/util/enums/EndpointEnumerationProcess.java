@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.util.enums;
 import static java.util.stream.Collectors.counting;
 import static java.util.stream.Collectors.groupingBy;
 
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.setEndpointLink;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
@@ -91,6 +92,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
     protected final Class<LOCAL_STATE> localStateClass;
     protected final String localStateServiceFactoryLink;
+
+    public ResourceState resourceDeletionState = new ResourceState();
 
     protected final LOCAL_STATE SKIP = null;
 
@@ -186,6 +189,32 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         this.endpointReference = endpointReference;
         this.localStateClass = localStateClass;
         this.localStateServiceFactoryLink = localStateServiceFactoryLink;
+    }
+
+    /**
+     * Constructs the {@link EndpointEnumerationProcess}.
+     *
+     * @param service
+     *            The service that is creating and using this enumeration logic.
+     * @param endpointReference
+     *            Reference to the end-point that is target of this enumeration.
+     * @param localStateClass
+     *            The class representing the local resource states.
+     * @param localStateServiceFactoryLink
+     *            The factory link of the service handling the local resource states.
+     * @param deletedResourceExpirationMicros
+     *            Time in micros at which to expire deleted resources.
+     */
+    public EndpointEnumerationProcess(StatelessService service,
+            URI endpointReference,
+            Class<LOCAL_STATE> localStateClass,
+            String localStateServiceFactoryLink,
+            long deletedResourceExpirationMicros) {
+        this.service = service;
+        this.endpointReference = endpointReference;
+        this.localStateClass = localStateClass;
+        this.localStateServiceFactoryLink = localStateServiceFactoryLink;
+        this.resourceDeletionState = getDeletionState(deletedResourceExpirationMicros);
     }
 
     public boolean isApplyInfraFields() {
@@ -638,7 +667,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 return;
             }
 
-            Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink);
+            Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink)
+                    .setBody(context.resourceDeletionState);
 
             DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {

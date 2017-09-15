@@ -177,6 +177,11 @@ public class NetworkInterfaceService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handleGet(Operation get) {
 
         NetworkInterfaceState currentState = getState(get);

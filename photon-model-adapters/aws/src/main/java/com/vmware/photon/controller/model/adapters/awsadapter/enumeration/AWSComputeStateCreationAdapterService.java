@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnu
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createDeleteOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
@@ -63,6 +64,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.DeferredResult;
@@ -126,6 +128,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public List<String> tenantLinks;
         boolean isMock;
         public Set<URI> parentCDStatsAdapterReferences;
+        public long deletedResourceExpirationMicros;
     }
 
     /**
@@ -148,6 +151,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public Map<String, Set<String>> internalTagLinksMap = new HashMap<>();
         // Holds tags of newly discovered instaces that got successfully POSTed (with 200 or 304)
         List<Tag> createdExternalTags;
+        // maintains internal tagLinks Example, link for tagState for type=ec2_instances
+        public ResourceState resourceDeletionState;
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
@@ -157,6 +162,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             this.computeDescriptionMap = new HashMap<>();
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
             this.operation = op;
+            this.resourceDeletionState = getDeletionState(request.deletedResourceExpirationMicros);
         }
     }
 
@@ -230,9 +236,9 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
             getRelatedComputeDescriptions(context,
-                    AWSComputeStateCreationStage.CREATE_INTERNAL_TYPE_TAGS);
+                    AWSComputeStateCreationStage.CREATE_INTERNAL_TYPE_TAG);
             break;
-        case CREATE_INTERNAL_TYPE_TAGS:
+        case CREATE_INTERNAL_TYPE_TAG:
             createInternalTypeTags(context, AWSComputeStateCreationStage.CREATE_EXTERNAL_TAGS);
             break;
         case CREATE_EXTERNAL_TAGS:
@@ -826,6 +832,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      */
     private NetworkInterfaceState deleteNICState(AWSComputeStateCreationContext context,
             NetworkInterfaceState existingNicState) {
+        context.resourceDeletionState.documentExpirationTimeMicros =
+                existingNicState.documentExpirationTimeMicros;
         Operation updateNicOperation = createDeleteOperation(this, existingNicState);
         context.enumerationOperations.add(updateNicOperation);
         return existingNicState;

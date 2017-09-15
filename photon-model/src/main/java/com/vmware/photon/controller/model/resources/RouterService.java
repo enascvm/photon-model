@@ -84,6 +84,11 @@ public class RouterService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePatch(Operation patchOp) {
         try {
             ResourceUtils.handlePatch(

@@ -238,6 +238,11 @@ public class LoadBalancerService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePost(Operation post) {
         try {
             LoadBalancerState returnState = processInput(post);

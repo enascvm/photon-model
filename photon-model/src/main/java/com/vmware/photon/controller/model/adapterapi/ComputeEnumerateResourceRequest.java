@@ -50,6 +50,10 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
     public String endpointLink;
 
     /**
+     * Time in micros at which deleted resources should be expired.
+     */
+    public long deletedResourceExpirationMicros;
+    /**
      * Return a key to uniquely identify enumeration for endpoint and resource pool instance.
      */
     public String getEnumKey() {

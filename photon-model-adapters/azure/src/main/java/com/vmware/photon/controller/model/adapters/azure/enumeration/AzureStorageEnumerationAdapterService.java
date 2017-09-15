@@ -34,6 +34,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EMPTY_STR;
@@ -168,6 +169,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Map<String, StorageAccount> storageAccountMap = new ConcurrentHashMap<>();
         String internalBlobTypeTag;
         String internalVhdTypeTag;
+        ResourceState resourceDeletionState;
 
         // Azure API call statistics
         int apiStorageAccountsCount;
@@ -191,6 +193,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
             this.stage = EnumerationStages.CLIENT;
             this.operation = op;
+            this.resourceDeletionState = getDeletionState(request.original
+                    .deletedResourceExpirationMicros);
         }
     }
 

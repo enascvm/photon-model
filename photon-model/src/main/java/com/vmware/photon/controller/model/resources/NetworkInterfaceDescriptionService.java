@@ -134,6 +134,11 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePut(Operation put) {
         try {
             NetworkInterfaceDescription returnState = processInput(put);

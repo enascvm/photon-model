@@ -239,6 +239,11 @@ public class SecurityGroupService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePut(Operation put) {
         try {
             SecurityGroupState returnState = processInput(put);

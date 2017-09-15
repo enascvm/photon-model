@@ -147,6 +147,11 @@ public class StorageDescriptionService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePut(Operation put) {
         try {
             StorageDescription returnState = processInput(put);

@@ -77,7 +77,8 @@ public abstract class BaseComputeEnumerationAdapterContext<T extends BaseCompute
         super(service,
                 request.original.buildUri(request.original.endpointLink),
                 localStateClass,
-                localStateServiceFactoryLink);
+                localStateServiceFactoryLink,
+                request.original.deletedResourceExpirationMicros);
 
         this.request = request;
         this.operation = operation;

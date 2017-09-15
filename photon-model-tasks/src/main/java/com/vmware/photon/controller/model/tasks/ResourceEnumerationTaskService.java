@@ -13,14 +13,19 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.tasks.TaskUtils.getResourceExpirationMicros;
+
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.FactoryService;
@@ -54,6 +59,15 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
 
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);
+
+
+    /**
+     * Specifies when deleted remote resource documents should be expired from the system.
+     * Defaults to EXPIRE_AFTER_ONE_MONTH, which sets expiry to micros after 31 days.
+     */
+    public enum ResourceExpirationPolicy {
+        EXPIRE_NEVER, EXPIRE_AFTER_ONE_MONTH, EXPIRE_NOW
+    }
 
     /**
      * This class defines the document state associated with a single
@@ -97,6 +111,13 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
          * Link to the cloud account endpoint.
          */
         public String endpointLink;
+
+        /**
+         * Specifies when deleted resource documents should be expired.
+         * Defaults to EXPIRE_NEVER.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_31)
+        public ResourceExpirationPolicy expirationPolicy;
     }
 
     public ResourceEnumerationTaskService() {
@@ -196,6 +217,8 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         req.isMockRequest = state.options.contains(TaskOption.IS_MOCK);
         req.preserveMissing = state.options.contains(TaskOption.PRESERVE_MISSING_RESOUCES);
         req.endpointLink = state.endpointLink;
+        req.deletedResourceExpirationMicros = getResourceExpirationMicros(state.expirationPolicy
+                == null ? ResourceExpirationPolicy.EXPIRE_AFTER_ONE_MONTH : state.expirationPolicy);
 
         // Patch the enumerate service URI from the CHD
         CompletionHandler descriptionCompletion = (o, ex) -> {

@@ -173,6 +173,11 @@ public class SubnetRangeService extends StatefulService {
         }
     }
 
+    @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
     /**
      * Comes in here for a http put on an existing doc
      */

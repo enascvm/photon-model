@@ -170,6 +170,11 @@ public class SubnetService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePut(Operation put) {
         try {
             SubnetState returnState = processInput(put);

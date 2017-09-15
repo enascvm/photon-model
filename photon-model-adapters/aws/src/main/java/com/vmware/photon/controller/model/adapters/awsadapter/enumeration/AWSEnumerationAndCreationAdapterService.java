@@ -639,6 +639,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.enumeratedNetworks = this.context.enumeratedNetworks;
             awsComputeState.enumeratedSecurityGroups = this.context.enumeratedSecurityGroups;
             awsComputeState.zones = this.context.zones;
+            awsComputeState.deletedResourceExpirationMicros = this.context.request.original.deletedResourceExpirationMicros;
 
             this.service.sendRequest(Operation
                     .createPatch(this.service, AWSComputeStateCreationAdapterService.SELF_LINK)

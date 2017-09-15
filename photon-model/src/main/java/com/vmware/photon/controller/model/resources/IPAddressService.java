@@ -159,6 +159,11 @@ public class IPAddressService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePost(Operation post) {
         try {
             IPAddressState returnState = processInput(post);

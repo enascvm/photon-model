@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
@@ -170,6 +171,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // Azure clients
         Azure azure;
         RestClient restClient;
+        ResourceState resourceDeletionState;
 
         EnumerationContext(ComputeEnumerateAdapterRequest request, Operation op) {
             this.request = request.original;
@@ -178,6 +180,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             this.stage = EnumerationStages.CLIENT;
             this.operation = op;
+            this.resourceDeletionState = getDeletionState(request.original
+                    .deletedResourceExpirationMicros);
         }
     }
 
@@ -520,7 +524,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     operations.add(
                             Operation.createPatch(this, computeState.documentSelfLink).setBody(cs));
                 } else {
-                    operations.add(Operation.createDelete(this, computeState.documentSelfLink));
+                    operations.add(Operation.createDelete(this, computeState.documentSelfLink)
+                            .setBody(ctx.resourceDeletionState));
                     logFine(() -> String.format("Deleting compute state %s",
                             computeState.documentSelfLink));
 

@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNet
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapVPCToNetworkState;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
@@ -190,6 +191,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         // stores documentSelfLink for subnets internal tags
         Set<String> subnetInternalTagLinksSet = new HashSet<>();
         List<Tag> createdExternalTags = new ArrayList<>();
+        public ResourceState resourceDeletionState;
 
         static class SubnetStateWithParentVpcId {
             String parentVpcId;
@@ -206,6 +208,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             this.request = request;
             this.networkCreationStage = AWSNetworkStateCreationStage.CLIENT;
             this.operation = op;
+            this.resourceDeletionState = getDeletionState(request.request
+                    .deletedResourceExpirationMicros);
         }
     }
 
@@ -885,7 +889,9 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            Operation dOp = Operation.createDelete(this, ls.documentSelfLink);
+            Operation dOp = Operation.createDelete(this, ls.documentSelfLink)
+                    .setBody(context.resourceDeletionState)
+                    .setReferer(this.getUri());
 
             DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {

@@ -110,10 +110,7 @@ public class EndpointService extends StatefulService {
         if ((requestHeader != null && requestHeader
                 .equals(ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE)) ||
                 delete.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_FROM_MIGRATION_TASK)) {
-            logInfo("Deleting Endpoint, Path: %s, Operation ID: %d, Referrer: %s",
-                    delete.getUri().getPath(), delete.getId(),
-                    delete.getRefererAsString());
-            super.handleDelete(delete);
+            ResourceUtils.handleDelete(delete, this);
         } else {
             logSevere(
                     "Invalid request for deleting endpoint, Path: %s, Operation ID: %d, Referrer: %s",

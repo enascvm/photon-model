@@ -110,6 +110,11 @@ public class TagService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePatch(Operation patch) {
         patch.fail(new UnsupportedOperationException("Tags may not be modified"));
     }

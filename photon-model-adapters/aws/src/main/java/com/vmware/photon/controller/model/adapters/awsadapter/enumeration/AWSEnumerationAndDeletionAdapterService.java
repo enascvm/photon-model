@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -113,6 +114,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         // The next page link for the next set of results to fetch from the local system.
         public String nextPageLink;
         public int pageNo = 0;
+        public ResourceState resourceDeletionState;
 
         public EnumerationDeletionContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
@@ -125,6 +127,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             this.instancesToBeDeleted = new ArrayList<>();
             this.stage = AWSEnumerationDeletionStages.CLIENT;
             this.subStage = AWSEnumerationDeletionSubStage.GET_LOCAL_RESOURCES;
+            this.resourceDeletionState = getDeletionState(request.original
+                    .deletedResourceExpirationMicros);
         }
     }
 
@@ -464,6 +468,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         for (ComputeState computeStateToDelete : context.instancesToBeDeleted) {
             Operation deleteComputeStateOperation = Operation
                     .createDelete(this.getHost(), computeStateToDelete.documentSelfLink)
+                    .setBody(getDeletionState(context.request.original
+                            .deletedResourceExpirationMicros))
                     .setReferer(getHost().getUri());
             deleteOperations.add(deleteComputeStateOperation);
             // Create delete operations for all the network links associated with each of the
@@ -472,6 +478,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 for (String networkLinkToDelete : computeStateToDelete.networkInterfaceLinks) {
                     Operation deleteNetworkOperation = Operation
                             .createDelete(this.getHost(), networkLinkToDelete)
+                            .setBody(getDeletionState(context.request.original
+                                    .deletedResourceExpirationMicros))
                             .setReferer(getHost().getUri());
                     deleteOperations.add(deleteNetworkOperation);
                 }
@@ -483,6 +491,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 for (String diskLinkToDelete : computeStateToDelete.diskLinks) {
                     Operation deleteDiskOperation = Operation
                             .createDelete(this.getHost(), diskLinkToDelete)
+                            .setBody(getDeletionState(context.request.original
+                                    .deletedResourceExpirationMicros))
                             .setReferer(getHost().getUri());
                     deleteOperations.add(deleteDiskOperation);
                 }

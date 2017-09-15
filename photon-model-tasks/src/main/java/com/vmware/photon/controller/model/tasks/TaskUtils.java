@@ -19,9 +19,11 @@ import java.net.UnknownHostException;
 import java.security.GeneralSecurityException;
 import java.util.Collection;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceExpirationPolicy;
 import com.vmware.xenon.common.Claims;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service.Action;
@@ -375,5 +377,25 @@ public class TaskUtils {
         // Setting the AuthContext to null, so that xenon uses the token instead.
         service.setAuthorizationContext(op, null);
         op.addRequestHeader(Operation.REQUEST_AUTH_TOKEN_HEADER, token);
+    }
+
+
+    public static long getResourceExpirationMicros(ResourceExpirationPolicy expirationPolicy) {
+        long expirationMicros = 0;
+        switch (expirationPolicy) {
+        case EXPIRE_NEVER:
+            break;
+        case EXPIRE_AFTER_ONE_MONTH:
+            expirationMicros = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(31);
+            break;
+        case EXPIRE_NOW:
+            expirationMicros = Utils.getNowMicrosUtc();
+            break;
+        default:
+            Utils.logWarning("Invalid ResourceExpirationPolicy value.");
+            break;
+
+        }
+        return expirationMicros;
     }
 }

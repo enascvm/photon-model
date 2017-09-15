@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_S3;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
 import java.util.ArrayList;
@@ -124,6 +125,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         public long enumerationStartTimeInMicros;
         // selfLink for internal type TagState
         public String internalTypeTagSelfLink;
+        public ResourceState resourceDeletionState;
 
         public S3StorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
@@ -142,6 +144,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             this.enumerationOperations = new ArrayList<>();
             this.stage = S3StorageEnumerationStages.CLIENT;
             this.subStage = S3StorageEnumerationSubStage.CREATE_INTERNAL_TYPE_TAG;
+            this.resourceDeletionState = getDeletionState(request.original
+                    .deletedResourceExpirationMicros);
         }
     }
 
@@ -510,6 +514,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                         logWarning("Null region found in S3 diskState");
                         Operation.createDelete(aws.service.getHost(), entry.getValue().documentSelfLink)
                                 .setReferer(aws.service.getUri())
+                                .setBody(getDeletionState(Utils.getNowMicrosUtc()))
                                 .setCompletion((o, e) -> {
                                     if (e != null) {
                                         logWarning("Exception deleting diskState with null region [ex=%s]",
@@ -799,7 +804,8 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                         .get(diskState.id) == null) {
                                     deleteOperations
                                             .add(Operation.createDelete(this,
-                                                    diskState.documentSelfLink));
+                                                    diskState.documentSelfLink)
+                                                    .setBody(aws.resourceDeletionState));
                                 }
                             }
                             this.logFine(() -> String.format("Deleting %d disks",

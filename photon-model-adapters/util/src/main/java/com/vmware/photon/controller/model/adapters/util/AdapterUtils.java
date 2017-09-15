@@ -209,4 +209,11 @@ public class AdapterUtils {
                 }, true, servicePaths);
     }
 
+    public static ResourceState getDeletionState(long documentExpirationMicros) {
+        ResourceState resourceState = new ResourceState();
+        resourceState.documentExpirationTimeMicros = documentExpirationMicros;
+
+        return resourceState;
+    }
+
 }

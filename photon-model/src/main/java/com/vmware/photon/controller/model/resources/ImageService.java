@@ -155,6 +155,11 @@ public class ImageService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePut(Operation putOp) {
         if (checkForValid(putOp)) {
             super.handlePut(putOp);

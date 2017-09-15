@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
@@ -150,6 +151,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         public String internalTypeTagSelfLink;
         // Holds tags of newly discovered instaces that got successfully POSTed (with 200 or 304)
         public List<Tag> createdExternalTags;
+        public ResourceState resourceDeletionState;
 
         public EBSStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
@@ -169,6 +171,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.stage = AWSEBSStorageEnumerationStages.CLIENT;
             this.subStage = EBSVolumesEnumerationSubStage.CREATE_INTERNAL_TYPE_TAG;
             this.pageNo = 1;
+            this.resourceDeletionState = getDeletionState(request.original
+                    .deletedResourceExpirationMicros);
         }
     }
 
@@ -911,7 +915,9 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                                     .contains(diskState.id)) {
                                                 deleteOperations
                                                         .add(Operation.createDelete(this.service,
-                                                                diskState.documentSelfLink));
+                                                                diskState.documentSelfLink)
+                                                        .setBody(this.context.resourceDeletionState));
+
                                             }
                                         }
                                         this.service.logFine(() -> String.format("Deleting %d disks",

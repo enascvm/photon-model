@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
+import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
@@ -178,6 +179,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Azure credentials.
         ApplicationTokenCredentials credentials;
 
+        ResourceState resourceDeletionState;
+
         static class SubnetStateWithParentVNetId {
             String parentVNetId;
             SubnetState subnetState;
@@ -195,6 +198,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
             this.stage = EnumerationStages.CLIENT;
             this.operation = op;
+            this.resourceDeletionState = getDeletionState(request.original
+                    .deletedResourceExpirationMicros);
         }
 
         // Clear results from previous page of resources.
@@ -1212,7 +1217,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         // Delete all matching states.
                         List<Operation> operations = queryTask.results.documentLinks.stream()
                                 .filter(link -> shouldDelete(context, queryTask, link))
-                                .map(link -> Operation.createDelete(this, link))
+                                .map(link -> Operation.createDelete(this, link)
+                                        .setBody(context.resourceDeletionState))
                                 .collect(Collectors.toList());
 
                         if (!operations.isEmpty()) {

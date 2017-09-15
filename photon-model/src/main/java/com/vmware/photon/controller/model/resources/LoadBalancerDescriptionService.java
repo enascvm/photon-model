@@ -245,6 +245,11 @@ public class LoadBalancerDescriptionService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        ResourceUtils.handleDelete(delete, this);
+    }
+
+    @Override
     public void handlePut(Operation put) {
         try {
             LoadBalancerDescription returnState = processInput(put);

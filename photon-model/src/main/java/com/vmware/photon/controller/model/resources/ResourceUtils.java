@@ -14,13 +14,16 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.util.EnumSet;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ReflectionUtils;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
 
 public class ResourceUtils {
@@ -139,5 +142,27 @@ public class ResourceUtils {
             }
         }
         return modified;
+    }
+
+    public static void handleDelete(Operation op, StatefulService service) {
+        service.logInfo("Deleting document %s, Operation ID: %d, Referrer: %s",
+                op.getUri().getPath(), op.getId(), op.getRefererAsString());
+
+        ServiceDocument currentState = service.getState(op);
+
+        // If delete request specifies the document expiration time then set that, otherwise
+        // by default set the expiration to one month later.
+        if (op.hasBody()) {
+            ServiceDocument opState = op.getBody(ServiceDocument.class);
+
+            if (opState.documentExpirationTimeMicros > 0) {
+                currentState.documentExpirationTimeMicros = opState.documentExpirationTimeMicros;
+            }
+        } else {
+            currentState.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                    + TimeUnit.DAYS.toMicros(31);
+        }
+
+        op.complete();
     }
 }
