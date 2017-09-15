@@ -1,7 +1,13 @@
 # CHANGELOG
 
-## 0.6.36-SNAPSHOT
-
+## 0.6.36
+* Added disk adapter to create an ebs volume on aws.
+* Added Vsphere disk adapter enhancements.
+* Added Azure disk adapter to create disks on Azure.
+* Added support for Azure custom images while provisioning.
+* Upgrade Xenon to v1.5.5.
+* Wrapped Azure SDK synchronous calls into executors.
+* Added logic to fail operations after throwing exceptions.
 
 ## 0.6.35
 * Added enhancements for Azure provisioning.
