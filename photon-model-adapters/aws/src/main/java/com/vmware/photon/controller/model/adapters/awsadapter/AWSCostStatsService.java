@@ -703,6 +703,7 @@ public class AWSCostStatsService extends StatelessService {
             ComputeStats awsServiceStats = new ComputeStats();
             awsServiceStats.statValues = new ConcurrentHashMap<>();
             awsServiceStats.computeLink = accountComputeState.documentSelfLink;
+            awsServiceStats.addCustomProperty(PhotonModelConstants.DOES_CONTAIN_SERVICE_STATS, Boolean.TRUE.toString());
             for (AwsServiceDetailDto serviceDetailDto : awsAccountDetailDto.serviceDetailsMap.values()) {
                 Map<String, List<ServiceStat>> statsForAwsService = createStatsForAwsService(serviceDetailDto,
                         awsAccountDetailDto.billProcessedTimeMillis);

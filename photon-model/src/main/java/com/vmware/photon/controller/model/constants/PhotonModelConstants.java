@@ -157,4 +157,7 @@ public class PhotonModelConstants {
 
     // constant for tag with key = type
     public static final String TAG_KEY_TYPE = "type";
+
+    // Key to be inserted while persisting service metrics of AWS,Azure
+    public static final String DOES_CONTAIN_SERVICE_STATS = "containsServiceStats";
 }

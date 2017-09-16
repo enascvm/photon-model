@@ -1329,6 +1329,8 @@ public class AzureCostStatsService extends StatelessService {
                 ComputeStats subscriptionStats = new ComputeStats();
                 subscriptionStats.statValues = new ConcurrentHashMap<>();
                 subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
+                subscriptionStats.addCustomProperty(PhotonModelConstants.DOES_CONTAIN_SERVICE_STATS,
+                        Boolean.TRUE.toString());
                 for (AzureService service : subscription.getServices().values()) {
                     List<ComputeStats> resourcesCostStats = new ArrayList<>();
                     Map<String, List<ServiceStat>> statsForAzureService = createStatsForAzureService(
