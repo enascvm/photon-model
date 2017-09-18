@@ -16,8 +16,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService.AzureEnumerationStages.TRIGGER_RESOURCE_GROUP_ENUMERATION;
 import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService.AzureEnumerationStages.TRIGGER_STORAGE_ENUMERATION;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -36,7 +34,6 @@ import com.vmware.xenon.common.Utils;
  */
 public class AzureEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENUMERATION_ADAPTER;
-    private ConcurrentHashMap<String, String> ongoingEnumerations = new ConcurrentHashMap<>();
 
     /**
      * The enumeration service context needed trigger adapters for Azure.
@@ -104,17 +101,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
                         handleEnumerationRequest(context);
                         return;
                     }
-                    String enumKey = context.request.getEnumKey();
-                    String ongoing = this.ongoingEnumerations.putIfAbsent(enumKey, enumKey);
-                    if (ongoing == null) {
-                        handleEnumerationRequest(context);
-                    } else {
-                        logInfo(() -> String.format(
-                                "There is already an ongoing enumeration for endpoint:[%s], resourcePool:[%s]",
-                                context.request.endpointLink, context.request.resourcePoolLink));
-                        setOperationDurationStat(context.operation);
-                        context.taskManager.finishTask();
-                    }
+                    handleEnumerationRequest(context);
                 });
     }
 
@@ -193,13 +180,11 @@ public class AzureEnumerationAdapterService extends StatelessService {
         case FINISHED:
             logInfo(() -> String.format("Azure enumeration %s completed", context.request.getEnumKey()));
             setOperationDurationStat(context.operation);
-            this.ongoingEnumerations.remove(context.request.getEnumKey());
             context.taskManager.finishTask();
             break;
         case ERROR:
             logSevere(() -> String.format("Azure enumeration %s, error: %s ", context.request.getEnumKey(),
                     Utils.toString(context.error)));
-            this.ongoingEnumerations.remove(context.request.getEnumKey());
             context.taskManager.patchTaskToFailure(context.error);
             break;
         default:
@@ -207,7 +192,6 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     context.request.getEnumKey(),
                     context.stage.toString()));
             context.error = new Exception("Unknown Azure enumeration stage");
-            this.ongoingEnumerations.remove(context.request.getEnumKey());
             context.taskManager.patchTaskToFailure(context.error);
             break;
         }
