@@ -447,7 +447,7 @@ public class InstanceClient extends BaseHelper {
 
         //Set the provisioning type of the parent disk.
         VirtualMachineRelocateSpecDiskLocator diskProvisionTypeLocator = setProvisioningType(vd, datastore,
-                computeDiskMoveType());
+                pbmSpec);
         if (diskProvisionTypeLocator != null) {
             cloneSpec.getLocation().getDisk().add(diskProvisionTypeLocator);
         }
@@ -884,7 +884,7 @@ public class InstanceClient extends BaseHelper {
                         logger.warn(
                                 "Changing clone strategy to MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING, as there is disk resize requested");
                         customizeImageDisk = true;
-                        bootDiskLocator = setProvisioningType(vDisks.get(0), datastore, diskMoveOption);
+                        bootDiskLocator = setProvisioningType(vDisks.get(0), datastore, pbmSpec);
                     }
                 }
             }
@@ -1246,16 +1246,24 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualMachineRelocateSpecDiskLocator setProvisioningType(VirtualDisk vDisk,
-            ManagedObjectReference datastore, VirtualMachineRelocateDiskMoveOptions diskMoveOption) {
+            ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec)
+          throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
 
         if (vDisk == null) {
             return null;
         }
 
-        DiskStateExpanded ds = findMatchingImageDiskState(vDisk, this.imageDisks);
+        // If datastore for disk is null, if storage policy is configured pick the compatible
+        // datastore from that.
+        if (datastore == null) {
+            ManagedObjectReference dsFromSp = getDatastoreFromStoragePolicy(this.connection,
+                    pbmSpec);
+            datastore = dsFromSp == null ? getDatastore() : dsFromSp;
+        }
+
         VirtualDiskFlatVer2BackingInfo flatBacking = (VirtualDiskFlatVer2BackingInfo) vDisk.getBacking();
 
-        VirtualDiskType provisioningType = getDiskProvisioningType(ds);
+        VirtualDiskType provisioningType = getDiskProvisioningType(this.bootDisk);
 
         boolean wasThinProvision = flatBacking.isThinProvisioned();
         Boolean wasEagerScrubbed = flatBacking.isEagerlyScrub() != null ?
