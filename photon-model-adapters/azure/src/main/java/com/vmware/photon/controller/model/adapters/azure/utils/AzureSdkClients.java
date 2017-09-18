@@ -122,7 +122,7 @@ public class AzureSdkClients implements AutoCloseable {
         this.networkManagementClient = null;
         this.storageManagementClient = null;
 
-        AzureUtils.cleanUpHttpClient(this.restClient.httpClient());
+        AzureUtils.cleanUpHttpClient(this.restClient);
         this.restClient = null;
     }
 }

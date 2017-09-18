@@ -139,13 +139,13 @@ public class AzurePowerService extends StatelessService {
                     @Override
                     public void onError(Throwable paramThrowable) {
                         c.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        AzureUtils.cleanUpHttpClient(dh.restClient);
                     }
 
                     @Override
                     public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
                         updateComputeState(dh, c);
-                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        AzureUtils.cleanUpHttpClient(dh.restClient);
                     }
                 });
     }
@@ -156,13 +156,13 @@ public class AzurePowerService extends StatelessService {
                         @Override
                     public void onError(Throwable paramThrowable) {
                             c.taskManager.patchTaskToFailure(paramThrowable);
-                            AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                            AzureUtils.cleanUpHttpClient(dh.restClient);
                         }
 
                         @Override
                     public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
                             updateComputeState(dh, c);
-                            AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                            AzureUtils.cleanUpHttpClient(dh.restClient);
                         }
                     });
     }

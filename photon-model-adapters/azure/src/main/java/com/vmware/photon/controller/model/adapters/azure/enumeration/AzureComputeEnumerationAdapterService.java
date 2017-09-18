@@ -306,14 +306,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         case FINISHED:
             logInfo(() -> String.format("Azure compute enumeration finished for %s",
                     ctx.request.getEnumKey()));
-            cleanUpHttpClient(ctx.restClient.httpClient());
+            cleanUpHttpClient(ctx.restClient);
             ctx.operation.complete();
             break;
         case ERROR:
             logWarning(() -> String
                     .format("Azure compute enumeration error for %s, Failed due to %s",
                             ctx.request.getEnumKey(), Utils.toString(ctx.error)));
-            cleanUpHttpClient(ctx.restClient.httpClient());
+            cleanUpHttpClient(ctx.restClient);
             ctx.operation.fail(ctx.error);
             break;
         default:

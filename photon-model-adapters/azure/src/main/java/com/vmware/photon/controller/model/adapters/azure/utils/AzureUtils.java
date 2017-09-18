@@ -531,10 +531,12 @@ public class AzureUtils {
     /**
      * Clean up Azure SDK HTTP client.
      */
-    public static void cleanUpHttpClient(OkHttpClient httpClient) {
-        if (httpClient == null) {
+    public static void cleanUpHttpClient(RestClient restClient) {
+        if (restClient == null || restClient.httpClient() == null) {
             return;
         }
+
+        OkHttpClient httpClient = restClient.httpClient();
 
         httpClient.connectionPool().evictAll();
         ExecutorService httpClientExecutor = httpClient.dispatcher().executorService();

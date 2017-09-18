@@ -179,7 +179,7 @@ public class AzureEndpointAdapterService extends StatelessService {
                 rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
                 callback.accept(rsp, e);
             } finally {
-                cleanUpHttpClient(restClient.httpClient());
+                cleanUpHttpClient(restClient);
 
             }
         };

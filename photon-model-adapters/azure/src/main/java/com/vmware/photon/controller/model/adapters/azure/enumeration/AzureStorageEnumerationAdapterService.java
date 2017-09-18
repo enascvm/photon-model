@@ -309,13 +309,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             logInfo(() -> String.format("Azure storage enumeration finished for %s",
                     getEnumKey(context)));
             logStatsInformation(context);
-            cleanUpHttpClient(context.restClient.httpClient());
+            cleanUpHttpClient(context.restClient);
             context.operation.complete();
             break;
         case ERROR:
             logWarning(() -> String.format("Azure storage enumeration error for %s",
                     getEnumKey(context)));
-            cleanUpHttpClient(context.restClient.httpClient());
+            cleanUpHttpClient(context.restClient);
             context.operation.fail(context.error);
             break;
         default:

@@ -186,7 +186,7 @@ public class AzureLifecycleOperationService extends StatelessService {
                                 "Error: Azure restart operation failed for resource %s in resourceGroup %s with error %s",
                                 dh.vmName, dh.rgName, Utils.toString(paramThrowable));
                         ctx.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        AzureUtils.cleanUpHttpClient(dh.restClient);
                     }
 
                     @Override
@@ -195,7 +195,7 @@ public class AzureLifecycleOperationService extends StatelessService {
                                 "Success: Azure restart operation for resource %s in resourceGroup %s completed successfully.",
                                 dh.vmName, dh.rgName);
                         updateComputeState(dh, ctx);
-                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        AzureUtils.cleanUpHttpClient(dh.restClient);
                     }
                 });
     }
@@ -209,7 +209,7 @@ public class AzureLifecycleOperationService extends StatelessService {
                                 "Error: Azure deallocate operation failed for resource %s in resourceGroup %s with error %s",
                                 dh.vmName, dh.rgName, Utils.toString(paramThrowable));
                         ctx.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        AzureUtils.cleanUpHttpClient(dh.restClient);
                     }
 
                     @Override
@@ -218,7 +218,7 @@ public class AzureLifecycleOperationService extends StatelessService {
                                 "Success: Azure deallocate operation for resource %s in resourceGroup %s completed successfully.",
                                 dh.vmName, dh.rgName);
                         updateComputeState(dh, ctx);
-                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        AzureUtils.cleanUpHttpClient(dh.restClient);
                     }
                 });
     }
