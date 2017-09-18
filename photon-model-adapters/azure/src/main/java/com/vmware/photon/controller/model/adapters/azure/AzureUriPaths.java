@@ -80,6 +80,9 @@ public class AzureUriPaths {
     public static final String AZURE_SECURITY_GROUP_ADAPTER = AdapterTypePath.SECURITY_GROUP_ADAPTER
             .adapterLink(EndpointType.azure.name());
 
+    public static final String AZURE_LOAD_BALANCER_ADAPTER = AdapterTypePath.LOAD_BALANCER_ADAPTER
+            .adapterLink(EndpointType.azure.name());
+
     public static final String AZURE_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
             .adapterLink(EndpointType.azure.name());
 
@@ -106,6 +109,7 @@ public class AzureUriPaths {
         adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER.key);
         adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER.key);
         adapterLinksByType.put(AZURE_DISK_ADAPTER, AdapterTypePath.DISK_ADAPTER.key);
+        adapterLinksByType.put(AZURE_LOAD_BALANCER_ADAPTER, AdapterTypePath.LOAD_BALANCER_ADAPTER.key);
 
         AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }

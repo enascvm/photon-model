@@ -25,6 +25,7 @@ import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureInstan
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureComputeDiskDay2Service;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureDiskService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureLoadBalancerService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureSecurityGroupService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureSubnetService;
 import com.vmware.photon.controller.model.adapters.azure.power.AzurePowerService;
@@ -55,6 +56,7 @@ public class AzureAdapters {
             service(AzureComputeDiskDay2Service.class),
             service(AzureSubnetService.class),
             service(AzureSecurityGroupService.class),
+            service(AzureLoadBalancerService.class),
             service(AzureStatsService.class),
             service(AzureComputeStatsGatherer.class),
             service(AzureComputeHostStatsGatherer.class),
