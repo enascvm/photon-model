@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
@@ -29,6 +30,8 @@ import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.model.AvailabilityZone;
 import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
+import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
+import com.amazonaws.services.ec2.model.DeleteVolumeResult;
 import com.amazonaws.services.ec2.model.Volume;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
@@ -61,6 +64,7 @@ public class AWSDiskService extends StatelessService {
         CREDENTIALS,
         CLIENT,
         CREATE,
+        DELETE,
         FINISHED,
         FAILED
     }
@@ -120,11 +124,6 @@ public class AWSDiskService extends StatelessService {
 
         op.complete();
 
-        if (ctx.diskRequest.isMockRequest) {
-            ctx.taskManager.finishTask();
-            return;
-        }
-
         handleStages(ctx, AwsDiskStage.DISK_STATE);
     }
 
@@ -160,12 +159,18 @@ public class AWSDiskService extends StatelessService {
                 }
                 if (context.diskRequest.requestType == DiskInstanceRequest.DiskRequestType.CREATE) {
                     context.stage = AwsDiskStage.CREATE;
+                } else if (context.diskRequest.requestType
+                        == DiskInstanceRequest.DiskRequestType.DELETE) {
+                    context.stage = AwsDiskStage.DELETE;
                 }
 
                 handleStages(context);
                 break;
             case CREATE:
                 createDisk(context);
+                break;
+            case DELETE:
+                deleteDisk(context);
                 break;
             case FINISHED:
                 context.taskManager.finishTask();
@@ -183,6 +188,39 @@ public class AWSDiskService extends StatelessService {
             // Same as FAILED stage
             context.taskManager.patchTaskToFailure(error);
         }
+    }
+
+    /**
+     * Deletes the diskstate and the corresponding volume on aws.
+     */
+    private void deleteDisk(AWSDiskContext context) {
+        if (context.diskRequest.isMockRequest) {
+            deleteDiskState(context, AwsDiskStage.FINISHED);
+            return;
+        }
+
+        DiskState diskState = context.disk;
+        String diskId = diskState.id;
+        if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
+            String message = "disk Id cannot be empty";
+            this.logSevere("[AWSDiskService] " + message);
+            throw new IllegalArgumentException(message);
+        }
+
+        if (diskState.status != DiskService.DiskStatus.AVAILABLE) {
+            String message = String.format("disk cannot be deleted. Current status is %s",
+                    diskState.status.name());
+            this.logSevere("[AWSDiskService] " + message);
+            throw new IllegalArgumentException(message);
+        }
+
+        AsyncHandler<DeleteVolumeRequest, DeleteVolumeResult> deletionHandler =
+                new AWSDiskDeletionHandler(this, context);
+
+        DeleteVolumeRequest deleteVolumeRequest = new DeleteVolumeRequest()
+                .withVolumeId(diskId);
+
+        context.client.deleteVolume(deleteVolumeRequest, deletionHandler);
     }
 
     /**
@@ -373,21 +411,89 @@ public class AWSDiskService extends StatelessService {
 
             Volume volume = result.getVolume();
             String volumeId = volume.getVolumeId();
-            startStatusChecker(volumeId, consumer);
+            startStatusChecker(this.context, volumeId, AWSTaskStatusChecker.AWS_AVAILABLE_NAME,
+                    consumer);
+        }
+    }
+
+    private void startStatusChecker(AWSDiskContext context, String volumeId, String status, Consumer<Object> consumer) {
+
+        Runnable proceed = () -> {
+            AWSTaskStatusChecker
+                    .create(context.client.client, volumeId, status, consumer, context.taskManager,
+                            this, context.taskExpirationMicros)
+                    .start(new Volume());
+        };
+
+        proceed.run();
+    }
+
+    /**
+     *  Async handler that will be used during the delete volume request.
+     */
+    public class AWSDiskDeletionHandler
+            extends AWSAsyncHandler<DeleteVolumeRequest, DeleteVolumeResult> {
+
+        private StatelessService service;
+        private AWSDiskContext context;
+
+        private AWSDiskDeletionHandler(StatelessService service, AWSDiskContext context) {
+            this.service = service;
+            this.context = context;
         }
 
-        private void startStatusChecker(String volumeId, Consumer<Object> consumer) {
+        @Override
+        protected void handleError(Exception exception) {
+            handleStages(this.context, AwsDiskStage.FAILED);
+        }
 
-            Runnable proceed = () -> {
-                AWSTaskStatusChecker
-                        .create(this.context.client.client, volumeId,
-                                AWSTaskStatusChecker.AWS_AVAILABLE_NAME, consumer,
-                                this.context.taskManager,
-                                this.service, this.context.taskExpirationMicros)
-                        .start(new Volume());
+        @Override
+        protected void handleSuccess(DeleteVolumeRequest request, DeleteVolumeResult result) {
+
+            //consumer to be invoked once a volume is deleted
+            Consumer<Object> consumer1 = volume -> {
+                String message =
+                        "[AWSDiskService] Successfully deleted the volume from aws for task reference:"
+                                + this.context.diskRequest.taskReference;
+                this.service.logInfo(() -> message);
+                deleteDiskState(this.context, AwsDiskStage.FINISHED);
             };
 
-            proceed.run();
+            //consumer to be invoked once a volume is in deleting stage.
+            Consumer<Object> consumer = volume -> {
+                if (volume == null) {
+                    consumer1.accept(null);
+                    return;
+                }
+                String message =
+                        "[AWSDiskService] aws volume is in deleting state. Task reference:"
+                                + this.context.diskRequest.taskReference;
+                this.service.logInfo(() -> message);
+                startStatusChecker(this.context, ((Volume) volume).getVolumeId(),
+                        AWSTaskStatusChecker.AWS_DELETED_NAME, consumer1);
+            };
+
+            String volumeId = this.context.disk.id;
+            startStatusChecker(this.context, volumeId, AWSTaskStatusChecker.AWS_DELETING_NAME,
+                    consumer);
         }
+    }
+
+    /**
+     * Finish the disk delete operation by cleaning up the disk reference in the system.
+     */
+    private void deleteDiskState(AWSDiskContext ctx, AwsDiskStage next) {
+        sendRequest(Operation.createDelete(this, ctx.disk.documentSelfLink)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        handleStages(ctx, e);
+                        return;
+                    }
+
+                    String message = "[AWSDiskService] Successfully deleted the disk state for task reference:"
+                            + ctx.diskRequest.taskReference;
+                    this.logInfo(() -> message);
+                    handleStages(ctx, next);
+                }));
     }
 }

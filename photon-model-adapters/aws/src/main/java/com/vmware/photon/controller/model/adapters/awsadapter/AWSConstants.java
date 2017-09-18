@@ -77,6 +77,7 @@ public class AWSConstants {
     public static final String AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS
             = PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS;
     public static final String AWS_INVALID_INSTANCE_ID_ERROR_CODE = "InvalidInstanceID.NotFound";
+    public static final String AWS_INVALID_VOLUME_ID_ERROR_CODE = "InvalidVolume.NotFound";
     public static final String PROPERTY_NAME_QUERY_PAGE_SIZE = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".QUERY_PAGE_SIZE";
     private static int QUERY_PAGE_SIZE = Integer.getInteger(PROPERTY_NAME_QUERY_PAGE_SIZE, 50);

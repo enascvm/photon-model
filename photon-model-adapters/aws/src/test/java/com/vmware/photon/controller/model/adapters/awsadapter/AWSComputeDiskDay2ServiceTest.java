@@ -54,7 +54,6 @@ import com.google.gson.Gson;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -255,8 +254,6 @@ public class AWSComputeDiskDay2ServiceTest {
     }
 
     @Test
-    @Ignore("Since provisioning service depends on delete disk this test is ignored till the delete"
-            + " functionality is checked in")
     public void testAttachDisk() throws Throwable {
         Gson gson = new Gson();
 

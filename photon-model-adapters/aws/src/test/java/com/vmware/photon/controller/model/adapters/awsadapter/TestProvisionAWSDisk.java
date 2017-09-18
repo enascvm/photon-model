@@ -14,15 +14,15 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_VOLUME_ID_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EBS_VOLUME_SIZE_IN_MEBI_BYTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,9 +32,9 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
 import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
 import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.Volume;
@@ -122,19 +122,6 @@ public class TestProvisionAWSDisk {
         if (this.host == null) {
             return;
         }
-        // try to delete the Disks
-        if (this.diskState != null && this.diskState.id.startsWith(VOLUMEID_PREFIX)) {
-            try {
-                TestAWSSetupUtils
-                        .deleteDisks(this.diskState.documentSelfLink, this.isMock, this.host,
-                                false);
-
-                TestAWSSetupUtils
-                        .deleteEbsVolumeUsingEC2Client(this.client, this.host, this.diskState.id);
-            } catch (Throwable deleteEx) {
-                this.host.log(Level.WARNING, "Exception deleting Disk - %s", deleteEx.getMessage());
-            }
-        }
         this.host.tearDownInProcessPeers();
         this.host.toggleNegativeTestMode(false);
         this.host.tearDown();
@@ -157,6 +144,9 @@ public class TestProvisionAWSDisk {
         AWSUtils.setAwsMockHost(awsMockEndpointReference);
     }
 
+    /**
+     * This test verified the disk creation and deletion on aws.
+     */
     @Test
     public void testDiskProvision() throws Throwable {
         createEndpoint();
@@ -164,31 +154,18 @@ public class TestProvisionAWSDisk {
         this.diskState = createAWSDiskState(this.host, this.endpointState,
                 this.currentTestName.getMethodName() + "_disk1", null, regionId);
 
-        // start provision task to do the actual disk creation
-        ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskState();
-        provisionTask.taskSubStage = ProvisionDiskTaskState.SubStage.CREATING_DISK;
-
-        provisionTask.diskLink = this.diskState.documentSelfLink;
-        provisionTask.isMockRequest = this.isMock;
-
-        provisionTask.documentExpirationTimeMicros =
-                Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
-                        AWS_DISK_REQUEST_TIMEOUT_MINUTES);
-        provisionTask.tenantLinks = this.endpointState.tenantLinks;
-
-        provisionTask = TestUtils.doPost(this.host,
-                provisionTask, ProvisionDiskTaskState.class,
-                UriUtils.buildUri(this.host, ProvisionDiskTaskService.FACTORY_LINK));
-
-        this.host.waitForFinishedTask(ProvisionDiskTaskState.class,
-                provisionTask.documentSelfLink);
+        String taskLink = getProvisionDiskTask(this.diskState,
+                ProvisionDiskTaskState.SubStage.CREATING_DISK);
+        this.host.waitForFinishedTask(ProvisionDiskTaskState.class, taskLink);
 
         // check that the disk has been created
         ProvisioningUtils.queryDiskInstances(this.host, 1);
 
+        DiskState disk = getDisk(this.host, this.diskState.documentSelfLink);
         if (!this.isMock) {
-            DiskState disk = getDisk(this.host, this.diskState.documentSelfLink);
             String volumeId = disk.id;
+
+            assertTrue(volumeId.startsWith(VOLUMEID_PREFIX));
 
             List<Volume> volumes = getAwsDisksByIds(this.client, this.host,
                     Collections.singletonList(volumeId));
@@ -215,21 +192,49 @@ public class TestProvisionAWSDisk {
             assertEquals("availability zones are not matching", disk.zoneId,
                     volume.getAvailabilityZone());
 
-            assertTrue("disk status not matching", disk.status == DiskService.DiskStatus.AVAILABLE);
+            assertTrue("disk status is not matching",
+                    disk.status == DiskService.DiskStatus.AVAILABLE);
 
-            assertEquals("disk is encrypted", 0, disk.encrypted.compareTo(isEncrypted));
-
+            assertEquals("disk encryption status not matching", 0,
+                    disk.encrypted.compareTo(isEncrypted));
         }
 
-        List<String> disksToDelete = new ArrayList<>();
-        disksToDelete.add(this.diskState.documentSelfLink);
+        //delete the disk using the AWSDiskService.Delete
+        taskLink = getProvisionDiskTask(this.diskState,
+                ProvisionDiskTaskState.SubStage.DELETING_DISK);
 
-        //delete the local disk state documents
-        TestAWSSetupUtils
-                .deleteDisks(this.diskState.documentSelfLink, this.isMock, this.host, true);
+        this.host.waitForFinishedTask(ProvisionDiskTaskState.class, taskLink);
 
-        //validates the local documents of disk links have been removed
-        verifyRemovalOfResourceState(this.host, disksToDelete);
+        // check that the disk has been deleted
+        ProvisioningUtils.queryDiskInstances(this.host, 0);
+
+        if (!this.isMock) {
+            String volumeId = disk.id;
+            List<Volume> volumes = getAwsDisksByIds(this.client, this.host,
+                    Collections.singletonList(volumeId));
+            assertNull(volumes);
+        }
+    }
+
+    private String getProvisionDiskTask(DiskState diskState,
+            ProvisionDiskTaskState.SubStage subStage) throws Throwable {
+        // start provision task to do the actual disk creation
+        ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskState();
+        provisionTask.taskSubStage = subStage;
+
+        provisionTask.diskLink = diskState.documentSelfLink;
+        provisionTask.isMockRequest = this.isMock;
+
+        provisionTask.documentExpirationTimeMicros =
+                Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
+                        AWS_DISK_REQUEST_TIMEOUT_MINUTES);
+        provisionTask.tenantLinks = this.endpointState.tenantLinks;
+
+        provisionTask = TestUtils.doPost(this.host,
+                provisionTask, ProvisionDiskTaskState.class,
+                UriUtils.buildUri(this.host, ProvisionDiskTaskService.FACTORY_LINK));
+        return provisionTask.documentSelfLink;
+
     }
 
     /**
@@ -237,17 +242,26 @@ public class TestProvisionAWSDisk {
      */
     public static List<Volume> getAwsDisksByIds(AmazonEC2AsyncClient client,
             VerificationHost host, List<String> diskIds) throws Throwable {
+        try {
 
-        host.log("Getting disks with ids " + diskIds
-                + " from the AWS endpoint using the EC2 client.");
+            host.log("Getting disks with ids " + diskIds
+                    + " from the AWS endpoint using the EC2 client.");
 
-        DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
-                .withVolumeIds(diskIds);
+            DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
+                    .withVolumeIds(diskIds);
 
-        DescribeVolumesResult describeVolumesResult = client
-                .describeVolumes(describeVolumesRequest);
+            DescribeVolumesResult describeVolumesResult = client
+                    .describeVolumes(describeVolumesRequest);
 
-        return new ArrayList<>(describeVolumesResult.getVolumes());
+            return describeVolumesResult.getVolumes();
+        } catch (Exception e) {
+            if (e instanceof AmazonEC2Exception
+                    && ((AmazonEC2Exception) e).getErrorCode()
+                    .equalsIgnoreCase(AWS_INVALID_VOLUME_ID_ERROR_CODE)) {
+                return null;
+            }
+        }
+        return new ArrayList<>();
     }
 
     public static DiskState getDisk(VerificationHost host, String diskLink)

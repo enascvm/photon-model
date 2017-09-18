@@ -20,6 +20,8 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.AvailabilityZone;
 import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
+import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
+import com.amazonaws.services.ec2.model.DeleteVolumeResult;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 
@@ -37,6 +39,14 @@ public class AwsDiskClient {
     public void createVolume(CreateVolumeRequest req,
             AsyncHandler<CreateVolumeRequest, CreateVolumeResult> creationHandler) {
         this.client.createVolumeAsync(req, creationHandler);
+    }
+
+    /**
+     * Deletes an ebs volume.
+     */
+    public void deleteVolume(DeleteVolumeRequest req,
+            AsyncHandler<DeleteVolumeRequest, DeleteVolumeResult> deletionHandler) {
+        this.client.deleteVolumeAsync(req, deletionHandler);
     }
 
     public List<AvailabilityZone> getAvailabilityZones() {

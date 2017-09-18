@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_INSTANCE_ID_ERROR_CODE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_VOLUME_ID_ERROR_CODE;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +26,7 @@ import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.AmazonWebServiceResult;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeNatGatewaysRequest;
@@ -50,6 +52,7 @@ public class AWSTaskStatusChecker<T> {
     public static final String AWS_TERMINATED_NAME = "terminated";
     public static final String AWS_AVAILABLE_NAME = "available";
     public static final String AWS_DELETED_NAME = "deleted";
+    public static final String AWS_DELETING_NAME = "deleting";
 
     private String instanceId;
     private AmazonEC2AsyncClient amazonEC2Client;
@@ -164,6 +167,11 @@ public class AWSTaskStatusChecker<T> {
                             AWSTaskStatusChecker.this.taskManager,
                             AWSTaskStatusChecker.this.service,
                             AWSTaskStatusChecker.this.expirationTimeMicros).start(type);
+                    return;
+                } else if (exception instanceof AmazonEC2Exception
+                        && ((AmazonEC2Exception) exception).getErrorCode()
+                        .equalsIgnoreCase(AWS_INVALID_VOLUME_ID_ERROR_CODE)) {
+                    AWSTaskStatusChecker.this.consumer.accept(null);
                     return;
                 }
                 AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(exception);
