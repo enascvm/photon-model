@@ -939,6 +939,7 @@ public class EndpointAllocationTaskService
         // setting up a host, so all have VM_HOST as a child
         cd.tenantLinks = state.tenantLinks;
         cd.endpointLink = state.documentSelfLink;
+
         if (cd.endpointLinks == null) {
             cd.endpointLinks = new HashSet<String>();
         }
@@ -985,6 +986,7 @@ public class EndpointAllocationTaskService
         computeHost.name = endpointRegionId != null ? endpointRegionId : state.name;
         computeHost.tenantLinks = state.tenantLinks;
         computeHost.endpointLink = state.documentSelfLink;
+
         if (computeHost.endpointLinks == null) {
             computeHost.endpointLinks = new HashSet<String>();
         }

@@ -145,7 +145,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     public static class StorageEnumContext {
         public Throwable error;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public StorageEnumStages subStage;
         // Stored operation to signal completion to the Azure storage enumeration once all
         // the stages are successfully completed.
@@ -191,7 +191,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         public StorageEnumContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
             this.request = request.original;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
 
             this.stage = EnumerationStages.CLIENT;
@@ -269,7 +269,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         case CLIENT:
             if (context.credentials == null) {
                 try {
-                    context.credentials = getAzureConfig(context.parentAuth);
+                    context.credentials = getAzureConfig(context.endpointAuth);
                 } catch (Throwable e) {
                     logSevere(e);
                     context.error = e;
@@ -422,7 +422,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         if (uriStr == null) {
             uriStr = AdapterUriUtil.expandUriPathTemplate(LIST_STORAGE_ACCOUNTS,
-                    context.parentAuth.userLink);
+                    context.endpointAuth.userLink);
             uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(uriStr),
                     QUERY_PARAM_API_VERSION, STORAGE_ACCOUNT_REST_API_VERSION);
         } else {
@@ -503,9 +503,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         context.storageDescriptions.clear();
 
         Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(StorageDescription.class)
-                .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.parentCompute.documentSelfLink);
+                .addKindFieldClause(StorageDescription.class);
+
+        // TODO VSYM-8582: this needs to be added back once we create one compute host for n endpoints
+//                .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
+//                        context.parentCompute.documentSelfLink);
 
         Query.Builder instanceIdFilterParentQuery = Query.Builder
                 .create(Occurance.MUST_OCCUR);
@@ -524,8 +526,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         QueryByPages<StorageDescription> queryLocalStates = new QueryByPages<>(getHost(),
                 qBuilder.build(),
-                StorageDescription.class, context.parentCompute.tenantLinks,
-                context.request.endpointLink)
+                StorageDescription.class, context.parentCompute.tenantLinks)
+                //context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
@@ -585,7 +587,17 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     storageDescriptionToUpdate.documentSelfLink = sd.documentSelfLink;
                     storageDescriptionToUpdate.endpointLink = sd.endpointLink;
+<<<<<<< HEAD
                     storageDescriptionToUpdate.computeHostLink = sd.computeHostLink;
+=======
+
+                    storageDescriptionToUpdate.endpointLinks = sd.endpointLinks; // first copy
+                    if (storageDescriptionToUpdate.endpointLinks == null) {
+                        storageDescriptionToUpdate.endpointLinks = new HashSet<>();
+                    }
+                    storageDescriptionToUpdate.endpointLinks.add(context.request.endpointLink); // then update it.
+
+>>>>>>> 238ea85... VSYM-8568 : Updating the Azure adapters to populate the endpointLinks set in different resources
                     storageDescriptionToUpdate.tenantLinks = sd.tenantLinks;
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     // Check if SSE (encryption) is enable on azure storage account
@@ -963,10 +975,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
-                .addCompositeFieldClause(
-                        ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        COMPUTE_HOST_LINK_PROP_NAME,
-                        context.parentCompute.documentSelfLink)
+//                .addCompositeFieldClause(
+//                        ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+//                        COMPUTE_HOST_LINK_PROP_NAME,
+//                        context.parentCompute.documentSelfLink)
                 .addCompositeFieldClause(
                         ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                         ComputeProperties.RESOURCE_TYPE_KEY,
@@ -978,8 +990,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 getHost(),
                 qBuilder.build(),
                 ResourceGroupState.class,
-                context.parentCompute.tenantLinks,
-                context.request.endpointLink)
+                context.parentCompute.tenantLinks)
+//                context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
@@ -1030,16 +1042,16 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .getPrimaryUri().getHost());
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
-                .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.parentCompute.documentSelfLink)
+//                .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
+//                        context.parentCompute.documentSelfLink)
                 .addFieldClause(StorageDescription.FIELD_NAME_NAME, storageAcctName);
 
         QueryTop<StorageDescription> queryLocalStates = new QueryUtils.QueryTop<>(
                 getHost(),
                 qBuilder.build(),
                 StorageDescription.class,
-                context.parentCompute.tenantLinks,
-                context.request.endpointLink)
+                context.parentCompute.tenantLinks)
+//                context.request.endpointLink)
                 .setMaxResultsLimit(getQueryResultLimit());
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
@@ -1085,7 +1097,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         if (context.request.endpointLink != null) {
             resourceGroupState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
                     context.request.endpointLink);
+            if (resourceGroupState.endpointLinks == null) {
+                resourceGroupState.endpointLinks =  new HashSet<>();
+            }
+            resourceGroupState.endpointLinks.add(context.request.endpointLink);
         }
+
         resourceGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
         resourceGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
                 container.getProperties().getLastModified().toString());
@@ -1294,9 +1311,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             return;
         }
         Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(DiskState.class)
-                .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.parentCompute.documentSelfLink);
+                .addKindFieldClause(DiskState.class);
+//                .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
+//                        context.parentCompute.documentSelfLink);
 
         if (context.storageBlobs.size() <= MAX_RESOURCES_TO_QUERY) {
             // do not load resources from enumExternalResourcesIds
@@ -1314,8 +1331,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 getHost(),
                 qBuilder.build(),
                 DiskState.class,
-                context.parentCompute.tenantLinks,
-                context.request.endpointLink)
+                context.parentCompute.tenantLinks)
+                //context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
@@ -1375,18 +1392,18 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
             Query.Builder qBuilder = Query.Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
-                    .addCompositeFieldClause(
-                            ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            COMPUTE_HOST_LINK_PROP_NAME,
-                            context.parentCompute.documentSelfLink)
+//                    .addCompositeFieldClause(
+//                            ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+//                            COMPUTE_HOST_LINK_PROP_NAME,
+//                            context.parentCompute.documentSelfLink)
                     .addFieldClause(ResourceGroupState.FIELD_NAME_ID, containerId);
 
             QueryTop<ResourceGroupState> queryLocalStates = new QueryUtils.QueryTop<>(
                     getHost(),
                     qBuilder.build(),
                     ResourceGroupState.class,
-                    context.parentCompute.tenantLinks,
-                    context.request.endpointLink)
+                    context.parentCompute.tenantLinks)
+//                    context.request.endpointLink)
                     .setMaxResultsLimit(getQueryResultLimit());
             queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
@@ -1506,6 +1523,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         diskState.computeHostLink = context.parentCompute.documentSelfLink;
         diskState.endpointLink = context.request.endpointLink;
         diskState.computeHostLink = context.parentCompute.documentSelfLink;
+
+        if (oldDiskState != null) {
+            diskState.endpointLinks = oldDiskState.endpointLinks;  // first copy the existing ones
+        }
+        if (diskState.endpointLinks == null) {
+            diskState.endpointLinks = new HashSet<>();
+        }
+        diskState.endpointLinks.add(context.request.endpointLink);  // then append new one
         diskState.tenantLinks = context.parentCompute.tenantLinks;
         long bLength = 0;
         if (blob instanceof CloudBlob) {
@@ -1687,8 +1712,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 context.restClient = buildRestClient(context.credentials, this.executorService);
             }
             context.azure = Azure.authenticate(context.restClient,
-                    context.parentAuth.customProperties.get(AZURE_TENANT_ID))
-                    .withSubscription(context.parentAuth.userLink);
+                    context.endpointAuth.customProperties.get(AZURE_TENANT_ID))
+                    .withSubscription(context.endpointAuth.userLink);
         }
         return context.azure;
     }

@@ -290,6 +290,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.totalMemoryBytes = currentState.totalMemoryBytes;
             chsWithDesc.endpointLink = currentState.endpointLink;
             chsWithDesc.computeHostLink = currentState.computeHostLink;
+            chsWithDesc.endpointLinks = currentState.endpointLinks;
 
             return chsWithDesc;
         }

@@ -191,6 +191,18 @@ public class QueryUtils {
     }
 
     /**
+     * Add {@code endpointLinks} constraint to passed query builder, if present.
+     */
+    public static Query.Builder addEndpointLinks(Query.Builder qBuilder, List<String> endpointLinks) {
+        if (endpointLinks != null) {
+            // all given endpoint links must be present in the document
+            endpointLinks.forEach(link -> qBuilder
+                    .addCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, link));
+        }
+        return qBuilder;
+    }
+
+    /**
      * Add {@code tenantLinks} constraint to passed query builder, if present.
      */
     public static Query.Builder addTenantLinks(Query.Builder qBuilder, List<String> tenantLinks) {

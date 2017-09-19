@@ -148,7 +148,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         ComputeStateWithDescription parentCompute;
         EnumerationStages stage;
         Throwable error;
-        AuthCredentialsServiceState parentAuth;
+        AuthCredentialsServiceState endpointAuth;
         long enumerationStartTimeInMicros;
         String deletionNextPageLink;
         String enumNextPageLink;
@@ -176,7 +176,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         EnumerationContext(ComputeEnumerateAdapterRequest request, Operation op) {
             this.request = request.original;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
 
             this.stage = EnumerationStages.CLIENT;
@@ -227,8 +227,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+//        // Add ENDPOINT_LINKS criteria
+//        QueryUtils.addEndpointLinks(qBuilder, Lists.newArrayList(ctx.request.endpointLink));
     }
 
     @Override
@@ -265,7 +265,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         case CLIENT:
             if (ctx.credentials == null) {
                 try {
-                    ctx.credentials = getAzureConfig(ctx.parentAuth);
+                    ctx.credentials = getAzureConfig(ctx.endpointAuth);
                 } catch (Throwable e) {
                     logSevere(e);
                     ctx.error = e;
@@ -800,9 +800,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         ctx.diskStates.clear();
 
         Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(DiskState.class)
-                .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
-                        ctx.parentCompute.documentSelfLink);
+                .addKindFieldClause(DiskState.class);
+//                .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
+//                        ctx.parentCompute.documentSelfLink);
 
         addScopeCriteria(qBuilder, DiskState.class, ctx);
 
@@ -900,9 +900,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
 
         Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(StorageDescription.class)
-                .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        ctx.parentCompute.documentSelfLink);
+                .addKindFieldClause(StorageDescription.class);
+                /*.addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
+                        ctx.parentCompute.documentSelfLink);*/
 
         qBuilder.addInClause(storageAccountProperty, diagnosticStorageAccountUris);
 
@@ -1003,6 +1003,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.regionId = virtualMachine.location();
             computeDescription.authCredentialsLink = authLink;
             computeDescription.endpointLink = ctx.request.endpointLink;
+
+            if (computeDescription.endpointLinks == null) {
+                computeDescription.endpointLinks = new HashSet<>();
+            }
+            computeDescription.endpointLinks.add(ctx.request.endpointLink);
+
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
             if (virtualMachine.hardwareProfile() != null
@@ -1089,6 +1095,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         virtualMachine.storageProfile().osDisk().caching().name());
             }
             diskToUpdate.computeHostLink = ctx.parentCompute.documentSelfLink;
+            diskToUpdate.endpointLinks.add(ctx.request.endpointLink);
             Operation diskOp = Operation
                     .createPatch(ctx.request.buildUri(diskToUpdate.documentSelfLink))
                     .setBody(diskToUpdate);
@@ -1207,8 +1214,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .addInClause(NetworkInterfaceState.FIELD_NAME_ID, remoteStates.keySet());
 
         QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
-                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
+                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks)
+                .setMaxPageSize(getQueryResultLimit());
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
@@ -1285,9 +1292,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         if (isCreate) {
             nic.id = remoteNic.id();
             nic.endpointLink = ctx.request.endpointLink;
+            if (nic.endpointLinks == null) {
+                nic.endpointLinks = new HashSet<>();
+            }
+            nic.endpointLinks.add(ctx.request.endpointLink);
             nic.tenantLinks = ctx.parentCompute.tenantLinks;
             nic.regionId = remoteNic.location();
             nic.computeHostLink = ctx.parentCompute.documentSelfLink;
+        } else {
+            nic.endpointLinks.add(ctx.request.endpointLink);
         }
 
         List<NetworkInterfaceIPConfigurationInner> ipConfigurations = remoteNic.ipConfigurations();
@@ -1422,8 +1435,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         nicsPerSubnet.keySet().stream().collect(Collectors.toList()));
 
         QueryByPages<SubnetState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(), SubnetState.class, ctx.parentCompute.tenantLinks,
-                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
+                qBuilder.build(), SubnetState.class, ctx.parentCompute.tenantLinks)
+                .setMaxPageSize(getQueryResultLimit());
         Map<String, String> subnetLinkPerNicId = new HashMap<>();
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
@@ -1502,6 +1515,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK,
                         ctx.computeDescriptionIds.get(virtualMachine.name()));
         computeState.endpointLink = ctx.request.endpointLink;
+        if (computeState.endpointLinks == null) {
+            computeState.endpointLinks = new HashSet<>();
+        }
+        computeState.endpointLinks.add(ctx.request.endpointLink);
         computeState.resourcePoolLink = ctx.request.resourcePoolLink;
         computeState.computeHostLink = ctx.parentCompute.documentSelfLink;
         computeState.diskLinks = vmDisks;
@@ -1632,6 +1649,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 computeState.customProperties = new HashMap<>();
             }
             computeState.customProperties.put(RESOURCE_GROUP_NAME, resourceGroupName);
+            computeState.endpointLinks.add(ctx.request.endpointLink);
 
             computeState.type = ComputeType.VM_GUEST;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
@@ -1660,9 +1678,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             if (ctx.restClient == null) {
                 ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
             }
-            ctx.azure = Azure.authenticate(ctx.restClient,
-                    ctx.parentAuth.customProperties.get(AZURE_TENANT_ID))
-                    .withSubscription(ctx.parentAuth.userLink);
+
+            ctx.azure = Azure.authenticate(ctx.restClient, ctx.endpointAuth.customProperties.get(AZURE_TENANT_ID))
+                    .withSubscription(ctx.endpointAuth.userLink);
         }
         return ctx.azure;
     }

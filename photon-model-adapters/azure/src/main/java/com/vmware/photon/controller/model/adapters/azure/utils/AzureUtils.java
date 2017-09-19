@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 
 import java.net.URI;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -317,6 +318,10 @@ public class AzureUtils {
         storageDescription.resourcePoolLink = request.resourcePoolLink;
         storageDescription.documentSelfLink = UUID.randomUUID().toString();
         storageDescription.endpointLink = request.endpointLink;
+        if (storageDescription.endpointLinks == null) {
+            storageDescription.endpointLinks = new HashSet<>();
+        }
+        storageDescription.endpointLinks.add(request.endpointLink);
         storageDescription.computeHostLink = parentCompute.documentSelfLink;
         storageDescription.customProperties = new HashMap<>();
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
@@ -363,6 +368,10 @@ public class AzureUtils {
         storageDescription.resourcePoolLink = parent.resourcePoolLink;
         storageDescription.documentSelfLink = UUID.randomUUID().toString();
         storageDescription.endpointLink = parent.endpointLink;
+        if (storageDescription.endpointLinks == null) {
+            storageDescription.endpointLinks = new HashSet<>();
+        }
+        storageDescription.endpointLinks.add(parent.endpointLink);
         storageDescription.computeHostLink = parent.documentSelfLink;
         storageDescription.customProperties = new HashMap<>();
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
@@ -386,6 +395,10 @@ public class AzureUtils {
         cs.tenantLinks = tenantLinks;
         cs.endpointLink = endpointLink;
         cs.computeHostLink = parentLink;
+        if (cs.endpointLinks == null) {
+            cs.endpointLinks = new HashSet<>();
+        }
+        cs.endpointLinks.add(endpointLink);
         if (customProperties == null) {
             customProperties = new HashMap<>();
         }
@@ -407,6 +420,10 @@ public class AzureUtils {
         cd.tenantLinks = tenantLinks;
         cd.endpointLink = endpointLink;
         cd.computeHostLink = parentLink;
+        if (cd.endpointLinks == null) {
+            cd.endpointLinks = new HashSet<>();
+        }
+        cd.endpointLinks.add(endpointLink);
         cd.name = name != null ? name :
                 String.format(COMPUTES_NAME_FORMAT_WITH_ENTITY_ID, subscriptionId);
         cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;

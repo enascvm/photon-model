@@ -128,7 +128,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Used to store an error while transferring to the error stage.
         Throwable error;
 
-        AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
 
         // Virtual Networks page as fetched from Azure
         // key -> Virtual Network id; value -> Virtual Network.
@@ -194,7 +194,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         NetworkEnumContext(ComputeEnumerateAdapterRequest request, Operation op) {
             this.request = request.original;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
 
             this.stage = EnumerationStages.CLIENT;
@@ -254,8 +254,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+//        // Add ENDPOINT_LINK criteria
+//        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 
     @Override
@@ -288,7 +288,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         case CLIENT:
             if (context.credentials == null) {
                 try {
-                    context.credentials = getAzureConfig(context.parentAuth);
+                    context.credentials = getAzureConfig(context.endpointAuth);
                 } catch (Throwable e) {
                     logSevere(e);
                     context.error = e;
@@ -451,7 +451,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         if (context.enumNextPageLink == null) {
             // First request to fetch Virtual Networks from Azure.
             String uriStr = AdapterUriUtil.expandUriPathTemplate(LIST_VIRTUAL_NETWORKS_URI,
-                    context.parentAuth.userLink);
+                    context.endpointAuth.userLink);
             uri = UriUtils.extendUriWithQuery(
                     UriUtils.buildUri(uriStr),
                     QUERY_PARAM_API_VERSION, NETWORK_REST_API_VERSION);
@@ -553,6 +553,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
+
+        if (subnetState.endpointLinks == null) {
+            subnetState.endpointLinks = new HashSet<>();
+        }
+        subnetState.endpointLinks.add(endpointLink);
+
         subnetState.supportPublicIpAddress = true;
         subnetState.computeHostLink = parentLink;
 
@@ -578,10 +584,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
                 .addInClause(ResourceState.FIELD_NAME_ID, resourceGroupIds)
-                .addCompositeFieldClause(
-                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
-                        context.parentCompute.documentSelfLink)
+//                .addCompositeFieldClause(
+//                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+//                        ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+//                        context.parentCompute.documentSelfLink)
                 .addCompositeFieldClause(
                         ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                         ComputeProperties.RESOURCE_TYPE_KEY,
@@ -1012,6 +1018,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             }
             subnetState.endpointLink = context.request.endpointLink;
             subnetState.computeHostLink = context.parentCompute.documentSelfLink;
+            if (subnetState.endpointLinks == null) {
+                subnetState.endpointLinks = new HashSet<>();
+            }
+            subnetState.endpointLinks.add(context.request.endpointLink);
 
             return context.subnetStates.containsKey(subnetId) ?
             // Update case
@@ -1068,9 +1078,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             resultNetworkState.groupLinks = localNetworkState.groupLinks;
             resultNetworkState.resourcePoolLink = localNetworkState.resourcePoolLink;
             resultNetworkState.tagLinks = localNetworkState.tagLinks;
+            resultNetworkState.endpointLinks = localNetworkState.endpointLinks;
         } else {
             resultNetworkState.id = azureVirtualNetwork.id;
-            resultNetworkState.authCredentialsLink = context.parentAuth.documentSelfLink;
+            resultNetworkState.authCredentialsLink = context.endpointAuth.documentSelfLink;
             resultNetworkState.resourcePoolLink = context.request.resourcePoolLink;
         }
 
@@ -1078,6 +1089,11 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         resultNetworkState.regionId = azureVirtualNetwork.location;
         resultNetworkState.endpointLink = context.request.endpointLink;
         resultNetworkState.computeHostLink = context.parentCompute.documentSelfLink;
+
+        if (resultNetworkState.endpointLinks == null) {
+            resultNetworkState.endpointLinks = new HashSet<>();
+        }
+        resultNetworkState.endpointLinks.add(context.request.endpointLink);
 
         AddressSpace addressSpace = azureVirtualNetwork.properties.addressSpace;
         if (addressSpace != null
