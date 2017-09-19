@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointA
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureInstanceTypeService;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureComputeDiskDay2Service;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureDiskService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureSecurityGroupService;
@@ -51,6 +52,7 @@ public class AzureAdapters {
             service(AzureInstanceTypeService.class),
             service(AzureInstanceService.class),
             service(AzureDiskService.class),
+            service(AzureComputeDiskDay2Service.class),
             service(AzureSubnetService.class),
             service(AzureSecurityGroupService.class),
             service(AzureStatsService.class),

@@ -136,7 +136,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
                 this.endpointState, azureVMName)
                 .withNicSpecs(DEFAULT_NIC_SPEC)
-                .withImageSource(imageSource);
+                .withImageSource(imageSource)
+                .withManagedDisk(false);
 
         // create Azure VM compute resource.
         this.vmState = createVMResourceFromSpec(vmResourceSpec);
@@ -179,7 +180,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 this.endpointState, azureVMName)
                 .withImageSource(imageSource)
                 .withNicSpecs(DEFAULT_NIC_SPEC)
-                .withNumberOfAdditionalDisks(numberOfAdditionalDisks);
+                .withNumberOfAdditionalDisks(numberOfAdditionalDisks)
+                .withManagedDisk(true);
 
         // create Azure VM compute resource.
         this.vmState = createVMResourceFromSpec(vmResourceSpec);
@@ -206,7 +208,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 this.endpointState, azureVMName)
                 .withImageSource(privateImageSource)
                 .withNicSpecs(NO_PUBLIC_IP_NIC_SPEC)
-                .withNumberOfAdditionalDisks(numberOfAdditionalDisks);
+                .withNumberOfAdditionalDisks(numberOfAdditionalDisks)
+                .withManagedDisk(true);
 
         // create Azure VM compute resource.
         this.vmState = createVMResourceFromSpec(vmResourceSpec);

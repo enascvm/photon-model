@@ -35,6 +35,10 @@ public enum ResourceOperation {
 
     REVERT_SNAPSHOT("Snapshot.Revert", "Revert To Snapshot", "Revert To Snapshot Operation"),
 
+    ATTACH_DISK("Disk.Attach", "Attach Disk", "Attach Disk Operation"),
+
+    DETACH_DISK("Disk.Detach", "Detach Disk", "Detach Disk Operation"),
+
     RESIZE("Resize", "Resize Compute", "Resize CPU/RAM for Compute resource");
 
     public final String operation;

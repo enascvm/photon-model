@@ -19,6 +19,7 @@ import java.util.Map;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.xenon.common.UriUtils;
 
@@ -35,6 +36,10 @@ public class AzureUriPaths {
             .adapterLink(EndpointType.azure.name());
     public static final String AZURE_DISK_ADAPTER = AdapterTypePath.DISK_ADAPTER
             .adapterLink(EndpointType.azure.name());
+    public static final String AZURE_DISK_DAY2_ADAPTER = ResourceOperationSpecService
+            .buildDefaultAdapterLink(
+                    EndpointType.azure.name(),
+                    ResourceOperationSpecService.ResourceType.COMPUTE, "disk-day2-adapter");
     public static final String AZURE_COST_STATS_ADAPTER = AdapterTypePath.COST_STATS_ADAPTER
             .adapterLink(EndpointType.azure_ea.name());
     public static final String AZURE_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER

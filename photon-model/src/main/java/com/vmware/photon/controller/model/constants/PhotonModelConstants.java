@@ -53,6 +53,7 @@ public class PhotonModelConstants {
     public static final String MEMORY_USED_PERCENT = "MemoryUsedPercent";
     public static final String STORAGE_USED_BYTES = "StorageUsedBytes";
     public static final String STORAGE_AVAILABLE_BYTES = "StorageAvailableBytes";
+    public static final String DISK_LINK = "diskLink";
 
     public static final String SERVICE_RESOURCE_COST = "Service.%s.ResourceCost";
     public static final String SERVICE_OTHER_COST = "Service.%s.OtherCost";

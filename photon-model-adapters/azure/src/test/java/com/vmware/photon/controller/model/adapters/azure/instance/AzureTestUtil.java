@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
@@ -86,6 +87,7 @@ import com.microsoft.azure.management.network.implementation.VirtualNetworkInner
 import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
+import com.microsoft.azure.management.storage.SkuName;
 import com.microsoft.rest.ServiceCallback;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -744,6 +746,7 @@ public class AzureTestUtil {
         public String networkRGLink;
         public ImageSource imageSource;
         public int numberOfAdditionalDisks;
+        public boolean isManagedDisk;
 
         public VMResourceSpec(VerificationHost host, ComputeState computeHost, EndpointState endpointState,
                               String azureVmName) {
@@ -765,6 +768,11 @@ public class AzureTestUtil {
 
         public VMResourceSpec withNumberOfAdditionalDisks(int numberOfAdditionalDisks) {
             this.numberOfAdditionalDisks = numberOfAdditionalDisks;
+            return this;
+        }
+
+        public VMResourceSpec withManagedDisk(boolean isManagedDisk) {
+            this.isManagedDisk = isManagedDisk;
             return this;
         }
     }
@@ -865,22 +873,27 @@ public class AzureTestUtil {
         rootDisk.customProperties = new HashMap<>();
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING.name());
 
-        boolean isManagedDisk = false;
         if (spec.imageSource.type == Type.PRIVATE_IMAGE) {
-            rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
-            rootDisk.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE, "Standard_LRS");
-            isManagedDisk = true;
+            if (spec.isManagedDisk) {
+                rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
+                rootDisk.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE, SkuName.STANDARD_LRS.toString());
+            }
         } else if (spec.imageSource.type == Type.PUBLIC_IMAGE) {
-            rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
-            rootDisk.customProperties.put(
-                    AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
-                    (spec.azureVmName + "sa").replaceAll("[_-]", "").toLowerCase());
-            rootDisk.customProperties.put(
-                    AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
-                    defaultVmRGName);
-            rootDisk.customProperties.put(
-                    AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
-                    AZURE_STORAGE_ACCOUNT_TYPE);
+            if (spec.isManagedDisk) {
+                rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
+                rootDisk.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE, SkuName.STANDARD_LRS.toString());
+            } else {
+                rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
+                rootDisk.customProperties.put(
+                        AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
+                        (spec.azureVmName + "sa").replaceAll("[_-]", "").toLowerCase());
+                rootDisk.customProperties.put(
+                        AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                        defaultVmRGName);
+                rootDisk.customProperties.put(
+                        AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
+                        AZURE_STORAGE_ACCOUNT_TYPE);
+            }
         } else if (spec.imageSource.type == Type.IMAGE_REFERENCE) {
             rootDisk.sourceImageReference = URI.create(spec.imageSource.asRef());
         }
@@ -895,7 +908,7 @@ public class AzureTestUtil {
         if (spec.numberOfAdditionalDisks > 0) {
             // TODO Need to modify createAdditionalDisks() to have only spec passed as parameter
             vmDisks.addAll(createAdditionalDisks(spec.host, spec.azureVmName,
-                    spec.endpointState, spec.numberOfAdditionalDisks, isManagedDisk));
+                    spec.endpointState, spec.numberOfAdditionalDisks, spec.isManagedDisk));
         }
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
@@ -1080,7 +1093,7 @@ public class AzureTestUtil {
                         AZURE_STORAGE_ACCOUNT_TYPE);
             } else {
                 dataDisk.customProperties.put(
-                        AzureConstants.AZURE_MANAGED_DISK_TYPE, "Standard_LRS");
+                        AzureConstants.AZURE_MANAGED_DISK_TYPE, SkuName.STANDARD_LRS.toString());
             }
 
             dataDisk = TestUtils.doPost(host, dataDisk, DiskState.class,
@@ -1420,7 +1433,7 @@ public class AzureTestUtil {
 
         imageDisks.add(dataDiskConfig2);
 
-        bootImage.diskConfigs = Collections.singletonList(osDiskConfig);
+        bootImage.diskConfigs = imageDisks;
 
         bootImage = TestUtils.doPost(host, bootImage, ImageState.class,
                 UriUtils.buildUri(host, ImageService.FACTORY_LINK));
@@ -1835,5 +1848,24 @@ public class AzureTestUtil {
             String awsMockEndpointReference) {
         AzureUtils.setAzureClientMock(isAwsClientMock);
         AzureUtils.setAzureMockHost(awsMockEndpointReference);
+    }
+
+    private static ResourceState getResourceState(VerificationHost host, String resourceLink)
+            throws Throwable {
+        Operation response = host.waitForResponse(Operation.createGet(host, resourceLink));
+        return response.getBody(ResourceState.class);
+    }
+
+    /**
+     * Validate the deletion of documents of ResourceState.
+     */
+    public static void verifyRemovalOfResourceState(VerificationHost host,
+                                                    List<String> resourceStateLinks) throws Throwable {
+        for (String resourceLink : resourceStateLinks) {
+            ResourceState resourceState = getResourceState(host, resourceLink);
+            assertNotNull(resourceState);
+            // make sure the document has been removed.
+            assertNull(resourceState.documentSelfLink);
+        }
     }
 }
