@@ -61,7 +61,8 @@ public class UriPaths {
         ENUMERATION_DELETION_ADAPTER("enumerationDeletionAdapter", "enumeration-deletion-adapter"),
         COMPUTE_DESCRIPTION_CREATION_ADAPTER("computeDescriptionCreationAdapter", "compute-description-creation-adapter"),
         COMPUTE_STATE_CREATION_ADAPTER("computeStateCreationAdapter", "compute-state-creation-adapter"),
-        STATIC_CONTENT_ADAPTER("staticContent", "static-content");
+        STATIC_CONTENT_ADAPTER("staticContent", "static-content"),
+        NIC_SECURITY_GROUPS_ADAPTER("nicSecurityGroupsAdapter", "network-interface-security-groups-adapter");
 
         /**
          * endpoint type agnostic key used for transport purposes to identify concrete

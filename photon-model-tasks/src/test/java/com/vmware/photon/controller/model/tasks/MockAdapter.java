@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.Reque
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.NicSecurityGroupsRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
@@ -41,6 +42,7 @@ import com.vmware.photon.controller.model.support.CertificateInfo;
 import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
+import com.vmware.photon.controller.model.tasks.NicSecurityGroupsTaskService.NicSecurityGroupsTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.xenon.common.Operation;
@@ -93,6 +95,8 @@ public class MockAdapter {
         host.startService(new MockSuccessEndpointAdapter(test));
         host.startService(new MockUntrustedCertEndpointAdapter());
         host.startService(new MockFailNPEEndpointAdapter());
+        host.startService(new MockNetworkInterfaceSecurityGroupsFailureAdapter());
+        host.startService(new MockNetworkInterfaceSecurityGroupsSuccessAdapter());
     }
 
     public static TaskState createFailedTaskInfo() {
@@ -882,6 +886,71 @@ public class MockAdapter {
                     return;
                 }
                 op.fail(new UnsupportedOperationException("Not implemented"));
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock network interface security groups adapter success
+     */
+    public static class MockNetworkInterfaceSecurityGroupsSuccessAdapter extends
+            StatelessService {
+        public static final String SELF_LINK = UriPaths.TASKS
+                + "/mock_network_interface_security_groups_success_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                NicSecurityGroupsRequest request = op
+                        .getBody(NicSecurityGroupsRequest.class);
+                NicSecurityGroupsTaskState taskState = new
+                        NicSecurityGroupsTaskState();
+                taskState.taskInfo = new TaskState();
+                taskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(
+                        taskState));
+                op.complete();
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock network interface security groups adapter failure
+     */
+    public static class MockNetworkInterfaceSecurityGroupsFailureAdapter extends
+            StatelessService {
+        public static final String SELF_LINK = UriPaths.TASKS
+                + "/mock_network_interface_security_groups_failure_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                NicSecurityGroupsRequest request = op
+                        .getBody(NicSecurityGroupsRequest.class);
+                NicSecurityGroupsTaskState taskState = new
+                        NicSecurityGroupsTaskState();
+                taskState.taskInfo = createFailedTaskInfo();
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(
+                        taskState));
+                op.complete();
                 break;
             default:
                 super.handleRequest(op);

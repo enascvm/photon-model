@@ -75,6 +75,9 @@ public class PhotonModelTaskServices {
                     StatsCollectionTaskService::createFactory),
             factoryService(SubTaskService.class,
                     () -> TaskFactoryService.create(SubTaskService.class)),
+            factoryService(NicSecurityGroupsTaskService.class,
+                    () -> TaskFactoryService
+                            .create(NicSecurityGroupsTaskService.class)),
 
             service(IPAddressReleaseTaskService.class)
     };
