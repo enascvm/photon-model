@@ -103,6 +103,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -554,4 +555,19 @@ public interface AzureCostHelper {
         return op.setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(EXTERNAL_REQUEST_TIMEOUT_SECONDS)));
     }
 
+    /**
+     * Check if the detailed bill should be downloaded. The detailed bill will not be downloaded
+     * and processed in case the final total EA account cost in the last bill processed and the new
+     * total EA account usage cost obtained from the summarized bill is the same and no new
+     * subscriptions have been explicitly added to the system.
+     * @param oldCost total EA account cost obtained by summing up all line item costs
+     *                from the detailed bill in the last run.
+     * @param newCost total EA account usage cost obtained from the summarized bill API
+     * @param newSubscriptions explicitly added subscriptions
+     * @return true if the bill has to be downloaded, false otherwise.
+     */
+    static boolean shouldDownloadBill(Double oldCost, Double newCost, Set<String> newSubscriptions) {
+        return oldCost == null || newCost == null
+                || !oldCost.equals(newCost) || !newSubscriptions.isEmpty();
+    }
 }

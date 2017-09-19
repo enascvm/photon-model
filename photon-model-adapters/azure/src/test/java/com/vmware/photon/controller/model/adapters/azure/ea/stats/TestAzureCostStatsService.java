@@ -122,10 +122,12 @@ public class TestAzureCostStatsService extends BaseModelTest {
         verifyPersistedStats(completeState,
                 PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 1);
 
-        //Check if second iteration of adapter succeeds.
+        // Check if second iteration of adapter succeeds: no stats should be posted in
+        // the immediate next run since the optimization will prevent bill download
+        // and last sync time would remain the same.
         triggerStatsCollection(resourcePool);
         verifyPersistedStats(completeState,
-                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 2);
+                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 1);
 
         System.clearProperty(AzureCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
     }
