@@ -141,6 +141,6 @@ public class ResourceState extends ServiceDocument {
         target.tagLinks = this.tagLinks;
         target.creationTimeMicros = this.creationTimeMicros;
         target.regionId = this.regionId;
+        target.endpointLinks = this.endpointLinks;
     }
-
 }
