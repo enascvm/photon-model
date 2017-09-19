@@ -157,8 +157,9 @@ public class PhotonModelConstants {
 
     public static final String IS_RESOURCE_AUTO_DISCOVERY_ENABLED = "isAutoDiscoveryEnabled";
 
-    // constant for tag with key = type
-    public static final String TAG_KEY_TYPE = "type";
+    // constant for internal tags where key pattern is vmware.enumeration.<tag>
+    public static final String TAG_ENUMERATION_PREFIX = "vmware.enumeration.";
+    public static final String TAG_KEY_TYPE = TAG_ENUMERATION_PREFIX + "type";
 
     // Key to be inserted while persisting service metrics of AWS,Azure
     public static final String DOES_CONTAIN_SERVICE_STATS = "containsServiceStats";
