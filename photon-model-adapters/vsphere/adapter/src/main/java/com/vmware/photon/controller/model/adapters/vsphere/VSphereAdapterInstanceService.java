@@ -22,11 +22,14 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+
+import io.netty.util.internal.StringUtil;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -54,6 +57,7 @@ import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
+import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -61,7 +65,6 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-
 
 public class VSphereAdapterInstanceService extends StatelessService {
 
@@ -195,6 +198,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             finishTask = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
                         }
 
+                        updateNicsAfterProvisionSuccess(vmOverlay.getNics(), ctx);
                         updateDiskLinksAfterProvisionSuccess(state, vmOverlay.getDisks(), ctx);
 
                         state.lifecycleState = LifecycleState.READY;
@@ -322,6 +326,27 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 }
             }
         };
+    }
+
+    /**
+     * Update the details of nics into compute state after the provisioning is successful
+     */
+    private void updateNicsAfterProvisionSuccess(List<VirtualEthernetCard> virtualEthernetCards,
+            ProvisionContext ctx) {
+        for (NetworkInterfaceStateWithDetails nic : ctx.nics) {
+            VirtualEthernetCard virtualEthernetCard = virtualEthernetCards.get(nic.deviceIndex);
+            if (!StringUtil.isNullOrEmpty(virtualEthernetCard.getExternalId())) {
+                NetworkInterfaceState patchNic = new NetworkInterfaceState();
+                patchNic.customProperties = new HashMap<>(1);
+                // Update nic external id
+                patchNic.customProperties
+                        .put(CustomProperties.NIC_EXTERNAL_ID, virtualEthernetCard.getExternalId());
+                Operation.createPatch(
+                        PhotonModelUriUtils.createDiscoveryUri(getHost(), nic.documentSelfLink))
+                        .setBody(patchNic)
+                        .sendWith(this);
+            }
+        }
     }
 
     /**

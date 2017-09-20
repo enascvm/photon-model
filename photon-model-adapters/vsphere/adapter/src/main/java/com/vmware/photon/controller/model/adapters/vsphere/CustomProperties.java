@@ -141,6 +141,11 @@ public class CustomProperties {
      */
     public static final String SNAPSHOT_MAXIMUM_LIMIT = "__snapshotLimit"; // the specified limit of snapshots allowed
 
+    /**
+     * Nic external id. Set when the nic is assigned to NSX-T logical switch
+     */
+    public static final String NIC_EXTERNAL_ID = "external_id";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;
