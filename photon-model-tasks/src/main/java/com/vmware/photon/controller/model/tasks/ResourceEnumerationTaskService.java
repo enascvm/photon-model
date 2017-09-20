@@ -16,8 +16,13 @@ package com.vmware.photon.controller.model.tasks;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getResourceExpirationMicros;
 
 import java.net.URI;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
@@ -27,11 +32,15 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceStateMapUpdateRequest;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -45,6 +54,21 @@ import com.vmware.xenon.services.common.TaskService;
  */
 public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerationTaskService.ResourceEnumerationTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/resource-enumeration-tasks";
+    /**
+     * key for the endpoint state custom property, holding resource enumeration task state for
+     * the given endpoint
+     */
+    public static final String EP_CP_ENUMERATION_TASK_STATE = "enumerationTaskState";
+    /**
+     * key for the endpoint state custom property, showing the error message if the resource
+     * enumeration task failed for the given endpoint
+     */
+    public static final String EP_CP_ENUMERATION_TASK_MESSAGE = "enumerationTaskMessage";
+    /**
+     * key for the endpoint state custom property, showing the error message id, if the resource
+     * enumeration task failed for the given endpoint
+     */
+    public static final String EP_CP_ENUMERATION_TASK_MESSAGE_ID = "enumerationTaskMessageId";
 
     public static FactoryService createFactory() {
         TaskFactoryService fs =  new TaskFactoryService(ResourceEnumerationTaskState.class) {
@@ -171,7 +195,10 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         case STARTED:
             logFine(() -> "Started enum task");
             currentState.taskInfo.stage = TaskStage.STARTED;
-            sendEnumRequest(patch, currentState);
+            updateEndpointState(currentState).thenApply(v -> {
+                sendEnumRequest(patch, currentState);
+                return null;
+            });
             break;
         case FINISHED:
             logFine(() -> "Task is complete");
@@ -179,6 +206,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
                 sendRequest(Operation
                         .createDelete(getUri()));
             }
+            updateEndpointState(currentState);
             break;
         case FAILED:
         case CANCELLED:
@@ -192,6 +220,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
                 sendRequest(Operation
                         .createDelete(getUri()));
             }
+            updateEndpointState(currentState);
             break;
         default:
             logWarning(() -> "Unknown stage");
@@ -199,6 +228,46 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         }
 
         patch.setBody(currentState).complete();
+    }
+
+    private DeferredResult<Operation> updateEndpointState(
+            ResourceEnumerationTaskState currentState) {
+        TaskStage taskStage = currentState.taskInfo.stage;
+        String stageName = taskStage.name();
+        String message = null;
+        String messageId = null;
+        if (currentState.taskInfo.failure != null) {
+            message = currentState.taskInfo.failure.message;
+            messageId = currentState.taskInfo.failure.messageId;
+        }
+        Map<Object, Object> cpToAdd = Collections.singletonMap(
+                EP_CP_ENUMERATION_TASK_STATE, stageName);
+        Collection<String> cpToRemove = new LinkedList<>();
+        if (message == null || message.length() == 0) {
+            cpToRemove.add(EP_CP_ENUMERATION_TASK_MESSAGE);
+        }
+        if (messageId == null || messageId.length() == 0) {
+            cpToRemove.add(EP_CP_ENUMERATION_TASK_MESSAGE_ID);
+        }
+
+        Map<String, Map<Object, Object>> entriesToAdd =
+                Collections.singletonMap(
+                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES, cpToAdd);
+        Map<String, Collection<Object>> keysToRemove = Collections.singletonMap(
+                EndpointState.FIELD_NAME_CUSTOM_PROPERTIES, new HashSet<>(cpToRemove));
+
+        ServiceStateMapUpdateRequest mapUpdateRequest = ServiceStateMapUpdateRequest.create(
+                entriesToAdd, keysToRemove
+        );
+        return sendWithDeferredResult(
+                Operation.createPatch(this, currentState.endpointLink)
+                        .setBody(mapUpdateRequest)
+        ).exceptionally(err -> {
+            logWarning("Cannot patch custom properties of"
+                            + " endpoint '%s' to stageName '%s'. Cause: %s",
+                    currentState.endpointLink, stageName, Utils.toString(err));
+            return null;
+        });
     }
 
     @Override
