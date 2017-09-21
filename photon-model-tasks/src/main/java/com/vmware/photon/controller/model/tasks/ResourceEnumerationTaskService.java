@@ -19,6 +19,7 @@ import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -226,7 +227,6 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             logWarning(() -> "Unknown stage");
             break;
         }
-
         patch.setBody(currentState).complete();
     }
 
@@ -240,13 +240,17 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             message = currentState.taskInfo.failure.message;
             messageId = currentState.taskInfo.failure.messageId;
         }
-        Map<Object, Object> cpToAdd = Collections.singletonMap(
-                EP_CP_ENUMERATION_TASK_STATE, stageName);
+        Map<Object, Object> cpToAdd = new HashMap<>();
+        cpToAdd.put(EP_CP_ENUMERATION_TASK_STATE, stageName);
         Collection<String> cpToRemove = new LinkedList<>();
-        if (message == null || message.length() == 0) {
+        if (message != null && message.length() > 0) {
+            cpToAdd.put(EP_CP_ENUMERATION_TASK_MESSAGE, message);
+        } else {
             cpToRemove.add(EP_CP_ENUMERATION_TASK_MESSAGE);
         }
-        if (messageId == null || messageId.length() == 0) {
+        if (messageId != null && messageId.length() > 0) {
+            cpToAdd.put(EP_CP_ENUMERATION_TASK_MESSAGE_ID, messageId);
+        } else {
             cpToRemove.add(EP_CP_ENUMERATION_TASK_MESSAGE_ID);
         }
 
