@@ -733,9 +733,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 getHost(),
                 qBuilder.build(),
                 ComputeState.class,
-                ctx.parentCompute.tenantLinks,
-                ctx.request.endpointLink)
-                .setMaxPageSize(getQueryResultLimit());
+                ctx.parentCompute.tenantLinks).setMaxPageSize(getQueryResultLimit());
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
@@ -1122,6 +1120,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         virtualMachine.storageProfile().osDisk().caching().name());
             }
             diskToUpdate.computeHostLink = ctx.parentCompute.documentSelfLink;
+            if (diskToUpdate.endpointLinks == null) {
+                diskToUpdate.endpointLinks = new HashSet<>();
+            }
             diskToUpdate.endpointLinks.add(ctx.request.endpointLink);
             Operation diskOp = Operation
                     .createPatch(ctx.request.buildUri(diskToUpdate.documentSelfLink))

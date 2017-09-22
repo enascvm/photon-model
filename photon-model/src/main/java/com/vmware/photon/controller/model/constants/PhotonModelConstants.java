@@ -180,4 +180,6 @@ public class PhotonModelConstants {
 
     // Contents of the ISO files that need to be uploaded for CDROM disk
     public static final String DISK_CONTENT_BASE_64 = "diskContentBase64";
+    // Batch size for operation joins.
+    public static final int OPERATION_BATCH_SIZE = 100;
 }

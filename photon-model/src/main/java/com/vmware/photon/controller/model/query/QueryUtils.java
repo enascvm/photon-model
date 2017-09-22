@@ -53,7 +53,7 @@ public class QueryUtils {
     public static final String MAX_RESULT_LIMIT_PROPERTY = UriPaths.PROPERTY_PREFIX
             + "query.maxResultLimit";
     public static final int DEFAULT_MAX_RESULT_LIMIT = 10000;
-    private static final int MAX_RESULT_LIMIT = Integer
+    public static final int MAX_RESULT_LIMIT = Integer
             .getInteger(MAX_RESULT_LIMIT_PROPERTY, DEFAULT_MAX_RESULT_LIMIT);
 
     public static final String DEFAULT_RESULT_LIMIT_PROPERTY = UriPaths.PROPERTY_PREFIX
