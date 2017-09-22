@@ -63,6 +63,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
             super(service, request, op, ResourceGroupState.class,
                     ResourceGroupService.FACTORY_LINK);
+            setEndpointLinkAgnostic(true);
         }
 
         @Override

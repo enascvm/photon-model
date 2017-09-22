@@ -1096,7 +1096,6 @@ public class AzureTestUtil {
         computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, defaultVmRGName);
         computeState.groupLinks = Collections.singleton(defaultVmRGLink);
         computeState.endpointLink = endpointState.documentSelfLink;
-
         if (computeState.endpointLinks == null) {
             computeState.endpointLinks = new HashSet<>();
         }
@@ -1192,12 +1191,10 @@ public class AzureTestUtil {
         storageDesc.endpointLink = endpointState.documentSelfLink;
         storageDesc.endpointLinks = new HashSet<>();
         storageDesc.endpointLinks.add(endpointState.documentSelfLink);
-
         if (storageDesc.endpointLinks == null) {
             storageDesc.endpointLinks = new HashSet<>();
         }
         storageDesc.endpointLinks.add(endpointState.documentSelfLink);
-
         storageDesc.customProperties = new HashMap<>();
         storageDesc.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
 
