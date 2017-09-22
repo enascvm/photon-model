@@ -40,6 +40,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -110,6 +111,7 @@ import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -203,6 +205,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         CREATE_COMPUTE_EXTERNAL_TAG_STATES,
         CREATE_COMPUTE_INTERNAL_TYPE_TAG,
         UPDATE_COMPUTE_STATES,
+        UPDATE_COMPUTE_DESCRIPTIONS,
         GET_DISK_STATES,
         GET_STORAGE_DESCRIPTIONS,
         CREATE_COMPUTE_DESCRIPTIONS,
@@ -373,7 +376,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             break;
         case UPDATE_COMPUTE_STATES:
             logFine("IN UPDATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
-            updateComputeStates(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS);
+            updateComputeStates(ctx, ComputeEnumerationSubStages.UPDATE_COMPUTE_DESCRIPTIONS);
+            break;
+        case UPDATE_COMPUTE_DESCRIPTIONS:
+            logFine("IN UPDATE_COMPUTE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
+            updateComputeDescriptions(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS);
             break;
         case CREATE_COMPUTE_DESCRIPTIONS:
             logFine("IN CREATE_COMPUTE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
@@ -550,8 +557,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     // Deleting the localResourceState is done by disassociating the endpointLink from the
                     // localResourceState. If the localResourceState isn't associated with any other
                     // endpointLink, we issue a delete then
-                    Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, ctx
-                            .request.endpointLink, computeState.documentSelfLink, computeState
+                    Operation dOp = PhotonModelUtils.createRemoveEndpointLinksOperation
+                            (this, ctx
+                            .request.endpointLink, s, computeState.documentSelfLink,
+                            computeState
                             .endpointLinks);
 
                     if (dOp != null) {
@@ -584,9 +593,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                                         "diskState: %s", ex.getMessage()));
                                     } else {
                                         DiskState diskState = op.getBody(DiskState.class);
-                                        Operation diskOp = AdapterUtils
-                                                .createEndpointLinksUpdateOperation
-                                                (this, ctx.request.endpointLink, computeState
+                                        Operation diskOp = PhotonModelUtils
+                                                .createRemoveEndpointLinksOperation
+                                                (this, ctx.request.endpointLink,
+                                                op.getBodyRaw(), computeState
                                                 .diskLinks.get(0), diskState.endpointLinks);
 
                                         if (diskOp != null) {
@@ -810,6 +820,31 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     return result;
                 })
                 .collect(Collectors.toList())).whenComplete(thenHandleSubStage(ctx, next));
+    }
+
+    private void updateComputeDescriptions(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+        if (ctx.computeStatesForPatching.isEmpty()) {
+            logFine(() -> "No compute descriptions needs to updated.");
+            ctx.subStage = next;
+            handleSubStage(ctx);
+            return;
+        }
+
+        DeferredResult.allOf(
+                ctx.computeStatesForPatching.values().stream().map(
+                        entry -> {
+                            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                                    (ComputeDescription.FIELD_NAME_ENDPOINT_LINKS,
+                                            Collections.singletonList(ctx.request.endpointLink));
+
+                            ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                                    .create(collectionsToAddMap, null);
+
+                            return this.sendWithDeferredResult(Operation.createPatch(this.getHost(), entry.descriptionLink)
+                                    .setReferer(this.getHost().getUri())
+                                    .setBody(updateEndpointLinksRequest));
+                        }).collect(Collectors.toList()))
+                .whenComplete(thenHandleSubStage(ctx, next));
     }
 
     /**
@@ -1311,9 +1346,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         allLocalNics.stream()
                 .filter(localNic -> !remoteNicIds.contains(localNic.id))
                 .forEach(localNic -> {
-                    Operation upOp = AdapterUtils.createEndpointLinksUpdateOperation
-                            (this, ctx.request.endpointLink, localNic.documentSelfLink,localNic
-                                    .endpointLinks);
+                    Operation upOp = PhotonModelUtils.createRemoveEndpointLinksOperation
+                            (this, ctx.request.endpointLink, Utils.toJson(localNic),
+                                    localNic.documentSelfLink,
+                                    localNic.endpointLinks);
                     if (upOp != null) {
                         updateOps.add(sendWithDeferredResult(upOp));
                     }

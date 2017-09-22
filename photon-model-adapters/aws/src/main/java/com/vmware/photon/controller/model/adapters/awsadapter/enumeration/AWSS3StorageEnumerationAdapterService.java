@@ -57,6 +57,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -818,10 +819,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                 // update.
                                 if (aws.remoteBucketsByBucketName
                                         .get(diskState.id) == null) {
-
-                                    Operation updateOp = AdapterUtils
-                                            .createEndpointLinksUpdateOperation(this, aws
-                                                    .request.original.endpointLink, diskState
+                                    Operation updateOp = PhotonModelUtils
+                                            .createRemoveEndpointLinksOperation(this, aws
+                                                    .request.original.endpointLink, s, diskState
                                                     .documentSelfLink, diskState
                                                     .endpointLinks);
 

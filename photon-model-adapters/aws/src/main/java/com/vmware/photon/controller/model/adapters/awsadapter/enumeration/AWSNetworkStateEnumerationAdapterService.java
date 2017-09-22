@@ -76,7 +76,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandl
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -89,6 +88,7 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -892,29 +892,45 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            // Deleting the localResourceState is done by disassociating the endpointLink from the
-            // localResourceState. If the localResourceState isn't associated with any other
-            // endpointLink, it should be deleted by the groomer task
-            Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context
-                    .request.request.endpointLink, ls.documentSelfLink, ls.endpointLinks);
-
-            if (dOp == null) {
-                return;
-            }
-
-            DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
-                    .whenComplete((o, e) -> {
-                        final String message = "Disassociate stale %s state";
-                        if (e != null) {
-                            logWarning(message + ": FAILED with %s",
-                                    ls.documentSelfLink, Utils.toString(e));
-                        } else {
-                            log(Level.FINEST, message + ": SUCCESS",
-                                    ls.documentSelfLink);
+            //Get the document because the endpointLink is not accessible in the parent
+            // ResourceState. Then update endpointLinks/endpointLink.
+            sendWithDeferredResult(
+                    Operation.createGet(getHost(), ls.documentSelfLink))
+                    .whenComplete((res, ex) -> {
+                        if (ex != null) {
+                            logWarning(() -> String.format("Failure retrieving local " +
+                                    "state: %s, " +
+                                    "reason: %s", ls.documentSelfLink, ex.toString()));
+                            return;
                         }
+                        Object rawDocument = res.getBodyRaw();
+                        // Deleting the localResourceState is done by disassociating the endpointLink from the
+                        // localResourceState. If the localResourceState isn't associated with any other
+                        // endpointLink, it should be deleted by the groomer task
+                        Operation dOp = PhotonModelUtils.createRemoveEndpointLinksOperation(
+                                this, context
+                                .request.request.endpointLink, rawDocument, ls.documentSelfLink, ls
+                                        .endpointLinks);
+
+                        if (dOp == null) {
+                            return;
+                        }
+
+                        DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
+                                .whenComplete((o, e) -> {
+                                    final String message = "Disassociate stale %s state";
+                                    if (e != null) {
+                                        logWarning(message + ": FAILED with %s",
+                                                ls.documentSelfLink, Utils.toString(e));
+                                    } else {
+                                        log(Level.FINEST, message + ": SUCCESS",
+                                                ls.documentSelfLink);
+                                    }
+                                });
+
+                        ops.add(dr);
                     });
 
-            ops.add(dr);
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .thenApply(r -> context);

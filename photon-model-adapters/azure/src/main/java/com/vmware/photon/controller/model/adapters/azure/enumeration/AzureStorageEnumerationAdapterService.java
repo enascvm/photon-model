@@ -825,30 +825,48 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context.request
-                    .endpointLink, sd.documentSelfLink, sd.endpointLinks);
-
-            if (dOp == null) {
-                return;
-            }
-
-            logFine(() -> String.format("Disassociating storage description %s", sd
-                    .documentSelfLink));
-
-            DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
-                    .whenComplete((o, e) -> {
-
-                        final String message = "Disassociate storage description stale %s state";
-                        if (e != null) {
-                            logWarning(message + ": ERROR - %s",
-                                    sd.documentSelfLink, Utils.toString(e));
-                        } else {
-                            logFine(message + ": SUCCESS",
-                                    sd.documentSelfLink);
+            //Get the document because the endpointLink is not accessible in the parent
+            // ResourceState. Then update endpointLinks/endpointLink.
+            sendWithDeferredResult(
+                    Operation.createGet(getHost(), sd.documentSelfLink))
+                    .whenComplete((res, ex) -> {
+                        if (ex != null) {
+                            logWarning(() -> String.format("Failure retrieving local " +
+                                    "state: %s, " +
+                                    "reason: %s", sd.documentSelfLink, ex.toString()));
+                            return;
                         }
-                    });
+                        Object rawDocument = res.getBodyRaw();
+                        // Deleting the localResourceState is done by disassociating the endpointLink from the
+                        // localResourceState. If the localResourceState isn't associated with any other
+                        // endpointLink, it should be deleted by the groomer task
+                        Operation dOp = PhotonModelUtils.createRemoveEndpointLinksOperation
+                                (this, context.request.endpointLink,
+                                        rawDocument,
+                                        sd.documentSelfLink, sd.endpointLinks);
 
-            ops.add(dr);
+                        if (dOp == null) {
+                            return;
+                        }
+
+                        logFine(() -> String.format("Disassociating storage description %s", sd
+                                .documentSelfLink));
+
+                        DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
+                                .whenComplete((o, e) -> {
+
+                                    final String message = "Disassociate storage description stale %s state";
+                                    if (e != null) {
+                                        logWarning(message + ": ERROR - %s",
+                                                sd.documentSelfLink, Utils.toString(e));
+                                    } else {
+                                        logFine(message + ": SUCCESS",
+                                                sd.documentSelfLink);
+                                    }
+                                });
+
+                        ops.add(dr);
+                    });
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .whenComplete((r, e) -> {
@@ -1228,29 +1246,46 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context.request
-                    .endpointLink, rg.documentSelfLink, rg.endpointLinks);
-            if (dOp == null) {
-                return;
-            }
-
-            logFine(() -> String.format("Disassociating storage containers %s", rg
-                    .documentSelfLink));
-
-            DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
-                    .whenComplete((o, e) -> {
-
-                        final String message = "Disassociate storage containers stale %s state";
-                        if (e != null) {
-                            logWarning(message + ": ERROR - %s",
-                                    rg.documentSelfLink, Utils.toString(e));
-                        } else {
-                            logFine(message + ": SUCCESS",
-                                    rg.documentSelfLink);
+            //Get the document because the endpointLink is not accessible in the parent
+            // ResourceState. Then update endpointLinks/endpointLink.
+            sendWithDeferredResult(
+                    Operation.createGet(getHost(), rg.documentSelfLink))
+                    .whenComplete((res, ex) -> {
+                        if (ex != null) {
+                            logWarning(() -> String.format("Failure retrieving local " +
+                                    "state: %s, " +
+                                    "reason: %s", rg.documentSelfLink, ex.toString()));
+                            return;
                         }
-                    });
+                        Object rawDocument = res.getBodyRaw();
+                        // Deleting the localResourceState is done by disassociating the endpointLink from the
+                        // localResourceState. If the localResourceState isn't associated with any other
+                        // endpointLink, it should be deleted by the groomer task
+                        Operation dOp = PhotonModelUtils.createRemoveEndpointLinksOperation
+                                (this, context.request
+                                        .endpointLink, rawDocument, rg.documentSelfLink, rg.endpointLinks);
+                        if (dOp == null) {
+                            return;
+                        }
 
-            ops.add(dr);
+                        logFine(() -> String.format("Disassociating storage containers %s", rg
+                                .documentSelfLink));
+
+                        DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
+                                .whenComplete((o, e) -> {
+
+                                    final String message = "Disassociate storage containers stale %s state";
+                                    if (e != null) {
+                                        logWarning(message + ": ERROR - %s",
+                                                rg.documentSelfLink, Utils.toString(e));
+                                    } else {
+                                        logFine(message + ": SUCCESS",
+                                                rg.documentSelfLink);
+                                    }
+                                });
+
+                        ops.add(dr);
+                    });
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .whenComplete((r, e) -> {
@@ -1701,9 +1736,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     }
                     logFine(() -> String.format("Disassociating disk state %s",
                             diskState.documentSelfLink));
-                    Operation operation = AdapterUtils.createEndpointLinksUpdateOperation
-                            (this, context.request.endpointLink,
-                                    diskState.documentSelfLink, diskState.endpointLinks);
+                    Operation operation = PhotonModelUtils.createRemoveEndpointLinksOperation
+                            (this, context.request.endpointLink, Utils.toJson(diskState),
+                            diskState.documentSelfLink, diskState.endpointLinks);
                     if (operation == null) {
                         return DeferredResult.completed(new Operation());
                     }

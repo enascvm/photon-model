@@ -56,6 +56,7 @@ import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.ServiceStats;
+import com.vmware.xenon.common.ServiceStateMapUpdateRequest;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -153,6 +154,7 @@ public class PhotonModelUtils {
         return state;
     }
 
+
     /**
      * Utility method to create an operation to remove an endpointLink from the endpointLinks set
      * of the resourceState and also update the endpointLink property of the specific resourceState
@@ -224,7 +226,7 @@ public class PhotonModelUtils {
                                     ComputeStateWithDescription.class)))) {
                                 ComputeStateWithDescription computeStateWithDescriptionState =
                                         Utils.fromJson(document,
-                                        ComputeStateWithDescription.class);
+                                                ComputeStateWithDescription.class);
                                 resourceEndpointLinks = computeStateWithDescriptionState
                                         .endpointLinks;
                                 resourceEndpointLink = computeStateWithDescriptionState
@@ -232,7 +234,7 @@ public class PhotonModelUtils {
                                 if (endpointLink.equals(resourceEndpointLink)) {
                                     computeStateWithDescriptionState.endpointLink =
                                             getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
+                                                    (resourceEndpointLink, resourceEndpointLinks);
                                     handleResourceStateEndpointLinkUpdate(service, selfLink,
                                             computeStateWithDescriptionState);
                                 }
@@ -262,7 +264,7 @@ public class PhotonModelUtils {
                                     .buildKind(NetworkInterfaceState.class)))) {
                                 NetworkInterfaceState networkInterfaceState = Utils
                                         .fromJson(document,
-                                        NetworkInterfaceState.class);
+                                                NetworkInterfaceState.class);
                                 resourceEndpointLinks = networkInterfaceState.endpointLinks;
                                 resourceEndpointLink = networkInterfaceState.endpointLink;
                                 if (endpointLink.equals(resourceEndpointLink)) {
@@ -275,13 +277,13 @@ public class PhotonModelUtils {
                                     .buildKind(NetworkInterfaceDescription.class)))) {
                                 NetworkInterfaceDescription networkInterfaceDescription =
                                         Utils.fromJson(document,
-                                        NetworkInterfaceDescription.class);
+                                                NetworkInterfaceDescription.class);
                                 resourceEndpointLinks = networkInterfaceDescription.endpointLinks;
                                 resourceEndpointLink = networkInterfaceDescription.endpointLink;
                                 if (endpointLink.equals(resourceEndpointLink)) {
                                     networkInterfaceDescription.endpointLink =
                                             getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
+                                                    (resourceEndpointLink, resourceEndpointLinks);
                                     handleResourceStateEndpointLinkUpdate(service, selfLink,
                                             networkInterfaceDescription);
                                 }
@@ -300,7 +302,7 @@ public class PhotonModelUtils {
                                     .buildKind(SecurityGroupState.class))) {
                                 SecurityGroupState securityGroupState = Utils
                                         .fromJson(document,
-                                        SecurityGroupState.class);
+                                                SecurityGroupState.class);
                                 resourceEndpointLinks = securityGroupState.endpointLinks;
                                 resourceEndpointLink = securityGroupState.endpointLink;
                                 if (endpointLink.equals(resourceEndpointLink)) {
@@ -336,7 +338,7 @@ public class PhotonModelUtils {
                                     Utils.buildKind(RouterService.RouterState.class))) {
                                 RouterService.RouterState routerState = Utils
                                         .fromJson(document, RouterService.RouterState
-                                        .class);
+                                                .class);
                                 resourceEndpointLinks = routerState.endpointLinks;
                                 resourceEndpointLink = routerState.endpointLink;
                                 if (endpointLink.equals(resourceEndpointLink)) {
@@ -349,8 +351,8 @@ public class PhotonModelUtils {
                                     .buildKind(LoadBalancerService.LoadBalancerState.class))) {
                                 LoadBalancerService.LoadBalancerState loadBalancerState =
                                         Utils.fromJson
-                                        (document, LoadBalancerService.LoadBalancerState
-                                        .class);
+                                                (document, LoadBalancerService.LoadBalancerState
+                                                        .class);
                                 resourceEndpointLinks = loadBalancerState.endpointLinks;
                                 resourceEndpointLink = loadBalancerState.endpointLink;
                                 if (endpointLink.equals(resourceEndpointLink)) {
@@ -363,7 +365,7 @@ public class PhotonModelUtils {
                                     .class))) {
                                 StorageDescription storageDescription = Utils
                                         .fromJson(document,
-                                        StorageDescription.class);
+                                                StorageDescription.class);
                                 resourceEndpointLinks = storageDescription.endpointLinks;
                                 resourceEndpointLink = storageDescription.endpointLink;
                                 if (endpointLink.equals(resourceEndpointLink)) {
@@ -376,22 +378,45 @@ public class PhotonModelUtils {
                                     .class))) {
                                 ResourceGroupState resourceGroupState = Utils
                                         .fromJson(document,
-                                        ResourceGroupState.class);
+                                                ResourceGroupState.class);
                                 resourceEndpointLinks = resourceGroupState.endpointLinks;
+                                resourceEndpointLink = resourceGroupState.endpointLink;
+                                String updatedEndpointLink = getUpdatedEndpointLink
+                                        (resourceEndpointLink, resourceEndpointLinks);
+
+                                //update both endpointLink and custom EndpointLink for consistency
+                                if (endpointLink.equals(resourceEndpointLink)) {
+                                    resourceGroupState.endpointLink = updatedEndpointLink;
+                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
+                                            resourceGroupState);
+                                }
+
                                 if (resourceGroupState.customProperties != null &&
                                         resourceGroupState.customProperties
-                                        .get(CUSTOM_PROP_ENDPOINT_LINK) != null) {
-                                    resourceEndpointLink =
+                                                .get(CUSTOM_PROP_ENDPOINT_LINK) != null) {
+                                    String resourceCustomEndpointLink =
                                             resourceGroupState.customProperties
                                                     .get(CUSTOM_PROP_ENDPOINT_LINK);
 
-                                    if (endpointLink.equals(resourceEndpointLink)) {
-                                        resourceGroupState.customProperties.put(
-                                                CUSTOM_PROP_ENDPOINT_LINK, getUpdatedEndpointLink(
+                                    if (endpointLink.equals(resourceCustomEndpointLink)) {
+
+                                        Map<String, Collection<Object>> customEndpointLinkToRemove
+                                                = Collections.singletonMap(
+                                                ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                                Collections.singleton(CUSTOM_PROP_ENDPOINT_LINK));
+                                        Map<String, Map<Object, Object>> customEndpointLinkToAdd =
+                                                Collections.singletonMap(
+                                                ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                                Collections.singletonMap(CUSTOM_PROP_ENDPOINT_LINK,
+                                                        getUpdatedEndpointLink(
                                                         resourceEndpointLink,
-                                                        resourceEndpointLinks));
+                                                        resourceEndpointLinks)));
+                                        ServiceStateMapUpdateRequest serviceStateMapUpdateRequest =
+                                                ServiceStateMapUpdateRequest
+                                                        .create(customEndpointLinkToAdd,
+                                                                customEndpointLinkToRemove);
                                         handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                                resourceGroupState);
+                                                serviceStateMapUpdateRequest);
                                     }
                                 }
                             }
@@ -416,7 +441,7 @@ public class PhotonModelUtils {
     }
 
 
-    public static String getUpdatedEndpointLink(String resourceEndpointLink, Set<String>
+    private static String getUpdatedEndpointLink(String resourceEndpointLink, Set<String>
             endpointLinks) {
 
         String endpointLinkVal = null;
@@ -434,7 +459,7 @@ public class PhotonModelUtils {
     }
 
 
-    public static void handleResourceStateEndpointLinkUpdate(Service service, String selfLink,
+    private static void handleResourceStateEndpointLinkUpdate(Service service, String selfLink,
                                                              Object resourceState) {
         Operation.createPatch(UriUtils.buildUri(service.getHost(), selfLink))
                 .setReferer(service.getUri())
@@ -449,7 +474,7 @@ public class PhotonModelUtils {
                                                 .toString()));
                                 return;
                             }
-                        });
+                        }).sendWith(service);
     }
 
     public static void handleIdempotentPut(StatefulService s, Operation put) {
@@ -501,6 +526,7 @@ public class PhotonModelUtils {
         }
         return new ImmutablePair<>(result, Boolean.valueOf(hasChanged));
     }
+
 
     /**
      * Executes given code in the specified executor.

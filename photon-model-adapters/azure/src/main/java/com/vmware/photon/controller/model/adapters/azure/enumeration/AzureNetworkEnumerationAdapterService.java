@@ -74,6 +74,7 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -1238,8 +1239,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         // Disassociate all matching states.
                         List<Operation> operations = queryTask.results.documentLinks.stream()
                                 .filter(link -> shouldDelete(context, queryTask, link))
-                                .map(link -> AdapterUtils.createEndpointLinksUpdateOperation
+                                .map(link -> PhotonModelUtils.createRemoveEndpointLinksOperation
                                         (this, context.request.endpointLink,
+                                                queryTask.results.documents.get(link),
                                         link, Utils.fromJson(queryTask.results.documents.get(link),
                                                 NetworkState.class).endpointLinks))
                                 .filter(Objects::nonNull)
@@ -1270,38 +1272,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 }));
     }
 
-
-    private Operation createEndpointLinksUpdateOperation(String endpointLink, String selfLink,
-                                                         Set<String> endpointLinks) {
-
-        if (endpointLinks == null || !endpointLinks.contains(endpointLink)) {
-            return null;
-        }
-
-        Set<String> endpointLinksToBeDisassociated = new HashSet<>();
-        endpointLinksToBeDisassociated.add(endpointLink);
-        Map<String, Collection<Object>> endpointsToRemove = Collections
-                .singletonMap(EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
-                        new HashSet<>(endpointLinksToBeDisassociated));
-        ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
-                ServiceStateCollectionUpdateRequest.create(null,
-                        endpointsToRemove);
-
-        Operation operation = Operation
-                .createPatch(this.getHost(), selfLink)
-                .setReferer(getHost().getUri())
-                .setBody(serviceStateCollectionUpdateRequest)
-                .setCompletion(
-                        (updateOp, exception) -> {
-                            if (exception != null) {
-                                logWarning(() -> String.format("PATCH to " +
-                                                "instance service %s, failed: %s",
-                                        updateOp.getUri(), exception.toString()));
-                                return;
-                            }
-                        });
-        return operation;
-    }
 
     /**
      * Checks whether an entity should be delete.

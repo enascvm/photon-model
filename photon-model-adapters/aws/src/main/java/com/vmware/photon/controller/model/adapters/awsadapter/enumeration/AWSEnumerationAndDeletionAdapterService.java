@@ -51,6 +51,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -470,8 +471,10 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         List<Operation> updateOperations = new ArrayList<>();
         // Create delete operations for the compute states that have to be deleted from the system.
         for (ComputeState computeStateToDelete : context.instancesToBeDeleted) {
-            Operation csUpdateOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context
-                            .request.original.endpointLink, computeStateToDelete.documentSelfLink,
+            Operation csUpdateOp = PhotonModelUtils.createRemoveEndpointLinksOperation(this,
+                    context.request.original.endpointLink, Utils.toJson(computeStateToDelete),
+                    computeStateToDelete
+                            .documentSelfLink,
                     computeStateToDelete.endpointLinks);
             if (csUpdateOp != null) {
                 updateOperations.add(csUpdateOp);
@@ -488,11 +491,14 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                                             "reason: %s", networkLinkToDelete, e.toString()));
                                     return;
                                 }
-                                NetworkInterfaceState networkInterfaceState = o.getBody(NetworkInterfaceState.class);
-                                Operation nsUpdateOp = AdapterUtils
-                                        .createEndpointLinksUpdateOperation(this, context
-                                                .request.original.endpointLink,
-                                        networkLinkToDelete, networkInterfaceState.endpointLinks);
+                                NetworkInterfaceState networkInterfaceState =
+                                        o.getBody(NetworkInterfaceState.class);
+                                Operation nsUpdateOp = PhotonModelUtils
+                                        .createRemoveEndpointLinksOperation(this, context
+                                                        .request.original.endpointLink,
+                                                o.getBodyRaw(),
+                                                networkLinkToDelete,
+                                                networkInterfaceState.endpointLinks);
                                 if (nsUpdateOp != null) {
                                     updateOperations.add(nsUpdateOp);
                                 }
@@ -515,10 +521,11 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                                     return;
                                 }
                                 DiskState diskState = o.getBody(DiskState.class);
-                                Operation dsUpdateOp = AdapterUtils
-                                        .createEndpointLinksUpdateOperation(this,
-                                        context.request.original.endpointLink, diskLinkToDelete,
-                                        diskState.endpointLinks);
+                                Operation dsUpdateOp = PhotonModelUtils
+                                        .createRemoveEndpointLinksOperation(this,
+                                                context.request.original.endpointLink,
+                                                o.getBodyRaw(), diskLinkToDelete,
+                                                diskState.endpointLinks);
                                 if (dsUpdateOp != null) {
                                     updateOperations.add(dsUpdateOp);
                                 }

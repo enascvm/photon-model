@@ -71,6 +71,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -923,12 +924,13 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                                 // diskstate isn't associated with any other
                                                 // endpointLink, it should be deleted by the
                                                 // groomer task
-                                                Operation dsOperation = AdapterUtils
-                                                        .createEndpointLinksUpdateOperation
+                                                Operation dsOperation = PhotonModelUtils
+                                                        .createRemoveEndpointLinksOperation
                                                         (this.service, this.context
-                                                                .request.original.endpointLink,
+                                                                .request.original.endpointLink, s,
                                                                 diskState.documentSelfLink, diskState
-                                                                .endpointLinks);
+                                                                        .endpointLinks);
+
                                                 if (dsOperation != null) {
                                                     deleteOperations.add(dsOperation);
                                                 }
