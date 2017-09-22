@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -322,6 +323,9 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         // Asserts to check if the document counts are correct after multiple enumerations
         assertDocumentCounts();
 
+        // Assert that all networkInterfaceLinks in computestates are valid.
+        assertNetworkInterfaceLinksAreValid();
+
         // Delete AWS resources that were provisioned
         deleteVMsUsingEC2Client(this.client, this.host, this.instanceIds);
 
@@ -625,6 +629,28 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         Assert.assertTrue("Subnet document count mismatch during enumeration",
                 getEnumeratedDocumentCountByQueryingIds(this.subnetIds,
                 SubnetState.class) == this.subnetIds.size());
+    }
+
+    private void assertNetworkInterfaceLinksAreValid() {
+        for (String computeLink : this.computeStateLinks) {
+            Operation getCompute = Operation.createGet((UriUtils.buildUri(this.host, computeLink)))
+                    .setReferer(this.host.getUri());
+
+            Operation compute = this.host.waitForResponse(getCompute);
+
+            if (compute.getStatusCode() == 200) {
+                ComputeState state = compute.getBody(ComputeState.class);
+
+                for (String nicLink : state.networkInterfaceLinks) {
+                    Operation getNic = Operation.createGet((UriUtils.buildUri(this.host, nicLink)))
+                            .setReferer(this.host.getUri());
+
+                    Operation nic = this.host.waitForResponse(getNic);
+
+                    assertEquals("GET on NIC failed.", Operation.STATUS_CODE_OK, nic.getStatusCode());
+                }
+            }
+        }
     }
 
     /**

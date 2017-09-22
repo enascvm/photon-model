@@ -479,13 +479,18 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     // for each NIC create Description and State create operations. Link the
                     // ComputeState to be created to the NIC State
                     for (InstanceNetworkInterface awsNic : instance.getNetworkInterfaces()) {
+                        if (context.request.enumeratedNetworks != null
+                                && context.request.enumeratedNetworks.subnets != null
+                                && context.request.enumeratedNetworks.subnets
+                                .containsKey(awsNic.getSubnetId())) {
 
-                        NetworkInterfaceState nicState = createNICStateAndDescription(
-                                context, awsNic);
+                            NetworkInterfaceState nicState = createNICStateAndDescription(
+                                    context, awsNic);
 
-                        computeStateToBeCreated.networkInterfaceLinks.add(UriUtils.buildUriPath(
-                                NetworkInterfaceService.FACTORY_LINK,
-                                nicState.documentSelfLink));
+                            computeStateToBeCreated.networkInterfaceLinks.add(UriUtils.buildUriPath(
+                                    NetworkInterfaceService.FACTORY_LINK,
+                                    nicState.documentSelfLink));
+                        }
                     }
                 }
 
@@ -761,7 +766,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         Collection<Object> networkInterfaceLinksToBeAdded = instance.getNetworkInterfaces().stream()
                 .filter(awsNic -> deviceIndexesToAdd
-                        .contains(awsNic.getAttachment().getDeviceIndex()))
+                        .contains(awsNic.getAttachment().getDeviceIndex())
+                        && context.request.enumeratedNetworks != null
+                        && context.request.enumeratedNetworks.subnets != null
+                        && context.request.enumeratedNetworks.subnets
+                        .containsKey(awsNic.getSubnetId()))
 
                 // create new NIC State and Description operation
                 .map(awsNic -> createNICStateAndDescription(context, awsNic))
