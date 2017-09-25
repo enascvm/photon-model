@@ -145,6 +145,8 @@ public class PhotonModelConstants {
 
     public static final String CUSTOM_PROP_CREDENTIALS_SCOPE = "scope";
 
+    public static final String CUSTOM_PROP_SSH_KEY_NAME = "sshKeyName";
+
     // Endpoint identifier as provided by the cloud-provider
     public static final String CLOUD_ACCOUNT_ID = "accountId";
 

@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_GENERAL_PURPOSED_SSD;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_SSH_KEY_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
@@ -353,6 +354,12 @@ public class AWSInstanceService extends StatelessService {
                 .withMinCount(1)
                 .withMaxCount(1)
                 .withMonitoring(true);
+
+        if (aws.child.customProperties != null &&
+                aws.child.customProperties.containsKey(CUSTOM_PROP_SSH_KEY_NAME)) {
+            runInstancesRequest = runInstancesRequest.withKeyName(aws.child.customProperties
+                    .get(CUSTOM_PROP_SSH_KEY_NAME));
+        }
 
         if (!aws.dataDisks.isEmpty() || bootDisk.capacityMBytes > 0 ||
                 bootDisk.customProperties != null) {
