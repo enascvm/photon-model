@@ -80,6 +80,18 @@ public class ResourceMetricsService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        if (delete.hasBody()) {
+            ServiceDocument state = delete.getBody(ServiceDocument.class);
+            if (state != null && state.documentExpirationTimeMicros != 0) {
+                ResourceMetrics body = getState(delete);
+                body.documentExpirationTimeMicros = state.documentExpirationTimeMicros;
+            }
+        }
+        super.handleDelete(delete);
+    }
+
+    @Override
     public void handlePut(Operation put) {
         PhotonModelUtils.handleIdempotentPut(this, put);
     }

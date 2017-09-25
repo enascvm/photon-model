@@ -15,11 +15,16 @@ package com.vmware.photon.controller.model.monitoring;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
@@ -37,12 +42,16 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.Reso
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * This class implements tests for the {@link ResourceMetricService} class.
@@ -66,7 +75,7 @@ public class ResourceMetricsServiceTest extends Suite {
     private static ResourceMetricsService.ResourceMetrics buildValidStartState() {
         ResourceMetricsService.ResourceMetrics statState = new ResourceMetricsService.ResourceMetrics();
         statState.entries = new HashMap<>();
-        statState.timestampMicrosUtc  = TimeUnit.MICROSECONDS.toMillis(Utils.getNowMicrosUtc());
+        statState.timestampMicrosUtc = TimeUnit.MICROSECONDS.toMillis(Utils.getNowMicrosUtc());
         statState.entries.put(KEY1, VAL);
         statState.documentExpirationTimeMicros = EXPIRATION_TIME;
         return statState;
@@ -105,7 +114,7 @@ public class ResourceMetricsServiceTest extends Suite {
             ResourceMetricsService.ResourceMetrics startState = buildValidStartState();
             ResourceMetricsService.ResourceMetrics returnState = postServiceSynchronously(
                     ResourceMetricsService.FACTORY_LINK,
-                            startState, ResourceMetricsService.ResourceMetrics.class);
+                    startState, ResourceMetricsService.ResourceMetrics.class);
 
             assertNotNull(returnState);
             assertThat(returnState.entries.values().iterator().next(),
@@ -116,7 +125,9 @@ public class ResourceMetricsServiceTest extends Suite {
                     is(startState.documentExpirationTimeMicros));
             QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
             querySpec.query = Query.Builder.create().addRangeClause(
-                    QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,KEY1), NumericRange.createEqualRange(VAL)).build();
+                    QuerySpecification
+                            .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, KEY1),
+                    NumericRange.createEqualRange(VAL)).build();
             this.host.createAndWaitSimpleDirectQuery(querySpec, 1, 1);
         }
 
@@ -135,14 +146,145 @@ public class ResourceMetricsServiceTest extends Suite {
             this.host.waitForServiceAvailable(ResourceMetricsService.FACTORY_LINK);
 
             this.host.testStart(1);
-            PhotonModelMetricServices.setFactoryToAvailable(this.host, ResourceMetricsService.FACTORY_LINK, this.host.getCompletion());
+            PhotonModelMetricServices
+                    .setFactoryToAvailable(this.host, ResourceMetricsService.FACTORY_LINK,
+                            this.host.getCompletion());
             this.host.testWait();
 
-            URI availableUri = UriUtils.buildAvailableUri(this.host, ResourceMetricsService.FACTORY_LINK);
+            URI availableUri = UriUtils
+                    .buildAvailableUri(this.host, ResourceMetricsService.FACTORY_LINK);
             Operation factoryAvailableOp = Operation.createGet(availableUri)
                     .setCompletion(this.host.getCompletion());
             this.host.log(Level.INFO, "Attempting to get factory's availability: %s", availableUri);
             this.host.sendAndWait(factoryAvailableOp);
+        }
+
+        @Test
+        public void testResourceMetricsDelete() throws Throwable {
+            this.host.startFactory(new ResourceMetricsService());
+            this.host.waitForServiceAvailable(ResourceMetricsService.FACTORY_LINK);
+
+            ResourceMetrics metricToBeDeletedWithoutBody = postResourceMetricsDocument(this.host);
+            ResourceMetrics metricToBeDeletedWithBodyExpireNow = postResourceMetricsDocument(
+                    this.host);
+            ResourceMetrics metricToBeDeletedWithBodyExpireLater = postResourceMetricsDocument(
+                    this.host);
+            assertNotNull(metricToBeDeletedWithoutBody);
+            assertNotNull(metricToBeDeletedWithBodyExpireNow);
+            assertNotNull(metricToBeDeletedWithBodyExpireLater);
+
+            ServiceDocument expireNowDocument = new ServiceDocument();
+            expireNowDocument.documentExpirationTimeMicros = Utils.getNowMicrosUtc();
+            ServiceDocument expireLaterDocument = new ServiceDocument();
+            expireLaterDocument.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                    + TimeUnit.MINUTES.toMicros(10);
+
+            // Delete a metric without body and validate that it exists as deleted in the index
+            // with expected expiration.
+            Operation deleteWithoutBodyOp = Operation.createDelete(UriUtils.buildUri(this.host,
+                    metricToBeDeletedWithoutBody.documentSelfLink))
+                    .setReferer(this.host.getUri());
+            // Delete a metric with body and set current expiry. Validate that the document gets
+            // removed from the index.
+            Operation deleteWithBodyExpireNowOp = Operation
+                    .createDelete(UriUtils.buildUri(this.host,
+                            metricToBeDeletedWithBodyExpireNow.documentSelfLink))
+                    .setBody(expireNowDocument)
+                    .setReferer(this.host.getUri());
+            // Delete a metric with body and set future expiry. Validate that it exists as deleted
+            // in the index with expected expiration.
+            Operation deleteWithBodyExpireLaterOp = Operation
+                    .createDelete(UriUtils.buildUri(this.host,
+                            metricToBeDeletedWithBodyExpireLater.documentSelfLink))
+                    .setBody(expireLaterDocument)
+                    .setReferer(this.host.getUri());
+            Operation deleteWithoutBodyResponse = this.host.waitForResponse(deleteWithoutBodyOp);
+            Operation deleteWithBodyExpireNowResponse = this.host
+                    .waitForResponse(deleteWithBodyExpireNowOp);
+            Operation deleteWithBodyExpireLaterResponse = this.host
+                    .waitForResponse(deleteWithBodyExpireLaterOp);
+            assertEquals(200, deleteWithoutBodyResponse.getStatusCode());
+            assertEquals(200, deleteWithBodyExpireLaterResponse.getStatusCode());
+            assertEquals(200, deleteWithBodyExpireNowResponse.getStatusCode());
+
+            List<String> expectDocumentLinks = Arrays.asList(metricToBeDeletedWithoutBody.documentSelfLink,
+                    metricToBeDeletedWithBodyExpireLater.documentSelfLink);
+            List<String> unexpectedDocumentLinks = Arrays.asList(metricToBeDeletedWithBodyExpireNow.documentSelfLink);
+
+            // Wait for Xenon groomer to remove the expired documents.
+            this.host.waitFor("Timeout waiting for document cleanup", () -> {
+                try {
+                    validateResourceMetricsDeletion(metricToBeDeletedWithoutBody.documentSelfLink,
+                            metricToBeDeletedWithBodyExpireNow.documentSelfLink,
+                            metricToBeDeletedWithBodyExpireLater.documentSelfLink);
+                } catch (Exception e) {
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        public static ResourceMetrics postResourceMetricsDocument(VerificationHost host) {
+            ResourceMetrics resourceMetrics = new ResourceMetrics();
+            resourceMetrics.timestampMicrosUtc = Utils.getNowMicrosUtc();
+            resourceMetrics.documentExpirationTimeMicros = 0;
+            resourceMetrics.entries = new HashMap<>();
+            resourceMetrics.entries.put("key", 1.1);
+            resourceMetrics.customProperties = new HashMap<>();
+            resourceMetrics.customProperties.put("key", "value");
+            resourceMetrics.documentSelfLink = UriUtils
+                    .buildUriPath(ResourceMetricsService.FACTORY_LINK,
+                            UUID.randomUUID().toString());
+
+            Operation postOp = Operation
+                    .createPost(UriUtils.buildUri(host, ResourceMetricsService.FACTORY_LINK))
+                    .setBody(resourceMetrics).setReferer(host.getUri());
+            Operation postResponse = host.waitForResponse(postOp);
+            if (postResponse.getStatusCode() == 200) {
+                return resourceMetrics;
+            } else {
+                return null;
+            }
+        }
+
+        public void validateResourceMetricsDeletion(String metricToBeDeletedWithoutBodyLink,
+                String metricToBeDeletedWithBodyExpireNowLink, String metricToBeDeletedWithBodyExpireLaterLink)
+                throws Exception {
+            QueryTask response;
+            while (true) {
+                Query query = Query.Builder.create()
+                        .addKindFieldClause(ResourceMetrics.class)
+                        .build();
+                QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                        .setQuery(query)
+                        .addOption(QueryOption.INCLUDE_DELETED)
+                        .addOption(QueryOption.EXPAND_CONTENT)
+                        .build();
+
+                Operation queryOp = Operation.createPost(
+                        UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                        .setBody(queryTask).setReferer(this.host.getUri());
+                Operation queryResponse = this.host.waitForResponse(queryOp);
+                assertEquals(200, queryResponse.getStatusCode());
+
+                response = queryResponse.getBody(QueryTask.class);
+
+                if (response.results.documentLinks.contains(metricToBeDeletedWithoutBodyLink)
+                        && response.results.documentLinks.contains(metricToBeDeletedWithBodyExpireLaterLink)
+                        && !response.results.documentLinks.contains(metricToBeDeletedWithBodyExpireNowLink)) {
+                    break;
+                }
+                Thread.sleep(TimeUnit.SECONDS.toMillis(1));
+            }
+
+            ResourceMetrics metricWithNoExpiry = Utils.fromJson(response.results.documents
+                    .get(metricToBeDeletedWithoutBodyLink), ResourceMetrics.class);
+            ResourceMetrics metricWithFutureExpiry = Utils.fromJson(response.results.documents
+                    .get(metricToBeDeletedWithBodyExpireLaterLink), ResourceMetrics.class);
+            assertTrue(metricWithNoExpiry.documentExpirationTimeMicros == 0);
+            assertTrue(metricWithFutureExpiry.documentExpirationTimeMicros > Utils.getNowMicrosUtc());
+            assertTrue(metricWithFutureExpiry.documentUpdateAction.equals("DELETE"));
+            assertTrue(metricWithFutureExpiry.documentUpdateAction.equals("DELETE"));
         }
     }
 }
