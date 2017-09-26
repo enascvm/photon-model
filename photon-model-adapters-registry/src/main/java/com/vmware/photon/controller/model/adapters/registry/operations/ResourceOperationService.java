@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.commons.collections.CollectionUtils;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -89,7 +91,10 @@ public class ResourceOperationService extends StatelessService {
                     if (e != null) {
                         get.fail(e);
                     } else {
-                        get.setBody(specs).complete();
+                        if (CollectionUtils.isNotEmpty(specs)) {
+                            get.setBody(specs);
+                        }
+                        get.complete();
                     }
                 });
     }
