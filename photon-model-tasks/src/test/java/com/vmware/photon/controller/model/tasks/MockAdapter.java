@@ -711,7 +711,8 @@ public class MockAdapter {
                     op.fail(new IllegalStateException(ERROR_NO_TENANTS));
                     return;
                 }
-                if (request.requestType == RequestType.VALIDATE) {
+                if (request.requestType == RequestType.VALIDATE
+                        || request.requestType == RequestType.CHECK_IF_ACCOUNT_EXISTS) {
                     op.complete();
                     return;
                 }
