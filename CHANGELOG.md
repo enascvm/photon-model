@@ -1,7 +1,11 @@
 # CHANGELOG
 
-## 0.6.37-SNAPSHOT
-
+## 0.6.37
+* Added service to attach/detach disk to vSphere VMs.
+* Added Azure Load Balancer provisioning.
+* Added service to attach EBS volume to AWS VMs.
+* Added service to manage disk attachment for Azure VMs.
+* Added ability to delete an AWS disk.
 
 ## 0.6.36
 * Added disk adapter to create an ebs volume on aws.
