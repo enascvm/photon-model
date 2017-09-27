@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.39-SNAPSHOT
+
 ## 0.6.38
 * Downgrade Xenon to v1.5.4-CR4.
 
