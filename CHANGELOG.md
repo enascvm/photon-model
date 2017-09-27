@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## 0.6.38-SNAPSHOT
+## 0.6.38
+* Downgrade Xenon to v1.5.4-CR4.
 
 ## 0.6.37
 * Added service to attach/detach disk to vSphere VMs.
