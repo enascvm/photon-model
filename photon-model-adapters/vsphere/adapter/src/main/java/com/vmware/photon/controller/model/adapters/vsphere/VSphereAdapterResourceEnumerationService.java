@@ -1884,6 +1884,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         snapshot.id = current.getId().toString();
         populateTags(enumerationProgress, vm, snapshot);
         snapshot.tenantLinks = enumerationProgress.getTenantLinks();
+        if (snapshot.endpointLinks == null) {
+            snapshot.endpointLinks = new HashSet<String>();
+        }
+        snapshot.endpointLinks.add(enumerationProgress.getRequest().endpointLink);
         return snapshot;
     }
 
