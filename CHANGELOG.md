@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.38-SNAPSHOT
+
 ## 0.6.37
 * Added service to attach/detach disk to vSphere VMs.
 * Added Azure Load Balancer provisioning.
