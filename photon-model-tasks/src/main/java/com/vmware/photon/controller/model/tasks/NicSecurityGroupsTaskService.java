@@ -22,6 +22,7 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -220,16 +221,19 @@ public class NicSecurityGroupsTaskService extends TaskService<NicSecurityGroupsT
                             String.format("Could not find security groups with links %s",
                                     state.securityGroupLinks));
 
-                    List<SecurityGroupState> securityGroups = qrt.results.documents.values()
+                    Set<String> endpointLinks = qrt.results.documents.values()
                             .stream()
-                            .map(o -> Utils.fromJson(o, SecurityGroupState.class))
-                            .collect(Collectors.toList());
+                            .map(o -> Utils.fromJson(o, SecurityGroupState.class).endpointLink)
+                            .collect(Collectors.toSet());
 
                     // we only support security groups from the same endpoint for the same request
-                    if (securityGroups.stream().anyMatch(
-                            sg -> sg.endpointLink != securityGroups.get(0).endpointLink)) {
+                    if (endpointLinks.size() != 1) {
                         throw new IllegalArgumentException(
                                 "All security groups must belong to the same endpoint.");
+                    }
+                    if (endpointLinks.iterator().next() == null) {
+                        throw new IllegalArgumentException(
+                                "All security groups must have endpoint link set.");
                     }
                     return null;
                 });

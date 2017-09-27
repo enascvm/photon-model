@@ -68,7 +68,8 @@ public class NicSecurityGroupsTaskServiceTest extends Suite {
 
         state.requestType = requestType;
         state.networkInterfaceLink = createNetworkInterface(test).documentSelfLink;
-        state.securityGroupLinks = Arrays.asList(createSecurityGroup(test).documentSelfLink);
+        state.securityGroupLinks = Arrays
+                .asList(createSecurityGroup(test, UUID.randomUUID().toString()).documentSelfLink);
 
         switch (instanceAdapterType) {
         case SUCCESS:
@@ -88,12 +89,12 @@ public class NicSecurityGroupsTaskServiceTest extends Suite {
         return state;
     }
 
-    private static SecurityGroupState createSecurityGroup(BaseModelTest test) throws Throwable {
+    private static SecurityGroupState createSecurityGroup(BaseModelTest test, String endpointLink) throws Throwable {
         SecurityGroupState securityGroupState = new SecurityGroupState();
         securityGroupState.authCredentialsLink = "authCredentialsLink";
         securityGroupState.name = UUID.randomUUID().toString();
         securityGroupState.regionId = "regionId";
-        securityGroupState.endpointLink = UUID.randomUUID().toString();
+        securityGroupState.endpointLink = endpointLink;
         securityGroupState.resourcePoolLink = "/resourcePoolLink";
         securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
                 MockAdapter.MockSecurityGroupInstanceSuccessAdapter.SELF_LINK);
@@ -259,12 +260,41 @@ public class NicSecurityGroupsTaskServiceTest extends Suite {
                         NicSecurityGroupsRequest.OperationRequestType.ADD,
                         InstanceAdapterTestTypes.SUCCESS);
                 securityGroupDifferentEndpoints.securityGroupLinks = Arrays.asList(
-                        createSecurityGroup(this).documentSelfLink,
-                        createSecurityGroup(this).documentSelfLink);
+                        createSecurityGroup(this, UUID.randomUUID().toString()).documentSelfLink,
+                        createSecurityGroup(this, UUID.randomUUID().toString()).documentSelfLink);
 
                 postServiceSynchronously(
                         NicSecurityGroupsTaskService.FACTORY_LINK,
                         securityGroupDifferentEndpoints,
+                        NicSecurityGroupsTaskState.class,
+                        CompletionException.class);
+            }
+            {
+                NicSecurityGroupsTaskState securityGroupDifferentEndpoints = buildStartState(
+                        this,
+                        NicSecurityGroupsRequest.OperationRequestType.ADD,
+                        InstanceAdapterTestTypes.SUCCESS);
+                securityGroupDifferentEndpoints.securityGroupLinks = Arrays.asList(
+                        createSecurityGroup(this, UUID.randomUUID().toString()).documentSelfLink,
+                        createSecurityGroup(this, null).documentSelfLink);
+
+                postServiceSynchronously(
+                        NicSecurityGroupsTaskService.FACTORY_LINK,
+                        securityGroupDifferentEndpoints,
+                        NicSecurityGroupsTaskState.class,
+                        CompletionException.class);
+            }
+            {
+                NicSecurityGroupsTaskState securityGroupNullEndpoint = buildStartState(
+                        this,
+                        NicSecurityGroupsRequest.OperationRequestType.ADD,
+                        InstanceAdapterTestTypes.SUCCESS);
+                securityGroupNullEndpoint.securityGroupLinks = Arrays.asList(
+                        createSecurityGroup(this, null).documentSelfLink);
+
+                postServiceSynchronously(
+                        NicSecurityGroupsTaskService.FACTORY_LINK,
+                        securityGroupNullEndpoint,
                         NicSecurityGroupsTaskState.class,
                         CompletionException.class);
             }
