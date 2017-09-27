@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.TEMPLATE_DISK_LINK;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -146,8 +147,18 @@ public class VSphereDiskService extends StatelessService {
      * Finish the disk delete operation by cleaning up the disk reference in the system.
      */
     private void finishDiskDeleteOperation(DiskContext ctx) {
-        OperationSequence.create(deleteDisk(ctx.diskState.documentSelfLink))
-                .next(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED))
+        // Clean up disk description link if it is present.
+        String diskDescLink = CustomProperties.of(ctx.diskState).getString(TEMPLATE_DISK_LINK);
+        OperationSequence seq = null;
+        if (diskDescLink != null && !diskDescLink.isEmpty()) {
+            seq = OperationSequence.create(deleteDisk(diskDescLink));
+        }
+        if (seq == null) {
+            seq = OperationSequence.create(deleteDisk(ctx.diskState.documentSelfLink));
+        } else {
+            seq.next(deleteDisk(ctx.diskState.documentSelfLink));
+        }
+        seq.next(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED))
                 .setCompletion(ctx.failTaskOnError())
                 .sendWith(this);
     }
