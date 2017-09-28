@@ -53,6 +53,7 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
@@ -818,10 +819,12 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                 // update.
                                 if (aws.remoteBucketsByBucketName
                                         .get(diskState.id) == null) {
-                                    deleteOperations
-                                            .add(Operation.createDelete(this,
-                                                    diskState.documentSelfLink)
-                                                    .setBody(aws.resourceDeletionState));
+
+                                    createEndpointLinksUpdateOperation(aws.request.original
+                                                    .endpointLink,
+                                            deleteOperations, diskState
+                                                    .documentSelfLink, diskState
+                                                    .endpointLinks);
                                 }
                             }
                             this.logFine(() -> String.format("Deleting %d disks",
@@ -932,4 +935,36 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             handleReceivedEnumerationData(aws);
         };
     }
+
+    private void createEndpointLinksUpdateOperation(String endpointLink,
+                                                    List<Operation> updateOperations,
+                                                    String selfLink, Set<String> endpointLinks) {
+        if (endpointLinks != null && endpointLinks.contains(endpointLink)) {
+
+            Set<String> endpointLinksToBeDisassociated = new HashSet<>();
+            endpointLinksToBeDisassociated.add(endpointLink);
+            Map<String, Collection<Object>> endpointsToRemove = Collections
+                    .singletonMap(EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
+                            new HashSet<>(endpointLinksToBeDisassociated));
+            ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
+                    ServiceStateCollectionUpdateRequest.create(null,
+                            endpointsToRemove);
+
+            updateOperations.add(Operation
+                    .createPatch(this, selfLink)
+                    .setReferer(this.getUri())
+                    .setBody(serviceStateCollectionUpdateRequest)
+                    .setCompletion(
+                            (updateOp, exception) -> {
+                                if (exception != null) {
+                                    logWarning(() -> String.format("PATCH to " +
+                                                    "instance service %s, failed: %s",
+                                            updateOp.getUri(), exception.toString()));
+                                    return;
+                                }
+                            }));
+
+        }
+    }
+
 }

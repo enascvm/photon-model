@@ -66,6 +66,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
@@ -912,10 +913,16 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                             // update.
                                             if (!this.context.remoteAWSVolumeIds
                                                     .contains(diskState.id)) {
-                                                deleteOperations
-                                                        .add(Operation.createDelete(this.service,
-                                                                diskState.documentSelfLink)
-                                                        .setBody(this.context.resourceDeletionState));
+                                                // Deleting the diskState is done by disassociating
+                                                // the endpointLink from the diskstate. If the
+                                                // diskstate isn't associated with any other
+                                                // endpointLink, it should be deleted by the
+                                                // groomer task
+                                                createEndpointLinksUpdateOperation(this.context
+                                                                .request.original.endpointLink,
+                                                        deleteOperations, diskState
+                                                                .documentSelfLink, diskState
+                                                                .endpointLinks);
 
                                             }
                                         }
@@ -943,6 +950,38 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                     }));
 
         }
+
+
+        private void createEndpointLinksUpdateOperation(String endpointLink, List<Operation>
+                updateOperations, String selfLink, Set<String> endpointLinks) {
+            if (endpointLinks != null && endpointLinks.contains(endpointLink)) {
+
+                Set<String> endpointLinksToBeDisassociated = new HashSet<>();
+                endpointLinksToBeDisassociated.add(endpointLink);
+                Map<String, Collection<Object>> endpointsToRemove = Collections
+                        .singletonMap(EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
+                                new HashSet<>(endpointLinksToBeDisassociated));
+                ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
+                        ServiceStateCollectionUpdateRequest.create(null,
+                                endpointsToRemove);
+
+                updateOperations.add(Operation
+                        .createPatch(this.service, selfLink)
+                        .setReferer(this.service.getUri())
+                        .setBody(serviceStateCollectionUpdateRequest)
+                        .setCompletion(
+                                (updateOp, exception) -> {
+                                    if (exception != null) {
+                                        this.service.logWarning(() -> String.format("PATCH to " +
+                                                        "instance service %s, failed: %s",
+                                                updateOp.getUri(), exception.toString()));
+                                        return;
+                                    }
+                                }));
+
+            }
+        }
+
 
         /**
          * Signals Enumeration Stop to the AWS enumeration adapter. The AWS enumeration adapter will

@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1007,7 +1006,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             assertEquals(expectedTagsCount, diskState.tagLinks.size());
         }
 
-        assertEquals(expectedDiskCount, response.results.documentLinks.size());
+        DiskState diskState = Utils.fromJson(response.results.documents
+                .get(response.results.documentLinks.get(0)), DiskState.class);
+
+        assertEquals(expectedDiskCount, diskState.endpointLinks.size());
     }
 
     private void validateS3TagStatesCreated() {
@@ -1260,7 +1262,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             } catch (Throwable e) {
                 // do nothing, expected is the resource not to be found
             }
-            assertNull("Stale subnet state should have been deleted.", resourceState);
+            //the resourceState will be deleted by the groomer task after disassociation
+            assertTrue("Stale subnet state should have been disassociated.", resourceState
+                    .endpointLinks.isEmpty());
         }
     }
 

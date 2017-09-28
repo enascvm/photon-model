@@ -37,6 +37,8 @@ import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLess
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -81,6 +83,7 @@ import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -94,6 +97,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -889,13 +893,19 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            Operation dOp = Operation.createDelete(this, ls.documentSelfLink)
-                    .setBody(context.resourceDeletionState)
-                    .setReferer(this.getUri());
+            // Deleting the localResourceState is done by disassociating the endpointLink from the
+            // localResourceState. If thelocalResourceState isn't associated with any other
+            // endpointLink, it should be deleted by the groomer task
+            Operation dOp = createEndpointLinksUpdateOperation(context.request.request.endpointLink,
+                    ls.documentSelfLink, ls.endpointLinks);
+
+            if (dOp == null) {
+                return;
+            }
 
             DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {
-                        final String message = "Delete stale %s state";
+                        final String message = "Disassociate stale %s state";
                         if (e != null) {
                             logWarning(message + ": FAILED with %s",
                                     ls.documentSelfLink, Utils.toString(e));
@@ -909,6 +919,39 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .thenApply(r -> context);
+    }
+
+    private Operation createEndpointLinksUpdateOperation(String endpointLink,
+                                                     String selfLink, Set<String> endpointLinks) {
+        if (endpointLinks != null && endpointLinks.contains(endpointLink)) {
+
+            Set<String> endpointLinksToBeDisassociated = new HashSet<>();
+            endpointLinksToBeDisassociated.add(endpointLink);
+            Map<String, Collection<Object>> endpointsToRemove = Collections
+                    .singletonMap(EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
+                            new HashSet<>(endpointLinksToBeDisassociated));
+            ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
+                    ServiceStateCollectionUpdateRequest.create(null,
+                            endpointsToRemove);
+
+            Operation operation = Operation
+                    .createPatch(this.getHost(), selfLink)
+                    .setReferer(getHost().getUri())
+                    .setBody(serviceStateCollectionUpdateRequest)
+                    .setCompletion(
+                            (updateOp, exception) -> {
+                                if (exception != null) {
+                                    logWarning(() -> String.format("PATCH to " +
+                                                    "instance service %s, failed: %s",
+                                            updateOp.getUri(), exception.toString()));
+                                    return;
+                                }
+                            });
+            return operation;
+
+        }
+
+        return null;
     }
 
     private void setResourceTags(ResourceState resourceState, List<Tag> tags) {

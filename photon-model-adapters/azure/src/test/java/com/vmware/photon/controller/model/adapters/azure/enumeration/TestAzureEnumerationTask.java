@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceDisassociated;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
@@ -779,9 +780,9 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     private void assertStaleResources() {
         // Resource groups.
         for (int i = 0; i < STALE_RG_COUNT; i++) {
-            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
+            assertResourceDisassociated(this.host, ResourceGroupService.FACTORY_LINK,
                     STALE_RG_NAME_PREFIX + i,
-                    false);
+                    true);
         }
 
         // VMs

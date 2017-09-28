@@ -22,6 +22,8 @@ import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLess
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -39,12 +41,14 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -254,8 +258,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 .thenApply(log("getEndpointAuthState"))
                 .thenCompose(this::enumeratePageByPage)
                 .thenApply(log("enumeratePageByPage"))
-                .thenCompose(this::deleteLocalResourceStates)
-                .thenApply(log("deleteLocalResourceStates"));
+                .thenCompose(this::disassociateLocalResourceStates)
+                .thenApply(log("disassociateLocalResourceStates"));
     }
 
     /**
@@ -315,7 +319,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      *
      * @see {@link #queryLocalStates(EndpointEnumerationProcess)} for details about the GET criteria
      *      being pre-set/used by this enumeration logic.
-     * @see {@link #deleteLocalResourceStates(EndpointEnumerationProcess)} for details about the
+     * @see {@link #disassociateLocalResourceStates(EndpointEnumerationProcess)} for details about the
      *      DELETE criteria being pre-set/used by this enumeration logic.
      */
     protected abstract void customizeLocalStatesQuery(Query.Builder qBuilder);
@@ -623,9 +627,10 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
     }
 
     /**
-     * Delete stale local resource states. The logic works by recording a timestamp when enumeration
-     * starts. This timestamp is used to lookup resources which have not been touched as part of
-     * current enumeration cycle.
+     * Disassociate stale local resource states. The logic works by recording a timestamp when
+     * enumeration starts. This timestamp is used to lookup resources which have not been touched
+     * as part of current enumeration cycle. Resources not associated with any endpointLink will
+     * be removed by the groomer task.
      * <p>
      * Here is the list of criteria used to locate the stale local resources states:
      * <ul>
@@ -639,7 +644,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * {@link #customizeLocalStatesQuery(com.vmware.xenon.services.common.QueryTask.Query.Builder)}</li>
      * </ul>
      */
-    protected DeferredResult<T> deleteLocalResourceStates(T context) {
+    protected DeferredResult<T> disassociateLocalResourceStates(T context) {
 
         final String msg = "Delete %ss that no longer exist in the endpoint: %s";
 
@@ -685,8 +690,15 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 return;
             }
 
-            Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink)
-                    .setBody(context.resourceDeletionState);
+            // Deleting the localResourceState is done by disassociating the endpointLink from the
+            // localResourceState. If the localResourceState isn't associated with any other
+            // endpointLink, it should be eventually deleted by the groomer task
+            Operation dOp = createEndpointLinksUpdateOperation(context, ls.documentSelfLink, ls
+                    .endpointLinks);
+
+            if (dOp == null) {
+                return;
+            }
 
             DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {
@@ -713,4 +725,41 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
     protected boolean shouldDelete(LOCAL_STATE localState) {
         return !this.enumExternalResourcesIds.contains(localState.id);
     }
+
+    private Operation createEndpointLinksUpdateOperation(T context,
+                                                     String selfLink, Set<String> endpointLinks) {
+        String endpointLink = context.endpointState.documentSelfLink;
+        if (endpointLinks != null && endpointLinks.contains(endpointLink)) {
+
+            Set<String> endpointLinksToBeDisassociated = new HashSet<>();
+            endpointLinksToBeDisassociated.add(endpointLink);
+            Map<String, Collection<Object>> endpointsToRemove = Collections
+                    .singletonMap(EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
+                            new HashSet<>(endpointLinksToBeDisassociated));
+            ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
+                    ServiceStateCollectionUpdateRequest.create(null,
+                            endpointsToRemove);
+
+            Operation operation = Operation
+                    .createPatch(context.service, selfLink)
+                    .setReferer(context.service.getHost().getUri())
+                    .setBody(serviceStateCollectionUpdateRequest)
+                    .setCompletion(
+                            (updateOp, exception) -> {
+                                if (exception != null) {
+                                    context.service.logWarning(() -> String.format("PATCH to " +
+                                                    "instance service %s, failed: %s",
+                                            updateOp.getUri(), exception.toString()));
+                                    return;
+                                }
+                            });
+            return operation;
+
+        }
+
+        return null;
+    }
+
+
+
 }
