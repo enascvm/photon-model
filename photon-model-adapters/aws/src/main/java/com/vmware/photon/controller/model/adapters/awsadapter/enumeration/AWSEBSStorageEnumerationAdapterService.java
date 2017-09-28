@@ -58,6 +58,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -917,10 +918,20 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                             // update.
                                             if (!this.context.remoteAWSVolumeIds
                                                     .contains(diskState.id)) {
-                                                deleteOperations
-                                                        .add(Operation.createDelete(this.service,
-                                                                diskState.documentSelfLink)
-                                                        .setBody(this.context.resourceDeletionState));
+                                                // Deleting the diskState is done by disassociating
+                                                // the endpointLink from the diskstate. If the
+                                                // diskstate isn't associated with any other
+                                                // endpointLink, it should be deleted by the
+                                                // groomer task
+                                                Operation dsOperation = AdapterUtils
+                                                        .createEndpointLinksUpdateOperation
+                                                        (this.service, this.context
+                                                                .request.original.endpointLink,
+                                                                diskState.documentSelfLink, diskState
+                                                                .endpointLinks);
+                                                if (dsOperation != null) {
+                                                    deleteOperations.add(dsOperation);
+                                                }
 
                                             }
                                         }

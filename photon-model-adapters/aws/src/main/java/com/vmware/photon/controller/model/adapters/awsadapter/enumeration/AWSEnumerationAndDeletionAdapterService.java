@@ -41,12 +41,15 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -266,7 +269,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 if (aws.request.original.preserveMissing) {
                     retireComputeStates(aws);
                 } else {
-                    deleteComputeStates(aws);
+                    disassociateComputeStates(aws);
                 }
             }
             break;
@@ -459,69 +462,94 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     /**
      * Creates operations for the deletion of all the compute states and networks from the local
      * system for which the AWS instance has been terminated from the remote instance. Kicks off the
-     * deletion of all the identified compute states, also the networks and disks for which the
+     * disassociation of all the identified compute states, also the networks and disks for which the
      * actual AWS instance has been terminated.
      */
-    private void deleteComputeStates(EnumerationDeletionContext context) {
+    private void disassociateComputeStates(EnumerationDeletionContext context) {
 
-        List<Operation> deleteOperations = new ArrayList<>();
+        List<Operation> updateOperations = new ArrayList<>();
         // Create delete operations for the compute states that have to be deleted from the system.
         for (ComputeState computeStateToDelete : context.instancesToBeDeleted) {
-            Operation deleteComputeStateOperation = Operation
-                    .createDelete(this.getHost(), computeStateToDelete.documentSelfLink)
-                    .setBody(getDeletionState(context.request.original
-                            .deletedResourceExpirationMicros))
-                    .setReferer(getHost().getUri());
-            deleteOperations.add(deleteComputeStateOperation);
-            // Create delete operations for all the network links associated with each of the
+            Operation csUpdateOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context
+                            .request.original.endpointLink, computeStateToDelete.documentSelfLink,
+                    computeStateToDelete.endpointLinks);
+            if (csUpdateOp != null) {
+                updateOperations.add(csUpdateOp);
+            }
+            // Create update operations for all the network links associated with each of the
             // compute states.
             if (computeStateToDelete.networkInterfaceLinks != null) {
                 for (String networkLinkToDelete : computeStateToDelete.networkInterfaceLinks) {
-                    Operation deleteNetworkOperation = Operation
-                            .createDelete(this.getHost(), networkLinkToDelete)
-                            .setBody(getDeletionState(context.request.original
-                                    .deletedResourceExpirationMicros))
-                            .setReferer(getHost().getUri());
-                    deleteOperations.add(deleteNetworkOperation);
+
+                    sendRequest(Operation.createGet(this.getHost(), networkLinkToDelete)
+                            .setCompletion((o, e) -> {
+                                if (e != null) {
+                                    logWarning(() -> String.format("Failure retrieving networkInterfaceState: %s, " +
+                                            "reason: %s", networkLinkToDelete, e.toString()));
+                                    return;
+                                }
+                                NetworkInterfaceState networkInterfaceState = o.getBody(NetworkInterfaceState.class);
+                                Operation nsUpdateOp = AdapterUtils
+                                        .createEndpointLinksUpdateOperation(this, context
+                                                .request.original.endpointLink,
+                                        networkLinkToDelete, networkInterfaceState.endpointLinks);
+                                if (nsUpdateOp != null) {
+                                    updateOperations.add(nsUpdateOp);
+                                }
+                            }));
+
+
                 }
             }
 
-            // Create delete operations for all the disk links associated with each of the
+            // Create update operations for all the disk links associated with each of the
             // compute states.
             if (computeStateToDelete.diskLinks != null) {
                 for (String diskLinkToDelete : computeStateToDelete.diskLinks) {
-                    Operation deleteDiskOperation = Operation
-                            .createDelete(this.getHost(), diskLinkToDelete)
-                            .setBody(getDeletionState(context.request.original
-                                    .deletedResourceExpirationMicros))
-                            .setReferer(getHost().getUri());
-                    deleteOperations.add(deleteDiskOperation);
+
+                    sendRequest(Operation.createGet(this.getHost(), diskLinkToDelete)
+                            .setCompletion((o, e) -> {
+                                if (e != null) {
+                                    logWarning(() -> String.format("Failure retrieving diskState: %s, " +
+                                            "reason: %s", diskLinkToDelete, e.toString()));
+                                    return;
+                                }
+                                DiskState diskState = o.getBody(DiskState.class);
+                                Operation dsUpdateOp = AdapterUtils
+                                        .createEndpointLinksUpdateOperation(this,
+                                        context.request.original.endpointLink, diskLinkToDelete,
+                                        diskState.endpointLinks);
+                                if (dsUpdateOp != null) {
+                                    updateOperations.add(dsUpdateOp);
+                                }
+                            }));
                 }
             }
         }
-        // Kick off deletion operations with a join handler.
-        if (deleteOperations == null || deleteOperations.size() == 0) {
-            logFine(() -> "No compute states to be deleted.");
+        // Kick off update operations with a join handler.
+        if (updateOperations == null || updateOperations.size() == 0) {
+            logFine(() -> "No compute states to be disassociated.");
             deleteResourcesInLocalSystem(context);
             return;
         }
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
-                logSevere(() -> String.format("Failure deleting local compute states.",
+                logSevere(() -> String.format("Failure disassociating local compute states.",
                         Utils.toString(exc)));
                 deleteResourcesInLocalSystem(context);
                 return;
 
             }
-            logFine(() -> "Deleted local compute states and networks.");
+            logFine(() -> "Disassociated local compute states and networks.");
             deleteResourcesInLocalSystem(context);
             return;
         };
-        OperationJoin joinOp = OperationJoin.create(deleteOperations);
+        OperationJoin joinOp = OperationJoin.create(updateOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
     }
+
 
     /**
      * Creates operations to retire all the compute states in the local system for which the AWS

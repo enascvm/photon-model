@@ -818,10 +818,16 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                 // update.
                                 if (aws.remoteBucketsByBucketName
                                         .get(diskState.id) == null) {
-                                    deleteOperations
-                                            .add(Operation.createDelete(this,
-                                                    diskState.documentSelfLink)
-                                                    .setBody(aws.resourceDeletionState));
+
+                                    Operation updateOp = AdapterUtils
+                                            .createEndpointLinksUpdateOperation(this, aws
+                                                    .request.original.endpointLink, diskState
+                                                    .documentSelfLink, diskState
+                                                    .endpointLinks);
+
+                                    if (updateOp != null) {
+                                        deleteOperations.add(updateOp);
+                                    }
                                 }
                             }
                             this.logFine(() -> String.format("Deleting %d disks",
@@ -933,4 +939,5 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             handleReceivedEnumerationData(aws);
         };
     }
+
 }

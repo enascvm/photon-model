@@ -15,6 +15,10 @@ package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,10 +28,12 @@ import java.util.logging.Level;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -214,6 +220,44 @@ public class AdapterUtils {
         resourceState.documentExpirationTimeMicros = documentExpirationMicros;
 
         return resourceState;
+    }
+
+
+    /**
+     * Utility method to create and operation to remove an endpointLink from the endpointLinks set
+     * of the resourceState
+     * @param service
+     * @param endpointLink
+     * @param selfLink
+     * @param endpointLinks
+     * @return
+     */
+    public static Operation createEndpointLinksUpdateOperation(StatelessService service, String
+            endpointLink, String selfLink, Set<String> endpointLinks) {
+
+        if (endpointLinks == null || !endpointLinks.contains(endpointLink)) {
+            return null;
+        }
+
+        Map<String, Collection<Object>> endpointsToRemoveMap = Collections.singletonMap(
+                EndpointState.FIELD_NAME_ENDPOINT_LINKS, Collections.singleton(endpointLink));
+        ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
+                ServiceStateCollectionUpdateRequest.create(null, endpointsToRemoveMap);
+
+        return Operation
+                .createPatch(UriUtils.buildUri(service.getHost(), selfLink))
+                .setReferer(service.getUri())
+                .setBody(serviceStateCollectionUpdateRequest)
+                .setCompletion(
+                        (updateOp, exception) -> {
+                            if (exception != null) {
+                                service.logWarning(() -> String.format("PATCH to " +
+                                        "instance " +
+                                        "service %s, " +
+                                        "failed: %s", updateOp.getUri(), exception.toString()));
+                                return;
+                            }
+                        });
     }
 
 }

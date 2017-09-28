@@ -76,6 +76,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandl
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -891,13 +892,19 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            Operation dOp = Operation.createDelete(this, ls.documentSelfLink)
-                    .setBody(context.resourceDeletionState)
-                    .setReferer(this.getUri());
+            // Deleting the localResourceState is done by disassociating the endpointLink from the
+            // localResourceState. If the localResourceState isn't associated with any other
+            // endpointLink, it should be deleted by the groomer task
+            Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context
+                    .request.request.endpointLink, ls.documentSelfLink, ls.endpointLinks);
+
+            if (dOp == null) {
+                return;
+            }
 
             DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {
-                        final String message = "Delete stale %s state";
+                        final String message = "Disassociate stale %s state";
                         if (e != null) {
                             logWarning(message + ": FAILED with %s",
                                     ls.documentSelfLink, Utils.toString(e));
@@ -912,6 +919,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .thenApply(r -> context);
     }
+
 
     private void setResourceTags(ResourceState resourceState, List<Tag> tags) {
         if (tags != null && !tags.isEmpty()) {

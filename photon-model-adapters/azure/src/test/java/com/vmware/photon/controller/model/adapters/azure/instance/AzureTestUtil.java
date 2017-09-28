@@ -1176,6 +1176,7 @@ public class AzureTestUtil {
 
         storageDesc.tenantLinks = endpointState.tenantLinks;
         storageDesc.endpointLink = endpointState.documentSelfLink;
+
         if (storageDesc.endpointLinks == null) {
             storageDesc.endpointLinks = new HashSet<>();
         }
@@ -1202,6 +1203,9 @@ public class AzureTestUtil {
 
         rGroupState.tenantLinks = endpointState.tenantLinks;
         rGroupState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+
+        rGroupState.endpointLinks = new HashSet<>();
+        rGroupState.endpointLinks.add(endpointState.documentSelfLink);
 
         rGroupState.customProperties = new HashMap<>();
         rGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME, computeHost.documentSelfLink);
@@ -1242,6 +1246,7 @@ public class AzureTestUtil {
 
         diskState.tenantLinks = endpointState.tenantLinks;
         diskState.endpointLink = endpointState.documentSelfLink;
+
         if (diskState.endpointLinks == null) {
             diskState.endpointLinks = new HashSet<>();
         }
@@ -1276,6 +1281,7 @@ public class AzureTestUtil {
             networkState.subnetCIDR = azureNicSpecs.network.cidr;
             networkState.authCredentialsLink = endpointSate.authCredentialsLink;
             networkState.endpointLink = endpointSate.documentSelfLink;
+
             if (networkState.endpointLinks == null) {
                 networkState.endpointLinks = new HashSet<>();
             }
@@ -1678,6 +1684,38 @@ public class AzureTestUtil {
 
         assertEquals("Expected: " + shouldExists + ", but was: " + exists, shouldExists, exists);
     }
+
+
+    /**
+     * Assert that a resource with the provided name exist in the document store.
+     *
+     * @param factoryLink
+     *            Factory link to the stateful service which states to check.
+     * @param name
+     *            name of the resource to assert if exists.
+     * @param isDisassociated
+     *            whether to assert if a resource exists or not.
+     */
+    public static void assertResourceDisassociated(VerificationHost host, String factoryLink,
+                                            String name, boolean isDisassociated) {
+
+        ServiceDocumentQueryResult result = host.getExpandedFactoryState(
+                UriUtils.buildUri(host, factoryLink));
+
+        boolean disassociated = false;
+        for (Object document : result.documents.values()) {
+            ResourceState state = Utils.fromJson(document, ResourceState.class);
+
+            if (name.equals(state.name) && state.endpointLinks.isEmpty()) {
+                disassociated = true;
+                break;
+            }
+        }
+
+        assertEquals("Expected: " + isDisassociated + ", but was: " + disassociated, isDisassociated,
+                disassociated);
+    }
+
 
     /**
      * Validate DiskStates are populated with the appropriate type tagLinks
