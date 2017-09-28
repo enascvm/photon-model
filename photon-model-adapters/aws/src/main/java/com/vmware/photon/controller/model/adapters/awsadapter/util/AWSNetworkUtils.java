@@ -165,10 +165,6 @@ public class AWSNetworkUtils {
                 .addKindFieldClause(stateClass)
                 .addInClause(ResourceState.FIELD_NAME_ID, stateIds);
 
-        if (endpointLink != null && !endpointLink.isEmpty()) {
-            queryBuilder.addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, endpointLink);
-        }
-
         if (regionId != null) {
             queryBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, regionId);
         }

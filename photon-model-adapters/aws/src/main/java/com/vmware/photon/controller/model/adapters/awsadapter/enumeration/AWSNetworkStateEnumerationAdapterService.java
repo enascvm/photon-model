@@ -124,7 +124,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     public static class AWSNetworkEnumerationRequest {
         public ComputeEnumerateResourceRequest request;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public String regionId;
         public List<String> tenantLinks;
         public String parentComputeLink;
@@ -383,7 +383,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getAWSAsyncClient(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
-                context.request.parentAuth, context.request.regionId,
+                context.request.endpointAuth, context.request.regionId,
                 this, (t) -> context.operation.fail(t));
         if (context.amazonEC2Client != null) {
             handleNetworkStateChanges(context, next);
@@ -962,7 +962,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         this.context.request.regionId,
                         this.context.request.request.resourcePoolLink,
                         this.context.request.request.endpointLink,
-                        this.context.request.parentAuth.documentSelfLink,
+                        this.context.request.endpointAuth.documentSelfLink,
                         this.context.request.parentComputeLink,
                         this.context.request.tenantLinks,
                         adapterUri);

@@ -118,7 +118,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
     public static class EBSStorageEnumerationContext {
         public AmazonEC2AsyncClient amazonEC2Client;
         public ComputeEnumerateAdapterRequest request;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSEBSStorageEnumerationStages stage;
         public EBSVolumesEnumerationSubStage subStage;
@@ -158,7 +158,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 Operation op) {
             this.operation = op;
             this.request = request;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
             this.localDiskStateMap = new ConcurrentSkipListMap<>();
             this.volumesToBeUpdated = new HashMap<>();
@@ -264,7 +264,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(EBSStorageEnumerationContext aws,
             AWSEBSStorageEnumerationStages next) {
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
+        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.endpointAuth,
                 aws.request.regionId, this, t -> aws.error = t);
         if (aws.error != null) {
             aws.stage = AWSEBSStorageEnumerationStages.ERROR;
@@ -272,7 +272,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             return;
         }
         OperationContext opContext = OperationContext.getOperationContext();
-        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.parentAuth,
+        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
                 aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
@@ -437,17 +437,14 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
          */
         private void getLocalResources(EBSVolumesEnumerationSubStage next) {
             // query all disk state resources for the cluster filtered by the received set of
-            // instance Ids. the filtering is performed on the selected resource pool and auth
-            // credentials link.
+            // instance Ids. The filtering is performed on the selected resource pool.
             Query.Builder qBuilder = Query.Builder.create()
                     .addKindFieldClause(DiskState.class)
-                    .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
-                            this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE, STORAGE_TYPE_EBS)
                     .addInClause(ComputeState.FIELD_NAME_ID,
                             this.context.remoteAWSVolumes.keySet());
 
-            addScopeCriteria(qBuilder, DiskState.class, this.context);
+            addScopeCriteria(qBuilder, this.context);
 
             QueryTask queryTask = QueryTask.Builder.createDirectTask()
                     .setQuery(qBuilder.build())
@@ -579,7 +576,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.context.volumesToBeCreated.forEach(volume -> {
                 diskStatesToBeCreated.add(mapVolumeToDiskState(volume,
                         this.context.request.original.resourcePoolLink,
-                        this.context.parentAuth.documentSelfLink,
+                        this.context.endpointAuth.documentSelfLink,
                         this.context.request.original.endpointLink,
                         this.context.request.regionId,
                         this.context.request.parentCompute.documentSelfLink,
@@ -624,7 +621,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.context.volumesToBeUpdated.forEach((selfLink, volume) -> {
                 diskStatesToBeUpdated.add(mapVolumeToDiskState(volume,
                         null,
-                        this.context.parentAuth.documentSelfLink,
+                        this.context.endpointAuth.documentSelfLink,
                         this.context.request.original.endpointLink,
                         this.context.request.regionId,
                         this.context.request.parentCompute.documentSelfLink,
@@ -844,8 +841,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         private void deleteDiskStates(EBSVolumesEnumerationSubStage next) {
             Query.Builder qBuilder = Builder.create()
                     .addKindFieldClause(DiskState.class)
-                    .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
-                            this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE,
                             STORAGE_TYPE_EBS)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
@@ -856,7 +851,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                             SOURCE_TASK_LINK, ResourceEnumerationTaskService.FACTORY_LINK,
                             QueryTask.Query.Occurance.MUST_OCCUR);
 
-            addScopeCriteria(qBuilder, DiskState.class, this.context);
+            addScopeCriteria(qBuilder, this.context);
 
             QueryTask q = QueryTask.Builder.createDirectTask()
                     .addOption(QueryOption.EXPAND_CONTENT)
@@ -993,19 +988,16 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
 
 
     /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
+     * Constrain every query with regionId and tenantLinks, if presented.
      */
     private static void addScopeCriteria(
             Query.Builder qBuilder,
-            Class<? extends ResourceState> stateClass,
             EBSStorageEnumerationContext ctx) {
 
         // Add REGION criteria
         qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.request.regionId);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
 }

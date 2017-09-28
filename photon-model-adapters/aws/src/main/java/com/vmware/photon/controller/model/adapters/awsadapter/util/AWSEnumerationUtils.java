@@ -111,7 +111,6 @@ public class AWSEnumerationUtils {
      * - Environment name(AWS),
      * - id (instance type),
      * - ZoneId(placement).
-     * - Endpoint link
      * - Created from the enumeration task.
      * Compute hosts are modeled to support VM guests.So excluding them from the query to get
      * compute descriptions for VMs.
@@ -128,7 +127,6 @@ public class AWSEnumerationUtils {
                 .addFieldClause(ComputeDescription.FIELD_NAME_ENVIRONMENT_NAME,
                         ComputeDescription.ENVIRONMENT_NAME_AWS)
                 .addFieldClause(ComputeDescription.FIELD_NAME_REGION_ID, regionId)
-                .addFieldClause(ComputeDescription.FIELD_NAME_ENDPOINT_LINK, endpointLink)
                 .addFieldClause(sourceTaskName, ResourceEnumerationTaskService.FACTORY_LINK)
                 .build();
 
@@ -173,7 +171,7 @@ public class AWSEnumerationUtils {
      */
     public static ComputeState mapInstanceToComputeState(ServiceHost host, Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
-            String endpointLink,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
+            Set<String> endpointLinks,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
             Set<String> internalTagLinks, String regionId, String zoneId, List<String> tenantLinks,
             List<Tag> createdExternalTags, Boolean isNewState) {
         ComputeState computeState = new ComputeState();
@@ -199,8 +197,9 @@ public class AWSEnumerationUtils {
         if (computeState.endpointLinks == null) {
             computeState.endpointLinks = new HashSet<String>();
         }
-        computeState.endpointLinks.add(endpointLink);
-        computeState.endpointLink = endpointLink;
+        computeState.endpointLinks.addAll(endpointLinks);
+        // assign first one for time being (for backward compatibility)
+        computeState.endpointLink = endpointLinks.iterator().next();
         // Compute descriptions are looked up by the instanceType in the local list of CDs.
         computeState.descriptionLink = computeDescriptionLink;
         computeState.hostName = instance.getPublicDnsName();

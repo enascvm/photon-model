@@ -40,7 +40,6 @@ import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterR
 import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
-import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.util.AssertUtil;
@@ -85,10 +84,12 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
 
         Query.Builder findSecurityGroupStates = Builder.create()
                 .addKindFieldClause(SecurityGroupState.class)
-                .addCompositeFieldClause(
-                        SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
-                        context.request.parentCompute.documentSelfLink);
+                .addInClause(SecurityGroupState.FIELD_NAME_ID, context.enumExternalResourcesIds);
+        // VSYM-8581 TODO this needs to be added back once we create one compute host for n endpoints
+//                .addCompositeFieldClause(
+//                        SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+//                        ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+//                        context.request.parentCompute.documentSelfLink);
 
         if (context.enumExternalResourcesIds != null && !context.enumExternalResourcesIds.isEmpty()) {
             findSecurityGroupStates
@@ -120,6 +121,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 ComputeEnumerateAdapterRequest request, Operation op) {
 
             super(service, request, op, SecurityGroupState.class, FACTORY_LINK);
+            setEndpointLinkAgnostic(true);
         }
 
         @Override
@@ -150,11 +152,11 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
 
         @Override
         protected void customizeLocalStatesQuery(Query.Builder qBuilder) {
-
-            qBuilder.addCompositeFieldClause(
-                    ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                    ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
-                    this.request.parentCompute.documentSelfLink);
+            // VSYM-8581 TODO this needs to be added back once we create one compute host for n endpoints
+//            qBuilder.addCompositeFieldClause(
+//                    ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+//                    ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+//                    this.request.parentCompute.documentSelfLink);
         }
 
         @Override
@@ -168,7 +170,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             stateHolder.localState = new SecurityGroupState();
 
             if (existingLocalResourceState == null) {
-                stateHolder.localState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
+                stateHolder.localState.authCredentialsLink = this.request.endpointAuth.documentSelfLink;
                 stateHolder.localState.resourcePoolLink = this.request.parentCompute.resourcePoolLink;
                 stateHolder.localState.instanceAdapterReference = AdapterUriUtil
                         .buildAdapterUri(this.service.getHost(),
@@ -217,7 +219,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             EnumerationStages next) {
         if (context.amazonEC2Client == null) {
             context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
-                    context.request.parentAuth,
+                    context.request.endpointAuth,
                     context.getEndpointRegion(),
                     this,
                     (t) -> handleError(context, t));

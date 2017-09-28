@@ -100,7 +100,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     public static class EnumerationDeletionContext {
         public AmazonEC2AsyncClient amazonEC2Client;
         public ComputeEnumerateAdapterRequest request;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSEnumerationDeletionStages stage;
         public AWSEnumerationDeletionSubStage subStage;
@@ -121,7 +121,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 Operation op) {
             this.request = request;
             this.operation = op;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
             this.localInstanceIds = new ConcurrentSkipListMap<>();
             this.remoteInstanceIds = new HashSet<>();
@@ -205,7 +205,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(EnumerationDeletionContext aws,
             AWSEnumerationDeletionStages next) {
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
+        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.endpointAuth,
                 aws.request.regionId, this, (t) -> aws.error = t);
         if (aws.error != null) {
             aws.stage = AWSEnumerationDeletionStages.ERROR;
@@ -213,7 +213,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             return;
         }
         OperationContext opContext = OperationContext.getOperationContext();
-        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.parentAuth,
+        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
                 aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
@@ -300,7 +300,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                                 LifecycleState.RETIRED.toString()),
                         Occurance.MUST_NOT_OCCUR);
 
-        addScopeCriteria(qBuilder, ComputeState.class, context);
+        addScopeCriteria(qBuilder, context);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
@@ -616,19 +616,16 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Constrain every query with endpointLink/region and tenantLinks, if presented.
+     * Constrain every query with region and tenantLinks, if presented.
      */
     private static void addScopeCriteria(
             Query.Builder qBuilder,
-            Class<? extends ResourceState> stateClass,
             EnumerationDeletionContext ctx) {
 
         // Add REGION criteria
         qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.request.regionId);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
 }

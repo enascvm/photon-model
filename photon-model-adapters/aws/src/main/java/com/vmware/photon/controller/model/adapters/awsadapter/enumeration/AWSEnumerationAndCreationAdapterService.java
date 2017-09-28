@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -71,6 +72,8 @@ import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -98,7 +101,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     public static class EnumerationCreationContext {
         public AmazonEC2AsyncClient amazonEC2Client;
         public ComputeEnumerateAdapterRequest request;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSEnumerationCreationStages stage;
         public AWSEnumerationRefreshSubStage refreshSubStage;
@@ -137,7 +140,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 Operation op) {
             this.operation = op;
             this.request = request;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
             this.localAWSInstanceMap = new ConcurrentSkipListMap<>();
             this.instancesToBeUpdated = new ConcurrentSkipListMap<>();
@@ -206,6 +209,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
         private void createMissingLocalInstances(List<AvailabilityZone> zones,
                 Map<String, ComputeState> cm) {
+
+            // For existing compute & description, update the endpoint links
+            List<Operation> descUpdateOps = new ArrayList<>();
             zones.stream()
                     .filter(z -> cm.containsKey(z.getZoneName()))
                     .forEach(z -> {
@@ -213,7 +219,12 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         this.context.zones.put(c.id,
                                 ZoneData.build(this.context.request.regionId,
                                         c.id, c.documentSelfLink));
+                        if (!c.endpointLinks.contains(this.context.request.original.endpointLink)) {
+                            descUpdateOps.add(updateResourceState(c.documentSelfLink));
+                            descUpdateOps.add(updateResourceState(c.descriptionLink));
+                        }
                     });
+
             List<Operation> descOps = zones.stream()
                     .filter(z -> !cm.containsKey(z.getZoneName()))
                     .map(this::createComputeDescription)
@@ -222,43 +233,73 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                             .setBody(cd))
                     .collect(Collectors.toList());
 
-            if (descOps.isEmpty()) {
+            if (descOps.isEmpty() && descUpdateOps.isEmpty()) {
                 proceedWithRefresh();
                 return;
             }
 
-            OperationJoin
-                    .create(descOps)
-                    .setCompletion(
-                            (ops, exs) -> {
-                                if (exs != null) {
-                                    this.service
-                                            .logSevere(() -> String.format("Error creating a"
-                                                            + " compute descriptions for "
-                                                            + "discovered AvailabilityZone: %s",
-                                                    Utils.toString(exs)));
-                                    this.context.operation.fail(exs.values().iterator().next());
-                                    return;
-                                }
-                                List<Operation> computeOps = ops
-                                        .values()
-                                        .stream()
-                                        .map(o -> o.getBody(ComputeDescription.class))
-                                        .map(this::createComputeInstanceForAvailabilityZone)
-                                        .map(c -> Operation
-                                                .createPost(this.service,
-                                                        ComputeService.FACTORY_LINK)
-                                                .setBody(c))
-                                        .collect(Collectors.toList());
+            OperationSequence operationSequence = null;
+            if (!descOps.isEmpty()) {
+                operationSequence = OperationSequence.create(OperationJoin.create(descOps))
+                        .setCompletion(
+                                (ops, exs) -> {
+                                    if (exs != null) {
+                                        this.service
+                                                .logSevere(() -> String.format("Error creating a"
+                                                                + " compute descriptions for "
+                                                                + "discovered AvailabilityZone: %s",
+                                                        Utils.toString(exs)));
+                                        this.context.operation.fail(exs.values().iterator().next());
+                                        return;
+                                    }
 
-                                invokeComputeOps(computeOps);
-                            })
-                    .sendWith(this.service);
+                                    List<Operation> computeOps = ops
+                                            .values()
+                                            .stream()
+                                            .map(o -> o.getBody(ComputeDescription.class))
+                                            .map(this::createComputeInstanceForAvailabilityZone)
+                                            .map(c -> Operation
+                                                    .createPost(this.service,
+                                                            ComputeService.FACTORY_LINK)
+                                                    .setBody(c))
+                                            .collect(Collectors.toList());
+
+                                    boolean refresh = descUpdateOps.isEmpty() ? true : false;
+                                    invokeComputeOps(computeOps, refresh);
+                                });
+            }
+
+            if (!descUpdateOps.isEmpty()) {
+                OperationJoin descUpdateJoin = OperationJoin.create(descUpdateOps);
+                if (operationSequence == null) {
+                    operationSequence = OperationSequence.create(descUpdateJoin);
+                } else {
+                    operationSequence = operationSequence.next(descUpdateJoin);
+                }
+                operationSequence
+                        .setCompletion(
+                                (ops, exs) -> {
+                                    if (exs != null) {
+                                        this.service
+                                                .logSevere(() -> String.format("Error updating a"
+                                                                + " compute descriptions for "
+                                                                + "discovered AvailabilityZone: %s",
+                                                        Utils.toString(exs)));
+                                        this.context.operation.fail(exs.values().iterator().next());
+                                        return;
+                                    }
+                                    proceedWithRefresh();
+                                    return;
+                                });
+            }
+            operationSequence.sendWith(this.service);
         }
 
-        private void invokeComputeOps(List<Operation> computeOps) {
+        private void invokeComputeOps(List<Operation> computeOps, boolean refresh) {
             if (computeOps.isEmpty()) {
-                proceedWithRefresh();
+                if (refresh) {
+                    proceedWithRefresh();
+                }
                 return;
             }
 
@@ -277,7 +318,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                         ZoneData.build(
                                                 this.context.request.regionId,
                                                 c.id, c.documentSelfLink)));
-                        proceedWithRefresh();
+                        if (refresh) {
+                            proceedWithRefresh();
+                        }
                     })
                     .sendWith(this.service);
         }
@@ -290,6 +333,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.parentLink = this.context.parentCompute.documentSelfLink;
             computeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
             computeState.endpointLink = this.context.request.original.endpointLink;
+            computeState.endpointLinks = this.context.parentCompute.endpointLinks;
             if (computeState.endpointLinks == null) {
                 computeState.endpointLinks = new HashSet<String>();
             }
@@ -311,6 +355,21 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
             computeState.tenantLinks = this.context.parentCompute.tenantLinks;
             return computeState;
+        }
+
+        private Operation updateResourceState(String docLink) {
+            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                    (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
+                            Collections.singletonList(this.context.request.original.endpointLink));
+            Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
+                    (ResourceState.FIELD_NAME_ENDPOINT_LINKS, Collections.EMPTY_LIST);
+
+            ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                    .create(collectionsToAddMap, collectionsToRemoveMap);
+
+            return Operation.createPatch(this.service.getHost(), docLink)
+                    .setReferer(this.service.getUri())
+                    .setBody(updateEndpointLinksRequest);
         }
 
         private ComputeDescription createComputeDescription(AvailabilityZone z) {
@@ -603,8 +662,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             this.service.logFine(() -> "Creating compute descriptions for enumerated VMs");
             AWSComputeDescriptionCreationState cd = new AWSComputeDescriptionCreationState();
             cd.instancesToBeCreated = this.context.instancesToBeCreated;
+            cd.instancesToBeUpdated = new ArrayList<>(this.context.instancesToBeUpdated.values());
             cd.parentTaskLink = this.context.request.original.taskReference;
-            cd.authCredentiaslLink = this.context.parentAuth.documentSelfLink;
+            cd.authCredentiaslLink = this.context.endpointAuth.documentSelfLink;
             cd.tenantLinks = this.context.parentCompute.tenantLinks;
             cd.parentDescription = this.context.parentCompute.description;
             cd.endpointLink = this.context.request.original.endpointLink;
@@ -648,7 +708,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.parentTaskLink = this.context.request.original.taskReference;
             awsComputeState.parentCDStatsAdapterReferences = this.context.parentCompute.description.statsAdapterReferences;
             awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
-            awsComputeState.parentAuth = this.context.parentAuth;
+            awsComputeState.endpointAuth = this.context.endpointAuth;
             awsComputeState.regionId = this.context.request.regionId;
             awsComputeState.enumeratedNetworks = this.context.enumeratedNetworks;
             awsComputeState.enumeratedSecurityGroups = this.context.enumeratedSecurityGroups;
@@ -765,11 +825,12 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         }
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
-                        context.request.original.resourceLink())
+                // VSYM-8581 TODO this needs to be added back once we create one compute host for n endpoints
+//                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
+//                        context.request.original.resourceLink())
                 .addInClause(ResourceState.FIELD_NAME_ID, remoteIds);
 
-        addScopeCriteria(qBuilder, ComputeState.class, context);
+        addScopeCriteria(qBuilder, context);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
@@ -803,18 +864,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Constrain every query with endpointLink/region and tenantLinks, if presented.
+     * Constrain every query with region and tenantLinks, if presented.
      */
     private static void addScopeCriteria(Query.Builder qBuilder,
-            Class<? extends ResourceState> stateClass,
             EnumerationCreationContext ctx) {
 
         // Add REGION criteria
         qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.request.regionId);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
     @Override
@@ -976,7 +1034,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(EnumerationCreationContext aws,
             AWSEnumerationCreationStages next) {
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
+        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.endpointAuth,
                 aws.request.regionId, this, (t) -> aws.error = t);
         if (aws.error != null) {
             aws.stage = AWSEnumerationCreationStages.ERROR;
@@ -984,7 +1042,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             return;
         }
         OperationContext opContext = OperationContext.getOperationContext();
-        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.parentAuth,
+        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
                 aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
@@ -1020,7 +1078,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             AWSEnumerationRefreshSubStage next) {
         ComputeEnumerateAdapterRequest sgEnumeration = new ComputeEnumerateAdapterRequest(
                 aws.request.original,
-                aws.parentAuth,
+                aws.endpointAuth,
                 aws.parentCompute, aws.request.regionId);
         Operation patchSGOperation = Operation
                 .createPatch(this, AWSSecurityGroupEnumerationAdapterService.SELF_LINK)
@@ -1051,7 +1109,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             AWSEnumerationRefreshSubStage next) {
         AWSNetworkEnumerationRequest networkEnumeration = new AWSNetworkEnumerationRequest();
         networkEnumeration.tenantLinks = aws.parentCompute.tenantLinks;
-        networkEnumeration.parentAuth = aws.parentAuth;
+        networkEnumeration.endpointAuth = aws.endpointAuth;
         networkEnumeration.regionId = aws.request.regionId;
         networkEnumeration.request = aws.request.original;
         networkEnumeration.parentComputeLink = aws.request.parentCompute.documentSelfLink;

@@ -28,6 +28,11 @@ public abstract class ResourceRequest {
     public URI resourceReference;
 
     /**
+     * The URI of endpointState in whose context this request is initiated
+     */
+    public URI endpointLinkReference;
+
+    /**
      * URI reference to calling task.
      */
     public URI taskReference;
