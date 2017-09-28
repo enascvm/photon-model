@@ -19,6 +19,7 @@ import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -47,18 +48,22 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     }
 
     public enum BaseAdapterStage {
-        VMDESC, PARENTDESC, PARENTAUTH, CUSTOMIZE
+        VMDESC, PARENTDESC, PARENTAUTH, ENDPOINTSTATE, ENDPOINTAUTH, CUSTOMIZE
     }
 
     public final StatelessService service;
     public final URI resourceReference;
+    public final URI endpointReference;
 
     /**
      * The compute state that is to be provisioned.
      */
     public ComputeStateWithDescription child;
     public ComputeStateWithDescription parent;
+    public EndpointService.EndpointState endpointServiceState;
+
     public AuthCredentialsServiceState parentAuth;
+    public AuthCredentialsServiceState endpointAuth;
 
     /**
      * The error that has occurred while transitioning to the error stage.
@@ -89,6 +94,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     public BaseAdapterContext(StatelessService service, ResourceRequest resourceRequest) {
         this.service = service;
         this.resourceReference = resourceRequest.resourceReference;
+        this.endpointReference = resourceRequest.endpointLinkReference;
         this.taskManager = new TaskManager(this.service, resourceRequest.taskReference,
                 resourceRequest.resourceLink());
     }
@@ -109,6 +115,18 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         case PARENTAUTH:
             return getParentAuth(self())
                     .thenApply(log("getParentAuth"))
+                    .thenCompose(c -> populateBaseContext(BaseAdapterStage.ENDPOINTSTATE));
+        case ENDPOINTSTATE:
+            if (this.endpointReference != null) {
+                return getEndPointState(self())
+                        .thenApply(log("getEndPointState"))
+                        .thenCompose(c -> populateBaseContext(BaseAdapterStage.ENDPOINTAUTH));
+            } else {
+                return populateBaseContext(BaseAdapterStage.CUSTOMIZE);
+            }
+        case ENDPOINTAUTH:
+            return getEndPointAuth(self())
+                    .thenApply(log("getEndPointAuth"))
                     .thenCompose(c -> populateBaseContext(BaseAdapterStage.CUSTOMIZE));
         case CUSTOMIZE:
             return customizeBaseContext(self()).thenApply(log("customizeBaseContext"));
@@ -174,6 +192,33 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
                 .sendWithDeferredResult(op, ComputeStateWithDescription.class)
                 .thenApply(state -> {
                     context.parent = state;
+                    return context;
+                });
+    }
+
+    protected DeferredResult<T> getEndPointState(T context) {
+
+        Operation op = Operation.createGet(context.endpointReference);
+
+        return context.service
+                .sendWithDeferredResult(op, EndpointService.EndpointState.class)
+                .thenApply(state -> {
+                    context.endpointServiceState = state;
+                    return context;
+                });
+    }
+
+    protected DeferredResult<T> getEndPointAuth(T context) {
+
+        URI endPointAuthRef = UriUtils.buildUri(context.service.getHost(),
+                context.endpointServiceState.authCredentialsLink);
+
+        Operation op = Operation.createGet(endPointAuthRef);
+
+        return context.service
+                .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
+                .thenApply(state -> {
+                    context.endpointAuth = state;
                     return context;
                 });
     }

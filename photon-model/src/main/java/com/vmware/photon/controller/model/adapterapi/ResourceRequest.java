@@ -27,6 +27,8 @@ public abstract class ResourceRequest {
      */
     public URI resourceReference;
 
+    public URI endpointLinkReference;
+
     /**
      * URI reference to calling task.
      */

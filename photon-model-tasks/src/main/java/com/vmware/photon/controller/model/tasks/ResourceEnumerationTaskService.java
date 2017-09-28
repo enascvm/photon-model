@@ -284,6 +284,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         req.resourcePoolLink = state.resourcePoolLink;
         req.adapterManagementReference = state.adapterManagementReference;
         req.resourceReference = UriUtils.buildUri(getHost(), state.parentComputeLink);
+        req.endpointLinkReference = UriUtils.buildUri(getHost(), state.endpointLink);
         req.enumerationAction = state.enumerationAction;
         req.taskReference = UriUtils.buildUri(getHost(),
                 state.documentSelfLink);

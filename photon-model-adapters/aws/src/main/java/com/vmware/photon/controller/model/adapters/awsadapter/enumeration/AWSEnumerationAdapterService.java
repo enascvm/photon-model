@@ -202,7 +202,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
         if (!AWSUtils.isAwsClientMock()) {
             ComputeEnumerateAdapterRequest awsS3EnumerationRequest = new
-                    ComputeEnumerateAdapterRequest(context.request, context.parentAuth,
+                    ComputeEnumerateAdapterRequest(context.request, context.endpointAuth,
                     context.parent, Regions.DEFAULT_REGION.getName());
 
             Operation patchAWSS3StorageAdapterService = Operation
@@ -217,7 +217,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             List<Operation> enumOperationsForRegion = new ArrayList<>();
             ComputeEnumerateAdapterRequest awsEnumerationRequest =
                     new ComputeEnumerateAdapterRequest(
-                        context.request, context.parentAuth,
+                        context.request, context.endpointAuth,
                         context.parent, regionId);
 
             Operation patchAWSCreationAdapterService = Operation

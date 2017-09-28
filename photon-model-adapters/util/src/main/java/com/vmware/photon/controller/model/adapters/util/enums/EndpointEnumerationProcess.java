@@ -106,6 +106,12 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
     private boolean applyInfraFields = true;
 
     /**
+     * Flag controlling whether queries should be agnostic to endpointLink or not (as part of resource deduplication
+     * work).
+     */
+    private boolean endpointLinkAgnostic = false;
+
+    /**
      * Represents a single page of remote resources.
      */
     public class RemoteResourcesPage {
@@ -223,6 +229,14 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
     public void setApplyInfraFields(boolean applyInfraFields) {
         this.applyInfraFields = applyInfraFields;
+    }
+
+    public boolean isEndpointLinkAgnostic() {
+        return this.endpointLinkAgnostic;
+    }
+
+    public void setEndpointLinkAgnostic(boolean endpointLinkAgnostic) {
+        this.endpointLinkAgnostic = endpointLinkAgnostic;
     }
 
     /**
@@ -459,7 +473,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
-                isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
+                !isEndpointLinkAgnostic() ? context.endpointState.documentSelfLink : null);
         queryLocalStates.setMaxPageSize(remoteIds.size());
 
         return queryLocalStates
@@ -567,6 +581,10 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
             localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         } else {
             // Update case
+            if (isApplyInfraFields()) {
+                // update the endpointLinks
+                setEndpointLink(localState, this.endpointState.documentSelfLink);
+            }
             localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         }
 
@@ -657,7 +675,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
-                isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
+                !isEndpointLinkAgnostic() ? context.endpointState.documentSelfLink : null);
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
 

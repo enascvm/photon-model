@@ -20,6 +20,8 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -40,6 +42,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -57,8 +60,9 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         GET_REPRESENTATIVE_LIST,
         QUERY_LOCAL_COMPUTE_DESCRIPTIONS,
         COMPARE,
-        POPULATE_COMPUTEDESC,
-        CREATE_COMPUTEDESC,
+        POPULATE_CREATE_COMPUTEDESC,
+        POPULATE_UPDATE_COMPUTEDESC,
+        CREATE_OR_UPDATE_COMPUTEDESC,
         SIGNAL_COMPLETION
     }
 
@@ -71,6 +75,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
      */
     public static class AWSComputeDescriptionCreationState {
         public List<Instance> instancesToBeCreated;
+        public List<Instance> instancesToBeUpdated;
         public String regionId;
         public URI parentTaskLink;
         public String authCredentiaslLink;
@@ -86,10 +91,11 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
      * that are required to be created in the system based on the enumeration data received from AWS.
      */
     public static class AWSComputeDescriptionCreationServiceContext {
-        public List<Operation> createOperations;
+        public List<Operation> enumerationOperations;
         public Map<InstanceDescKey, String> localComputeDescriptionMap;
         public Set<InstanceDescKey> representativeComputeDescriptionSet;
         public List<InstanceDescKey> computeDescriptionsToBeCreatedList;
+        public List<InstanceDescKey> computeDescriptionsToBeUpdatedList;
         public AWSComputeDescCreationStage creationStage;
         public AWSComputeDescriptionCreationState cdState;
         // Cached operation to signal completion to the AWS instance adapter once all the compute
@@ -102,7 +108,8 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             this.localComputeDescriptionMap = new HashMap<>();
             this.representativeComputeDescriptionSet = new HashSet<>();
             this.computeDescriptionsToBeCreatedList = new ArrayList<>();
-            this.createOperations = new ArrayList<>();
+            this.computeDescriptionsToBeUpdatedList = new ArrayList<>();
+            this.enumerationOperations = new ArrayList<>();
             this.creationStage = AWSComputeDescCreationStage.GET_REPRESENTATIVE_LIST;
             this.operation = op;
         }
@@ -143,19 +150,18 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             break;
         case COMPARE:
             compareLocalStateWithEnumerationData(context,
-                    AWSComputeDescCreationStage.POPULATE_COMPUTEDESC);
+                    AWSComputeDescCreationStage.POPULATE_CREATE_COMPUTEDESC);
             break;
-        case POPULATE_COMPUTEDESC:
-            if (context.computeDescriptionsToBeCreatedList.size() > 0) {
-                populateComputeDescriptions(context,
-                        AWSComputeDescCreationStage.CREATE_COMPUTEDESC);
-            } else {
-                context.creationStage = AWSComputeDescCreationStage.SIGNAL_COMPLETION;
-                handleComputeDescriptionCreation(context);
-            }
+        case POPULATE_CREATE_COMPUTEDESC:
+            populateCreateOperations(context,
+                        AWSComputeDescCreationStage.POPULATE_UPDATE_COMPUTEDESC);
             break;
-        case CREATE_COMPUTEDESC:
-            createComputeDescriptions(context, AWSComputeDescCreationStage.SIGNAL_COMPLETION);
+        case POPULATE_UPDATE_COMPUTEDESC:
+            populateUpdateOperations(context,
+                        AWSComputeDescCreationStage.CREATE_OR_UPDATE_COMPUTEDESC);
+            break;
+        case CREATE_OR_UPDATE_COMPUTEDESC:
+            createOrUpdateComputeDescriptions(context, AWSComputeDescCreationStage.SIGNAL_COMPLETION);
             break;
         case SIGNAL_COMPLETION:
             setOperationDurationStat(context.operation);
@@ -189,8 +195,11 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
      */
     private void getRepresentativeListOfComputeDescriptions(
             AWSComputeDescriptionCreationServiceContext context, AWSComputeDescCreationStage next) {
+        Collection<Instance> instanceList = new ArrayList<>();
+        instanceList.addAll(context.cdState.instancesToBeCreated);
+        instanceList.addAll(context.cdState.instancesToBeUpdated);
         context.representativeComputeDescriptionSet = getRepresentativeListOfCDsFromInstanceList(
-                context.cdState.instancesToBeCreated, context.cdState.zones);
+                instanceList, context.cdState.zones);
         context.creationStage = next;
         handleComputeDescriptionCreation(context);
     }
@@ -264,6 +273,14 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
 
             logFine(() -> String.format("%d additional compute descriptions need to be created",
                     context.computeDescriptionsToBeCreatedList.size()));
+
+            context.representativeComputeDescriptionSet.stream()
+                    .filter(d -> context.localComputeDescriptionMap.containsKey(d))
+                    .forEach(d -> context.computeDescriptionsToBeUpdatedList.add(d));
+
+            logFine(() -> String.format("%d additional compute descriptions need to be updated",
+                    context.computeDescriptionsToBeUpdatedList.size()));
+
         }
         context.creationStage = next;
         handleComputeDescriptionCreation(context);
@@ -272,12 +289,12 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
     /**
      * Method to create compute descriptions associated with the instances received from the AWS host.
      */
-    private void populateComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
+    private void populateCreateOperations(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
         if (context.computeDescriptionsToBeCreatedList == null
                 || context.computeDescriptionsToBeCreatedList.isEmpty()) {
             logFine(() -> "No local compute descriptions need to be created");
-            context.creationStage = AWSComputeDescCreationStage.SIGNAL_COMPLETION;
+            context.creationStage = next;
             handleComputeDescriptionCreation(context);
             return;
         }
@@ -285,10 +302,44 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                 context.computeDescriptionsToBeCreatedList.size()));
         context.computeDescriptionsToBeCreatedList.stream()
                 .map(dk -> createComputeDescriptionOperation(dk, context.cdState))
-                .forEach(o -> context.createOperations.add(o));
+                .forEach(o -> context.enumerationOperations.add(o));
 
         context.creationStage = next;
         handleComputeDescriptionCreation(context);
+    }
+
+    private void populateUpdateOperations(AWSComputeDescriptionCreationServiceContext context,
+                                          AWSComputeDescCreationStage next) {
+        if (context.computeDescriptionsToBeUpdatedList == null
+                || context.computeDescriptionsToBeUpdatedList.isEmpty()) {
+            logFine(() -> "No local compute descriptions need to be updated");
+            context.creationStage = next;
+            handleComputeDescriptionCreation(context);
+            return;
+        }
+        logFine(() -> String.format("Need to update %d local compute descriptions",
+                context.computeDescriptionsToBeUpdatedList.size()));
+        context.computeDescriptionsToBeUpdatedList.stream()
+                .map(dk -> updateComputeDescriptionOperation(dk, context))
+                .forEach(o -> context.enumerationOperations.add(o));
+
+        context.creationStage = next;
+        handleComputeDescriptionCreation(context);
+    }
+
+    private Operation updateComputeDescriptionOperation(InstanceDescKey cd,
+                                                        AWSComputeDescriptionCreationServiceContext context) {
+
+        Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                (ComputeDescription.FIELD_NAME_ENDPOINT_LINKS,
+                        Collections.singletonList(context.cdState.endpointLink));
+
+        ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                .create(collectionsToAddMap, null);
+
+        return Operation.createPatch(this.getHost(), context.localComputeDescriptionMap.get(cd))
+                .setReferer(this.getHost().getUri())
+                .setBody(updateEndpointLinksRequest);
     }
 
     /**
@@ -343,9 +394,9 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
      * completion of of those operations. Once all the compute descriptions are successfully created moves the state machine
      * to the next stage.
      */
-    private void createComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
+    private void createOrUpdateComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
-        if (context.createOperations == null || context.createOperations.size() == 0) {
+        if (context.enumerationOperations == null || context.enumerationOperations.size() == 0) {
             logFine(() -> "No compute descriptions to be created");
             context.creationStage = next;
             handleComputeDescriptionCreation(context);
@@ -363,7 +414,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             context.creationStage = next;
             handleComputeDescriptionCreation(context);
         };
-        OperationJoin joinOp = OperationJoin.create(context.createOperations);
+        OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
     }
@@ -371,4 +422,5 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
     private void finishWithFailure(AWSComputeDescriptionCreationServiceContext context, Throwable exc) {
         context.operation.fail(exc);
     }
+
 }

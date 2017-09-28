@@ -104,7 +104,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         public StatelessService service;
         public AmazonS3Client amazonS3Client;
         public ComputeEnumerateAdapterRequest request;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public ComputeStateWithDescription parentCompute;
         public S3StorageEnumerationStages stage;
         public S3StorageEnumerationSubStage subStage;
@@ -132,7 +132,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.S3);
             this.operation = op;
             this.request = request;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
             this.remoteBucketsByBucketName = new ConcurrentHashMap<>();
             this.regionsByBucketName = new ConcurrentHashMap<>();
@@ -243,9 +243,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     private void getAWSS3Client(S3StorageEnumerationContext aws,
             S3StorageEnumerationStages next) {
         aws.amazonS3Client = aws.clientManager.getOrCreateS3Client
-                (aws.parentAuth, aws.request.regionId, this, t -> aws.error = t);
+                (aws.endpointAuth, aws.request.regionId, this, t -> aws.error = t);
 
-        if (aws.clientManager.isS3ClientInvalid(aws.parentAuth, aws.request.regionId)
+        if (aws.clientManager.isS3ClientInvalid(aws.endpointAuth, aws.request.regionId)
                 || (aws.error != null)) {
             logWarning("AWS client is invalid for [endpoint=%s]",
                     aws.request.original.endpointLink);
@@ -311,7 +311,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         logWarning("AWS client is invalid for [endpoint=%s]",
                 aws.request.original.endpointLink);
         aws.clientManager
-                .markS3ClientInvalid(this, aws.parentAuth, aws.request.regionId);
+                .markS3ClientInvalid(this, aws.endpointAuth, aws.request.regionId);
         aws.stage = S3StorageEnumerationStages.FINISHED;
         handleEnumerationRequest(aws);
     }
@@ -382,16 +382,14 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      */
     private void getLocalResources(S3StorageEnumerationContext aws, S3StorageEnumerationSubStage next) {
         // query all disk state resources for the cluster filtered by the received set of
-        // instance Ids. the filtering is performed on the selected resource pool and auth
-        // credentials link.
+        // instance Ids. the filtering is performed on the selected resource pool.
         if (aws.localResourcesNextPageLink == null) {
             Query.Builder qBuilder = Query.Builder.create()
                     .addKindFieldClause(DiskState.class)
-                    .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK, aws.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE, STORAGE_TYPE_S3)
                     .addInClause(DiskState.FIELD_NAME_ID, aws.remoteBucketsByBucketName.keySet());
 
-            addScopeCriteria(qBuilder, DiskState.class, aws);
+            addScopeCriteria(qBuilder, aws);
 
             QueryTask queryTask = QueryTask.Builder.createDirectTask()
                     .setQuery(qBuilder.build())
@@ -529,7 +527,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     }
 
                     s3Client = aws.clientManager
-                            .getOrCreateS3Client(aws.parentAuth, entry.getValue().regionId, aws.service,
+                            .getOrCreateS3Client(aws.endpointAuth, entry.getValue().regionId, aws.service,
                                     t -> aws.error = t);
                     if (aws.error != null) {
                         logSevere("Error getting AWS S3 client for [endpoint=%s] [region=%s] [ex=%s]",
@@ -563,7 +561,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 for (Bucket bucket : aws.bucketsToBeCreated) {
                     for (Regions region : Regions.values()) {
                         s3Client = aws.clientManager
-                                .getOrCreateS3Client(aws.parentAuth, region.getName(), aws.service,
+                                .getOrCreateS3Client(aws.endpointAuth, region.getName(), aws.service,
                                         t -> aws.error = t);
                         if (aws.error != null) {
                             logSevere("Error getting AWS S3 client for [endpoint=%s] [region=%s] [ex=%s]",
@@ -661,6 +659,26 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     });
         }
 
+        // update endpointLinks
+        aws.diskStatesToBeUpdatedByBucketName.entrySet().stream()
+                .filter(diskMap -> diskMap.getValue().endpointLinks == null
+                        || !diskMap.getValue().endpointLinks.contains(aws.request.original.endpointLink))
+                .forEach(diskMap -> {
+                    Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                            (DiskState.FIELD_NAME_ENDPOINT_LINKS,
+                                    Collections.singletonList(aws.request.original.endpointLink));
+                    Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
+                            (DiskState.FIELD_NAME_ENDPOINT_LINKS, Collections.EMPTY_LIST);
+
+                    ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                            .create(collectionsToAddMap, collectionsToRemoveMap);
+
+                    aws.enumerationOperations.add(Operation.createPatch(this.getHost(),
+                            diskMap.getValue().documentSelfLink)
+                            .setReferer(aws.service.getUri())
+                            .setBody(updateEndpointLinksRequest));
+                });
+
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
@@ -727,15 +745,13 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     private void deleteDiskStates(S3StorageEnumerationContext aws, S3StorageEnumerationSubStage next) {
         Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(DiskState.class)
-                .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
-                        aws.parentAuth.documentSelfLink)
                 .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE,
                         STORAGE_TYPE_S3)
                 .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
                         NumericRange
                                 .createLessThanRange(aws.enumerationStartTimeInMicros));
 
-        addScopeCriteria(qBuilder, DiskState.class, aws);
+        addScopeCriteria(qBuilder, aws);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -842,7 +858,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         diskState.name = bucket.getName();
         diskState.storageType = STORAGE_TYPE_S3;
         diskState.regionId = aws.regionsByBucketName.get(bucket.getName());
-        diskState.authCredentialsLink = aws.parentAuth.documentSelfLink;
+        diskState.authCredentialsLink = aws.endpointAuth.documentSelfLink;
         diskState.resourcePoolLink = aws.request.original.resourcePoolLink;
         diskState.endpointLink = aws.request.original.endpointLink;
         if (diskState.endpointLinks == null) {
@@ -890,17 +906,14 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Constrain every query with endpointLink/region and tenantLinks, if presented.
+     * Constrain every query with region and tenantLinks, if presented.
      */
     private static void addScopeCriteria(
             Query.Builder qBuilder,
-            Class<? extends ResourceState> stateClass,
             S3StorageEnumerationContext ctx) {
 
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
     /**

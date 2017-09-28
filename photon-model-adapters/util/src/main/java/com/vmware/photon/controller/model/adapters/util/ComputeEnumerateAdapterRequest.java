@@ -34,6 +34,9 @@ public class ComputeEnumerateAdapterRequest {
      */
     public ComputeEnumerateResourceRequest original;
 
+    // Moving towards endpoint auth details
+    public AuthCredentialsServiceState endpointAuth;
+
     public AuthCredentialsServiceState parentAuth;
     public ComputeStateWithDescription parentCompute;
     /**
@@ -47,6 +50,7 @@ public class ComputeEnumerateAdapterRequest {
         this.original = request;
         this.parentAuth = parentAuth;
         this.parentCompute = parentCompute;
+        this.endpointAuth = parentAuth;
     }
 
     public ComputeEnumerateAdapterRequest(ComputeEnumerateResourceRequest request,
@@ -56,5 +60,6 @@ public class ComputeEnumerateAdapterRequest {
         this.parentAuth = parentAuth;
         this.parentCompute = parentCompute;
         this.regionId = regionId;
+        this.endpointAuth = parentAuth;
     }
 }
