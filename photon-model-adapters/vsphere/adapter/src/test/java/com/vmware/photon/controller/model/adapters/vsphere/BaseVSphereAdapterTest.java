@@ -177,15 +177,12 @@ public class BaseVSphereAdapterTest {
             PhotonModelServices.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
-            VSphereAdapters.startServices(this.host);
+
             PhotonModelSecurityServices.startServices(this.host);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-
-            this.host.waitForServiceAvailable(VSphereAdapters.CONFIG_LINK);
             this.host.waitForServiceAvailable(PhotonModelSecurityServices.LINKS);
-
 
             startAdditionalServices();
             ServerX509TrustManager.create(this.host);
@@ -221,7 +218,9 @@ public class BaseVSphereAdapterTest {
         doSetup();
     }
 
-    protected void startAdditionalServices() {
+    protected void startAdditionalServices() throws Throwable {
+        VSphereAdapters.startServices(this.host);
+        this.host.waitForServiceAvailable(VSphereAdapters.CONFIG_LINK);
     }
 
     protected void doSetup() {
