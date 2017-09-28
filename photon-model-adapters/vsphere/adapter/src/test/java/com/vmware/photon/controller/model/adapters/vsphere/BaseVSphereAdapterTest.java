@@ -163,7 +163,7 @@ public class BaseVSphereAdapterTest {
 
     @Before
     public void setUp() throws Throwable {
-        this.host = VerificationHost.create(0);
+        this.host = VerificationHost.create(Integer.getInteger(TestProperties.HOST_PREFERRED_PORT, 0));
 
         this.host.start();
         this.host.waitForServiceAvailable(ExampleService.FACTORY_LINK);
@@ -186,6 +186,8 @@ public class BaseVSphereAdapterTest {
             this.host.waitForServiceAvailable(VSphereAdapters.CONFIG_LINK);
             this.host.waitForServiceAvailable(PhotonModelSecurityServices.LINKS);
 
+
+            startAdditionalServices();
             ServerX509TrustManager.create(this.host);
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
@@ -217,6 +219,9 @@ public class BaseVSphereAdapterTest {
                     .substring(this.dataStoreId.lastIndexOf("/") + 1, this.dataStoreId.length());
         }
         doSetup();
+    }
+
+    protected void startAdditionalServices() {
     }
 
     protected void doSetup() {
@@ -819,6 +824,23 @@ public class BaseVSphereAdapterTest {
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
 
+        configureAdapters(computeDesc);
+
+        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
+
+        computeDesc.regionId = this.datacenterId;
+
+        return TestUtils.doPost(this.host, computeDesc,
+                ComputeDescription.class,
+                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
+    }
+
+    /**
+     * Hook for subclasses to define  alternative adapters.
+     *
+     * @param computeDesc
+     */
+    protected void configureAdapters(ComputeDescription computeDesc) {
         computeDesc.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
                 VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
@@ -829,14 +851,6 @@ public class BaseVSphereAdapterTest {
                 VSphereUriPaths.POWER_SERVICE);
         computeDesc.diskAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
                 VSphereUriPaths.DISK_SERVICE);
-
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        computeDesc.regionId = this.datacenterId;
-
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 
     /**

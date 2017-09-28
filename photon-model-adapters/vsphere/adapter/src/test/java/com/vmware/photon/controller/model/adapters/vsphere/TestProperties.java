@@ -27,4 +27,5 @@ public class TestProperties {
     public static final String VC_DATECENTER_ID = "vc.datacenterId";
     public static final String VC_STORAGE_POLICY_ID = "vc.storagePolicyId";
     public static final String VC_STORAGE_POLICY_NAME = "vc.storagePolicyName";
+    public static final String HOST_PREFERRED_PORT = "host.preferred.port";
 }
