@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.6.39-SNAPSHOT
+## 0.6.39
+* Added support to assign vSphere VM Network Interface to security groups.
+* Upgraded xenon to v1.5.7
 
 ## 0.6.38
 * Downgrade Xenon to v1.5.4-CR4.
