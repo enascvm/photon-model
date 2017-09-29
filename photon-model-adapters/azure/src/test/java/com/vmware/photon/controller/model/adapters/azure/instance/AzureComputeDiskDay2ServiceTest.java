@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static junit.framework.TestCase.assertNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -79,20 +80,26 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
     private ComputeService.ComputeState vmState;
     private ComputeService.ComputeState computeVM;
 
+    private enum DiskOpKind {
+        ATTACH, DETACH
+    }
+
     /**
      * Task service to check the status of attach operation
      */
     public static class AttachDiskTaskTestService
-            extends TaskService<AttachDiskTaskTestService.AttachDiskTaskTestState> {
+            extends TaskService<AttachDiskTaskTestService.DiskTaskTestState> {
 
         public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/attach-disk-tasks";
 
+
+
         public AttachDiskTaskTestService() {
-            super(AttachDiskTaskTestState.class);
+            super(DiskTaskTestState.class);
             super.toggleOption(ServiceOption.INSTRUMENTATION, true);
         }
 
-        public static class AttachDiskTaskTestState extends TaskService.TaskServiceState {
+        public static class DiskTaskTestState extends TaskService.TaskServiceState {
             public enum SubStage {
                 STARTED, FINISHED, FAILED
             }
@@ -108,12 +115,12 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         @Override
         public void handlePatch(Operation patch) {
             ResourceOperationResponse response = patch.getBody(ResourceOperationResponse.class);
-            AttachDiskTaskTestState attachDiskTaskTestState = getState(patch);
+            DiskTaskTestState diskTaskTestState = getState(patch);
 
             if (TaskState.isFailed(response.taskInfo)) {
-                attachDiskTaskTestState.taskSubStage = AttachDiskTaskTestState.SubStage.FAILED;
+                diskTaskTestState.taskSubStage = DiskTaskTestState.SubStage.FAILED;
             } else if (TaskState.isFinished(response.taskInfo)) {
-                attachDiskTaskTestState.taskSubStage = AttachDiskTaskTestState.SubStage.FINISHED;
+                diskTaskTestState.taskSubStage = DiskTaskTestState.SubStage.FINISHED;
             }
             patch.complete();
         }
@@ -141,7 +148,7 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         createDiskStateDesc();
         kickOffDiskProvisioning();
 
-        attachDiskToVM();
+        performDiskOperationOnVM(DiskOpKind.ATTACH);
         assertAttachDiskToVM();
 
         // Create and attach another additional disk
@@ -152,8 +159,17 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         this.computeVM = this.host.getServiceState(null,
                 ComputeService.ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        attachDiskToVM();
+        performDiskOperationOnVM(DiskOpKind.ATTACH);
         assertAttachDiskToVM();
+
+        // Save the VM's details after attaching second disk
+        this.computeVM = this.host.getServiceState(null,
+                ComputeService.ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+        performDiskOperationOnVM(DiskOpKind.DETACH);
+
+        assertDetachDiskFromVM();
+
     }
 
     @After
@@ -256,18 +272,25 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
                 provisionDiskTaskState.documentSelfLink);
     }
 
-    private void attachDiskToVM() throws Throwable {
-        AttachDiskTaskTestService.AttachDiskTaskTestState attachTask = new AttachDiskTaskTestService.AttachDiskTaskTestState();
-        attachTask.taskSubStage = AttachDiskTaskTestService.AttachDiskTaskTestState.SubStage.STARTED;
+    private void performDiskOperationOnVM(DiskOpKind opType) throws Throwable {
+
+        AttachDiskTaskTestService.DiskTaskTestState attachTask = new AttachDiskTaskTestService.DiskTaskTestState();
+        attachTask.taskSubStage = AttachDiskTaskTestService.DiskTaskTestState.SubStage.STARTED;
 
         attachTask = TestUtils
-                .doPost(this.host, attachTask, AttachDiskTaskTestService.AttachDiskTaskTestState.class,
+                .doPost(this.host, attachTask, AttachDiskTaskTestService.DiskTaskTestState.class,
                         UriUtils.buildUri(this.host, AttachDiskTaskTestService.FACTORY_LINK));
 
         ResourceOperationRequest request = new ResourceOperationRequest();
 
         request.isMockRequest = this.isMock;
-        request.operation = ResourceOperation.ATTACH_DISK.operation;
+
+        if (opType.equals(DiskOpKind.ATTACH)) {
+            request.operation = ResourceOperation.ATTACH_DISK.operation;
+        } else {
+            request.operation = ResourceOperation.DETACH_DISK.operation;
+        }
+
         request.payload = new HashMap<>();
         request.payload.put(PhotonModelConstants.DISK_LINK, this.diskState.documentSelfLink);
         request.resourceReference = UriUtils.buildUri(this.host, this.vmState.documentSelfLink);
@@ -287,13 +310,15 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         final String attachTaskServiceLink = attachTask.documentSelfLink;
         this.host.waitFor("Attach disk failed.", () -> {
 
-            AttachDiskTaskTestService.AttachDiskTaskTestState attachDiskTaskTestState = this.host
-                    .getServiceState(null, AttachDiskTaskTestService.AttachDiskTaskTestState.class,
+            AttachDiskTaskTestService.DiskTaskTestState diskTaskTestState = this.host
+                    .getServiceState(null, AttachDiskTaskTestService.DiskTaskTestState.class,
                             UriUtils.buildUri(this.host, attachTaskServiceLink));
 
             // Check for the disk is attached to a vm or not.
-            return attachDiskTaskTestState.taskSubStage ==
-                    AttachDiskTaskTestService.AttachDiskTaskTestState.SubStage.FINISHED;
+            return diskTaskTestState.taskSubStage ==
+                    AttachDiskTaskTestService.DiskTaskTestState.SubStage.FINISHED
+                    || diskTaskTestState.taskSubStage ==
+                    AttachDiskTaskTestService.DiskTaskTestState.SubStage.FAILED;
         });
     }
 
@@ -312,6 +337,31 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
 
             VirtualMachine vm = this.getAzureSdkClients().getComputeManager()
                     .virtualMachines().getById(provisionedVM.id);
+
+            this.host.log("Number of disks attached to VM is - " + vm.dataDisks().size());
+        }
+    }
+
+    private void assertDetachDiskFromVM() {
+        ComputeService.ComputeState provisionedVM = this.host.getServiceState(null,
+                ComputeService.ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+        assertEquals(this.computeVM.diskLinks.size() - 1, provisionedVM.diskLinks.size());
+
+        DiskService.DiskState detachedDisk = this.host.getServiceState(null,
+                DiskService.DiskState.class, UriUtils.buildUri(this.host, this.diskState.documentSelfLink));
+
+        assertEquals("Disk status is not matching", DiskService.DiskStatus.AVAILABLE, detachedDisk.status);
+
+        if (!this.isMock) {
+            assertNull("LUN number not removed from Detached Disk", detachedDisk.customProperties
+                    .get(DISK_CONTROLLER_NUMBER));
+
+            VirtualMachine vm = this.getAzureSdkClients().getComputeManager()
+                    .virtualMachines().getById(provisionedVM.id);
+
+            //Check total numbers of disk match previous count - 1 = current data disks + 1 os disk
+            assertEquals("Number of disks not correct on Azure", this.computeVM.diskLinks.size()
+                    - 1, vm.dataDisks().size() + 1);
 
             this.host.log("Number of disks attached to VM is - " + vm.dataDisks().size());
         }
