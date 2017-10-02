@@ -18,6 +18,9 @@ package com.vmware.photon.controller.model.adapters.vsphere.constants;
  */
 public class VSphereConstants {
 
+    public static final boolean VSPHERE_IGNORE_CERTIFICATE_WARNINGS =
+            Boolean.getBoolean("vc.ssl.ignore.certificate.warnings");
+
     // snapshot related constants
     public static final String VSPHERE_SNAPSHOT_NAME = "name";
     public static final String VSPHERE_SNAPSHOT_DESCRIPTION = "description";

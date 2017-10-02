@@ -664,8 +664,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (resourceLink.startsWith(ComputeService.FACTORY_LINK)) {
                 ResourceCleanRequest patch = new ResourceCleanRequest();
                 patch.resourceLink = resourceLink;
-                deleteOps.add(Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(),
-                        VSphereUriPaths.RESOURCE_CLEANER))
+                deleteOps.add(Operation.createPatch(this, VSphereUriPaths.RESOURCE_CLEANER)
                         .setBody(patch));
             } else {
                 deleteOps.add(Operation.createDelete(

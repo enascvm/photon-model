@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants.VSPHERE_IGNORE_CERTIFICATE_WARNINGS;
+
 import java.net.URI;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -137,7 +139,12 @@ public class VSphereIOThreadPool {
             ConnectionCallback callback, Consumer<Connection> connectionEnhancer) {
         BasicConnection connection = new BasicConnection();
 
-        connection.setTrustManager(ServerX509TrustManager.getInstance());
+        // ignores the certificate for testing purposes
+        if (VSPHERE_IGNORE_CERTIFICATE_WARNINGS) {
+            connection.setIgnoreSslErrors(true);
+        } else {
+            connection.setTrustManager(ServerX509TrustManager.getInstance());
+        }
 
         connection.setUsername(auth.privateKeyId);
         connection.setPassword(EncryptionUtils.decrypt(auth.privateKey));

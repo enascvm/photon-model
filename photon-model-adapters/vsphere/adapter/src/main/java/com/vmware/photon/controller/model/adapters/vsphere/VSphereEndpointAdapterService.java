@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SUPPORT_DATASTORES;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
+import static com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants.VSPHERE_IGNORE_CERTIFICATE_WARNINGS;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_BAD_REQUEST;
 
 import java.net.URI;
@@ -224,8 +225,13 @@ public class VSphereEndpointAdapterService extends StatelessService {
             AuthCredentialsServiceState auth) {
         BasicConnection connection = new BasicConnection();
 
-        ServerX509TrustManager trustManager = ServerX509TrustManager.getInstance();
-        connection.setTrustManager(trustManager);
+        // ignores the certificate for testing purposes
+        if (VSPHERE_IGNORE_CERTIFICATE_WARNINGS) {
+            connection.setIgnoreSslErrors(true);
+        } else {
+            ServerX509TrustManager trustManager = ServerX509TrustManager.getInstance();
+            connection.setTrustManager(trustManager);
+        }
 
         connection.setUsername(auth.privateKeyId);
         connection.setPassword(EncryptionUtils.decrypt(auth.privateKey));
