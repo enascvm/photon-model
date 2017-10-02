@@ -44,6 +44,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -165,6 +166,10 @@ public class BaseVSphereAdapterTest {
     public void setUp() throws Throwable {
         this.host = VerificationHost.create(Integer.getInteger(TestProperties.HOST_PREFERRED_PORT, 0));
 
+        String bindingAddress = System.getProperty(TestProperties.HOST_BINDING_ADDRESS);
+        if (!StringUtils.isEmpty(bindingAddress)) {
+            this.host.setBindAddress(bindingAddress);
+        }
         this.host.start();
         this.host.waitForServiceAvailable(ExampleService.FACTORY_LINK);
 
