@@ -1023,6 +1023,11 @@ public class AzureCostStatsService extends StatelessService {
     private BiConsumer<Map<String, AzureSubscription>, Long>  getDailyStatsConsumer(
             Context context, Stages next) {
         return (newMonthlyBillBatch, parsingCompleteTimeMillis) -> {
+            if (newMonthlyBillBatch.size() == 0) {
+                // There are no stats to be posted
+                postStats(context, true);
+                return;
+            }
             if (parsingCompleteTimeMillis != null) {
                 // This means bill parsing is complete
                 context.billParsingCompleteTimeMillis = parsingCompleteTimeMillis;
@@ -1511,7 +1516,7 @@ public class AzureCostStatsService extends StatelessService {
                                 op.getBodyRaw()));
                     }
                 } catch (Exception ex) {
-                    handleError(context, null, ex, true);
+                    handleError(context, next, ex, true);
                     return;
                 }
             }
@@ -1612,6 +1617,9 @@ public class AzureCostStatsService extends StatelessService {
         LocalDate date = null;
         LocalDate billMonth = AzureCostHelper.getMonthFromOldRequestUri(requestUri);
         for (OldEaSummarizedBillElement billElement : summarizedBillElements) {
+            if (billElement == null) {
+                continue;
+            }
             billElement = AzureCostHelper.sanitizeSummarizedBillElementUsingOldApi(billElement);
             String serviceCommitment = billElement.serviceCommitment;
             context.currency = DEFAULT_CURRENCY_VALUE;

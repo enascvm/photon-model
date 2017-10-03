@@ -27,6 +27,7 @@ import java.util.logging.Logger;
 import com.opencsv.CSVReader;
 import com.opencsv.bean.HeaderColumnNameMappingStrategy;
 
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureService;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaDetailedBillElement;
@@ -130,7 +131,8 @@ public class AzureDetailedBillHandler {
             }
             prevRowEpoch = curRowEpoch;
         }
-        if (nextRow == null && monthlyBill.size() > 0) {
+        if ((nextRow == null && monthlyBill.size() > 0) || (nextRow == null
+                && csvReader.getLinesRead() == AzureCostConstants.DEFAULT_LINES_TO_SKIP)) {
             parsingComplete = true;
             dailyStatsConsumer.accept(monthlyBill, billProcessedTimeMillis);
             logger.fine(() -> "Finished parsing CSV bill.");
