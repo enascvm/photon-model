@@ -447,9 +447,10 @@ public class AWSCsvBillParser {
             // The AccountId is not obtained from LinkedAccountId in case of
             // non-consolidated bills and has to be fetched from PayerAccountId
             // column from the bill file
-            awsAccountDetail = accountDetails.get(rowMap.get(DetailedCsvHeaders.PAYER_ACCOUNT_ID).toString());
+            awsAccountDetail = createOrGetAccountDetailObject(accountDetails,
+                    getStringFieldValue(rowMap, DetailedCsvHeaders.PAYER_ACCOUNT_ID));
         } else {
-            awsAccountDetail = accountDetails.get(linkedAccountId);
+            awsAccountDetail = createOrGetAccountDetailObject(accountDetails, linkedAccountId);
         }
         String invoiceId = getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID);
         if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, DetailedCsvHeaders.LINE_ITEM)) {

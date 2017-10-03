@@ -21,6 +21,7 @@ import java.util.logging.Logger;
 
 import com.google.common.collect.ImmutableMap;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.ExchangeRates;
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
@@ -41,7 +42,13 @@ public class AzureCostConstants {
     // By default we will collect the following number of months bills from Azure.
     public static final int DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS = 11;
 
-    public static final int REQUEST_EXPIRATION_SECONDS = 120;
+    // Time to wait for response from Azure servers
+    public static final int INTERNAL_REQUEST_TIMEOUT_SECONDS = Integer.getInteger(
+            UriPaths.PROPERTY_PREFIX + "azure.costCollection.internalRequestTimeoutSecs", 300);
+
+    // Time to wait for response from metrics server (internal)
+    public static final int EXTERNAL_REQUEST_TIMEOUT_SECONDS = Integer.getInteger(
+            UriPaths.PROPERTY_PREFIX + "azure.costCollection.externalRequestTimeoutSecs", 120);
 
     public static final int DOWNLOAD_CHUNK_SIZE = 2048; //Same as Okio Segment.SIZE
 

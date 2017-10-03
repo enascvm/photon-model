@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea.stats;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants
+        .AzureCostConstants.INTERNAL_REQUEST_TIMEOUT_SECONDS;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.AUTO_DISCOVERED_ENTITY;
 
 import java.io.File;
@@ -86,6 +88,7 @@ import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -546,18 +549,14 @@ public class AzureCostStatsService extends StatelessService {
         QueryTask.Query.Builder builder = QueryTask.Query.Builder
                 .create(QueryTask.Query.Occurance.SHOULD_OCCUR);
         builder.addKindFieldClause(ResourceMetricsService.ResourceMetrics.class);
-        builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK,
-                        UriUtils.getLastPathSegment(context.computeHostDesc.documentSelfLink)),
-                QueryTask.QueryTerm.MatchType.PREFIX);
-        builder.addRangeClause(QueryTask.QuerySpecification
-                        .buildCompositeFieldName(
-                                ResourceMetricsService.ResourceMetrics.FIELD_NAME_ENTRIES,
-                                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS),
-                QueryTask.NumericRange
-                        .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
+        builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
+                ResourceMetrics.PROPERTY_RESOURCE_LINK, context.computeHostDesc.documentSelfLink);
+        builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
+                PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
+
         URI queryUri = UriUtils.extendUri(getMetricsServiceUri(),
                 ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+
         Operation.createPost(queryUri)
                 .setBody(QueryTask.Builder.createDirectTask()
                         .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
@@ -571,6 +570,8 @@ public class AzureCostStatsService extends StatelessService {
                         .setResultLimit(1)
                         .setQuery(builder.build()).build())
                 .setConnectionSharing(true)
+                .setExpiration(Utils.fromNowMicrosUtc(
+                        TimeUnit.SECONDS.toMicros(INTERNAL_REQUEST_TIMEOUT_SECONDS)))
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         handleError(context, Stages.GET_HISTORICAL_COSTS,
@@ -806,8 +807,8 @@ public class AzureCostStatsService extends StatelessService {
                     .getOldDetailedBillRequest(context.auth.privateKeyId, context.auth.privateKey,
                             firstDayOfCurrentMonth);
             OkHttpClient.Builder b = new OkHttpClient.Builder();
-            b.readTimeout(AzureCostConstants.REQUEST_EXPIRATION_SECONDS, TimeUnit.SECONDS);
-            b.connectTimeout(AzureCostConstants.REQUEST_EXPIRATION_SECONDS, TimeUnit.SECONDS);
+            b.readTimeout(AzureCostConstants.EXTERNAL_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            b.connectTimeout(AzureCostConstants.EXTERNAL_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             b.interceptors().add(this::createRequestRetryInterceptor);
 
@@ -1267,6 +1268,8 @@ public class AzureCostStatsService extends StatelessService {
         ComputeStats accountStats = new ComputeStats();
         accountStats.computeLink = computeHostDesc.documentSelfLink;
         accountStats.statValues = new ConcurrentSkipListMap<>();
+        accountStats.addCustomProperty(PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT,
+                Boolean.TRUE.toString());
 
         ServiceStat billProcessedTimeStat = AzureCostHelper.createServiceStat(
                 PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS,

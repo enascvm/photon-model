@@ -162,4 +162,7 @@ public class PhotonModelConstants {
 
     // Key to be inserted while persisting service metrics of AWS,Azure
     public static final String DOES_CONTAIN_SERVICE_STATS = "containsServiceStats";
+
+    // Key to identify documents containing the bill processed time
+    public static final String CONTAINS_BILL_PROCESSED_TIME_STAT = "containsBillProcessedTimeStat";
 }

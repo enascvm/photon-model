@@ -60,6 +60,7 @@ import org.apache.commons.collections.CollectionUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
@@ -121,6 +122,8 @@ public class AWSCostStatsService extends StatelessService {
     public static final String TEMP_DIR_LOCATION = "java.io.tmpdir";
     public static final String DIMENSION_CURRENCY_VALUE = "USD";
     public static final String BATCH_SIZE_KEY = "aws.costCollection.stats.batchSize";
+    public static final int INTERNAL_REQUEST_TIMEOUT_SECONDS = Integer.getInteger(
+            UriPaths.PROPERTY_PREFIX + "aws.costCollection.internalRequestTimeoutSecs", 300);
     public static final int DEFAULT_BATCH_SIZE = 500;
     // Past months for which bills need to be collected, default is 11, excluding current month's bill.
     protected static final String BILLS_BACK_IN_TIME_MONTHS_KEY = "aws.costsCollection.backInTime.months";
@@ -928,6 +931,8 @@ public class AWSCostStatsService extends StatelessService {
             markerMetrics.timestampMicrosUtc = getCurrentMonthStartTimeMicros();
             markerMetrics.customProperties = new HashMap<>();
             markerMetrics.customProperties.put(ResourceMetrics.PROPERTY_RESOURCE_LINK, compute.documentSelfLink);
+            markerMetrics.customProperties
+                    .put(PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
             markerMetrics.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(7);
             sendRequest(Operation.createPost(uri).setBodyNoCloning(markerMetrics));
         }
@@ -1106,14 +1111,13 @@ public class AWSCostStatsService extends StatelessService {
         return ((t) -> statsData.taskManager.patchTaskToFailure(t));
     }
 
-    private QueryTask getQueryTaskForMetric(ComputeState accountComputeState, String metric) {
+    private QueryTask getQueryTaskForMetric(ComputeState accountComputeState) {
         Query.Builder builder = Query.Builder.create(Occurance.SHOULD_OCCUR);
         builder.addKindFieldClause(ResourceMetrics.class);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 ResourceMetrics.PROPERTY_RESOURCE_LINK, accountComputeState.documentSelfLink);
-        builder.addRangeClause(QueryTask.QuerySpecification.buildCompositeFieldName(
-                ResourceMetrics.FIELD_NAME_ENTRIES, metric),
-                QueryTask.NumericRange.createDoubleRange(0.0, Double.MAX_VALUE, true, true));
+        builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
+                PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
 
         QueryTask qTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.SORT)
@@ -1125,16 +1129,17 @@ public class AWSCostStatsService extends StatelessService {
                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK, ServiceDocumentDescription.TypeName.STRING)
                 .setResultLimit(1)
                 .setQuery(builder.build()).build();
-        qTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+        qTask.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QueryUtils.TEN_MINUTES_IN_MICROS);
         return qTask;
     }
 
     private Operation getMarkerMetricsOp(AWSCostStatsCreationContext context, ComputeState accComputeState) {
 
-        QueryTask qTask = getQueryTaskForMetric(accComputeState, AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS);
+        QueryTask qTask = getQueryTaskForMetric(accComputeState);
         URI postUri = UriUtils.buildUri(ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
                 ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
         return Operation.createPost(postUri).setBody(qTask).setConnectionSharing(true)
+                .setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(INTERNAL_REQUEST_TIMEOUT_SECONDS)))
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         logWarning(() -> String.format(

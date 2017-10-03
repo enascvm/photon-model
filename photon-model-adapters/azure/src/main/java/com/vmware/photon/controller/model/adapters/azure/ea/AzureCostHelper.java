@@ -24,6 +24,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.DETAILED_CSV_BILL_NAME_MID;
 import static com.vmware.photon.controller.model.adapters.azure.constants
+        .AzureCostConstants.EXTERNAL_REQUEST_TIMEOUT_SECONDS;
+import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.OLD_EA_BILL_AVAILABLE_MONTHS;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.OLD_EA_USAGE_REPORT;
@@ -41,8 +43,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_CSV;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_JSON;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.REQUEST_EXPIRATION_SECONDS;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.SUMMARIZED_BILL;
 import static com.vmware.photon.controller.model.adapters.azure.constants
@@ -149,7 +149,7 @@ public interface AzureCostHelper {
         addDefaultRequestHeaders(operation, accessToken);
         // Retry thrice on failure.
         operation = operation.setRetryCount(3);
-        operation = setExpiration(operation);
+        operation = setExpirationForExternalRequests(operation);
         return operation;
     }
 
@@ -195,7 +195,7 @@ public interface AzureCostHelper {
         addDefaultRequestHeaders(operation, accessToken);
         // Retry thrice on failure.
         operation = operation.setRetryCount(3);
-        operation = setExpiration(operation);
+        operation = setExpirationForExternalRequests(operation);
         return operation;
     }
 
@@ -212,7 +212,7 @@ public interface AzureCostHelper {
         addDefaultRequestHeaders(operation, accessToken);
         // Retry thrice on failure.
         operation = operation.setRetryCount(3);
-        operation = setExpiration(operation);
+        operation = setExpirationForExternalRequests(operation);
         return operation;
     }
 
@@ -550,9 +550,8 @@ public interface AzureCostHelper {
      * when the detailed bill takes extremely long time to respond for large bills.
      * @param op operation whose expiration has to be increased.
      */
-    static Operation setExpiration(Operation op) {
-        return op.setExpiration(
-                Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(REQUEST_EXPIRATION_SECONDS)));
+    static Operation setExpirationForExternalRequests(Operation op) {
+        return op.setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(EXTERNAL_REQUEST_TIMEOUT_SECONDS)));
     }
 
 }
