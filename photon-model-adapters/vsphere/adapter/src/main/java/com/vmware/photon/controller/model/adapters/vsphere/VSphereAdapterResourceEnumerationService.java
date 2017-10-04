@@ -1530,6 +1530,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.id = cr.getId().getValue();
         state.type = ComputeType.VM_HOST;
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
+        state.regionId = enumerationProgress.getRegionId();
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         state.adapterManagementReference = enumerationProgress
                 .getRequest().adapterManagementReference;
@@ -1661,6 +1662,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.type = ComputeType.VM_HOST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
+        state.regionId = enumerationProgress.getRegionId();
         state.id = hs.getId().getValue();
         state.adapterManagementReference = enumerationProgress
                 .getRequest().adapterManagementReference;
@@ -2028,6 +2030,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.type = ComputeType.VM_HOST;
         state.powerState = PowerState.ON;
         state.endpointLink = request.endpointLink;
+        state.regionId = enumerationProgress.getRegionId();
         state.parentLink = enumerationProgress.getRequest().resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
