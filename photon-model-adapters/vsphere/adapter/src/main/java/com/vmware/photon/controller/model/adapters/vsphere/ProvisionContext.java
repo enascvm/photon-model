@@ -115,6 +115,8 @@ public class ProvisionContext {
                     .extendUriWithQuery(ctx.computeReference,
                             UriUtils.URI_PARAM_ODATA_EXPAND,
                             Boolean.TRUE.toString());
+            computeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), computeUri);
+
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ctx.child = op.getBody(ComputeStateWithDescription.class);
                 populateContextThen(service, ctx, onSuccess);
@@ -131,7 +133,7 @@ public class ProvisionContext {
         // in all other cases ignore the presence of the template
         if (templateLink != null && ctx.templateMoRef == null
                 && ctx.instanceRequestType == InstanceRequestType.CREATE) {
-            URI computeUri = UriUtils.buildUri(service.getHost(), templateLink);
+            URI computeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), templateLink);
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ImageState body = op.getBody(ImageState.class);
@@ -153,7 +155,7 @@ public class ProvisionContext {
             String snapshotLink = CustomProperties.of(ctx.child).getString(CustomProperties.SNAPSHOT_LINK);
 
             if (snapshotLink != null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
-                URI snapshotUri = UriUtils.buildUri(service.getHost(), snapshotLink);
+                URI snapshotUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), snapshotLink);
 
                 AdapterUtils.getServiceState(service, snapshotUri, op -> {
                     SnapshotService.SnapshotState snapshotState = op.getBody(SnapshotService.SnapshotState.class);
@@ -170,7 +172,7 @@ public class ProvisionContext {
                         String refComputeLink = snapshotState.computeLink;
 
                         if (refComputeLink != null) {
-                            URI refComputeUri = UriUtils.buildUri(service.getHost(), refComputeLink);
+                            URI refComputeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), refComputeLink);
 
                             AdapterUtils.getServiceState(service, refComputeUri, opCompute -> {
                                 ComputeStateWithDescription refComputeState = opCompute.getBody(ComputeStateWithDescription.class);
@@ -199,6 +201,8 @@ public class ProvisionContext {
                             UriUtils.URI_PARAM_ODATA_EXPAND,
                             Boolean.TRUE.toString());
 
+            computeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), computeUri);
+
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ctx.parent = op.getBody(ComputeStateWithDescription.class);
                 populateContextThen(service, ctx, onSuccess);
@@ -214,8 +218,8 @@ public class ProvisionContext {
                 return;
             }
 
-            URI credUri = UriUtils
-                    .buildUri(service.getHost(), ctx.parent.description.authCredentialsLink);
+            URI credUri = PhotonModelUriUtils.createDiscoveryUri(
+                    service.getHost(), ctx.parent.description.authCredentialsLink);
             AdapterUtils.getServiceState(service, credUri, op -> {
                 ctx.vSphereCredentials = op.getBody(AuthCredentialsServiceState.class);
                 populateContextThen(service, ctx, onSuccess);
@@ -224,7 +228,7 @@ public class ProvisionContext {
         }
 
         if (ctx.task == null) {
-            AdapterUtils.getServiceState(service, ctx.provisioningTaskReference, op -> {
+            AdapterUtils.getServiceState(service, PhotonModelUriUtils.createDiscoveryUri(service.getHost(), ctx.provisioningTaskReference), op -> {
                 ctx.task = op.getBody(ServiceDocument.class);
                 populateContextThen(service, ctx, onSuccess);
             }, ctx.errorHandler);
@@ -317,6 +321,9 @@ public class ProvisionContext {
                     PhotonModelUriUtils.createDiscoveryUri(service.getHost(), placementLink),
                     UriUtils.URI_PARAM_ODATA_EXPAND,
                     Boolean.TRUE.toString());
+
+            expandedPlacementUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), expandedPlacementUri);
+
             Operation.createGet(expandedPlacementUri).setCompletion((o, e) -> {
                 if (e != null) {
                     ctx.fail(e);
@@ -371,7 +378,7 @@ public class ProvisionContext {
             // collect disks in parallel
             Stream<Operation> opsGetDisk = ctx.child.diskLinks.stream()
                     .map(link -> {
-                        URI diskStateUri = UriUtils.buildUri(service.getHost(), link);
+                        URI diskStateUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), link);
                         return Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
                                 DiskStateExpanded.buildUri(diskStateUri)));
                     });
@@ -402,7 +409,7 @@ public class ProvisionContext {
         );
         if (libraryItemLink != null && ctx.image == null
                 && ctx.instanceRequestType == InstanceRequestType.CREATE) {
-            URI libraryUri = UriUtils.buildUri(service.getHost(), libraryItemLink);
+            URI libraryUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), libraryItemLink);
 
             AdapterUtils.getServiceState(service, libraryUri, op -> {
                 ImageState body = op.getBody(ImageState.class);
@@ -420,7 +427,8 @@ public class ProvisionContext {
                         .findFirst().orElse(null);
 
                 if (bootDisk != null) {
-                    AdapterUtils.getServiceState(service, bootDisk.imageLink, op -> {
+                    URI bootImageRef = PhotonModelUriUtils.createDiscoveryUri(service.getHost(), bootDisk.imageLink);
+                    AdapterUtils.getServiceState(service, bootImageRef, op -> {
                         ImageState body = op.getBody(ImageState.class);
                         ctx.image = body;
                         populateContextThen(service, ctx, onSuccess);

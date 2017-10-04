@@ -32,7 +32,6 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -84,7 +83,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
             this.resourcePool = createResourcePool();
             this.auth = createAuth();
 
-            this.computeHostDescription = createComputeHostDescription();
+            this.computeHostDescription = createComputeDescription();
             this.computeHost = createComputeHost();
 
             // enumerate all resources hoping to find the template
@@ -300,25 +299,5 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
                 ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
-    }
-
-    private ComputeDescription createComputeHostDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = UUID.randomUUID().toString();
-        computeDesc.name = computeDesc.id;
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-        computeDesc.enumerationAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
-        computeDesc.regionId = this.datacenterId;
-
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 }
