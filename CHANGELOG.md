@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## 0.6.40-SNAPSHOT
+## 0.6.40
+* Critical fixes related to AWS and Azure costs computation.
 
 ## 0.6.39
 * Added support to assign vSphere VM Network Interface to security groups.
