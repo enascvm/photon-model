@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.resources.IPAddressService.IPAd
 import java.util.UUID;
 
 import io.netty.util.internal.StringUtil;
+import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
@@ -168,6 +169,8 @@ public class IPAddressService extends StatefulService {
         try {
             IPAddressState returnState = processInput(post);
             setState(post, returnState);
+            logInfo("Resource %s was granted the ip %s with the status %s", returnState.connectedResourceLink,
+                    returnState.ipAddress, returnState.ipAddressStatus);
             post.complete();
         } catch (Throwable t) {
             post.fail(t);
@@ -186,6 +189,7 @@ public class IPAddressService extends StatefulService {
             // Verify valid status changes
             IPAddressState currentState = getState(put);
             if (isNoOperation(currentState, newState)) {
+                put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
                 put.complete();
                 return;
             }
@@ -195,8 +199,14 @@ public class IPAddressService extends StatefulService {
             }
 
             validateState(newState);
+            logInfo("Validating transition for put request from current ip %s "
+                            + "current status %s to new ip %s new status %s",
+                    currentState.ipAddress, currentState.ipAddressStatus,
+                    newState.ipAddress, newState.ipAddressStatus);
             validateIPAddressStatusTransition(currentState, newState);
             setState(put, newState);
+            logInfo("Resource %s was granted the ip %s with the status %s", newState.connectedResourceLink,
+                    newState.ipAddress, newState.ipAddressStatus);
             put.complete();
         } catch (Throwable t) {
             put.fail(t);
@@ -213,6 +223,7 @@ public class IPAddressService extends StatefulService {
         IPAddressState patchState = patch.getBody(IPAddressState.class);
 
         if (isNoOperation(currentState, patchState)) {
+            patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
             patch.complete();
             return;
         }
@@ -226,9 +237,15 @@ public class IPAddressService extends StatefulService {
                     // Verify valid status changes
                     if (patchState.ipAddressStatus != null
                             && patchState.ipAddressStatus != currentState.ipAddressStatus) {
+                        logInfo("Validating transition for patch request from current ip %s "
+                                + "current status %s to new ip %s new status %s",
+                                currentState.ipAddress, currentState.ipAddressStatus,
+                                patchState.ipAddress, patchState.ipAddressStatus);
                         validateIPAddressStatusTransition(currentState, patchState);
                         currentState.ipAddressStatus = patchState.ipAddressStatus;
                         validateIPAddressStatusWithConnectedResource(currentState);
+                        logInfo("Resource %s was granted the ip %s with the status %s", patchState.connectedResourceLink,
+                                patchState.ipAddress, patchState.ipAddressStatus);
                         hasChanged = true;
                     }
 
@@ -258,6 +275,7 @@ public class IPAddressService extends StatefulService {
             throw (new IllegalArgumentException("body is required"));
         }
         IPAddressState state = op.getBody(IPAddressState.class);
+        logInfo("Attempting to create IP %s for resource %s",state.ipAddress, state.connectedResourceLink);
         validateState(state);
         return state;
     }
@@ -353,6 +371,14 @@ public class IPAddressService extends StatefulService {
                 IPAddressStatus.AVAILABLE.equals(currentState.ipAddressStatus)) {
             logInfo("IP address [%s] is already available, and need not be released. Operation ignored.",
                     currentState.documentSelfLink);
+            return true;
+        }
+
+        if (StringUtils.equals(currentState.connectedResourceLink, newState.connectedResourceLink)
+                &&
+                StringUtils.equals(currentState.ipAddress, newState.ipAddress) &&
+                StringUtils.equals(currentState.subnetRangeLink, newState.subnetRangeLink) &&
+                currentState.ipAddressStatus.equals(newState.ipAddressStatus)) {
             return true;
         }
 
