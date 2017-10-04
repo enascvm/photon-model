@@ -267,7 +267,7 @@ public class TestAWSProvisionTask {
 
             assertVmNetworksConfiguration(instance);
 
-            assertStorageConfiguration(this.client, instance);
+            assertStorageConfiguration(this.client, instance, compute);
         }
 
         this.host.setTimeoutSeconds(600);
@@ -333,7 +333,7 @@ public class TestAWSProvisionTask {
 
             assertVmNetworksConfiguration(instances.get(0));
 
-            assertStorageConfiguration(this.client, instances.get(0));
+            assertStorageConfiguration(this.client, instances.get(0), compute);
 
             // reach out to AWS and get the current state
             TestAWSSetupUtils
@@ -606,7 +606,7 @@ public class TestAWSProvisionTask {
         }
     }
 
-    private void assertStorageConfiguration(AmazonEC2AsyncClient client, Instance awsInstance)
+    private void assertStorageConfiguration(AmazonEC2AsyncClient client, Instance awsInstance, ComputeState compute)
             throws Throwable {
         // This assert is only suitable for real (non-mock) environment.
         if (this.isMock) {
@@ -619,16 +619,25 @@ public class TestAWSProvisionTask {
         ComputeState vm = this.host.getServiceState(null,
                 ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        //For now there is a boot disk and one additional disk attached to the compute
-        assertBootDiskConfiguration(client, awsInstance, vm.diskLinks.get(0));
-
         List<String> additionalDiskLinks = new ArrayList<>();
-        for (int i = 1; i < vm.diskLinks.size(); i++) {
-            additionalDiskLinks.add(vm.diskLinks.get(i));
+        List<String> existingDataDiskLinks = new ArrayList<>();
+        String bootDiskLink = vm.diskLinks.get(0);
+        for (int i = 1; i < compute.diskLinks.size(); i++) {
+            DiskState disk = getDiskState(vm.diskLinks.get(i));
+            if (disk.bootOrder == null) {
+                additionalDiskLinks.add(disk.documentSelfLink);
+            } else {
+                bootDiskLink = disk.documentSelfLink;
+            }
         }
 
-        assertAdditionalDiskConfiguration(client, awsInstance, additionalDiskLinks);
+        //For now there is a boot disk and one additional disk attached to the compute
+        assertBootDiskConfiguration(client, awsInstance, bootDiskLink);
+
+        //assert additional disk configuration
+        assertDataDiskConfiguration(client, awsInstance, additionalDiskLinks);
     }
+
 
     protected void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
             String diskLink) {
@@ -649,40 +658,44 @@ public class TestAWSProvisionTask {
                 bootVolume.getIops().intValue());
     }
 
-    protected void assertAdditionalDiskConfiguration(AmazonEC2AsyncClient client,
+    protected void assertDataDiskConfiguration(AmazonEC2AsyncClient client,
             Instance awsInstance, List<String> diskLinks) {
         for (String diskLink : diskLinks) {
             DiskState diskState = getDiskState(diskLink);
+            assertEbsDiskConfiguration(client, awsInstance, diskState);
+        }
+    }
 
-            assertNotNull("Additional Disk should contain atleast one custom property",
-                    diskState.customProperties);
+    protected void assertEbsDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
+            DiskState diskState) {
+        assertNotNull("Additional Disk should contain atleast one custom property",
+                diskState.customProperties);
 
-            assertTrue("deviceName is missing from the custom properties", diskState
-                    .customProperties.containsKey(DEVICE_NAME));
+        assertTrue("deviceName is missing from the custom properties", diskState
+                .customProperties.containsKey(DEVICE_NAME));
 
-            Volume volume = getVolume(client, awsInstance, diskState
-                    .customProperties.get(DEVICE_NAME));
+        Volume volume = getVolume(client, awsInstance, diskState
+                .customProperties.get(DEVICE_NAME));
 
-            assertEquals(
-                    "Additional disk capacity in diskstate is not matching the volume size in aws",
-                    diskState.capacityMBytes, volume.getSize() * 1024);
+        assertEquals(
+                "Additional disk capacity in diskstate is not matching the volume size in aws",
+                diskState.capacityMBytes, volume.getSize() * 1024);
 
-            assertEquals(
-                    "Additional disk type in diskstate is not same as the type of the volume in aws",
-                    diskState.customProperties.get(VOLUME_TYPE), volume.getVolumeType());
+        assertEquals(
+                "Additional disk type in diskstate is not same as the type of the volume in aws",
+                diskState.customProperties.get(VOLUME_TYPE), volume.getVolumeType());
 
-            //assert encryption status
-            assertEquals("Additional disk encryption status is not matching the "
-                            + "actual encryption status of the disk on aws", diskState.encrypted,
-                    volume.getEncrypted());
+        //assert encryption status
+        assertEquals("Additional disk encryption status is not matching the "
+                        + "actual encryption status of the disk on aws", diskState.encrypted,
+                volume.getEncrypted());
 
-            if (diskState.customProperties.containsKey(DISK_IOPS)) {
-                int requestedIops = Integer.parseInt(diskState.customProperties.get(DISK_IOPS));
-                int MAX_SUPPORTED_IOPS = (int) (diskState.capacityMBytes / 1024) * 50;
-                int provisionedIops = Math.min(requestedIops, MAX_SUPPORTED_IOPS);
-                assertEquals("Disk speeds are not matching", provisionedIops,
-                        volume.getIops().intValue());
-            }
+        if (diskState.customProperties.containsKey(DISK_IOPS)) {
+            int requestedIops = Integer.parseInt(diskState.customProperties.get(DISK_IOPS));
+            int MAX_SUPPORTED_IOPS = (int) (diskState.capacityMBytes / 1024) * 50;
+            int provisionedIops = Math.min(requestedIops, MAX_SUPPORTED_IOPS);
+            assertEquals("Disk speeds are not matching", provisionedIops,
+                    volume.getIops().intValue());
         }
     }
 
@@ -691,7 +704,7 @@ public class TestAWSProvisionTask {
                 UriUtils.buildUri(this.host, diskLink));
     }
 
-    private Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance, String deviceName) {
+    protected Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance, String deviceName) {
         InstanceBlockDeviceMapping bootDiskMapping = awsInstance.getBlockDeviceMappings().stream()
                 .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName().equals(deviceName))
                 .findAny()

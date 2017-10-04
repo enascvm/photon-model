@@ -1061,7 +1061,7 @@ public class TestAWSSetupUtils {
             DiskState disk = new DiskState();
             disk.id = UUID.randomUUID().toString();
             disk.documentSelfLink = disk.id;
-            disk.bootOrder = i + 2;
+            disk.bootOrder = null;
             disk.name = "Test Volume" + i;
             disk.sourceImageReference = URI.create(imageId);
             disk.capacityMBytes = ADDITIONAL_DISK_SIZE_IN_MEBI_BYTES;
