@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.42-SNAPSHOT
+
 ## 0.6.41
 * Changes related to naming of internal tags for resources.
   Key for internal tag 'type' is changed to 'vmware.enumeration.type'.
