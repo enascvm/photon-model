@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.41-SNAPSHOT
+
 ## 0.6.40
 * Critical fixes related to AWS and Azure costs computation.
 
