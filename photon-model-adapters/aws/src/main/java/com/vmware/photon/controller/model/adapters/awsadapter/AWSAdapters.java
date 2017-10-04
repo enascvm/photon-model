@@ -20,6 +20,7 @@ import java.util.logging.Level;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSMissingResourcesEnumerationService;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSRegionEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -52,7 +53,8 @@ public class AWSAdapters {
             service(AWSMissingResourcesEnumerationService.class),
             service(AWSRebootService.class),
             service(AWSComputeDiskDay2Service.class),
-            service(AWSResetService.class)
+            service(AWSResetService.class),
+            service(AWSRegionEnumerationAdapterService.class)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);

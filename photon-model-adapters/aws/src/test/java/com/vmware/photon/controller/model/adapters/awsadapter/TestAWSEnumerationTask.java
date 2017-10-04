@@ -90,6 +90,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
@@ -110,10 +111,13 @@ import org.junit.rules.TestName;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -143,6 +147,7 @@ import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
@@ -947,6 +952,23 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             unTagResources(this.client, diskTags, this.diskId);
             tearDownTestDisk(this.client, this.host, this.awsTestContext, this.isMock);
         }
+    }
+
+    @Test
+    public void testGetAvailableRegions() {
+        URI uri = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                host.getPort(),
+                UriPaths.AdapterTypePath.REGION_ENUMERATION_ADAPTER.adapterLink(
+                        PhotonModelConstants.EndpointType.aws.toString().toLowerCase()), null);
+
+        Operation post = Operation.createPost(uri);
+        post.setBody(new AuthCredentialsServiceState());
+
+        Operation operation = host.getTestRequestSender().sendAndWait(post);
+        RegionEnumerationResponse result = operation.getBody(RegionEnumerationResponse.class);
+
+        assertEquals(Regions.values().length, result.regions.size());
     }
 
     private void createS3BucketAndTags(Map<String, String> tags) {

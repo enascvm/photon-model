@@ -86,6 +86,8 @@ public class AWSUriPaths {
     public static final String AWS_MISSING_RESOURCES_SERVICE = PROVISIONING_AWS + "/missing_resources_enumeration";
     public static final String AWS_VOLUME_TYPE_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
             + "/volume-type-enumeration-adapter";
+    public static final String AWS_REGION_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
+            + "/region-enumeration-adapter";
     /**
      * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
      */
@@ -104,6 +106,7 @@ public class AWSUriPaths {
         adapterLinksByType.put(AWS_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
         adapterLinksByType.put(AWS_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
         adapterLinksByType.put(AWS_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER.key);
+        adapterLinksByType.put(AWS_REGION_ENUMERATION_ADAPTER_SERVICE, AdapterTypePath.REGION_ENUMERATION_ADAPTER.key);
 
         AWS_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }
