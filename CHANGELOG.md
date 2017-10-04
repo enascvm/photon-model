@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.6.41-SNAPSHOT
+## 0.6.41
+* Changes related to naming of internal tags for resources.
+  Key for internal tag 'type' is changed to 'vmware.enumeration.type'.
 
 ## 0.6.40
 * Critical fixes related to AWS and Azure costs computation.
