@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.resources.SecurityGroupService.
 import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -307,10 +308,6 @@ public class AWSLoadBalancerService extends StatelessService {
 
     private DeferredResult<AWSLoadBalancerContext> createSecurityGroup(
             AWSLoadBalancerContext context) {
-        if (context.loadBalancerStateExpanded.securityGroupLinks != null
-                && !context.loadBalancerStateExpanded.securityGroupLinks.isEmpty()) {
-            return DeferredResult.completed(context);
-        }
 
         return DeferredResult.completed(context)
                 .thenCompose(this::populateVpcIdFromSubnet)
@@ -597,10 +594,14 @@ public class AWSLoadBalancerService extends StatelessService {
     }
 
     private CreateLoadBalancerRequest buildCreationRequest(AWSLoadBalancerContext context) {
-        Collection<SecurityGroupState> securityGroupsToUse = context.securityGroupStates != null
-                && !context.securityGroupStates.isEmpty()
-                ? context.securityGroupStates
-                : Collections.singleton(context.provisionedSecurityGroupState);
+        // Combine all security groups associated with the LB to a single list
+        Collection<SecurityGroupState> securityGroupsToUse = new ArrayList<>();
+        if (context.provisionedSecurityGroupState != null) {
+            securityGroupsToUse.add(context.provisionedSecurityGroupState);
+        }
+        if (context.securityGroupStates != null && !context.securityGroupStates.isEmpty()) {
+            securityGroupsToUse.addAll(context.securityGroupStates);
+        }
 
         CreateLoadBalancerRequest request = new CreateLoadBalancerRequest()
                 .withLoadBalancerName(context.loadBalancerStateExpanded.name)
