@@ -41,11 +41,6 @@ public class CustomProperties {
     public static final String TEMPLATE_LINK = "__templateComputeLink";
 
     /**
-     * Reference to the description of the disk using which the disk is created.
-     */
-    public static final String TEMPLATE_DISK_LINK = "__templateDiskLink";
-
-    /**
      * When the instance needs to be linked clone from a snapshot.
      */
     public static final String SNAPSHOT_LINK = "__snapshotLink";

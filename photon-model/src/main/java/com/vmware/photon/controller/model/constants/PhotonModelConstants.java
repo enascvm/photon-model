@@ -55,6 +55,12 @@ public class PhotonModelConstants {
     public static final String STORAGE_AVAILABLE_BYTES = "StorageAvailableBytes";
     public static final String DISK_LINK = "diskLink";
 
+    /**
+     * When part of computeDescription, causes a vm to be created as a clone of the
+     * compute state.
+     */
+    public static final String TEMPLATE_DISK_LINK = "__templateDiskLink";
+
     public static final String SERVICE_RESOURCE_COST = "Service.%s.ResourceCost";
     public static final String SERVICE_OTHER_COST = "Service.%s.OtherCost";
 

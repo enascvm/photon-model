@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -40,9 +41,11 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AwsDiskClient;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -483,17 +486,28 @@ public class AWSDiskService extends StatelessService {
      * Finish the disk delete operation by cleaning up the disk reference in the system.
      */
     private void deleteDiskState(AWSDiskContext ctx, AwsDiskStage next) {
-        sendRequest(Operation.createDelete(this, ctx.disk.documentSelfLink)
+        List<Operation> ops = new ArrayList<>();
+
+        Operation op1 = Operation.createDelete(this, ctx.disk.documentSelfLink);
+        ops.add(op1);
+
+        // Clean up disk description link if it is present.
+        if (ctx.disk.customProperties != null && !ctx.disk.customProperties.isEmpty()) {
+            String diskDescLink = ctx.disk.customProperties.get(PhotonModelConstants.TEMPLATE_DISK_LINK);
+            if (diskDescLink != null) {
+                Operation op2 = Operation.createDelete(this, diskDescLink);
+                ops.add(op2);
+            }
+        }
+        OperationJoin.create(ops)
                 .setCompletion((o, e) -> {
-                    if (e != null) {
-                        handleStages(ctx, e);
+                    if (e != null && !e.isEmpty()) {
+                        handleStages(ctx, new Throwable(Utils.toString(e)));
                         return;
                     }
-
-                    String message = "[AWSDiskService] Successfully deleted the disk state for task reference:"
-                            + ctx.diskRequest.taskReference;
-                    this.logInfo(() -> message);
                     handleStages(ctx, next);
-                }));
+                })
+                .sendWith(this);
     }
+
 }

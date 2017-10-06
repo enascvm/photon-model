@@ -13,7 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Level;
@@ -24,6 +26,7 @@ import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.resources.fluentcore.utils.SdkContext;
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
+
 import rx.Completable;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
@@ -33,11 +36,13 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioning
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 
 /**
@@ -322,10 +327,31 @@ public class AzureDiskService extends StatelessService {
      * delete disk state locally
      */
     private DeferredResult<AzureDiskContext> deleteDiskState(AzureDiskContext context) {
+        List<DeferredResult<Operation>> ops = new ArrayList<>();
+        DeferredResult<Operation> op1 = this.sendWithDeferredResult(Operation.createDelete(this,
+                context.diskState.documentSelfLink));
+        ops.add(op1);
 
-        return this.sendWithDeferredResult(
-                Operation.createDelete(this, context.diskState.documentSelfLink)).thenApply(op ->
-                context);
+        // Clean up disk description link if it is present.
+        if (context.diskState.customProperties != null && !context.diskState.customProperties.isEmpty()) {
+            String diskDescLink = context.diskState.customProperties.get(PhotonModelConstants.TEMPLATE_DISK_LINK);
+
+            if (diskDescLink != null) {
+                DeferredResult<Operation> op2 = this.sendWithDeferredResult(Operation.createDelete(this, diskDescLink));
+                ops.add(op2);
+            }
+        }
+        return DeferredResult.allOf(ops)
+                .handle((c, e) -> {
+                    if (e != null) {
+                        logSevere(() -> String.format("Deleting diskState %s : FAILED with %s",
+                                context.diskState.name,
+                                Utils.toString(e)));
+                    } else {
+                        logFine(() -> String.format("Deleting diskState %s : SUCCESS", context.diskState.name));
+                    }
+                    return context;
+                });
     }
 
 }

@@ -16,10 +16,10 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
-import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.TEMPLATE_DISK_LINK;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
@@ -148,7 +148,8 @@ public class VSphereDiskService extends StatelessService {
      */
     private void finishDiskDeleteOperation(DiskContext ctx) {
         // Clean up disk description link if it is present.
-        String diskDescLink = CustomProperties.of(ctx.diskState).getString(TEMPLATE_DISK_LINK);
+        String diskDescLink = CustomProperties.of(ctx.diskState).getString(
+                PhotonModelConstants.TEMPLATE_DISK_LINK);
         OperationSequence seq = null;
         if (diskDescLink != null && !diskDescLink.isEmpty()) {
             seq = OperationSequence.create(deleteDisk(diskDescLink));
