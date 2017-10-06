@@ -35,6 +35,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.in
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.makePathToVmdkFile;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.nextUnitNumber;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.toKb;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_REFERENCE;
 
 import java.net.URI;
 import java.nio.file.Paths;
@@ -1354,7 +1355,8 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_config_guestId,
                 VimPath.vm_guest_net,
                 VimPath.vm_summary_guest_ipAddress,
-                VimPath.vm_summary_guest_hostName);
+                VimPath.vm_summary_guest_hostName,
+                VimPath.vm_datastore);
 
         VmOverlay overlay = new VmOverlay(this.vm, props);
         state.id = overlay.getInstanceUuid();
@@ -1365,7 +1367,8 @@ public class InstanceClient extends BaseHelper {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, this.vm)
-                .put(CustomProperties.TYPE, VimNames.TYPE_VM);
+                .put(CustomProperties.TYPE, VimNames.TYPE_VM)
+                .put(STORAGE_REFERENCE, overlay.getDatastoreMorefsAsString());
 
         return overlay;
     }

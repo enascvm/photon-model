@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -30,6 +29,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.vim25.ArrayOfGuestNicInfo;
+import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayOfVirtualMachineSnapshotTree;
 import com.vmware.vim25.ManagedObjectReference;
@@ -43,6 +43,8 @@ import com.vmware.vim25.VirtualMachineSnapshotTree;
  * Type-safe wrapper of a VM represented by a set of fetched properties.
  */
 public class VmOverlay extends AbstractOverlay {
+
+    private static final String DATASTORE_MOREF_DELIMITER = ";";
 
     private static final Comparator<String> IP_COMPARATOR = new Comparator<String>() {
         @Override
@@ -96,6 +98,18 @@ public class VmOverlay extends AbstractOverlay {
 
     public String getName() {
         return (String) getOrFail(VimPath.vm_config_name);
+    }
+
+    public String getDatastoreMorefsAsString() {
+        ArrayOfManagedObjectReference morefs = (ArrayOfManagedObjectReference) getOrDefault(
+                VimPath.vm_datastore, null);
+        if (morefs != null && morefs.getManagedObjectReference() != null && !morefs
+                .getManagedObjectReference().isEmpty()) {
+            return String.join(DATASTORE_MOREF_DELIMITER,
+                    morefs.getManagedObjectReference().stream().map(moref -> VimUtils
+                            .convertMoRefToString(moref)).collect(Collectors.toList()));
+        }
+        return null;
     }
 
     public List<VirtualEthernetCard> getNics() {
@@ -167,8 +181,8 @@ public class VmOverlay extends AbstractOverlay {
             return Collections.emptyList();
         }
         return arr.getGuestNicInfo()
-               .stream()
-               .flatMap(gni -> gni.getIpAddress().stream()).collect(Collectors.toList());
+                .stream()
+                .flatMap(gni -> gni.getIpAddress().stream()).collect(Collectors.toList());
     }
 
     public Map<Integer, List<String>> getMapNic2IpV4Addresses() {
@@ -188,9 +202,9 @@ public class VmOverlay extends AbstractOverlay {
     }
 
     /**
-     * Tries to guess the "public" IP of a VM. IPv6 addresses are excluded.
-     * It prefer routable addresses, then class A, then class B, then class C.
-     * Return null if not candidates.
+     * Tries to guess the "public" IP of a VM. IPv6 addresses are excluded. It prefer routable
+     * addresses, then class A, then class B, then class C. Return null if not candidates.
+     *
      * @return
      */
     public String guessPublicIpV4Address() {

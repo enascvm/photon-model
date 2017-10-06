@@ -53,11 +53,16 @@ public class PhotonModelConstants {
     public static final String MEMORY_USED_PERCENT = "MemoryUsedPercent";
     public static final String STORAGE_USED_BYTES = "StorageUsedBytes";
     public static final String STORAGE_AVAILABLE_BYTES = "StorageAvailableBytes";
-    public static final String DISK_LINK = "diskLink";
 
+    public static final String DISK_LINK = "diskLink";
     /**
-     * When part of computeDescription, causes a vm to be created as a clone of the
-     * compute state.
+     * Refers to the details of storage where the compute is provisioned. For ex, In vSphere it
+     * could refer to the datastore where the Compute lies. This will be ; separated data if
+     * there are multiple items in it. In Azure it could refer to the storage account names.
+     */
+    public static final String STORAGE_REFERENCE = "__storageReference";
+    /**
+     * Refers to the disk description link for a given disk.
      */
     public static final String TEMPLATE_DISK_LINK = "__templateDiskLink";
 
