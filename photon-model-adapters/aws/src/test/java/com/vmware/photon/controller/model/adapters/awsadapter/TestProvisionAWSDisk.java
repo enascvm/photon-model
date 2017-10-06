@@ -17,7 +17,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_VOLUME_ID_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EBS_VOLUME_SIZE_IN_MEBI_BYTES;
@@ -52,7 +51,6 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService.ProvisionDiskTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -154,8 +152,11 @@ public class TestProvisionAWSDisk {
         this.diskState = createAWSDiskState(this.host, this.endpointState,
                 this.currentTestName.getMethodName() + "_disk1", null, regionId);
 
-        String taskLink = getProvisionDiskTask(this.diskState,
-                ProvisionDiskTaskState.SubStage.CREATING_DISK);
+        String taskLink = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils
+                .getProvisionDiskTask(this.diskState.documentSelfLink,
+                        ProvisionDiskTaskState.SubStage.CREATING_DISK,
+                        this.host, this.isMock, this.endpointState.tenantLinks);
+
         this.host.waitForFinishedTask(ProvisionDiskTaskState.class, taskLink);
 
         // check that the disk has been created
@@ -200,8 +201,10 @@ public class TestProvisionAWSDisk {
         }
 
         //delete the disk using the AWSDiskService.Delete
-        taskLink = getProvisionDiskTask(this.diskState,
-                ProvisionDiskTaskState.SubStage.DELETING_DISK);
+        taskLink = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils
+                .getProvisionDiskTask(this.diskState.documentSelfLink,
+                        ProvisionDiskTaskState.SubStage.DELETING_DISK,
+                        this.host, this.isMock, this.endpointState.tenantLinks);
 
         this.host.waitForFinishedTask(ProvisionDiskTaskState.class, taskLink);
 
@@ -216,26 +219,7 @@ public class TestProvisionAWSDisk {
         }
     }
 
-    private String getProvisionDiskTask(DiskState diskState,
-            ProvisionDiskTaskState.SubStage subStage) throws Throwable {
-        // start provision task to do the actual disk creation
-        ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskState();
-        provisionTask.taskSubStage = subStage;
 
-        provisionTask.diskLink = diskState.documentSelfLink;
-        provisionTask.isMockRequest = this.isMock;
-
-        provisionTask.documentExpirationTimeMicros =
-                Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
-                        AWS_DISK_REQUEST_TIMEOUT_MINUTES);
-        provisionTask.tenantLinks = this.endpointState.tenantLinks;
-
-        provisionTask = TestUtils.doPost(this.host,
-                provisionTask, ProvisionDiskTaskState.class,
-                UriUtils.buildUri(this.host, ProvisionDiskTaskService.FACTORY_LINK));
-        return provisionTask.documentSelfLink;
-
-    }
 
     /**
      * Method to get Disk details directly from Amazon

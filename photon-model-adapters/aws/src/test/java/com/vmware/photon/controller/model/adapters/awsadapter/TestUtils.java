@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_ALLOWED_NETWORK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_PROTOCOL;
@@ -36,6 +37,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -66,6 +68,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
@@ -494,4 +497,26 @@ public class TestUtils {
         }
     }
 
+
+    public static String getProvisionDiskTask(String documentSelfLink,
+            ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage subStage,
+            VerificationHost host, boolean isMock, List<String> tenantLinks) throws Throwable {
+        // start provision task to do the actual disk creation
+        ProvisionDiskTaskService.ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskService.ProvisionDiskTaskState();
+        provisionTask.taskSubStage = subStage;
+
+        provisionTask.diskLink = documentSelfLink;
+        provisionTask.isMockRequest = isMock;
+
+        provisionTask.documentExpirationTimeMicros =
+                Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
+                        AWS_DISK_REQUEST_TIMEOUT_MINUTES);
+        provisionTask.tenantLinks = tenantLinks;
+
+        provisionTask = com.vmware.photon.controller.model.tasks.TestUtils.doPost(host,
+                provisionTask, ProvisionDiskTaskService.ProvisionDiskTaskState.class,
+                UriUtils.buildUri(host, ProvisionDiskTaskService.FACTORY_LINK));
+        return provisionTask.documentSelfLink;
+
+    }
 }

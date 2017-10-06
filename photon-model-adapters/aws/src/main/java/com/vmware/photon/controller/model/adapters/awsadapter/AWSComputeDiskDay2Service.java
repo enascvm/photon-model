@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_OPERATION_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_EBS_DEVICE_NAMES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
@@ -20,15 +21,26 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.AttachVolumeRequest;
 import com.amazonaws.services.ec2.model.AttachVolumeResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
+import com.amazonaws.services.ec2.model.DetachVolumeRequest;
+import com.amazonaws.services.ec2.model.DetachVolumeResult;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
 import com.amazonaws.services.ec2.model.Reservation;
+
+import com.amazonaws.services.ec2.model.StartInstancesRequest;
+import com.amazonaws.services.ec2.model.StartInstancesResult;
+import com.amazonaws.services.ec2.model.StopInstancesRequest;
+import com.amazonaws.services.ec2.model.StopInstancesResult;
+import com.amazonaws.services.ec2.model.Volume;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -41,6 +53,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.DefaultAdapterContext;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -65,6 +78,12 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         protected ComputeState computeState;
         protected DiskState diskState;
         protected AmazonEC2AsyncClient amazonEC2Client;
+        public long taskExpirationMicros;
+
+        DiskContext() {
+            this.taskExpirationMicros = Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
+                    AWS_DISK_OPERATION_TIMEOUT_MINUTES);
+        }
     }
 
     @Override
@@ -109,21 +128,12 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                     return context;
                 });
 
+        Function<DiskContext, DeferredResult<DiskContext>> fn;
         // handle resource operation
         if (request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
-            drDiskContext.thenCompose(this::setComputeState)
-                    .thenCompose(this::setDiskState)
-                    .thenCompose(this::setClient)
-                    .thenCompose(this::performAttachOperation)
-                    .whenComplete((ctx, e) -> {
-                        if (e != null) {
-                            ctx.baseAdapterContext.taskManager.patchTaskToFailure(e);
-                            return;
-                        }
-                        ctx.baseAdapterContext.taskManager.finishTask();
-                    });
+            fn = this::performAttachOperation;
         } else if (request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
-            //TODO: detach a disk from its vm
+            fn = this::performDetachOperation;
         } else {
             drDiskContext.thenCompose(c -> {
                 Throwable err = new IllegalArgumentException(
@@ -131,7 +141,20 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 c.baseAdapterContext.taskManager.patchTaskToFailure(err);
                 return DeferredResult.failed(err);
             });
+            return;
         }
+
+        drDiskContext.thenCompose(this::setComputeState)
+                .thenCompose(this::setDiskState)
+                .thenCompose(this::setClient)
+                .thenCompose(fn)
+                .whenComplete((ctx, e) -> {
+                    if (e != null) {
+                        ctx.baseAdapterContext.taskManager.patchTaskToFailure(e);
+                        return;
+                    }
+                    ctx.baseAdapterContext.taskManager.finishTask();
+                });
     }
 
     private void validateRequest(ResourceOperationRequest request) {
@@ -229,6 +252,198 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         return dr;
     }
 
+    private DeferredResult<DiskContext> performDetachOperation(DiskContext context) {
+        DeferredResult<DiskContext> dr = new DeferredResult();
+
+        try {
+            validateDetachInfo(context.diskState);
+        } catch (Exception e) {
+            dr.fail(e);
+            return dr;
+        }
+
+        if (context.request.isMockRequest) {
+            updateComputeAndDiskState(dr, context);
+            return dr;
+        }
+
+        String instanceId = context.computeState.id;
+        if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
+            String message = "compute id cannot be empty";
+            this.logSevere("[AWSComputeDiskDay2Service] " + message);
+            return DeferredResult.failed(new IllegalArgumentException(message));
+        }
+
+        String diskId = context.diskState.id;
+        if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
+            String message = "disk id cannot be empty";
+            this.logSevere("[AWSComputeDiskDay2Service] " + message);
+            return DeferredResult.failed(new IllegalArgumentException(message));
+        }
+
+        //TODO: Ideally the volume must be unmounted before detaching the disk. Currently
+        // we don't have a way to unmount the disk. The solution is to stop the instance,
+        // detach the disk and then start the instance
+
+        //stop the instance, detach the disk and then start the instance.
+        if (context.baseAdapterContext.child.powerState.equals(ComputeService.PowerState.ON)) {
+            StopInstancesRequest stopRequest = new StopInstancesRequest();
+            stopRequest.withInstanceIds(context.baseAdapterContext.child.id);
+            context.amazonEC2Client.stopInstancesAsync(stopRequest,
+                    new AWSAsyncHandler<StopInstancesRequest, StopInstancesResult>() {
+                        @Override
+                        protected void handleError(Exception e) {
+                            dr.fail(e);
+                        }
+
+                        @Override
+                        protected void handleSuccess(StopInstancesRequest request,
+                                StopInstancesResult result) {
+
+                            AWSUtils.waitForTransitionCompletion(getHost(),
+                                    result.getStoppingInstances(), "stopped",
+                                    context.amazonEC2Client, (is, e) -> {
+                                        if (e != null) {
+                                            dr.fail(e);
+                                            return;
+                                        }
+                                        logInfo(() -> String.format(
+                                                "[AWSComputeDiskDay2Service] Successfully stopped "
+                                                        + "the instance %s", instanceId));
+                                        //detach disk from the instance.
+                                        detachVolume(context, dr, instanceId, diskId, true);
+                                    });
+                        }
+                    });
+        } else {
+            detachVolume(context, dr, instanceId, diskId, false);
+        }
+
+        return dr;
+    }
+
+    /**
+     *  Verifies if the disk is in attached to a vm and is not boot disk.
+     */
+    private void validateDetachInfo(DiskState diskState) {
+        if (diskState.bootOrder != null) {
+            throw new IllegalArgumentException("Boot disk cannot be detached from the vm");
+        }
+
+        //Detached or available disk cannot be detached.
+        if (diskState.status != null && diskState.status != DiskService.DiskStatus.ATTACHED) {
+            throw new IllegalArgumentException(String.format("Cannot perform detach operation on "
+                    + "disk with id %s. The disk has to be in attached state.", diskState.id));
+        }
+    }
+
+    /**
+     * Send detach request to aws using amazon ec2 client.
+     */
+    private void detachVolume(DiskContext context, DeferredResult<DiskContext> dr,
+            String instanceId, String diskId, boolean startInstance) {
+        DetachVolumeRequest detachVolumeRequest = new DetachVolumeRequest()
+                .withInstanceId(instanceId)
+                .withVolumeId(diskId);
+
+        AWSAsyncHandler<DetachVolumeRequest, DetachVolumeResult> detachDiskHandler =
+                new AWSDetachDiskHandler(this, dr, context, startInstance);
+
+        context.amazonEC2Client.detachVolumeAsync(detachVolumeRequest, detachDiskHandler);
+    }
+
+    /**
+     * start the instance and on success updates the disk and compute state to reflect the detach information.
+     */
+    private void startInstance(AmazonEC2AsyncClient client, DiskContext c, DeferredResult<DiskContext> dr) {
+        StartInstancesRequest startRequest  = new StartInstancesRequest();
+        startRequest.withInstanceIds(c.baseAdapterContext.child.id);
+        client.startInstancesAsync(startRequest,
+                new AWSAsyncHandler<StartInstancesRequest, StartInstancesResult>() {
+
+                    @Override
+                    protected void handleError(Exception e) {
+                        dr.fail(e);
+                    }
+
+                    @Override
+                    protected void handleSuccess(StartInstancesRequest request, StartInstancesResult result) {
+                        AWSUtils.waitForTransitionCompletion(getHost(),
+                                result.getStartingInstances(), "running",
+                                client, (is, e) -> {
+                                    if (e != null) {
+                                        dr.fail(e);
+                                        return;
+                                    }
+
+                                    logInfo(() -> String.format(
+                                            "[AWSComputeDiskDay2Service] Successfully started the "
+                                                    + "instance %s",
+                                            result.getStartingInstances().get(0).getInstanceId()));
+                                    updateComputeAndDiskState(dr, c);
+                                });
+                    }
+                });
+    }
+
+    /**
+     *  Async handler for updating the disk and vm state after attaching the disk to a vm.
+     */
+    public class AWSDetachDiskHandler
+            extends AWSAsyncHandler<DetachVolumeRequest, DetachVolumeResult> {
+
+        private StatelessService service;
+        private DeferredResult<DiskContext> dr;
+        private DiskContext context;
+        Boolean performNextInstanceOp;
+
+        private AWSDetachDiskHandler(StatelessService service, DeferredResult<DiskContext> dr,
+                DiskContext context, Boolean performNextInstanceOp) {
+            this.service = service;
+            this.dr = dr;
+            this.context = context;
+            this.performNextInstanceOp = performNextInstanceOp;
+        }
+
+        @Override
+        protected void handleError(Exception exception) {
+            this.dr.fail(exception);
+        }
+
+        @Override
+        protected void handleSuccess(DetachVolumeRequest request, DetachVolumeResult result) {
+
+            //consumer to be invoked once a volume is deleted
+            Consumer<Object> consumer = volume -> {
+                this.service.logInfo(
+                        () -> String.format("[AWSComputeDiskDay2Service] Successfully detached "
+                                        + "the volume %s from instance %s for task reference :%s",
+                                this.context.diskState.id, this.context.computeState.id,
+                                this.context.request.taskLink()));
+                if (this.performNextInstanceOp) {
+                    //Instance will be started only if the disk is succesfully detached from the instance
+                    startInstance(this.context.amazonEC2Client, this.context, this.dr);
+                }
+            };
+
+            String volumeId = this.context.diskState.id;
+            startStatusChecker(this.context, volumeId, AWSTaskStatusChecker.AWS_AVAILABLE_NAME,
+                    consumer);
+        }
+    }
+
+    private void startStatusChecker(DiskContext context, String volumeId, String status, Consumer<Object> consumer) {
+
+        Runnable proceed = () -> {
+            AWSTaskStatusChecker
+                    .create(context.amazonEC2Client, volumeId, status, consumer, context.baseAdapterContext.taskManager,
+                            this, context.taskExpirationMicros)
+                    .start(new Volume());
+        };
+
+        proceed.run();
+    }
+
     /**
      *  Async handler for updating the disk and vm state after attaching the disk to a vm.
      */
@@ -258,7 +473,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
     }
 
     /**
-     * Update photon-model disk state and compute state to reflect the attached disk.
+     * Update photon-model disk state and compute state to reflect the attached/detached disk.
      *
      */
     private void updateComputeAndDiskState(DeferredResult<DiskContext> dr,
@@ -271,52 +486,71 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         DeferredResult.allOf(patchDRs)
                 .whenComplete((c, e) -> {
                     if (e != null) {
-                        String message = String
-                                .format("Error updating vm state. %s", Utils.toString(e));
-                        this.logSevere(() -> "[AWSComputeDiskDay2Service] " + message);
+                        this.logSevere(() -> String.format(
+                                "[AWSComputeDiskDay2Service] Error updating computeState and "
+                                        + "diskState. %s", Utils.toString(e)));
                         dr.fail(e);
                         return;
                     }
-                    String message = String
-                            .format("[AWSComputeDiskDay2Service] Successfully attached "
-                                            + "volume(%s) to instance(%s):", context.diskState.id,
-                                    context.computeState.id);
-                    this.logInfo(() -> message);
+                    this.logInfo(() -> String
+                            .format("[AWSComputeDiskDay2Service] Updating ComputeState %s and "
+                                            + "DiskState %s : SUCCESS", context.diskState.id,
+                                    context.computeState.id));
                     dr.complete(context);
                 });
     }
 
     /**
-     * Update status of disk
+     * Update attach status of disk
      */
     private DeferredResult<Operation> updateDiskState(DiskContext context) {
         DiskState diskState = context.diskState;
-        diskState.status = DiskService.DiskStatus.ATTACHED;
+        Operation diskOp = null;
 
-        Operation diskPatchOp = Operation.createPatch(this.getHost(),
-                diskState.documentSelfLink)
-                .setBody(diskState)
-                .setReferer(this.getUri());
+        if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
+            diskState.status = DiskService.DiskStatus.ATTACHED;
+            diskOp = Operation.createPatch(this.getHost(),
+                    diskState.documentSelfLink)
+                    .setBody(diskState)
+                    .setReferer(this.getUri());
+        } else if (context.request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
+            diskState.status = DiskService.DiskStatus.AVAILABLE;
+            diskState.customProperties.remove(DEVICE_NAME);
+            diskOp = Operation.createPut(UriUtils.buildUri(this.getHost(), diskState
+                    .documentSelfLink))
+                    .setBody(diskState)
+                    .setReferer(this.getUri());
+        }
 
-        return this.sendWithDeferredResult(diskPatchOp);
+        return this.sendWithDeferredResult(diskOp);
     }
 
     /**
-     * Add diskLink to ComputeState
+     * Add/remove diskLink to/from ComputeState
      */
     private DeferredResult<Operation> updateComputeState(DiskContext context) {
         ComputeState computeState = context.computeState;
-        if (computeState.diskLinks == null) {
-            computeState.diskLinks = new ArrayList<>();
+        Operation computeStateOp = null;
+
+        if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
+            if (computeState.diskLinks == null) {
+                computeState.diskLinks = new ArrayList<>();
+            }
+
+            computeState.diskLinks.add(context.diskState.documentSelfLink);
+            computeStateOp = Operation.createPatch(UriUtils.buildUri(this.getHost(),
+                    computeState.documentSelfLink))
+                    .setBody(computeState)
+                    .setReferer(this.getUri());
+
+        } else if (context.request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
+            computeState.diskLinks.remove(context.diskState.documentSelfLink);
+            computeStateOp = Operation.createPut(UriUtils.buildUri(this.getHost(),
+                    computeState.documentSelfLink))
+                    .setBody(computeState)
+                    .setReferer(this.getUri());
         }
-
-        computeState.diskLinks.add(context.diskState.documentSelfLink);
-        Operation computeStatePatchOp = Operation.createPatch(UriUtils.buildUri(this.getHost(),
-                computeState.documentSelfLink))
-                .setBody(computeState)
-                .setReferer(this.getUri());
-
-        return this.sendWithDeferredResult(computeStatePatchOp);
+        return this.sendWithDeferredResult(computeStateOp);
     }
 
     private String getAvailableDeviceName(DiskContext context, String instanceId) {

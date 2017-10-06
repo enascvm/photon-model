@@ -117,17 +117,17 @@ public class AWSComputeDiskDay2ServiceTest {
 
     private TestAWSSetupUtils.AwsNicSpecs singleNicSpec;
 
-    public static class AttachDiskTaskService
-            extends TaskService<AttachDiskTaskService.AttachDiskTaskState> {
+    public static class DiskTaskService
+            extends TaskService<DiskTaskService.DiskTaskState> {
 
-        public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/attach-disk-tasks";
+        public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/disk-op-tasks";
 
-        public AttachDiskTaskService() {
-            super(AttachDiskTaskState.class);
+        public DiskTaskService() {
+            super(DiskTaskState.class);
             super.toggleOption(ServiceOption.INSTRUMENTATION, true);
         }
 
-        public static class AttachDiskTaskState extends TaskService.TaskServiceState {
+        public static class DiskTaskState extends TaskService.TaskServiceState {
             public static enum SubStage {
                 STARTED, FINISHED, FAILED
             }
@@ -143,12 +143,12 @@ public class AWSComputeDiskDay2ServiceTest {
         @Override
         public void handlePatch(Operation patch) {
             ResourceOperationResponse response = patch.getBody(ResourceOperationResponse.class);
-            AttachDiskTaskState attachDiskTaskState = getState(patch);
+            DiskTaskState diskTaskState = getState(patch);
 
             if (TaskState.isFailed(response.taskInfo)) {
-                attachDiskTaskState.taskSubStage = AttachDiskTaskState.SubStage.FAILED;
+                diskTaskState.taskSubStage = DiskTaskState.SubStage.FAILED;
             } else if (TaskState.isFinished(response.taskInfo)) {
-                attachDiskTaskState.taskSubStage = AttachDiskTaskState.SubStage.FINISHED;
+                diskTaskState.taskSubStage = DiskTaskState.SubStage.FINISHED;
             }
             patch.complete();
         }
@@ -181,8 +181,8 @@ public class AWSComputeDiskDay2ServiceTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
 
-            factoryService(AttachDiskTaskService.class,
-                    () -> TaskFactoryService.create(AttachDiskTaskService.class)).start(this.host);
+            factoryService(DiskTaskService.class,
+                    () -> TaskFactoryService.create(DiskTaskService.class)).start(this.host);
 
             AWSAdapters.startServices(this.host);
 
@@ -224,17 +224,18 @@ public class AWSComputeDiskDay2ServiceTest {
         if (this.vmState.diskLinks != null) {
             resourcesToDelete.addAll(this.vmState.diskLinks);
         }
+
+        resourcesToDelete.add(this.diskState.documentSelfLink);
+
         if (this.vmState.networkInterfaceLinks != null) {
             resourcesToDelete.addAll(this.vmState.networkInterfaceLinks);
         }
 
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
+        TestAWSSetupUtils.deleteDisks(this.diskState.documentSelfLink, this.isMock, this.host,
+                this.endpointState.tenantLinks);
 
         if (!this.isMock) {
-            //TODO: When delete disk is implemented the below call will be replaced.
-            TestAWSSetupUtils
-                    .deleteEbsVolumeUsingEC2Client(this.client, this.host, this.diskState.id);
-
             if (!vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
                 SecurityGroup securityGroup = new AWSSecurityGroupClient(this.client)
                         .getSecurityGroup(TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
@@ -254,7 +255,7 @@ public class AWSComputeDiskDay2ServiceTest {
     }
 
     @Test
-    public void testAttachDisk() throws Throwable {
+    public void testDiskOperations() throws Throwable {
         Gson gson = new Gson();
 
         provisionSingleAWS();
@@ -294,45 +295,8 @@ public class AWSComputeDiskDay2ServiceTest {
         assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
                 availableDisk.status);
 
-        AttachDiskTaskService.AttachDiskTaskState attachTask = new AttachDiskTaskService.AttachDiskTaskState();
-        attachTask.taskSubStage = AttachDiskTaskService.AttachDiskTaskState.SubStage.STARTED;
-
-        attachTask = TestUtils
-                .doPost(this.host, attachTask, AttachDiskTaskService.AttachDiskTaskState.class,
-                        UriUtils.buildUri(this.host, AttachDiskTaskService.FACTORY_LINK));
-
-        ResourceOperationRequest request = new ResourceOperationRequest();
-
-        request.isMockRequest = this.isMock;
-        request.operation = ResourceOperation.ATTACH_DISK.operation;
-        request.payload = new HashMap<>();
-        request.payload.put(PhotonModelConstants.DISK_LINK, this.diskState.documentSelfLink);
-        request.resourceReference = UriUtils.buildUri(this.host, compute.documentSelfLink);
-        request.taskReference = UriUtils.buildUri(this.host, attachTask.documentSelfLink);
-
-        Operation attachDiskOp = Operation
-                .createPatch(UriUtils.buildUri(this.host, AWSComputeDiskDay2Service.SELF_LINK))
-                .setBody(request)
-                .setReferer(this.host.getReferer());
-
-        TestRequestSender sender = new TestRequestSender(this.host);
-        sender.sendRequest(attachDiskOp);
-
-        this.host.log("Waiting for disk attach to complete");
-        final String attachTaskServiceLink = attachTask.documentSelfLink;
-        this.host.waitFor("Attach disk failed.", () -> {
-            AttachDiskTaskService.AttachDiskTaskState attachDiskTaskState = this.host
-                    .getServiceState(null, AttachDiskTaskService.AttachDiskTaskState.class,
-                            UriUtils.buildUri(this.host, attachTaskServiceLink));
-
-            // Check for the disk is attached to a vm or not.
-            if (attachDiskTaskState.taskSubStage
-                    == AttachDiskTaskService.AttachDiskTaskState.SubStage.FINISHED) {
-                return true;
-            } else {
-                return false;
-            }
-        });
+        //attach disk to vm and verify the details
+        performDiskOperation(compute, this.diskState, ResourceOperation.ATTACH_DISK.operation);
 
         ComputeState vm = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
@@ -345,8 +309,61 @@ public class AWSComputeDiskDay2ServiceTest {
         assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
                 attachedDisk.status);
 
+
+        //detach disk from the vm and verify the details
+        performDiskOperation(vm, attachedDisk, ResourceOperation.DETACH_DISK.operation);
+
+        vm = this.host.getServiceState(null, ComputeState.class,
+                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+        assertEquals(compute.diskLinks.size(), vm.diskLinks.size());
+
+        DiskState detachedDisk = this.host.getServiceState(null, DiskState.class,
+                UriUtils.buildUri(this.host, this.diskState.documentSelfLink));
+
+        assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
+                detachedDisk.status);
+
         this.vmState = vm;
-        this.diskState = attachedDisk;
+        this.diskState = detachedDisk;
+    }
+
+    private void performDiskOperation(ComputeState compute, DiskState diskState, String requestType) throws Throwable {
+        DiskTaskService.DiskTaskState diskOpTask = new DiskTaskService.DiskTaskState();
+        diskOpTask.taskSubStage = DiskTaskService.DiskTaskState.SubStage.STARTED;
+
+        diskOpTask = TestUtils
+                .doPost(this.host, diskOpTask, DiskTaskService.DiskTaskState.class,
+                        UriUtils.buildUri(this.host, DiskTaskService.FACTORY_LINK));
+
+        ResourceOperationRequest request = new ResourceOperationRequest();
+
+        request.isMockRequest = this.isMock;
+        request.operation = requestType;
+        request.payload = new HashMap<>();
+        request.payload.put(PhotonModelConstants.DISK_LINK, diskState.documentSelfLink);
+        request.resourceReference = UriUtils.buildUri(this.host, compute.documentSelfLink);
+        request.taskReference = UriUtils.buildUri(this.host, diskOpTask.documentSelfLink);
+
+        Operation diskOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, AWSComputeDiskDay2Service.SELF_LINK))
+                .setBody(request)
+                .setReferer(this.host.getReferer());
+
+        TestRequestSender sender = new TestRequestSender(this.host);
+        sender.sendRequest(diskOp);
+
+        this.host.log("Waiting for disk operation to complete");
+        final String taskServiceLink = diskOpTask.documentSelfLink;
+        this.host.waitFor("disk Operation failed.", () -> {
+            DiskTaskService.DiskTaskState diskTaskState = this.host
+                    .getServiceState(null, DiskTaskService.DiskTaskState.class,
+                            UriUtils.buildUri(this.host, taskServiceLink));
+
+            // Check if the disk operation is successful or not.
+            return diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FINISHED ||
+                    diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FAILED;
+        });
     }
 
     private void assertAndSetVMSecurityGroupsToBeDeleted(Instance instance, ComputeState vm) {

@@ -165,6 +165,7 @@ import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
@@ -1336,32 +1337,12 @@ public class TestAWSSetupUtils {
      * Deletes the Disk that is present on an endpoint and represented by the passed in ID.
      */
     public static void deleteDisks(String documentSelfLink, boolean isMock, VerificationHost host,
-            boolean deleteDocumentOnly)
-            throws Throwable {
-        host.testStart(1);
-        ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
-        QuerySpecification resourceQuerySpec = new QueryTask.QuerySpecification();
-        // query all disks  for the cluster
-        resourceQuerySpec.query
-                .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
-                .setTermMatchValue(documentSelfLink);
-        deletionState.resourceQuerySpec = resourceQuerySpec;
-        deletionState.isMockRequest = isMock;
-        // Waiting for default request timeout in minutes for the disk to be deleted.
-        deletionState.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
-                + TimeUnit.MINUTES.toMicros(AWS_DISK_REQUEST_TIMEOUT_MINUTES);
-        if (deleteDocumentOnly) {
-            deletionState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
-        }
-        host.send(Operation
-                .createPost(
-                        UriUtils.buildUri(host,
-                                ResourceRemovalTaskService.FACTORY_LINK))
-                .setBody(deletionState)
-                .setCompletion(host.getCompletion()));
-        host.testWait();
-        // check that the disks are deleted
-        ProvisioningUtils.queryDiskInstances(host, 0);
+            List<String> tenantLinks) throws Throwable {
+        String taskLink = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils
+                .getProvisionDiskTask(documentSelfLink,
+                        ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.DELETING_DISK,
+                host, isMock, tenantLinks);
+        host.waitForFinishedTask(ProvisionDiskTaskService.ProvisionDiskTaskState.class, taskLink);
     }
 
     /**
