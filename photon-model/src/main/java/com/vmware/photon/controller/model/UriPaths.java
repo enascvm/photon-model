@@ -19,12 +19,53 @@ import com.vmware.xenon.common.UriUtils;
  * Service paths used by the photon model.
  */
 public class UriPaths {
-    public static final String PROVISIONING = "/provisioning";
-    public static final String RESOURCES = "/resources";
-    public static final String CONFIG = "/config";
-    public static final String ADAPTER = "/adapter";
-    public static final String TASKS = "/tasks";
-    public static final String SCHEDULES = "/schedules";
+
+    public static final String PROPERTY_PREFIX = "photon-model.";
+
+    public static final String DEFAULT_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "default.uri.prefix";
+
+    public static final String RESOURCES_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "resources.uri.prefix";
+    public static final String PROVISIONING_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "provisioning.uri.prefix";
+    public static final String CONFIG_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "config.uri.prefix";
+    public static final String ADAPTER_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "adapter.uri.prefix";
+    public static final String TASKS_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "tasks.uri.prefix";
+    public static final String SCHEDULES_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "schedules.uri.prefix";
+    public static final String MONITORING_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "monitoring.uri.prefix";
+
+    private static final String DEFAULT_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            DEFAULT_BASE_URI_PREFIX_PROPERTY_NAME, ""));
+    public static final String RESOURCES_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            RESOURCES_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+    public static final String PROVISIONING_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            PROVISIONING_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+    public static final String CONFIG_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            CONFIG_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+    public static final String ADAPTER_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            ADAPTER_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+    public static final String TASKS_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            TASKS_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+    public static final String SCHEDULES_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            SCHEDULES_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+    public static final String MONITORING_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
+            MONITORING_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+
+    public static final String RESOURCES = RESOURCES_BASE_URI_PREFIX + "/resources";
+
+    public static final String PROVISIONING = PROVISIONING_BASE_URI_PREFIX + "/provisioning";
+    public static final String CONFIG = CONFIG_BASE_URI_PREFIX + "/config";
+    public static final String ADAPTER = ADAPTER_BASE_URI_PREFIX + "/adapter";
+    public static final String TASKS = TASKS_BASE_URI_PREFIX + "/tasks";
+    public static final String SCHEDULES = SCHEDULES_BASE_URI_PREFIX + "/schedules";
+    public static final String MONITORING = MONITORING_BASE_URI_PREFIX + "/monitoring";
+
 
     public static final String RESOURCES_NETWORKS = RESOURCES + "/networks";
     public static final String RESOURCES_NETWORK_INTERFACES = RESOURCES + "/network-interfaces";
@@ -37,10 +78,6 @@ public class UriPaths {
     public static final String RESOURCES_IMAGES = RESOURCES + "/images";
 
     public static final String RESOURCES_ROUTERS = RESOURCES + "/routers";
-
-    public static final String MONITORING = "/monitoring";
-
-    public static final String PROPERTY_PREFIX = "photon-model.";
 
     public enum AdapterTypePath {
         INSTANCE_ADAPTER("instanceAdapter", "instance-adapter"),
