@@ -87,15 +87,19 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
     private DeferredResult<AWSSecurityGroupEnumerationResponse> createResponse(
             SecurityGroupEnumContext context) {
 
+        AWSSecurityGroupEnumerationResponse response = new AWSSecurityGroupEnumerationResponse();
+
+        if (context.enumExternalResourcesIds == null  || context.enumExternalResourcesIds.isEmpty()) {
+            return new DeferredResult<AWSSecurityGroupEnumerationResponse>().thenApply(aVoid ->response);
+        }
+
         Query.Builder findSecurityGroupStates = Builder.create()
                 .addKindFieldClause(SecurityGroupState.class)
                 .addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK, context.request.parentCompute.documentSelfLink)
                 .addInClause(SecurityGroupState.FIELD_NAME_ID, context.enumExternalResourcesIds);
 
-        if (context.enumExternalResourcesIds != null && !context.enumExternalResourcesIds.isEmpty()) {
-            findSecurityGroupStates
+        findSecurityGroupStates
                     .addInClause(SecurityGroupState.FIELD_NAME_ID, context.enumExternalResourcesIds);
-        }
 
         QueryTop<SecurityGroupState> querySecurityGroupStates = new QueryTop<>(
                 context.service.getHost(),
@@ -105,7 +109,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                         .setMaxResultsLimit(context.enumExternalResourcesIds.size());
         querySecurityGroupStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        AWSSecurityGroupEnumerationResponse response = new AWSSecurityGroupEnumerationResponse();
 
         return querySecurityGroupStates
                 .queryDocuments(sgState ->

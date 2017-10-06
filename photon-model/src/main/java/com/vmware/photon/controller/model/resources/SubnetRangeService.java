@@ -243,7 +243,8 @@ public class SubnetRangeService extends StatefulService {
                         .thenAccept((ignored) -> setState(patch, currentState))
                         .whenCompleteNotify(patch);
             } else {
-                patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+                patch.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
+                patch.setBody(currentState);
                 patch.complete();
             }
 

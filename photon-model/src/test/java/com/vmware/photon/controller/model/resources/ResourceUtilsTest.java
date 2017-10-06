@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.resources;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -73,9 +72,8 @@ public class ResourceUtilsTest extends BaseModelTest {
         patch.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
         patch.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
 
-        boolean changed = handlePatch(current, patch).getStatusCode() == Operation.STATUS_CODE_OK;
-
-        assertFalse(changed);
+        Operation returnOp = handlePatch(current, patch);
+        assertTrue(returnOp.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED));
         assertEquals(current.tenantLinks, patch.tenantLinks);
         assertEquals(current.groupLinks, patch.groupLinks);
         assertEquals(current.tagLinks, patch.tagLinks);
@@ -89,9 +87,9 @@ public class ResourceUtilsTest extends BaseModelTest {
         current.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
         ResourceState patch = new ResourceState();
 
-        boolean changed = handlePatch(current, patch).getStatusCode() == Operation.STATUS_CODE_OK;
+        Operation returnOp = handlePatch(current, patch);
+        assertTrue(returnOp.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED));
 
-        assertFalse(changed);
         assertEquals(Arrays.asList("tenant1", "tenant2"), current.tenantLinks);
         assertEquals(new HashSet<>(Arrays.asList("groupA", "groupB")), current.groupLinks);
         assertEquals(new HashSet<>(Arrays.asList("tag1", "tag2")), current.tagLinks);
@@ -113,8 +111,7 @@ public class ResourceUtilsTest extends BaseModelTest {
                 .buildDescription(ResourceState.class);
 
         ResourceUtils.handlePatch(patchOperation, current, desc, ResourceState.class, null);
-
-        assertEquals(Operation.STATUS_CODE_NOT_MODIFIED, patchOperation.getStatusCode());
+        assertTrue(patchOperation.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED));
     }
 
     @Test
@@ -144,7 +141,7 @@ public class ResourceUtilsTest extends BaseModelTest {
 
         ResourceStateWithLinks patch = new ResourceStateWithLinks();
         Operation patchOperation = handlePatch(current, patch, ResourceStateWithLinks.class);
-        assertEquals(Operation.STATUS_CODE_NOT_MODIFIED, patchOperation.getStatusCode());
+        assertTrue(patchOperation.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED));
 
         patch.optionalLink = "/some/other";
         patch.noAutoMergeLink = "/link";

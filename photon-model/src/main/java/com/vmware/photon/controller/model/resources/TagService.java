@@ -190,7 +190,7 @@ public class TagService extends StatefulService {
             }
 
             if (!modified) {
-                put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+                put.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
             }
             put.setBody(currentState);
             put.complete();

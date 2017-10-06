@@ -741,8 +741,6 @@ public class SingleResourceStatsAggregationTaskService extends
         QueryTask task = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .addOption(QueryOption.SORT)
-                .orderDescending(ResourceMetrics.FIELD_NAME_TIMESTAMP, TypeName.LONG)
                 .setResultLimit(RAW_METRICS_LIMIT)
                 .setQuery(overallQueryBuilder.build()).build();
 

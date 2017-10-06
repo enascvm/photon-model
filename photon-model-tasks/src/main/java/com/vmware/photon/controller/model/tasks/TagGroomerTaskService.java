@@ -371,6 +371,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
                         // if results are null, don't fail but proceed to next page of tags
                         task.subStage = SubStage.GET_TAGS_NEXT_PAGE;
                         sendSelfPatch(task);
+                        return;
                     }
                     getNextPageOfTaggedDocuments(task, next);
                 })

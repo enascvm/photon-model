@@ -146,16 +146,19 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
     @Override
     public void handlePatch(Operation patch) {
+        boolean opCompleted = false;
         StatsCollectionTaskState currentState = getState(patch);
         StatsCollectionTaskState patchState = getTaskBody(patch);
         updateState(currentState, patchState);
         patch.setBody(currentState);
-        patch.complete();
 
         switch (currentState.taskInfo.stage) {
         case CREATED:
             break;
         case STARTED:
+            // mark op complete and kick off the task to execute
+            patch.complete();
+            opCompleted = true;
             handleStagePatch(patch, currentState);
             break;
         case FINISHED:
@@ -172,13 +175,16 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
             if (currentState.options != null
                     && currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
-                sendRequest(Operation
-                        .createDelete(getUri()));
+                currentState.documentExpirationTimeMicros = Utils.getNowMicrosUtc();
             }
 
             break;
         default:
             break;
+        }
+
+        if (!opCompleted) {
+            patch.complete();
         }
     }
 

@@ -1163,7 +1163,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         response = this.host.waitForResponse(setNullRegionOp);
 
-        if (response.getStatusCode() == Operation.STATUS_CODE_OK) {
+        //TODO : This test is broken - Setting the regionId to null does not do anything to the underlying state
+        if (response.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED)) {
+            this.isTestBucketPatched = false;
+        } else {
             this.isTestBucketPatched = true;
         }
     }

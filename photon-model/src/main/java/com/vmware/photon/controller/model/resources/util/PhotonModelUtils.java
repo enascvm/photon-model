@@ -326,7 +326,9 @@ public class PhotonModelUtils {
             // converted PUT due to IDEMPOTENT_POST option
             s.logFine(() -> String.format("Task %s has already started. Ignoring converted PUT.",
                     put.getUri()));
-            put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+            put.setBody(s.getState(put));
+            put.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
+            put.setStatusCode(Operation.STATUS_CODE_OK);
             put.complete();
             return;
         }

@@ -204,11 +204,10 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             break;
         case FINISHED:
             logFine(() -> "Task is complete");
-            if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
-                sendRequest(Operation
-                        .createDelete(getUri()));
-            }
             updateEndpointState(currentState);
+            if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
+                currentState.documentExpirationTimeMicros = Utils.getNowMicrosUtc();
+            }
             break;
         case FAILED:
         case CANCELLED:
@@ -218,11 +217,10 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
                 logWarning(() -> String.format("Task failed: %s",
                         Utils.toJsonHtml(currentState.taskInfo.failure)));
             }
-            if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
-                sendRequest(Operation
-                        .createDelete(getUri()));
-            }
             updateEndpointState(currentState);
+            if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
+                currentState.documentExpirationTimeMicros = Utils.getNowMicrosUtc();
+            }
             break;
         default:
             logWarning(() -> "Unknown stage");

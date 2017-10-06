@@ -164,11 +164,7 @@ public class TagServiceTest extends Suite {
             returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
-            assertNotNull(returnState);
-            assertThat(returnState.key, is(startState.key));
-            assertThat(returnState.value, is(startState.value));
-            assertThat(returnState.external, is(Boolean.TRUE));
-            assertThat(returnState.documentVersion, is (0L));
+            assertThat(returnState.documentVersion, is(0L));
         }
 
         @Test
@@ -209,10 +205,7 @@ public class TagServiceTest extends Suite {
             returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
-            assertNotNull(returnState);
-            assertThat(returnState.key, is(startState.key));
-            assertThat(returnState.value, is(startState.value));
-            assertThat(returnState.external, is(Boolean.FALSE));
+            assertThat(returnState.documentVersion, is(0L));
         }
 
         @Test
@@ -227,8 +220,7 @@ public class TagServiceTest extends Suite {
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
 
-            assertThat(newReturnState.documentSelfLink, is(returnState.documentSelfLink));
-            assertThat(newReturnState.documentVersion, is(0L));
+            assertThat(returnState.documentVersion, is(0L));
             startState.external = Boolean.TRUE;
             TagService.TagState updatedReturnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,

@@ -278,10 +278,6 @@ public class NetworkInterfaceService extends StatefulService {
         Utils.validateState(getStateDescription(), state);
 
         if (state.address != null) {
-            if (state.subnetLink == null) {
-                throw new IllegalArgumentException(
-                        "SubnetLink must not be null when address is set");
-            }
             if (!InetAddressValidator.getInstance().isValidInet4Address(
                     state.address)) {
                 throw new IllegalArgumentException("IP address is invalid");

@@ -103,10 +103,7 @@ public class QueryUtils {
             QueryTask queryTask,
             ServiceTypeCluster cluster,
             boolean isLocal) {
-
-        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster,
-                isLocal);
-
+        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster, isLocal);
         return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
     }
 
@@ -141,7 +138,6 @@ public class QueryUtils {
         if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
             queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
         }
-
         return startQueryTask(service, queryTask, ServiceTypeCluster.INVENTORY_SERVICE, isLocal);
     }
 
@@ -193,9 +189,7 @@ public class QueryUtils {
     public static Operation createQueryTaskOperation(
             Service service, QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator,
             boolean isLocal) {
-
-        return createQueryTaskOperation(service.getHost(), queryTask, serviceEndpointLocator,
-                isLocal);
+        return createQueryTaskOperation(service.getHost(), queryTask, serviceEndpointLocator, isLocal);
     }
 
     /**
@@ -253,7 +247,6 @@ public class QueryUtils {
                 queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
             }
         }
-
         if (queryTask.documentExpirationTimeMicros == 0) {
             queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                     + QueryUtils.TEN_MINUTES_IN_MICROS;
@@ -526,7 +519,6 @@ public class QueryUtils {
 
             QueryTask.Builder queryTaskBuilder = newQueryTaskBuilder()
                     .addOption(QueryOption.EXPAND_CONTENT);
-
             return queryImpl(queryTaskBuilder, documentConsumer);
         }
 
@@ -541,7 +533,6 @@ public class QueryUtils {
         public DeferredResult<Void> queryLinks(Consumer<String> linkConsumer) {
 
             QueryTask.Builder queryTaskBuilder = newQueryTaskBuilder();
-
             return queryImpl(queryTaskBuilder, linkConsumer);
         }
 
@@ -749,7 +740,8 @@ public class QueryUtils {
          */
         @Override
         protected QueryTask.Builder newQueryTaskBuilder() {
-            return super.newQueryTaskBuilder().addOption(QueryOption.TOP_RESULTS);
+            return super.newQueryTaskBuilder()
+                    .addOption(QueryOption.TOP_RESULTS);
         }
 
         @Override

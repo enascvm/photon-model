@@ -146,8 +146,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         // local system.
         public String deletionNextPageLink;
         public Operation operation;
-        // The list of operations that have to created/updated as part of the EBS enumeration.
-        public List<Operation> enumerationOperations;
         // The time stamp at which the enumeration started.
         public long enumerationStartTimeInMicros;
         public String internalTypeTagSelfLink;
@@ -167,7 +165,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             this.diskStatesToBeUpdated = new HashMap<>();
             this.remoteAWSVolumes = new ConcurrentSkipListMap<>();
             this.volumesToBeCreated = new ArrayList<>();
-            this.enumerationOperations = new ArrayList<>();
             this.remoteAWSVolumeIds = new HashSet<>();
             this.createdExternalTags = new ArrayList<>();
             this.stage = AWSEBSStorageEnumerationStages.CLIENT;
@@ -584,13 +581,13 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         this.context.parentCompute.tenantLinks, true));
 
             });
+            List<Operation> enumerationOperations = new ArrayList<>();
             diskStatesToBeCreated.forEach(diskState ->
-                    this.context.enumerationOperations.add(
+                    enumerationOperations.add(
                             createPostOperation(this.service, diskState,
                                     DiskService.FACTORY_LINK)));
             this.service.logFine(() -> String.format("Creating %d EBS disks",
                     this.context.volumesToBeCreated.size()));
-
             // For existing disk states, check if tagLinks contains internal type tag. If it doesn't
             // then send a collection update request and add internal type tag to tagLinks.
             if (this.context.internalTypeTagSelfLink != null) {
@@ -607,7 +604,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                             ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
                                     .create(collectionsToAddMap, collectionsToRemoveMap);
 
-                            this.context.enumerationOperations.add(Operation.createPatch(this.service.getHost(),
+                            enumerationOperations.add(Operation.createPatch(this.service.getHost(),
                                     diskMap.getValue().documentSelfLink)
                                     .setReferer(this.service.getUri())
                                     .setBody(updateTagLinksRequest));
@@ -630,7 +627,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
 
             });
             diskStatesToBeUpdated.forEach(diskState -> {
-                this.context.enumerationOperations.add(
+                enumerationOperations.add(
                         createPatchOperation(this.service, diskState,
                                 this.context.localDiskStateMap.get(diskState.id).documentSelfLink));
             });
@@ -650,13 +647,12 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 handleReceivedEnumerationData();
             };
 
-            if (this.context.enumerationOperations.isEmpty()) {
+            if (enumerationOperations.isEmpty()) {
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
                 return;
             }
-
-            OperationJoin joinOp = OperationJoin.create(this.context.enumerationOperations);
+            OperationJoin joinOp = OperationJoin.create(enumerationOperations);
             joinOp.setCompletion(joinCompletion);
             joinOp.sendWith(this.service.getHost());
         }

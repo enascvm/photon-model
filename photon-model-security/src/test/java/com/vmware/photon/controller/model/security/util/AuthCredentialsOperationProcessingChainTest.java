@@ -63,7 +63,8 @@ public class AuthCredentialsOperationProcessingChainTest extends BaseModelTest {
         // set AuthCredentialsOperationProcessingChain in the factory
         FactoryService fs = (FactoryService) findService.invoke(host,
                 AuthCredentialsService.FACTORY_LINK);
-        fs.setOperationProcessingChain(new AuthCredentialsOperationProcessingChain(fs));
+        fs.setOperationProcessingChain(
+                AuthCredentialsOperationProcessingChain.createOperationProcessingChain(fs));
 
         // common setup
         System.clearProperty(EncryptionUtils.ENCRYPTION_KEY);
@@ -219,7 +220,8 @@ public class AuthCredentialsOperationProcessingChainTest extends BaseModelTest {
             AuthCredentialsServiceState state) throws Exception {
         AuthCredentialsService s = (AuthCredentialsService) findService.invoke(host,
                 state.documentSelfLink);
-        s.setOperationProcessingChain(new AuthCredentialsOperationProcessingChain(s));
+        s.setOperationProcessingChain(
+                AuthCredentialsOperationProcessingChain.createOperationProcessingChain(s));
         return state;
     }
 }

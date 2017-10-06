@@ -265,7 +265,7 @@ public class ImageEnumerationTaskService
 
         ImageEnumerationTaskState currentState = getState(patchOp);
         ImageEnumerationTaskState patchState = getBody(patchOp);
-
+        boolean opCompleted = false;
         try {
             if (!validateTransition(patchOp, currentState, patchState)) {
                 return;
@@ -277,10 +277,10 @@ public class ImageEnumerationTaskService
                     patchOp.getReferer().getPath()));
 
             updateState(currentState, patchState);
-            patchOp.complete();
-
             switch (patchState.taskInfo.stage) {
             case STARTED:
+                patchOp.complete();
+                opCompleted = true;
                 sendImageEnumerationAdapterRequest(currentState);
                 break;
             case FINISHED:
@@ -304,6 +304,9 @@ public class ImageEnumerationTaskService
                 logSevere(() -> String.format("An error occurred on stage %s: %s",
                         currentState.taskInfo.stage, Utils.toString(e)));
             }
+        }
+        if (!opCompleted) {
+            patchOp.complete();
         }
     }
 

@@ -301,10 +301,9 @@ public class ResourcePoolServiceTest extends Suite {
                     .setBody(patchState);
             Operation returnedOp = sendOperationSynchronously(patchOp);
 
-            assertThat(returnedOp.getStatusCode(), is(Operation.STATUS_CODE_NOT_MODIFIED));
+            assertThat(returnedOp.getStatusCode(), is(Operation.STATUS_CODE_OK));
+            assertThat(returnedOp.getBody(ResourcePoolService.ResourcePoolState.class).documentVersion, is(0L));
 
-            // test full state is not returned (the original patch state is returned)
-            assertNull(returnedOp.getBody(ResourcePoolService.ResourcePoolState.class).query);
         }
 
         @Test

@@ -189,7 +189,8 @@ public class IPAddressService extends StatefulService {
             // Verify valid status changes
             IPAddressState currentState = getState(put);
             if (isNoOperation(currentState, newState)) {
-                put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+                put.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
+                put.setBody(currentState);
                 put.complete();
                 return;
             }
@@ -223,7 +224,8 @@ public class IPAddressService extends StatefulService {
         IPAddressState patchState = patch.getBody(IPAddressState.class);
 
         if (isNoOperation(currentState, patchState)) {
-            patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+            patch.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
+            patch.setBody(currentState);
             patch.complete();
             return;
         }

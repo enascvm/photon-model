@@ -941,7 +941,7 @@ public class IPAddressAllocationTaskService extends
                         logSevere("Error updating IP %s: Error: %s ", addressState.ipAddress,
                                 e.getMessage());
                         ipAddressStateDeferredResult.fail(e);
-                    } else if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
+                    } else if (o.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED)) {
                         // Another concurrent request obtained the IP Address.
                         String msg = String
                                 .format("IP Address %s is already allocated. Will re-attempt allocation with a different IP Address.",

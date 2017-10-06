@@ -83,10 +83,9 @@ public class ResourceUtils {
             }
 
             if (!hasStateChanged) {
-                op.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
-            } else {
-                op.setBody(currentState);
+                op.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
             }
+            op.setBody(currentState);
             op.complete();
         } catch (NoSuchFieldException | IllegalAccessException e) {
             op.fail(e);

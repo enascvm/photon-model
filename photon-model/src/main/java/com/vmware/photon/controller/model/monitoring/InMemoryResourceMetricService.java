@@ -74,7 +74,7 @@ public class InMemoryResourceMetricService extends StatefulService {
                 }
             }
             setState(put, currentState);
-            put.setBody(null).complete();
+            put.setBody(currentState).complete();
         } catch (Throwable t) {
             put.fail(t);
         }
