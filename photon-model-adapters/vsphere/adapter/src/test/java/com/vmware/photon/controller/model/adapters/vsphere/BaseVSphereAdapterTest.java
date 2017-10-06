@@ -17,6 +17,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
@@ -24,7 +26,9 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResizeComputeService.COMPUTE_CPU_COUNT;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResizeComputeService.REBOOT_VM_FLAG;
+import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
+
 
 import java.io.File;
 import java.io.FileWriter;
@@ -41,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -65,6 +70,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -72,6 +78,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
@@ -94,6 +101,8 @@ import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.security.util.CertificateUtil;
 import com.vmware.photon.controller.model.support.LifecycleState;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -121,6 +130,7 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.TestContext;
+import com.vmware.xenon.common.test.TestProperty;
 import com.vmware.xenon.common.test.TestRequestSender;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -161,6 +171,67 @@ public class BaseVSphereAdapterTest {
 
     @Rule
     public TestName testName = new TestName();
+
+    protected EndpointState createEndpoint(Consumer<ComputeState> cs,
+            Consumer<ComputeDescription> desc) throws Throwable {
+        EndpointAllocationTaskState validateEndpoint = new EndpointAllocationTaskState();
+        EndpointState endpoint = new EndpointState();
+        validateEndpoint.endpointState = endpoint;
+
+        endpoint.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
+        endpoint.name = PhotonModelConstants.EndpointType.vsphere.name();
+        endpoint.regionId = this.datacenterId;
+
+        endpoint.endpointProperties = new HashMap<>();
+        endpoint.endpointProperties.put(PRIVATE_KEYID_KEY,
+                this.vcUsername != null ? this.vcUsername : "username");
+        endpoint.endpointProperties.put(PRIVATE_KEY_KEY,
+                this.vcPassword != null ? this.vcPassword : "password");
+        endpoint.endpointProperties.put(HOST_NAME_KEY,
+                this.vcUrl != null ? URI.create(this.vcUrl).toURL().getHost() : "hostname");
+        validateEndpoint.options = isMock() ? EnumSet.of(TaskOption.IS_MOCK) : null;
+        configureEndpoint(endpoint);
+
+        EndpointAllocationTaskState outTask = TestUtils
+                .doPost(this.host, validateEndpoint,
+                        EndpointAllocationTaskState.class,
+                        UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
+
+        this.host.waitForFinishedTask(
+                EndpointAllocationTaskState.class,
+                outTask.documentSelfLink);
+
+        EndpointAllocationTaskState taskState = this.host.getServiceState(EnumSet.noneOf(TestProperty.class),
+                EndpointAllocationTaskState.class,
+                UriUtils.buildUri(this.host, outTask.documentSelfLink));
+
+        if (cs != null) {
+            cs.accept(this.host.getServiceState(
+                    EnumSet.noneOf(TestProperty.class),
+                    ComputeState.class,
+                    UriUtils.buildUri(this.host, taskState.endpointState.computeLink)
+            ));
+        }
+
+        if (desc != null) {
+            desc.accept(this.host.getServiceState(
+                    EnumSet.noneOf(TestProperty.class),
+                    ComputeDescription.class,
+                    UriUtils.buildUri(this.host, taskState.endpointState.computeDescriptionLink)
+            ));
+        }
+
+        this.resourcePool = this.host.getServiceState(
+                EnumSet.noneOf(TestProperty.class),
+                ResourcePoolState.class,
+                UriUtils.buildUri(this.host, taskState.endpointState.resourcePoolLink));
+        this.auth = this.host.getServiceState(
+                EnumSet.noneOf(TestProperty.class),
+                AuthCredentialsServiceState.class,
+                UriUtils.buildUri(this.host, taskState.endpointState.authCredentialsLink));
+
+        return taskState.endpointState;
+    }
 
     @Before
     public void setUp() throws Throwable {
@@ -221,6 +292,13 @@ public class BaseVSphereAdapterTest {
                     .substring(this.dataStoreId.lastIndexOf("/") + 1, this.dataStoreId.length());
         }
         doSetup();
+    }
+
+    /**
+     * Hook to customized endoint before it is sibmitted for creation.
+     * @param endpoint
+     */
+    protected void configureEndpoint(EndpointState endpoint) {
     }
 
     protected void startAdditionalServices() throws Throwable {
@@ -566,7 +644,8 @@ public class BaseVSphereAdapterTest {
             return true;
         });
         TestContext ctx2 = this.host.testCreate(1);
-        Operation resetOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+        Operation resetOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
                 .setBody(resetVMRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> {
@@ -597,9 +676,11 @@ public class BaseVSphereAdapterTest {
 
         String taskLink = UUID.randomUUID().toString();
 
-        ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest(ResourceOperation.CREATE_SNAPSHOT.operation, vm.documentSelfLink, taskLink);
+        ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest(ResourceOperation.CREATE_SNAPSHOT.operation,
+                vm.documentSelfLink, taskLink);
 
-        Operation createSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
+        Operation createSnapshotOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
                 .setBody(snapshotRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> Assert.assertNull(e));
@@ -637,7 +718,8 @@ public class BaseVSphereAdapterTest {
         ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest(ResourceOperation.CREATE_SNAPSHOT.operation,
                 vm.documentSelfLink, taskLink);
 
-        Operation createSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
+        Operation createSnapshotOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
                 .setBody(snapshotRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> Assert.assertNull(e));
@@ -670,9 +752,11 @@ public class BaseVSphereAdapterTest {
 
         String taskLink = UUID.randomUUID().toString();
 
-        ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(ResourceOperation.DELETE_SNAPSHOT.operation, "DELETE", snapshotState.documentSelfLink, taskLink);
+        ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(
+                ResourceOperation.DELETE_SNAPSHOT.operation, "DELETE", snapshotState.documentSelfLink, taskLink);
 
-        Operation deleteSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
+        Operation deleteSnapshotOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
                 .setBody(snapshotRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> Assert.assertNull(e));
@@ -685,7 +769,8 @@ public class BaseVSphereAdapterTest {
             SnapshotState finalSnapshotState = querySnapshotState(computeState.documentSelfLink, true);
             ComputeState finalComputeState = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, computeState.documentSelfLink));
-            String hasSnapshot = finalComputeState.customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS);
+            String hasSnapshot = finalComputeState.customProperties
+                    .get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS);
             // Check for the snapshot state and _hasSnapshots flag in compute. Since we are deleting
             // the current snapshot, the vm is left with one more snapshot (which is the child of the deleted )
             // snapshot. So hasSnapshot will still be true.
@@ -706,9 +791,12 @@ public class BaseVSphereAdapterTest {
 
         String taskLink = UUID.randomUUID().toString();
 
-        ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(ResourceOperation.REVERT_SNAPSHOT.operation, "REVERT", snapshotStateToRevertTo.documentSelfLink, taskLink);
+        ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(
+                ResourceOperation.REVERT_SNAPSHOT.operation, "REVERT", snapshotStateToRevertTo.documentSelfLink,
+                taskLink);
 
-        Operation revertSnapshotOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
+        Operation revertSnapshotOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
                 .setBody(snapshotRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> Assert.assertNull(e));
@@ -721,7 +809,8 @@ public class BaseVSphereAdapterTest {
             SnapshotState finalSnapshotState = querySnapshotState(computeState.documentSelfLink, true);
             ComputeState finalComputeState = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, computeState.documentSelfLink));
-            String hasSnapshot = finalComputeState.customProperties.get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS);
+            String hasSnapshot = finalComputeState.customProperties
+                    .get(ComputeProperties.CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS);
             // Check for the snapshot state and _hasSnapshots flag in compute
             if (hasSnapshot != null && Boolean.parseBoolean(hasSnapshot)
                     && finalSnapshotState.documentSelfLink.equals(snapshotStateToRevertTo.documentSelfLink)) {
@@ -735,8 +824,10 @@ public class BaseVSphereAdapterTest {
 
     protected void resizeVM(ComputeState vm) {
         String taskLink = UUID.randomUUID().toString();
-        ResourceOperationRequest resizeRequest = getResizeComputeRequest(ResourceOperation.RESIZE.operation, vm.documentSelfLink, taskLink);
-        Operation resizeComputeOperation = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterResizeComputeService.SELF_LINK))
+        ResourceOperationRequest resizeRequest = getResizeComputeRequest(ResourceOperation.RESIZE.operation,
+                vm.documentSelfLink, taskLink);
+        Operation resizeComputeOperation = Operation
+                .createPatch(UriUtils.buildUri(this.host, VSphereAdapterResizeComputeService.SELF_LINK))
                 .setBody(resizeRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> Assert.assertNull(e));
@@ -747,8 +838,10 @@ public class BaseVSphereAdapterTest {
         ComputeState cState = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, vm.documentSelfLink));
         this.host.waitFor("Resize compute request failed", () -> {
-            Operation op = this.host.waitForResponse(Operation.createGet(this.host, cState.documentSelfLink + "?expand"));
-            ComputeService.ComputeStateWithDescription cDesc = op.getBody(ComputeService.ComputeStateWithDescription.class);
+            Operation op = this.host
+                    .waitForResponse(Operation.createGet(this.host, cState.documentSelfLink + "?expand"));
+            ComputeService.ComputeStateWithDescription cDesc = op
+                    .getBody(ComputeService.ComputeStateWithDescription.class);
             if (cDesc != null && cDesc.description.cpuCount == 4L) {
                 return true;
             } else {
@@ -798,7 +891,7 @@ public class BaseVSphereAdapterTest {
     }
 
     protected void createTaskResultListener(VerificationHost host, String taskLink,
-                                          Function<Operation, Boolean> h) {
+            Function<Operation, Boolean> h) {
         StatelessService service = new StatelessService() {
             @Override
             public void handleRequest(Operation update) {
@@ -879,10 +972,15 @@ public class BaseVSphereAdapterTest {
     }
 
     protected void enumerateComputes(ComputeState computeHost) throws Throwable {
-        enumerateComputes(computeHost, null);
+        enumerateComputes(computeHost, null, null);
     }
 
-    protected void enumerateComputes(ComputeState computeHost,
+    protected void enumerateComputes(ComputeState computeHost, EndpointState endpointState) throws Throwable {
+        enumerateComputes(computeHost, endpointState, null);
+    }
+
+
+    protected void enumerateComputes(ComputeState computeHost, EndpointState endpointState,
             EnumSet<TaskOption> options) throws Throwable {
         ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
         task.adapterManagementReference = computeHost.adapterManagementReference;
@@ -890,7 +988,11 @@ public class BaseVSphereAdapterTest {
         task.enumerationAction = EnumerationAction.REFRESH;
         task.parentComputeLink = computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;
-        task.endpointLink = "/some/endpoint/link";
+        if (endpointState != null) {
+            task.endpointLink = endpointState.documentSelfLink;
+        } else {
+            task.endpointLink = "/some/endpoint/link";
+        }
         task.options = options;
 
         if (isMock()) {
@@ -1045,7 +1147,6 @@ public class BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
 
-
     protected HashMap<String, String> buildCustomProperties() {
         HashMap<String, String> customProperties = new HashMap<>();
 
@@ -1136,7 +1237,7 @@ public class BaseVSphereAdapterTest {
     }
 
     private ResourceOperationRequest getCreateSnapshotRequest(String operation, String documentSelfLink,
-                                                              String taskLink) {
+            String taskLink) {
         Map<String, String> payload = new HashMap<>();
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, "CREATE");
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_MEMORY, "false");
@@ -1150,10 +1251,11 @@ public class BaseVSphereAdapterTest {
     }
 
     private ResourceOperationRequest getResizeComputeRequest(String operation, String documentSelfLink,
-                                                              String taskLink) {
+            String taskLink) {
         Map<String, String> payload = new HashMap<>();
         payload.put(COMPUTE_CPU_COUNT, "4"); //update "__cpuCount" to 4 from 2
-        payload.put(REBOOT_VM_FLAG, "true"); //reboot vm flag to true (not expecting hot-plug to be enabled in the provisioned machine)
+        payload.put(REBOOT_VM_FLAG,
+                "true"); //reboot vm flag to true (not expecting hot-plug to be enabled in the provisioned machine)
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
         resourceOperationRequest.operation = operation;
         resourceOperationRequest.isMockRequest = isMock();
@@ -1163,8 +1265,9 @@ public class BaseVSphereAdapterTest {
         return resourceOperationRequest;
     }
 
-    private ResourceOperationRequest getDeleteOrRevertSnapshotRequest(String operationId, String operationType, String documentSelfLink,
-                                                        String taskLink) {
+    private ResourceOperationRequest getDeleteOrRevertSnapshotRequest(String operationId, String operationType,
+            String documentSelfLink,
+            String taskLink) {
         Map<String, String> payload = new HashMap<>();
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, operationType);
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();

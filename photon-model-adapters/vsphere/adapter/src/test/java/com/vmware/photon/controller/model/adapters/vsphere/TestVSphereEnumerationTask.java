@@ -262,7 +262,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     }
 
     private void refreshAndRetire() throws Throwable {
-        enumerateComputes(this.computeHost, EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES));
+        enumerateComputes(this.computeHost, null, EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES));
     }
 
     private QueryTask queryForDatastore() {

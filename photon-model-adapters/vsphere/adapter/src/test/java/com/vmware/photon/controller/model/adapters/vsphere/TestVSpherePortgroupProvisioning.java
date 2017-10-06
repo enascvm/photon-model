@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.EnumSet;
-import java.util.UUID;
 
 import org.junit.Assert;
 import org.junit.Ignore;
@@ -23,9 +22,8 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -47,19 +45,13 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  */
 @Ignore
 public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
-    private ComputeDescription computeHostDescription;
 
     private ComputeState computeHost;
+    private EndpointState endpoint;
 
     @Test
     public void createPortgroup() throws Throwable {
-
-        // Create a resource pool where the VM will be housed
-        this.resourcePool = createResourcePool();
-        this.auth = createAuth();
-
-        this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost();
+        this.endpoint = createEndpoint(cs -> this.computeHost = cs, null);
 
         // enumerate all resources hoping to find the template
         doRefresh();
@@ -153,24 +145,6 @@ public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
     }
 
     private void doRefresh() throws Throwable {
-        enumerateComputes(this.computeHost);
-    }
-
-    /**
-     * Create a compute host representing a vcenter server
-     */
-    private ComputeState createComputeHost() throws Throwable {
-        ComputeState computeState = new ComputeState();
-        computeState.id = UUID.randomUUID().toString();
-        computeState.name = this.computeHostDescription.name;
-        computeState.documentSelfLink = computeState.id;
-        computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
-        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = getAdapterManagementReference();
-
-        ComputeState returnState = TestUtils.doPost(this.host, computeState,
-                ComputeState.class,
-                UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
-        return returnState;
+        enumerateComputes(this.computeHost, this.endpoint);
     }
 }
