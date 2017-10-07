@@ -67,6 +67,7 @@ import com.microsoft.azure.management.storage.implementation.StorageAccountsInne
 import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.ResultContinuation;
 import com.microsoft.azure.storage.ResultSegment;
+import com.microsoft.azure.storage.StorageCredentials;
 import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.BlobListingDetails;
 import com.microsoft.azure.storage.blob.CloudBlob;
@@ -888,8 +889,16 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 }
 
                 try {
-                    CloudStorageAccount storageAccount = CloudStorageAccount
-                            .parse(storageConnectionString);
+                    CloudStorageAccount storageAccount;
+                    if (AzureUtils.isAzureClientMock()) {
+                        StorageCredentials credentials = StorageCredentials.tryParseCredentials(storageConnectionString);
+                        storageAccount = new CloudStorageAccount(credentials, new URI(AzureUtils.getAzureBaseUri()),
+                               new URI(AzureUtils.getAzureBaseUri()), new URI(AzureUtils.getAzureBaseUri()),
+                               new URI(AzureUtils.getAzureBaseUri()));
+                    } else {
+                        storageAccount = CloudStorageAccount.parse(storageConnectionString);
+                    }
+
                     CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
 
                     ResultContinuation nextContainerResults = null;
@@ -1735,7 +1744,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      **/
     private String getStorageAccountNameFromUri(String uri) {
         int p = uri.indexOf(".");
-        return uri.substring(0, p);
+        if (p > -1) {
+            return uri.substring(0, p);
+        } else {
+            return uri;
+        }
     }
 
     // Log Azure API usage statistics.

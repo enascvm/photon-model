@@ -152,7 +152,7 @@ public class AzureConstants {
     //Storage accounts REST constants
     public static final String STORAGE_ACCOUNT_REST_API_VERSION = "2016-01-01";
     public static final String LIST_STORAGE_ACCOUNTS = AzureUtils.getAzureBaseUri()
-            + "/subscriptions/{subscriptionId}/providers/Microsoft.Storage/storageAccounts";
+            + "subscriptions/{subscriptionId}/providers/Microsoft.Storage/storageAccounts";
 
     public static final String UNIT_COST = "USD";
     public static final String UNIT_BYTES = "Bytes";
@@ -172,16 +172,16 @@ public class AzureConstants {
     // Virtual Network REST constants
     public static final String NETWORK_REST_API_VERSION = "2015-06-15";
     public static final String LIST_VIRTUAL_NETWORKS_URI = AzureUtils.getAzureBaseUri()
-            + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualnetworks";
+            + "subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualNetworks";
 
     // Network Security Groups
     public static final String LIST_NETWORK_SECURITY_GROUP_URI = AzureUtils.getAzureBaseUri()
-            + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/networkSecurityGroups";
+            + "subscriptions/{subscriptionId}/providers/Microsoft.Network/networkSecurityGroups";
 
     // Resource Group REST constants
     public static final String RESOURCE_GROUP_REST_API_VERSION = "2015-11-01";
     public static final String LIST_RESOURCE_GROUPS_URI = AzureUtils.getAzureBaseUri()
-            + "/subscriptions/{subscriptionId}/resourcegroups";
+            + "subscriptions/{subscriptionId}/resourcegroups";
 
     // Azure network properties
     public static final String DEFAULT_INSTANCE_ADAPTER_REFERENCE = "defaultInstanceAdapterReference";
@@ -189,7 +189,7 @@ public class AzureConstants {
     // Provider REST constants
     public static final String PROVIDER_REST_API_VERSION = "2016-07-01";
     public static final String PROVIDER_URI = AzureUtils.getAzureBaseUri()
-            + "/subscriptions/{subscriptionId}/providers/{resourceProviderNamespace}";
+            + "subscriptions/{subscriptionId}/providers/{resourceProviderNamespace}";
     public static final String PROVIDER_PERMISSIONS_URI = PROVIDER_URI + "/permissions";
 
     public static final String STATUS_SUBNET_NOT_VALID = "not valid";
