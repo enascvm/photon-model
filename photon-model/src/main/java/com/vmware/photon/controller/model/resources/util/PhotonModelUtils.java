@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -43,8 +44,10 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ReflectionUtils;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -180,6 +183,12 @@ public class PhotonModelUtils {
         return new ImmutablePair<>(result, Boolean.valueOf(hasChanged));
     }
 
+    /**
+     * Executes given code in the specified executor.
+     * @param executor Executor in which code is to be executed.
+     * @param runnable Code to be executed in the executor.
+     * @param failure failure consumer.
+     */
     public static void runInExecutor(ExecutorService executor, Runnable runnable,
             Consumer<Throwable> failure) {
         try {
@@ -193,5 +202,17 @@ public class PhotonModelUtils {
         } catch (Exception e) {
             failure.accept(e);
         }
+    }
+
+    /**
+     * Sets a metric with unit and value in the ServiceStat associated with the service
+     */
+    public static void setStat(Service service, String name, String unit, double value) {
+        service.getHost().log(Level.INFO, "Setting stat [service=%s] [name=%s] [unit=%s] [value=%f]",
+                service.getClass(), name, unit, value);
+        ServiceStats.ServiceStat stat = new ServiceStats.ServiceStat();
+        stat.name = name;
+        stat.unit = unit;
+        service.setStat(stat, value);
     }
 }

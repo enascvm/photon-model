@@ -177,4 +177,7 @@ public class PhotonModelConstants {
 
     // Key to identify documents containing the bill processed time
     public static final String CONTAINS_BILL_PROCESSED_TIME_STAT = "containsBillProcessedTimeStat";
+
+    // Batch size for operation joins.
+    public static final int OPERATION_BATCH_SIZE = 100;
 }
