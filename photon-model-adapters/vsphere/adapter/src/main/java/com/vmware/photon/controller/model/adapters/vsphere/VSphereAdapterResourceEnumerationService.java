@@ -1815,42 +1815,49 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (vmSelfLink != null) {
             List<VirtualMachineSnapshotTree> rootSnapshotList = vm.getRootSnapshotList();
             if (rootSnapshotList != null) {
-
+                enumerationProgress.resetSnapshotTracker();
                 for (VirtualMachineSnapshotTree snapshotTree : rootSnapshotList) {
+                    enumerationProgress.getSnapshotTracker().register();
                     processSnapshot(snapshotTree, null, enumerationProgress, vm,
                             vmSelfLink);
+                    enumerationProgress.getSnapshotTracker().arrive();
                 }
             }
         }
     }
 
-    private void processSnapshot(VirtualMachineSnapshotTree current, String
-            parentLink, EnumerationProgress enumerationProgress,
-            VmOverlay vm, String vmSelfLink) {
+    private void processSnapshot(VirtualMachineSnapshotTree current, String parentLink,
+                                 EnumerationProgress enumerationProgress,
+                                 VmOverlay vm, String vmSelfLink) {
         QueryTask task = queryForSnapshot(enumerationProgress, current.getId().toString(),
                 vmSelfLink);
         withTaskResults(task, (ServiceDocumentQueryResult result) -> {
-            String snapshotSelfLink = null;
             SnapshotState snapshotState = constructSnapshot(current, parentLink, vmSelfLink,
                     enumerationProgress, vm);
             if (result.documentLinks.isEmpty()) {
-                createSnapshot(enumerationProgress, vm, snapshotState);
+                createSnapshot(snapshotState)
+                        .thenCompose(createdSnapshotState ->
+                                trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink, createdSnapshotState));
             } else {
-                SnapshotState oldState = convertOnlyResultToDocument(result,
-                        SnapshotState.class);
-                updateSnapshot(enumerationProgress, vm, oldState, snapshotState);
-                snapshotSelfLink = oldState.documentSelfLink;
-            }
-            if (snapshotSelfLink != null) {
-                List<VirtualMachineSnapshotTree> childSnapshotList = current.getChildSnapshotList();
-                if (!CollectionUtils.isEmpty(childSnapshotList)) {
-                    for (VirtualMachineSnapshotTree childSnapshot : childSnapshotList) {
-                        processSnapshot(childSnapshot, snapshotSelfLink,
-                                enumerationProgress, vm, vmSelfLink);
-                    }
-                }
+                SnapshotState oldState = convertOnlyResultToDocument(result, SnapshotState.class);
+                updateSnapshot(enumerationProgress, vm, oldState, snapshotState, current.getId().toString())
+                        .thenCompose(updatedSnapshotState ->
+                                trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink, updatedSnapshotState));
             }
         });
+    }
+
+    private DeferredResult<Object> trackAndProcessChildSnapshots(VirtualMachineSnapshotTree current, EnumerationProgress enumerationProgress,
+                                                                 VmOverlay vm, String vmSelfLink, SnapshotState updatedSnapshotState) {
+        trackSnapshot(enumerationProgress, vm);
+        List<VirtualMachineSnapshotTree> childSnapshotList = current.getChildSnapshotList();
+        if (!CollectionUtils.isEmpty(childSnapshotList)) {
+            for (VirtualMachineSnapshotTree childSnapshot : childSnapshotList) {
+                processSnapshot(childSnapshot, updatedSnapshotState.documentSelfLink,
+                        enumerationProgress, vm, vmSelfLink);
+            }
+        }
+        return DeferredResult.completed(null);
     }
 
     private QueryTask queryForSnapshot(EnumerationProgress ctx, String id, String vmSelfLink) {
@@ -1892,44 +1899,31 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return snapshot;
     }
 
-    private void createSnapshot(EnumerationProgress enumerationProgress,
-            VmOverlay vm, SnapshotState snapshot) {
+    private DeferredResult<SnapshotState> createSnapshot(SnapshotState snapshot) {
         logFine(() -> String.format("Creating new snapshot %s", snapshot.name));
-        trackSnapshot(enumerationProgress, vm);
-        Operation.createPost(this, SnapshotService.FACTORY_LINK)
-                .setBody(snapshot)
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        logWarning(
-                                () -> String.format("Failed to create snapshot:"
-                                        + " %s", e.getMessage()));
-                    } else {
-                        logFine(() -> String.format("Created new snapshot %s", snapshot.name));
-                    }
-                })
-                .sendWith(this);
+        Operation opCreateSnapshot = Operation.createPost(this, SnapshotService.FACTORY_LINK)
+                .setBody(snapshot);
+        return this.sendWithDeferredResult(opCreateSnapshot, SnapshotState.class);
     }
 
-    private void updateSnapshot(EnumerationProgress enumerationProgress,
-            VmOverlay vm, SnapshotState oldState, SnapshotState newState) {
+    private DeferredResult<SnapshotState> updateSnapshot(EnumerationProgress enumerationProgress,
+                                                         VmOverlay vm, SnapshotState oldState,
+                                                         SnapshotState newState, String id) {
         newState.documentSelfLink = oldState.documentSelfLink;
+        newState.id = id;
+        newState.regionId = enumerationProgress.getRegionId();
+        populateTags(enumerationProgress, vm, newState);
+        newState.tenantLinks = enumerationProgress.getTenantLinks();
         logFine(() -> String.format("Syncing snapshot %s", oldState.name));
-        Operation.createPatch(UriUtils.buildUri(getHost(), oldState.documentSelfLink))
-                .setBody(newState)
-                .setCompletion(trackSnapshot(enumerationProgress, vm))
-                .sendWith(this);
+        Operation opPatchSnapshot = Operation.createPatch(UriUtils.buildUri(getHost(), oldState.documentSelfLink))
+                .setBody(newState);
+        return this.sendWithDeferredResult(opPatchSnapshot, SnapshotState.class);
     }
 
     private CompletionHandler trackSnapshot(EnumerationProgress enumerationProgress,
-            VmOverlay vm) {
+                                            VmOverlay vm) {
         return (o, e) -> {
             enumerationProgress.touchResource(getSelfLinkFromOperation(o));
-            if (e == null) {
-                enumerationProgress.getSnapshotTracker().track(vm.getId(), getSelfLinkFromOperation
-                        (o));
-            } else {
-                enumerationProgress.getSnapshotTracker().track(vm.getId(), ResourceTracker.ERROR);
-            }
         };
     }
 

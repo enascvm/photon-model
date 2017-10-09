@@ -287,14 +287,18 @@ public class InstanceClient extends BaseHelper {
 
         // even though this is a clone, hw config from the compute resource
         // is takes precedence
-        spec.setNumCPUs((int) this.ctx.child.description.cpuCount);
+        if (this.ctx.child.description.cpuCount > 0) {
+            spec.setNumCPUs((int) this.ctx.child.description.cpuCount);
+        }
 
         String gt = CustomProperties.of(this.ctx.child).getString(CustomProperties.GUEST_ID, null);
         if (gt != null) {
             spec.setGuestId(gt);
         }
 
-        spec.setMemoryMB(toMemoryMb(this.ctx.child.description.totalMemoryBytes));
+        if (this.ctx.child.description.totalMemoryBytes > 0) {
+            spec.setMemoryMB(toMemoryMb(this.ctx.child.description.totalMemoryBytes));
+        }
         recordTimestamp(spec.getExtraConfig());
 
         // set ovf environment

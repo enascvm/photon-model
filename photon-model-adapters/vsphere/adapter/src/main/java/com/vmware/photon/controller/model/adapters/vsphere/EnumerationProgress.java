@@ -38,11 +38,11 @@ public class EnumerationProgress {
     private ResourceTracker computeResourceTracker;
     private ResourceTracker resourcePoolTracker;
     private ResourceTracker storagePolicyTracker;
-    private ResourceTracker snapshotTracker;
 
     private final MoRefKeyedMap<AbstractOverlay> overlays;
 
     private Phaser vmTracker;
+    private Phaser snapshotTracker;
 
     public EnumerationProgress(Set<String> resourceLinks, ComputeEnumerateResourceRequest request,
             ComputeStateWithDescription parent, VapiConnection endpoint) {
@@ -51,6 +51,7 @@ public class EnumerationProgress {
         this.parent = parent;
         this.endpoint = endpoint;
         this.vmTracker = new Phaser(1);
+        this.snapshotTracker = new Phaser(1);
         this.overlays = new MoRefKeyedMap<>();
     }
 
@@ -82,7 +83,7 @@ public class EnumerationProgress {
         return this.networkTracker;
     }
 
-    public ResourceTracker getSnapshotTracker() {
+    public Phaser getSnapshotTracker() {
         return this.snapshotTracker;
     }
 
@@ -136,6 +137,10 @@ public class EnumerationProgress {
 
     public void resetVmTracker() {
         this.vmTracker = new Phaser(1);
+    }
+
+    public void resetSnapshotTracker() {
+        this.snapshotTracker = new Phaser(1);
     }
 
     public AbstractOverlay getOverlay(ManagedObjectReference ref) {
