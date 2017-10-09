@@ -66,7 +66,8 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
         state.id = UUID.randomUUID().toString();
         state.name = "lbName";
         state.endpointLink = EndpointService.FACTORY_LINK + "/my-endpoint";
-        state.computeDescriptionLink = ComputeDescriptionService.FACTORY_LINK + "/a-compute-desc";
+        state.computeDescriptionLinks = Arrays.asList(ComputeDescriptionService.FACTORY_LINK +
+                "/a-compute-desc");
         state.networkName = "lb-net";
         state.regionId = "regionId";
         state.tenantLinks = new ArrayList<>();
@@ -153,7 +154,6 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
 
         @Test
         public void testInvalidValues() throws Throwable {
-            LoadBalancerDescription missingComputeDescriptionLink = buildValidStartState();
             LoadBalancerDescription missingRoutes = buildValidStartState();
             LoadBalancerDescription missingProtocol = buildValidStartState();
             LoadBalancerDescription missingPort = buildValidStartState();
@@ -170,7 +170,6 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             LoadBalancerDescription bothNetworkAndSubnetsSet = buildValidStartState();
             LoadBalancerDescription noNetworkAndSubnetsSet = buildValidStartState();
 
-            missingComputeDescriptionLink.computeDescriptionLink = null;
             missingRoutes.routes = null;
             missingProtocol.routes.get(0).protocol = null;
             missingPort.routes.get(0).port = null;
@@ -191,7 +190,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             noNetworkAndSubnetsSet.networkName = null;
 
             {
-                LoadBalancerDescription[] states = { missingComputeDescriptionLink, missingRoutes,
+                LoadBalancerDescription[] states = { missingRoutes,
                         missingProtocol, missingPort, missingInstanceProtocol, missingInstancePort,
                         invalidPortNumber, invalidInstancePortNumber, missingHealthProtocol,
                         missingHealthPort, invalidHealthPortNumber, bothNetworkAndSubnetsSet,
@@ -230,8 +229,8 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             LoadBalancerDescription patchState = new LoadBalancerDescription();
             patchState.name = "patchNetworkName";
             patchState.endpointLink = EndpointService.FACTORY_LINK + "/new-endpoint";
-            patchState.computeDescriptionLink = ComputeDescriptionService.FACTORY_LINK
-                    + "/b-compute-desc";
+            patchState.computeDescriptionLinks = Arrays
+                    .asList(ComputeDescriptionService.FACTORY_LINK + "/b-compute-desc");
             patchState.subnetLinks = new HashSet<>();
             patchState.subnetLinks.add(SubnetService.FACTORY_LINK + "/b-subnet");
             patchState.customProperties = new HashMap<>();
@@ -250,7 +249,9 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
 
             assertThat(returnState.name, is(patchState.name));
             assertThat(returnState.endpointLink, is(patchState.endpointLink));
-            assertThat(returnState.computeDescriptionLink, is(patchState.computeDescriptionLink));
+            assertThat(returnState.computeDescriptionLinks, is(Arrays.asList(
+                    ComputeDescriptionService.FACTORY_LINK + "/a-compute-desc",
+                    ComputeDescriptionService.FACTORY_LINK + "/b-compute-desc")));
             assertThat(returnState.subnetLinks.size(), is(1));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));

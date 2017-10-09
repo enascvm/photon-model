@@ -89,7 +89,6 @@ public class LoadBalancerService extends StatefulService {
         /**
          * Links to the load balanced instances.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Set<String> computeLinks;
 

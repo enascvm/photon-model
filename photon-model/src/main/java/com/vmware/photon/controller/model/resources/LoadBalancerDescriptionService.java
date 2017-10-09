@@ -47,6 +47,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
 
     public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
     public static final String FIELD_NAME_COMPUTE_DESCRIPTION_LINK = "computeDescriptionLink";
+    public static final String FIELD_NAME_COMPUTE_DESCRIPTION_LINKS = "computeDescriptionLinks";
     public static final String FIELD_NAME_SUBNET_LINKS = "subnetLinks";
     public static final String FIELD_NAME_SECURITY_GROUP_LINKS = "securityGroupLinks";
     public static final String FIELD_NAME_ROUTES = "routes";
@@ -169,9 +170,16 @@ public class LoadBalancerDescriptionService extends StatefulService {
         /**
          * Link to the description of the instance cluster.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String computeDescriptionLink;
+
+        /**
+         * Descriptions of the instances that are load balanced. Could be a single description of
+         * an instance cluster, or multiple ones.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_42)
+        public List<String> computeDescriptionLinks;
 
         /**
          * Name of the network the load balancer is attached to. Similar to the {@code name} field
@@ -199,7 +207,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
          * Optional list of security groups to apply on the load balancer.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_23)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public List<String> securityGroupLinks;
 
         /**
@@ -276,7 +283,14 @@ public class LoadBalancerDescriptionService extends StatefulService {
             throw (new IllegalArgumentException("body is required"));
         }
         LoadBalancerDescription state = op.getBody(LoadBalancerDescription.class);
+
+        // populate the new computeDescriptionLinks from the legacy computeDescriptionLink
+        if (state.computeDescriptionLink != null && state.computeDescriptionLinks == null) {
+            state.computeDescriptionLinks = Arrays.asList(state.computeDescriptionLink);
+        }
+
         validateState(state);
+
         return state;
     }
 
@@ -299,6 +313,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
                         currentState.routes = patchBody.routes;
                     }
 
+                    // merge securityGroupLinks so that there are no duplicate values
                     if (patchBody.securityGroupLinks != null) {
                         if (currentState.securityGroupLinks == null) {
                             currentState.securityGroupLinks = patchBody.securityGroupLinks;
@@ -311,6 +326,28 @@ public class LoadBalancerDescriptionService extends StatefulService {
                                 }
                             }
                         }
+                    }
+
+                    // merge computeDescriptionLinks so that there are no duplicate values
+                    if (patchBody.computeDescriptionLinks != null) {
+                        if (currentState.computeDescriptionLinks == null) {
+                            currentState.computeDescriptionLinks = patchBody.computeDescriptionLinks;
+                            hasChanged = true;
+                        } else {
+                            for (String link : patchBody.computeDescriptionLinks) {
+                                if (!currentState.computeDescriptionLinks.contains(link)) {
+                                    currentState.computeDescriptionLinks.add(link);
+                                    hasChanged = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // TODO pmitrov: temporary keep in sync legacy and new fields
+                    if (patchBody.computeDescriptionLink != null) {
+                        currentState.computeDescriptionLinks = Arrays.asList(patchBody
+                                .computeDescriptionLink);
+                        hasChanged = true;
                     }
 
                     return Boolean.valueOf(hasChanged);

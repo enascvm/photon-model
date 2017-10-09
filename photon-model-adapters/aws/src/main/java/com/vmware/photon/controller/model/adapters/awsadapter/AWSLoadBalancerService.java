@@ -172,7 +172,12 @@ public class AWSLoadBalancerService extends StatelessService {
                         Operation.createGet(LoadBalancerStateExpanded.buildUri(
                                 context.request.resourceReference)),
                         LoadBalancerStateExpanded.class)
-                .thenApply(state -> {
+                .thenApply(lbStateExpanded -> {
+                    if (lbStateExpanded.computes == null) {
+                        lbStateExpanded.computes = Collections.emptySet();
+                    }
+                    return lbStateExpanded;
+                }).thenApply(state -> {
                     context.loadBalancerStateExpanded = state;
                     return context;
                 });

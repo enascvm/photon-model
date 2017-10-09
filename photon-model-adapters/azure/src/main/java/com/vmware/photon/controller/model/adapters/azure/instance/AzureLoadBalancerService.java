@@ -286,8 +286,10 @@ public class AzureLoadBalancerService extends StatelessService {
     private DeferredResult<AzureLoadBalancerContext> getNetworkInterfaceStates(
             AzureLoadBalancerContext context) {
         List<String> networkInterfaceLinks = Lists.newArrayList();
-        context.loadBalancerStateExpanded.computes
-                .forEach(compute -> networkInterfaceLinks.addAll(compute.networkInterfaceLinks));
+        if (context.loadBalancerStateExpanded.computes != null) {
+            context.loadBalancerStateExpanded.computes.forEach(
+                    compute -> networkInterfaceLinks.addAll(compute.networkInterfaceLinks));
+        }
 
         if (networkInterfaceLinks.isEmpty()) {
             return DeferredResult.completed(context);

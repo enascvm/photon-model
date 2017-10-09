@@ -155,7 +155,6 @@ public class LoadBalancerServiceTest extends Suite {
         @Test
         public void testInvalidValues() throws Throwable {
             LoadBalancerState missingEndpointLink = buildValidStartState();
-            LoadBalancerState missingComputeLinks = buildValidStartState();
             LoadBalancerState missingRoutes = buildValidStartState();
             LoadBalancerState missingProtocol = buildValidStartState();
             LoadBalancerState missingPort = buildValidStartState();
@@ -171,7 +170,6 @@ public class LoadBalancerServiceTest extends Suite {
             LoadBalancerState invalidHealthPortNumber = buildValidStartState();
 
             missingEndpointLink.endpointLink = null;
-            missingComputeLinks.computeLinks = null;
             missingRoutes.routes = null;
             missingProtocol.routes.get(0).protocol = null;
             missingPort.routes.get(0).port = null;
@@ -189,7 +187,7 @@ public class LoadBalancerServiceTest extends Suite {
             invalidHealthPortNumber.routes.get(0).healthCheckConfiguration.port = "100000";
 
             {
-                LoadBalancerState[] states = { missingEndpointLink, missingComputeLinks,
+                LoadBalancerState[] states = { missingEndpointLink,
                         missingRoutes, missingProtocol, missingPort, missingInstanceProtocol,
                         missingInstancePort, invalidPortNumber, invalidInstancePortNumber,
                         missingHealthProtocol, missingHealthPort, invalidHealthPortNumber };
