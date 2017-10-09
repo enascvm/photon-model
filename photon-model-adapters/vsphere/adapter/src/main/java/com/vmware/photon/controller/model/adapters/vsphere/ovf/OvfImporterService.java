@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPoolAl
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereUriPaths;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -77,7 +78,7 @@ public class OvfImporterService extends StatelessService {
 
             List<ComputeDescription> ovfDescriptions = parser.parse(doc, req.template);
             Stream<Operation> opStream = ovfDescriptions.stream().map(desc -> Operation
-                    .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
+                    .createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeDescriptionService.FACTORY_LINK))
                     .setBodyNoCloning(desc));
 
             OperationJoin join = OperationJoin.create()
