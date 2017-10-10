@@ -354,7 +354,7 @@ public class EndpointAdapterUtils {
             this.values = values;
         }
 
-        static Retriever of(Map<String, String> values) {
+        public static Retriever of(Map<String, String> values) {
             return new Retriever(values);
         }
 

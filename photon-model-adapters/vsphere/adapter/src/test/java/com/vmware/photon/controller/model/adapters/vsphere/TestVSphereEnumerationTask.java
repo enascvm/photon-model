@@ -18,6 +18,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
@@ -25,10 +26,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
+import org.junit.Assume;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -49,6 +54,7 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -169,6 +175,29 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         }
 
         verifyDatastoreAndStoragePolicy();
+    }
+
+    @Test
+    public void testGetAvailableRegions() throws Throwable {
+        Assume.assumeFalse(isMock());
+
+        startAdditionalServices();
+
+        this.host.waitForServiceAvailable(VSphereUriPaths.VSPHERE_REGION_ENUMERATION_ADAPTER_SERVICE);
+
+        URI uri = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                host.getPort(),
+                UriPaths.AdapterTypePath.REGION_ENUMERATION_ADAPTER.adapterLink(
+                        PhotonModelConstants.EndpointType.vsphere.toString().toLowerCase()), null);
+
+        Operation post = Operation.createPost(uri);
+        post.setBody(createEndpoint((a) -> { }, (b) -> { }));
+
+        Operation operation = host.getTestRequestSender().sendAndWait(post);
+        RegionEnumerationResponse result = operation.getBody(RegionEnumerationResponse.class);
+
+        assertTrue(!result.regions.isEmpty());
     }
 
     private void verifyDatastoreAndStoragePolicy() throws Throwable {

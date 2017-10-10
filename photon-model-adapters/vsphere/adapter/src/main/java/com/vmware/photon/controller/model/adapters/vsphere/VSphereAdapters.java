@@ -50,7 +50,8 @@ public class VSphereAdapters {
             service(VSphereAdapterD2PowerOpsService.class),
             service(VSphereAdapterResizeComputeService.class),
             service(VSphereDiskService.class),
-            service(VSphereComputeDiskManagementService.class)
+            service(VSphereComputeDiskManagementService.class),
+            service(VSphereRegionEnumerationAdapterService.class)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);

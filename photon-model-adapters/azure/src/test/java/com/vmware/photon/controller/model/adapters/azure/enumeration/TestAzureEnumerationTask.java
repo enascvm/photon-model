@@ -86,9 +86,11 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -139,6 +141,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -601,6 +604,26 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         // clean up
         this.vmState = null;
         this.resourceManagementClient.resourceGroups().beginDelete(azureVMName);
+    }
+
+    @Test
+    public void testGetAvailableRegions() {
+
+        Assume.assumeFalse(this.isMock);
+
+        URI uri = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                host.getPort(),
+                UriPaths.AdapterTypePath.REGION_ENUMERATION_ADAPTER.adapterLink(
+                        PhotonModelConstants.EndpointType.azure.toString().toLowerCase()), null);
+
+        Operation post = Operation.createPost(uri);
+        post.setBody(endpointState);
+
+        Operation operation = host.getTestRequestSender().sendAndWait(post);
+        RegionEnumerationResponse result = operation.getBody(RegionEnumerationResponse.class);
+
+        assertTrue(!result.regions.isEmpty());
     }
 
     // Add tags, that later should be discovered as part of first enumeration cycle.

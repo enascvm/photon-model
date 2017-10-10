@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointA
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureInstanceTypeService;
+import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureRegionEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureComputeDiskDay2Service;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureDiskService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
@@ -63,7 +64,8 @@ public class AzureAdapters {
             service(AzureComputeHostStorageStatsGatherer.class),
             service(AzureEndpointAdapterService.class),
             service(AzurePowerService.class),
-            service(AzureLifecycleOperationService.class)
+            service(AzureLifecycleOperationService.class),
+            service(AzureRegionEnumerationAdapterService.class)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);

@@ -70,6 +70,8 @@ public class AzureUriPaths {
             + "/subscription-endpoint-creator";
     public static final String AZURE_SUBSCRIPTION_ENDPOINTS_ENUMERATOR = PROVISIONING_AZURE
             + "/subscription-endpoints-enumerator";
+    public static final String AZURE_REGION_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AZURE
+            + "/region-enumeration-adapter";
 
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.azure.name());
@@ -110,6 +112,7 @@ public class AzureUriPaths {
         adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER.key);
         adapterLinksByType.put(AZURE_DISK_ADAPTER, AdapterTypePath.DISK_ADAPTER.key);
         adapterLinksByType.put(AZURE_LOAD_BALANCER_ADAPTER, AdapterTypePath.LOAD_BALANCER_ADAPTER.key);
+        adapterLinksByType.put(AZURE_REGION_ENUMERATION_ADAPTER_SERVICE, AdapterTypePath.REGION_ENUMERATION_ADAPTER.key);
 
         AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }

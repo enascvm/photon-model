@@ -21,6 +21,7 @@ import com.microsoft.azure.management.compute.implementation.ComputeManagementCl
 import com.microsoft.azure.management.compute.implementation.ComputeManager;
 import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
+import com.microsoft.azure.management.resources.implementation.SubscriptionClientImpl;
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 import com.microsoft.rest.RestClient;
 
@@ -45,6 +46,7 @@ public class AzureSdkClients implements AutoCloseable {
     private ResourceManagementClientImpl resourceManagementClient;
     private NetworkManagementClientImpl networkManagementClient;
     private StorageManagementClientImpl storageManagementClient;
+    private SubscriptionClientImpl subscriptionClientImpl;
     // }}
 
     public AzureSdkClients(
@@ -110,6 +112,14 @@ public class AzureSdkClients implements AutoCloseable {
         }
 
         return this.resourceManagementClient;
+    }
+
+    public synchronized SubscriptionClientImpl getSubscriptionClientImpl() {
+        if (this.subscriptionClientImpl == null) {
+            this.subscriptionClientImpl = new SubscriptionClientImpl(this.restClient);
+        }
+
+        return this.subscriptionClientImpl;
     }
 
     @Override

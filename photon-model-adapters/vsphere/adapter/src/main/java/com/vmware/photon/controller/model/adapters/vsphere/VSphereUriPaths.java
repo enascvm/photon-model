@@ -49,6 +49,7 @@ public class VSphereUriPaths {
     public static final String ENDPOINT_CONFIG_ADAPTER = PROVISIONING + "/endpoint-config-adapter";
     public static final String DVS_NETWORK_SERVICE = PROVISIONING + "/dvs-network-adapter";
     public static final String RESOURCE_CLEANER = PROVISIONING + "/resource-cleaner";
+    public static final String VSPHERE_REGION_ENUMERATION_ADAPTER_SERVICE = PROVISIONING + "/region-enumeration-adapter";
 
     /**
      * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
@@ -65,6 +66,7 @@ public class VSphereUriPaths {
         adapterLinksByType.put(IMAGE_ENUMERATION_SERVICE, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
         adapterLinksByType.put(ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
         adapterLinksByType.put(POWER_SERVICE, AdapterTypePath.POWER_ADAPTER.key);
+        adapterLinksByType.put(VSPHERE_REGION_ENUMERATION_ADAPTER_SERVICE, AdapterTypePath.REGION_ENUMERATION_ADAPTER.key);
 
         VSPHERE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }

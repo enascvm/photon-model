@@ -98,7 +98,7 @@ public class AzureEndpointAdapterService extends StatelessService {
                 computeDesc(), compute(), endpoint(), validate(body));
     }
 
-    private BiConsumer<EndpointService.EndpointState,Retriever> endpoint() {
+    public static BiConsumer<EndpointService.EndpointState,Retriever> endpoint() {
         return (e , r) -> {
             e.endpointProperties.put(PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
             e.endpointProperties.put(USER_LINK_KEY, r.getRequired(USER_LINK_KEY));
@@ -185,7 +185,7 @@ public class AzureEndpointAdapterService extends StatelessService {
         };
     }
 
-    private BiConsumer<AuthCredentialsServiceState, Retriever> credentials() {
+    public static BiConsumer<AuthCredentialsServiceState, Retriever> credentials() {
         return (c, r) -> {
             // overwrite fields that are set in endpointProperties, otherwise use the present ones
             if (c.privateKey != null) {
