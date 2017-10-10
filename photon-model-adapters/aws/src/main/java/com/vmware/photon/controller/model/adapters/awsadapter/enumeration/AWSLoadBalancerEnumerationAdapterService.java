@@ -115,8 +115,15 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
                     LoadBalancerService.FACTORY_LINK);
 
             this.regionId = request.computeRequest.regionId;
-            this.localSubNetworkStates = request.enumeratedNetworks.subnets;
-            this.localSecurityGroupStates = request.enumeratedSecurityGroups.securityGroupStates;
+
+            if (request.enumeratedNetworks != null && request.enumeratedNetworks.subnets != null) {
+                this.localSubNetworkStates = request.enumeratedNetworks.subnets;
+            }
+
+            if (request.enumeratedSecurityGroups != null
+                    && request.enumeratedSecurityGroups.securityGroupStates != null) {
+                this.localSecurityGroupStates = request.enumeratedSecurityGroups.securityGroupStates;
+            }
         }
 
         @Override
