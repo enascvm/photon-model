@@ -78,6 +78,8 @@ public class PhotonModelTaskServices {
             factoryService(NicSecurityGroupsTaskService.class,
                     () -> TaskFactoryService
                             .create(NicSecurityGroupsTaskService.class)),
+            factoryService(TagGroomerTaskService.class,
+                    TagGroomerTaskService::createFactory),
 
             service(IPAddressReleaseTaskService.class)
     };
