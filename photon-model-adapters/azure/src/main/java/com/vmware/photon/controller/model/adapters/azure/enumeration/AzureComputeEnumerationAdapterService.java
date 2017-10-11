@@ -59,6 +59,7 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.InstanceViewStatus;
 import com.microsoft.azure.management.compute.InstanceViewTypes;
+import com.microsoft.azure.management.compute.OSDisk;
 import com.microsoft.azure.management.compute.OperatingSystemTypes;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
@@ -96,6 +97,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -1025,9 +1027,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             DiskState diskToUpdate = ctx.diskStates.get(diskUri);
             if (diskToUpdate == null) {
-                logFine(() -> String.format("Disk not found: %s", diskUri));
-                continue;
+                diskToUpdate = createDiskState(virtualMachine);
+                Operation.createPost(ctx.request.buildUri(DiskService.FACTORY_LINK))
+                        .setBody(diskToUpdate);
             }
+
             ImageReferenceInner imageReference = virtualMachine.storageProfile()
                     .imageReference();
             diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
@@ -1040,7 +1044,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             Operation diskOp = Operation
                     .createPatch(ctx.request.buildUri(diskToUpdate.documentSelfLink))
                     .setBody(diskToUpdate);
+
             opCollection.add(diskOp);
+            ctx.diskStates.put(diskToUpdate.id, diskToUpdate);
         }
 
         if (opCollection.isEmpty()) {
@@ -1063,6 +1069,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     handleSubStage(ctx);
 
                 }).sendWith(this);
+    }
+
+    private DiskState createDiskState(VirtualMachineInner vm) {
+        DiskState diskState = new DiskState();
+        diskState.id = getVhdUri(vm);
+        OSDisk osDisk = vm.storageProfile().osDisk();
+        diskState.capacityMBytes = osDisk.diskSizeGB() * 1024;
+        diskState.name = osDisk.name();
+        String id = UUID.randomUUID().toString();
+        diskState.documentSelfLink = UriUtils.buildUriPath(DiskService.FACTORY_LINK, id);
+        return diskState;
     }
 
     /**
@@ -1669,16 +1686,19 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private String getVhdUri(VirtualMachineInner vm) {
-        if (vm.storageProfile() == null
-                || vm.storageProfile().osDisk() == null
-                || vm.storageProfile().osDisk().vhd() == null
-                || vm.storageProfile().osDisk().vhd().uri() == null) {
-            logWarning(String.format(
-                    "Enumeration failed. VM %s has a ManagedDisk configuration, which is currently not supported.",
-                    vm.id()));
+        OSDisk osDisk;
+        if (vm.storageProfile() == null || vm.storageProfile().osDisk() == null) {
+            logWarning(() -> "VM has empty storage profile, or OS disk.");
             return null;
+        } else {
+            osDisk = vm.storageProfile().osDisk();
+
+            if (osDisk.vhd() == null || osDisk.vhd().uri() == null) {
+                return osDisk.managedDisk().id();
+            } else {
+                return httpsToHttp(vm.storageProfile().osDisk().vhd().uri());
+            }
         }
-        return httpsToHttp(vm.storageProfile().osDisk().vhd().uri());
     }
 
     /**
