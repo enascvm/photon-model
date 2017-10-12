@@ -1283,7 +1283,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.capacityBytes = ds.getCapacityBytes();
         res.regionId = regionId;
         CustomProperties.of(res)
-                .put(CustomProperties.MOREF, ds.getId());
+                .put(CustomProperties.MOREF, ds.getId())
+                .put(STORAGE_USED_BYTES, ds.getCapacityBytes() - ds.getFreeSpaceBytes())
+                .put(STORAGE_AVAILABLE_BYTES, ds.getFreeSpaceBytes());
 
         return res;
     }
