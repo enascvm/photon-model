@@ -26,7 +26,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_GENERAL_PURPOSED_SSD;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_SSH_KEY_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
@@ -38,9 +37,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -59,18 +56,15 @@ import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
-
 import org.apache.commons.lang3.EnumUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.Constraint.Condition;
 import com.vmware.photon.controller.model.Constraint.Condition.Enforcement;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -87,7 +81,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
-import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -382,85 +375,41 @@ public class AWSInstanceService extends StatelessService {
 
             Image image = imagesDescriptionResult.getImages().get(0);
 
-            AssertUtil.assertNotNull(aws.instanceTypeInfo, "instanceType cannot be null");
-
             List<BlockDeviceMapping> blockDeviceMappings = image.getBlockDeviceMappings();
-            String rootDeviceType = image.getRootDeviceType();
+            if (bootDisk.capacityMBytes > 0 || bootDisk.customProperties != null) {
+                try {
+                    String rootDeviceType = image.getRootDeviceType();
+                    validateBootDiskConfiguration(bootDisk, rootDeviceType);
+                    customizeBootDiskProperties(bootDisk, rootDeviceType, image.getRootDeviceName(),
+                            blockDeviceMappings, aws);
+                    if (!aws.dataDisks.isEmpty()) {
 
-            String bootDiskType = bootDisk.customProperties.get(DEVICE_TYPE);
-            boolean hasHardConstraint = containsHardConstraint(bootDisk);
-            BlockDeviceMapping rootDeviceMapping = null;
-            try {
-                // The number of instance-store disks that will be provisioned is limited by the instance-type.
-                suppressExcessInstanceStoreDevices(blockDeviceMappings, aws.instanceTypeInfo);
-
-                for (BlockDeviceMapping blockDeviceMapping : blockDeviceMappings) {
-                    EbsBlockDevice ebs = blockDeviceMapping.getEbs();
-                    String diskType = getDeviceType(ebs);
-
-                    if (hasHardConstraint) {
-                        validateIfDeviceTypesAreMatching(diskType, bootDiskType);
-                    }
-
-                    if (blockDeviceMapping.getNoDevice() != null &&
-                            Boolean.valueOf(blockDeviceMapping.getNoDevice())) {
-                        continue;
-                    }
-
-                    if (rootDeviceType.equals(AWSStorageType.EBS.getName()) &&
-                            blockDeviceMapping.getDeviceName().equals(image.getRootDeviceName())) {
-                        rootDeviceMapping = blockDeviceMapping;
-                        continue;
-                    }
-
-                    DiskState diskState = new DiskState();
-
-                    copyConstraint(diskState, bootDisk);
-
-                    copyCustomProperties(diskState, bootDisk);
-
-                    addMandatoryProperties(diskState, blockDeviceMapping, aws.instanceTypeInfo);
-
-                    updateDeviceMapping(diskType, bootDiskType, blockDeviceMapping.getDeviceName(),
-                            ebs,
-                            diskState);
-
-                    //update disk state with final volume-type and iops
-                    if (diskType.equals(AWSStorageType.EBS.getName())) {
-                        diskState.customProperties.put(VOLUME_TYPE, ebs.getVolumeType());
-                        diskState.customProperties.put(DISK_IOPS, String.valueOf(ebs.getIops()));
-                    }
-
-                    aws.imageDisks.add(diskState);
-                }
-
-                customizeBootDiskProperties(bootDisk, rootDeviceType, rootDeviceMapping,
-                        hasHardConstraint, aws);
-
-                if (!aws.dataDisks.isEmpty()) {
-                    List<DiskState> instanceStoreDisks = new ArrayList<>();
-                    List<DiskState> ebsDisks = new ArrayList<>();
-                    if (!rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
-                        instanceStoreDisks = aws.dataDisks;
-                        validateSupportForAdditionalInstanceStoreDisks(instanceStoreDisks,
-                                blockDeviceMappings, aws.instanceTypeInfo, rootDeviceType);
-                    } else {
-                        splitDataDisks(aws.dataDisks, instanceStoreDisks, ebsDisks);
-                        setDefaultVolumeTypeIfNotSpecified(ebsDisks);
-                        if (!instanceStoreDisks.isEmpty()) {
-                            validateSupportForAdditionalInstanceStoreDisks(instanceStoreDisks,
-                                    blockDeviceMappings, aws.instanceTypeInfo, rootDeviceType);
+                        AssertUtil.assertNotNull(aws.instanceTypeInfo,
+                                "instanceType cannot be null");
+                        List<DiskState> instanceStoreDisks = new ArrayList<>();
+                        List<DiskState> ebsDisks = new ArrayList<>();
+                        if (!rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
+                            instanceStoreDisks = aws.dataDisks;
+                            validateSupportForInstanceStoreDisks(instanceStoreDisks, blockDeviceMappings,
+                                    aws.instanceTypeInfo, rootDeviceType);
+                            validateInstanceStoreDiskConfiguration(instanceStoreDisks, aws.bootDiskImageNativeId);
+                        } else {
+                            splitExistingDisks(aws.dataDisks, instanceStoreDisks, ebsDisks);
+                            addDefaultPropertiesIfMissing(ebsDisks);
+                            if (!instanceStoreDisks.isEmpty()) {
+                                validateSupportForInstanceStoreDisks(instanceStoreDisks,
+                                        blockDeviceMappings, aws.instanceTypeInfo, rootDeviceType);
+                            }
                         }
+                        addDeviceMappings(ebsDisks, instanceStoreDisks, runInstancesRequest,
+                                blockDeviceMappings, aws.instanceTypeInfo);
                     }
-                    addDeviceMappings(ebsDisks, instanceStoreDisks, runInstancesRequest,
-                            blockDeviceMappings, aws.instanceTypeInfo);
+                } catch (Exception e) {
+                    aws.error = e;
+                    aws.stage = AWSInstanceStage.ERROR;
+                    handleAllocation(aws);
+                    return;
                 }
-                runInstancesRequest.withBlockDeviceMappings(blockDeviceMappings);
-            } catch (Exception e) {
-                aws.error = e;
-                aws.stage = AWSInstanceStage.ERROR;
-                handleAllocation(aws);
-                return;
             }
         }
 
@@ -493,189 +442,9 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Instance Type(like r3.large etc) supports a limited number of instance-store disks. All the
-     * extra instance-store mappings that are more than those supported by the instance-type are
-     * termed as excess. Excess mappings does not result in provisioning a disk.
-     *
-     * Suppress the excess instance-store mappings in the image by setting NoDevice to 'true'.
-     */
-    private void suppressExcessInstanceStoreDevices(List<BlockDeviceMapping> deviceMappings,
-            InstanceType type) {
-
-        List<BlockDeviceMapping> unsuppressedInstanceStoreMappings =
-                getUnsuppressedInstanceStoreMappings(deviceMappings);
-
-        int imageInstanceStoreCount = unsuppressedInstanceStoreMappings != null ?
-                unsuppressedInstanceStoreMappings.size() : 0;
-
-        int maxSupported = type.dataDiskMaxCount != null ? type.dataDiskMaxCount : 0;
-
-        if (imageInstanceStoreCount > maxSupported) {
-            for (int i = 0; i < imageInstanceStoreCount; i++) {
-                if (i >= maxSupported) {
-                    unsuppressedInstanceStoreMappings.get(i).setNoDevice("true");
-                }
-            }
-        }
-    }
-
-    private boolean containsHardConstraint(DiskState bootDisk) {
-        boolean hasHardConstraint = false;
-        if (bootDisk.constraint != null) {
-            List<Condition> bootDiskConditions = bootDisk.constraint.conditions;
-            if (bootDiskConditions != null) {
-                if (bootDiskConditions.stream()
-                        .anyMatch(condition -> condition.enforcement == Enforcement.HARD)) {
-                    hasHardConstraint = true;
-                }
-            }
-        }
-        return hasHardConstraint;
-    }
-
-    /**
-     * update the deviceMappings for ebs devices.
-     */
-    private void updateDeviceMapping(String currentDiskType, String requestedDiskType,
-            String deviceName, EbsBlockDevice ebs, DiskState diskState) {
-        if (requestedDiskType != null) {
-            String ebsType = AWSStorageType.EBS.getName();
-            String instanceStoreType = AWSStorageType.INSTANCE_STORE.getName();
-            if (requestedDiskType.equals(ebsType) && currentDiskType.equals(ebsType)) {
-                updateEbsBlockDeviceMapping(ebs, diskState);
-            } else if (requestedDiskType.equals(instanceStoreType) && currentDiskType
-                    .equals(instanceStoreType)) {
-                String message = String.format("[AWSInstanceService] No customization is applied"
-                        + " to image disk at %s", deviceName);
-                this.logInfo(message);
-            } else {
-                String message = String
-                        .format("[AWSInstanceService] Image disk at %s is of type %s and cannot be "
-                                        + "changed to %s type. Ignoring the request to change the type.",
-                                deviceName, currentDiskType, requestedDiskType);
-                this.logWarning(message);
-            }
-        }
-        if (ebs != null && ebs.getSnapshotId() != null) {
-            ebs.setEncrypted(null);
-        }
-    }
-
-    private void updateEbsBlockDeviceMapping(EbsBlockDevice ebs, DiskState diskState) {
-
-        String requestedVolumeType = diskState.customProperties.get(VOLUME_TYPE);
-        if (requestedVolumeType == null) {
-            return;
-        }
-
-        String requestedIops = diskState.customProperties.get(DISK_IOPS);
-        String currentVolumeType = ebs.getVolumeType();
-        if (!requestedVolumeType.equals(currentVolumeType)) {
-            if (currentVolumeType.equals(VOLUME_TYPE_PROVISIONED_SSD)) {
-                //converting io1 volume to one of {gp2, st1, sc1, magnetic} type.
-                ebs.setIops(0);
-            } else if (requestedVolumeType.equals(VOLUME_TYPE_PROVISIONED_SSD)) {
-                //converting from one of {gp2, st1, sc1, magnetic} type to io1 type.
-                int iops = Math.min(ebs.getVolumeSize() * MAX_IOPS_PER_GiB,
-                        Integer.parseInt(requestedIops));
-                ebs.setIops(iops);
-            } else {
-                //converting from one of {gp2, st1, sc1, magnetic} type to another one in the same set.
-                //No need to set iops for this type of volume conversion.
-            }
-        } else if (currentVolumeType.equals(VOLUME_TYPE_PROVISIONED_SSD)) {
-            //Changing the iops value of the the volume.
-            int iops = Math.min(ebs.getIops(), Integer.parseInt(requestedIops));
-            ebs.setIops(iops);
-        }
-
-        ebs.setVolumeType(requestedVolumeType);
-    }
-
-    /**
-     * Fail the request in case of hard constraints and device type mismatch.
-     */
-    private void validateIfDeviceTypesAreMatching(String currentDeviceType,
-            String requestedDeviceType) {
-        if (requestedDeviceType != null && !currentDeviceType.equals(requestedDeviceType)) {
-            String message = String.format("Found hard constraint on existing disk. %s type "
-                    + "cannot be changed to %s type.", currentDeviceType, requestedDeviceType);
-            this.logSevere("[AWSInstanceService] " + message);
-            throw new IllegalArgumentException(message);
-        }
-    }
-
-    private String getDeviceType(EbsBlockDevice ebs) {
-        return ebs != null ? AWSStorageType.EBS.getName() : AWSStorageType.INSTANCE_STORE.getName();
-    }
-
-    /**
-     * Copy constraints of boot disk into existing disk.
-     */
-    private void copyConstraint(DiskState diskState, DiskState bootDisk) {
-        Constraint bootDiskConstraint = bootDisk.constraint;
-        if (bootDiskConstraint != null && bootDiskConstraint.conditions != null) {
-            diskState.constraint = new Constraint();
-            diskState.constraint.conditions = new ArrayList<>();
-            for (Condition condition : bootDiskConstraint.conditions) {
-                Condition diskStateCondition = new Condition();
-                diskStateCondition.enforcement = condition.enforcement;
-                diskStateCondition.expression = condition.expression;
-                diskStateCondition.occurrence = condition.occurrence;
-                diskStateCondition.type = condition.type;
-            }
-        }
-    }
-
-    /**
-     * copy the custom properties from the boot disk to the existing disk.
-     */
-    private void copyCustomProperties(DiskState diskState, DiskState bootDisk) {
-
-        Map<String, String> bootDiskCustomProperties = bootDisk.customProperties;
-        Map<String, String> customProperties = new HashMap<>();
-
-        if (bootDiskCustomProperties.containsKey(DEVICE_TYPE)) {
-            customProperties.put(DEVICE_TYPE, bootDiskCustomProperties.get(DEVICE_TYPE));
-        }
-
-        if (bootDiskCustomProperties.containsKey(VOLUME_TYPE)) {
-            customProperties.put(VOLUME_TYPE, bootDiskCustomProperties.get(VOLUME_TYPE));
-        }
-
-        if (bootDiskCustomProperties.containsKey(DISK_IOPS)) {
-            customProperties.put(DISK_IOPS, bootDiskCustomProperties.get(DISK_IOPS));
-        }
-
-        diskState.customProperties = customProperties.size() > 0 ? customProperties : null;
-    }
-
-    /**
-     * Add the disk information to disk state so that the disk state reflects the volume information
-     */
-    private void addMandatoryProperties(DiskState diskState, BlockDeviceMapping deviceMapping,
-            InstanceType instanceType) {
-
-        if (diskState.customProperties == null) {
-            diskState.customProperties = new HashMap<>();
-        }
-        String deviceName = deviceMapping.getDeviceName();
-        diskState.customProperties.put(DEVICE_NAME, deviceName);
-
-        EbsBlockDevice ebs = deviceMapping.getEbs();
-        if (ebs != null) {
-            diskState.capacityMBytes = ebs.getVolumeSize() * 1024;
-            diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
-        } else {
-            diskState.capacityMBytes = instanceType.dataDiskSizeInMB;
-            diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.INSTANCE_STORE.getName());
-        }
-    }
-
-    /**
      * Splits the set of existing disks into instance-store disks and ebs disks
      */
-    private void splitDataDisks(List<DiskState> dataDisks, List<DiskState> instanceStoreDisks,
+    private void splitExistingDisks(List<DiskState> dataDisks, List<DiskState> instanceStoreDisks,
             List<DiskState> ebsDisks) {
         dataDisks.forEach(diskState -> {
             if (diskState.customProperties != null &&
@@ -692,7 +461,7 @@ public class AWSInstanceService extends StatelessService {
     /**
      * Set gp2 volumes as default for ebs disks.
      */
-    private void setDefaultVolumeTypeIfNotSpecified(List<DiskState> dataDisks) {
+    private void addDefaultPropertiesIfMissing(List<DiskState> dataDisks) {
         for (DiskState diskState : dataDisks) {
             if (diskState.customProperties == null) {
                 diskState.customProperties = new HashMap<>();
@@ -735,10 +504,10 @@ public class AWSInstanceService extends StatelessService {
                 }
 
                 ComputeState cs = new ComputeState();
-                cs.id = ((Instance) instance).getInstanceId();
+                cs.id = ((Instance)instance).getInstanceId();
                 cs.type = ComputeType.VM_GUEST;
                 cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-                cs.address = ((Instance) instance).getPublicIpAddress();
+                cs.address = ((Instance)instance).getPublicIpAddress();
                 cs.regionId = getRequestRegionId(this.context);
                 cs.zoneId = ((Instance)instance).getPlacement().getAvailabilityZone();
                 cs.powerState = AWSUtils.mapToPowerState(((Instance)instance).getState());
@@ -750,55 +519,16 @@ public class AWSInstanceService extends StatelessService {
                 cs.customProperties.put(SOURCE_TASK_LINK,
                         ProvisionComputeTaskService.FACTORY_LINK);
                 cs.customProperties.put(AWSConstants.AWS_VPC_ID,
-                        ((Instance) instance).getVpcId());
+                        ((Instance)instance).getVpcId());
                 cs.lifecycleState = LifecycleState.READY;
-                cs.diskLinks = new ArrayList<>();
 
                 patchOperations.addAll(createPatchNICStatesOperations(this.context.nics,
-                        ((Instance) instance)));
-
-                updateDiskIds(this.context.bootDisk, this.context.imageDisks,
-                        this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings());
-
-                DeferredResult<ComputeState> dr = new DeferredResult<>();
-                if (this.context.imageDisks != null && !this.context.imageDisks.isEmpty()) {
-
-                    DeferredResult.allOf(this.context.imageDisks.stream()
-                            .map(diskState ->
-                                    sendWithDeferredResult(
-                                            Operation.createPost(this.service.getHost(),
-                                                    DiskService.FACTORY_LINK)
-                                                    .setReferer(this.context.service.getHost()
-                                                            .getUri())
-                                                    .setBody(diskState), DiskState.class)
-                            ).collect(Collectors.toList()))
-                            .thenApply(diskStates -> {
-                                for (DiskState diskState : diskStates) {
-                                    cs.diskLinks.add(diskState.documentSelfLink);
-                                }
-                                return cs;
-                            })
-                            .whenComplete((o, exc) -> {
-                                if (exc != null) {
-                                    dr.fail(exc);
-                                    return;
-                                }
-                                dr.complete(cs);
-                            });
-                } else {
-                    dr.complete(cs);
-                }
-
+                        ((Instance)instance)));
                 //update boot disk size of instance-store AMI's
                 patchOperations.addAll(createPatchDiskStatesOperations(
                         Arrays.asList(this.context.bootDisk)));
                 //update disk size and device names of the data disks
                 patchOperations.addAll(createPatchDiskStatesOperations(this.context.dataDisks));
-
-                cs.diskLinks.add(this.context.bootDisk.documentSelfLink);
-                for (DiskState dataDisk : this.context.dataDisks) {
-                    cs.diskLinks.add(dataDisk.documentSelfLink);
-                }
 
                 Operation patchState = Operation
                         .createPatch(this.context.computeRequest.resourceReference)
@@ -806,8 +536,7 @@ public class AWSInstanceService extends StatelessService {
                         .setReferer(this.service.getHost().getUri());
                 patchOperations.add(patchState);
 
-                OperationJoin joinOp = OperationJoin.create(patchOperations);
-                joinOp.setCompletion((ox,
+                OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                         exc) -> {
                     if (exc != null) {
                         this.service.logSevere(() -> String.format("Error updating VM state. %s",
@@ -817,56 +546,16 @@ public class AWSInstanceService extends StatelessService {
                         return;
                     }
                     this.context.taskManager.finishTask();
-                });
-
-                dr.whenComplete((computeState, throwable) -> {
-                    if (throwable != null) {
-                        this.service.logSevere(() -> String.format(" [AWSInstanceService] Error "
-                                        + "updating VM state. %s", Utils.toString(throwable)));
-                        this.context.taskManager.patchTaskToFailure(
-                                new IllegalStateException("Error updating VM state"));
-                        return;
-                    }
-                    joinOp.sendWith(this.service.getHost());
-                });
+                };
+                OperationJoin joinOp = OperationJoin.create(patchOperations);
+                joinOp.setCompletion(joinCompletion);
+                joinOp.sendWith(this.service.getHost());
             };
 
             String instanceId = result.getReservation().getInstances().get(0)
                     .getInstanceId();
 
             tagInstanceAndStartStatusChecker(instanceId, this.context.child.tagLinks, consumer);
-        }
-
-        /**
-         * update diskstate with the corresponding volume Id.
-         */
-        private void updateDiskIds(DiskState bootDisk, List<DiskState> imageDisks,
-                List<DiskState> additionalDisks,
-                List<InstanceBlockDeviceMapping> blockDeviceMappings) {
-            List<DiskState> diskStateList = new ArrayList<>();
-            diskStateList.add(bootDisk);
-            diskStateList.addAll(imageDisks);
-            diskStateList.addAll(additionalDisks);
-
-            for (DiskState diskState : diskStateList) {
-                String deviceType = diskState.customProperties.get(DEVICE_TYPE);
-                if (deviceType.equals(AWSStorageType.EBS.getName())) {
-                    String deviceName = diskState.customProperties.get(DEVICE_NAME);
-                    for (InstanceBlockDeviceMapping blockDeviceMapping : blockDeviceMappings) {
-                        if (blockDeviceMapping.getDeviceName().equals(deviceName)) {
-                            diskState.id = blockDeviceMapping.getEbs().getVolumeId();
-                            if (diskState.name == null) {
-                                diskState.name = diskState.id;
-                            }
-                            break;
-                        }
-                    }
-                } else {
-                    diskState.id = String.format("%s_%s", AWSStorageType.INSTANCE_STORE.getName(),
-                            UUID.randomUUID().toString());
-                    diskState.name = diskState.id;
-                }
-            }
         }
 
         private List<Operation> createPatchNICStatesOperations(List<AWSNicContext> nics,
@@ -902,8 +591,7 @@ public class AWSInstanceService extends StatelessService {
         /**
          * creates patch operations to update each diskstate with the latest information.
          */
-        private List<Operation> createPatchDiskStatesOperations(
-                List<DiskState> additionalDiskStates) {
+        private List<Operation> createPatchDiskStatesOperations(List<DiskState> additionalDiskStates) {
             List<Operation> patchOperations = new ArrayList<>();
             for (DiskState diskState : additionalDiskStates) {
                 patchOperations.add(Operation.createPatch(this.service.getHost(),
@@ -1183,37 +871,69 @@ public class AWSInstanceService extends StatelessService {
     }
 
     private void customizeBootDiskProperties(DiskState bootDisk, String rootDeviceType,
-            BlockDeviceMapping rootDeviceMapping, boolean hasHardConstraint,
+            String rootDeviceName, List<BlockDeviceMapping> blockDeviceMappings,
             AWSInstanceContext aws) {
         if (rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
-            String requestedType = bootDisk.customProperties.get(DEVICE_TYPE);
-            EbsBlockDevice ebs = rootDeviceMapping.getEbs();
-            if (hasHardConstraint) {
-                validateIfDeviceTypesAreMatching(rootDeviceType, requestedType);
+            BlockDeviceMapping rootDeviceMapping = blockDeviceMappings.stream()
+                    .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName()
+                            .equals(rootDeviceName))
+                    .findAny()
+                    .orElse(null);
+
+            EbsBlockDevice ebsRootDeviceMapping = rootDeviceMapping.getEbs();
+            if (bootDisk.capacityMBytes > 0) {
+                ebsRootDeviceMapping.setVolumeSize((int) bootDisk.capacityMBytes / 1024);
+                ebsRootDeviceMapping.setEncrypted(null);
             }
-            bootDisk.capacityMBytes = ebs.getVolumeSize() * 1024;
-            updateDeviceMapping(rootDeviceType, requestedType, rootDeviceMapping.getDeviceName(),
-                    ebs, bootDisk);
-            bootDisk.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
-            bootDisk.customProperties.put(DEVICE_NAME, rootDeviceMapping.getDeviceName());
-            bootDisk.customProperties.put(VOLUME_TYPE, ebs.getVolumeType());
-            bootDisk.customProperties.put(DISK_IOPS, String.valueOf(ebs.getIops()));
-        } else {
-            if (aws.instanceTypeInfo.dataDiskSizeInMB != null) {
-                this.logInfo(
-                        () -> "[AWSInstanceService] Instance-Store boot disk size is set to the "
-                                + "value supported by instance-type.");
+            if (bootDisk.customProperties != null &&
+                    bootDisk.customProperties.containsKey(VOLUME_TYPE) &&
+                    bootDisk.customProperties.get(VOLUME_TYPE) != null) {
+                String rootVolumeType = ebsRootDeviceMapping.getVolumeType();
+                if (!rootVolumeType
+                        .equals(bootDisk.customProperties.get(VOLUME_TYPE))) {
+                    ebsRootDeviceMapping.setVolumeType(
+                            bootDisk.customProperties.get(VOLUME_TYPE));
+                }
+            }
+            if (bootDisk.customProperties != null) {
+                String diskIops = bootDisk.customProperties.get(DISK_IOPS);
+                if (diskIops != null && !diskIops.isEmpty()) {
+                    ebsRootDeviceMapping.setIops(Integer.parseInt(diskIops));
+                }
+            }
+        } else if (bootDisk.capacityMBytes > 0) {
+            this.logWarning(() -> "[AWSInstanceService] Instance-store boot disk cannot be "
+                    + "resized. Uses the default size supported by instance-type.");
+            if (aws.instanceTypeInfo.dataDiskSizeInMB != null && !rootDeviceType
+                    .equals(AWSStorageType.EBS.name().toLowerCase())) {
                 bootDisk.capacityMBytes = aws.instanceTypeInfo.dataDiskSizeInMB;
-                bootDisk.customProperties.put(DEVICE_TYPE, AWSStorageType.INSTANCE_STORE.getName());
+            }
+        }
+    }
+
+    private void validateBootDiskConfiguration(DiskState bootDisk, String rootDeviceType) {
+        if (bootDisk.constraint == null) {
+            return;
+        }
+        List<Condition> bootDiskConditions = bootDisk.constraint.conditions;
+        if (bootDiskConditions != null) {
+            if (bootDiskConditions.stream()
+                    .anyMatch(condition -> condition.enforcement == Enforcement.HARD)) {
+                String deviceType = bootDisk.customProperties.get(DEVICE_TYPE);
+                if (deviceType != null && !rootDeviceType.equals(deviceType)) {
+                    String message = String.format("Found hard constraint on boot disk. %s type "
+                            + "cannot be changed to %s type.", rootDeviceType, deviceType);
+                    this.logSevere("[AWSInstanceService] " + message);
+                    throw new IllegalArgumentException(message);
+                }
             }
         }
     }
 
     /**
-     * creates the device mapping for each of the data disk and adds it to the runInstancesRequest.
+     * creates the device mappings for each of the data disks and adds them to the runInstancesRequest.
      */
-    private void addDeviceMappings(List<DiskState> ebsDiskStates,
-            List<DiskState> instanceStoreDiskStates,
+    private void addDeviceMappings(List<DiskState> ebsDiskStates, List<DiskState> instanceStoreDiskStates,
             RunInstancesRequest runInstancesRequest, List<BlockDeviceMapping> blockDeviceMappings,
             InstanceType instanceType) {
 
@@ -1230,30 +950,46 @@ public class AWSInstanceService extends StatelessService {
 
         additionalDiskMappings.addAll(createEbsDeviceMappings(ebsDiskStates, usedDeviceNames));
         blockDeviceMappings.addAll(additionalDiskMappings);
+        runInstancesRequest.withBlockDeviceMappings(blockDeviceMappings);
     }
 
-    private void validateSupportForAdditionalInstanceStoreDisks(List<DiskState> disks,
-            List<BlockDeviceMapping> blockDeviceMappings, InstanceType type,
-            String rootDeviceType) {
-        validateImageAndInstanceTypeCompatibility(type, rootDeviceType);
-        int numInstanceStoreDisksInImage = countInstanceStoreDisksInImage(blockDeviceMappings);
-        int totalInstanceStoreDisks = numInstanceStoreDisksInImage + disks.size();
-        AssertUtil.assertTrue(totalInstanceStoreDisks <= type.dataDiskMaxCount,
-                String.format("%s does not support %s additional instance-store disks", type,
-                        disks.size()));
-    }
-
-    private void validateImageAndInstanceTypeCompatibility(InstanceType type,
-            String rootDeviceType) {
+    private void validateSupportForInstanceStoreDisks(List<DiskState> disks,
+            List<BlockDeviceMapping> blockDeviceMappings, InstanceType type, String rootDeviceType) {
         AssertUtil.assertTrue(
                 EnumUtils.isValidEnum(AWSConstants.AWSInstanceStoreTypes.class, type.storageType),
                 String.format("%s does not support instance-store volumes", type));
         if (!rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
-            AssertUtil.assertFalse(
-                    type.storageType.equals(AWSConstants.AWSInstanceStoreTypes.NVMe_SSD.name()),
+            AssertUtil.assertTrue(
+                    !type.storageType.equals(AWSConstants.AWSInstanceStoreTypes.NVMe_SSD.name()),
                     String.format(
-                            "%s supports only NVMe_SSD instance-store disks and NVMe disks cannot be "
-                                    + "attached to %s AMI", type, rootDeviceType));
+                            "%s supports only NVMe_SSD instance-store disks and NVMe disks can be "
+                                    + "attached only to ebs AMI", type));
+        }
+        int numExistingInstanceStoreDisks = countExistingInstanceStoreDisks(blockDeviceMappings);
+        int totalRequestedInstanceStoreDisks = numExistingInstanceStoreDisks + disks.size();
+        AssertUtil.assertTrue(totalRequestedInstanceStoreDisks <= type.dataDiskMaxCount,
+                String.format("%s does not support more than %s additional instance-store disks", type,
+                        type.dataDiskMaxCount - numExistingInstanceStoreDisks));
+    }
+
+    /**
+     * validate if the instance-store disks are matched only to instance-store items from the profile
+     */
+    private void validateInstanceStoreDiskConfiguration(List<DiskState> instanceStoreDisks,
+            String imageId) {
+        String instanceStoreType = AWSStorageType.INSTANCE_STORE.getName();
+        for (DiskState instanceStoreDisk : instanceStoreDisks) {
+            if (instanceStoreDisk.customProperties == null) {
+                continue;
+            }
+
+            String configuredDeviceType = instanceStoreDisk.customProperties.get(DEVICE_TYPE);
+            if (configuredDeviceType != null) {
+                AssertUtil.assertTrue(instanceStoreType.equals(configuredDeviceType),
+                        String.format("%s disks cannot be attached to %s AMI %s.",
+                                configuredDeviceType, configuredDeviceType, instanceStoreType,
+                                imageId));
+            }
         }
     }
 
@@ -1275,27 +1011,11 @@ public class AWSInstanceService extends StatelessService {
         return usedVirtualNames;
     }
 
-    /**
-     * Count the number of instance-store disks configured in the image that are marked for provisioning.
-     */
-    private int countInstanceStoreDisksInImage(List<BlockDeviceMapping> blockDeviceMappings) {
-        List<BlockDeviceMapping> unsuppressedInstanceStoreMappings =
-                getUnsuppressedInstanceStoreMappings(blockDeviceMappings);
-        return unsuppressedInstanceStoreMappings != null ?
-                unsuppressedInstanceStoreMappings.size() : 0;
-    }
-
-    /**
-     *  Get the list of instance store mappings available in the image and are mapped for provisioning.
-     */
-    private List<BlockDeviceMapping> getUnsuppressedInstanceStoreMappings(
-            List<BlockDeviceMapping> blockDeviceMappings) {
-        return blockDeviceMappings.stream()
-                .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName() != null &&
-                        blockDeviceMapping.getEbs() == null &&
-                        (blockDeviceMapping.getNoDevice() == null ||
-                                !Boolean.valueOf(blockDeviceMapping.getNoDevice())
-                        )).collect(Collectors.toList());
+    private int countExistingInstanceStoreDisks(List<BlockDeviceMapping> blockDeviceMappings) {
+        return (int) blockDeviceMappings.stream()
+                .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName() != null
+                        && blockDeviceMapping.getEbs() == null)
+                .count();
     }
 
     /**
@@ -1372,14 +1092,13 @@ public class AWSInstanceService extends StatelessService {
      * Creates device mappings for the instance-store disks.
      */
     private List<BlockDeviceMapping> createInstanceStoreMappings(List<DiskState> instanceStoreDisks,
-            List<String> usedDeviceNames, List<String> usedVirtualNames, String instanceType,
-            Integer capacityMBytes) {
+            List<String> usedDeviceNames, List<String> usedVirtualNames, String instanceType, Integer capacityMBytes) {
         List<BlockDeviceMapping> deviceMappings = new ArrayList<>();
         if (!instanceStoreDisks.isEmpty()) {
             this.logInfo(
-                    () -> String.format("[AWSInstanceService] Ignores the size and type of the "
-                            + "additional disk. Instance-store type of additional disks are "
-                            + "provisioned with the capacity supported by %s", instanceType));
+                    () -> String.format("[AWSInstanceService] Ignores the size provided for "
+                            + "additional disk. Instance-store disks are provisioned with the "
+                            + "capacity supported by %s", instanceType));
             List<String> availableDeviceNames = getAvailableDeviceNames(usedDeviceNames,
                     AWS_INSTANCE_STORE_DEVICE_NAMES);
             List<String> availableVirtualNames = getAvailableVirtualNames(usedVirtualNames);
@@ -1402,8 +1121,6 @@ public class AWSInstanceService extends StatelessService {
                         diskState.customProperties = new HashMap<>();
                     }
                     diskState.customProperties.put(DEVICE_NAME, deviceName);
-                    diskState.customProperties
-                            .put(DEVICE_TYPE, AWSStorageType.INSTANCE_STORE.getName());
                     diskState.capacityMBytes = capacityMBytes;
                 }
             } else {
