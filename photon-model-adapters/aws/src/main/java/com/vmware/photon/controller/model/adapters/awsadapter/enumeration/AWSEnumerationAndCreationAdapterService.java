@@ -329,6 +329,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.type = ComputeType.ZONE;
             computeState.regionId = cd.regionId;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
+            computeState.computeHostLink = this.context.request.parentCompute.documentSelfLink;
 
             computeState.powerState = PowerState.ON;
 
@@ -370,6 +371,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             if (cd.endpointLinks == null) {
                 cd.endpointLinks = new HashSet<>();
             }
+            cd.computeHostLink = this.context.request.parentCompute.documentSelfLink;
             cd.endpointLinks.add(this.context.request.original.endpointLink);
             // Book keeping information about the creation of the compute description in the system.
             if (cd.customProperties == null) {
@@ -651,6 +653,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.tenantLinks = this.context.parentCompute.tenantLinks;
             cd.parentDescription = this.context.parentCompute.description;
             cd.endpointLink = this.context.request.original.endpointLink;
+            cd.parentComputeLink = this.context.request.parentCompute.documentSelfLink;
             cd.regionId = this.context.request.regionId;
             cd.zones = this.context.zones;
 
@@ -1094,6 +1097,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         networkEnumeration.endpointAuth = aws.endpointAuth;
         networkEnumeration.regionId = aws.request.regionId;
         networkEnumeration.request = aws.request.original;
+        networkEnumeration.parentComputeLink = aws.request.parentCompute.documentSelfLink;
 
         Operation patchNetworkOperation = Operation
                 .createPatch(this, AWSNetworkStateEnumerationAdapterService.SELF_LINK)

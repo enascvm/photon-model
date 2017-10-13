@@ -210,6 +210,7 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
             }
             stateHolder.localState.endpointLinks.add(this.request.original.endpointLink);
             stateHolder.localState.internetFacing = !"internal".equals(remoteResource.getScheme());
+            stateHolder.localState.computeHostLink = this.request.parentCompute.documentSelfLink;
 
             stateHolder.localState.routes = getRouteConfigurations(remoteResource);
 

@@ -132,6 +132,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public String regionId;
         public List<String> tenantLinks;
+        public String parentComputeLink;
     }
 
     /**
@@ -1004,6 +1005,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         this.context.request.request.resourcePoolLink,
                         this.context.request.request.endpointLink,
                         this.context.request.endpointAuth.documentSelfLink,
+                        this.context.request.parentComputeLink,
                         this.context.request.tenantLinks,
                         adapterUri);
                 if (networkState.subnetCIDR == null) {
@@ -1082,6 +1084,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 SubnetState subnetState = mapSubnetToSubnetState(subnet,
                         this.context.request.tenantLinks,
                         this.context.request.regionId,
+                        this.context.request.parentComputeLink,
                         this.context.request.request.endpointLink);
 
                 if (subnetState.subnetCIDR == null) {

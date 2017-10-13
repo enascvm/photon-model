@@ -939,6 +939,7 @@ public class EndpointAllocationTaskService
             cd.endpointLinks = new HashSet<String>();
         }
         cd.endpointLinks.add(state.documentSelfLink);
+        cd.computeHostLink = state.computeHostLink;
         cd.authCredentialsLink = state.authCredentialsLink;
         cd.name = state.name;
         cd.regionId = state.regionId;
@@ -984,6 +985,7 @@ public class EndpointAllocationTaskService
             computeHost.endpointLinks = new HashSet<String>();
         }
         computeHost.endpointLinks.add(state.documentSelfLink);
+        computeHost.computeHostLink = state.computeHostLink;
         computeHost.regionId = state.regionId;
         computeHost.creationTimeMicros = Utils.getNowMicrosUtc();
         computeHost.customProperties = new HashMap<>();

@@ -579,6 +579,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         this.context.endpointAuth.documentSelfLink,
                         this.context.request.original.endpointLink,
                         this.context.request.regionId,
+                        this.context.request.parentCompute.documentSelfLink,
                         this.context.parentCompute.tenantLinks, true));
 
             });
@@ -623,6 +624,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         this.context.endpointAuth.documentSelfLink,
                         this.context.request.original.endpointLink,
                         this.context.request.regionId,
+                        this.context.request.parentCompute.documentSelfLink,
                         this.context.parentCompute.tenantLinks, false));
 
             });
@@ -707,8 +709,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
          * Map an EBS volume to a photon-model disk state.
          */
         private DiskState mapVolumeToDiskState(Volume volume, String resourcePoolLink,
-                String authCredentialsLink, String endpointLink, String regionId, List<String> tenantLinks,
-                boolean isNewDiskState) {
+                String authCredentialsLink, String endpointLink, String regionId,
+                String parentComputeLink, List<String> tenantLinks, boolean isNewDiskState) {
             DiskState diskState = new DiskState();
             diskState.id = volume.getVolumeId();
 
@@ -725,6 +727,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             }
             diskState.endpointLinks.add(endpointLink);
             diskState.tenantLinks = tenantLinks;
+            diskState.computeHostLink = parentComputeLink;
             diskState.tagLinks = new HashSet<>();
 
             if (volume.getCreateTime() != null) {

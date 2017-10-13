@@ -359,6 +359,7 @@ public class AWSLoadBalancerService extends StatelessService {
         state.egress = context.loadBalancerStateExpanded.routes.stream()
                 .map(routeConfiguration -> buildRule(routeConfiguration.instancePort))
                 .collect(Collectors.toList());
+        state.computeHostLink = context.loadBalancerStateExpanded.computeHostLink;
 
         Operation operation = Operation.createPost(this, FACTORY_LINK).setBody(state);
 

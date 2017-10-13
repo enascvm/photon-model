@@ -178,6 +178,7 @@ public class AWSEnumerationUtils {
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
         computeState.parentLink = parentComputeLink;
+        computeState.computeHostLink = parentComputeLink;
         computeState.type = ComputeType.VM_GUEST;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         computeState.regionId = regionId;

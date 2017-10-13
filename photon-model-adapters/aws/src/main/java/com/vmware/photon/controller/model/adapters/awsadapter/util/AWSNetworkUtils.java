@@ -61,7 +61,7 @@ public class AWSNetworkUtils {
 
     public static NetworkState mapVPCToNetworkState(Vpc vpc, String regionId,
             String resourcePoolLink, String endpointLink, String authCredentialsLink,
-            List<String> tenantLinks, URI adapterUri) {
+            String parentComputeLink, List<String> tenantLinks, URI adapterUri) {
         if (vpc == null) {
             throw new IllegalArgumentException("Cannot map VPC to network state for null instance");
         }
@@ -90,6 +90,7 @@ public class AWSNetworkUtils {
         networkState.authCredentialsLink = authCredentialsLink;
         networkState.instanceAdapterReference = adapterUri;
         networkState.tenantLinks = tenantLinks;
+        networkState.computeHostLink = parentComputeLink;
         networkState.customProperties = new HashMap<>();
         networkState.customProperties.put("defaultInstance", String.valueOf(vpc.isDefault()));
         return networkState;
@@ -100,7 +101,7 @@ public class AWSNetworkUtils {
      * valid NetworkState.documentSelfLink is available.
      */
     public static SubnetState mapSubnetToSubnetState(Subnet subnet, List<String> tenantLinks,
-            String regionId, String endpointLink) {
+            String regionId, String parentComputeLink, String endpointLink) {
         if (subnet == null) {
             throw new IllegalArgumentException(
                     "Cannot map Subnet to subnet state for null instance");
@@ -118,6 +119,7 @@ public class AWSNetworkUtils {
             subnetState.endpointLinks = new HashSet<String>();
         }
         subnetState.endpointLinks.add(endpointLink);
+        subnetState.computeHostLink = parentComputeLink;
         subnetState.customProperties = new HashMap<>();
         subnetState.regionId = regionId;
 

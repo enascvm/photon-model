@@ -531,6 +531,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             }
             nicState.endpointLinks.addAll(endpointLinks);
             nicState.regionId = context.request.regionId;
+            nicState.computeHostLink = context.request.parentComputeLink;
             Set<String> internalTagLinks = context.internalTagLinksMap
                     .get(ec2_net_interface.toString());
             // append internal tagLinks to any existing ones

@@ -712,6 +712,7 @@ public class ResourceAllocationTaskService
         nic.endpointLink = nid.endpointLink;
         nic.endpointLinks = new HashSet<String>();
         nic.endpointLinks.add(nid.endpointLink);
+        nic.computeHostLink = nid.computeHostLink;
         nic.regionId = nid.regionId;
         nic.customProperties = nid.customProperties;
 
