@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.resources.SubnetRangeService.Su
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -121,25 +120,27 @@ public class SubnetRangeService extends StatefulService {
          * May override the SubnetState values.
          */
         @Documentation(description = "DNS server addresses")
-        @PropertyOptions(
-                usage = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public Set<String> dnsServerAddresses;
+        @PropertyOptions(usage = {
+                ServiceDocumentDescription.PropertyUsageOption.OPTIONAL
+                })
+        public List<String> dnsServerAddresses;
 
         /**
          * DNS domain of the subnet range.
          * May override the SubnetState values.
          */
-        @PropertyOptions(
-                usage = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(usage = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String domain;
 
         /**
-         * DNS domain search.
+         * DNS domain search (in order)
          * May override the SubnetState values.
          */
-        @PropertyOptions(
-                usage = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public Set<String> dnsSearchDomains;
+        @Documentation(description = "DNS search domains")
+        @PropertyOptions(usage = {
+                ServiceDocumentDescription.PropertyUsageOption.OPTIONAL
+                })
+        public List<String> dnsSearchDomains;
 
         public String toString() {
             StringBuilder sb = new StringBuilder();
@@ -151,6 +152,8 @@ public class SubnetRangeService extends StatefulService {
             sb.append(", IP version: ").append(this.ipVersion);
             sb.append(", is DHCP: ").append(this.isDHCP);
             sb.append(", domain: ").append(this.domain);
+            sb.append(", dnsSearchDomains: ").append(this.dnsSearchDomains == null ? null : this.dnsSearchDomains.toString());
+            sb.append(", dnsServerAddresses: ").append(this.dnsServerAddresses == null ? null : this.dnsServerAddresses.toString());
 
             return sb.toString();
         }
@@ -211,7 +214,7 @@ public class SubnetRangeService extends StatefulService {
 
         try {
             SubnetRangeState currentState = getState(patch);
-
+            SubnetRangeState patchBody = patch.getBody(SubnetRangeState.class);
             // Merge the patch values to current state
             // In order to validate the merged result
             EnumSet<Utils.MergeResult> mergeResult =
@@ -219,6 +222,20 @@ public class SubnetRangeService extends StatefulService {
                             SubnetRangeState.class, patch);
 
             boolean hasStateChanged = mergeResult.contains(Utils.MergeResult.STATE_CHANGED);
+
+            if (patchBody.dnsSearchDomains != null) {
+                // replace dnsSearchDomains
+                // dnsSearchDomains are overwritten -- it's not a merge
+                currentState.dnsSearchDomains = patchBody.dnsSearchDomains;
+                hasStateChanged = true;
+            }
+
+            if (patchBody.dnsServerAddresses != null) {
+                // replace dnsServerAddresses
+                // dnsServerAddresses are overwritten -- it's not a merge
+                currentState.dnsServerAddresses = patchBody.dnsServerAddresses;
+                hasStateChanged = true;
+            }
 
             if (hasStateChanged) {
                 validateAll(currentState)

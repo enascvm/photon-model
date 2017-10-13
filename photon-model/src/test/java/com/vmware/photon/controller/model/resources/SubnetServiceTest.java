@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -66,6 +67,10 @@ public class SubnetServiceTest extends Suite {
         subnetState.networkLink = NetworkService.FACTORY_LINK + "/mynet";
         subnetState.tenantLinks = new ArrayList<>();
         subnetState.tenantLinks.add("tenant-linkA");
+        subnetState.dnsServerAddresses = new ArrayList<>();
+        subnetState.dnsServerAddresses.addAll(Arrays.asList("1.2.3.4", "11.22.33.44"));
+        subnetState.dnsSearchDomains = new ArrayList<>();
+        subnetState.dnsSearchDomains.addAll(Arrays.asList("foo.bar", "subdomain.foo.bar"));
 
         return subnetState;
     }
@@ -197,6 +202,15 @@ public class SubnetServiceTest extends Suite {
             patchState.groupLinks = new HashSet<String>();
             patchState.groupLinks.add("group1");
             patchState.zoneId = "my-zone";
+
+            patchState.dnsServerAddresses = new ArrayList<>();
+            patchState.dnsServerAddresses.addAll(startState.dnsServerAddresses);
+            patchState.dnsServerAddresses.add("88.88.88.88");
+
+            patchState.dnsSearchDomains = new ArrayList<>();
+            patchState.dnsSearchDomains.addAll(startState.dnsSearchDomains);
+            patchState.dnsSearchDomains.add("testsubdomain.foo.bar");
+
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
 
@@ -208,9 +222,13 @@ public class SubnetServiceTest extends Suite {
             assertThat(returnState.subnetCIDR, is(patchState.subnetCIDR));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));
-            assertEquals(returnState.tenantLinks.size(), 2);
-            assertEquals(returnState.groupLinks, patchState.groupLinks);
-            assertEquals(returnState.zoneId, patchState.zoneId);
+            assertEquals(2, returnState.tenantLinks.size());
+            assertEquals(patchState.groupLinks, returnState.groupLinks);
+            assertEquals(patchState.zoneId, returnState.zoneId);
+
+            // assert that order in ordered lists is preserved and there are no duplicate entries
+            assertEquals(patchState.dnsServerAddresses, returnState.dnsServerAddresses);
+            assertEquals(patchState.dnsSearchDomains, returnState.dnsSearchDomains);
         }
     }
 

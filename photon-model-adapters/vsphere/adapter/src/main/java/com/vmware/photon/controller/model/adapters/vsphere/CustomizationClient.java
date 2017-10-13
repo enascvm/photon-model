@@ -13,8 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.apache.commons.net.util.SubnetUtils;
@@ -100,7 +100,7 @@ public class CustomizationClient extends BaseHelper {
         return new SubnetUtils(subnetCIDR).getInfo().getNetmask();
     }
 
-    public void customizeDns(Set<String> dnsServers, Set<String> dnsSearchDomains,
+    public void customizeDns(List<String> dnsServers, List<String> dnsSearchDomains,
             CustomizationSpec template) {
         CustomizationGlobalIPSettings settings = new CustomizationGlobalIPSettings();
         if (dnsServers != null) {

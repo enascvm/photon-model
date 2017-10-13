@@ -70,9 +70,12 @@ public class SubnetRangeServiceTest extends Suite {
         subnetRangeState.endIPAddress = "192.130.120.140";
         subnetRangeState.ipVersion = IPVersion.IPv4;
         subnetRangeState.isDHCP = false;
-        subnetRangeState.dnsServerAddresses = new HashSet();
-        subnetRangeState.dnsServerAddresses.add("dnsServer1.corp.local");
-        subnetRangeState.dnsServerAddresses.add("dnsServer2.corp.local");
+        subnetRangeState.dnsServerAddresses = new ArrayList<>();
+        subnetRangeState.dnsServerAddresses.add("1.2.3.4");
+        subnetRangeState.dnsServerAddresses.add("5.6.7.8");
+        subnetRangeState.dnsSearchDomains = new ArrayList<>();
+        subnetRangeState.dnsSearchDomains.add("dnsServer1.corp.local");
+        subnetRangeState.dnsSearchDomains.add("dnsServer2.corp.local");
         subnetRangeState.domain = "vmware.com";
         subnetRangeState.subnetLink = subnetState.documentSelfLink;
         subnetRangeState.tenantLinks = new ArrayList<>();
@@ -464,6 +467,43 @@ public class SubnetRangeServiceTest extends Suite {
         }
 
         @Test
+        public void testPatchDnsServers() throws Throwable {
+
+            SubnetService.SubnetState subnetRequest = buildValidSubnetState();
+            SubnetService.SubnetState subnetState = postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetRequest, SubnetService.SubnetState.class);
+
+            postServiceSynchronously(
+                    SubnetService.FACTORY_LINK,
+                    subnetState, SubnetService.SubnetState.class);
+
+            SubnetRangeService.SubnetRangeState startState = buildValidSubnetRangeState(
+                    subnetState);
+
+            SubnetRangeService.SubnetRangeState returnState = postServiceSynchronously(
+                    SubnetRangeService.FACTORY_LINK,
+                    startState, SubnetRangeService.SubnetRangeState.class);
+
+            // Update value for dns server addresses
+            SubnetRangeService.SubnetRangeState patchState = new SubnetRangeService.SubnetRangeState();
+            patchState.dnsServerAddresses = new ArrayList<>();
+            patchState.dnsServerAddresses.addAll(startState.dnsServerAddresses);
+            patchState.dnsSearchDomains = new ArrayList<>();
+            patchState.dnsSearchDomains.addAll(startState.dnsSearchDomains);
+
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            // Verify no change after patching with the same set
+            SubnetRangeService.SubnetRangeState afterPatchState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    SubnetRangeService.SubnetRangeState.class);
+
+            assertEquals(startState.dnsServerAddresses, afterPatchState.dnsServerAddresses);
+            assertEquals(startState.dnsSearchDomains, afterPatchState.dnsSearchDomains);
+        }
+
+        @Test
         public void testPatchSingleAssignmentProperty() throws Throwable {
 
             SubnetService.SubnetState subnetRequest = buildValidSubnetState();
@@ -554,10 +594,10 @@ public class SubnetRangeServiceTest extends Suite {
             assertThat("There are 2 DNS server addresses in the set",
                     returnState.dnsServerAddresses.size() == 2);
 
-            // Patch with single dns server, will be added to the list
+            // Patch with single dns server; it will replace the current list
             SubnetRangeService.SubnetRangeState patchState = new SubnetRangeService.SubnetRangeState();
-            patchState.dnsServerAddresses = new HashSet<>();
-            patchState.dnsServerAddresses.add("single.dns.server");
+            patchState.dnsServerAddresses = new ArrayList<>();
+            patchState.dnsServerAddresses.add("99.99.99.99");
 
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
@@ -565,9 +605,7 @@ public class SubnetRangeServiceTest extends Suite {
                     SubnetRangeService.SubnetRangeState.class);
             assertNotNull(returnState);
             assertNotNull(returnState.dnsServerAddresses);
-            assertEquals(returnState.dnsServerAddresses.size(), 3);
-            assertThat("Added dns server to the list",
-                    returnState.dnsServerAddresses.contains("single.dns.server"));
+            assertEquals(patchState.dnsServerAddresses, returnState.dnsServerAddresses);
         }
     }
 

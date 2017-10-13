@@ -16,9 +16,9 @@ package com.vmware.photon.controller.model.resources;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.NETWORK_SUBTYPE_SUBNET_STATE;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
@@ -87,8 +87,8 @@ public class SubnetService extends StatefulService {
         /**
          * DNS IP addresses for this subnet
          */
-        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = PropertyIndexingOption.EXPAND)
-        public Set<String> dnsServerAddresses;
+        @PropertyOptions(indexing = PropertyIndexingOption.EXPAND)
+        public List<String> dnsServerAddresses;
 
         /**
          * DNS domain of the this subnet
@@ -100,7 +100,7 @@ public class SubnetService extends StatefulService {
          * Domains search in
          */
         @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = PropertyIndexingOption.EXPAND)
-        public Set<String> dnsSearchDomains;
+        public List<String> dnsSearchDomains;
 
         /**
          * Indicates whether the sub-network supports public IP assignment.
@@ -205,6 +205,21 @@ public class SubnetService extends StatefulService {
                         currentState.endpointLink = patchBody.endpointLink;
                         hasStateChanged = true;
                     }
+
+                    if (patchBody.dnsSearchDomains != null) {
+                        // replace dnsSearchDomains
+                        // dnsSearchDomains are overwritten -- it's not a merge
+                        currentState.dnsSearchDomains = patchBody.dnsSearchDomains;
+                        hasStateChanged = true;
+                    }
+
+                    if (patchBody.dnsServerAddresses != null) {
+                        // replace dnsServerAddresses
+                        // dnsServerAddresses are overwritten -- it's not a merge
+                        currentState.dnsServerAddresses = patchBody.dnsServerAddresses;
+                        hasStateChanged = true;
+                    }
+
                     return hasStateChanged;
                 });
     }
@@ -235,7 +250,7 @@ public class SubnetService extends StatefulService {
         template.name = "sub-network";
         template.networkLink = UriUtils.buildUriPath(NetworkService.FACTORY_LINK,
                 "on-prem-network");
-        template.dnsServerAddresses = new HashSet<>();
+        template.dnsServerAddresses = new ArrayList<>();
         template.dnsServerAddresses.add("10.12.14.12");
         template.gatewayAddress = "10.1.0.1";
         template.supportPublicIpAddress = Boolean.TRUE;

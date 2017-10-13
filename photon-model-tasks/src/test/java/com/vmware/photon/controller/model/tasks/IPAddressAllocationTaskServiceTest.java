@@ -512,7 +512,7 @@ public class IPAddressAllocationTaskServiceTest extends Suite{
             subnetRangeState.endIPAddress = endIp;
             subnetRangeState.ipVersion = ipVersion;
             subnetRangeState.isDHCP = false;
-            subnetRangeState.dnsServerAddresses = new HashSet();
+            subnetRangeState.dnsServerAddresses = new ArrayList<>();
             subnetRangeState.dnsServerAddresses.add("dnsServer1.vmware.com");
             subnetRangeState.dnsServerAddresses.add("dnsServer2.vmwew.com");
             subnetRangeState.domain = "vmware.com";

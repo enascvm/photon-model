@@ -18,7 +18,7 @@ import static org.junit.Assert.assertEquals;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -96,9 +96,9 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
             ComputeState template = findTemplate();
 
             this.subnet = fetchServiceState(SubnetState.class, findPortGroup(networkId));
-            this.subnet.dnsSearchDomains = Collections.singleton("local");
+            this.subnet.dnsSearchDomains = Arrays.asList("local");
             this.subnet.gatewayAddress = "10.0.0.1";
-            this.subnet.dnsServerAddresses = Collections.singleton("8.8.8.8");
+            this.subnet.dnsServerAddresses = Arrays.asList("8.8.8.8");
             this.subnet.domain = "local";
             this.subnet.subnetCIDR = "10.0.0.0/24";
 
