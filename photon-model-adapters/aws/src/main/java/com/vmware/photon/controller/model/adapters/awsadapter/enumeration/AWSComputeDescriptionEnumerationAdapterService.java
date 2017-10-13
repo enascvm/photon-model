@@ -79,6 +79,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         public Map<String, ZoneData> zones;
         public ComputeDescription parentDescription;
         public String endpointLink;
+        public String parentComputeLink;
     }
 
     /**
@@ -330,6 +331,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         computeDescription.customProperties = new HashMap<>();
         computeDescription.customProperties.put(SOURCE_TASK_LINK,
                 ResourceEnumerationTaskService.FACTORY_LINK);
+        computeDescription.computeHostLink = cdState.parentComputeLink;
 
         // security group is not being returned currently in the VM. Add additional logic VSYM-326.
 

@@ -560,9 +560,9 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
             if (isApplyInfraFields()) {
                 // By default populate TENANT_LINKS
                 localState.tenantLinks = this.endpointState.tenantLinks;
-
                 // By default populate ENDPOINT_ILNK
                 setEndpointLink(localState, this.endpointState.documentSelfLink);
+                localState.computeHostLink = this.endpointState.computeLink;
             }
 
             localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);

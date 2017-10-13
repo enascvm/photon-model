@@ -289,6 +289,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.gpuCount = currentState.gpuCount;
             chsWithDesc.totalMemoryBytes = currentState.totalMemoryBytes;
             chsWithDesc.endpointLink = currentState.endpointLink;
+            chsWithDesc.computeHostLink = currentState.computeHostLink;
 
             return chsWithDesc;
         }

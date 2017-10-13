@@ -176,6 +176,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             }
             stateHolder.localState.id = remoteResource.getGroupId();
             stateHolder.localState.name = remoteResource.getGroupName();
+            stateHolder.localState.computeHostLink = this.request.parentCompute.documentSelfLink;
 
             stateHolder.localState.ingress = new ArrayList<>();
             for (IpPermission ipPermission : remoteResource.getIpPermissions()) {
