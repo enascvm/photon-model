@@ -85,6 +85,7 @@ public class EndpointAllocationTaskService
      */
     public enum SubStage {
         VALIDATE_CREDENTIALS,
+        CHECK_IF_ACCOUNT_EXISTS,
         CREATE_UPDATE_ENDPOINT,
         INVOKE_ADAPTER,
         TRIGGER_ENUMERATION,
@@ -133,6 +134,18 @@ public class EndpointAllocationTaskService
                 + "when validate the endpoint.")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
         public CertificateInfo certificateInfo;
+
+        @Documentation(description = "A flag that tracks if the cloud provider account has "
+                + "already been configured for this endpoint.")
+        @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
+        public boolean accountAlreadyExists;
+
+        @Documentation(description = "The existing compute host and compute description corresponding to the account. "
+                + "This will be updated to reflect the association"
+                + "with the new endpoint being configured in the system in case they map back to "
+                + "the same cloud provider account. ")
+        @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
+        public Map<String, ServiceDocument> existingDocuments;
 
     }
 
@@ -215,7 +228,10 @@ public class EndpointAllocationTaskService
         case VALIDATE_CREDENTIALS:
             validateCredentials(currentState,
                     currentState.options.contains(TaskOption.VALIDATE_ONLY)
-                            ? SubStage.COMPLETED : SubStage.CREATE_UPDATE_ENDPOINT);
+                            ? SubStage.COMPLETED : SubStage.CHECK_IF_ACCOUNT_EXISTS);
+            break;
+        case CHECK_IF_ACCOUNT_EXISTS:
+            invokeAdapterForUniquenessCheck(currentState, SubStage.CREATE_UPDATE_ENDPOINT);
             break;
         case CREATE_UPDATE_ENDPOINT:
             if (currentState.endpointState.documentSelfLink != null) {
@@ -298,6 +314,42 @@ public class EndpointAllocationTaskService
                 }));
     }
 
+    /**
+     * RequestType = CHECK_IF_ACCOUNT_EXISTS
+     * Invokes the cloud provider specific adapter with the passed in credentials to verify
+     * if the cloud provider account has already been configured aprior. If it a compute host
+     * has already been created corresponding to the given cloud account then it is updated
+     * to reflect the endpointLink for the currently being configured endpoint.
+     */
+
+    private void invokeAdapterForUniquenessCheck(EndpointAllocationTaskState currentState,
+            SubStage nextStage) {
+        EndpointConfigRequest req = new EndpointConfigRequest();
+        req.isMockRequest = currentState.options.contains(TaskOption.IS_MOCK);
+        req.requestType = RequestType.CHECK_IF_ACCOUNT_EXISTS;
+        req.tenantLinks = currentState.tenantLinks;
+        req.resourceReference = UriUtils.buildUri(getHost(),
+                currentState.endpointState.documentSelfLink);
+        req.taskReference = UriUtils.buildUri(this.getHost(), getSelfLink());
+        req.endpointProperties = currentState.endpointState.endpointProperties;
+        sendRequest(Operation.createPatch(currentState.adapterReference).setBody(req)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logWarning(
+                                "PATCH to endpoint config adapter service %s, failed: %s",
+                                o.getUri(), e.toString());
+                        sendFailurePatch(this, currentState, e);
+                        return;
+                    }
+                    EndpointConfigRequest returnedRequest = o.getBody(EndpointConfigRequest.class);
+                    EndpointAllocationTaskState state = createUpdateSubStageTask(
+                            nextStage);
+                    state.accountAlreadyExists = returnedRequest.accountAlreadyExists;
+                    state.existingDocuments = returnedRequest.existingDocuments;
+                    sendSelfPatch(state);
+                }));
+    }
+
     private void createEndpoint(EndpointAllocationTaskState currentState) {
 
         List<String> createdDocumentLinks = new ArrayList<>();
@@ -317,8 +369,13 @@ public class EndpointAllocationTaskService
 
         Operation endpointOp = Operation.createPost(this, EndpointService.FACTORY_LINK);
 
-        ComputeDescription computeDescription = configureDescription(es);
-        ComputeState computeState = configureCompute(es, endpointProperties);
+        ComputeDescription computeDescription = configureDescription(currentState, es);
+        ComputeState computeState = configureCompute(currentState, es, endpointProperties);
+
+        Operation cdOp = createComputeDescriptionOp(currentState,
+                computeDescription.documentSelfLink);
+        Operation compOp = createComputeStateOp(currentState,
+                computeState.documentSelfLink);
 
         // TODO VSYM-2484: EndpointAllocationTaskService doesn't tag the compute host with resource
         // pool link
@@ -327,9 +384,6 @@ public class EndpointAllocationTaskService
             es.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
             computeState.resourcePoolLink = es.resourcePoolLink;
         }
-
-        Operation cdOp = Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK);
-        Operation compOp = Operation.createPost(this, ComputeService.FACTORY_LINK);
 
         OperationSequence sequence;
         if (es.authCredentialsLink == null) {
@@ -373,7 +427,9 @@ public class EndpointAllocationTaskService
 
                     Operation o = ops.get(cdOp.getId());
                     ComputeDescription desc = o.getBody(ComputeDescription.class);
-                    createdDocumentLinks.add(desc.documentSelfLink);
+                    if (!currentState.accountAlreadyExists) {
+                        createdDocumentLinks.add(desc.documentSelfLink);
+                    }
                     computeState.descriptionLink = desc.documentSelfLink;
                     es.computeDescriptionLink = desc.documentSelfLink;
                 });
@@ -443,7 +499,9 @@ public class EndpointAllocationTaskService
                             }
                             Operation csOp = ops.get(compOp.getId());
                             ComputeState c = csOp.getBody(ComputeState.class);
-                            createdDocumentLinks.add(c.documentSelfLink);
+                            if (!currentState.accountAlreadyExists) {
+                                createdDocumentLinks.add(c.documentSelfLink);
+                            }
                             es.computeLink = c.documentSelfLink;
                             endpointOp.setBody(es);
                         })
@@ -468,6 +526,22 @@ public class EndpointAllocationTaskService
                     state.createdDocumentLinks = createdDocumentLinks;
                     sendSelfPatch(state);
                 }).sendWith(this);
+    }
+
+    private Operation createComputeDescriptionOp(EndpointAllocationTaskState currentState,
+            String computeDescriptionLink) {
+        if (currentState.accountAlreadyExists) {
+            return Operation.createPatch(this, computeDescriptionLink);
+        }
+        return Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK);
+    }
+
+    private Operation createComputeStateOp(EndpointAllocationTaskState currentState,
+            String computeStateLink) {
+        if (currentState.accountAlreadyExists) {
+            return Operation.createPatch(this, computeStateLink);
+        }
+        return Operation.createPost(this, ComputeService.FACTORY_LINK);
     }
 
     private void updateOrCreateEndpoint(EndpointAllocationTaskState currentState) {
@@ -763,6 +837,16 @@ public class EndpointAllocationTaskService
             isUpdate = true;
         }
 
+        if (body.existingDocuments != null) {
+            currentState.existingDocuments = body.existingDocuments;
+            isUpdate = true;
+        }
+
+        if (body.accountAlreadyExists != currentState.accountAlreadyExists) {
+            currentState.accountAlreadyExists = body.accountAlreadyExists;
+            isUpdate = true;
+        }
+
         if (body.adapterReference != null) {
             currentState.adapterReference = body.adapterReference;
             isUpdate = true;
@@ -837,10 +921,22 @@ public class EndpointAllocationTaskService
         return authState;
     }
 
-    private ComputeDescription configureDescription(EndpointState state) {
-
-        // setting up a host, so all have VM_HOST as a child
+    private ComputeDescription configureDescription(EndpointAllocationTaskState currentState,
+            EndpointState state) {
         ComputeDescription cd = new ComputeDescription();
+        if (currentState.accountAlreadyExists) {
+            for (ServiceDocument document : currentState.existingDocuments.values()) {
+                if (document instanceof ComputeDescription) {
+                    cd = (ComputeDescription) document;
+                }
+            }
+            if (cd.endpointLinks == null) {
+                cd.endpointLinks = new HashSet<String>();
+            }
+            cd.endpointLinks.add(state.documentSelfLink);
+            return cd;
+        }
+        // setting up a host, so all have VM_HOST as a child
         cd.tenantLinks = state.tenantLinks;
         cd.endpointLink = state.documentSelfLink;
         if (cd.endpointLinks == null) {
@@ -866,11 +962,24 @@ public class EndpointAllocationTaskService
         return cd;
     }
 
-    private ComputeState configureCompute(EndpointState state, Map<String, String> endpointProperties) {
+    private ComputeState configureCompute(EndpointAllocationTaskState currentState,
+            EndpointState state, Map<String, String> endpointProperties) {
+        ComputeState computeHost = new ComputeState();
+        if (currentState.accountAlreadyExists) {
+            for (ServiceDocument document : currentState.existingDocuments.values()) {
+                if (document instanceof ComputeState) {
+                    computeHost = (ComputeState) document;
+                }
+            }
+            if (computeHost.endpointLinks == null) {
+                computeHost.endpointLinks = new HashSet<String>();
+            }
+            computeHost.endpointLinks.add(state.documentSelfLink);
+            return computeHost;
+        }
+
         String endpointRegionId = endpointProperties != null
                 ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
-
-        ComputeState computeHost = new ComputeState();
         computeHost.id = UUID.randomUUID().toString();
         computeHost.name = endpointRegionId != null ? endpointRegionId : state.name;
         computeHost.tenantLinks = state.tenantLinks;

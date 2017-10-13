@@ -50,6 +50,7 @@ import com.microsoft.azure.management.resources.implementation.SubscriptionInner
 import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.Permission;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.PermissionList;
@@ -96,6 +97,11 @@ public class AzureEndpointAdapterService extends StatelessService {
             return;
         }
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
+
+        if (body.requestType == RequestType.CHECK_IF_ACCOUNT_EXISTS) {
+            checkIfAccountExistsAndGetExistingDocuments(body, op);
+            return;
+        }
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
                 computeDesc(), compute(), endpoint(), validate(body));
@@ -314,5 +320,13 @@ public class AzureEndpointAdapterService extends StatelessService {
 
     private boolean canRead(Permission permission) {
         return permission.isOwner() || permission.isReader() || permission.isContributor();
+    }
+
+    //TODO https://jira-hzn.eng.vmware.com/browse/VSYM-8582
+    private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req,
+            Operation op) {
+        req.accountAlreadyExists = false;
+        op.setBody(req);
+        op.complete();
     }
 }

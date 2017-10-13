@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
@@ -54,6 +55,11 @@ public class AzureEaEndpointAdapterService extends StatelessService {
             return;
         }
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
+
+        if (body.requestType == RequestType.CHECK_IF_ACCOUNT_EXISTS) {
+            checkIfAccountExistsAndGetExistingDocuments(body, op);
+            return;
+        }
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
                 computeDesc(), compute(), endpoint(), validate());
@@ -137,5 +143,13 @@ public class AzureEaEndpointAdapterService extends StatelessService {
             c.customProperties = new HashMap<>();
         }
         c.customProperties.put(key, value);
+    }
+
+    //TODO https://jira-hzn.eng.vmware.com/browse/VSYM-8582
+    private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req,
+            Operation op) {
+        req.accountAlreadyExists = false;
+        op.setBody(req);
+        op.complete();
     }
 }

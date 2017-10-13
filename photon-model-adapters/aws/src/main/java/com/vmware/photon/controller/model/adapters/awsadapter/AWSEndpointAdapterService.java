@@ -19,6 +19,8 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE;
 import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ACCOUNT_ID_KEY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.net.URI;
@@ -41,16 +43,19 @@ import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClient;
 import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientBuilder;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -58,6 +63,10 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Adapter to validate and enhance AWS based endpoints.
@@ -92,6 +101,10 @@ public class AWSEndpointAdapterService extends StatelessService {
         }
 
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
+        if (body.requestType == RequestType.CHECK_IF_ACCOUNT_EXISTS) {
+            checkIfAccountExistsAndGetExistingDocuments(body, op);
+            return;
+        }
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
                 computeDesc(), compute(), endpoint(), validate(body));
@@ -283,9 +296,95 @@ public class AWSEndpointAdapterService extends StatelessService {
             if (ex.getErrorCode().compareTo("AccessDenied") == 0) {
                 String msg = ex.getMessage();
                 userId = msg.split(":", 7)[5];
+            } else {
+                logSevere("Exception getting the accountId %s", ex);
+
             }
         }
         return userId;
     }
 
+    private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req, Operation op) {
+        String accountId = getAccountId(
+                req.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEYID_KEY),
+                req.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEY_KEY));
+        if (accountId != null && !accountId.isEmpty()) {
+            Query.Builder qBuilder = Query.Builder.create()
+                    .addKindFieldClause(ComputeState.class, Occurance.SHOULD_OCCUR)
+                    .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                    .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
+                            PhotonModelConstants.EndpointType.aws.name())
+                    .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            AWS_ACCOUNT_ID_KEY, accountId)
+                    .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
+                            req.tenantLinks);
+
+            QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                    .setQuery(qBuilder.build())
+                    .addOption(QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryOption.TOP_RESULTS)
+                    .setResultLimit(getQueryResultLimit())
+                    .build();
+
+            queryTask.tenantLinks = req.tenantLinks;
+            QueryUtils.startQueryTask(this, queryTask)
+                    .whenComplete((qrt, e) -> {
+                        if (e != null) {
+                            logSevere(
+                                    () -> String.format(
+                                            "Failure retrieving query results for compute host corresponding to"
+                                                    + "the account ID: %s",
+                                            e.toString()));
+                            op.fail(e);
+                            return;
+                        }
+                        if (qrt.results.documentCount > 0) {
+                            req.existingDocuments = new HashMap<>();
+                            for (Object s : qrt.results.documents.values()) {
+                                req.accountAlreadyExists = true;
+                                ComputeState computeHost = Utils.fromJson(s,
+                                        ComputeState.class);
+                                req.existingDocuments.put(computeHost.documentSelfLink,
+                                        computeHost);
+                                getComputeDescription(req, computeHost.descriptionLink, op);
+                            }
+                        } else {
+                            req.accountAlreadyExists = false;
+                            op.setBody(req);
+                            op.complete();
+                            return;
+                        }
+                    });
+        } else { //If the account Id cannot be looked up with the given set of credentials then de duplication is not possible.
+            req.accountAlreadyExists = false;
+            op.setBody(req);
+            op.complete();
+        }
+    }
+
+    /**
+     * Retrieves the compute description corresponding to the compute host for a given account id.
+     */
+    private void getComputeDescription(EndpointConfigRequest req, String descriptionLink,
+            Operation op) {
+        Operation.createGet(getHost(), descriptionLink)
+                .setCompletion((o, ex) -> {
+                    if (ex != null) {
+                        logSevere(
+                                () -> String.format(
+                                        "Failure retrieving the compute host description corresponding to"
+                                                + "the account ID: %s",
+                                        ex.toString()));
+                        op.fail(ex);
+                        return;
+                    }
+                    ComputeDescription computeHostDescription = o.getBody(ComputeDescription.class);
+                    req.existingDocuments.put(computeHostDescription.documentSelfLink,
+                            computeHostDescription);
+                    op.setBody(req);
+                    op.complete();
+                    return;
+                }).sendWith(this);
+    }
 }
