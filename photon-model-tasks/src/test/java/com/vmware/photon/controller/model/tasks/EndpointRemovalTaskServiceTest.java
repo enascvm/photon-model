@@ -53,6 +53,8 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.RouterService;
 import com.vmware.photon.controller.model.resources.RouterService.RouterState;
+import com.vmware.photon.controller.model.resources.SnapshotService;
+import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
@@ -270,6 +272,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         createPrivateImageState(test, endpointLink, tenantLinks);
         createNetworkState(test, endpointLink, tenantLinks);
         createRouterState(test, endpointLink, tenantLinks);
+        createSnapshotState(test, endpointLink, tenantLinks);
         createAuthCredentials(test, endpointLink, tenantLinks);
     }
 
@@ -340,6 +343,19 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         net.regionId = "region-id";
         net.instanceAdapterReference = UriUtils.buildUri(test.getHost(), "instance-adapter");
         test.postServiceSynchronously(NetworkService.FACTORY_LINK, net, NetworkState.class);
+    }
+
+    private static void createSnapshotState(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        SnapshotState snapshot = new SnapshotState();
+        snapshot.name = "snapshot";
+        snapshot.parentLink = null;
+        snapshot.computeLink = "vmLink";
+        snapshot.tenantLinks = tenantLinks;
+        snapshot.endpointLinks = new HashSet<String>();
+        snapshot.endpointLinks.add(endpointLink);
+        snapshot.regionId = "region-id";
+        test.postServiceSynchronously(SnapshotService.FACTORY_LINK, snapshot, SnapshotState.class);
     }
 
     private static void createAuthCredentials(BaseModelTest test, String endpointLink,

@@ -49,6 +49,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
@@ -97,13 +98,15 @@ public class EndpointRemovalTaskService
             Utils.buildKind(SubnetState.class),
             Utils.buildKind(StorageDescription.class),
             Utils.buildKind(ImageState.class),
-            Utils.buildKind(RouterState.class)
+            Utils.buildKind(RouterState.class),
+            Utils.buildKind(SnapshotState.class)
     );
 
     /**
      * SubStage.
      */
     public static enum SubStage {
+
 
         /**
          * Load endpoint data.
