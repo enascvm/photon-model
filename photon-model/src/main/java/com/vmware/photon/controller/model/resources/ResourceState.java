@@ -41,6 +41,7 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_ENDPOINT_LINKS = "endpointLinks";
     public static final String FIELD_NAME_REGION_ID = "regionId";
     public static final String FIELD_NAME_CREATION_TIME_MICROS = "creationTimeMicros";
+    public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
 
     /**
      * Identifier of this resource instance
@@ -129,6 +130,14 @@ public class ResourceState extends ServiceDocument {
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_33)
     public Set<String> endpointLinks;
 
+    /**
+     * Reference to compute host instance.
+     */
+    @UsageOption(option = PropertyUsageOption.OPTIONAL)
+    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_42)
+    public String computeHostLink;
+
     public void copyTo(ResourceState target) {
         super.copyTo(target);
 
@@ -142,5 +151,6 @@ public class ResourceState extends ServiceDocument {
         target.creationTimeMicros = this.creationTimeMicros;
         target.regionId = this.regionId;
         target.endpointLinks = this.endpointLinks;
+        target.computeHostLink = this.computeHostLink;
     }
 }

@@ -68,7 +68,6 @@ public class DiskService extends StatefulService {
     public static class DiskState extends ResourceState {
         public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
         public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
-        public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
         public static final String FIELD_NAME_STORAGE_TYPE = "storageType";
 
         /**
@@ -212,13 +211,6 @@ public class DiskService extends StatefulService {
          * Currency unit used for pricing.
          */
         public String currencyUnit;
-
-        /**
-         * Link to the compute host the disk belongs to. This property is not used to associate the
-         * diskState with it's compute (VM). That association happens through the compute's
-         * diskLinks property.
-         */
-        public String computeHostLink;
 
         /**
          * Link to the cloud account endpoint the disk belongs to.

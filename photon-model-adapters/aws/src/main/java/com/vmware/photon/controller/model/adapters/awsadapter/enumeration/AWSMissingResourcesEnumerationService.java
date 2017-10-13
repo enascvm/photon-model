@@ -161,6 +161,7 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
             cd.endpointLinks = new HashSet<String>();
         }
         cd.endpointLinks.add(primaryAccountCompute.endpointLink);
+        cd.computeHostLink = primaryAccountCompute.computeHostLink;
         return cd;
     }
 

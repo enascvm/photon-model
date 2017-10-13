@@ -850,6 +850,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         }
         diskState.endpointLinks.add(aws.request.original.endpointLink);
         diskState.tenantLinks = aws.parentCompute.tenantLinks;
+        diskState.computeHostLink = aws.parentCompute.documentSelfLink;
         diskState.tagLinks = new HashSet<>();
 
         if (bucket.getCreationDate() != null) {
