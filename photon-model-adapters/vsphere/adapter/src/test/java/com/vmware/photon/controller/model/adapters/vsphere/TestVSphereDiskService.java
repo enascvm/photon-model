@@ -74,6 +74,14 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
     }
 
     @Test
+    public void testDiskCreateAndDeleteWithCustomPropsDataStore() throws Throwable {
+        prepareEnvironment();
+        DiskState diskState = createDiskWithCustomPropsDataStore("AdditionalDisk1",
+                DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
+        testDiskCreateAndDelete(diskState);
+    }
+
+    @Test
     public void testDiskCreateAndDeleteWithStoragePolicy() throws Throwable {
         prepareEnvironment();
         DiskState diskState = createDiskWithStoragePolicy("AdditionalDisk1",
@@ -205,6 +213,16 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
         DiskState diskState = constructDiskState(alias, type, 0, null,
                 capacityMBytes, customProperties);
         diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
+        return postDiskStateWithDetails(diskState);
+    }
+
+    private DiskState createDiskWithCustomPropsDataStore(String alias, DiskService.DiskType type,
+            long capacityMBytes, HashMap<String, String> customProperties) throws Throwable {
+        DiskState diskState = constructDiskState(alias, type, 0, null,
+                capacityMBytes, customProperties);
+        // Store the datastore name inside properties
+        diskState.customProperties.put(CustomProperties.DISK_DATASTORE_NAME, this.dataStoreId);
+
         return postDiskStateWithDetails(diskState);
     }
 

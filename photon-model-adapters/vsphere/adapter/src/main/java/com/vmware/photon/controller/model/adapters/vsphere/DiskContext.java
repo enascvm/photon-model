@@ -120,6 +120,11 @@ public class DiskContext {
                             }
                             populateContextThen(service, ctx, onSuccess);
                         });
+            } else if (CustomProperties.of(ctx.diskState)
+                    .getString(CustomProperties.DISK_DATASTORE_NAME) != null) {
+                ctx.datastoreName = CustomProperties.of(ctx.diskState)
+                        .getString(CustomProperties.DISK_DATASTORE_NAME);
+                populateContextThen(service, ctx, onSuccess);
             } else {
                 // Mark empty so that it can fall back to any available datastore from the system.
                 ctx.datastoreName = "";
