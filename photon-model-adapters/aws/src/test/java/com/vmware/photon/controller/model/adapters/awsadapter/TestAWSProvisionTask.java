@@ -17,10 +17,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.avalabilityZoneIdentifier;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -62,7 +64,6 @@ import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.Volume;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -232,6 +233,28 @@ public class TestAWSProvisionTask {
                 this.currentTestName.getMethodName() + "_vm1", zoneId, regionId,
                 null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup);
 
+
+        // set placement link
+        String zoneId = TestAWSSetupUtils.zoneId + avalabilityZoneIdentifier;
+        ComputeState zoneComputeState = createAWSComputeHost(this.host, this.endpointState,
+                zoneId,
+                regionId, this.isAwsClientMock, this.awsMockEndpointReference, null);
+
+        zoneComputeState.id = zoneId;
+
+        zoneComputeState = TestUtils
+                .doPatch(this.host, zoneComputeState, ComputeState.class, UriUtils.buildUri(this.host,
+                        zoneComputeState.documentSelfLink));
+
+        if (this.vmState.customProperties == null) {
+            this.vmState.customProperties = new HashMap<>();
+        }
+
+        this.vmState.customProperties.put(PLACEMENT_LINK, zoneComputeState.documentSelfLink);
+        TestUtils
+                .doPatch(this.host, this.vmState, ComputeState.class, UriUtils.buildUri(this.host,
+                        this.vmState.documentSelfLink));
+
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
 
@@ -254,7 +277,7 @@ public class TestAWSProvisionTask {
                 provisionTask.documentSelfLink);
 
         // check that the VM has been created
-        ProvisioningUtils.queryComputeInstances(this.host, 2);
+        ProvisioningUtils.queryComputeInstances(this.host, 3);
 
         if (!this.isMock) {
             ComputeState compute = getCompute(this.host, this.vmState.documentSelfLink);
@@ -268,6 +291,8 @@ public class TestAWSProvisionTask {
             assertVmNetworksConfiguration(instance);
 
             assertStorageConfiguration(this.client, instance, compute);
+
+            assertEquals(zoneId, instance.getPlacement().getAvailabilityZone());
         }
 
         this.host.setTimeoutSeconds(600);
@@ -319,7 +344,7 @@ public class TestAWSProvisionTask {
         addNonExistingSecurityGroup = false;
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(),
-                this.currentTestName.getMethodName() + "_vm2", zoneId, regionId,
+                this.currentTestName.getMethodName() + "_vm2", TestAWSSetupUtils.zoneId, regionId,
                 tagLinks, this.singleNicSpec, addNonExistingSecurityGroup);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);

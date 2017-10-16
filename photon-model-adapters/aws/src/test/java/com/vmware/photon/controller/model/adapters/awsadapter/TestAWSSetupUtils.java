@@ -112,7 +112,6 @@ import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerReque
 import com.amazonaws.services.elasticloadbalancing.model.Listener;
 import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerResult;
-
 import org.joda.time.LocalDateTime;
 import org.junit.Assert;
 
@@ -1307,7 +1306,6 @@ public class TestAWSSetupUtils {
     public static void deleteVMs(String documentSelfLink, boolean isMock, VerificationHost host,
             boolean deleteDocumentOnly)
             throws Throwable {
-        host.testStart(1);
         ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
         QuerySpecification resourceQuerySpec = new QueryTask.QuerySpecification();
         // query all ComputeState resources for the cluster
@@ -1322,15 +1320,22 @@ public class TestAWSSetupUtils {
         if (deleteDocumentOnly) {
             deletionState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
         }
-        host.send(Operation
-                .createPost(
+
+        deletionState = TestUtils
+                .doPost(host, deletionState, ResourceRemovalTaskState.class,
                         UriUtils.buildUri(host,
-                                ResourceRemovalTaskService.FACTORY_LINK))
-                .setBody(deletionState)
-                .setCompletion(host.getCompletion()));
-        host.testWait();
+                                ResourceRemovalTaskService.FACTORY_LINK));
+
+        ProvisioningUtils.waitForTaskCompletion(host, deletionState.documentSelfLink,
+                ResourceRemovalTaskState.class);
+
         // check that the VMs are gone
-        ProvisioningUtils.queryComputeInstances(host, 1);
+        ServiceDocumentQueryResult serviceDocumentQueryResult = ProvisioningUtils
+                .queryAllFactoryResources(host, ComputeService.FACTORY_LINK);
+
+        List<String> documentLinks = serviceDocumentQueryResult.documentLinks;
+
+        assertFalse(documentLinks.contains(documentSelfLink));
     }
 
     /**
