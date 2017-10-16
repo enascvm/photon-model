@@ -15,12 +15,13 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
+
 import java.util.List;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Instance;
 
-import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -34,20 +35,27 @@ public class TestProvisionAWSStorage extends TestAWSProvisionTask {
     public static final String INSTANCE_STORE_AMI = "ami-6872c27e";
     public static final String INSTANCE_TYPE = "d2.xlarge";
 
-    @Before
-    public void setUp() throws Exception {
-        TestAWSSetupUtils.imageId = INSTANCE_STORE_AMI;
-        TestAWSSetupUtils.instanceType = INSTANCE_TYPE;
+    public static final String IMAGE_DISKS_AMI = "ami-b8bbabd2";
+    public static final String IMAGE_DISKS_INSTANCE_TYPE = "f1.2xlarge";
+
+    public static boolean isExistingDiskCustomizationTest = false;
+
+    public void setUp(String imageId, String instanceType, boolean isExistingDiskCustomizationTest)
+            throws Exception {
+        TestAWSSetupUtils.imageId = imageId;
+        TestAWSSetupUtils.instanceType = instanceType;
+        this.isExistingDiskCustomizationTest = isExistingDiskCustomizationTest;
         super.setUp();
     }
 
-    //Ignoring test case because if this test runs in parallel(in different pipelines),
+    //Ignoring test case because if this test runs in parallel(as part of different pipelines),
     //then the test might fail with InstanceLimitExceeded(Your quota allows for 0 more running
     //instance(s). You requested at least 1)
     @Ignore
     @Override
     @Test
     public void testProvision() throws Throwable {
+        setUp(INSTANCE_STORE_AMI, INSTANCE_TYPE, false);
         super.testProvision();
     }
 
@@ -57,23 +65,41 @@ public class TestProvisionAWSStorage extends TestAWSProvisionTask {
      *  For e.g. curl http://169.254.169.254/latest/meta-data/block-device-mapping/ephemeral0
      */
     @Override
-    protected void assertAdditionalDiskConfiguration(AmazonEC2AsyncClient client,
+    protected void assertDataDiskConfiguration(AmazonEC2AsyncClient client,
             Instance awsInstance, List<String> diskLinks) {
         for (String diskLink : diskLinks) {
-            DiskService.DiskState diskState = super.getDiskState(diskLink);
-            assertEquals(String.format("Data disk size is not matching to the size supported by %s",
-                    INSTANCE_TYPE), getSupportedInstanceStoreDiskSize(INSTANCE_TYPE).intValue(),
-                    (int) diskState.capacityMBytes);
+            DiskService.DiskState diskState = getDiskState(diskLink);
+            if (diskState.customProperties.get(DEVICE_TYPE)
+                    .equals(AWSConstants.AWSStorageType.EBS.getName())) {
+                assertEbsDiskConfiguration(client, awsInstance, diskState);
+            } else {
+                assertEquals(String.format(
+                        "Data disk size is not matching to the size supported by %s",
+                        TestAWSSetupUtils.imageId),
+                        getSupportedInstanceStoreDiskSize(TestAWSSetupUtils.instanceType)
+                                .intValue(),
+                        (int) diskState.capacityMBytes);
+            }
         }
     }
 
     @Override
     protected void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
             String diskLink) {
-        DiskService.DiskState bootDisk = super.getDiskState(diskLink);
-        assertEquals(String.format("Boot disk size of %s is not the same as supported by %s",
-                INSTANCE_STORE_AMI, INSTANCE_TYPE),
-                getSupportedInstanceStoreDiskSize(INSTANCE_TYPE).intValue(),
-                (int) bootDisk.capacityMBytes);
+        if (isExistingDiskCustomizationTest) {
+            super.assertBootDiskConfiguration(client, awsInstance, diskLink);
+        } else {
+            DiskService.DiskState bootDisk = super.getDiskState(diskLink);
+            assertEquals(String.format("Boot disk size of %s is not the same as supported by %s",
+                    INSTANCE_STORE_AMI, INSTANCE_TYPE),
+                    getSupportedInstanceStoreDiskSize(INSTANCE_TYPE).intValue(),
+                    (int) bootDisk.capacityMBytes);
+        }
+    }
+
+    @Test
+    public void testExistingDiskCustomization() throws Throwable {
+        setUp(IMAGE_DISKS_AMI, IMAGE_DISKS_INSTANCE_TYPE, true);
+        super.testProvision();
     }
 }
