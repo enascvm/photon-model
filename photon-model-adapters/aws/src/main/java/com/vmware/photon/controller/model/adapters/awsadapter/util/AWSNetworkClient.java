@@ -159,11 +159,12 @@ public class AWSNetworkClient {
     /**
      * Async create the subnet and return it.
      */
-    public DeferredResult<Subnet> createSubnetAsync(String subnetCidr, String vpcId) {
+    public DeferredResult<Subnet> createSubnetAsync(String subnetCidr, String vpcId, String zoneId) {
 
         CreateSubnetRequest req = new CreateSubnetRequest()
                 .withCidrBlock(subnetCidr)
-                .withVpcId(vpcId);
+                .withVpcId(vpcId)
+                .withAvailabilityZone(zoneId);
 
         String message = "Create AWS Subnet with CIDR [" + subnetCidr
                 + "] for vpc id [" + vpcId + "].";

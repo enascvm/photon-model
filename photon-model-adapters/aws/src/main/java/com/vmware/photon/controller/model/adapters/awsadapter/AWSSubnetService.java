@@ -277,7 +277,8 @@ public class AWSSubnetService extends StatelessService {
     private DeferredResult<AWSSubnetContext> createSubnet(AWSSubnetContext context) {
         return context.client.createSubnetAsync(
                 context.subnetState.subnetCIDR,
-                context.parentNetwork.id)
+                context.parentNetwork.id,
+                context.subnetState.zoneId)
                 .thenApply(subnet -> {
                     context.awsSubnetId = subnet.getSubnetId();
                     return context;
