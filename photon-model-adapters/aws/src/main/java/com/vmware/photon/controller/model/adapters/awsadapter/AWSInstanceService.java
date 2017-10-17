@@ -57,7 +57,6 @@ import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
-import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.Tag;
@@ -355,10 +354,6 @@ public class AWSInstanceService extends StatelessService {
                 .withMinCount(1)
                 .withMaxCount(1)
                 .withMonitoring(true);
-
-        if (aws.placement != null) {
-            runInstancesRequest.withPlacement(new Placement(aws.placement));
-        }
 
         if (aws.child.customProperties != null &&
                 aws.child.customProperties.containsKey(CUSTOM_PROP_SSH_KEY_NAME)) {
