@@ -44,6 +44,14 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_ENUMERATION_ADAPTER;
 
+    public static final String[] LINKS = new String[] {
+            AWSEnumerationAndCreationAdapterService.SELF_LINK,
+            AWSEnumerationAndDeletionAdapterService.SELF_LINK,
+            AWSEBSStorageEnumerationAdapterService.SELF_LINK,
+            AWSS3StorageEnumerationAdapterService.SELF_LINK,
+            AWSVolumeTypeDiscoveryService.SELF_LINK
+    };
+
     public AWSEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
@@ -142,11 +150,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
         AdapterUtils.registerForServiceAvailability(getHost(),
                 operation -> startPost.complete(), startPost::fail,
-                AWSEnumerationAndCreationAdapterService.SELF_LINK,
-                AWSEnumerationAndDeletionAdapterService.SELF_LINK,
-                AWSEBSStorageEnumerationAdapterService.SELF_LINK,
-                AWSS3StorageEnumerationAdapterService.SELF_LINK,
-                AWSVolumeTypeDiscoveryService.SELF_LINK);
+                LINKS);
     }
 
     /**
