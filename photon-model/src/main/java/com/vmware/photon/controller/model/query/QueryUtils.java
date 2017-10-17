@@ -175,9 +175,12 @@ public class QueryUtils {
         }
 
         if (PhotonModelUtils.ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(stateClass)) {
-            return qBuilder.addFieldClause(
+            qBuilder.addFieldClause(
                     PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
-                    endpointLink);
+                    endpointLink, Query.Occurance.SHOULD_OCCUR);
+            return qBuilder.addCollectionItemClause(
+                    PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS,
+                    endpointLink, Query.Occurance.SHOULD_OCCUR);
         }
 
         if (PhotonModelUtils.ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {

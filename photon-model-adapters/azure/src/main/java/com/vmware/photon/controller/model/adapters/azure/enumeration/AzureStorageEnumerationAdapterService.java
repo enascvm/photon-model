@@ -207,18 +207,18 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         UPDATE_STORAGE_DESCRIPTIONS,
         CREATE_STORAGE_DESCRIPTIONS,
         PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS,
-        DELETE_STORAGE_DESCRIPTIONS,
+        DISASSOCIATE_STORAGE_DESCRIPTIONS,
         GET_STORAGE_CONTAINERS,
         GET_LOCAL_STORAGE_CONTAINERS,
         UPDATE_RESOURCE_GROUP_STATES,
         CREATE_RESOURCE_GROUP_STATES,
-        DELETE_RESOURCE_GROUP_STATES,
+        DISASSOCIATE_RESOURCE_GROUP_STATES,
         CREATE_INTERNAL_TYPE_TAGS,
         GET_BLOBS,
         GET_LOCAL_STORAGE_DISKS,
         CREATE_DISK_STATES,
         UPDATE_DISK_STATES,
-        DELETE_DISK_STATES,
+        DISASSOCIATE_DISK_STATES,
         FINISHED
     }
 
@@ -349,10 +349,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     StorageEnumStages.PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS);
             break;
         case PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS:
-            patchAdditionalFields(context, StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS);
+            patchAdditionalFields(context, StorageEnumStages.DISASSOCIATE_STORAGE_DESCRIPTIONS);
             break;
-        case DELETE_STORAGE_DESCRIPTIONS:
-            deleteStorageDescription(context, StorageEnumStages.GET_STORAGE_CONTAINERS);
+        case DISASSOCIATE_STORAGE_DESCRIPTIONS:
+            disassociateStorageDescription(context, StorageEnumStages.GET_STORAGE_CONTAINERS);
             break;
         case GET_STORAGE_CONTAINERS:
             getStorageContainersAsync(context, StorageEnumStages.GET_LOCAL_STORAGE_CONTAINERS);
@@ -364,10 +364,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             updateResourceGroupStates(context, StorageEnumStages.CREATE_RESOURCE_GROUP_STATES);
             break;
         case CREATE_RESOURCE_GROUP_STATES:
-            createResourceGroupStates(context, StorageEnumStages.DELETE_RESOURCE_GROUP_STATES);
+            createResourceGroupStates(context, StorageEnumStages.DISASSOCIATE_RESOURCE_GROUP_STATES);
             break;
-        case DELETE_RESOURCE_GROUP_STATES:
-            deleteResourceGroupStates(context, StorageEnumStages.CREATE_INTERNAL_TYPE_TAGS);
+        case DISASSOCIATE_RESOURCE_GROUP_STATES:
+            disassociateResourceGroupStates(context, StorageEnumStages.CREATE_INTERNAL_TYPE_TAGS);
             break;
         case CREATE_INTERNAL_TYPE_TAGS:
             createInternalTypeTags(context,StorageEnumStages.GET_BLOBS);
@@ -382,10 +382,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             updateDiskStates(context, StorageEnumStages.CREATE_DISK_STATES);
             break;
         case CREATE_DISK_STATES:
-            createDiskStates(context, StorageEnumStages.DELETE_DISK_STATES);
+            createDiskStates(context, StorageEnumStages.DISASSOCIATE_DISK_STATES);
             break;
-        case DELETE_DISK_STATES:
-            deleteDiskStates(context, StorageEnumStages.FINISHED);
+        case DISASSOCIATE_DISK_STATES:
+            disassociateDiskStates(context, StorageEnumStages.FINISHED);
             break;
         case FINISHED:
             context.stage = EnumerationStages.FINISHED;
@@ -461,7 +461,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
             // If there are no storage accounts in Azure move to storage account cleanup.
             if (storageAccounts == null || storageAccounts.size() == 0) {
-                context.subStage = StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS;
+                context.subStage = StorageEnumStages.DISASSOCIATE_STORAGE_DESCRIPTIONS;
                 handleSubStage(context);
                 return;
             }
@@ -587,17 +587,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     storageDescriptionToUpdate.documentSelfLink = sd.documentSelfLink;
                     storageDescriptionToUpdate.endpointLink = sd.endpointLink;
-<<<<<<< HEAD
-                    storageDescriptionToUpdate.computeHostLink = sd.computeHostLink;
-=======
 
+                    storageDescriptionToUpdate.computeHostLink = sd.computeHostLink;
                     storageDescriptionToUpdate.endpointLinks = sd.endpointLinks; // first copy
                     if (storageDescriptionToUpdate.endpointLinks == null) {
                         storageDescriptionToUpdate.endpointLinks = new HashSet<>();
                     }
                     storageDescriptionToUpdate.endpointLinks.add(context.request.endpointLink); // then update it.
 
->>>>>>> 238ea85... VSYM-8568 : Updating the Azure adapters to populate the endpointLinks set in different resources
                     storageDescriptionToUpdate.tenantLinks = sd.tenantLinks;
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     // Check if SSE (encryption) is enable on azure storage account
@@ -791,17 +788,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     }
 
     /*
-     * Delete local storage accounts and all resources inside them that no longer exist in Azure
+     * Disassociate local storage accounts and all resources inside them that no longer exist in
+     * Azure
      *
      * The logic works by recording a timestamp when enumeration starts. This timestamp is used to
      * lookup resources which haven't been touched as part of current enumeration cycle. The other
      * data point this method uses is the storage accounts discovered as part of get storage
      * accounts call.
      *
-     * A delete on a storage description is invoked only if it meets two criteria: - Timestamp older
+     * A disassociate on a storage description is invoked only if it meets two criteria: -
+     * Timestamp older
      * than current enumeration cycle. - Storage account is not present on Azure.
      */
-    private void deleteStorageDescription(StorageEnumContext context, StorageEnumStages next) {
+    private void disassociateStorageDescription(StorageEnumContext context, StorageEnumStages next) {
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
@@ -826,14 +825,20 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            Operation dOp = Operation.createDelete(context.request.buildUri(sd.documentSelfLink));
+            Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context.request
+                    .endpointLink, sd.documentSelfLink, sd.endpointLinks);
 
-            logFine(() -> String.format("Deleting storage description %s", sd.documentSelfLink));
+            if (dOp == null) {
+                return;
+            }
+
+            logFine(() -> String.format("Disassociating storage description %s", sd
+                    .documentSelfLink));
 
             DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {
 
-                        final String message = "Delete storage description stale %s state";
+                        final String message = "Disassociate storage description stale %s state";
                         if (e != null) {
                             logWarning(message + ": ERROR - %s",
                                     sd.documentSelfLink, Utils.toString(e));
@@ -847,11 +852,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .whenComplete((r, e) -> {
-                    logFine(() -> "Finished deletion of storage descriptions for Azure");
+                    logFine(() -> "Finished disassociation of storage descriptions for Azure");
                     context.subStage = next;
                     handleSubStage(context);
                 });
     }
+
 
     /*
      * Get all Azure containers by storage account
@@ -859,7 +865,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     public void getStorageContainersAsync(StorageEnumContext context, StorageEnumStages next) {
         if (context.storageAccountIds.size() == 0) {
             logFine(() -> "No storage description available - clean up all resources");
-            context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
+            context.subStage = StorageEnumStages.DISASSOCIATE_RESOURCE_GROUP_STATES;
             handleSubStage(context);
             return;
         }
@@ -968,7 +974,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         if (context.storageContainers.isEmpty()) {
             logFine(() -> "No storage containers available - clean up all resources");
-            context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
+            context.subStage = StorageEnumStages.DISASSOCIATE_RESOURCE_GROUP_STATES;
             handleSubStage(context);
             return;
         }
@@ -1177,17 +1183,18 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     }
 
     /*
-     * Delete local storage containers that no longer exist in Azure
+     * Disassociate local storage containers that no longer exist in Azure
      *
      * The logic works by recording a timestamp when enumeration starts. This timestamp is used to
      * lookup resources which haven't been touched as part of current enumeration cycle. The other
      * data point this method uses is the storage accounts discovered as part of get storage
      * accounts call.
      *
-     * A delete on a resource group state is invoked only if it meets two criteria: - Timestamp
+     * A disassociate on a resource group state is invoked only if it meets two criteria: -
+     * Timestamp
      * older than current enumeration cycle. - Storage container is not present on Azure.
      */
-    private void deleteResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
+    private void disassociateResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
@@ -1221,14 +1228,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            Operation dOp = Operation.createDelete(context.request.buildUri(rg.documentSelfLink));
+            Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, context.request
+                    .endpointLink, rg.documentSelfLink, rg.endpointLinks);
+            if (dOp == null) {
+                return;
+            }
 
-            logFine(() -> String.format("Deleting storage containers %s", rg.documentSelfLink));
+            logFine(() -> String.format("Disassociating storage containers %s", rg
+                    .documentSelfLink));
 
             DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {
 
-                        final String message = "Delete storage containers stale %s state";
+                        final String message = "Disassociate storage containers stale %s state";
                         if (e != null) {
                             logWarning(message + ": ERROR - %s",
                                     rg.documentSelfLink, Utils.toString(e));
@@ -1242,7 +1254,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .whenComplete((r, e) -> {
-                    logFine(() -> "Finished deletion of storage containers for Azure");
+                    logFine(() -> "Finished disassociation of storage containers for Azure");
                     context.subStage = next;
                     handleSubStage(context);
                 });
@@ -1295,7 +1307,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         // Move on to disk deletion stage
         if (context.storageAccountIds.size() == 0) {
             logFine(() -> "No storage description available - clean up all local disks");
-            context.subStage = StorageEnumStages.DELETE_DISK_STATES;
+            context.subStage = StorageEnumStages.DISASSOCIATE_DISK_STATES;
             handleSubStage(context);
             return;
         } else {
@@ -1598,16 +1610,16 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     }
 
     /*
-     * Delete local disk states that no longer exist in Azure
+     * Disassociate local disk states that no longer exist in Azure
      *
      * The logic works by recording a timestamp when enumeration starts. This timestamp is used to
      * lookup resources which haven't been touched as part of current enumeration cycle. The other
      * data point this method uses is the blob discovered as part of get blob call.
      *
-     * A delete on a disk state is invoked only if it meets two criteria: - Timestamp older than
-     * current enumeration cycle. - blob is not present on Azure.
+     * A disassociate on a disk state is invoked only if it meets two criteria: - Timestamp older
+     * than current enumeration cycle. - blob is not present on Azure.
      */
-    private void deleteDiskStates(StorageEnumContext context, StorageEnumStages next) {
+    private void disassociateDiskStates(StorageEnumContext context, StorageEnumStages next) {
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
@@ -1649,18 +1661,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             if (context.blobIds.contains(ds.id)) {
                 return;
             }
-            ops.add(deleteIfNotAttachedToCompute(context, ds));
+            ops.add(disassociateIfNotAttachedToCompute(context, ds));
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .whenComplete((r, e) -> {
-                    logFine(() -> "Finished deletion of disk states for Azure");
+                    logFine(() -> "Finished disassociation of disk states for Azure");
                     context.subStage = next;
                     handleSubStage(context);
                 });
     }
 
-    private DeferredResult<Operation> deleteIfNotAttachedToCompute(StorageEnumContext context,
-            DiskState diskState) {
+    private DeferredResult<Operation> disassociateIfNotAttachedToCompute(StorageEnumContext
+                                                        context, DiskState diskState) {
+
         Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeService.ComputeState.class)
                 .addCollectionItemClause(ComputeService.ComputeState.FIELD_NAME_DISK_LINKS,
@@ -1679,21 +1692,24 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
 
         return QueryUtils.startInventoryQueryTask(this, queryTask)
-                .thenCompose(result -> {
+        .thenCompose(result -> {
                     if (result.results != null && result.results.documentCount != 0) {
                         logFine(() -> String.format(
-                                "Won't delete disk state %s, as it is attached to machine",
+                                "Won't disassociate disk state %s, as it is attached to machine",
                                 diskState.documentSelfLink));
                         return DeferredResult.completed(new Operation());
                     }
-                    logFine(() -> String.format("Deleting disk state %s",
+                    logFine(() -> String.format("Disassociating disk state %s",
                             diskState.documentSelfLink));
-                    return sendWithDeferredResult(
-                            Operation.createDelete(
-                                    context.request.buildUri(diskState.documentSelfLink)))
+                    Operation operation = AdapterUtils.createEndpointLinksUpdateOperation
+                            (this, context.request.endpointLink,
+                            diskState.documentSelfLink, diskState.endpointLinks);
+                    if (operation == null) {
+                        return DeferredResult.completed(new Operation());
+                    }
+                    return sendWithDeferredResult(operation)
                             .whenComplete((o, e) -> {
-
-                                final String message = "Delete disk state stale %s state";
+                                final String message = "Disassociate disk state stale %s state";
                                 if (e != null) {
                                     logWarning(message + ": ERROR - %s",
                                             diskState.documentSelfLink,

@@ -70,6 +70,7 @@ public class PhotonModelUtils {
         set.add(SecurityGroupState.class);
         set.add(StorageDescription.class);
         set.add(SubnetState.class);
+        set.add(ResourceGroupState.class);
 
         ENDPOINT_LINK_EXPLICIT_SUPPORT = Collections.unmodifiableSet(set);
     }
@@ -83,7 +84,6 @@ public class PhotonModelUtils {
     static {
         Set<Class<? extends ServiceDocument>> set = new HashSet<>();
         set.add(AuthCredentialsServiceState.class);
-        set.add(ResourceGroupState.class);
 
         ENDPOINT_LINK_CUSTOM_PROP_SUPPORT = Collections.unmodifiableSet(set);
     }

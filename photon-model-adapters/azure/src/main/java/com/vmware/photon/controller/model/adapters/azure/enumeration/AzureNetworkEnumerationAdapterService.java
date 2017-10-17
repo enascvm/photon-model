@@ -30,12 +30,14 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
@@ -63,6 +65,7 @@ import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -77,6 +80,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -247,11 +251,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
-    /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
-     */
     private static void addScopeCriteria(Query.Builder qBuilder,
-            Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
+                                         Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
 //        // Add ENDPOINT_LINK criteria
@@ -385,10 +386,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             createUpdateSubnetStates(context, NetworkEnumStages.DELETE_NETWORK_STATES);
             break;
         case DELETE_NETWORK_STATES:
-            deleteNetworkStates(context, NetworkEnumStages.DELETE_SUBNET_STATES);
+            disassociateNetworkStates(context, NetworkEnumStages.DELETE_SUBNET_STATES);
             break;
         case DELETE_SUBNET_STATES:
-            deleteSubnetStates(context, NetworkEnumStages.FINISHED);
+            disassociateSubnetStates(context, NetworkEnumStages.FINISHED);
             break;
         case FINISHED:
             context.stage = EnumerationStages.FINISHED;
@@ -1142,8 +1143,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * The logic works by recording a timestamp when enumeration starts. This timestamp is used to
      * lookup resources which haven't been touched as part of current enumeration cycle.
      */
-    private void deleteNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine(() -> "Delete Network States that no longer exists in Azure.");
+    private void disassociateNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
+        logFine(() -> "Disassociate Network States that no longer exists in Azure.");
 
         Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
@@ -1159,10 +1160,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine(() -> "Querying Network States for deletion.");
+        logFine(() -> "Querying Network States for disassociation.");
 
         // Add deleted NetworkStates to the list.
-        sendDeleteQueryTask(q, context, next);
+        sendDisassociateQueryTask(q, context, next);
     }
 
     /**
@@ -1172,7 +1173,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * lookup resources which haven't been touched as part of current enumeration cycle and belong
      * to networks touched by this enumeration cycle (either created/updated/deleted).
      */
-    private void deleteSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
+    private void disassociateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         Builder builder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addFieldClause(SubnetState.FIELD_NAME_LIFECYCLE_STATE,
@@ -1190,12 +1191,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine(() -> "Querying Subnet States for deletion.");
-        sendDeleteQueryTask(q, context, next);
+        logFine(() -> "Querying Subnet States for disassociation.");
+        sendDisassociateQueryTask(q, context, next);
     }
 
-    private void sendDeleteQueryTask(QueryTask q, NetworkEnumContext context,
-            NetworkEnumStages next) {
+    private void sendDisassociateQueryTask(QueryTask q, NetworkEnumContext context,
+                                           NetworkEnumStages next) {
 
         QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -1206,23 +1207,23 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
                     context.deletionNextPageLink = queryTask.results.nextPageLink;
 
-                    handleDeleteQueryTaskResult(context, next);
+                    handleDisassociateQueryTaskResult(context, next);
                 });
     }
 
     /**
-     * Get next page of query results and delete then.
+     * Get next page of query results and disassociate then.
      */
-    private void handleDeleteQueryTaskResult(NetworkEnumContext context,
-            NetworkEnumStages next) {
+    private void handleDisassociateQueryTaskResult(NetworkEnumContext context, NetworkEnumStages
+            next) {
 
         if (context.deletionNextPageLink == null) {
-            logFine(() -> "Finished deletion stage.");
+            logFine(() -> "Finished disassociation stage.");
             handleSubStage(context, next);
             return;
         }
 
-        logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+        logFine(() -> String.format("Querying page [%s] for resources to be disassociated",
                 context.deletionNextPageLink));
         sendRequest(Operation.createGet(createInventoryUri(this.getHost(), context.deletionNextPageLink))
                 .setCompletion((completedOp, ex) -> {
@@ -1234,11 +1235,14 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     QueryTask queryTask = completedOp.getBody(QueryTask.class);
 
                     if (queryTask.results.documentCount > 0) {
-                        // Delete all matching states.
+                        // Disassociate all matching states.
                         List<Operation> operations = queryTask.results.documentLinks.stream()
                                 .filter(link -> shouldDelete(context, queryTask, link))
-                                .map(link -> Operation.createDelete(this, link)
-                                        .setBody(context.resourceDeletionState))
+                                .map(link -> AdapterUtils.createEndpointLinksUpdateOperation
+                                        (this, context.request.endpointLink,
+                                        link, Utils.fromJson(queryTask.results.documents.get(link),
+                                                NetworkState.class).endpointLinks))
+                                .filter(Objects::nonNull)
                                 .collect(Collectors.toList());
 
                         if (!operations.isEmpty()) {
@@ -1262,8 +1266,41 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     context.deletionNextPageLink = queryTask.results.nextPageLink;
 
                     // Handle next page of results.
-                    handleDeleteQueryTaskResult(context, next);
+                    handleDisassociateQueryTaskResult(context, next);
                 }));
+    }
+
+
+    private Operation createEndpointLinksUpdateOperation(String endpointLink, String selfLink,
+                                                         Set<String> endpointLinks) {
+
+        if (endpointLinks == null || !endpointLinks.contains(endpointLink)) {
+            return null;
+        }
+
+        Set<String> endpointLinksToBeDisassociated = new HashSet<>();
+        endpointLinksToBeDisassociated.add(endpointLink);
+        Map<String, Collection<Object>> endpointsToRemove = Collections
+                .singletonMap(EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
+                        new HashSet<>(endpointLinksToBeDisassociated));
+        ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
+                ServiceStateCollectionUpdateRequest.create(null,
+                        endpointsToRemove);
+
+        Operation operation = Operation
+                .createPatch(this.getHost(), selfLink)
+                .setReferer(getHost().getUri())
+                .setBody(serviceStateCollectionUpdateRequest)
+                .setCompletion(
+                        (updateOp, exception) -> {
+                            if (exception != null) {
+                                logWarning(() -> String.format("PATCH to " +
+                                                "instance service %s, failed: %s",
+                                        updateOp.getUri(), exception.toString()));
+                                return;
+                            }
+                        });
+        return operation;
     }
 
     /**

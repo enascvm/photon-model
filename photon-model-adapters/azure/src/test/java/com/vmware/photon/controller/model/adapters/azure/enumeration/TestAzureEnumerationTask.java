@@ -193,14 +193,14 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     private static ComputeState computeHost;
     private static EndpointState endpointState;
 
-    public String clientID = "clientID";
-    public String clientKey = "clientKey";
-    public String subscriptionId = "subscriptionId";
-    public String tenantId = "tenantId";
+    public String clientID = "6794b6f4-019e-45bc-b3f0-64c2d8891362";
+    public String clientKey = "lvXGxkrEOtBAicCwS5poOLwRfTDqdAW8S1/mPWfS8yE=";
+    public String subscriptionId = "210805b4-f20e-4ef2-87c8-b4f0665f1756";
+    public String tenantId = "b39138ca-3cee-4b4a-a4d6-cd83d9dd62f0";
 
     public static String azureVMNamePrefix = "enumtest-";
     public static String azureVMName;
-    public boolean isMock = true;
+    public boolean isMock = false;
     public String mockedStorageAccountName = randomString(15);
 
     // object counts
@@ -600,7 +600,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         runEnumeration();
 
-        assertResourceExists(this.host, ComputeService.FACTORY_LINK, azureVMName, false);
+        assertResourceDisassociated(this.host, ComputeService.FACTORY_LINK, azureVMName, true);
 
         // clean up
         this.vmState = null;
@@ -787,28 +787,28 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         // VMs
         for (int i = 0; i < STALE_VM_RESOURCES_COUNT; i++) {
-            assertResourceExists(this.host, ComputeService.FACTORY_LINK, STALE_VM_NAME_PREFIX + i,
-                    false);
+            assertResourceDisassociated(this.host, ComputeService.FACTORY_LINK, STALE_VM_NAME_PREFIX + i,
+                    true);
         }
 
         // Storage accounts
         for (int i = 0; i < STALE_STORAGE_ACCOUNTS_COUNT; i++) {
-            assertResourceExists(this.host, StorageDescriptionService.FACTORY_LINK,
+            assertResourceDisassociated(this.host, StorageDescriptionService.FACTORY_LINK,
                     STALE_SA_NAME_PREFIX
                             + i,
-                    false);
+                    true);
         }
 
         // Storage containers
         for (int i = 0; i < STALE_CONTAINERS_COUNT; i++) {
-            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
-                    STALE_CONTAINER_NAME_PREFIX + i, false);
+            assertResourceDisassociated(this.host, ResourceGroupService.FACTORY_LINK,
+                    STALE_CONTAINER_NAME_PREFIX + i, true);
         }
 
         // Disks
         for (int i = 0; i < STALE_DISKS_COUNT; i++) {
-            assertResourceExists(this.host, DiskService.FACTORY_LINK,
-                    STALE_DISKS_NAME_PREFIX + i, false);
+            assertResourceDisassociated(this.host, DiskService.FACTORY_LINK,
+                    STALE_DISKS_NAME_PREFIX + i, true);
         }
 
         // Security Groups

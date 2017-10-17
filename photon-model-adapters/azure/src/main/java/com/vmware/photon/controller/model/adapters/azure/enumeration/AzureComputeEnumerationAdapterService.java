@@ -123,6 +123,7 @@ import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
+
 /**
  * Enumeration adapter for data collection of VMs on Azure.
  */
@@ -210,7 +211,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         CREATE_NETWORK_INTERFACE_STATES,
         CREATE_COMPUTE_STATES,
         PATCH_ADDITIONAL_FIELDS,
-        DELETE_COMPUTE_STATES,
+        DISASSOCIATE_COMPUTE_STATES,
         FINISHED
     }
 
@@ -389,12 +390,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             createComputeStates(ctx, ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS);
             break;
         case PATCH_ADDITIONAL_FIELDS:
-            logFine("IN PATCH_ADDITIONAL_FIELDS [endpointLink:%s]", ctx.request.endpointLink);
-            patchAdditionalFields(ctx, ComputeEnumerationSubStages.DELETE_COMPUTE_STATES);
+            patchAdditionalFields(ctx, ComputeEnumerationSubStages.DISASSOCIATE_COMPUTE_STATES);
             break;
-        case DELETE_COMPUTE_STATES:
-            logFine("IN DELETE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
-            deleteComputeStates(ctx, ComputeEnumerationSubStages.FINISHED);
+        case DISASSOCIATE_COMPUTE_STATES:
+            disassociateComputeStates(ctx, ComputeEnumerationSubStages.FINISHED);
             break;
         case FINISHED:
             logFine("IN FINISHED [endpointLink:%s]", ctx.request.endpointLink);
@@ -464,7 +463,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * <p>
      * The method paginates through list of resources for deletion.
      */
-    private void deleteComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+    private void disassociateComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
@@ -501,14 +500,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
 
                     ctx.deletionNextPageLink = queryTask.results.nextPageLink;
-                    deleteOrRetireHelper(ctx, next);
+                    disassociateOrRetireHelper(ctx, next);
                 });
     }
 
     /**
      * Helper method to paginate through resources to be deleted.
      */
-    private void deleteOrRetireHelper(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+    private void disassociateOrRetireHelper(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         if (ctx.deletionNextPageLink == null) {
             logFine(() -> String.format("Finished %s of compute states for Azure",
                     ctx.request.preserveMissing ? "retiring" : "deletion"));
@@ -547,10 +546,19 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     operations.add(
                             Operation.createPatch(this, computeState.documentSelfLink).setBody(cs));
                 } else {
-                    operations.add(Operation.createDelete(this, computeState.documentSelfLink)
-                            .setBody(ctx.resourceDeletionState));
-                    logFine(() -> String.format("Deleting compute state %s",
-                            computeState.documentSelfLink));
+
+                    // Deleting the localResourceState is done by disassociating the endpointLink from the
+                    // localResourceState. If the localResourceState isn't associated with any other
+                    // endpointLink, we issue a delete then
+                    Operation dOp = AdapterUtils.createEndpointLinksUpdateOperation(this, ctx
+                            .request.endpointLink, computeState.documentSelfLink, computeState
+                            .endpointLinks);
+
+                    if (dOp != null) {
+                        operations.add(dOp);
+                        logFine(() -> String.format("Deleting compute state %s",
+                                computeState.documentSelfLink));
+                    }
 
                     if (computeState.diskLinks != null && !computeState.diskLinks.isEmpty()) {
                         computeState.diskLinks.forEach(dl -> {
@@ -569,6 +577,25 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             logFine(() -> String.format("Deleting NetworkInterface state %s of "
                                     + "machine %s", nil, computeState.documentSelfLink));
                         });
+                        sendRequest(Operation.createGet(this, computeState.diskLinks.get(0))
+                                .setCompletion((op, ex) -> {
+                                    if (ex != null) {
+                                        logWarning(() -> String.format("Error retrieving " +
+                                                        "diskState: %s", ex.getMessage()));
+                                    } else {
+                                        DiskState diskState = op.getBody(DiskState.class);
+                                        Operation diskOp = AdapterUtils
+                                                .createEndpointLinksUpdateOperation
+                                                (this, ctx.request.endpointLink, computeState
+                                                .diskLinks.get(0), diskState.endpointLinks);
+
+                                        if (diskOp != null) {
+                                            operations.add(diskOp);
+                                            logFine(() -> String.format("Deleting disk state %s",
+                                                    computeState.diskLinks.get(0)));
+                                        }
+                                    }
+                                }));
                     }
                 }
             }
@@ -576,7 +603,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             if (operations.size() == 0) {
                 logFine(() -> String.format("No compute/disk states to %s",
                         ctx.request.preserveMissing ? "retire" : "delete"));
-                deleteOrRetireHelper(ctx, next);
+                disassociateOrRetireHelper(ctx, next);
                 return;
             }
 
@@ -590,7 +617,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                             ex.getMessage())));
                         }
 
-                        deleteOrRetireHelper(ctx, next);
+                        disassociateOrRetireHelper(ctx, next);
                     })
                     .sendWith(this);
         };
@@ -646,7 +673,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 ctx.enumNextPageLink = virtualMachineInnerPage.nextPageLink();
 
                 if (virtualMachineInners == null || virtualMachineInners.size() == 0) {
-                    ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+                    ctx.subStage = ComputeEnumerationSubStages.DISASSOCIATE_COMPUTE_STATES;
                     handleSubStage(ctx);
                     return;
                 }
@@ -682,7 +709,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void queryForComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         if (ctx.virtualMachines.isEmpty()) {
-            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+            ctx.subStage = ComputeEnumerationSubStages.DISASSOCIATE_COMPUTE_STATES;
             handleSubStage(ctx);
             return;
         }
@@ -725,7 +752,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (context.virtualMachines.isEmpty()) {
             logFine("No VMs found, so no tags need to be created/updated. Continue to update compute states.");
-            context.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+            context.subStage = ComputeEnumerationSubStages.DISASSOCIATE_COMPUTE_STATES;
             handleSubStage(context);
             return;
         }
@@ -793,7 +820,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void queryForDiskStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         if (ctx.virtualMachines.size() == 0) {
             logFine(() -> "No virtual machines found to be associated with local disks");
-            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+            ctx.subStage = ComputeEnumerationSubStages.DISASSOCIATE_COMPUTE_STATES;
             handleSubStage(ctx);
             return;
         }
@@ -1054,7 +1081,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void updateDiskStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         if (ctx.virtualMachines.isEmpty()) {
             logFine(() -> "No virtual machines found to be associated with local disks");
-            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+            ctx.subStage = ComputeEnumerationSubStages.DISASSOCIATE_COMPUTE_STATES;
             handleSubStage(ctx);
             return;
         }
@@ -1244,8 +1271,54 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // create new network interfaces identified as 'remoteStates'. Here, 'remoteStates' includes
         // ONLY newly identified nics.
         createNic(remoteStates, ctx, subnetPerNicId, ops);
+        // Disassociate the NICs that exist locally but not on remote.
+        List<String> remoteNicIds = new ArrayList<>();
+        // Collect IDs of all remote network interfaces. Delete all local states that
+        // have IDs other than remoteNicIds (i.e. stale states).
+        remoteNics.stream()
+                .forEach(pair -> remoteNicIds.add(pair.getLeft().id()));
 
+        disassociateNicHelper(remoteNicIds, ctx);
         return DeferredResult.allOf(ops);
+    }
+
+    /**
+     * Helper for deleting stale network interfaces.
+     */
+    private DeferredResult<List<Operation>> disassociateNicHelper(
+            List<String> remoteNicIds, EnumerationContext ctx) {
+
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(NetworkInterfaceState.class);
+
+        QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
+                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
+                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
+
+        return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
+                allLocalNics -> disassociateNics(ctx, remoteNicIds, allLocalNics));
+    }
+
+    /**
+     * Deletes stale network interface states that are deleted from the remote.
+     */
+    private DeferredResult<List<Operation>> disassociateNics(
+            EnumerationContext ctx, List<String> remoteNicIds, List<NetworkInterfaceState> allLocalNics) {
+
+        List<DeferredResult<Operation>> updateOps = new ArrayList<>();
+
+        allLocalNics.stream()
+                .filter(localNic -> !remoteNicIds.contains(localNic.id))
+                .forEach(localNic -> {
+                    Operation upOp = AdapterUtils.createEndpointLinksUpdateOperation
+                            (this, ctx.request.endpointLink, localNic.documentSelfLink,localNic
+                                    .endpointLinks);
+                    if (upOp != null) {
+                        updateOps.add(sendWithDeferredResult(upOp));
+                    }
+                });
+
+        return DeferredResult.allOf(updateOps);
     }
 
     private void updateNic(List<NetworkInterfaceState> localNics,

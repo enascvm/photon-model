@@ -15,8 +15,11 @@ package com.vmware.photon.controller.model.resources;
 
 import java.util.EnumSet;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
@@ -41,6 +44,12 @@ public class ResourceGroupService extends StatefulService {
         @Documentation(description = "Query used to define resource group membership")
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Query query;
+
+        /**
+         * Link to the cloud account endpoint the resource group belongs to.
+         */
+        @VersionFieldSerializer.Since(ReleaseConstants.RELEASE_VERSION_0_6_42)
+        public String endpointLink;
     }
 
     public ResourceGroupService() {
