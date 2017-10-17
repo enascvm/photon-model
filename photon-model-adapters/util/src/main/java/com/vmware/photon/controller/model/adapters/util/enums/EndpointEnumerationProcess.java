@@ -563,6 +563,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
                 // By default populate ENDPOINT_ILNK
                 setEndpointLink(localState, this.endpointState.documentSelfLink);
+
+                localState.computeHostLink = this.endpointState.computeLink;
             }
 
             localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);

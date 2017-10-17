@@ -1013,6 +1013,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
             computeDescription.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
             computeDescription.diskAdapterReference = ctx.parentCompute.description.diskAdapterReference;
+            computeDescription.computeHostLink = ctx.parentCompute.documentSelfLink;
             computeDescription.customProperties = new HashMap<>();
 
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
@@ -1087,6 +1088,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 diskToUpdate.customProperties.put(AZURE_OSDISK_CACHING,
                         virtualMachine.storageProfile().osDisk().caching().name());
             }
+            diskToUpdate.computeHostLink = ctx.parentCompute.documentSelfLink;
             Operation diskOp = Operation
                     .createPatch(ctx.request.buildUri(diskToUpdate.documentSelfLink))
                     .setBody(diskToUpdate);
@@ -1285,6 +1287,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             nic.endpointLink = ctx.request.endpointLink;
             nic.tenantLinks = ctx.parentCompute.tenantLinks;
             nic.regionId = remoteNic.location();
+            nic.computeHostLink = ctx.parentCompute.documentSelfLink;
         }
 
         List<NetworkInterfaceIPConfigurationInner> ipConfigurations = remoteNic.ipConfigurations();
@@ -1500,6 +1503,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         ctx.computeDescriptionIds.get(virtualMachine.name()));
         computeState.endpointLink = ctx.request.endpointLink;
         computeState.resourcePoolLink = ctx.request.resourcePoolLink;
+        computeState.computeHostLink = ctx.parentCompute.documentSelfLink;
         computeState.diskLinks = vmDisks;
         if (virtualMachine.hardwareProfile() != null
                 && virtualMachine.hardwareProfile().vmSize() != null) {

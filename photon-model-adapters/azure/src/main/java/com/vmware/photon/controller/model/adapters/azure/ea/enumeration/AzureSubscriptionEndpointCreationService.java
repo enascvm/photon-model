@@ -120,7 +120,8 @@ public class AzureSubscriptionEndpointCreationService extends StatelessService {
         EndpointState endpointState = createEndpointState(azureEaEndpoint, request);
         ComputeDescription computeDescState = AzureUtils
                 .constructAzureSubscriptionComputeDescription(endpointState.documentSelfLink,
-                azureEaEndpoint.tenantLinks, request.subscriptionId, null, null);
+                azureEaEndpoint.tenantLinks, request.subscriptionId, null, null,
+                        endpointState.computeLink);
 
         authOp.setBody(authCredentialsState);
 
@@ -149,7 +150,7 @@ public class AzureSubscriptionEndpointCreationService extends StatelessService {
                             endpointState.documentSelfLink, cd.documentSelfLink,
                             azureEaEndpoint.tenantLinks, request.subscriptionId,
                             azureEaEndpoint.resourcePoolLink,
-                            getCustomPropertiesMap(endpointState, request), null);
+                            getCustomPropertiesMap(endpointState, request), null, endpointState.computeLink);
                     csOp.setBody(cs);
                     endpointState.computeDescriptionLink = cd.documentSelfLink;
                 })

@@ -522,7 +522,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
                     SubnetState subnetState = buildSubnetState(subnet,
                             context.parentCompute.tenantLinks, context.request.endpointLink,
-                            virtualNetwork.location);
+                            virtualNetwork.location, context.parentCompute.documentSelfLink);
                     SubnetStateWithParentVNetId subnetStateWithParentVNetId = new SubnetStateWithParentVNetId(
                             virtualNetwork.id, subnetState);
 
@@ -538,7 +538,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * Map Azure subnet to {@link SubnetState}.
      */
     private SubnetState buildSubnetState(Subnet subnet, List<String> tenantLinks,
-            String endpointLink, String location) {
+            String endpointLink, String location, String parentLink) {
         if (subnet == null) {
             throw new IllegalArgumentException("Cannot map Subnet to subnet state for null "
                     + "instance.");
@@ -554,6 +554,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
         subnetState.supportPublicIpAddress = true;
+        subnetState.computeHostLink = parentLink;
 
         subnetState.customProperties = new HashMap<>();
         subnetState.regionId = location;
@@ -1010,6 +1011,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         subnetState.name));
             }
             subnetState.endpointLink = context.request.endpointLink;
+            subnetState.computeHostLink = context.parentCompute.documentSelfLink;
 
             return context.subnetStates.containsKey(subnetId) ?
             // Update case
@@ -1075,6 +1077,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         resultNetworkState.name = azureVirtualNetwork.name;
         resultNetworkState.regionId = azureVirtualNetwork.location;
         resultNetworkState.endpointLink = context.request.endpointLink;
+        resultNetworkState.computeHostLink = context.parentCompute.documentSelfLink;
 
         AddressSpace addressSpace = azureVirtualNetwork.properties.addressSpace;
         if (addressSpace != null
