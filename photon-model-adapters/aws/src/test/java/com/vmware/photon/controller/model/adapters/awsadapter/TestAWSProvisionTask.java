@@ -64,6 +64,7 @@ import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.Volume;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -644,25 +645,16 @@ public class TestAWSProvisionTask {
         ComputeState vm = this.host.getServiceState(null,
                 ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
+        //For now there is a boot disk and one additional disk attached to the compute
+        assertBootDiskConfiguration(client, awsInstance, vm.diskLinks.get(0));
+
         List<String> additionalDiskLinks = new ArrayList<>();
-        List<String> existingDataDiskLinks = new ArrayList<>();
-        String bootDiskLink = vm.diskLinks.get(0);
-        for (int i = 1; i < compute.diskLinks.size(); i++) {
-            DiskState disk = getDiskState(vm.diskLinks.get(i));
-            if (disk.bootOrder == null) {
-                additionalDiskLinks.add(disk.documentSelfLink);
-            } else {
-                bootDiskLink = disk.documentSelfLink;
-            }
+        for (int i = 1; i < vm.diskLinks.size(); i++) {
+            additionalDiskLinks.add(vm.diskLinks.get(i));
         }
 
-        //For now there is a boot disk and one additional disk attached to the compute
-        assertBootDiskConfiguration(client, awsInstance, bootDiskLink);
-
-        //assert additional disk configuration
-        assertDataDiskConfiguration(client, awsInstance, additionalDiskLinks);
+        assertAdditionalDiskConfiguration(client, awsInstance, additionalDiskLinks);
     }
-
 
     protected void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
             String diskLink) {
@@ -683,44 +675,40 @@ public class TestAWSProvisionTask {
                 bootVolume.getIops().intValue());
     }
 
-    protected void assertDataDiskConfiguration(AmazonEC2AsyncClient client,
+    protected void assertAdditionalDiskConfiguration(AmazonEC2AsyncClient client,
             Instance awsInstance, List<String> diskLinks) {
         for (String diskLink : diskLinks) {
             DiskState diskState = getDiskState(diskLink);
-            assertEbsDiskConfiguration(client, awsInstance, diskState);
-        }
-    }
 
-    protected void assertEbsDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
-            DiskState diskState) {
-        assertNotNull("Additional Disk should contain atleast one custom property",
-                diskState.customProperties);
+            assertNotNull("Additional Disk should contain atleast one custom property",
+                    diskState.customProperties);
 
-        assertTrue("deviceName is missing from the custom properties", diskState
-                .customProperties.containsKey(DEVICE_NAME));
+            assertTrue("deviceName is missing from the custom properties", diskState
+                    .customProperties.containsKey(DEVICE_NAME));
 
-        Volume volume = getVolume(client, awsInstance, diskState
-                .customProperties.get(DEVICE_NAME));
+            Volume volume = getVolume(client, awsInstance, diskState
+                    .customProperties.get(DEVICE_NAME));
 
-        assertEquals(
-                "Additional disk capacity in diskstate is not matching the volume size in aws",
-                diskState.capacityMBytes, volume.getSize() * 1024);
+            assertEquals(
+                    "Additional disk capacity in diskstate is not matching the volume size in aws",
+                    diskState.capacityMBytes, volume.getSize() * 1024);
 
-        assertEquals(
-                "Additional disk type in diskstate is not same as the type of the volume in aws",
-                diskState.customProperties.get(VOLUME_TYPE), volume.getVolumeType());
+            assertEquals(
+                    "Additional disk type in diskstate is not same as the type of the volume in aws",
+                    diskState.customProperties.get(VOLUME_TYPE), volume.getVolumeType());
 
-        //assert encryption status
-        assertEquals("Additional disk encryption status is not matching the "
-                        + "actual encryption status of the disk on aws", diskState.encrypted,
-                volume.getEncrypted());
+            //assert encryption status
+            assertEquals("Additional disk encryption status is not matching the "
+                            + "actual encryption status of the disk on aws", diskState.encrypted,
+                    volume.getEncrypted());
 
-        if (diskState.customProperties.containsKey(DISK_IOPS)) {
-            int requestedIops = Integer.parseInt(diskState.customProperties.get(DISK_IOPS));
-            int MAX_SUPPORTED_IOPS = (int) (diskState.capacityMBytes / 1024) * 50;
-            int provisionedIops = Math.min(requestedIops, MAX_SUPPORTED_IOPS);
-            assertEquals("Disk speeds are not matching", provisionedIops,
-                    volume.getIops().intValue());
+            if (diskState.customProperties.containsKey(DISK_IOPS)) {
+                int requestedIops = Integer.parseInt(diskState.customProperties.get(DISK_IOPS));
+                int MAX_SUPPORTED_IOPS = (int) (diskState.capacityMBytes / 1024) * 50;
+                int provisionedIops = Math.min(requestedIops, MAX_SUPPORTED_IOPS);
+                assertEquals("Disk speeds are not matching", provisionedIops,
+                        volume.getIops().intValue());
+            }
         }
     }
 
@@ -729,7 +717,7 @@ public class TestAWSProvisionTask {
                 UriUtils.buildUri(this.host, diskLink));
     }
 
-    protected Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance, String deviceName) {
+    private Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance, String deviceName) {
         InstanceBlockDeviceMapping bootDiskMapping = awsInstance.getBlockDeviceMappings().stream()
                 .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName().equals(deviceName))
                 .findAny()

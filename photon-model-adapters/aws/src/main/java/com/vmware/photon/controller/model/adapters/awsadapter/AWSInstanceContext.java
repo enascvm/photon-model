@@ -95,8 +95,6 @@ public class AWSInstanceContext
 
     public DiskState bootDisk;
 
-    public List<DiskState> imageDisks = new ArrayList<>();
-
     public List<DiskState> dataDisks = new ArrayList<>();
 
     public String bootDiskImageNativeId;
@@ -601,12 +599,8 @@ public class AWSInstanceContext
         return DeferredResult.allOf(getStatesDR)
                 .thenAccept(diskStates -> diskStates.forEach(
                         diskState -> {
-                            if (diskState.bootOrder != null) {
-                                if (diskState.bootOrder == 1) {
-                                    context.bootDisk = diskState;
-                                } else {
-                                    context.imageDisks.add(diskState);
-                                }
+                            if (diskState.bootOrder != null && diskState.bootOrder == 1) {
+                                context.bootDisk = diskState;
                             } else {
                                 context.dataDisks.add(diskState);
                             }
