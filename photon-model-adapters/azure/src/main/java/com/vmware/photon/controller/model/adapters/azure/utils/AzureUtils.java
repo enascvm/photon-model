@@ -378,12 +378,14 @@ public class AzureUtils {
 
     public static ComputeState constructAzureSubscriptionComputeState(String endpointLink,
             String descriptionLink, List<String> tenantLinks, String entityName,
-            String resourcePoolLink, Map<String, String> customProperties, String name) {
+            String resourcePoolLink, Map<String, String> customProperties, String name,
+            String parentLink) {
         ComputeState cs = new ComputeState();
         cs.id = UUID.randomUUID().toString();
         cs.name = name != null ? name : entityName;
         cs.tenantLinks = tenantLinks;
         cs.endpointLink = endpointLink;
+        cs.computeHostLink = parentLink;
         if (customProperties == null) {
             customProperties = new HashMap<>();
         }
@@ -400,10 +402,11 @@ public class AzureUtils {
 
     public static ComputeDescription constructAzureSubscriptionComputeDescription(
             String endpointLink, List<String> tenantLinks, String subscriptionId, String name,
-            Map<String, String> customProperties) {
+            Map<String, String> customProperties, String parentLink) {
         ComputeDescription cd = new ComputeDescription();
         cd.tenantLinks = tenantLinks;
         cd.endpointLink = endpointLink;
+        cd.computeHostLink = parentLink;
         cd.name = name != null ? name :
                 String.format(COMPUTES_NAME_FORMAT_WITH_ENTITY_ID, subscriptionId);
         cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;

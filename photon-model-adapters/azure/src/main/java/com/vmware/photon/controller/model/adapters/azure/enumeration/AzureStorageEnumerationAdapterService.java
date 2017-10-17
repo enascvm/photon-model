@@ -585,6 +585,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     storageDescriptionToUpdate.documentSelfLink = sd.documentSelfLink;
                     storageDescriptionToUpdate.endpointLink = sd.endpointLink;
+                    storageDescriptionToUpdate.computeHostLink = sd.computeHostLink;
                     storageDescriptionToUpdate.tenantLinks = sd.tenantLinks;
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     // Check if SSE (encryption) is enable on azure storage account
@@ -1075,6 +1076,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         ResourceGroupState resourceGroupState = new ResourceGroupState();
         resourceGroupState.id = container.getUri().toString();
         resourceGroupState.name = container.getName();
+        resourceGroupState.computeHostLink = context.parentCompute.documentSelfLink;
         if (storageLink != null) {
             resourceGroupState.groupLinks = new HashSet<>();
             resourceGroupState.groupLinks.add(storageLink);
@@ -1503,6 +1505,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         diskState.resourcePoolLink = context.request.resourcePoolLink;
         diskState.computeHostLink = context.parentCompute.documentSelfLink;
         diskState.endpointLink = context.request.endpointLink;
+        diskState.computeHostLink = context.parentCompute.documentSelfLink;
         diskState.tenantLinks = context.parentCompute.tenantLinks;
         long bLength = 0;
         if (blob instanceof CloudBlob) {

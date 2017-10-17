@@ -343,7 +343,8 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                                     .constructAzureSubscriptionComputeDescription(
                                             enumerationContext.parent.endpointLink,
                                             enumerationContext.parent.tenantLinks,
-                                            subscription.entityId, null, null))
+                                            subscription.entityId, null, null,
+                                            enumerationContext.parent.documentSelfLink))
                             .setCompletion((o, e) -> {
                                 if (e != null) {
                                     logSevere(
@@ -360,7 +361,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                                         enumerationContext.parent.tenantLinks, csName,
                                         enumerationContext.parent.resourcePoolLink,
                                         getPropertiesMap(enumerationContext, subscription,
-                                                true), null));
+                                                true), null, enumerationContext.parent.documentSelfLink));
                             });
                     return op;
                 })
