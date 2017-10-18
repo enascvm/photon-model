@@ -78,7 +78,7 @@ public class VSphereAdapterStatsService extends StatelessService {
     }
 
     private void collectStats(ProvisionContext ctx, ComputeStatsRequest statsRequest) {
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (conn, ce) -> {
                     if (ctx.fail(ce)) {
                         return;

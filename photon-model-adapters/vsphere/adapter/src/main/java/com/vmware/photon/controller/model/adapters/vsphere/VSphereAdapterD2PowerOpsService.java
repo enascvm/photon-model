@@ -114,7 +114,7 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
     }
 
     private void handleResourceOperationRequest(VSphereVMContext ctx, final String operation) {
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.parentAuth,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.parentAuth,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;

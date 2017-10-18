@@ -19,7 +19,6 @@ import java.net.URI;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -58,7 +57,6 @@ public class VSphereIOThreadPool {
      * This method will execute the provided callback in a managed threadpool and give it a
      * connection authenticated with the credentials found in the parentAuthLink.
      *
-     * @param sender
      * @param adapterReference
      *            SDK url of vSpehere host, usually found in
      *            {@link com.vmware.photon.controller.model.resources.ComputeService.ComputeState#adapterManagementReference}
@@ -68,32 +66,10 @@ public class VSphereIOThreadPool {
      * @param callback
      *            non-null callback
      */
-    public void submit(Service sender, URI adapterReference, AuthCredentialsServiceState auth,
+    public void submit(URI adapterReference, AuthCredentialsServiceState auth,
             ConnectionCallback callback) {
 
-        execute(adapterReference, auth, callback, null);
-    }
-
-    /**
-     * This method will execute the provided callback in a managed threadpool and give it a
-     * connection authenticated with the credentials found in the parentAuthLink.
-     *
-     * @param sender
-     * @param adapterReference
-     *            SDK url of vSpehere host, usually found in
-     *            {@link com.vmware.photon.controller.model.resources.ComputeService.ComputeState#adapterManagementReference}
-     *            . Probably looks like https://hostname:443/sdk
-     * @param auth
-     *            authorization object used to authenticate against vsphere host
-     * @param callback
-     *            non-null callback
-     * @param connectionEnhancer
-     *            not-null connection enhancer
-     */
-    public void submit(Service sender, URI adapterReference, AuthCredentialsServiceState auth,
-            ConnectionCallback callback, Consumer<Connection> connectionEnhancer) {
-
-        execute(adapterReference, auth, callback, connectionEnhancer);
+        execute(adapterReference, auth, callback);
     }
 
     /**
@@ -120,7 +96,7 @@ public class VSphereIOThreadPool {
                     }
 
                     AuthCredentialsServiceState auth = o.getBody(AuthCredentialsServiceState.class);
-                    execute(adapterReference, auth, callback, null);
+                    execute(adapterReference, auth, callback);
                 });
 
         sender.sendRequest(op);
@@ -136,7 +112,7 @@ public class VSphereIOThreadPool {
     }
 
     private void execute(URI adapterReference, AuthCredentialsServiceState auth,
-            ConnectionCallback callback, Consumer<Connection> connectionEnhancer) {
+            ConnectionCallback callback) {
         BasicConnection connection = new BasicConnection();
 
         // ignores the certificate for testing purposes
@@ -150,10 +126,6 @@ public class VSphereIOThreadPool {
         connection.setPassword(EncryptionUtils.decrypt(auth.privateKey));
 
         connection.setURI(adapterReference);
-
-        if (connectionEnhancer != null) {
-            connectionEnhancer.accept(connection);
-        }
 
         // don't connect now, but as late as possible as the session can expire
         executeCallback(connection, callback);

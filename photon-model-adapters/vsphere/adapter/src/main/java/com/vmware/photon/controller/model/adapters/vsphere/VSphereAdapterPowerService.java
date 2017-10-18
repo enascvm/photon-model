@@ -54,7 +54,7 @@ public class VSphereAdapterPowerService extends StatelessService {
     }
 
     private void handlePowerRequest(ProvisionContext ctx, ComputePowerRequest request) {
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;

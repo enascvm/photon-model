@@ -116,7 +116,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
     private void handleCreateInstance(ProvisionContext ctx) {
 
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;
@@ -445,7 +445,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
     private void handleDeleteInstance(ProvisionContext ctx) {
 
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (conn, ce) -> {
                     if (ctx.fail(ce)) {
                         return;

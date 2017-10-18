@@ -101,7 +101,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
         }
 
         // Invoke the adapter
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;
@@ -127,7 +127,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
         }
 
         // Invoke the adapter
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;

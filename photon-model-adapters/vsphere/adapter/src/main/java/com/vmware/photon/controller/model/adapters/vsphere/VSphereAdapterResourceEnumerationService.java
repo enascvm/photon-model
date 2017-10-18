@@ -1189,8 +1189,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion((o, e) -> {
                     trackDatastore(enumerationProgress, ds).handle(o, e);
                     if (e == null) {
-                        updateLocalTags(enumerationProgress, ds, o.getBody(ResourceState.class));
-                        updateStorageStats(ds, o.getBody(ServiceDocument.class).documentSelfLink);
+                        submitWorkToVSpherePool(() -> {
+                            updateLocalTags(enumerationProgress, ds, o.getBody(ResourceState.class));
+                            updateStorageStats(ds, o.getBody(ServiceDocument.class).documentSelfLink);
+                        });
                     }
                 }).sendWith(this);
     }
@@ -1202,20 +1204,23 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         StorageDescription desc = makeStorageFromResults(request, ds, regionId);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         logFine(() -> String.format("Found new Datastore %s", ds.getName()));
-        populateTags(enumerationProgress, ds, desc);
 
-        Operation.createPost(
-                PhotonModelUriUtils.createDiscoveryUri(getHost(), StorageDescriptionService.FACTORY_LINK))
-                .setBody(desc)
-                .setCompletion((o, e) -> {
-                    trackDatastore(enumerationProgress, ds).handle(o, e);
-                    Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
-                            ResourceGroupService.FACTORY_LINK))
-                            .setBody(makeStorageGroup(ds, enumerationProgress))
-                            .sendWith(this);
-                    updateStorageStats(ds, o.getBody(ServiceDocument.class).documentSelfLink);
-                })
-                .sendWith(this);
+        submitWorkToVSpherePool(() -> {
+            populateTags(enumerationProgress, ds, desc);
+
+            Operation.createPost(
+                    PhotonModelUriUtils.createDiscoveryUri(getHost(), StorageDescriptionService.FACTORY_LINK))
+                    .setBody(desc)
+                    .setCompletion((o, e) -> {
+                        trackDatastore(enumerationProgress, ds).handle(o, e);
+                        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                                ResourceGroupService.FACTORY_LINK))
+                                .setBody(makeStorageGroup(ds, enumerationProgress))
+                                .sendWith(this);
+                        updateStorageStats(ds, o.getBody(ServiceDocument.class).documentSelfLink);
+                    })
+                    .sendWith(this);
+        });
     }
 
     private void updateStorageStats(DatastoreOverlay ds, String selfLink) {
@@ -1354,7 +1359,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion((o, e) -> {
                     trackComputeResource(enumerationProgress, cr).handle(o, e);
                     if (e == null) {
-                        updateLocalTags(enumerationProgress, cr, o.getBody(ResourceState.class));
+                        submitWorkToVSpherePool(()
+                                -> updateLocalTags(enumerationProgress, cr, o.getBody(ResourceState.class)));
                     }
                 })
                 .sendWith(this);
@@ -1428,13 +1434,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = makeComputeResourceFromResults(enumerationProgress, cr);
         state.tenantLinks = enumerationProgress.getTenantLinks();
         state.descriptionLink = desc.documentSelfLink;
-        populateTags(enumerationProgress, cr, state);
 
-        logFine(() -> String.format("Found new ComputeResource %s", cr.getId().getValue()));
-        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
-                .setBody(state)
-                .setCompletion(trackComputeResource(enumerationProgress, cr))
-                .sendWith(this);
+        submitWorkToVSpherePool(() -> {
+            populateTags(enumerationProgress, cr, state);
+
+            logFine(() -> String.format("Found new ComputeResource %s", cr.getId().getValue()));
+            Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
+                    .setBody(state)
+                    .setCompletion(trackComputeResource(enumerationProgress, cr))
+                    .sendWith(this);
+        });
     }
 
     /**
@@ -1595,7 +1604,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion((o, e) -> {
                     trackHostSystem(enumerationProgress, hs).handle(o, e);
                     if (e == null) {
-                        updateLocalTags(enumerationProgress, hs, o.getBody(ResourceState.class));
+                        submitWorkToVSpherePool(()
+                                -> updateLocalTags(enumerationProgress, hs, o.getBody(ResourceState.class)));
                     }
                 })
                 .sendWith(this);
@@ -1605,6 +1615,23 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .sendWith(this);
+    }
+
+    private void submitWorkToVSpherePool(Runnable work) {
+        // store context at the moment of submission
+        OperationContext orig = OperationContext.getOperationContext();
+        VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
+
+        pool.submit(() -> {
+            OperationContext old = OperationContext.getOperationContext();
+
+            OperationContext.setFrom(orig);
+            try {
+                work.run();
+            } finally {
+                OperationContext.restoreOperationContext(old);
+            }
+        });
     }
 
     private void createNewHostSystem(EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
@@ -1618,13 +1645,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = makeHostSystemFromResults(enumerationProgress, hs);
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = enumerationProgress.getTenantLinks();
-        populateTags(enumerationProgress, hs, state);
 
-        logFine(() -> String.format("Found new HostSystem %s", hs.getName()));
-        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
-                .setBody(state)
-                .setCompletion(trackHostSystem(enumerationProgress, hs))
-                .sendWith(this);
+        submitWorkToVSpherePool(() -> {
+            populateTags(enumerationProgress, hs, state);
+
+            logFine(() -> String.format("Found new HostSystem %s", hs.getName()));
+            Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
+                    .setBody(state)
+                    .setCompletion(trackHostSystem(enumerationProgress, hs))
+                    .sendWith(this);
+        });
     }
 
     private void populateTags(EnumerationProgress enumerationProgress, AbstractOverlay obj,
@@ -1738,7 +1768,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion((o, e) -> {
                     trackVm(enumerationProgress).handle(o, e);
                     if (e == null) {
-                        updateLocalTags(enumerationProgress, vm, o.getBody(ResourceState.class));
+                        submitWorkToVSpherePool(()
+                                -> updateLocalTags(enumerationProgress, vm, o.getBody(ResourceState.class)));
                     }
                 })
                 .sendWith(this);
@@ -1775,40 +1806,41 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = makeVmFromResults(enumerationProgress, vm);
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = enumerationProgress.getTenantLinks();
-        populateTags(enumerationProgress, vm, state);
 
-        state.networkInterfaceLinks = new ArrayList<>();
-        for (VirtualEthernetCard nic : vm.getNics()) {
-            VirtualDeviceBackingInfo backing = nic.getBacking();
+        submitWorkToVSpherePool(() -> {
+            populateTags(enumerationProgress, vm, state);
+            state.networkInterfaceLinks = new ArrayList<>();
+            for (VirtualEthernetCard nic : vm.getNics()) {
+                VirtualDeviceBackingInfo backing = nic.getBacking();
 
-            if (backing instanceof VirtualEthernetCardNetworkBackingInfo) {
-                VirtualEthernetCardNetworkBackingInfo veth = (VirtualEthernetCardNetworkBackingInfo) backing;
-                NetworkInterfaceState iface = new NetworkInterfaceState();
-                iface.networkLink = enumerationProgress.getNetworkTracker()
-                        .getSelfLink(veth.getNetwork());
-                iface.name = nic.getDeviceInfo().getLabel();
-                iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
-                        getHost().nextUUID());
+                if (backing instanceof VirtualEthernetCardNetworkBackingInfo) {
+                    VirtualEthernetCardNetworkBackingInfo veth = (VirtualEthernetCardNetworkBackingInfo) backing;
+                    NetworkInterfaceState iface = new NetworkInterfaceState();
+                    iface.networkLink = enumerationProgress.getNetworkTracker()
+                            .getSelfLink(veth.getNetwork());
+                    iface.name = nic.getDeviceInfo().getLabel();
+                    iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
+                            getHost().nextUUID());
 
-                Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
-                        NetworkInterfaceService.FACTORY_LINK))
-                        .setBody(iface)
-                        .sendWith(this);
+                    Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                            NetworkInterfaceService.FACTORY_LINK))
+                            .setBody(iface)
+                            .sendWith(this);
 
-                state.networkInterfaceLinks.add(iface.documentSelfLink);
-            } else {
-                // TODO add support for DVS
-                logFine(() -> String.format("Will not add nic of type %s",
-                        backing.getClass().getName()));
+                    state.networkInterfaceLinks.add(iface.documentSelfLink);
+                } else {
+                    // TODO add support for DVS
+                    logFine(() -> String.format("Will not add nic of type %s",
+                            backing.getClass().getName()));
+                }
             }
-        }
 
-        logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
-        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
-                .setBody(state)
-                .setCompletion(trackVm(enumerationProgress))
-                .sendWith(this);
-
+            logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
+            Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeService.FACTORY_LINK))
+                    .setBody(state)
+                    .setCompletion(trackVm(enumerationProgress))
+                    .sendWith(this);
+        });
     }
 
     private void processSnapshots(EnumerationProgress enumerationProgress, VmOverlay vm, String
@@ -1913,12 +1945,26 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         newState.documentSelfLink = oldState.documentSelfLink;
         newState.id = id;
         newState.regionId = enumerationProgress.getRegionId();
-        populateTags(enumerationProgress, vm, newState);
-        newState.tenantLinks = enumerationProgress.getTenantLinks();
-        logFine(() -> String.format("Syncing snapshot %s", oldState.name));
-        Operation opPatchSnapshot = Operation.createPatch(UriUtils.buildUri(getHost(), oldState.documentSelfLink))
-                .setBody(newState);
-        return this.sendWithDeferredResult(opPatchSnapshot, SnapshotState.class);
+
+        DeferredResult<SnapshotState> res = new DeferredResult<>();
+        submitWorkToVSpherePool(() -> {
+            populateTags(enumerationProgress, vm, newState);
+            newState.tenantLinks = enumerationProgress.getTenantLinks();
+            logFine(() -> String.format("Syncing snapshot %s", oldState.name));
+            Operation opPatchSnapshot = Operation.createPatch(UriUtils.buildUri(getHost(), oldState.documentSelfLink))
+                    .setBody(newState);
+
+            sendWithDeferredResult(opPatchSnapshot, SnapshotState.class).handle((snap, e) -> {
+                if (e != null) {
+                    res.fail(e);
+                } else {
+                    res.complete(snap);
+                }
+                return null;
+            });
+        });
+
+        return res;
     }
 
     private CompletionHandler trackSnapshot(EnumerationProgress enumerationProgress,

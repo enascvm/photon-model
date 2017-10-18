@@ -81,7 +81,7 @@ public class VSphereDiskService extends StatelessService {
             finishDiskCreateOperation(ctx);
             return;
         }
-        ctx.pool.submit(this, ctx.adapterManagementReference, ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.adapterManagementReference, ctx.vSphereCredentials,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;
@@ -113,7 +113,7 @@ public class VSphereDiskService extends StatelessService {
             finishDiskDeleteOperation(ctx);
             return;
         }
-        ctx.pool.submit(this, ctx.adapterManagementReference, ctx.vSphereCredentials,
+        ctx.pool.submit(ctx.adapterManagementReference, ctx.vSphereCredentials,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;

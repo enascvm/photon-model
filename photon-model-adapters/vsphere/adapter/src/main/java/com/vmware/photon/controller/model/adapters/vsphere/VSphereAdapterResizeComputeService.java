@@ -162,7 +162,7 @@ public class VSphereAdapterResizeComputeService extends StatelessService {
     }
 
     private void handleResourceOperationRequest(VSphereVMContext ctx, int cpuCount, long memoryInMBytes, boolean rebootVM) {
-        ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.parentAuth,
+        ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.parentAuth,
                 (connection, ce) -> {
                     if (ctx.fail(ce)) {
                         return;
