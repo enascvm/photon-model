@@ -22,13 +22,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -217,12 +217,14 @@ public class TagsUtil {
                             .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, tagLinksToRemove)
                             .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
 
-                    QueryStrategy<TagState> queryLocalStates = new QueryTop<>(
+                    QueryTop<TagState> queryLocalStates = new QueryTop<>(
                             service.getHost(),
                             qBuilder.build(),
                             TagState.class,
                             localState.tenantLinks)
                             .setMaxResultsLimit(tagLinksToRemove.size());
+
+                    queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
                     removeAllExternalTagLinksDR = queryLocalStates.collectLinks(
                             Collectors.toCollection(HashSet::new));

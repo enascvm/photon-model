@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.EXPAND;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.FIXED_ITEM_NAME;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
@@ -215,7 +216,7 @@ public class NicSecurityGroupsTaskService extends TaskService<NicSecurityGroupsT
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_SELECTED_FIELDS)
                 .build();
 
-        return QueryUtils.startQueryTask(this, queryTask)
+        return QueryUtils.startInventoryQueryTask(this, queryTask)
                 .thenApply(qrt -> {
                     AssertUtil.assertTrue(qrt != null && qrt.results.documentCount > 0,
                             String.format("Could not find security groups with links %s",
@@ -286,8 +287,7 @@ public class NicSecurityGroupsTaskService extends TaskService<NicSecurityGroupsT
             SecurityGroupState securityGroupState) {
         NicSecurityGroupsRequest req = new NicSecurityGroupsRequest();
         req.requestType = taskState.requestType;
-        req.resourceReference = UriUtils.buildUri(this.getHost(),
-                taskState.networkInterfaceLink);
+        req.resourceReference = createInventoryUri(this.getHost(), taskState.networkInterfaceLink);
         req.securityGroupLinks = taskState.securityGroupLinks;
         req.authCredentialsLink = securityGroupState.authCredentialsLink;
         req.taskReference = this.getUri();

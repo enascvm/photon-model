@@ -281,7 +281,7 @@ public class SingleResourceStatsCollectionTaskService
     private void getDescriptions(SingleResourceStatsCollectionTaskState currentState) {
         URI computeDescUri = ComputeStateWithDescription
                 .buildUri(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.computeLink));
+                        ServiceTypeCluster.INVENTORY_SERVICE), currentState.computeLink));
         sendRequest(Operation
                 .createGet(computeDescUri)
                 .setCompletion(
@@ -326,7 +326,7 @@ public class SingleResourceStatsCollectionTaskService
                                         .name();
                                 statsRequest.resourceReference = UriUtils
                                         .extendUri(ClusterUtil.getClusterUri(getHost(),
-                                                ServiceTypeCluster.DISCOVERY_SERVICE),
+                                                ServiceTypeCluster.INVENTORY_SERVICE),
                                                 computeStateWithDesc.documentSelfLink);
                                 statsRequest.taskReference = getUri();
                                 patchUri = statsAdapterReference;
@@ -377,7 +377,7 @@ public class SingleResourceStatsCollectionTaskService
         minuteStats.unit = PhotonModelConstants.UNIT_MICROSECONDS;
         URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils
                 .extendUri(UriUtils.buildUri(ClusterUtil.getClusterUri(getHost(),
-                        ServiceTypeCluster.DISCOVERY_SERVICE)), currentState.computeLink));
+                        ServiceTypeCluster.INVENTORY_SERVICE)), currentState.computeLink));
         operations.add(Operation.createPost(inMemoryStatsUri).setBody(minuteStats));
         populateResourceMetrics(metricsList,
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
@@ -531,7 +531,7 @@ public class SingleResourceStatsCollectionTaskService
             ComputeStatsRequest computeStatsRequest, URI patchUri, List<String> tenantLinks) {
         URI computeStatsUri = UriUtils
                 .buildStatsUri(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.computeLink));
+                        ServiceTypeCluster.INVENTORY_SERVICE), currentState.computeLink));
         Operation.createGet(computeStatsUri)
                 .setCompletion((o, e) -> {
                     if (e != null) {

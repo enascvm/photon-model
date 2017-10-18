@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.util.List;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -207,8 +209,7 @@ public class ProvisionLoadBalancerTaskService extends TaskService<ProvisionLoadB
     private LoadBalancerInstanceRequest toReq(ProvisionLoadBalancerTaskState taskState) {
         LoadBalancerInstanceRequest req = new LoadBalancerInstanceRequest();
         req.requestType = taskState.requestType;
-        req.resourceReference = UriUtils.buildUri(this.getHost(),
-                taskState.loadBalancerLink);
+        req.resourceReference = createInventoryUri(this.getHost(), taskState.loadBalancerLink);
         req.taskReference = this.getUri();
         req.isMockRequest = taskState.isMockRequest;
 

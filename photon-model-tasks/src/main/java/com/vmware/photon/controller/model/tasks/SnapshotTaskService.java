@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -198,8 +200,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
         logFine(() -> String.format("Starting to create snapshot using sub task %s", subTaskLink));
 
         ResourceOperationRequest sr = new ResourceOperationRequest();
-        sr.resourceReference = UriUtils.buildUri(getHost(),
-                updatedState.snapshotLink);
+        sr.resourceReference = createInventoryUri(this.getHost(), updatedState.snapshotLink);
         sr.taskReference = UriUtils.buildUri(getHost(), subTaskLink);
         sr.isMockRequest = updatedState.isMockRequest;
         sendRequest(Operation

@@ -37,11 +37,11 @@ import java.util.stream.Collectors;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.AssertUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -461,6 +461,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
                 isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
         queryLocalStates.setMaxPageSize(remoteIds.size());
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryLocalStates
                 .queryDocuments(doc -> context.localResourceStates.put(doc.id, doc))
@@ -652,12 +653,13 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         // Delegate to descendants to any doc specific criteria
         customizeLocalStatesQuery(qBuilder);
 
-        QueryStrategy<LOCAL_STATE> queryLocalStates = new QueryByPages<>(
+        QueryByPages<LOCAL_STATE> queryLocalStates = new QueryByPages<>(
                 context.service.getHost(),
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
                 isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
 

@@ -39,12 +39,12 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.util.AssertUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -95,12 +95,13 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     .addInClause(SecurityGroupState.FIELD_NAME_ID, context.enumExternalResourcesIds);
         }
 
-        QueryStrategy<SecurityGroupState> querySecurityGroupStates = new QueryTop<>(
+        QueryTop<SecurityGroupState> querySecurityGroupStates = new QueryTop<>(
                 context.service.getHost(),
                 findSecurityGroupStates.build(),
                 SecurityGroupState.class,
                 context.request.parentCompute.tenantLinks)
                         .setMaxResultsLimit(context.enumExternalResourcesIds.size());
+        querySecurityGroupStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         AWSSecurityGroupEnumerationResponse response = new AWSSecurityGroupEnumerationResponse();
 

@@ -83,7 +83,7 @@ public class VSphereIOThreadPool {
      */
     public void submit(Service sender, URI adapterReference, String authLink,
             ConnectionCallback callback) {
-        URI authUri = PhotonModelUriUtils.createDiscoveryUri(this.host, authLink);
+        URI authUri = PhotonModelUriUtils.createInventoryUri(this.host, authLink);
 
         Operation op = Operation.createGet(authUri)
                 .setCompletion((o, e) -> {

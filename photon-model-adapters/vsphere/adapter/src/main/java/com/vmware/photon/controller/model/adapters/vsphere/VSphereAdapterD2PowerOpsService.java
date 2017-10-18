@@ -101,7 +101,7 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
             ctx.taskManager.patchTaskToFailure(new IllegalArgumentException(warnStr));
             return;
         }
-        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ctx.resourceReference))
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ctx.resourceReference))
                 .setBody(ctx.child)
                 .setCompletion((o, e) -> {
                     if (e != null) {

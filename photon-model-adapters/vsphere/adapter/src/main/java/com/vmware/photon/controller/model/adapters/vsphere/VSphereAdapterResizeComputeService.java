@@ -149,7 +149,7 @@ public class VSphereAdapterResizeComputeService extends StatelessService {
     private void patchComputeAndCompleteRequest(VSphereVMContext ctx, final int cpuCount, final long memoryInMBytes) {
         ctx.child.description.cpuCount = Long.valueOf(cpuCount);
         ctx.child.description.totalMemoryBytes = memoryInMBytes * MEGA_BYTES_TO_BYTES_CONSTANT;
-        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ctx.child.descriptionLink))
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ctx.child.descriptionLink))
                 .setBody(ctx.child.description)
                 .setCompletion((o, e) -> {
                     if (e != null) {

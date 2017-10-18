@@ -27,7 +27,6 @@ import java.net.URISyntaxException;
 import java.nio.file.Paths;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.EnumSet;
@@ -40,7 +39,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
-
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
@@ -59,7 +57,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderEx
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
-import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.FileFaultFaultMsg;
 import com.vmware.vim25.FileNotFoundFaultMsg;
@@ -93,7 +90,6 @@ import com.vmware.vim25.VirtualIDEController;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSIOController;
-import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceClient;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -101,7 +97,6 @@ import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.http.netty.NettyHttpServiceClient;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Utility methods that are common for all the clients like InstanceClient, EnumerationClient etc,
@@ -661,12 +656,9 @@ public class ClientUtils {
                 .build();
         task.querySpec.options = EnumSet
                 .of(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
-        Operation.createPost(
-                PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
-                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(task)
-                .setConnectionSharing(true)
-                .setCompletion((o, e) -> {
+
+        QueryUtils.startInventoryQueryTask(service, task)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         service.getHost().log(Level.WARNING, "Error processing task %s",
                                 task.documentSelfLink);
@@ -674,9 +666,9 @@ public class ClientUtils {
                         failure.accept(e);
                         return;
                     }
-                    QueryTask body = o.getBody(QueryTask.class);
-                    handler.accept(body.results);
-                }).sendWith(service);
+
+                    handler.accept(queryTask.results);
+                });
     }
 
 }

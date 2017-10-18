@@ -34,6 +34,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -337,6 +338,8 @@ public class AWSNetworkService extends StatelessService {
                 SubnetState.class,
                 context.network.tenantLinks,
                 context.network.endpointLink);
+
+        subnetStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         DeferredResult<Void> query = subnetStates.queryDocuments(subnetState -> {
             // First delete Subnet in AWS

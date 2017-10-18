@@ -15,7 +15,7 @@ package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME;
 import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE;
-
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
@@ -69,7 +69,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -339,26 +338,21 @@ public class EndpointRemovalTaskService
                 .build();
         resourceQueryTask.tenantLinks = state.tenantLinks;
 
-        Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(resourceQueryTask)
-                .setConnectionSharing(true)
-                .setCompletion(
-                        (queryOp, throwable) -> {
-                            if (throwable != null) {
-                                logWarning(throwable.getMessage());
-                                sendSelfPatch(TaskStage.STARTED, next);
-                                return;
-                            }
+        QueryUtils.startInventoryQueryTask(this, resourceQueryTask)
+                .whenComplete((queryTask, throwable) -> {
+                    if (throwable != null) {
+                        logWarning(throwable.getMessage());
+                        sendSelfPatch(TaskStage.STARTED, next);
+                        return;
+                    }
 
-                            QueryTask rsp = queryOp.getBody(QueryTask.class);
-                            if (rsp.results.nextPageLink == null) {
-                                sendSelfPatch(TaskStage.STARTED, next);
-                                return;
-                            }
+                    if (queryTask.results.nextPageLink == null) {
+                        sendSelfPatch(TaskStage.STARTED, next);
+                        return;
+                    }
 
-                            deleteAssociatedDocumentsHelper(rsp.results.nextPageLink, next);
-                        })
-                .sendWith(this);
+                    deleteAssociatedDocumentsHelper(queryTask.results.nextPageLink, next);
+                });
     }
 
     private void deleteAssociatedDocumentsHelper (String nextPageLink, SubStage next) {
@@ -400,7 +394,7 @@ public class EndpointRemovalTaskService
             joinOp.setCompletion(joinHandler);
             joinOp.sendWith(getHost());
         };
-        sendRequest(Operation.createGet(this, nextPageLink)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), nextPageLink))
                 .setCompletion(completionHandler));
     }
 

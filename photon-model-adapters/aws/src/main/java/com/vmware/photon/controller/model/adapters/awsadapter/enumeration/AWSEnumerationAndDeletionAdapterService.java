@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -309,7 +310,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         queryTask.tenantLinks = context.parentCompute.tenantLinks;
 
         // create the query to find resources
-        QueryUtils.startQueryTask(this, queryTask)
+        QueryUtils.startInventoryQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
                         logSevere(() -> String.format("Failure retrieving query results: %s",
@@ -596,7 +597,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         context.instancesToBeDeleted.clear();
         logFine(() -> "Getting next page of local records.");
         sendRequest(Operation
-                .createGet(getHost(), context.nextPageLink)
+                .createGet(createInventoryUri(getHost(), context.nextPageLink))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logSevere(() -> String.format("Failure retrieving next page from the local"

@@ -210,7 +210,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                 context.cdState.regionId, context.cdState.endpointLink);
 
         // create the query to find an existing compute description
-        QueryUtils.startQueryTask(this, queryTask)
+        QueryUtils.startInventoryQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
                         logWarning(() -> String.format("Failure retrieving query results: %s",

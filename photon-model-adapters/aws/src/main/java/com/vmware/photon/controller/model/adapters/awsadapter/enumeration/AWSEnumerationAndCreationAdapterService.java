@@ -777,7 +777,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         queryTask.tenantLinks = context.parentCompute.tenantLinks;
 
         service.logFine(() -> String.format("Created query for resources: " + remoteIds));
-        QueryUtils.startQueryTask(service, queryTask)
+        QueryUtils.startInventoryQueryTask(service, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
                         service.logSevere(

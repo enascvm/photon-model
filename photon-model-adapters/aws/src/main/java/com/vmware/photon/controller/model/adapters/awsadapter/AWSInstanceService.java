@@ -98,6 +98,7 @@ import com.vmware.photon.controller.model.support.InstanceTypeList.InstanceType;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.util.AssertUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -1072,6 +1073,7 @@ public class AWSInstanceService extends StatelessService {
             QueryTop<ResourceState> statesToDeleteQuery = new QueryTop<>(
                     getHost(), query, ResourceState.class, this.context.parent.tenantLinks,
                     null /* endpointLink */);
+            statesToDeleteQuery.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
             // Once got states to delete process with actual deletion
             return statesToDeleteQuery.collectDocuments(Collectors.toList())

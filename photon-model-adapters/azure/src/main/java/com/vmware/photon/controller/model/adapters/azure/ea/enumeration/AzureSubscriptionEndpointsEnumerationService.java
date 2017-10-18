@@ -170,7 +170,7 @@ public class AzureSubscriptionEndpointsEnumerationService extends StatelessServi
         QueryByPages<EndpointState> querySubscriptionEndpoints = new QueryByPages<>(
                 getHost(), azureEndpointsQuery, EndpointState.class,
                 enumerationContext.parent.tenantLinks);
-        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         querySubscriptionEndpoints.queryDocuments(endpointState -> {
                     if (endpointState.endpointProperties != null
@@ -242,7 +242,7 @@ public class AzureSubscriptionEndpointsEnumerationService extends StatelessServi
         request.accountId = subscription.parentEntityId;
         request.subscriptionId = subscription.entityId;
         request.resourceReference = UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                ServiceTypeCluster.DISCOVERY_SERVICE), context.parent.endpointLink);
+                ServiceTypeCluster.INVENTORY_SERVICE), context.parent.endpointLink);
         return request;
     }
 

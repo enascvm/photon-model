@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-
 import com.microsoft.azure.management.network.SecurityRuleDirection;
 import org.apache.commons.net.util.SubnetUtils;
 
@@ -45,7 +44,6 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -53,6 +51,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -279,13 +278,15 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                             ComputeProperties.RESOURCE_TYPE_KEY,
                             ResourceGroupStateType.AzureResourceGroup.name());
 
-            QueryStrategy<ResourceGroupState> queryByPages = new QueryByPages<ResourceGroupState>(
+            QueryByPages<ResourceGroupState> queryByPages = new QueryByPages<>(
                     this.service.getHost(),
                     qBuilder.build(),
                     ResourceGroupState.class,
                     context.request.parentCompute.tenantLinks,
                     context.request.original.endpointLink)
                             .setMaxPageSize(resourceGroupIds.size());
+
+            queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
             return queryByPages.queryDocuments(
                     rgState -> this.securityGroupRGStates.put(rgState.id, rgState.documentSelfLink))

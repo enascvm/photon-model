@@ -36,7 +36,6 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
-import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.TaskInfo;
@@ -135,7 +134,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     });
             break;
         case DELETE:
-            Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(this.getHost(),request.resourceLink()))
+            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),request.resourceLink()))
                     .setCompletion((o,e) -> {
                         if (e != null) {
                             mgr.patchTaskToFailure(e);
@@ -157,7 +156,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     }).sendWith(this);
             break;
         case REVERT:
-            Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(this.getHost(),request.resourceLink()))
+            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),request.resourceLink()))
                     .setCompletion((o,e) -> {
                         if (e != null) {
                             mgr.patchTaskToFailure(e);
@@ -208,7 +207,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
     private DeferredResult<SnapshotContext> thenSetComputeDescription(SnapshotContext context) {
         URI computeUri = ComputeStateWithDescription.buildUri(
-                PhotonModelUriUtils.createDiscoveryUri(this.getHost(), context.snapshotState.computeLink));
+                PhotonModelUriUtils.createInventoryUri(this.getHost(), context.snapshotState.computeLink));
 
         return this.sendWithDeferredResult(Operation.createGet(computeUri), ComputeStateWithDescription.class)
                 .thenApply(computeWithDescription -> {
@@ -219,7 +218,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
     private DeferredResult<SnapshotContext> thenSetParentComputeDescription(SnapshotContext context) {
         URI parentComputeUri = ComputeStateWithDescription.buildUri(
-                PhotonModelUriUtils.createDiscoveryUri(this.getHost(), context.computeDescription.parentLink));
+                PhotonModelUriUtils.createInventoryUri(this.getHost(), context.computeDescription.parentLink));
 
         return this.sendWithDeferredResult(Operation.createGet(parentComputeUri), ComputeStateWithDescription.class)
                 .thenApply(parentComputeWithDesc -> {
@@ -241,12 +240,12 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                 .addOption(QueryTask.QuerySpecification.QueryOption.INDEXED_METADATA)
                 .build();
 
-        return QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
-                .DISCOVERY_SERVICE)
+        return QueryUtils.startInventoryQueryTask(this, qTask)
                 .thenApply(op -> {
                     QueryResultsProcessor rp = QueryResultsProcessor.create(op);
                     if (rp.hasResults()) {
-                        Optional<SnapshotState> snapshotStateOptional = rp.streamDocuments(SnapshotState.class).findFirst();
+                        Optional<SnapshotState> snapshotStateOptional = rp
+                                .streamDocuments(SnapshotState.class).findFirst();
                         if (snapshotStateOptional.isPresent()) {
                             context.existingSnapshotState = snapshotStateOptional.get();
                             if (context.requestType == SnapshotService.SnapshotRequestType.CREATE) {
@@ -330,7 +329,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
         // create a new xenon SnapshotState
         logInfo(String.format("Creating a new snapshot state for compute : %s", context.computeDescription.name));
-        Operation createSnapshotState = Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+        Operation createSnapshotState = Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(),
                 SnapshotService.FACTORY_LINK))
                 .setBody(context.snapshotState);
 
@@ -421,7 +420,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                                 .stream()
                                 .map(childSnapshot -> Operation.createPatch(
                                         PhotonModelUriUtils
-                                                .createDiscoveryUri(getHost(), childSnapshot.documentSelfLink))
+                                                .createInventoryUri(getHost(), childSnapshot.documentSelfLink))
                                         .setBody(childSnapshot)
                                         .setReferer(getUri()))
                                 .collect(Collectors.toList());
@@ -506,7 +505,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
             SnapshotState parentSnapshot = new SnapshotState();
             parentSnapshot.isCurrent = Boolean.TRUE;
             context.snapshotOperations.add(Operation.createPatch(
-                    PhotonModelUriUtils.createDiscoveryUri(this.getHost(),snapshot.parentLink))
+                    PhotonModelUriUtils.createInventoryUri(this.getHost(),snapshot.parentLink))
                     .setBody(parentSnapshot).setReferer(getUri()));
         }
 
@@ -556,10 +555,11 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         // find if for the compute has only one snapshot (the one which is to be deleted)
         QueryTask qTask = getQueryWithFilters(context.snapshotState.computeLink, SnapshotState.FIELD_NAME_COMPUTE_LINK);
 
-        QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
-                .DISCOVERY_SERVICE).whenComplete((o, e) -> {
+        QueryUtils.startInventoryQueryTask(this, qTask)
+                .whenComplete((o, e) -> {
                     if (e != null) {
-                        logInfo(String.format("Failure getting snapshot state: %s", Utils.toString(e)));
+                        logInfo(String
+                                .format("Failure getting snapshot state: %s", Utils.toString(e)));
                         dr.fail(e);
                         return;
                     }
@@ -582,8 +582,8 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         // find the child snapshots for the given snapshot document link
         QueryTask qTask = getQueryWithFilters(snapshotLink, SnapshotState.FIELD_NAME_PARENT_LINK);
 
-        QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
-                .DISCOVERY_SERVICE).whenComplete((o, e) -> {
+        QueryUtils.startInventoryQueryTask(this, qTask)
+                .whenComplete((o, e) -> {
                     if (e != null) {
                         logWarning(String.format("Failure retrieving the child snapshots %s",
                                 Utils.toString(e)));

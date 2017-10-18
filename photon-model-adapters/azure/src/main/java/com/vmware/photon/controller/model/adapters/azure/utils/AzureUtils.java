@@ -49,7 +49,6 @@ import com.microsoft.azure.storage.StorageCredentials;
 import com.microsoft.rest.LogLevel;
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceResponseBuilder.Factory;
-
 import okhttp3.OkHttpClient;
 
 import org.apache.commons.lang3.StringUtils;
@@ -64,7 +63,6 @@ import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNe
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -75,6 +73,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -600,7 +599,7 @@ public class AzureUtils {
                         ComputeProperties.RESOURCE_TYPE_KEY,
                         ResourceGroupStateType.AzureResourceGroup.name());
 
-        QueryStrategy<ResourceGroupState> queryByPages = new QueryTop<>(
+        QueryTop<ResourceGroupState> queryByPages = new QueryTop<>(
                 serviceHost,
                 qBuilder.build(),
                 ResourceGroupState.class,
@@ -608,6 +607,7 @@ public class AzureUtils {
                 endpointLink)
                 // only one group is required
                 .setMaxResultsLimit(1);
+        queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryByPages
                 .collectDocuments(Collectors.toList())

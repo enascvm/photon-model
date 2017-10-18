@@ -72,7 +72,7 @@ public class DiskContext {
             Consumer<DiskContext> onSuccess) {
         // Step 1: Get disk details
         if (ctx.diskState == null) {
-            URI diskUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI diskUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     DiskService.DiskStateExpanded.buildUri(ctx.diskReference));
             AdapterUtils.getServiceState(service, diskUri, op -> {
                 ctx.diskState = op.getBody(DiskService.DiskStateExpanded.class);
@@ -134,7 +134,7 @@ public class DiskContext {
                 return;
             }
 
-            URI credUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI credUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     UriUtils.buildUri(service.getHost(), ctx.diskState.authCredentialsLink));
             AdapterUtils.getServiceState(service, credUri, op -> {
                 ctx.vSphereCredentials = op
@@ -146,7 +146,7 @@ public class DiskContext {
 
         // Step 4: Get the endpoint compute link
         if (ctx.endpointComputeLink == null) {
-            URI endpointUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI endpointUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     UriUtils.buildUri(service.getHost(), ctx.diskState.endpointLink));
             AdapterUtils.getServiceState(service, endpointUri, op -> {
                 EndpointService.EndpointState endpointState = op
@@ -159,7 +159,7 @@ public class DiskContext {
 
         // Step 5: Get the adapter reference to from the endpoint compute link
         if (ctx.adapterManagementReference == null) {
-            URI computeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     UriUtils.buildUri(service.getHost(), ctx.endpointComputeLink));
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ComputeService.ComputeState computeState = op

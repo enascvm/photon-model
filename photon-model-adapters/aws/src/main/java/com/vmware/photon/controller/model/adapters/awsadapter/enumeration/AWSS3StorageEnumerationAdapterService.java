@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -62,7 +63,6 @@ import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
@@ -400,7 +400,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                     .build();
             queryTask.tenantLinks = aws.parentCompute.tenantLinks;
 
-            QueryUtils.startQueryTask(this, queryTask).whenComplete((qrt, e) -> {
+            QueryUtils.startInventoryQueryTask(this, queryTask).whenComplete((qrt, e) -> {
                 if (e != null) {
                     this.logSevere(() -> String.format("Failure retrieving query" + " results: %s", e.toString()));
                     signalErrorToEnumerationAdapter(aws, e);
@@ -423,7 +423,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                 }
             });
         } else {
-            Operation.createGet(UriUtils.buildUri(this.getHost().getUri(), aws.localResourcesNextPageLink))
+            Operation.createGet(createInventoryUri(this.getHost(), aws.localResourcesNextPageLink))
                     .setReferer(this.getUri())
                     .setCompletion((o, e) -> {
                         if (e != null) {
@@ -745,7 +745,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         q.tenantLinks = aws.parentCompute.tenantLinks;
         q.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
         this.logFine(() -> "Querying disks for deletion");
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         this.logWarning("Failure querying S3 disks for deletion for [endpoint=%s]",
@@ -779,7 +779,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         this.logFine(() -> String.format("Querying page [%s] for resources to be deleted",
                 aws.deletionNextPageLink));
         this.sendRequest(
-                Operation.createGet(this, aws.deletionNextPageLink)
+                Operation.createGet(createInventoryUri(this.getHost(), aws.deletionNextPageLink))
                         .setCompletion((o, e) -> {
                             if (e != null) {
                                 this.logWarning("Failure querying S3 disks for deletion for [endpoint=%s]",

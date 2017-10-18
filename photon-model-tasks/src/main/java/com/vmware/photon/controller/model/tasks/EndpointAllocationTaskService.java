@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.ComputeProperties.ENDPOINT_LINK
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getAdapterUri;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.sendFailurePatch;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE;
@@ -49,6 +50,8 @@ import com.vmware.photon.controller.model.support.CertificateInfo;
 import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -252,7 +255,7 @@ public class EndpointAllocationTaskService
             req.isMockRequest = currentState.options.contains(TaskOption.IS_MOCK);
             req.requestType = RequestType.ENHANCE;
             req.tenantLinks = currentState.tenantLinks;
-            req.resourceReference = UriUtils.buildUri(getHost(),
+            req.resourceReference = createInventoryUri(this.getHost(),
                     currentState.endpointState.documentSelfLink);
             ServiceDocument subTask = o.getBody(ServiceDocument.class);
             req.taskReference = UriUtils.buildUri(this.getHost(), subTask.documentSelfLink);
@@ -572,7 +575,8 @@ public class EndpointAllocationTaskService
         req.tenantLinks = currentState.tenantLinks;
 
         if (currentState.endpointState.documentSelfLink != null) {
-            req.resourceReference = UriUtils.buildUri(getHost(),
+            req.resourceReference = UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                    ServiceTypeCluster.INVENTORY_SERVICE),
                     currentState.endpointState.documentSelfLink);
         }
         req.isMockRequest = currentState.options.contains(TaskOption.IS_MOCK);

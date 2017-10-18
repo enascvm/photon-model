@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.resources.SubnetRangeService.SubnetRan
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.IpHelper;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -430,6 +431,7 @@ public class IPAddressAllocationTaskService extends
         QueryUtils.QueryByPages<SubnetRangeState> query = new QueryUtils.QueryByPages<>(
                 this.getHost(),
                 builder.build(), SubnetRangeState.class, null);
+        query.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return query.collectDocuments(Collectors.toList())
                 .thenApply(subnetRangeStates -> {
@@ -494,6 +496,7 @@ public class IPAddressAllocationTaskService extends
                 this.getHost(),
                 getIpAddressQuery,
                 IPAddressState.class, null);
+        queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryByPages.collectDocuments(Collectors.toList());
     }

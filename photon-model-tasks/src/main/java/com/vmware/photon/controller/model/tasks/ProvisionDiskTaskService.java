@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -224,8 +226,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
             }
 
             DiskInstanceRequest cr = new DiskInstanceRequest();
-            cr.resourceReference = UriUtils.buildUri(getHost(),
-                    updatedState.diskLink);
+            cr.resourceReference = createInventoryUri(this.getHost(), updatedState.diskLink);
             cr.requestType = diskRequestType;
 
             ServiceDocument subTask = o.getBody(ServiceDocument.class);

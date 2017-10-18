@@ -23,7 +23,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
-
 import com.vmware.xenon.common.test.VerificationHost;
 
 public class ClusterUtilTest {
@@ -39,7 +38,7 @@ public class ClusterUtilTest {
     @After
     public void cleanUp() {
         ServiceTypeCluster.METRIC_SERVICE.setUri(null);
-        ServiceTypeCluster.DISCOVERY_SERVICE.setUri(null);
+        ServiceTypeCluster.INVENTORY_SERVICE.setUri(null);
         if (this.host == null) {
             return;
         }
@@ -64,7 +63,7 @@ public class ClusterUtilTest {
         assertEquals(expectedUri, returnedUri);
 
         this.setResourcesUri(null);
-        returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.DISCOVERY_SERVICE);
+        returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.INVENTORY_SERVICE);
         assertEquals(expectedUri, returnedUri);
     }
 
@@ -85,7 +84,7 @@ public class ClusterUtilTest {
         assertEquals(expectedUri, returnedUri);
 
         this.setResourcesUri(uri);
-        returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.DISCOVERY_SERVICE);
+        returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.INVENTORY_SERVICE);
         assertEquals(expectedUri, returnedUri);
     }
 
@@ -94,6 +93,6 @@ public class ClusterUtilTest {
     }
 
     private void setResourcesUri(String newUri) {
-        ServiceTypeCluster.DISCOVERY_SERVICE.setUri(newUri);
+        ServiceTypeCluster.INVENTORY_SERVICE.setUri(newUri);
     }
 }

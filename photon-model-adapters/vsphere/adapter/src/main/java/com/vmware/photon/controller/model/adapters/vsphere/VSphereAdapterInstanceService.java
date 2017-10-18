@@ -227,7 +227,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
             state.address = ip;
             // update compute
             Operation updateIpAddress = Operation
-                    .createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
+                    .createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), computeLink))
                     .setBody(state);
             updateIpAddressOperations.add(updateIpAddress);
         }
@@ -244,7 +244,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         // if nic has multiple ip addresses for ipv4 only pick 1st ip address
                         patchNic.address = ipsV4.get(0);
                         Operation updateAddressNetWorkInterface = Operation
-                                .createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(),
+                                .createPatch(PhotonModelUriUtils.createInventoryUri(getHost(),
                                         nic.documentSelfLink)).setBody(patchNic);
                         updateIpAddressOperations.add(updateAddressNetWorkInterface);
                     }
@@ -342,7 +342,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 patchNic.customProperties
                         .put(CustomProperties.NIC_EXTERNAL_ID, virtualEthernetCard.getExternalId());
                 Operation.createPatch(
-                        PhotonModelUriUtils.createDiscoveryUri(getHost(), nic.documentSelfLink))
+                        PhotonModelUriUtils.createInventoryUri(getHost(), nic.documentSelfLink))
                         .setBody(patchNic)
                         .sendWith(this);
             }
@@ -426,20 +426,20 @@ public class VSphereAdapterInstanceService extends StatelessService {
     }
 
     private void createDiskOnDemand(DiskState ds) {
-        Operation.createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), DiskService.FACTORY_LINK))
+        Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), DiskService.FACTORY_LINK))
                 .setBody(ds)
                 .sendWith(this);
     }
 
     private void createDiskPatch(DiskState ds) {
-        Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ds.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ds.documentSelfLink))
                 .setBody(ds)
                 .sendWith(this);
     }
 
     private Operation createComputeResourcePatch(ComputeState state, URI computeReference) {
         return Operation.createPatch(
-                PhotonModelUriUtils.createDiscoveryUri(getHost(), computeReference))
+                PhotonModelUriUtils.createInventoryUri(getHost(), computeReference))
                 .setBody(state);
     }
 

@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.util.EnumSet;
 import java.util.List;
 
@@ -227,8 +229,7 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
     private SubnetInstanceRequest toReq(ProvisionSubnetTaskState taskState) {
         SubnetInstanceRequest req = new SubnetInstanceRequest();
         req.requestType = taskState.requestType;
-        req.resourceReference = UriUtils.buildUri(this.getHost(),
-                taskState.subnetLink);
+        req.resourceReference = createInventoryUri(this.getHost(), taskState.subnetLink);
         req.taskReference = this.getUri();
         req.isMockRequest = taskState.options.contains(TaskOption.IS_MOCK);
 

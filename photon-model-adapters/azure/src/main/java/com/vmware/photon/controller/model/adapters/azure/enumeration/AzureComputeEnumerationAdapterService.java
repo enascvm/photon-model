@@ -34,6 +34,7 @@ import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLo
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -70,9 +71,7 @@ import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPC
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
 import com.microsoft.rest.RestClient;
-
 import org.apache.commons.lang3.tuple.Pair;
-
 import rx.functions.Action1;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -86,7 +85,6 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -107,6 +105,7 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -480,7 +479,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         q.tenantLinks = ctx.parentCompute.tenantLinks;
 
         logFine(() -> "Querying compute resources for deletion");
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(ctx, e);
@@ -578,7 +577,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         };
         logFine(() -> String.format("Querying page [%s] for resources to be %s",
                 ctx.deletionNextPageLink, ctx.request.preserveMissing ? "retire" : "delete"));
-        sendRequest(Operation.createGet(this, ctx.deletionNextPageLink)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), ctx.deletionNextPageLink))
                 .setCompletion(completionHandler));
     }
 
@@ -683,13 +682,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         qBuilder.addClause(instanceIdFilterParentQuery.build());
 
-        QueryStrategy<ComputeState> queryLocalStates = new QueryByPages<ComputeState>(
+        QueryByPages<ComputeState> queryLocalStates = new QueryByPages<ComputeState>(
                 getHost(),
                 qBuilder.build(),
                 ComputeState.class,
                 ctx.parentCompute.tenantLinks,
                 ctx.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         queryLocalStates.queryDocuments(c -> {
             ctx.computeStates.put(c.id, c);
@@ -820,7 +821,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;
 
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         logWarning(() -> String.format("Failed to get disk: %s", e.getMessage()));
@@ -895,7 +896,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;
 
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         logWarning(() -> String.format("Failed to get storage accounts: %s",
@@ -1185,6 +1186,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
                 ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
 
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+
         return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
                 localNics -> requestCreateUpdateDeleteNic(localNics, remoteStates, ctx, subnetPerNicId,
                         remoteNics));
@@ -1237,6 +1240,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
                 qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
                 ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
                 allLocalNics -> deleteNics(remoteNicIds, allLocalNics));
@@ -1440,6 +1445,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 qBuilder.build(), SubnetState.class, ctx.parentCompute.tenantLinks,
                 ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
         Map<String, String> subnetLinkPerNicId = new HashMap<>();
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryLocalStates.queryDocuments(subnet ->
                 nicsPerSubnet.get(subnet.id).forEach(p -> subnetLinkPerNicId

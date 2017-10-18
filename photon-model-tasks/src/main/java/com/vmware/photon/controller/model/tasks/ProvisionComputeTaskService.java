@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +29,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.BootDevice;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
@@ -303,8 +307,7 @@ public class ProvisionComputeTaskService
             }
 
             ComputeInstanceRequest cr = new ComputeInstanceRequest();
-            cr.resourceReference = UriUtils.buildUri(getHost(),
-                    updatedState.computeLink);
+            cr.resourceReference = createInventoryUri(this.getHost(), updatedState.computeLink);
             cr.requestType = InstanceRequestType.CREATE;
             // the first reboot needs to be from the network, and the bare metal
             // services
@@ -345,7 +348,8 @@ public class ProvisionComputeTaskService
             }
 
             ComputeBootRequest br = new ComputeBootRequest();
-            br.resourceReference = UriUtils.buildUri(getHost(),
+            br.resourceReference = UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                    ServiceTypeCluster.INVENTORY_SERVICE),
                     updatedState.computeLink);
             for (BootDevice bootDevice : bootDevices) {
                 br.bootDeviceOrder.add(bootDevice);

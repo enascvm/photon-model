@@ -187,7 +187,7 @@ public class VSphereDiskService extends StatelessService {
      * Create disk patch request to update the details of the disk.
      */
     private Operation createDiskPatch(DiskService.DiskState ds) {
-        return Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ds.documentSelfLink))
+        return Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ds.documentSelfLink))
                 .setBody(ds);
     }
 
@@ -197,6 +197,6 @@ public class VSphereDiskService extends StatelessService {
      */
     private Operation deleteDisk(String documentSelfLink) {
         return Operation.createDelete(
-                PhotonModelUriUtils.createDiscoveryUri(getHost(), documentSelfLink));
+                PhotonModelUriUtils.createInventoryUri(getHost(), documentSelfLink));
     }
 }

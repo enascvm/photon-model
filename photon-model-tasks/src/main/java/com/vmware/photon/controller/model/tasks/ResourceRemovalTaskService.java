@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
@@ -32,6 +34,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.tasks.ResourceIPDeallocationTaskService.ResourceIPDeallocationTaskState;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
@@ -159,7 +162,7 @@ public class ResourceRemovalTaskService
             q.tenantLinks = state.tenantLinks;
 
             // create the query to find resources
-            QueryUtils.startQueryTask(this, q)
+            QueryUtils.startInventoryQueryTask(this, q)
                     .whenComplete((o, e) -> {
                         if (e != null) {
                             // the task might have expired, with no results
@@ -380,6 +383,7 @@ public class ResourceRemovalTaskService
         QueryByPages<SnapshotService.SnapshotState> queryResources = new QueryByPages<>(getHost(),
                 queryBuilder.build(), SnapshotService.SnapshotState.class,
                 currentState.tenantLinks);
+        queryResources.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         queryResources.collectLinks(Collectors.toList()).whenComplete((ss, ex) -> {
             if (ex != null) {
@@ -517,7 +521,7 @@ public class ResourceRemovalTaskService
         ComputeStateWithDescription chd = o.getBody(ComputeStateWithDescription.class);
         if (chd.description.instanceAdapterReference != null) {
             ComputeInstanceRequest deleteReq = new ComputeInstanceRequest();
-            deleteReq.resourceReference = UriUtils.buildUri(getHost(), resourceLink);
+            deleteReq.resourceReference = createInventoryUri(this.getHost(), resourceLink);
             deleteReq.taskReference = UriUtils.buildUri(getHost(),
                     subTaskLink);
             deleteReq.requestType = ComputeInstanceRequest.InstanceRequestType.DELETE;
@@ -635,7 +639,7 @@ public class ResourceRemovalTaskService
     }
 
     public void getQueryResults(String resultsLink, Consumer<QueryTask> consumer) {
-        sendRequest(Operation.createGet(this, resultsLink)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), resultsLink))
                 .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
                 .setCompletion((o, e) -> {
                     if (e != null) {

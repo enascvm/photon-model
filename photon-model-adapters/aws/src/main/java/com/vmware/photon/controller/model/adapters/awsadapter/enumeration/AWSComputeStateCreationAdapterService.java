@@ -410,7 +410,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
 
         // create the query to find an existing compute description
-        QueryUtils.startQueryTask(this, queryTask)
+        QueryUtils.startInventoryQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
                         logWarning(() -> String.format("Failure retrieving query results: %s",

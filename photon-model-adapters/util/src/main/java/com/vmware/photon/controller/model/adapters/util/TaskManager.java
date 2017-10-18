@@ -17,13 +17,10 @@ import java.net.URI;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
-import com.vmware.photon.controller.model.util.ClusterUtil;
-import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState.TaskStage;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -68,12 +65,7 @@ public class TaskManager implements CompletionHandler {
     public Operation createTaskPatch(TaskStage stage) {
         ResourceOperationResponse body = ResourceOperationResponse.finish(this.resourceLink);
         body.taskInfo.stage = stage;
-        return Operation.createPatch(getDiscoveryUri()).setBody(body);
-    }
-
-    protected URI getDiscoveryUri() {
-        return UriUtils.buildUri(ClusterUtil.getClusterUri(this.service.getHost(),
-                ServiceTypeCluster.DISCOVERY_SERVICE), this.taskReference.getPath());
+        return Operation.createPatch(this.taskReference).setBody(body);
     }
 
     public void patchTaskToFailure(Throwable failure) {
@@ -96,7 +88,7 @@ public class TaskManager implements CompletionHandler {
         body.failureMessage = failure.getClass().getName() + ": " + msg;
 
         return Operation
-                .createPatch(getDiscoveryUri())
+                .createPatch(this.taskReference)
                 .setBody(body);
     }
 

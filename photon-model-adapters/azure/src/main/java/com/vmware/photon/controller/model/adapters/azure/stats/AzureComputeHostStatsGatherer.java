@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -172,7 +173,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
                 .build();
         queryTask.tenantLinks = statsData.computeHost.tenantLinks;
 
-        QueryUtils.startQueryTask(this, queryTask)
+        QueryUtils.startInventoryQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> handleComputeQueryCompletion(qrt, e, statsData));
     }
 
@@ -200,7 +201,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
         }
 
         if (queryTask.results.nextPageLink != null) {
-            Operation op = Operation.createGet(UriUtils.buildUri(this.getHost(),
+            Operation op = Operation.createGet(createInventoryUri(this.getHost(),
                     queryTask.results.nextPageLink));
             sendWithDeferredResult(op)
                     .whenComplete((o, e) -> handleComputeQueryCompletion(o.getBody(QueryTask.class),

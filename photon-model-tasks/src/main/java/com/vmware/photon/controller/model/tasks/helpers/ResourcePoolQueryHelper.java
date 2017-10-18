@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.helpers.ResourcePoolQueryHelper.QueryResult.ResourcePoolData;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
@@ -216,9 +217,10 @@ public class ResourcePoolQueryHelper {
             this.additionalResourcePoolQueryClausesProvider.accept(queryBuilder);
         }
 
-        return new QueryByPages<>(this.host, queryBuilder.build(), ResourcePoolState.class, null)
-                .setMaxPageSize(PAGE_SIZE)
-                .queryDocuments(rp -> storeResourcePool(rp));
+        QueryByPages<ResourcePoolState> queryByPages = new QueryByPages<>(
+                this.host, queryBuilder.build(), ResourcePoolState.class, null);
+        queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+        return queryByPages.setMaxPageSize(PAGE_SIZE).queryDocuments(rp -> storeResourcePool(rp));
     }
 
     /**
@@ -241,6 +243,7 @@ public class ResourcePoolQueryHelper {
             QueryByPages<ComputeState> computeQuery =
                     new QueryByPages<>(this.host, queryBuilder.build(), ComputeState.class, null)
                             .setMaxPageSize(PAGE_SIZE);
+            computeQuery.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
             DeferredResult<Map<String, ComputeState>> rpQueryDR;
             if (this.expandComputes) {
                 rpQueryDR = computeQuery
@@ -290,8 +293,10 @@ public class ResourcePoolQueryHelper {
             this.additionalQueryClausesProvider.accept(queryBuilder);
         }
 
-        return new QueryByPages<>(this.host, queryBuilder.build(), ComputeState.class, null)
-                .setMaxPageSize(PAGE_SIZE)
+        QueryByPages<ComputeState> queryByPages = new QueryByPages<>(this.host,
+                queryBuilder.build(), ComputeState.class, null);
+        queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+        return queryByPages.setMaxPageSize(PAGE_SIZE)
                 .collectLinks(Collectors.toCollection(ArrayList::new));
     }
 
@@ -310,7 +315,10 @@ public class ResourcePoolQueryHelper {
                 .addKindFieldClause(ComputeState.class)
                 .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, missingComputeLinks)
                 .build();
-        return new QueryByPages<>(this.host, query, ComputeState.class, null)
+        QueryByPages<ComputeState> queryByPages = new QueryByPages<>(this.host, query,
+                ComputeState.class, null);
+        queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+        return queryByPages
                 .setMaxPageSize(PAGE_SIZE)
                 .collectDocuments(Collectors.toMap(cs -> cs.documentSelfLink, cs -> cs))
                 .thenAccept(computesMap -> storeComputes(null, computesMap));

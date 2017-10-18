@@ -111,7 +111,7 @@ public class VSphereAdapterPowerService extends StatelessService {
 
     private Operation patchComputeResource(ComputeState state, URI computeReference) {
         return Operation.createPatch(
-                PhotonModelUriUtils.createDiscoveryUri(getHost(), computeReference))
+                PhotonModelUriUtils.createInventoryUri(getHost(), computeReference))
                 .setBody(state);
     }
 

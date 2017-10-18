@@ -21,7 +21,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -58,7 +57,7 @@ public class VsphereResourceCleanerService extends StatelessService {
             return;
         }
 
-        Operation.createGet(PhotonModelUriUtils.createDiscoveryUri(getHost(), req.resourceLink))
+        Operation.createGet(PhotonModelUriUtils.createInventoryUri(getHost(), req.resourceLink))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         patch.complete();
@@ -83,7 +82,7 @@ public class VsphereResourceCleanerService extends StatelessService {
         update.powerState = PowerState.OFF;
         update.lifecycleState = LifecycleState.RETIRED;
 
-        return Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
+        return Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), computeLink))
                 .setBody(update);
     }
 
@@ -99,7 +98,7 @@ public class VsphereResourceCleanerService extends StatelessService {
                 .setResultLimit(1)
                 .build();
 
-        QueryUtils.startQueryTask(this, task, ServiceTypeCluster.DISCOVERY_SERVICE)
+        QueryUtils.startInventoryQueryTask(this, task)
                 .handle((qt, e) -> {
                     if (e != null) {
                         patch.complete();
@@ -109,7 +108,7 @@ public class VsphereResourceCleanerService extends StatelessService {
                     if (qt.results.nextPageLink == null) {
                         // no resource placed here, safe to delete
                         Operation.createDelete(
-                                PhotonModelUriUtils.createDiscoveryUri(getHost(), computeLink))
+                                PhotonModelUriUtils.createInventoryUri(getHost(), computeLink))
                                 .setCompletion(justComplete(patch))
                                 .sendWith(this);
                     } else {

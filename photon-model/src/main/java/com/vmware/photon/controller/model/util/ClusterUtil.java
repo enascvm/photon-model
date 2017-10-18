@@ -35,9 +35,19 @@ public class ClusterUtil {
     /**
      * Discovery URI set as a system property.
      * Eg: -Dphoton-model.discovery.uri=http://localhost/
+     *
+     * Deprecated - see INVENTORY_URI.
      */
+    @Deprecated
     public static final String DISCOVERY_URI = System
             .getProperty(UriPaths.PROPERTY_PREFIX + "discovery.uri");
+
+    /**
+     * Inventory URI set as a system property. Defaults to discovery uri for backwards compatibility.
+     * Eg: -Dphoton-model.inventory.uri=http://localhost/
+     */
+    public static final String INVENTORY_URI = System
+            .getProperty(UriPaths.PROPERTY_PREFIX + "inventory.uri", DISCOVERY_URI);
 
     /**
      * Enum mapping Clusters with their URIs.
@@ -45,7 +55,9 @@ public class ClusterUtil {
     public enum ServiceTypeCluster implements ServiceEndpointLocator {
 
         METRIC_SERVICE(METRICS_URI),
-        DISCOVERY_SERVICE(DISCOVERY_URI);
+        @Deprecated
+        DISCOVERY_SERVICE(INVENTORY_URI),
+        INVENTORY_SERVICE(INVENTORY_URI);
 
         private String uri;
 

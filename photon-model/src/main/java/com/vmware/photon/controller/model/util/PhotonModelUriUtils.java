@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.util;
 
-import static com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster.DISCOVERY_SERVICE;
+import static com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE;
 
 import java.net.URI;
 
@@ -22,12 +22,12 @@ import com.vmware.xenon.common.UriUtils;
 
 public class PhotonModelUriUtils {
 
-    public static URI createDiscoveryUri(ServiceHost host, String link) {
-        return UriUtils.buildUri(ClusterUtil.getClusterUri(host, DISCOVERY_SERVICE), link);
+    public static URI createInventoryUri(ServiceHost host, String link) {
+        return UriUtils.buildUri(ClusterUtil.getClusterUri(host, INVENTORY_SERVICE), link);
     }
 
-    public static URI createDiscoveryUri(ServiceHost host, URI uri) {
-        URI clusterUri = ClusterUtil.getClusterUri(host, DISCOVERY_SERVICE);
+    public static URI createInventoryUri(ServiceHost host, URI uri) {
+        URI clusterUri = ClusterUtil.getClusterUri(host, INVENTORY_SERVICE);
         return UriUtils.buildUri(clusterUri.getHost(), clusterUri.getPort(), uri.getPath(),
                 uri.getQuery());
     }

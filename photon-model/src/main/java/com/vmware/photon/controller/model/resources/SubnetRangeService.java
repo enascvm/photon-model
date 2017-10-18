@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.SubnetValidator;
 
 import com.vmware.xenon.common.DeferredResult;
@@ -487,6 +488,8 @@ public class SubnetRangeService extends StatefulService {
                 SubnetRangeState.class,
                 null
         );
+
+        queryTop.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryTop.collectDocuments(Collectors.toList());
     }

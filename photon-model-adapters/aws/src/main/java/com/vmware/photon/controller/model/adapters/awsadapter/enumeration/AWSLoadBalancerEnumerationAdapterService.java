@@ -50,7 +50,6 @@ import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterR
 import com.vmware.photon.controller.model.adapters.util.Pair;
 import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
@@ -58,6 +57,7 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
@@ -152,12 +152,14 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
                     .addKindFieldClause(ComputeState.class)
                     .addInClause(ResourceState.FIELD_NAME_ID, instanceIds);
 
-            QueryStrategy<ComputeState> queryByPages = new QueryByPages<>(
+            QueryByPages<ComputeState> queryByPages = new QueryByPages<>(
                     this.service.getHost(),
                     qBuilder.build(),
                     ComputeState.class,
                     context.request.parentCompute.tenantLinks,
                     context.request.original.endpointLink);
+
+            queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
             return queryByPages.queryDocuments(
                     computeState -> this.localComputeStates

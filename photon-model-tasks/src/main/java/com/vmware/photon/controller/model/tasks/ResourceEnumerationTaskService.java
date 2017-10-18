@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getResourceExpirationMicros;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.Collection;
@@ -283,7 +284,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         ComputeEnumerateResourceRequest req = new ComputeEnumerateResourceRequest();
         req.resourcePoolLink = state.resourcePoolLink;
         req.adapterManagementReference = state.adapterManagementReference;
-        req.resourceReference = UriUtils.buildUri(getHost(), state.parentComputeLink);
+        req.resourceReference = createInventoryUri(this.getHost(), state.parentComputeLink);
         req.enumerationAction = state.enumerationAction;
         req.taskReference = UriUtils.buildUri(getHost(),
                 state.documentSelfLink);

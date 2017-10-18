@@ -81,6 +81,22 @@ public class QueryUtils {
         return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
     }
 
+    /**
+     * Utility method to execute the given query task on inventory cluster.
+     *
+     * @param service
+     *            The service executing the query task.
+     * @param queryTask
+     *            The query task.
+     */
+    public static DeferredResult<QueryTask> startInventoryQueryTask(Service service,
+            QueryTask queryTask) {
+
+        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask,
+                ServiceTypeCluster.INVENTORY_SERVICE);
+        return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
+    }
+
 
 
     /**
@@ -109,18 +125,22 @@ public class QueryUtils {
 
     public static Operation createQueryTaskOperation(Service service,
                                                  QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator) {
-        // We don't want any unbounded queries. By default, we cap the query results to 10000.
-        if (queryTask.querySpec.resultLimit == null) {
-            service.getHost().log(Level.WARNING,
-                    "No result limit set on the query: %s. Defaulting to %d",
-                    Utils.toJson(queryTask), MAX_RESULT_LIMIT);
-            queryTask.querySpec.options.add(QueryOption.TOP_RESULTS);
-            queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
-        } else if (queryTask.querySpec.resultLimit > MAX_RESULT_LIMIT) {
-            service.getHost().log(Level.WARNING,
-                    "The result limit set on the query is too high: %s. Defaulting to %d",
-                    Utils.toJson(queryTask), MAX_RESULT_LIMIT);
-            queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
+        boolean isCountQuery = queryTask.querySpec.options.contains(QueryOption.COUNT);
+
+        if (!isCountQuery) {
+            // We don't want any unbounded queries. By default, we cap the query results to 10000.
+            if (queryTask.querySpec.resultLimit == null) {
+                service.getHost().log(Level.WARNING,
+                        "No result limit set on the query: %s. Defaulting to %d",
+                        Utils.toJson(queryTask), MAX_RESULT_LIMIT);
+                queryTask.querySpec.options.add(QueryOption.TOP_RESULTS);
+                queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
+            } else if (queryTask.querySpec.resultLimit > MAX_RESULT_LIMIT) {
+                service.getHost().log(Level.WARNING,
+                        "The result limit set on the query is too high: %s. Defaulting to %d",
+                        Utils.toJson(queryTask), MAX_RESULT_LIMIT);
+                queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
+            }
         }
 
         if (queryTask.documentExpirationTimeMicros == 0) {

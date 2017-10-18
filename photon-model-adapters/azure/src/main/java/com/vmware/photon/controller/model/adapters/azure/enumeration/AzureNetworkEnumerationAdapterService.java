@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getD
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -594,7 +595,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         qt.tenantLinks = context.parentCompute.tenantLinks;
 
-        QueryUtils.startQueryTask(this, qt)
+        QueryUtils.startInventoryQueryTask(this, qt)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
@@ -637,7 +638,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         };
         logFine(() -> String.format("Querying page [%s] for getting local disk states",
                 context.enumNextPageLink));
-        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), context.enumNextPageLink))
                 .setCompletion(completionHandler));
     }
 
@@ -661,7 +662,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         qt.tenantLinks = context.parentCompute.tenantLinks;
 
-        QueryUtils.startQueryTask(this, qt)
+        QueryUtils.startInventoryQueryTask(this, qt)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
@@ -704,7 +705,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         };
         logFine(() -> String.format("Querying page [%s] for getting network states",
                 context.enumNextPageLink));
-        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), context.enumNextPageLink))
                 .setCompletion(completionHandler));
     }
 
@@ -731,7 +732,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
@@ -774,7 +775,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         };
         logFine(() -> String.format("Querying page [%s] for getting subnet states",
                 context.enumNextPageLink));
-        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), context.enumNextPageLink))
                 .setCompletion(completionHandler));
     }
 
@@ -1177,7 +1178,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void sendDeleteQueryTask(QueryTask q, NetworkEnumContext context,
             NetworkEnumStages next) {
 
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
@@ -1204,7 +1205,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         logFine(() -> String.format("Querying page [%s] for resources to be deleted",
                 context.deletionNextPageLink));
-        sendRequest(Operation.createGet(this, context.deletionNextPageLink)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), context.deletionNextPageLink))
                 .setCompletion((completedOp, ex) -> {
                     if (ex != null) {
                         handleError(context, ex);

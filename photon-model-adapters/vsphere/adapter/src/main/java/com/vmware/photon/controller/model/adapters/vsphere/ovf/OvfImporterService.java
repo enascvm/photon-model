@@ -78,7 +78,7 @@ public class OvfImporterService extends StatelessService {
 
             List<ComputeDescription> ovfDescriptions = parser.parse(doc, req.template);
             Stream<Operation> opStream = ovfDescriptions.stream().map(desc -> Operation
-                    .createPost(PhotonModelUriUtils.createDiscoveryUri(getHost(), ComputeDescriptionService.FACTORY_LINK))
+                    .createPost(PhotonModelUriUtils.createInventoryUri(getHost(), ComputeDescriptionService.FACTORY_LINK))
                     .setBodyNoCloning(desc));
 
             OperationJoin join = OperationJoin.create()

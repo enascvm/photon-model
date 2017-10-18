@@ -222,6 +222,6 @@ public class AzureSubscriptionEndpointCreationService extends StatelessService {
     }
 
     private URI getInventoryServiceUri() {
-        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.INVENTORY_SERVICE);
     }
 }

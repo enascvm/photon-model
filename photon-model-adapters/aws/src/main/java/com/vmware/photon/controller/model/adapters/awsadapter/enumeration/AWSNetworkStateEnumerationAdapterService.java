@@ -77,7 +77,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
@@ -88,7 +87,7 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
-
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -456,7 +455,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 context.request.tenantLinks);
 
         // create the query to find resources
-        QueryUtils.startQueryTask(this, queryTask)
+        QueryUtils.startInventoryQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
                         logSevere(() -> String.format("Failure retrieving query results: %s",
@@ -512,7 +511,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 context.request.tenantLinks);
 
         // create the query to find resources
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         logSevere(() -> String.format("Failed retrieving query results: %s",
@@ -874,12 +873,14 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                     Occurance.MUST_NOT_OCCUR);
         }
 
-        QueryStrategy<? extends ResourceState> queryLocalStates = new QueryByPages<>(
+        QueryByPages<? extends ResourceState> queryLocalStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 localStateClass,
                 context.request.tenantLinks,
                 context.request.request.endpointLink);
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
 

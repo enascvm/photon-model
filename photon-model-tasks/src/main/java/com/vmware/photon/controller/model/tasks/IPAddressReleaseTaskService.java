@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.IPAddressService;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -87,6 +88,7 @@ public class IPAddressReleaseTaskService extends StatelessService {
                 this.getHost(),
                 getReleasedIPAddressesQuery,
                 IPAddressService.IPAddressState.class, null);
+        queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryByPages.collectDocuments(Collectors.toList())
                 .exceptionally(e -> {

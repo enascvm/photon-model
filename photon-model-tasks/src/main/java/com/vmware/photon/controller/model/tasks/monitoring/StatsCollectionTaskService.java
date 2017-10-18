@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
@@ -224,7 +226,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         // load the RP state, if not already
         if (resourcePoolState == null) {
             sendRequest(Operation.createGet(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                    ServiceTypeCluster.DISCOVERY_SERVICE), currentState.resourcePoolLink))
+                    ServiceTypeCluster.INVENTORY_SERVICE), currentState.resourcePoolLink))
                     .setCompletion((o, e) -> {
                         if (e != null) {
                             if (e instanceof ServiceNotFoundException) {
@@ -274,7 +276,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                 .setQuery(resourcePoolStateQuery)
                 .setResultLimit(resultLimit);
         QueryTask qTask = queryTaskBuilder.build();
-        QueryUtils.startQueryTask(this, qTask, ServiceTypeCluster.DISCOVERY_SERVICE)
+        QueryUtils.startInventoryQueryTask(this, qTask)
                 .whenComplete((queryRsp, queryEx) -> {
                     if (queryEx != null) {
                         TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), queryEx);
@@ -294,8 +296,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
     private void getResources(Operation op, StatsCollectionTaskState currentState) {
         sendRequest(Operation
-                .createGet(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.nextPageLink))
+                .createGet(createInventoryUri(getHost(), currentState.nextPageLink))
                 .setCompletion(
                         (getOp, getEx) -> {
                             if (getEx != null) {

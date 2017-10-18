@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.List;
 import java.util.Set;
@@ -25,9 +26,6 @@ import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskC
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState;
-
-import com.vmware.photon.controller.model.util.ClusterUtil;
-import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -178,7 +176,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
                 .setQuery(currentState.query).setResultLimit(resultLimit);
         QueryTask qTask = queryTaskBuilder.build();
-        QueryUtils.startQueryTask(this, qTask, ServiceTypeCluster.DISCOVERY_SERVICE)
+        QueryUtils.startInventoryQueryTask(this, qTask)
                 .whenComplete((queryRsp, queryEx) -> {
                     if (queryEx != null) {
                         sendSelfFailurePatch(currentState, queryEx.getMessage());
@@ -198,8 +196,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     private void getResources(StatsAggregationTaskState currentState) {
         sendRequest(Operation
-                .createGet(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.queryResultLink))
+                .createGet(createInventoryUri(getHost(), currentState.queryResultLink))
                 .setCompletion(
                         (getOp, getEx) -> {
                             if (getEx != null) {

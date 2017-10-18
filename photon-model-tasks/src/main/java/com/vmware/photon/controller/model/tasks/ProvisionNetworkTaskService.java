@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.util.List;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -201,7 +203,7 @@ public class ProvisionNetworkTaskService extends TaskService<ProvisionNetworkTas
         req.requestType = taskState.requestType;
         req.authCredentialsLink = networkState.authCredentialsLink;
         req.resourcePoolLink = networkState.resourcePoolLink;
-        req.resourceReference = UriUtils.buildUri(this.getHost(),
+        req.resourceReference = createInventoryUri(this.getHost(),
                 taskState.networkDescriptionLink);
         req.taskReference = this.getUri();
         req.isMockRequest = taskState.isMockRequest;

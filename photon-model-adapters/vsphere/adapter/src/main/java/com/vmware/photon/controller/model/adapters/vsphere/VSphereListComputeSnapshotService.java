@@ -20,7 +20,6 @@ import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.SnapshotService;
-import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.StatelessService;
@@ -66,8 +65,7 @@ public class VSphereListComputeSnapshotService extends StatelessService {
                 .addOption(QueryTask.QuerySpecification.QueryOption.INDEXED_METADATA)
                 .build();
 
-        QueryUtils.startQueryTask(this, qTask, ClusterUtil.ServiceTypeCluster
-                .DISCOVERY_SERVICE)
+        QueryUtils.startInventoryQueryTask(this, qTask)
                 .thenApply(op -> {
                     QueryResultsProcessor rp = QueryResultsProcessor.create(op);
                     List<SnapshotService.SnapshotState> snapshots = new ArrayList<>();

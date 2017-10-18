@@ -109,7 +109,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         @Override
         protected URI getParentAuthRef(AzureSubscriptionsEnumerationContext context) {
             return UriUtils.extendUri(ClusterUtil.getClusterUri(context.service.getHost(),
-                    ServiceTypeCluster.DISCOVERY_SERVICE),
+                    ServiceTypeCluster.INVENTORY_SERVICE),
                     context.parent.description.authCredentialsLink);
         }
     }
@@ -178,7 +178,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         QueryByPages<ComputeState> querySubscriptionsComputes = new QueryByPages<>(
                 getHost(), azureComputesQuery, ComputeState.class,
                 enumerationContext.parent.tenantLinks);
-        querySubscriptionsComputes.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        querySubscriptionsComputes.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         querySubscriptionsComputes.queryDocuments(computeState -> {
                     if (computeState.customProperties != null
                             && computeState.customProperties
@@ -207,7 +207,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         QueryByPages<EndpointState> querySubscriptionEndpoints = new QueryByPages<>(getHost(),
                 azureSubscriptionEndpointQuery, EndpointState.class,
                 enumerationContext.parent.tenantLinks);
-        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         querySubscriptionEndpoints.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
         querySubscriptionEndpoints.collectDocuments(Collectors.toList())
                 .whenComplete((subscriptionEndpoints, t) -> {
@@ -440,6 +440,6 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     }
 
     private URI getInventoryServiceUri() {
-        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.INVENTORY_SERVICE);
     }
 }

@@ -13,8 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea.stats;
 
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.INTERNAL_REQUEST_TIMEOUT_SECONDS;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants.INTERNAL_REQUEST_TIMEOUT_SECONDS;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.AUTO_DISCOVERED_ENTITY;
 
 import java.io.File;
@@ -45,7 +44,6 @@ import java.util.stream.Collectors;
 
 import com.google.common.collect.Sets;
 import com.opencsv.CSVReader;
-
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Interceptor;
@@ -69,10 +67,8 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.ea.AzureCostHelper;
 import com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler;
-import com.vmware.photon.controller.model.adapters.azure.ea.enumeration
-        .AzureSubscriptionsEnumerationService;
-import com.vmware.photon.controller.model.adapters.azure.ea.enumeration
-        .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService;
+import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureErrorResponse;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureResource;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureService;
@@ -96,11 +92,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
-import com.vmware.photon.controller.model.tasks.monitoring
-        .SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
-import com.vmware.photon.controller.model.tasks.monitoring
-        .SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
@@ -348,7 +341,7 @@ public class AzureCostStatsService extends StatelessService {
         QueryByPages<EndpointState> querySubscriptionEndpoints = new QueryByPages<>(getHost(),
                 createQueryForSubscriptionEndpoints(context, subscriptionsToQueryResources),
                 EndpointState.class, context.computeHostDesc.tenantLinks);
-        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         querySubscriptionEndpoints.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
         querySubscriptionEndpoints.collectDocuments(Collectors.toList())
                 .whenComplete((subscriptionEndpoints, t) -> {
@@ -395,7 +388,7 @@ public class AzureCostStatsService extends StatelessService {
         QueryByPages<ComputeState> queryVms = new QueryByPages<>(getHost(),
                 createQueryForVmsWithEndpoints(endpointLinkToSubscription.keySet()),
                 ComputeState.class, context.computeHostDesc.tenantLinks);
-        queryVms.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        queryVms.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         queryVms.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
         queryVms.queryDocuments(computeState -> {
                     if (computeState.endpointLink != null) {
@@ -985,7 +978,8 @@ public class AzureCostStatsService extends StatelessService {
                 .setQuery(azureSubscriptionsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeHostDesc.tenantLinks;
-        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
+
+        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.INVENTORY_SERVICE)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         getFailureConsumer(context).accept(exception);
@@ -1794,10 +1788,6 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private URI getInventoryServiceUri() {
-        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
-    }
-
-    private URI getMetricsServiceUri() {
-        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE);
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.INVENTORY_SERVICE);
     }
 }

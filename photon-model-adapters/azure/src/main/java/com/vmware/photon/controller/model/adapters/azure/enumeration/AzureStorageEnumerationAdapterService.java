@@ -95,9 +95,9 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -110,6 +110,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -123,7 +124,6 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Enumeration adapter for data collection of storage artifacts in Azure.
@@ -528,6 +528,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
 
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+
         queryLocalStates.collectDocuments(Collectors.toList()).whenComplete((sds, ex) -> {
             if (ex != null) {
                 handleError(context, ex);
@@ -795,13 +797,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros));
 
-        QueryStrategy<StorageDescription> queryLocalStates = new QueryByPages<>(
+        QueryByPages<StorageDescription> queryLocalStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 StorageDescription.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
         queryLocalStates.queryDocuments(sd -> {
@@ -969,13 +973,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .addInClause(ResourceGroupState.FIELD_NAME_ID,
                         context.storageContainers.keySet());
 
-        QueryStrategy<ResourceGroupState> queryLocalStates = new QueryByPages<>(
+        QueryByPages<ResourceGroupState> queryLocalStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 ResourceGroupState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         queryLocalStates.queryDocuments(rg -> {
             if (context.resourceGroupStates.containsKey(rg.id)) {
@@ -1027,13 +1033,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         context.parentCompute.documentSelfLink)
                 .addFieldClause(StorageDescription.FIELD_NAME_NAME, storageAcctName);
 
-        QueryStrategy<StorageDescription> queryLocalStates = new QueryUtils.QueryTop<StorageDescription>(
+        QueryTop<StorageDescription> queryLocalStates = new QueryUtils.QueryTop<>(
                 getHost(),
                 qBuilder.build(),
                 StorageDescription.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
                 .setMaxResultsLimit(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryLocalStates
                 .collectLinks(Collectors.toSet())
@@ -1176,13 +1184,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros));
 
-        QueryStrategy<ResourceGroupState> queryLocalStates = new QueryByPages<>(
+        QueryByPages<ResourceGroupState> queryLocalStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 ResourceGroupState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
         queryLocalStates.queryDocuments(rg -> {
@@ -1298,13 +1308,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         qBuilder.addInClause(AZURE_STORAGE_TYPE,
                 Arrays.asList(AZURE_STORAGE_BLOBS, AZURE_STORAGE_DISKS));
 
-        QueryStrategy<DiskState> queryLocalStates = new QueryByPages<>(
+        QueryByPages<DiskState> queryLocalStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 DiskState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         // Delete stale resources.
         queryLocalStates.queryDocuments(ds -> {
@@ -1367,13 +1379,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             context.parentCompute.documentSelfLink)
                     .addFieldClause(ResourceGroupState.FIELD_NAME_ID, containerId);
 
-            QueryStrategy<ResourceGroupState> queryLocalStates = new QueryUtils.QueryTop<ResourceGroupState>(
+            QueryTop<ResourceGroupState> queryLocalStates = new QueryUtils.QueryTop<>(
                     getHost(),
                     qBuilder.build(),
                     ResourceGroupState.class,
                     context.parentCompute.tenantLinks,
                     context.request.endpointLink)
                     .setMaxResultsLimit(getQueryResultLimit());
+            queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
             return queryLocalStates.collectLinks(Collectors.toSet())
                     .thenCompose(rgLinks -> {
@@ -1592,13 +1605,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         qBuilder.addClause(typeFilterQuery.build());
 
-        QueryStrategy<DiskState> queryLocalStates = new QueryByPages<>(
+        QueryByPages<DiskState> queryLocalStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 DiskState.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
                 .setMaxPageSize(getQueryResultLimit());
+
+        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
 
@@ -1635,12 +1650,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     + QueryUtils.TEN_MINUTES_IN_MICROS;
         }
 
-        return sendWithDeferredResult(
-                Operation.createPost(
-                        context.request.buildUri(ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                        .setBody(queryTask)
-                        .setConnectionSharing(true),
-                QueryTask.class)
+        return QueryUtils.startInventoryQueryTask(this, queryTask)
                 .thenCompose(result -> {
                     if (result.results != null && result.results.documentCount != 0) {
                         logFine(() -> String.format(

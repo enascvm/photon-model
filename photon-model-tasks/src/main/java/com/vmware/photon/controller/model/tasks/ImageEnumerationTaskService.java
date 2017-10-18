@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.tasks;
 import static io.netty.util.internal.StringUtil.isNullOrEmpty;
 
 import static com.vmware.photon.controller.model.util.AssertUtil.assertTrue;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.EXPAND;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.FIXED_ITEM_NAME;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
@@ -48,13 +49,13 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
-import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
@@ -466,11 +467,13 @@ public class ImageEnumerationTaskService
     private DeferredResult<SendImageEnumerationAdapterContext> getEndpointStateByType(
             SendImageEnumerationAdapterContext ctx) {
 
-        QueryStrategy<EndpointState> queryEndpointsByType = new QueryTop<>(
+        QueryTop<EndpointState> queryEndpointsByType = new QueryTop<>(
                 getHost(),
                 endpointsByTypeQuery(ctx).build(),
                 EndpointState.class,
                 null).setMaxResultsLimit(1);
+
+        queryEndpointsByType.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryEndpointsByType.collectDocuments(Collectors.toList()).thenApply(epStates -> {
 
@@ -567,7 +570,8 @@ public class ImageEnumerationTaskService
 
         // The end-point is ALWAYS set regardless of Private/Public enum type
         // In case of Public, end-point credentials are used to run the enumeration
-        adapterReq.resourceReference = buildUri(getHost(), ctx.endpointState.documentSelfLink);
+        adapterReq.resourceReference = createInventoryUri(this.getHost(),
+                ctx.endpointState.documentSelfLink);
         adapterReq.taskReference = buildUri(getHost(), ctx.taskState.documentSelfLink);
         adapterReq.isMockRequest = ctx.taskState.options.contains(TaskOption.IS_MOCK);
 
@@ -630,6 +634,7 @@ public class ImageEnumerationTaskService
                 ImageState.class,
                 null /* tenants */);
         queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
+        queryAll.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         final List<DeferredResult<Operation>> deleteDRs = new ArrayList<>();
 

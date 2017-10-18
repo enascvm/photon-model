@@ -60,7 +60,7 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
         }
 
         Operation op = Operation.createGet(
-                PhotonModelUriUtils.createDiscoveryUri(getService().getHost(), dvsLink));
+                PhotonModelUriUtils.createInventoryUri(getService().getHost(), dvsLink));
         return getService().sendWithDeferredResult(op);
     }
 
@@ -127,7 +127,7 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
                     .put(DvsProperties.PORT_GROUP_KEY, pgKey);
 
             OperationContext.setFrom(getOperationContext());
-            Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getService().getHost(),
+            Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getService().getHost(),
                     this.subnetState.documentSelfLink))
                     .setBody(this.subnetState)
                     .setCompletion((o, e) -> {
@@ -153,7 +153,7 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
     private DeferredResult<Operation> fetchSubnet(Void start) {
         Operation op = Operation.createGet(
-                PhotonModelUriUtils.createDiscoveryUri(getService().getHost(), getRequest()
+                PhotonModelUriUtils.createInventoryUri(getService().getHost(), getRequest()
                 .resourceReference));
         return getService().sendWithDeferredResult(op);
     }

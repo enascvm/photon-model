@@ -14,8 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ACCOUNT_IS_AUTO_DISCOVERED;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants
-        .AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ACCOUNT_ID_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_LINKED_ACCOUNT_IDS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_EBS;
@@ -90,7 +89,6 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
@@ -463,7 +461,7 @@ public class AWSCostStatsService extends StatelessService {
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeDesc.tenantLinks;
 
-        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
+        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster.INVENTORY_SERVICE)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         getFailureConsumer(context).accept(e);
@@ -592,7 +590,7 @@ public class AWSCostStatsService extends StatelessService {
             AWSCostStatsCreationStages nextStage, AWSCostStatsCreationSubStage nextSubStage) {
         QueryByPages<ResourceState> queryResources = new QueryByPages<>(getHost(), query, ResourceState.class,
                 context.computeDesc.tenantLinks);
-        queryResources.setClusterType(ServiceTypeCluster.DISCOVERY_SERVICE);
+        queryResources.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         queryResources.queryDocuments(getAwsResourceConsumer(context)).whenComplete((v, t) -> {
             if (t != null) {
                 getFailureConsumer(context).accept(t);
@@ -1189,6 +1187,6 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     private URI getInventoryServiceUri() {
-        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.INVENTORY_SERVICE);
     }
 }

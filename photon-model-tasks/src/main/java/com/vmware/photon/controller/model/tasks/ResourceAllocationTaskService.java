@@ -367,7 +367,7 @@ public class ResourceAllocationTaskService
             q.querySpec.query.addBooleanClause(descriptionLinkClause);
         }
 
-        QueryUtils.startQueryTask(this, q).whenComplete((o, ex) -> {
+        QueryUtils.startInventoryQueryTask(this, q).whenComplete((o, ex) -> {
             if (ex != null) {
                 sendFailureSelfPatch(ex);
                 return;

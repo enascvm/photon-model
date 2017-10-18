@@ -38,6 +38,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.util.AssertUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -213,6 +214,7 @@ public class AzureSecurityGroupService extends StatelessService {
                 null,
                 context.securityGroupState.endpointLink);
         queryNetworkStates.setMaxResultsLimit(1);
+        queryNetworkStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryNetworkStates.collectDocuments(Collectors.toList())
                 .thenApply(networkStates -> {

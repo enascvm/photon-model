@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -334,7 +336,7 @@ public class SingleResourceStatsAggregationTaskService extends
         // Lookup last rollup time from in memory stats - /<resource-link>/stats
         URI statsUri = UriUtils.buildStatsUri(
                 UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.resourceLink));
+                        ServiceTypeCluster.INVENTORY_SERVICE), currentState.resourceLink));
 
         sendRequest(Operation.createGet(statsUri)
                 .setCompletion((o, e) -> {
@@ -452,7 +454,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 .setQuery(currentState.query)
                 .setResultLimit(resultLimit)
                 .build();
-        QueryUtils.startQueryTask(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
+        QueryUtils.startInventoryQueryTask(this, queryTask)
                 .whenComplete((resultTask, queryEx) -> {
                     if (queryEx != null) {
                         sendSelfFailurePatch(currentState, queryEx.getMessage());
@@ -480,8 +482,7 @@ public class SingleResourceStatsAggregationTaskService extends
      */
     private void getResources(SingleResourceStatsAggregationTaskState currentState) {
         sendRequest(Operation
-                .createGet(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
-                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.queryResultLink))
+                .createGet(createInventoryUri(getHost(), currentState.queryResultLink))
                 .setCompletion(
                         (getOp, getEx) -> {
                             if (getEx != null) {
@@ -988,7 +989,7 @@ public class SingleResourceStatsAggregationTaskService extends
             lastUpdateStat.name = rollupTime.getKey();
             lastUpdateStat.latestValue = 0;
             URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils.extendUri(
-                    ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE),
+                    ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.INVENTORY_SERVICE),
                     currentState.resourceLink));
             operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
         }
@@ -1042,7 +1043,7 @@ public class SingleResourceStatsAggregationTaskService extends
 
                     URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils.extendUri(
                             ClusterUtil.getClusterUri(getHost(),
-                                    ServiceTypeCluster.DISCOVERY_SERVICE),
+                                    ServiceTypeCluster.INVENTORY_SERVICE),
                             currentState.resourceLink));
                     operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
                 }
@@ -1097,7 +1098,7 @@ public class SingleResourceStatsAggregationTaskService extends
             lastUpdateStat.latestValue = aggregateMetricLastRollUpTime;
             URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils.extendUri(
                     ClusterUtil.getClusterUri(getHost(),
-                            ServiceTypeCluster.DISCOVERY_SERVICE),
+                            ServiceTypeCluster.INVENTORY_SERVICE),
                     currentState.resourceLink));
             operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
         }

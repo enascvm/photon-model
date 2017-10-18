@@ -231,7 +231,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
      * Create disk patch request to update the details of the disk.
      */
     private Operation createDiskPatch(DiskService.DiskState ds) {
-        return Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ds.documentSelfLink))
+        return Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ds.documentSelfLink))
                 .setBody(ds);
     }
 
@@ -239,7 +239,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
      * Create disk put request to update the details of the disk.
      */
     private Operation createDiskPut(DiskService.DiskState ds) {
-        return Operation.createPut(PhotonModelUriUtils.createDiscoveryUri(getHost(), ds.documentSelfLink))
+        return Operation.createPut(PhotonModelUriUtils.createInventoryUri(getHost(), ds.documentSelfLink))
                 .setBody(ds);
     }
 
@@ -305,7 +305,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
      * Patch the compute with the details of the disk references and complete the request.
      */
     private Operation createComputePatch(VSphereVMDiskContext ctx) {
-        return Operation.createPatch(PhotonModelUriUtils.createDiscoveryUri(getHost(), ctx
+        return Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ctx
                 .computeDesc.documentSelfLink))
                 .setBody(ctx.computeDesc);
     }
@@ -314,7 +314,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
      * Invoke PUT operation on compute to remove the disk link from the links.
      */
     private Operation createComputePut(VSphereVMDiskContext ctx) {
-        return Operation.createPut(PhotonModelUriUtils.createDiscoveryUri(getHost(), ctx
+        return Operation.createPut(PhotonModelUriUtils.createInventoryUri(getHost(), ctx
                 .computeDesc.documentSelfLink))
                 .setBody(ctx.computeDesc);
     }

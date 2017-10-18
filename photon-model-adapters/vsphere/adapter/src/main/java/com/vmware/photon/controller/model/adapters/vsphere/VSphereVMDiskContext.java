@@ -76,7 +76,7 @@ public class VSphereVMDiskContext {
             Consumer<VSphereVMDiskContext> onSuccess) {
 
         if (ctx.computeDesc == null) {
-            URI computeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     UriUtils.extendUriWithQuery(ctx.request.resourceReference,
                             UriUtils.URI_PARAM_ODATA_EXPAND,
                             Boolean.TRUE.toString()));
@@ -94,7 +94,7 @@ public class VSphereVMDiskContext {
         }
 
         if (ctx.diskState == null) {
-            URI diskUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI diskUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     DiskService.DiskStateExpanded.buildUri(UriUtils.buildUri(service.getHost(),
                             ctx.request.payload.get(DISK_LINK))));
             AdapterUtils.getServiceState(service, diskUri, op -> {
@@ -152,7 +152,7 @@ public class VSphereVMDiskContext {
         }
 
         if (ctx.parentComputeDesc == null && ctx.computeDesc.parentLink != null) {
-            URI computeUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     UriUtils.extendUriWithQuery(
                             UriUtils.buildUri(service.getHost(), ctx.computeDesc.parentLink),
                             UriUtils.URI_PARAM_ODATA_EXPAND,
@@ -174,7 +174,7 @@ public class VSphereVMDiskContext {
                 return;
             }
 
-            URI credUri = PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+            URI credUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
                     UriUtils.buildUri(service.getHost(),
                             ctx.parentComputeDesc.description.authCredentialsLink));
             AdapterUtils.getServiceState(service, credUri, op -> {

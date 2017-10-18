@@ -61,6 +61,8 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Protoco
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -385,7 +387,8 @@ public class AWSLoadBalancerService extends StatelessService {
             AWSLoadBalancerContext context) {
         SecurityGroupInstanceRequest req = new SecurityGroupInstanceRequest();
         req.requestType = type;
-        req.resourceReference = UriUtils.buildUri(this.getHost(),
+        req.resourceReference = UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                ServiceTypeCluster.INVENTORY_SERVICE),
                 securityGroupState.documentSelfLink);
         req.authCredentialsLink = securityGroupState.authCredentialsLink;
         req.resourcePoolLink = securityGroupState.resourcePoolLink;

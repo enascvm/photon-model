@@ -250,7 +250,7 @@ public class EndpointAdapterUtils {
                         Pair.of(cd, endpoint.computeDescriptionLink),
                         Pair.of(cs, endpoint.computeLink),
                         Pair.of(es, endpoint.documentSelfLink))
-                        .map((p) -> Operation.createPatch(body.buildUri(p.right))
+                        .map((p) -> Operation.createPatch(service.getHost(), p.right)
                                 .setBody(p.left)
                                 .setReferer(service.getUri()));
 

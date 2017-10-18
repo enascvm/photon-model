@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.crea
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -456,7 +457,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                     .build();
             queryTask.tenantLinks = this.context.parentCompute.tenantLinks;
 
-            QueryUtils.startQueryTask(this.service, queryTask)
+            QueryUtils.startInventoryQueryTask(this.service, queryTask)
                     .whenComplete((qrt, e) -> {
                         if (e != null) {
                             this.service.logSevere(() -> String.format("Failure retrieving query"
@@ -862,7 +863,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
             q.tenantLinks = this.context.parentCompute.tenantLinks;
             q.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
             this.service.logFine(() -> "Querying disks for deletion");
-            QueryUtils.startQueryTask(this.service, q)
+            QueryUtils.startInventoryQueryTask(this.service, q)
                     .whenComplete((queryTask, e) -> {
                         if (e != null) {
                             this.service.logWarning("Failure getting EBS diskStates for deletion: %s",
@@ -897,7 +898,8 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                     this.context.deletionNextPageLink));
             this.service
                     .sendRequest(
-                            Operation.createGet(this.service, this.context.deletionNextPageLink)
+                            Operation.createGet(createInventoryUri(this.service.getHost(),
+                                    this.context.deletionNextPageLink))
                                     .setCompletion((o, e) -> {
                                         if (e != null) {
                                             signalErrorToEnumerationAdapter(e);

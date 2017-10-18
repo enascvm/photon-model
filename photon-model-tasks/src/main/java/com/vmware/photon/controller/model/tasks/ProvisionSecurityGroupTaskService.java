@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.EXPAND;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.FIXED_ITEM_NAME;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
@@ -230,8 +231,7 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
             String subTaskLink) {
         SecurityGroupInstanceRequest req = new SecurityGroupInstanceRequest();
         req.requestType = taskState.requestType;
-        req.resourceReference = UriUtils.buildUri(this.getHost(),
-                securityGroupDescriptionLink);
+        req.resourceReference = createInventoryUri(this.getHost(), securityGroupDescriptionLink);
         req.authCredentialsLink = securityGroupState.authCredentialsLink;
         req.resourcePoolLink = securityGroupState.resourcePoolLink;
         req.taskReference = UriUtils.buildUri(getHost(), subTaskLink);
