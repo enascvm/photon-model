@@ -902,8 +902,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     logFine(() -> String.format("Found %d matching diagnostics storage accounts",
                             queryTask.results.documentCount));
 
-                    // If there are no matches, continue to creating compute states
-                    if (queryTask.results.documentCount == 0) {
+                    if (queryTask.results == null || queryTask.results.documents == null
+                            || queryTask.results.documents.isEmpty()) {
                         ctx.subStage = next;
                         handleSubStage(ctx);
                         return;
