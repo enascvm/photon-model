@@ -342,21 +342,24 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                     // kick off a collection task for each resource and track completion
                     // via the compute subtask
                     for (String computeLink : computeResources) {
-                        createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState.statsAdapterReference);
+                        createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState);
                     }
                 });
         sendRequest(startPost);
     }
 
     private void createSingleResourceComputeTask(String computeLink, String subtaskLink,
-            URI statsAdapterReference) {
+            StatsCollectionTaskState currentState) {
         SingleResourceStatsCollectionTaskState initState = new SingleResourceStatsCollectionTaskState();
         initState.parentTaskReference = UriUtils.buildPublicUri(getHost(), subtaskLink);
         initState.computeLink = computeLink;
-        initState.statsAdapterReference = statsAdapterReference;
+        initState.statsAdapterReference = currentState.statsAdapterReference;
         SubTaskState<StatsCollectionStage> patchState = new SubTaskState<>();
         patchState.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
         initState.parentPatchBody = patchState;
+        if (currentState.options != null && currentState.options.contains(TaskOption.IS_MOCK)) {
+            initState.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
         sendRequest(Operation
                     .createPost(this,
                             SingleResourceStatsCollectionTaskService.FACTORY_LINK)

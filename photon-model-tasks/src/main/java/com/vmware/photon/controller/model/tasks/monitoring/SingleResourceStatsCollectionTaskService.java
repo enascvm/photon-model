@@ -35,6 +35,7 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.util.ClusterUtil;
@@ -142,6 +143,10 @@ public class SingleResourceStatsCollectionTaskService
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public boolean isFinalBatch = true;
 
+        /**
+         * Task options.
+         */
+        public EnumSet<TaskOption> options;
     }
 
     public SingleResourceStatsCollectionTaskService() {
@@ -289,6 +294,9 @@ public class SingleResourceStatsCollectionTaskService
                             ComputeStateWithDescription computeStateWithDesc = getOp
                                     .getBody(ComputeStateWithDescription.class);
                             ComputeStatsRequest statsRequest = new ComputeStatsRequest();
+                            statsRequest.isMockRequest = currentState.options != null
+                                    ? currentState.options.contains(TaskOption.IS_MOCK)
+                                    : false;
                             URI patchUri = null;
                             Object patchBody = null;
 
