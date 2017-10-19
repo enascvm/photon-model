@@ -29,9 +29,7 @@ import java.util.List;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.vim25.FileBackedVirtualDiskSpec;
@@ -77,7 +75,7 @@ public class DiskClient extends BaseHelper {
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.diskState);
 
         String dsName = this.diskContext.datastoreName != null && !this.diskContext.datastoreName
-                .isEmpty() ? this.diskContext.datastoreName : getDefaultDatastore();
+                .isEmpty() ? this.diskContext.datastoreName : ClientUtils.getDefaultDatastore(this.finder);
         String diskName = getUniqueDiskName();
 
         // Create the parent folder before creation of the disk file
@@ -195,23 +193,6 @@ public class DiskClient extends BaseHelper {
         diskFilePath += ".vmdk";
 
         return diskFilePath;
-    }
-
-    /**
-     * Get default datastore from the server. Pick first available one. This will be used if there
-     * are no customizations requested for the disk by the client.
-     */
-    private String getDefaultDatastore()
-            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        if (this.defaultDatastore != null) {
-            return this.defaultDatastore;
-        }
-
-        List<Element> datastoreList = this.finder.datastoreList("*");
-        this.defaultDatastore = datastoreList.stream().map(o -> o.path.substring(o.path.lastIndexOf("/") + 1))
-                .findFirst()
-                .orElse(null);
-        return this.defaultDatastore;
     }
 
     /**

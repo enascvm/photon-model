@@ -90,5 +90,7 @@ public interface Connection {
 
     ManagedObjectReference getPbmServiceInstanceReference();
 
+    String getGenericServiceTicket(String url);
+
     URL getSpbmURL();
 }

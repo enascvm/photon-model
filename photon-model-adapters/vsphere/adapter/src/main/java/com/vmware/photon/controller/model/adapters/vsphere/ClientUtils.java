@@ -22,13 +22,28 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Paths;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.EnumSet;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,9 +53,18 @@ import com.vmware.pbm.PbmPlacementHub;
 import com.vmware.pbm.PbmProfileId;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ArrayOfVirtualDevice;
+import com.vmware.vim25.FileFaultFaultMsg;
+import com.vmware.vim25.FileNotFoundFaultMsg;
+import com.vmware.vim25.InvalidDatastoreFaultMsg;
+import com.vmware.vim25.InvalidDatastorePathFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
@@ -69,6 +93,15 @@ import com.vmware.vim25.VirtualIDEController;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSIOController;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceClient;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.http.netty.NettyHttpServiceClient;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Utility methods that are common for all the clients like InstanceClient, EnumerationClient etc,
@@ -76,6 +109,8 @@ import com.vmware.vim25.VirtualSIOController;
 public class ClientUtils {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientUtils.class.getName());
+    private static final long SINCE_TIME = new GregorianCalendar(2016, Calendar.JANUARY, 1)
+            .getTime().getTime();
     public static final String VM_PATH_FORMAT = "[%s] %s";
 
     /**
@@ -510,4 +545,138 @@ public class ClientUtils {
             VimUtils.rethrow(info.getError());
         }
     }
+
+    /**
+     * Get a unique name for the disk by appending a portion of a UUID.
+     */
+    public static String getUniqueName(String prefix) {
+        // Construct current time milli
+        long timestamp = System.currentTimeMillis() - SINCE_TIME;
+        String uniqueName = prefix + "-" + timestamp;
+        return uniqueName;
+    }
+
+
+    /**
+     * Create a directory at the specified path.
+     */
+    public static void createFolder(Connection connection, ManagedObjectReference datacenterMoRef,
+            String path) throws FileFaultFaultMsg, InvalidDatastoreFaultMsg, RuntimeFaultFaultMsg {
+
+        ManagedObjectReference fileManager = connection.getServiceContent().getFileManager();
+        connection.getVimPort().makeDirectory(fileManager, path, datacenterMoRef, true);
+    }
+
+    /**
+     * Delete a directory at the specified path.
+     */
+    public static void deleteFolder(Connection connection, ManagedObjectReference datacenterMoRef,
+            String path) throws FileFaultFaultMsg, InvalidDatastoreFaultMsg, RuntimeFaultFaultMsg,
+            FileNotFoundFaultMsg, InvalidDatastorePathFaultMsg {
+
+        ManagedObjectReference fileManager = connection.getServiceContent().getFileManager();
+        connection.getVimPort().deleteDatastoreFileTask(fileManager, path, datacenterMoRef);
+    }
+
+    /**
+     * Create a external client
+     */
+    public static ServiceClient getCustomServiceClient (TrustManager[] trustManagers,
+            ServiceHost host, URI uri,
+            String userAgent) {
+        SSLContext clientContext;
+        try {
+            // supply a scheduled executor for re-use by the client, but do not supply our
+            // regular executor, since the I/O threads might take up all threads
+            ScheduledExecutorService scheduledExecutor = Executors
+                    .newScheduledThreadPool(Utils.DEFAULT_THREAD_COUNT,
+                            r -> new Thread(r, uri.toString()));
+            ServiceClient externalClient = NettyHttpServiceClient.create(userAgent,
+                    null,
+                    scheduledExecutor, host
+            );
+            clientContext = SSLContext.getInstance(ServiceClient.TLS_PROTOCOL_NAME);
+            clientContext.init(null, trustManagers, null);
+            externalClient.setSSLContext(clientContext);
+            externalClient.start();
+            return externalClient;
+        } catch (NoSuchAlgorithmException | KeyManagementException | URISyntaxException e) {
+            if (e.getMessage() != null) {
+                host.log(Level.SEVERE, e.getMessage());
+            } else {
+                host.log(Level.SEVERE, "Could not create custom service client. Returning default host client.");
+            }
+            return host.getClient();
+        }
+    }
+
+    public static TrustManager getDefaultTrustManager() {
+        // currently accepts all certificates.
+        return new X509TrustManager() {
+
+            @Override public void checkClientTrusted(
+                    java.security.cert.X509Certificate[] x509Certificates, String s)
+                    throws java.security.cert.CertificateException {
+
+            }
+
+            @Override public void checkServerTrusted(
+                    java.security.cert.X509Certificate[] x509Certificates, String s)
+                    throws java.security.cert.CertificateException {
+
+            }
+
+            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                return null;
+            }
+        };
+    }
+
+    public static String getDefaultDatastore(Finder finder)
+            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+
+        List<Element> datastoreList = finder.datastoreList("*");
+        String defaultDatastore = datastoreList.stream().map(o -> o.path.substring(o.path
+                .lastIndexOf("/") + 1))
+                .findFirst()
+                .orElse(null);
+        return defaultDatastore;
+    }
+
+    public static void getDatastoresForProfile(Service service, String storagePolicyLink,
+            String endpointLink, List<String> tenantLinks, Consumer<Throwable> failure,
+            Consumer<ServiceDocumentQueryResult> handler) {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(StorageDescriptionService.StorageDescription.class);
+        builder.addCollectionItemClause(
+                StorageDescriptionService.StorageDescription.FIELD_NAME_GROUP_LINKS,
+                storagePolicyLink);
+
+        QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
+                endpointLink);
+        QueryUtils.addTenantLinks(builder, tenantLinks);
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+        task.querySpec.options = EnumSet
+                .of(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
+        Operation.createPost(
+                PhotonModelUriUtils.createDiscoveryUri(service.getHost(),
+                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                .setBody(task)
+                .setConnectionSharing(true)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        service.getHost().log(Level.WARNING, "Error processing task %s",
+                                task.documentSelfLink);
+
+                        failure.accept(e);
+                        return;
+                    }
+                    QueryTask body = o.getBody(QueryTask.class);
+                    handler.accept(body.results);
+                }).sendWith(service);
+    }
+
 }

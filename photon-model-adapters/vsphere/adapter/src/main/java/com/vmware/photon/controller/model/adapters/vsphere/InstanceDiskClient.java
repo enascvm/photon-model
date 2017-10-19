@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.VM_PATH_FORMAT;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createCdrom;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createFloppy;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createHdd;
@@ -32,17 +33,32 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.po
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
 
+import java.net.URI;
 import java.util.List;
+import java.util.Optional;
+import java.util.logging.Level;
+
+import javax.net.ssl.TrustManager;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.vim25.ArrayOfDatastoreHostMount;
 import com.vmware.vim25.ArrayOfVirtualDevice;
+import com.vmware.vim25.DatastoreHostMount;
+import com.vmware.vim25.FileFaultFaultMsg;
+import com.vmware.vim25.InvalidDatastoreFaultMsg;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualCdrom;
@@ -54,6 +70,10 @@ import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualMachineConfigSpec;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.vim25.VirtualSCSIController;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceClient;
+import com.vmware.xenon.common.ServiceHost;
+
 
 /**
  * A simple client for vsphere which handles compute day 2 disk related operation. Consist of a
@@ -65,8 +85,18 @@ public class InstanceDiskClient extends BaseHelper {
     private final GetMoRef get;
     private final ManagedObjectReference vm;
     private final Finder finder;
+    private final ServiceHost host;
+    private static final String ISO_UPLOAD_URL =
+            "https://%s/folder/%s/%s?dcPath=ha-datacenter&dsName=%s";
+    private static final String FULL_PATH = "[%s] %s/%s";
+    private static final String PARENT_DIR = "[%s] %s";
+    private static final String ISO_EXTENSION = ".iso";
+    private static final String ISO_FILE = "isoFile";
+    private static final String ISO_FOLDER = "ISOUploadFolder";
 
-    public InstanceDiskClient(Connection connection, VSphereVMDiskContext context) {
+
+    public InstanceDiskClient(Connection connection, VSphereVMDiskContext context,
+            ServiceHost host) {
         super(connection);
         this.context = context;
         this.diskState = this.context.diskState;
@@ -74,6 +104,7 @@ public class InstanceDiskClient extends BaseHelper {
         this.vm = VimUtils.convertStringToMoRef(CustomProperties.of(this.context.computeDesc)
                 .getString(CustomProperties.MOREF));
         this.finder = new Finder(connection, this.context.datacenterMoRef);
+        this.host = host;
     }
 
     public void attachDiskToVM() throws Exception {
@@ -101,6 +132,10 @@ public class InstanceDiskClient extends BaseHelper {
             int availableUnitNumber = nextUnitNumber(ideUnit);
             deviceConfigSpec = createCdrom(ideController, availableUnitNumber);
             fillInControllerUnitNumber(this.diskState, availableUnitNumber);
+
+            // copy the contents to an ISO file to the DC
+            uploadISOContents();
+
             if (diskPath != null) {
                 // mount iso image
                 insertCdrom((VirtualCdrom) deviceConfigSpec.getDevice(), diskPath);
@@ -180,4 +215,99 @@ public class InstanceDiskClient extends BaseHelper {
                 .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(this.diskState))
                 .findFirst().orElse(null);
     }
+
+    private void uploadISOContents() throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg,
+            InvalidDatastoreFaultMsg, FileFaultFaultMsg, FinderException {
+
+        // 1) fetch data store for the disk
+        String dataStoreName = this.context.datastoreName != null && !this.context.datastoreName
+                .isEmpty() ? this.context.datastoreName : ClientUtils.getDefaultDatastore(
+                this.finder);
+
+        List<Element> datastoreList = this.finder.datastoreList(dataStoreName);
+        ManagedObjectReference dsFromSp = null;
+        Optional<Element> datastoreOpt = datastoreList.stream().findFirst();
+        if (datastoreOpt.isPresent()) {
+            dsFromSp = datastoreOpt.get().object;
+        } else {
+            throw new IllegalArgumentException(String.format("No Datastore [%s] present on datacenter", dataStoreName));
+        }
+
+        // 2) Get available hosts for direct upload
+        String hostName = null;
+
+        ArrayOfDatastoreHostMount dsHosts = this.get.entityProp(dsFromSp, VimPath.res_host);
+        if (dsHosts != null && dsHosts.getDatastoreHostMount() != null) {
+            DatastoreHostMount dsHost = dsHosts.getDatastoreHostMount().stream()
+                    .filter(hostMount -> hostMount.getMountInfo() != null && hostMount.getMountInfo()
+                            .isAccessible() && hostMount.getMountInfo().isMounted())
+                    .findFirst().orElse(null);
+            if (dsHost != null) {
+                hostName = this.get.entityProp(dsHost.getKey(), VimPath.host_summary_config_name);
+            }
+        }
+
+        if (hostName == null) {
+            throw new IllegalStateException(String.format("No host found to upload ISO content "
+                            + "for Data Store Disk %s", dataStoreName));
+        }
+
+        // 3) Choose some unique filename
+        String filename = ClientUtils.getUniqueName(ISO_FILE) + ISO_EXTENSION;
+
+        // 4 ) Choose some unique folder name and create it.
+        String folderName = ClientUtils.getUniqueName(ISO_FOLDER);
+
+        ClientUtils.createFolder(this.connection, this.context.datacenterMoRef ,
+                String.format(VM_PATH_FORMAT, dataStoreName, folderName));
+
+
+        // 5) form the upload url and acquire generic service ticket for it
+        String isoUrl = String.format(ISO_UPLOAD_URL, hostName, folderName, filename,
+                dataStoreName);
+
+        String ticket = this.connection.getGenericServiceTicket(isoUrl);
+
+        // 6) create external client that accepts all certificates
+        TrustManager[] trustManagers = new TrustManager[]{ClientUtils.getDefaultTrustManager()};
+
+        ServiceClient serviceClient = ClientUtils.getCustomServiceClient(trustManagers, this.host,
+                URI.create(isoUrl), this.getClass().getSimpleName());
+
+        // 7) PUT operation for the iso content
+
+        String contentToUpload = CustomProperties.of(this.diskState).getString
+                (PhotonModelConstants.DISK_CONTENT_BASE_64);
+
+        Operation putISO = Operation.createPut(URI.create(isoUrl));
+        putISO.addRequestHeader("Content-Type", "application/octet-stream")
+                .addRequestHeader("Content-Length", String.valueOf(contentToUpload.length()))
+                .addRequestHeader("Cookie", "vmware_cgi_ticket=" + ticket)
+                .setBody(contentToUpload)
+                .setReferer(this.host.getUri())
+                .setCompletion(((operation, throwable) -> {
+
+                                if (throwable != null) {
+                                    this.host.log(Level.SEVERE,
+                                            "Could not upload ISO file %s to folder %s.",
+                                            filename, folderName);
+                                    this.context.fail(throwable);
+                                }
+                                // Update the details of the disk
+                                CustomProperties.of(this.diskState)
+                                        .put(DISK_FULL_PATH, String.format(FULL_PATH,
+                                                dataStoreName, folderName, filename))
+                                        .put(DISK_PARENT_DIRECTORY, String.format(PARENT_DIR,
+                                                dataStoreName, folderName))
+                                        .put(DISK_DATASTORE_NAME, dataStoreName);
+                            }
+                    )
+
+            );
+
+        serviceClient.sendRequest(putISO);
+    }
+
+
+
 }

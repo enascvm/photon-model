@@ -20,6 +20,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Basic
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 
+@Ignore
 public class TestVSphereLibraryProvisionTask extends TestVSphereLibraryProvisionTaskBase {
 
     @Test

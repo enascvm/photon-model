@@ -35,6 +35,7 @@ import com.vmware.vim25.InvalidLoginFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.ServiceContent;
+import com.vmware.vim25.SessionManagerHttpServiceRequestSpec;
 import com.vmware.vim25.UserSession;
 import com.vmware.vim25.VimPortType;
 import com.vmware.vim25.VimService;
@@ -181,6 +182,23 @@ public class BasicConnection implements Connection {
             }
         }
         return this.spbmurl;
+    }
+
+    public String getGenericServiceTicket(String url) {
+
+        SessionManagerHttpServiceRequestSpec spec = new SessionManagerHttpServiceRequestSpec();
+        spec.setMethod("httpPut");
+        spec.setUrl(url);
+        String ticket = null;
+        try {
+            ticket = this.vimPort.acquireGenericServiceTicket(this.getServiceContent()
+                    .getSessionManager(), spec).getId();
+        } catch (Exception ex) {
+            Throwable cause = (ex.getCause() != null) ? ex.getCause() : ex;
+            throw new BasicConnectionException(
+                    "failed to fetch GenericServiceTicket: " + ex.getMessage() + " : " + cause.getMessage(), cause);
+        }
+        return ticket;
     }
 
     public void connect() {

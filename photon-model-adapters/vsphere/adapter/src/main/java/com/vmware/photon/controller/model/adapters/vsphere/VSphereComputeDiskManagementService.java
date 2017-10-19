@@ -107,7 +107,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
                         return;
                     }
 
-                    InstanceDiskClient diskClient = new InstanceDiskClient(connection, ctx);
+                    InstanceDiskClient diskClient = new InstanceDiskClient(connection, ctx, getHost());
                     try {
                         diskClient.attachDiskToVM();
                         updateComputeAndDiskStateForAttach(ctx);
@@ -133,7 +133,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
                         return;
                     }
 
-                    InstanceDiskClient diskClient = new InstanceDiskClient(connection, ctx);
+                    InstanceDiskClient diskClient = new InstanceDiskClient(connection, ctx, getHost());
                     try {
                         diskClient.detachDiskFromVM();
                         updateComputeAndDiskStateForDetach(ctx);

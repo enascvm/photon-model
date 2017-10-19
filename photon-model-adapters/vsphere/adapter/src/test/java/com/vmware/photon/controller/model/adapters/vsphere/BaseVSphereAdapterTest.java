@@ -1135,13 +1135,30 @@ public class BaseVSphereAdapterTest {
     }
 
     /**
-     * Create a new disk state to attach it to the virual machine.
+     * Create a new disk state to attach it to the virtual machine.
      */
     protected DiskState createDiskWithDatastore(String alias, DiskService.DiskType type, int bootOrder,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String>
             customProperties) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
                 capacityMBytes, customProperties);
+        diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
+        return doPost(this.host, diskState, DiskState.class,
+                UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+    /**
+     * Create a new CD ROM disk state with ISO Image data.
+     */
+    protected DiskState createCDROMwithISO(String alias, DiskService.DiskType type, int bootOrder,
+            URI sourceImageReference, long capacityMBytes, HashMap<String, String>
+            customProperties) throws Throwable {
+        DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
+                capacityMBytes, customProperties);
+
+        String isoContent = "Some content to be uploaded";
+        CustomProperties.of(diskState).put(PhotonModelConstants.DISK_CONTENT_BASE_64, isoContent);
+
         diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));

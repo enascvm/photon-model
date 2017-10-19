@@ -27,6 +27,8 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.OperationJoin;
@@ -39,6 +41,9 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
  * VSphereVMDiskContext prepares the context to perform disk day 2 operation on the compute
  */
 public class VSphereVMDiskContext {
+
+    public String datastoreName;
+
     protected DiskService.DiskStateExpanded diskState;
     protected ComputeService.ComputeStateWithDescription computeDesc;
     protected ComputeService.ComputeStateWithDescription parentComputeDesc;
@@ -182,15 +187,45 @@ public class VSphereVMDiskContext {
 
         if (ctx.datacenterMoRef == null) {
             try {
-                ctx.datacenterMoRef = VimUtils.convertStringToMoRef(ctx.diskState.regionId);
+                ctx.datacenterMoRef = VimUtils.convertStringToMoRef(ctx.diskState.regionId ==
+                        null ? ctx.parentComputeDesc.regionId : ctx.diskState.regionId);
             } catch (IllegalArgumentException ex) {
                 ctx.fail(ex);
                 return;
             }
         }
+
+        // populate datastore name
+        if (ctx.datastoreName == null) {
+            if (ctx.diskState.customProperties != null && ctx.diskState.customProperties
+                    .get(DISK_DATASTORE_NAME) != null) {
+                ctx.datastoreName = ctx.diskState.customProperties.get(DISK_DATASTORE_NAME);
+            } else if (ctx.diskState.storageDescription != null) {
+                ctx.datastoreName = ctx.diskState.storageDescription.id;
+            } else if (ctx.diskState.resourceGroupStates != null && !ctx.diskState
+                    .resourceGroupStates.isEmpty()) {
+                // There will always be only one resource group state existing for a disk
+                ResourceGroupService.ResourceGroupState resource = ctx.diskState.resourceGroupStates.iterator().next();
+                ClientUtils.getDatastoresForProfile(service, resource.documentSelfLink, ctx
+                                .diskState.endpointLink, ctx.diskState.tenantLinks, ctx.errorHandler,
+                        (result) -> {
+                            if (result.documents != null && result.documents.size() > 0) {
+                                // pick the first datastore and proceed.
+                                ctx.datastoreName = Utils
+                                        .fromJson(result.documents.values().iterator().next(),
+                                                StorageDescriptionService.StorageDescription.class).id;
+                            } else {
+                                // Since no result found default to the available datastore.
+                                ctx.datastoreName = "";
+                            }
+                        });
+            }
+        }
+
         // context populated, invoke handler
         onSuccess.accept(ctx);
     }
+
 
     /**
      * Fails the disk operation by invoking the errorHandler.
@@ -217,8 +252,8 @@ public class VSphereVMDiskContext {
 
     /**
      * The returned JoinedCompletionHandler fails this context by invoking the error handler if any
-     * error is found in {@link OperationJoin.JoinedCompletionHandler#handle(java.util.Map,
-     * java.util.Map) error map}.
+     * error is found in {@link OperationJoin.JoinedCompletionHandler#handle(Map,
+     * Map) error map}.
      */
     public OperationJoin.JoinedCompletionHandler failTaskOnError() {
         return (ops, failures) -> {

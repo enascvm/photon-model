@@ -15,14 +15,11 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.net.URI;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.function.Consumer;
-import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
-import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
@@ -30,15 +27,11 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
-import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
-import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
-import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * DiskContext holds all the details that are needed to perform disk related operations.
@@ -106,8 +99,8 @@ public class DiskContext {
                     .resourceGroupStates.isEmpty()) {
                 // There will always be only one resource group state existing for a disk
                 ResourceGroupState resource = ctx.diskState.resourceGroupStates.iterator().next();
-                getDatastoresForProfile(service, resource.documentSelfLink, ctx.diskState
-                                .endpointLink, ctx.diskState.tenantLinks, ctx.errorHandler,
+                ClientUtils.getDatastoresForProfile(service, resource.documentSelfLink, ctx
+                                .diskState.endpointLink, ctx.diskState.tenantLinks, ctx.errorHandler,
                         (result) -> {
                             if (result.documents != null && result.documents.size() > 0) {
                                 // pick the first datastore and proceed.
@@ -215,39 +208,5 @@ public class DiskContext {
         };
     }
 
-    private static void getDatastoresForProfile(Service service, String storagePolicyLink,
-            String endpointLink, List<String> tenantLinks, Consumer<Throwable> failure,
-            Consumer<ServiceDocumentQueryResult> handler) {
-        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
-                .addKindFieldClause(StorageDescriptionService.StorageDescription.class);
-        builder.addCollectionItemClause(
-                StorageDescriptionService.StorageDescription.FIELD_NAME_GROUP_LINKS,
-                storagePolicyLink);
-
-        QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
-                endpointLink);
-        QueryUtils.addTenantLinks(builder, tenantLinks);
-
-        QueryTask task = QueryTask.Builder.createDirectTask()
-                .setQuery(builder.build())
-                .build();
-        task.querySpec.options = EnumSet
-                .of(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
-        Operation.createPost(
-                PhotonModelUriUtils.createDiscoveryUri(service.getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(task)
-                .setConnectionSharing(true)
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        service.getHost().log(Level.WARNING, "Error processing task %s",
-                                task.documentSelfLink);
-
-                        failure.accept(e);
-                        return;
-                    }
-                    QueryTask body = o.getBody(QueryTask.class);
-                    handler.accept(body.results);
-                }).sendWith(service);
-    }
 }
 

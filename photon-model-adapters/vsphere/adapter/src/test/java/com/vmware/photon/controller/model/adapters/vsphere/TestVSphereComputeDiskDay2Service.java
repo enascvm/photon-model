@@ -13,11 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
@@ -27,6 +29,7 @@ import java.net.URI;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import org.junit.Test;
 
@@ -36,6 +39,7 @@ import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -69,6 +73,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
     private EndpointService.EndpointState endpointState;
     public static final int DISK_REQUEST_TIMEOUT_MINUTES = 5;
     private ComputeState vm = null;
+    private DiskService.DiskState CDDiskState = null;
 
     public static class ComputeDiskOperationTaskService
             extends TaskService<ComputeDiskOperationTaskService.ComputeDiskOperationTaskState> {
@@ -173,14 +178,17 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
 
             // Step 4: Attach a CD-ROM disk
             // prepare a disk with CD-ROM type
-            DiskService.DiskState cdDiskState = createDisk("cdrom-1", DiskService.DiskType.CDROM,
+            DiskService.DiskState cdDiskState = createCDROMwithISO("cdrom-1", DiskService.DiskType.CDROM,
                     0, null, 1024, null);
+
             request = createResourceOperationRequest(cdDiskState, createComputeDiskTaskService(),
                     ResourceOperation.ATTACH_DISK);
             sendRequest(request, DiskService.DiskType.CDROM, computeAttachWaitHandler());
 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
+
+            this.CDDiskState = cdDiskState;
 
             // Step 5: Attach a floppy disk
             DiskService.DiskState floppyDiskState = createDisk("floppy-1", DiskService.DiskType.FLOPPY,
@@ -214,6 +222,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             assertEquals(DiskService.DiskStatus.AVAILABLE, diskState.status);
         } finally {
             if (!isMock()) {
+                cleanupISOFolder();
                 // Step 7: Delete VM
                 cleanUpVm(this.vm, null);
                 // Step 8: Delete disk
@@ -225,7 +234,23 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
                             ProvisionDiskTaskService.ProvisionDiskTaskState.class,
                             documentSelfLink);
                 }
+
             }
+        }
+    }
+
+    private void cleanupISOFolder() {
+
+        this.CDDiskState = this.host.getServiceState(null, DiskService.DiskState.class,
+                UriUtils.buildUri(this.host, this.CDDiskState.documentSelfLink));
+        BasicConnection conn = createConnection();
+        String path = CustomProperties.of(this.CDDiskState).getString(DISK_PARENT_DIRECTORY);
+        ManagedObjectReference datacenterMoRef = VimUtils.convertStringToMoRef(this.datacenterId);
+
+        try {
+            ClientUtils.deleteFolder(conn, datacenterMoRef, path);
+        } catch (Exception ex) {
+            this.host.log(Level.WARNING, "Unable to cleanup folder %s", path);
         }
     }
 
