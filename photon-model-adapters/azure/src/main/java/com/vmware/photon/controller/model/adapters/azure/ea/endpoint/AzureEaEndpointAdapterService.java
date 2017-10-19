@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.ea.endpoint;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 
 import java.net.URI;
 import java.util.HashMap;
@@ -31,16 +32,19 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
-
+import com.vmware.xenon.services.common.QueryTask;
 
 /**
  * Adapter to validate and enhance Azure EA endpoints
@@ -145,11 +149,85 @@ public class AzureEaEndpointAdapterService extends StatelessService {
         c.customProperties.put(key, value);
     }
 
-    //TODO https://jira-hzn.eng.vmware.com/browse/VSYM-8582
     private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req,
             Operation op) {
-        req.accountAlreadyExists = false;
-        op.setBody(req);
-        op.complete();
+        String accountId = req.endpointProperties.get(PRIVATE_KEYID_KEY);
+        if (accountId != null && !accountId.isEmpty() && req.tenantLinks != null &&
+                !req.tenantLinks.isEmpty()) {
+            QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                    .addKindFieldClause(ComputeState.class, QueryTask.Query.Occurance.SHOULD_OCCUR)
+                    .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                    .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
+                            PhotonModelConstants.EndpointType.azure_ea.name())
+                    .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId)
+                    .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
+                            req.tenantLinks);
+
+            QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                    .setQuery(qBuilder.build())
+                    .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
+                    .setResultLimit(getQueryResultLimit())
+                    .build();
+
+            queryTask.tenantLinks = req.tenantLinks;
+            QueryUtils.startQueryTask(this, queryTask)
+                    .whenComplete((qrt, e) -> {
+                        if (e != null) {
+                            logSevere(
+                                    () -> String.format(
+                                            "Failure retrieving query results for azure ea compute host corresponding to"
+                                                    + "the account ID: %s", e.toString()));
+                            op.fail(e);
+                            return;
+                        }
+                        if (qrt.results.documentCount > 0) {
+                            req.existingDocuments = new HashMap<>();
+                            for (Object s : qrt.results.documents.values()) {
+                                req.accountAlreadyExists = true;
+                                ComputeState computeHost = Utils.fromJson(s,
+                                        ComputeState.class);
+                                req.existingDocuments.put(computeHost.documentSelfLink,
+                                        computeHost);
+                                getComputeDescription(req, computeHost.descriptionLink, op);
+                            }
+                        } else {
+                            req.accountAlreadyExists = false;
+                            op.setBody(req);
+                            op.complete();
+                            return;
+                        }
+                    });
+        } else {
+            req.accountAlreadyExists = false;
+            op.setBody(req);
+            op.complete();
+        }
+    }
+
+    /**
+     * Retrieves the compute description corresponding to the compute host for a given account id.
+     */
+    private void getComputeDescription(EndpointConfigRequest req, String descriptionLink,
+            Operation op) {
+        Operation.createGet(getHost(), descriptionLink)
+                .setCompletion((o, ex) -> {
+                    if (ex != null) {
+                        logSevere(
+                                () -> String.format(
+                                        "Failure retrieving the azure compute host description "
+                                                + "corresponding to the account ID: %s", ex.toString()));
+                        op.fail(ex);
+                        return;
+                    }
+                    ComputeDescription computeHostDescription = o.getBody(ComputeDescription.class);
+                    req.existingDocuments.put(computeHostDescription.documentSelfLink,
+                            computeHostDescription);
+                    op.setBody(req);
+                    op.complete();
+                    return;
+                }).sendWith(this);
     }
 }
