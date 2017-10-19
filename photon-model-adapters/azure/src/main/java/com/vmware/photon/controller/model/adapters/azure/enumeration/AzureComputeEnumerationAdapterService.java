@@ -333,67 +333,67 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void handleSubStage(EnumerationContext ctx) {
         switch (ctx.subStage) {
         case LISTVMS:
-            logInfo("IN LISTVMS [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN LISTVMS [endpointLink:%s]", ctx.request.endpointLink);
             getVmList(ctx, ComputeEnumerationSubStages.GET_COMPUTE_STATES);
             break;
         case GET_COMPUTE_STATES:
-            logInfo("IN GET_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN GET_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             queryForComputeStates(ctx, ComputeEnumerationSubStages.GET_DISK_STATES);
             break;
         case GET_DISK_STATES:
-            logInfo("IN GET_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN GET_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
             queryForDiskStates(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_INTERNAL_TYPE_TAG);
             break;
         case CREATE_COMPUTE_INTERNAL_TYPE_TAG:
-            logInfo("IN CREATE_COMPUTE_INTERNAL_TYPE_TAG [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_COMPUTE_INTERNAL_TYPE_TAG [endpointLink:%s]", ctx.request.endpointLink);
             createInternalTypeTag(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_EXTERNAL_TAG_STATES);
             break;
         case CREATE_COMPUTE_EXTERNAL_TAG_STATES:
-            logInfo("IN CREATE_COMPUTE_EXTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_COMPUTE_EXTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createTagStates(ctx,
                     ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES);
             break;
         case CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES:
-            logInfo("IN CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createNetworkInterfaceInternalTagStates(ctx,
                     ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES);
             break;
         case CREATE_NETWORK_INTERFACE_STATES:
-            logInfo("IN CREATE_NETWORK_INTERFACE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_NETWORK_INTERFACE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createNetworkInterfaceStates(ctx, ComputeEnumerationSubStages.UPDATE_DISK_STATES);
             break;
         case UPDATE_DISK_STATES:
-            logInfo("IN UPDATE_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN UPDATE_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
             updateDiskStates(ctx, ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES);
             break;
         case UPDATE_COMPUTE_STATES:
-            logInfo("IN UPDATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN UPDATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             updateComputeStates(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS);
             break;
         case CREATE_COMPUTE_DESCRIPTIONS:
-            logInfo("IN CREATE_COMPUTE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_COMPUTE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
             createComputeDescriptions(ctx,
                     ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS);
             break;
         case GET_STORAGE_DESCRIPTIONS:
-            logInfo("IN GET_STORAGE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN GET_STORAGE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
             queryForDiagnosticStorageDescriptions(ctx,
                     ComputeEnumerationSubStages.CREATE_COMPUTE_STATES);
             break;
         case CREATE_COMPUTE_STATES:
-            logInfo("IN CREATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createComputeStates(ctx, ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS);
             break;
         case PATCH_ADDITIONAL_FIELDS:
-            logInfo("IN PATCH_ADDITIONAL_FIELDS [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN PATCH_ADDITIONAL_FIELDS [endpointLink:%s]", ctx.request.endpointLink);
             patchAdditionalFields(ctx, ComputeEnumerationSubStages.DELETE_COMPUTE_STATES);
             break;
         case DELETE_COMPUTE_STATES:
-            logInfo("IN DELETE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN DELETE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             deleteComputeStates(ctx, ComputeEnumerationSubStages.FINISHED);
             break;
         case FINISHED:
-            logInfo("IN FINISHED [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN FINISHED [endpointLink:%s]", ctx.request.endpointLink);
             ctx.stage = EnumerationStages.FINISHED;
             handleEnumeration(ctx);
             break;
@@ -872,14 +872,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             .storageUri());
                 });
 
+        if (diagnosticStorageAccountUris.isEmpty()) {
+            ctx.subStage = next;
+            handleSubStage(ctx);
+            return;
+        }
+
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
                         ctx.parentCompute.documentSelfLink);
 
-        if (!diagnosticStorageAccountUris.isEmpty()) {
-            qBuilder.addInClause(storageAccountProperty, diagnosticStorageAccountUris);
-        }
+        qBuilder.addInClause(storageAccountProperty, diagnosticStorageAccountUris);
 
         addScopeCriteria(qBuilder, StorageDescription.class, ctx);
 
