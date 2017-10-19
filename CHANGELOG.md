@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.6.42-SNAPSHOT
+## 0.6.42
+* Refactored photon-model adapters to use common QueryUtils.
+* Allow detaching non-boot EBS volume from running AWS VM.
+* Added region enumeration adapter service for AWS.
 
 ## 0.6.41
 * Changes related to naming of internal tags for resources.
