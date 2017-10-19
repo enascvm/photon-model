@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
@@ -42,6 +43,7 @@ public class TestVSphereLibraryProvisionTask extends TestVSphereLibraryProvision
     }
 
     @Test
+    @Ignore("VCOM-2131")
     public void deployFromLibraryCreateSnapshotsAndCheckSnapshotLimit() throws Throwable {
         ComputeState vm = provisionVMWithSnapshotLimitAndGetState();
         try {
@@ -58,6 +60,7 @@ public class TestVSphereLibraryProvisionTask extends TestVSphereLibraryProvision
     }
 
     @Test
+    @Ignore("VCOM-2131")
     public void deployFromLibraryToNewFolder() throws Throwable {
         final String vmFolder = "/Datacenters/Datacenter/vm/test-folder";
         this.vcFolder = vmFolder; // setting an explicit folder for this vm, if folder is not present it will  be created
