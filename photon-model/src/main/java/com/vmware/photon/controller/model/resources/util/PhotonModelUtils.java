@@ -180,18 +180,23 @@ public class PhotonModelUtils {
         return new ImmutablePair<>(result, Boolean.valueOf(hasChanged));
     }
 
-    public static void runInExecutor(ExecutorService executor, Runnable runnable,
+    public static void runInExecutor(
+            ExecutorService executor,
+            Runnable runnable,
             Consumer<Throwable> failure) {
         try {
             OperationContext operationContext = OperationContext.getOperationContext();
-            executor.submit(new Runnable() {
-                @Override public void run() {
-                    OperationContext.restoreOperationContext(operationContext);
+
+            executor.submit(() -> {
+                OperationContext.restoreOperationContext(operationContext);
+                try {
                     runnable.run();
+                } catch (Throwable runnableExc) {
+                    failure.accept(runnableExc);
                 }
             });
-        } catch (Exception e) {
-            failure.accept(e);
+        } catch (Throwable executorExc) {
+            failure.accept(executorExc);
         }
     }
 }

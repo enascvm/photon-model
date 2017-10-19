@@ -21,7 +21,13 @@ import static org.junit.Assert.assertTrue;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -48,7 +54,9 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
  * Tests for the {@link PhotonModelUtils} class.
  */
 @RunWith(PhotonModelUtilsTest.class)
-@SuiteClasses({ PhotonModelUtilsTest.SetEndpointLinkTest.class })
+@SuiteClasses({
+        PhotonModelUtilsTest.SetEndpointLinkTest.class,
+        PhotonModelUtilsTest.RunInExecutorTest.class })
 public class PhotonModelUtilsTest extends Suite {
 
     public PhotonModelUtilsTest(Class<?> klass, RunnerBuilder builder)
@@ -78,7 +86,7 @@ public class PhotonModelUtilsTest extends Suite {
                 assertNull(state.customProperties);
                 assertNotNull(state.endpointLinks);
                 assertTrue(state.endpointLinks.contains(EPL_VALUE));
-                //Verify that during an update scenario the collection is updated as expected.
+                // Verify that during an update scenario the collection is updated as expected.
                 state = PhotonModelUtils
                         .setEndpointLink(state, ADDITIONAL_EPL_VALUE);
                 assertNotNull(state.endpointLinks);
@@ -218,6 +226,40 @@ public class PhotonModelUtilsTest extends Suite {
                 assertNull(state.endpointLink);
             }
         }
+    }
 
+    /**
+     * Test for
+     * {@link PhotonModelUtils#runInExecutor(java.util.concurrent.ExecutorService, Runnable, java.util.function.Consumer)}.
+     */
+    public static class RunInExecutorTest extends BaseModelTest {
+
+        @Test
+        public void testCallingFailureHandlerUponRunnableException() throws InterruptedException {
+
+            RuntimeException failure = new RuntimeException("failure thrown by runnable code");
+
+            Runnable codeToRun = () -> {
+                throw failure;
+            };
+
+            AtomicReference<Throwable> failureRef = new AtomicReference<>();
+
+            Consumer<Throwable> failureHandler = failureRef::set;
+
+            ExecutorService executorService = Executors.newSingleThreadExecutor();
+
+            // The code under testing
+            PhotonModelUtils.runInExecutor(executorService, codeToRun, failureHandler);
+
+            executorService.awaitTermination(50, TimeUnit.MILLISECONDS);
+
+            Assert.assertNotNull(
+                    "The exception thrown by runnable in executor is NOT propagated to the failure consumer",
+                    failureRef.get());
+            Assert.assertSame(
+                    "The exception propagated to the failure consumer is INCORRECT",
+                    failure, failureRef.get());
+        }
     }
 }
