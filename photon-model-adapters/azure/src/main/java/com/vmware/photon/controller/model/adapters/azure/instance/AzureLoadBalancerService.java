@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,12 +47,12 @@ import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
@@ -60,7 +61,7 @@ import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * Adapter to create/delete a load balancer on Azure.
@@ -73,11 +74,9 @@ public class AzureLoadBalancerService extends StatelessService {
      * Load balancer request context.
      */
     private static class AzureLoadBalancerContext extends
-            BaseAdapterContext<AzureLoadBalancerContext> implements AutoCloseable {
+            AzureBaseAdapterContext<AzureLoadBalancerContext> {
 
         final LoadBalancerInstanceRequest loadBalancerRequest;
-
-        AzureSdkClients azureSdkClients;
 
         LoadBalancerStateExpanded loadBalancerStateExpanded;
         String resourceGroupName;
@@ -86,17 +85,24 @@ public class AzureLoadBalancerService extends StatelessService {
         String publicIPAddressInnerId;
         LoadBalancerInner loadBalancerAzure;
 
-        AzureLoadBalancerContext(StatelessService service, LoadBalancerInstanceRequest request) {
+        AzureLoadBalancerContext(
+                StatelessService service,
+                ExecutorService executorService,
+                LoadBalancerInstanceRequest request) {
+
             super(service, request);
+
             this.loadBalancerRequest = request;
         }
 
+        /**
+         * Get the authentication object using endpoint authentication.
+         */
         @Override
-        public void close() {
-            if (this.azureSdkClients != null) {
-                this.azureSdkClients.close();
-                this.azureSdkClients = null;
-            }
+        protected URI getParentAuthRef(AzureLoadBalancerContext context) {
+            return UriUtils.buildUri(
+                    context.service.getHost(),
+                    context.loadBalancerStateExpanded.endpointState.authCredentialsLink);
         }
     }
 
@@ -125,7 +131,7 @@ public class AzureLoadBalancerService extends StatelessService {
 
         // initialize context object
         AzureLoadBalancerContext context = new AzureLoadBalancerContext(
-                this, op.getBody(LoadBalancerInstanceRequest.class));
+                this, this.executorService, op.getBody(LoadBalancerInstanceRequest.class));
 
         // Immediately complete the Operation from calling task.
         op.complete();
@@ -133,15 +139,8 @@ public class AzureLoadBalancerService extends StatelessService {
         DeferredResult.completed(context)
                 .thenCompose(this::populateContext)
                 .thenCompose(this::handleLoadBalancerInstanceRequest)
-                .whenComplete((o, e) -> {
-                    // Once done patch the calling task with correct stage.
-                    if (e == null) {
-                        context.taskManager.finishTask();
-                    } else {
-                        context.taskManager.patchTaskToFailure(e);
-                    }
-                    context.close();
-                });
+                // Once done patch the calling task with correct stage.
+                .whenComplete((o, e) -> context.finish(e));
     }
 
     /**
@@ -156,9 +155,7 @@ public class AzureLoadBalancerService extends StatelessService {
             AzureLoadBalancerContext context) {
         return DeferredResult.completed(context)
                 .thenCompose(this::getLoadBalancerState)
-                .thenCompose(this::getCredentials)
-                .thenCompose(this::getAuthentication)
-                .thenCompose(this::getAzureClients);
+                .thenCompose(c -> c.populateBaseContext(BaseAdapterStage.PARENTAUTH));
     }
 
     /**
@@ -183,54 +180,6 @@ public class AzureLoadBalancerService extends StatelessService {
                     }
                     return context;
                 });
-    }
-
-    /**
-     * Populate context with endpoint credential info
-     *
-     * @param context Azure load balancer context
-     * @return DeferredResult
-     */
-    private DeferredResult<AzureLoadBalancerContext> getCredentials(
-            AzureLoadBalancerContext context) {
-        return context.populateBaseContext(BaseAdapterContext.BaseAdapterStage.PARENTAUTH);
-    }
-
-    /**
-     * Populate context with endpoint authentication info
-     *
-     * @param context Azure load balancer context
-     * @return DeferredResult
-     */
-    private DeferredResult<AzureLoadBalancerContext> getAuthentication(
-            AzureLoadBalancerContext context) {
-        return this
-                .sendWithDeferredResult(
-                        Operation.createGet(
-                                context.service.getHost(),
-                                context.loadBalancerStateExpanded.endpointState.authCredentialsLink),
-                        AuthCredentialsServiceState.class)
-                .thenApply(state -> {
-                    context.parentAuth = state;
-                    return context;
-                });
-    }
-
-    /**
-     * Initialize Azure SDK client in context
-     *
-     * @param context Azure load balancer context
-     * @return DeferredResult
-     */
-    private DeferredResult<AzureLoadBalancerContext> getAzureClients(
-            AzureLoadBalancerContext context) {
-        if (context.loadBalancerRequest.isMockRequest) {
-            return DeferredResult.completed(context);
-        }
-        if (context.azureSdkClients == null) {
-            context.azureSdkClients = new AzureSdkClients(this.executorService, context.parentAuth);
-        }
-        return DeferredResult.completed(context);
     }
 
     /**

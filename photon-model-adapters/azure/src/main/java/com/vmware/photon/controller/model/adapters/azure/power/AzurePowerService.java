@@ -13,27 +13,20 @@
 
 package com.vmware.photon.controller.model.adapters.azure.power;
 
-import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.resources.ComputeService.PowerState.OFF;
 
 import java.util.concurrent.ExecutorService;
 
-import com.microsoft.azure.AzureEnvironment;
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
-import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
-import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.DefaultAdapterContext;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -45,23 +38,26 @@ public class AzurePowerService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_POWER_ADAPTER;
 
-    private static class AzurePowerDataHolder {
-        final ComputePowerRequest pr;
-        Azure azureClient;
-        RestClient restClient;
-        AzurePowerService service;
+    private static class AzurePowerContext
+            extends AzureBaseAdapterContext<AzurePowerContext> {
+
+        final ComputePowerRequest request;
+
         String vmName;
         String rgName;
 
-        public AzurePowerDataHolder(AzurePowerService service, ComputePowerRequest pr) {
-            this.pr = pr;
-            this.service = service;
+        private AzurePowerContext(
+                AzurePowerService service,
+                ExecutorService executorService,
+                ComputePowerRequest request) {
+
+            super(service, executorService, request);
+
+            this.request = request;
         }
     }
 
     private ExecutorService executorService;
-
-    public ApplicationTokenCredentials credentials;
 
     @Override
     public void handleStart(Operation startPost) {
@@ -83,117 +79,94 @@ public class AzurePowerService extends StatelessService {
             return;
         }
 
-        ComputePowerRequest pr = op.getBody(ComputePowerRequest.class);
-        AzurePowerDataHolder dh = new AzurePowerDataHolder(this, pr);
+        ComputePowerRequest request = op.getBody(ComputePowerRequest.class);
+
         op.complete();
-        if (pr.isMockRequest) {
-            updateComputeState(dh, new DefaultAdapterContext(this, pr));
+
+        AzurePowerContext ctx = new AzurePowerContext(this, this.executorService, request);
+
+        if (request.isMockRequest) {
+            updateComputeState(ctx);
         } else {
-            new DefaultAdapterContext(this, pr)
-                    .populateBaseContext(BaseAdapterStage.VMDESC)
-                    .whenComplete((c, e) -> {
+            ctx.populateBaseContext(BaseAdapterStage.VMDESC)
+                    .whenComplete((ignoreCtx, e) -> {
                         if (e != null) {
-                            c.taskManager.patchTaskToFailure(e);
-                            this.logSevere(
+                            logSevere(
                                     "Error populating base context during Azure power state operation %s for resource %s failed with error %s",
-                                    pr.powerState, pr.resourceReference, Utils.toString(e));
+                                    request.powerState, request.resourceReference,
+                                    Utils.toString(e));
+
+                            ctx.finishExceptionally(e);
+
                             return;
                         }
-                        String clientId = c.parentAuth.privateKeyId;
-                        String clientKey = EncryptionUtils.decrypt(c.parentAuth.privateKey);
-                        String tenantId = c.parentAuth.customProperties
-                                .get(AzureConstants.AZURE_TENANT_ID);
 
-                        ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
-                                clientId, tenantId, clientKey,
-                                AzureEnvironment.AZURE);
+                        ctx.vmName = ctx.child.name != null ? ctx.child.name : ctx.child.id;
+                        ctx.rgName = AzureUtils.getResourceGroupName(ctx);
 
-                        dh.restClient = AzureUtils.buildRestClient(credentials, this.executorService);
-                        dh.azureClient = Azure.authenticate(dh.restClient, tenantId)
-                                .withSubscription(c.parentAuth.userLink);
-                        dh.vmName = c.child.name != null ? c.child.name : c.child.id;
-                        dh.rgName = getResourceGroupName(c);
-                        applyPowerOperation(dh, c);
+                        applyPowerOperation(ctx);
                     });
         }
     }
 
-    private void applyPowerOperation(AzurePowerDataHolder dh, DefaultAdapterContext c) {
-        switch (dh.pr.powerState) {
+    private void applyPowerOperation(AzurePowerContext ctx) {
+        switch (ctx.request.powerState) {
         case OFF:
-            powerOff(dh, c);
+            powerOff(ctx);
             break;
         case ON:
-            powerOn(dh, c);
+            powerOn(ctx);
             break;
         case UNKNOWN:
         default:
-            c.taskManager.patchTaskToFailure(
+            ctx.finishExceptionally(
                     new IllegalArgumentException("Unsupported power state transition requested."));
         }
     }
 
-    private void powerOff(AzurePowerDataHolder dh, DefaultAdapterContext c) {
-        dh.azureClient.virtualMachines().inner().powerOffAsync(dh.rgName, dh.vmName,
+    private void powerOff(AzurePowerContext ctx) {
+        ctx.azureSdkClients.getAzureClient().virtualMachines().inner().powerOffAsync(
+                ctx.rgName,
+                ctx.vmName,
                 new AzureAsyncCallback<OperationStatusResponseInner>() {
                     @Override
                     public void onError(Throwable paramThrowable) {
-                        c.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.restClient);
+                        ctx.finishExceptionally(paramThrowable);
                     }
 
                     @Override
                     public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
-                        updateComputeState(dh, c);
-                        AzureUtils.cleanUpHttpClient(dh.restClient);
+                        updateComputeState(ctx);
                     }
                 });
     }
 
-    private void powerOn(AzurePowerDataHolder dh, DefaultAdapterContext c) {
-        dh.azureClient.virtualMachines().inner().startAsync(dh.rgName, dh.vmName,
+    private void powerOn(AzurePowerContext ctx) {
+        ctx.azureSdkClients.getAzureClient().virtualMachines().inner().startAsync(
+                ctx.rgName,
+                ctx.vmName,
                 new AzureAsyncCallback<OperationStatusResponseInner>() {
-                        @Override
+                    @Override
                     public void onError(Throwable paramThrowable) {
-                            c.taskManager.patchTaskToFailure(paramThrowable);
-                            AzureUtils.cleanUpHttpClient(dh.restClient);
-                        }
-
-                        @Override
-                    public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
-                            updateComputeState(dh, c);
-                            AzureUtils.cleanUpHttpClient(dh.restClient);
-                        }
-                    });
-    }
-
-    private String getResourceGroupName(DefaultAdapterContext ctx) {
-        String resourceGroupName = null;
-        if (ctx.child.customProperties != null) {
-            resourceGroupName = ctx.child.customProperties.get(RESOURCE_GROUP_NAME);
-        }
-
-        if (resourceGroupName == null && ctx.child.description.customProperties != null) {
-            resourceGroupName = ctx.child.description.customProperties.get(RESOURCE_GROUP_NAME);
-        }
-        return resourceGroupName;
-    }
-
-    private void updateComputeState(AzurePowerDataHolder dh, DefaultAdapterContext c) {
-        ComputeState state = new ComputeState();
-        state.powerState = dh.pr.powerState;
-        if (OFF.equals(dh.pr.powerState)) {
-            state.address = ""; //clear IP address in case of power-off
-        }
-        Operation.createPatch(dh.pr.resourceReference)
-                .setBody(state)
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        c.taskManager.patchTaskToFailure(e);
-                        return;
+                        ctx.finishExceptionally(paramThrowable);
                     }
-                    c.taskManager.finishTask();
-                })
+
+                    @Override
+                    public void onSuccess(OperationStatusResponseInner paramServiceResponse) {
+                        updateComputeState(ctx);
+                    }
+                });
+    }
+
+    private void updateComputeState(AzurePowerContext ctx) {
+        ComputeState state = new ComputeState();
+        state.powerState = ctx.request.powerState;
+        if (OFF.equals(ctx.request.powerState)) {
+            state.address = ""; // clear IP address in case of power-off
+        }
+        Operation.createPatch(ctx.request.resourceReference)
+                .setBody(state)
+                .setCompletion((o, e) -> ctx.finish(e))
                 .sendWith(this);
     }
 }

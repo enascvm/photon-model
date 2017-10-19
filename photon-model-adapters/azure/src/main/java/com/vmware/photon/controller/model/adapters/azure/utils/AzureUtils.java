@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_EA_BASE_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_MOCK_HOST_SYSTEM_PROPERTY;
@@ -50,6 +51,7 @@ import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceResponseBuilder.Factory;
 
 import okhttp3.OkHttpClient;
+
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -60,6 +62,7 @@ import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceC
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
@@ -610,5 +613,29 @@ public class AzureUtils {
                 .collectDocuments(Collectors.toList())
                 .thenApply(rgStates -> rgStates.stream().findFirst().orElse(null));
     }
+
+    private static final String DEFAULT_GROUP_PREFIX = "group";
+
+    public static String getResourceGroupName(BaseAdapterContext<?> ctx) {
+
+        String resourceGroupName = null;
+
+        if (ctx.child.customProperties != null) {
+            resourceGroupName = ctx.child.customProperties.get(RESOURCE_GROUP_NAME);
+        }
+
+        if (resourceGroupName == null && ctx.child.description.customProperties != null) {
+            resourceGroupName = ctx.child.description.customProperties.get(RESOURCE_GROUP_NAME);
+        }
+
+        if (resourceGroupName == null || resourceGroupName.isEmpty()) {
+            resourceGroupName = DEFAULT_GROUP_PREFIX + String.valueOf(System.currentTimeMillis());
+        }
+
+        return resourceGroupName;
+    }
+
+
+
 
 }

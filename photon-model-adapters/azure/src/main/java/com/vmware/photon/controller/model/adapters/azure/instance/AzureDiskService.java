@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,7 +25,6 @@ import com.microsoft.azure.management.compute.Disk;
 import com.microsoft.azure.management.compute.DiskSkuTypes;
 import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.resources.fluentcore.utils.SdkContext;
-import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
 
 import rx.Completable;
@@ -32,18 +32,17 @@ import rx.Completable;
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
-import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
 
 /**
  * Adapter to create a disk on Azure.
@@ -59,22 +58,31 @@ public class AzureDiskService extends StatelessService {
     /**
      * Azure Disk request context.
      */
-    private static class AzureDiskContext {
+    private static class AzureDiskContext
+            extends AzureBaseAdapterContext<AzureDiskContext> {
 
         final DiskInstanceRequest diskRequest;
 
-        EndpointService.EndpointState endpoint;
-        AuthCredentialsService.AuthCredentialsServiceState authentication;
         DiskService.DiskState diskState;
         String resourceGroupName;
-        RestClient restClient;
-        AzureSdkClients azureSdkClients;
-        TaskManager taskManager;
 
-        AzureDiskContext(StatelessService service, DiskInstanceRequest request) {
+        AzureDiskContext(
+                AzureDiskService service,
+                ExecutorService executorService,
+                DiskInstanceRequest request) {
+
+            super(service, request);
+
             this.diskRequest = request;
-            this.taskManager = new TaskManager(service, request.taskReference,
-                    request.resourceLink());
+        }
+
+        /**
+         * Get the authentication object using disk authentication.
+         */
+        @Override
+        protected URI getParentAuthRef(AzureDiskContext context) {
+            return UriUtils.buildUri(
+                    context.service.getHost(), context.diskState.authCredentialsLink);
         }
     }
 
@@ -102,7 +110,7 @@ public class AzureDiskService extends StatelessService {
         }
 
         // initialize context object
-        AzureDiskContext context = new AzureDiskContext(this,
+        AzureDiskContext context = new AzureDiskContext(this, this.executorService,
                 op.getBody(DiskInstanceRequest.class));
 
         // Immediately complete the Operation from calling task.
@@ -112,47 +120,15 @@ public class AzureDiskService extends StatelessService {
                 .thenCompose(this::getDiskState)
                 .thenCompose(this::configureAzureSDKClient)
                 .thenCompose(this::handleDiskInstanceRequest)
-                .whenComplete((o, e) -> {
-                    // Once done patch the calling task with correct stage.
-                    if (e == null) {
-                        context.taskManager.finishTask();
-                    } else {
-                        context.taskManager.patchTaskToFailure(e);
-                    }
-                });
-    }
-
-    /**
-     * Get auth details and use them to configure the azure SDK
-     */
-    private DeferredResult<AzureDiskContext> configureAzureSDKClient(AzureDiskContext context) {
-        return DeferredResult.completed(context)
-                .thenCompose(this::getAuthentication)
-                .thenCompose(this::getAzureClient);
+                // Once done patch the calling task with correct stage.
+                .whenComplete((o, e) -> context.finish(e));
     }
 
     /**
      * Get the sdk clients to be used by this service
      */
-    private DeferredResult<AzureDiskContext> getAzureClient(AzureDiskContext ctx) {
-
-        if (ctx.azureSdkClients == null) {
-            ctx.azureSdkClients = new AzureSdkClients(this.executorService, ctx.authentication);
-        }
-        return DeferredResult.completed(ctx);
-    }
-
-    /**
-     * Get Auth credentials to be used for azure
-     */
-    private DeferredResult<AzureDiskContext> getAuthentication(AzureDiskContext context) {
-        return this.sendWithDeferredResult(
-                Operation.createGet(getHost(), context.diskState.authCredentialsLink),
-                AuthCredentialsService.AuthCredentialsServiceState.class)
-                .thenApply(authCredentialsServiceState -> {
-                    context.authentication = authCredentialsServiceState;
-                    return context;
-                });
+    private DeferredResult<AzureDiskContext> configureAzureSDKClient(AzureDiskContext context) {
+        return context.populateBaseContext(BaseAdapterStage.PARENTAUTH);
     }
 
     /**
@@ -202,20 +178,19 @@ public class AzureDiskService extends StatelessService {
     }
 
     /**
-     * Method to define the data disk to be created. We also specify to handle call backs from
-     * Azure
+     * Method to define the data disk to be created. We also specify to handle call backs from Azure
      */
     private DeferredResult<AzureDiskContext> createDisk(AzureDiskContext context) {
 
         // If ResourceGroupName is not given choose one randomly
         if (context.diskState.customProperties != null && context.diskState.customProperties
                 .containsKey(AzureConstants.AZURE_RESOURCE_GROUP_NAME)) {
-            context.resourceGroupName = context.diskState.customProperties.get(AzureConstants
-                    .AZURE_RESOURCE_GROUP_NAME);
+            context.resourceGroupName = context.diskState.customProperties
+                    .get(AzureConstants.AZURE_RESOURCE_GROUP_NAME);
         } else {
-            context.resourceGroupName = SdkContext.randomResourceName
-                    (PREFIX_OF_RESOURCE_GROUP_FOR_DISK,
-                            PREFIX_OF_RESOURCE_GROUP_FOR_DISK.length() + 5);
+            context.resourceGroupName = SdkContext.randomResourceName(
+                    PREFIX_OF_RESOURCE_GROUP_FOR_DISK,
+                    PREFIX_OF_RESOURCE_GROUP_FOR_DISK.length() + 5);
         }
 
         final String msg = "Creating new independent disk with name [" + context.diskState.name +
@@ -250,8 +225,8 @@ public class AzureDiskService extends StatelessService {
         if (context.diskState.customProperties != null && context.diskState.customProperties
                 .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
 
-            accountType = StorageAccountTypes.fromString(context.diskState.customProperties.get
-                    (AzureConstants.AZURE_MANAGED_DISK_TYPE));
+            accountType = StorageAccountTypes.fromString(
+                    context.diskState.customProperties.get(AzureConstants.AZURE_MANAGED_DISK_TYPE));
         }
 
         Disk.DefinitionStages.WithGroup basicDiskDefinition = context.azureSdkClients
@@ -303,24 +278,20 @@ public class AzureDiskService extends StatelessService {
      */
     private DeferredResult<AzureDiskContext> deleteDiskOnAzure(AzureDiskContext context) {
 
-//  TODO unable to use serviceCallback with Void type due to bug in Azure Java SDK
-//  TODO refer https://github.com/Azure/azure-sdk-for-java/issues/1905
+        // TODO unable to use serviceCallback with Void type due to bug in Azure Java SDK
+        // TODO refer https://github.com/Azure/azure-sdk-for-java/issues/1905
 
-        DeferredResult<AzureDiskContext> DR = new DeferredResult<>();
-        Completable c = context.azureSdkClients.getComputeManager().disks().deleteByIdAsync(context
-                .diskState.id);
+        DeferredResult<AzureDiskContext> dr = new DeferredResult<>();
+        Completable c = context.azureSdkClients.getComputeManager().disks()
+                .deleteByIdAsync(context.diskState.id);
         c.subscribe(() -> {
             // handle completion
             getHost().log(Level.INFO, "Deleted disk with name [" + context.diskState.name + "]");
-            DR.complete(context);
+            dr.complete(context);
 
-        }, throwable -> {
-            //handle error
-                DR.fail(throwable);
-            }
-        );
+        }, dr::fail);
 
-        return DR;
+        return dr;
     }
 
     /**
@@ -333,11 +304,14 @@ public class AzureDiskService extends StatelessService {
         ops.add(op1);
 
         // Clean up disk description link if it is present.
-        if (context.diskState.customProperties != null && !context.diskState.customProperties.isEmpty()) {
-            String diskDescLink = context.diskState.customProperties.get(PhotonModelConstants.TEMPLATE_DISK_LINK);
+        if (context.diskState.customProperties != null
+                && !context.diskState.customProperties.isEmpty()) {
+            String diskDescLink = context.diskState.customProperties
+                    .get(PhotonModelConstants.TEMPLATE_DISK_LINK);
 
             if (diskDescLink != null) {
-                DeferredResult<Operation> op2 = this.sendWithDeferredResult(Operation.createDelete(this, diskDescLink));
+                DeferredResult<Operation> op2 = this
+                        .sendWithDeferredResult(Operation.createDelete(this, diskDescLink));
                 ops.add(op2);
             }
         }
@@ -348,7 +322,8 @@ public class AzureDiskService extends StatelessService {
                                 context.diskState.name,
                                 Utils.toString(e)));
                     } else {
-                        logFine(() -> String.format("Deleting diskState %s : SUCCESS", context.diskState.name));
+                        logFine(() -> String.format("Deleting diskState %s : SUCCESS",
+                                context.diskState.name));
                     }
                     return context;
                 });

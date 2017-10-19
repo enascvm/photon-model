@@ -27,6 +27,7 @@ import com.microsoft.rest.ServiceCallback;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -308,16 +309,11 @@ public class AzureSubnetService extends StatelessService {
                 + "] in vNet [" + vNetName
                 + "] in resource group [" + rgName + "].";
 
-        AzureDeferredResultServiceCallback<Void> handler =
-                new AzureDeferredResultServiceCallback<Void>(this, msg) {
-                    @Override
-                    protected DeferredResult<Void> consumeSuccess(Void result) {
-                        return DeferredResult.completed(null);
-                    }
-                };
+        AzureDeferredResultServiceCallback<Void> handler = new Default<>(this, msg);
+
         context.azureClient.deleteAsync(rgName, vNetName, subnetName, handler);
-        return handler.toDeferredResult()
-                .thenApply(ignore -> context);
+
+        return handler.toDeferredResult().thenApply(ignore -> context);
     }
 
     private DeferredResult<AzureSubnetContext> deleteSubnetState(AzureSubnetContext context) {

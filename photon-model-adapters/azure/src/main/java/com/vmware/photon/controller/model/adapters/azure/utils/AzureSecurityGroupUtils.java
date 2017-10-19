@@ -25,6 +25,7 @@ import com.microsoft.azure.management.network.implementation.NetworkSecurityGrou
 import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
 import com.microsoft.rest.ServiceCallback;
 
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
@@ -110,13 +111,7 @@ public class AzureSecurityGroupUtils {
         service.logInfo(() -> msg);
 
         AzureDeferredResultServiceCallback<NetworkSecurityGroupInner> handler =
-                new AzureDeferredResultServiceCallback<NetworkSecurityGroupInner>(service, msg) {
-            @Override
-            protected DeferredResult<NetworkSecurityGroupInner> consumeSuccess(
-                    NetworkSecurityGroupInner securityGroup) {
-                return DeferredResult.completed(securityGroup);
-            }
-        };
+                new Default<>(service, msg);
 
         azureClient.getByResourceGroupAsync(
                 resourceGroupName,

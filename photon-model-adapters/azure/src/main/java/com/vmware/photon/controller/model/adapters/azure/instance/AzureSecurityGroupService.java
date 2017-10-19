@@ -26,12 +26,12 @@ import com.microsoft.azure.management.network.implementation.NetworkSecurityGrou
 
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -55,11 +55,9 @@ public class AzureSecurityGroupService extends StatelessService {
      * Security group request context.
      */
     private static class AzureSecurityGroupContext extends
-            BaseAdapterContext<AzureSecurityGroupContext> implements AutoCloseable {
+            AzureBaseAdapterContext<AzureSecurityGroupContext> {
 
         final SecurityGroupInstanceRequest securityGroupRequest;
-
-        AzureSdkClients azureSdkClients;
 
         SecurityGroupState securityGroupState;
         ResourceGroupState securityGroupRGState;
@@ -69,26 +67,24 @@ public class AzureSecurityGroupService extends StatelessService {
 
         NetworkSecurityGroupInner securityGroup;
 
-        AzureSecurityGroupContext(AzureSecurityGroupService service,
+        AzureSecurityGroupContext(
+                AzureSecurityGroupService service,
+                ExecutorService executorService,
                 SecurityGroupInstanceRequest request) {
-            super(service, request);
+
+            super(service, executorService, request);
 
             this.securityGroupRequest = request;
         }
 
+        /**
+         * Get the authentication object using security group authentication.
+         */
         @Override
         protected URI getParentAuthRef(AzureSecurityGroupContext context) {
             return UriUtils.buildUri(
                     context.service.getHost(),
                     context.securityGroupState.authCredentialsLink);
-        }
-
-        @Override
-        public void close() {
-            if (this.azureSdkClients != null) {
-                this.azureSdkClients.close();
-                this.azureSdkClients = null;
-            }
         }
     }
 
@@ -119,7 +115,9 @@ public class AzureSecurityGroupService extends StatelessService {
         }
 
         // initialize context object
-        AzureSecurityGroupContext context = new AzureSecurityGroupContext(this,
+        AzureSecurityGroupContext context = new AzureSecurityGroupContext(
+                this,
+                this.executorService,
                 op.getBody(SecurityGroupInstanceRequest.class));
 
         // Immediately complete the Operation from calling task.
@@ -128,15 +126,8 @@ public class AzureSecurityGroupService extends StatelessService {
         DeferredResult.completed(context)
                 .thenCompose(this::populateContext)
                 .thenCompose(this::handleSecurityGroupInstanceRequest)
-                .whenComplete((o, e) -> {
-                    // Once done patch the calling task with correct stage.
-                    if (e == null) {
-                        context.taskManager.finishTask();
-                    } else {
-                        context.taskManager.patchTaskToFailure(e);
-                    }
-                    context.close();
-                });
+                // Once done patch the calling task with correct stage.
+                .whenComplete((o, e) -> context.finish(e));
     }
 
     private DeferredResult<AzureSecurityGroupContext> populateContext(
@@ -151,8 +142,7 @@ public class AzureSecurityGroupService extends StatelessService {
                 // get the Azure resource group for the network
                 .thenCompose(this::getNetworkRGState)
                 // create the Azure clients
-                .thenCompose(this::getCredentials)
-                .thenCompose(this::getAzureClients);
+                .thenCompose(this::getAzureClient);
     }
 
     private DeferredResult<AzureSecurityGroupContext> getSecurityGroupState(
@@ -173,8 +163,10 @@ public class AzureSecurityGroupService extends StatelessService {
 
         return AzureUtils.filterRGsByType(getHost(),
                 context.securityGroupState.groupLinks, context.securityGroupState.endpointLink,
-                /* ignore tenantLinks for this query; group link and endpoint link (which is
-                implicitly tenanted) should be sufficient to uniquely identify the resource group */
+                /*
+                 * ignore tenantLinks for this query; group link and endpoint link (which is
+                 * implicitly tenanted) should be sufficient to uniquely identify the resource group
+                 */
                 null)
                 .thenApply(resourceGroupState -> {
                     context.securityGroupRGState = resourceGroupState;
@@ -196,7 +188,8 @@ public class AzureSecurityGroupService extends StatelessService {
 
         AssertUtil.assertNotNull(context.securityGroupRequest.customProperties,
                 "context.request.customProperties is null.");
-        String networkStateId = context.securityGroupRequest.customProperties.get(NETWORK_STATE_ID_PROP_NAME);
+        String networkStateId = context.securityGroupRequest.customProperties
+                .get(NETWORK_STATE_ID_PROP_NAME);
         AssertUtil.assertNotNull(networkStateId,
                 "context.request.customProperties doesn't contain the network state id.");
         AssertUtil.assertNotNull(context.securityGroupState.endpointLink,
@@ -213,8 +206,10 @@ public class AzureSecurityGroupService extends StatelessService {
                 this.getHost(),
                 query,
                 NetworkState.class,
-                /* ignore tenantLinks for this query; network id and endpoint link (which is
-                implicitly tenanted) should be sufficient to uniquely identify the network */
+                /*
+                 * ignore tenantLinks for this query; network id and endpoint link (which is
+                 * implicitly tenanted) should be sufficient to uniquely identify the network
+                 */
                 null,
                 context.securityGroupState.endpointLink);
         queryNetworkStates.setMaxResultsLimit(1);
@@ -259,7 +254,7 @@ public class AzureSecurityGroupService extends StatelessService {
                 });
     }
 
-    private DeferredResult<AzureSecurityGroupContext> getCredentials(
+    private DeferredResult<AzureSecurityGroupContext> getAzureClient(
             AzureSecurityGroupContext context) {
         return context.populateBaseContext(BaseAdapterStage.PARENTAUTH);
     }
@@ -286,7 +281,7 @@ public class AzureSecurityGroupService extends StatelessService {
             if (context.securityGroupRequest.isMockRequest) {
                 // no need to go to the end-point
                 logFine(() -> String.format("Mock request to delete an Azure security group [%s] "
-                                + "processed.", context.securityGroupState.name));
+                        + "processed.", context.securityGroupState.name));
             } else {
                 execution = execution.thenCompose(this::deleteSecurityGroup);
             }
@@ -298,23 +293,11 @@ public class AzureSecurityGroupService extends StatelessService {
         }
     }
 
-    private DeferredResult<AzureSecurityGroupContext> getAzureClients(AzureSecurityGroupContext ctx) {
-        if (ctx.securityGroupRequest.isMockRequest) {
-            return DeferredResult.completed(ctx);
-        }
-
-        if (ctx.azureSdkClients == null) {
-            ctx.azureSdkClients = new AzureSdkClients(this.executorService, ctx.parentAuth);
-        }
-
-        return DeferredResult.completed(ctx);
-    }
-
     private DeferredResult<AzureSecurityGroupContext> createSecurityGroup(
             AzureSecurityGroupContext context) {
 
-        String rgName = context.securityGroupRGState != null ?
-                context.securityGroupRGState.name : context.networkRGState.name;
+        String rgName = context.securityGroupRGState != null ? context.securityGroupRGState.name
+                : context.networkRGState.name;
 
         final String msg = "Creating Azure Security Group [" + context.securityGroupState.name
                 + "] in resource group [" + rgName + "].";
@@ -337,11 +320,11 @@ public class AzureSecurityGroupService extends StatelessService {
     private DeferredResult<AzureSecurityGroupContext> updateRules(
             AzureSecurityGroupContext context) {
 
-        String rgName = context.securityGroupRGState != null ?
-                context.securityGroupRGState.name : context.networkRGState.name;
+        String rgName = context.securityGroupRGState != null ? context.securityGroupRGState.name
+                : context.networkRGState.name;
 
-        final String msg = "Adding Azure Security Rules to Group [" + context.securityGroupState
-                .name + "] in resource group [" + rgName + "].";
+        final String msg = "Adding Azure Security Rules to Group ["
+                + context.securityGroupState.name + "] in resource group [" + rgName + "].";
 
         NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
                 .getNetworkManagementClientImpl().networkSecurityGroups();
@@ -356,8 +339,8 @@ public class AzureSecurityGroupService extends StatelessService {
     private DeferredResult<AzureSecurityGroupContext> deleteSecurityGroup(
             AzureSecurityGroupContext context) {
 
-        String rgName = context.securityGroupRGState != null ?
-                context.securityGroupRGState.name : context.networkRGState.name;
+        String rgName = context.securityGroupRGState != null ? context.securityGroupRGState.name
+                : context.networkRGState.name;
         String securityGroupName = context.securityGroupState.name;
 
         final String msg = "Deleting Azure Security Group [" + securityGroupName
@@ -366,19 +349,15 @@ public class AzureSecurityGroupService extends StatelessService {
         NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
                 .getNetworkManagementClientImpl().networkSecurityGroups();
 
-        AzureDeferredResultServiceCallback<Void> handler =
-                new AzureDeferredResultServiceCallback<Void>(this, msg) {
-                    @Override
-                    protected DeferredResult<Void> consumeSuccess(Void result) {
-                        return DeferredResult.completed(null);
-                    }
-                };
+        AzureDeferredResultServiceCallback<Void> handler = new Default<Void>(this, msg);
+
         azureSecurityGroupClient.deleteAsync(rgName, securityGroupName, handler);
-        return handler.toDeferredResult()
-                .thenApply(ignore -> context);
+
+        return handler.toDeferredResult().thenApply(ignore -> context);
     }
 
-    private DeferredResult<AzureSecurityGroupContext> deleteSecurityGroupState(AzureSecurityGroupContext context) {
+    private DeferredResult<AzureSecurityGroupContext> deleteSecurityGroupState(
+            AzureSecurityGroupContext context) {
         return this.sendWithDeferredResult(
                 Operation.createDelete(this, context.securityGroupState.documentSelfLink))
                 .thenApply(operation -> context);

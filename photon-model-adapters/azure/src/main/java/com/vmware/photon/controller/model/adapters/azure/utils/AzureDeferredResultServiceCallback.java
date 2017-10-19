@@ -30,6 +30,18 @@ import com.vmware.xenon.common.Utils;
  */
 public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsyncCallback<RES> {
 
+    public static class Default<RES> extends AzureDeferredResultServiceCallback<RES> {
+
+        public Default(StatelessService service, String message) {
+            super(service, message);
+        }
+
+        @Override
+        protected DeferredResult<RES> consumeSuccess(RES result) {
+            return DeferredResult.completed(result);
+        }
+    }
+
     /**
      * Return this instance by {@link #consumeError(Throwable)} to indicate that the descendant has
      * recovered from exception.

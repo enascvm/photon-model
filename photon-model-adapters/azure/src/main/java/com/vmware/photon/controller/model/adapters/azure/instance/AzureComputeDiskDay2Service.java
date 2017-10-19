@@ -17,6 +17,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -27,27 +29,25 @@ import com.microsoft.azure.management.compute.VirtualMachine;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
 
 /**
  * Service to attach/detach a disk to VM
@@ -61,30 +61,42 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * Azure Disk request context.
      */
-    public static class AzureComputeDiskContext {
+    public static class AzureComputeDiskDay2Context
+            extends AzureBaseAdapterContext<AzureComputeDiskDay2Context> {
 
         public final ResourceOperationRequest request;
 
         public ComputeState computeState;
         public DiskState diskState;
         public EndpointState endpointState;
-        public TaskManager taskManager;
-        public AuthCredentialsService.AuthCredentialsServiceState authentication;
-        public AzureSdkClients azureSdkClients;
 
         private VirtualMachine provisionedVm;
         private Disk provisionedDisk;
 
-        public AzureComputeDiskContext(StatelessService service, ResourceOperationRequest request) {
+        public AzureComputeDiskDay2Context(
+                StatelessService service,
+                ExecutorService executorService,
+                ResourceOperationRequest request) {
+
+            super(service, executorService, request);
+
             this.request = request;
-            this.taskManager = new TaskManager(service, request.taskReference,
-                    request.resourceLink());
+        }
+
+        /**
+         * Get the authentication object using endpoint authentication.
+         */
+        @Override
+        protected URI getParentAuthRef(AzureComputeDiskDay2Context context) {
+            return UriUtils.buildUri(
+                    context.service.getHost(), context.endpointState.authCredentialsLink);
         }
     }
 
     @Override
     public void handleStart(Operation startPost) {
         this.executorService = getHost().allocateExecutor(this);
+
         Operation.CompletionHandler completionHandler = (op, exc) -> {
             if (exc != null) {
                 startPost.fail(exc);
@@ -121,37 +133,29 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         op.complete();
 
         // initialize context object
-        AzureComputeDiskContext context = new AzureComputeDiskContext(this, request);
+        AzureComputeDiskDay2Context context = new AzureComputeDiskDay2Context(this, this.executorService, request);
 
-        DeferredResult<AzureComputeDiskContext> execution = DeferredResult.completed(context);
+        DeferredResult<AzureComputeDiskDay2Context> execution = DeferredResult.completed(context);
 
-        //common steps for both attach / detach ops
+        // common steps for both attach / detach ops
         execution = execution.thenCompose(this::getComputeState)
                 .thenCompose(this::getDiskState)
                 .thenCompose(this::configureAzureSDKClient)
                 .thenCompose(this::getAzureVirtualMachine);
 
         if (request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
+
             execution = execution.thenCompose(this::getAzureDisk)
                     .thenCompose(this::performDiskAttachment)
                     .thenCompose(this::updateComputeStateAndDiskState);
 
         } else if (request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
+
             execution = execution.thenCompose(this::performDiskDetach)
                     .thenCompose(this::updateComputeStateAndDiskState);
-
-        } else {
-            context.taskManager.patchTaskToFailure(new IllegalArgumentException(
-                    String.format("Unknown operation %s for a disk", request.operation)));
         }
 
-        execution.whenComplete((o, ex) -> {
-            if (ex != null) {
-                context.taskManager.patchTaskToFailure(ex);
-                return;
-            }
-            context.taskManager.finishTask();
-        });
+        execution.whenComplete((o, ex) -> context.finish(ex));
     }
 
     /**
@@ -163,12 +167,21 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                     "Operation cannot be empty");
         }
 
+        final Collection<String> operations = Arrays.asList(
+                ResourceOperation.ATTACH_DISK.operation,
+                ResourceOperation.DETACH_DISK.operation);
+        if (!operations.contains(request.operation)) {
+            throw new IllegalArgumentException(
+                    "Operation value should be any of " + operations);
+        }
+
         if (request.resourceReference == null) {
             throw new IllegalArgumentException(
                     "Compute resource reference to perform the disk operation cannot be empty");
         }
 
-        if (request.payload == null || request.payload.get(PhotonModelConstants.DISK_LINK) == null) {
+        if (request.payload == null
+                || request.payload.get(PhotonModelConstants.DISK_LINK) == null) {
             throw new IllegalArgumentException(
                     "Disk reference to attach to Compute cannot be empty");
         }
@@ -177,7 +190,8 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * Get ComputeState object of a VM using resource reference and save in context
      */
-    private DeferredResult<AzureComputeDiskContext> getComputeState(AzureComputeDiskContext context) {
+    private DeferredResult<AzureComputeDiskDay2Context> getComputeState(
+            AzureComputeDiskDay2Context context) {
         return this.sendWithDeferredResult(
                 Operation.createGet(context.request.resourceReference),
                 ComputeState.class)
@@ -190,22 +204,23 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * Get DiskState object of disk using disk reference and save in context
      */
-    private DeferredResult<AzureComputeDiskContext> getDiskState(AzureComputeDiskContext context) {
+    private DeferredResult<AzureComputeDiskDay2Context> getDiskState(
+            AzureComputeDiskDay2Context context) {
         return this.sendWithDeferredResult(
-                Operation.createGet(this.getHost(), context.request
-                        .payload.get(PhotonModelConstants.DISK_LINK)), DiskState.class)
+                Operation.createGet(this.getHost(),
+                        context.request.payload.get(PhotonModelConstants.DISK_LINK)),
+                DiskState.class)
                 .thenApply(diskState -> {
                     context.diskState = diskState;
                     return context;
                 });
     }
 
-
     /**
      * Method to detach Azure disk from VM
      */
-    private DeferredResult<AzureComputeDiskContext> performDiskDetach(AzureComputeDiskContext
-            context) {
+    private DeferredResult<AzureComputeDiskDay2Context> performDiskDetach(
+            AzureComputeDiskDay2Context context) {
 
         if (context.request.isMockRequest) {
             return DeferredResult.completed(context);
@@ -214,28 +229,27 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         final String msg = "Detaching disk with name [" + context.diskState.name +
                 "]" + "from machine with name [" + context.computeState.name + "]";
 
-        AzureDeferredResultServiceCallback<VirtualMachine> handler =
-                new AzureDeferredResultServiceCallback<VirtualMachine>(this, msg) {
+        AzureDeferredResultServiceCallback<VirtualMachine> handler = new AzureDeferredResultServiceCallback<VirtualMachine>(
+                this, msg) {
 
-                    @Override
-                    protected DeferredResult<VirtualMachine> consumeSuccess(VirtualMachine vm) {
-                        String msg = String.format("[AzureComputeDiskDay2Service] Successfully "
-                                        + "detached volume %s from instance %s",
-                                context.diskState.name, context.computeState.name);
-                        this.service.logInfo(() -> msg);
-                        return DeferredResult.completed(vm);
-                    }
-                };
+            @Override
+            protected DeferredResult<VirtualMachine> consumeSuccess(VirtualMachine vm) {
+                String msg = String.format("[AzureComputeDiskDay2Service] Successfully "
+                        + "detached volume %s from instance %s",
+                        context.diskState.name, context.computeState.name);
+                this.service.logInfo(() -> msg);
+                return DeferredResult.completed(vm);
+            }
+        };
 
         if (context.diskState.customProperties == null) {
             return DeferredResult.failed(new Throwable("LUN number not found in disk state"));
         } else {
             context.provisionedVm.update()
-                    .withoutDataDisk(Integer.parseInt(context.diskState
-                            .customProperties.get(AzureConstants.DISK_CONTROLLER_NUMBER)))
+                    .withoutDataDisk(Integer.parseInt(context.diskState.customProperties
+                            .get(AzureConstants.DISK_CONTROLLER_NUMBER)))
                     .applyAsync(handler);
         }
-
 
         return handler.toDeferredResult().thenApply(virtualMachine -> context);
 
@@ -244,8 +258,8 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * Method to fetch Azure VM reference
      */
-    private DeferredResult<AzureComputeDiskContext> getAzureVirtualMachine(AzureComputeDiskContext
-            context) {
+    private DeferredResult<AzureComputeDiskDay2Context> getAzureVirtualMachine(
+            AzureComputeDiskDay2Context context) {
 
         if (context.request.isMockRequest) {
             return DeferredResult.completed(context);
@@ -261,15 +275,15 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         final String msg = "Getting Virtual Machine details for [" + context.computeState.name +
                 "]";
 
-        AzureDeferredResultServiceCallback<VirtualMachine> handler =
-                new AzureDeferredResultServiceCallback<VirtualMachine>(this, msg) {
+        AzureDeferredResultServiceCallback<VirtualMachine> handler = new AzureDeferredResultServiceCallback<VirtualMachine>(
+                this, msg) {
 
-                    @Override
-                    protected DeferredResult<VirtualMachine> consumeSuccess(VirtualMachine vm) {
-                        context.provisionedVm = vm;
-                        return DeferredResult.completed(vm);
-                    }
-                };
+            @Override
+            protected DeferredResult<VirtualMachine> consumeSuccess(VirtualMachine vm) {
+                context.provisionedVm = vm;
+                return DeferredResult.completed(vm);
+            }
+        };
 
         context.azureSdkClients.getComputeManager().virtualMachines()
                 .getByIdAsync(instanceId, handler);
@@ -277,12 +291,11 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         return handler.toDeferredResult().thenApply(virtualMachine -> context);
     }
 
-
     /**
      * Method to fetch Azure disk reference
      */
-    private DeferredResult<AzureComputeDiskContext> getAzureDisk(AzureComputeDiskContext
-            context) {
+    private DeferredResult<AzureComputeDiskDay2Context> getAzureDisk(
+            AzureComputeDiskDay2Context context) {
 
         if (context.request.isMockRequest) {
             return DeferredResult.completed(context);
@@ -295,19 +308,18 @@ public class AzureComputeDiskDay2Service extends StatelessService {
             return DeferredResult.failed(new IllegalArgumentException(msg));
         }
 
-
         final String msg = "Getting Disk details for [" + context.diskState.name +
                 "]";
 
-        AzureDeferredResultServiceCallback<Disk> handler =
-                new AzureDeferredResultServiceCallback<Disk>(this, msg) {
+        AzureDeferredResultServiceCallback<Disk> handler = new AzureDeferredResultServiceCallback<Disk>(
+                this, msg) {
 
-                    @Override
-                    protected DeferredResult<Disk> consumeSuccess(Disk disk) {
-                        context.provisionedDisk = disk;
-                        return DeferredResult.completed(disk);
-                    }
-                };
+            @Override
+            protected DeferredResult<Disk> consumeSuccess(Disk disk) {
+                context.provisionedDisk = disk;
+                return DeferredResult.completed(disk);
+            }
+        };
 
         context.azureSdkClients.getComputeManager().disks()
                 .getByIdAsync(diskId, handler);
@@ -315,32 +327,31 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         return handler.toDeferredResult().thenApply(disk -> context);
     }
 
-
     /**
      * Method to attach Azure disk to VM
      */
-    private DeferredResult<AzureComputeDiskContext> performDiskAttachment(AzureComputeDiskContext context) {
+    private DeferredResult<AzureComputeDiskDay2Context> performDiskAttachment(
+            AzureComputeDiskDay2Context context) {
 
         if (context.request.isMockRequest) {
             return DeferredResult.completed(context);
         }
 
-
         final String msg = "Attaching an independent disk with name [" + context.diskState.name +
                 "]" + "to machine with name [" + context.computeState.name + "]";
 
+        AzureDeferredResultServiceCallback<VirtualMachine> handler = new AzureDeferredResultServiceCallback<VirtualMachine>(
+                this, msg) {
 
-        AzureDeferredResultServiceCallback<VirtualMachine> handler =
-                new AzureDeferredResultServiceCallback<VirtualMachine>(this, msg) {
-
-                    @Override
-                    protected DeferredResult<VirtualMachine> consumeSuccess(VirtualMachine vm) {
-                        String msg = String.format("[AzureComputeDiskDay2Service] Successfully attached volume %s to instance %s",
-                                context.diskState.id, context.computeState.id);
-                        this.service.logInfo(() -> msg);
-                        return DeferredResult.completed(vm);
-                    }
-                };
+            @Override
+            protected DeferredResult<VirtualMachine> consumeSuccess(VirtualMachine vm) {
+                String msg = String.format(
+                        "[AzureComputeDiskDay2Service] Successfully attached volume %s to instance %s",
+                        context.diskState.id, context.computeState.id);
+                this.service.logInfo(() -> msg);
+                return DeferredResult.completed(vm);
+            }
+        };
 
         context.provisionedVm.update()
                 .withExistingDataDisk(context.provisionedDisk)
@@ -349,14 +360,16 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         return handler.toDeferredResult().thenApply(virtualMachine -> context);
     }
 
-    private DeferredResult<AzureComputeDiskContext> updateComputeStateAndDiskState(AzureComputeDiskContext context) {
+    private DeferredResult<AzureComputeDiskDay2Context> updateComputeStateAndDiskState(
+            AzureComputeDiskDay2Context context) {
         List<DeferredResult<Operation>> patchedDRs = new ArrayList<>();
         patchedDRs.add(updateDiskState(context));
         patchedDRs.add(updateComputeState(context));
 
         return DeferredResult.allOf(patchedDRs).handle((o, e) -> {
             if (e != null) {
-                logSevere(() -> String.format("Updating ComputeState %s and DiskState %s : FAILED with %s",
+                logSevere(() -> String.format(
+                        "Updating ComputeState %s and DiskState %s : FAILED with %s",
                         context.computeState.name, context.diskState.name,
                         Utils.toString(e)));
                 throw new IllegalStateException(e);
@@ -371,7 +384,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * Update the diskLink of DiskState in ComputeState
      */
-    private DeferredResult<Operation> updateComputeState(AzureComputeDiskContext context) {
+    private DeferredResult<Operation> updateComputeState(AzureComputeDiskDay2Context context) {
         ComputeState computeState = context.computeState;
         Operation computeStateOp = null;
 
@@ -400,7 +413,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * Update status and LUN of DiskState
      */
-    private DeferredResult<Operation> updateDiskState(AzureComputeDiskContext context) {
+    private DeferredResult<Operation> updateDiskState(AzureComputeDiskDay2Context context) {
         DiskState diskState = context.diskState;
 
         if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
@@ -421,19 +434,21 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                 if (diskState.customProperties == null) {
                     diskState.customProperties = new HashMap<>();
                 }
-                diskState.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(dataDisk.lun()));
+                diskState.customProperties.put(DISK_CONTROLLER_NUMBER,
+                        String.valueOf(dataDisk.lun()));
             }
         }
 
         Operation diskPatchOp = null;
 
         if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
-            diskPatchOp = Operation.createPatch(UriUtils.buildUri(this.getHost(), diskState.documentSelfLink))
+            diskPatchOp = Operation
+                    .createPatch(UriUtils.buildUri(this.getHost(), diskState.documentSelfLink))
                     .setBody(diskState)
                     .setReferer(this.getUri());
         } else if (context.request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
-            diskPatchOp = Operation.createPut(UriUtils.buildUri(this.getHost(), diskState
-                    .documentSelfLink))
+            diskPatchOp = Operation
+                    .createPut(UriUtils.buildUri(this.getHost(), diskState.documentSelfLink))
                     .setBody(diskState)
                     .setReferer(this.getUri());
         }
@@ -441,17 +456,18 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         return this.sendWithDeferredResult(diskPatchOp);
     }
 
-    private DeferredResult<AzureComputeDiskContext> configureAzureSDKClient(AzureComputeDiskContext context) {
+    private DeferredResult<AzureComputeDiskDay2Context> configureAzureSDKClient(
+            AzureComputeDiskDay2Context context) {
         return DeferredResult.completed(context)
                 .thenCompose(this::getEndpointState)
-                .thenCompose(this::getAuthentication)
                 .thenCompose(this::getAzureClient);
     }
 
     /**
      * Get the endpoint state object
      */
-    private DeferredResult<AzureComputeDiskContext> getEndpointState(AzureComputeDiskContext context) {
+    private DeferredResult<AzureComputeDiskDay2Context> getEndpointState(
+            AzureComputeDiskDay2Context context) {
         URI uri = context.request.buildUri(context.computeState.endpointLink);
         return this.sendWithDeferredResult(
                 Operation.createGet(uri), EndpointState.class)
@@ -462,26 +478,12 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     }
 
     /**
-     * Get the authentication object using endpoint authentication
-     */
-    private DeferredResult<AzureComputeDiskContext> getAuthentication(AzureComputeDiskContext context) {
-        return this.sendWithDeferredResult(
-                Operation.createGet(getHost(), context.endpointState.authCredentialsLink),
-                AuthCredentialsService.AuthCredentialsServiceState.class)
-                .thenApply(authCredentialsServiceState -> {
-                    context.authentication = authCredentialsServiceState;
-                    return context;
-                });
-    }
-
-    /**
      * Get Azure sdk client object to access Azure APIs
      */
-    private DeferredResult<AzureComputeDiskContext> getAzureClient(AzureComputeDiskContext context) {
-        if (context.azureSdkClients == null) {
-            context.azureSdkClients = new AzureSdkClients(this.executorService, context.authentication);
-        }
-        return DeferredResult.completed(context);
+    private DeferredResult<AzureComputeDiskDay2Context> getAzureClient(
+            AzureComputeDiskDay2Context context) {
+
+        return context.populateBaseContext(BaseAdapterStage.PARENTAUTH);
     }
 
     /**

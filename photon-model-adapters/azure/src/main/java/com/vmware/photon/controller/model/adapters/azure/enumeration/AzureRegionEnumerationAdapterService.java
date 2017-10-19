@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.resources.implementation.LocationInner;
@@ -23,7 +24,9 @@ import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse.R
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.DeferredResult;
@@ -35,6 +38,103 @@ public class AzureRegionEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_REGION_ENUMERATION_ADAPTER_SERVICE;
 
+    private static class Context implements AutoCloseable {
+
+        final AzureRegionEnumerationAdapterService service;
+        final EndpointState request;
+
+        AuthCredentialsServiceState authentication;
+
+        AzureSdkClients azureSdkClients;
+
+        List<LocationInner> azureLocations;
+
+        Context(AzureRegionEnumerationAdapterService service, EndpointState request) {
+            this.service = service;
+            this.request = request;
+        }
+
+        /**
+         * Release internal {@link AzureSdkClients} instance.
+         */
+        @Override
+        public final void close() {
+            if (this.azureSdkClients != null) {
+                this.azureSdkClients.close();
+                this.azureSdkClients = null;
+            }
+        }
+
+        protected DeferredResult<Context> getAuthentication(Context context) {
+
+            if (this.request.authCredentialsLink == null) {
+                AzureEndpointAdapterService.credentials().accept(
+                        context.authentication = new AuthCredentialsServiceState(),
+                        EndpointAdapterUtils.Retriever.of(this.request.endpointProperties));
+
+                return DeferredResult.completed(context);
+            }
+
+            Operation op = Operation.createGet(
+                    context.service.getHost(),
+                    context.request.authCredentialsLink);
+
+            return context.service
+                    .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
+                    .thenApply(state -> {
+                        context.authentication = state;
+                        return context;
+                    });
+        }
+
+        protected DeferredResult<Context> getAzureClient(Context context) {
+
+            context.azureSdkClients = new AzureSdkClients(
+                    context.service.executorService,
+                    context.authentication);
+
+            return DeferredResult.completed(context);
+        }
+
+        protected DeferredResult<Context> getAzureLocations(Context context) {
+
+            AzureDeferredResultServiceCallback<List<LocationInner>> callback = new Default<>(
+                    context.service,
+                    "Retrieving locations for subscription with id "
+                            + context.azureSdkClients.authState.userLink);
+
+            context.azureSdkClients
+                    .getSubscriptionClientImpl()
+                    .subscriptions()
+                    .listLocationsAsync(context.azureSdkClients.authState.userLink, callback);
+
+            return callback.toDeferredResult().thenApply(locations -> {
+                context.azureLocations = locations;
+                return context;
+            });
+        }
+    }
+
+    private ExecutorService executorService;
+
+    public AzureRegionEnumerationAdapterService() {
+        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+    }
+
+    @Override
+    public void handleStart(Operation startPost) {
+        this.executorService = getHost().allocateExecutor(this);
+
+        super.handleStart(startPost);
+    }
+
+    @Override
+    public void handleStop(Operation delete) {
+        this.executorService.shutdown();
+        AdapterUtils.awaitTermination(this.executorService);
+        super.handleStop(delete);
+    }
+
     @Override
     public void handlePost(Operation post) {
         if (!post.hasBody()) {
@@ -42,58 +142,29 @@ public class AzureRegionEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        EndpointState request = post.getBody(EndpointState.class);
+        Context ctx = new Context(this, post.getBody(EndpointState.class));
 
-        DeferredResult<AuthCredentialsServiceState> credentialsDr;
-        if (request.authCredentialsLink == null) {
-            credentialsDr = new DeferredResult<>();
-            credentialsDr.complete(new AuthCredentialsServiceState());
-        } else {
-            Operation getCredentials = Operation.createGet(this, request.authCredentialsLink);
-            credentialsDr = sendWithDeferredResult(getCredentials,
-                    AuthCredentialsServiceState.class);
-        }
+        DeferredResult.completed(ctx)
+                .thenCompose(ctx::getAuthentication)
+                .thenCompose(ctx::getAzureClient)
+                .thenCompose(ctx::getAzureLocations)
+                .whenComplete((ignoreCtx, t) -> {
+                    try {
+                        if (t != null) {
+                            post.fail(t);
+                            return;
+                        }
 
-        credentialsDr.thenCompose(creds -> {
-            EndpointAdapterUtils.Retriever retriever = EndpointAdapterUtils.Retriever
-                    .of(request.endpointProperties);
+                        RegionEnumerationResponse result = new RegionEnumerationResponse();
+                        result.regions = ctx.azureLocations.stream()
+                                .map(loc -> new RegionInfo(loc.displayName(), loc.name()))
+                                .collect(Collectors.toList());
 
-            AzureEndpointAdapterService.credentials().accept(creds, retriever);
-
-            AzureSdkClients clients = new AzureSdkClients(getHost().allocateExecutor(this), creds);
-
-            AzureDeferredResultServiceCallback<List<LocationInner>> callback = new AzureDeferredResultServiceCallback<List<LocationInner>>(
-                    this, "Retrieving locations for subscription with id " + creds.userLink) {
-
-                @Override
-                protected DeferredResult<List<LocationInner>> consumeSuccess(
-                        List<LocationInner> result) {
-                    return DeferredResult.completed(result);
-                }
-            };
-
-            clients.getSubscriptionClientImpl().subscriptions()
-                    .listLocationsAsync(creds.userLink, callback);
-
-            return callback.toDeferredResult();
-        })
-                .whenComplete((locations, t) -> {
-                    if (t != null) {
-                        post.fail(t);
-                        return;
+                        post.setBodyNoCloning(result).complete();
+                    } finally {
+                        ctx.close();
                     }
-
-                    List<RegionInfo> regions = locations.stream()
-                            .map(location -> new RegionInfo(location.displayName(),
-                                    location.name()))
-                            .collect(
-                                    Collectors.toList());
-
-                    RegionEnumerationResponse result = new RegionEnumerationResponse();
-                    result.regions = regions;
-
-                    post.setBody(result);
-                    post.complete();
                 });
     }
+
 }

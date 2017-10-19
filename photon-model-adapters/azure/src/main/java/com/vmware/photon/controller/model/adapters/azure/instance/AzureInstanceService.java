@@ -56,7 +56,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.CloudError;
@@ -119,6 +118,7 @@ import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceC
 import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.AzureDiagnosticSettings;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
@@ -163,10 +163,8 @@ public class AzureInstanceService extends StatelessService {
     // TODO VSYM-322: Remove unused default properties from AzureInstanceService
     // Name prefixes
     private static final String NICCONFIG_NAME_PREFIX = "nicconfig";
-    private static final String DEFAULT_GROUP_PREFIX = "group";
+
     private static final String VHD_URI_FORMAT = "https://%s.blob.core.windows.net/vhds/%s.vhd";
-    private static final Pattern VHD_URI_PATTERN = Pattern
-            .compile("https://([\\p{Lower}\\p{Digit}]+).blob.core.windows.net/(.+)\\.vhd");
     private static final String BOOT_DISK_SUFFIX = "-boot-disk";
     private static final String DATA_DISK_SUFFIX = "-data-disk";
 
@@ -443,7 +441,7 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        String rgName = getResourceGroupName(ctx);
+        String rgName = AzureUtils.getResourceGroupName(ctx);
 
         if (rgName == null || rgName.isEmpty()) {
             throw new IllegalArgumentException("Resource group name is required");
@@ -570,7 +568,7 @@ public class AzureInstanceService extends StatelessService {
 
     private void createResourceGroup(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
 
-        String resourceGroupName = getResourceGroupName(ctx);
+        String resourceGroupName = AzureUtils.getResourceGroupName(ctx);
 
         ResourceGroupInner resourceGroup = new ResourceGroupInner();
         resourceGroup.withLocation(ctx.child.description.regionId);
@@ -2040,14 +2038,8 @@ public class AzureInstanceService extends StatelessService {
                     ctx.imageReference.offer(),
                     ctx.imageReference.sku());
 
-            AzureDeferredResultServiceCallback<List<VirtualMachineImageResourceInner>> callback = new AzureDeferredResultServiceCallback<List<VirtualMachineImageResourceInner>>(
-                    ctx.service, msg) {
-                @Override
-                protected DeferredResult<List<VirtualMachineImageResourceInner>> consumeSuccess(
-                        List<VirtualMachineImageResourceInner> imageResources) {
-                    return DeferredResult.completed(imageResources);
-                }
-            };
+            AzureDeferredResultServiceCallback<List<VirtualMachineImageResourceInner>> callback =
+                    new Default<>(ctx.service, msg);
 
             getComputeManagementClientImpl(ctx).virtualMachineImages().listAsync(
                     ctx.resourceGroup.location(),
@@ -2148,22 +2140,6 @@ public class AzureInstanceService extends StatelessService {
         }
     }
 
-    private String getResourceGroupName(AzureInstanceContext ctx) {
-        String resourceGroupName = null;
-        if (ctx.child.customProperties != null) {
-            resourceGroupName = ctx.child.customProperties.get(RESOURCE_GROUP_NAME);
-        }
-
-        if (resourceGroupName == null && ctx.child.description.customProperties != null) {
-            resourceGroupName = ctx.child.description.customProperties.get(RESOURCE_GROUP_NAME);
-        }
-
-        if (resourceGroupName == null || resourceGroupName.isEmpty()) {
-            resourceGroupName = DEFAULT_GROUP_PREFIX + String.valueOf(System.currentTimeMillis());
-        }
-        return resourceGroupName;
-    }
-
     private class StorageAccountProvisioningCallback
             extends AzureProvisioningCallback<StorageAccountInner> {
 
@@ -2225,24 +2201,8 @@ public class AzureInstanceService extends StatelessService {
             String msg = "Getting Azure StorageAccountKeys for [" + ctx.storageAccount.name()
                     + "] Storage Account";
 
-            AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler = new AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner>(
-                    this.service, msg) {
-
-                @Override
-                protected Throwable consumeError(Throwable exc) {
-                    return new IllegalStateException(msg + ": FAILED with " + exc.getMessage(),
-                            exc);
-                }
-
-                @Override
-                protected DeferredResult<StorageAccountListKeysResultInner> consumeSuccess(
-                        StorageAccountListKeysResultInner body) {
-
-                    logFine(() -> String.format(msg + ": SUCCESS"));
-
-                    return DeferredResult.completed(body);
-                }
-            };
+            AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler =
+                    new Default<>(this.service, msg);
 
             getStorageManagementClientImpl(ctx)
                     .storageAccounts()

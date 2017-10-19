@@ -26,6 +26,7 @@ import com.microsoft.azure.management.compute.implementation.VirtualMachineSizes
 
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -121,14 +122,8 @@ public class AzureInstanceTypeService extends StatelessService {
             String msg = "Getting Azure instance types for ["
                     + ctx.regionId + "/" + ctx.endpointState.name + "] Endpoint";
 
-            AzureDeferredResultServiceCallback<List<VirtualMachineSizeInner>> handler = new AzureDeferredResultServiceCallback<List<VirtualMachineSizeInner>>(
-                    ctx.service, msg) {
-                @Override
-                protected DeferredResult<List<VirtualMachineSizeInner>> consumeSuccess(
-                        List<VirtualMachineSizeInner> result) {
-                    return DeferredResult.completed(result);
-                }
-            };
+            AzureDeferredResultServiceCallback<List<VirtualMachineSizeInner>> handler =
+                    new Default<>(ctx.service, msg);
 
             virtualMachineSizes.listAsync(ctx.regionId, handler);
 
