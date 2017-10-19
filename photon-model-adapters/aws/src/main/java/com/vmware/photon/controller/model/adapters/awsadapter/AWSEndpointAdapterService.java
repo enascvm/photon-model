@@ -154,7 +154,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             List<String> children = new ArrayList<>();
-            children.add(ComputeType.VM_GUEST.toString());
+            children.add(ComputeType.ZONE.toString());
             cd.supportedChildren = children;
 
             cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
