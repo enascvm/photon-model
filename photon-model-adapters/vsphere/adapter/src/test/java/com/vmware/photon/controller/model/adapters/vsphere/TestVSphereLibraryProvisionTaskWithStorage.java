@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
@@ -37,6 +38,7 @@ import com.vmware.xenon.common.Operation;
 public class TestVSphereLibraryProvisionTaskWithStorage extends TestVSphereLibraryProvisionTaskBase {
 
     @Test
+    @Ignore("VCOM-2131")
     public void deployFromLibraryWithAdditionalDisks() throws Throwable {
         ComputeService.ComputeState vm = provisionVMAndGetState(true, true);
         try {
