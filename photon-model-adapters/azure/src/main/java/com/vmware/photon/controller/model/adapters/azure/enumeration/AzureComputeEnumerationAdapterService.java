@@ -333,67 +333,67 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void handleSubStage(EnumerationContext ctx) {
         switch (ctx.subStage) {
         case LISTVMS:
-            logFine("IN LISTVMS [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN LISTVMS [endpointLink:%s]", ctx.request.endpointLink);
             getVmList(ctx, ComputeEnumerationSubStages.GET_COMPUTE_STATES);
             break;
         case GET_COMPUTE_STATES:
-            logFine("IN GET_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN GET_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             queryForComputeStates(ctx, ComputeEnumerationSubStages.GET_DISK_STATES);
             break;
         case GET_DISK_STATES:
-            logFine("IN GET_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN GET_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
             queryForDiskStates(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_INTERNAL_TYPE_TAG);
             break;
         case CREATE_COMPUTE_INTERNAL_TYPE_TAG:
-            logFine("IN CREATE_COMPUTE_INTERNAL_TYPE_TAG [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN CREATE_COMPUTE_INTERNAL_TYPE_TAG [endpointLink:%s]", ctx.request.endpointLink);
             createInternalTypeTag(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_EXTERNAL_TAG_STATES);
             break;
         case CREATE_COMPUTE_EXTERNAL_TAG_STATES:
-            logFine("IN CREATE_COMPUTE_EXTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN CREATE_COMPUTE_EXTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createTagStates(ctx,
                     ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES);
             break;
         case CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES:
-            logFine("IN CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createNetworkInterfaceInternalTagStates(ctx,
                     ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES);
             break;
         case CREATE_NETWORK_INTERFACE_STATES:
-            logFine("IN CREATE_NETWORK_INTERFACE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN CREATE_NETWORK_INTERFACE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createNetworkInterfaceStates(ctx, ComputeEnumerationSubStages.UPDATE_DISK_STATES);
             break;
         case UPDATE_DISK_STATES:
-            logFine("IN UPDATE_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN UPDATE_DISK_STATES [endpointLink:%s]", ctx.request.endpointLink);
             updateDiskStates(ctx, ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES);
             break;
         case UPDATE_COMPUTE_STATES:
-            logFine("IN UPDATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN UPDATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             updateComputeStates(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS);
             break;
         case CREATE_COMPUTE_DESCRIPTIONS:
-            logFine("IN CREATE_COMPUTE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN CREATE_COMPUTE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
             createComputeDescriptions(ctx,
                     ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS);
             break;
         case GET_STORAGE_DESCRIPTIONS:
-            logFine("IN GET_STORAGE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN GET_STORAGE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
             queryForDiagnosticStorageDescriptions(ctx,
                     ComputeEnumerationSubStages.CREATE_COMPUTE_STATES);
             break;
         case CREATE_COMPUTE_STATES:
-            logFine("IN CREATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN CREATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             createComputeStates(ctx, ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS);
             break;
         case PATCH_ADDITIONAL_FIELDS:
-            logFine("IN PATCH_ADDITIONAL_FIELDS [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN PATCH_ADDITIONAL_FIELDS [endpointLink:%s]", ctx.request.endpointLink);
             patchAdditionalFields(ctx, ComputeEnumerationSubStages.DELETE_COMPUTE_STATES);
             break;
         case DELETE_COMPUTE_STATES:
-            logFine("IN DELETE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN DELETE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
             deleteComputeStates(ctx, ComputeEnumerationSubStages.FINISHED);
             break;
         case FINISHED:
-            logFine("IN FINISHED [endpointLink:%s]", ctx.request.endpointLink);
+            logInfo("IN FINISHED [endpointLink:%s]", ctx.request.endpointLink);
             ctx.stage = EnumerationStages.FINISHED;
             handleEnumeration(ctx);
             break;
