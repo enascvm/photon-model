@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.43-SNAPSHOT
+
 ## 0.6.42
 * Refactored photon-model adapters to use common QueryUtils.
 * Allow detaching non-boot EBS volume from running AWS VM.
