@@ -479,35 +479,18 @@ public class BaseVSphereAdapterTest {
 
         ResourceOperationRequest rebootVMRequest = getResourceOperationRequest("Reboot",
                 computeState.documentSelfLink, taskLink);
-
-        TestContext ctx = this.host.testCreate(1);
-        createTaskResultListener(this.host, taskLink, (u) -> {
-            if (u.getAction() != Service.Action.PATCH) {
-                return false;
-            }
-            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
-            if (TaskState.isFailed(response.taskInfo)) {
-                ctx.failIteration(
-                        new IllegalStateException(response.taskInfo.failure.message));
-            } else {
-                ctx.completeIteration();
-            }
-            return true;
-        });
-        TestContext ctx2 = this.host.testCreate(1);
         Operation rebootOp = Operation
                 .createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
                 .setBody(rebootVMRequest)
                 .setReferer(this.host.getReferer())
                 .setCompletion((o, e) -> {
-                    if (e != null) {
-                        ctx2.failIteration(e);
-                        return;
-                    }
-                    ctx2.completeIteration();
+                    Assert.assertNull(e);
                 });
-        this.host.send(rebootOp);
-        ctx2.await();
+
+        TestRequestSender sender = new TestRequestSender(this.host);
+        sender.sendRequest(rebootOp);
+        this.host.log("Waiting for the machine to be rebooted");
+
         ComputeState[] cState = new ComputeState[1];
 
         this.host.waitFor("Reboot request failed", () -> {
@@ -521,6 +504,7 @@ public class BaseVSphereAdapterTest {
         });
         assertEquals(ComputeService.PowerState.ON, cState[0].powerState);
         assertNotNull(cState[0].address);
+        this.host.log("Reboot operation completed successfully");
     }
 
     protected void suspendVSphereVM(ComputeState computeState) {

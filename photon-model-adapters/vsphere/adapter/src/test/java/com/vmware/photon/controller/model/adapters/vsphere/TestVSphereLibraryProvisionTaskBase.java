@@ -77,8 +77,9 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
         assertTrue(backing.isThinProvisioned());
     }
 
-    private ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription vmDescription, String imageLink,
-                                                      boolean isStoragePolicyBased, boolean withAdditionalDisks, boolean isSnapshotLimitCase) throws Throwable {
+    private ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription vmDescription,
+                                                      String imageLink, boolean isStoragePolicyBased,
+                                                      boolean withAdditionalDisks) throws Throwable {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.id = vmDescription.name;
         computeState.documentSelfLink = computeState.id;
@@ -115,10 +116,6 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
                 .put(ComputeProperties.PLACEMENT_LINK, selectPlacement())
                 .put(CustomProperties.LIBRARY_ITEM_LINK, imageLink);
-
-        if (isSnapshotLimitCase) {
-            computeState.customProperties.put(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT, "1");
-        }
 
         ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeService.ComputeState.class,
@@ -210,19 +207,11 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
     }
 
     protected ComputeService.ComputeState provisionVMAndGetState() throws Throwable {
-        return provisionVMAndGetState(false, false, false);
+        return provisionVMAndGetState(false, false);
     }
 
-    protected ComputeService.ComputeState provisionVMWithSnapshotLimitAndGetState() throws Throwable {
-        return provisionVMAndGetState(false, false, true);
-    }
-
-    protected ComputeService.ComputeState provisionVMAndGetState(boolean isStoragePolicyBased, boolean withAdditionalDisks) throws Throwable {
-        return provisionVMAndGetState(isStoragePolicyBased, withAdditionalDisks, false);
-    }
-
-    private ComputeService.ComputeState provisionVMAndGetState(boolean isStoragePolicyBased, boolean
-            withAdditionalDisks, boolean isSnapshotLimitCase) throws Throwable {
+    protected ComputeService.ComputeState provisionVMAndGetState(boolean isStoragePolicyBased,
+                                                                 boolean withAdditionalDisks) throws Throwable {
         if (isMock()) {
             return null;
         }
@@ -252,7 +241,10 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
 
         String imageLink = findImage();
         ComputeDescriptionService.ComputeDescription desc = createVmDescription();
-        ComputeService.ComputeState vm = createVmState(desc, imageLink, isStoragePolicyBased, withAdditionalDisks, isSnapshotLimitCase);
+        ComputeService.ComputeState vm = createVmState(desc, imageLink, isStoragePolicyBased, withAdditionalDisks);
+
+        //set timeout for the next step, createProvisionTask() takes time since overall provision and IP assignment sometimes take time
+        host.setTimeoutSeconds(60 * 10);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskService.ProvisionComputeTaskState outTask = createProvisionTask(vm);

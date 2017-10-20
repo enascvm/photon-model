@@ -13,67 +13,17 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
-import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 
-@Ignore
 public class TestVSphereLibraryProvisionTask extends TestVSphereLibraryProvisionTaskBase {
 
     @Test
     public void deployFromLibrary() throws Throwable {
         ComputeState vm = provisionVMAndGetState();
-        try {
-            if (vm == null) {
-                return;
-            }
-
-            // Verify that the disk is resized
-            BasicConnection connection = createConnection();
-            GetMoRef get = new GetMoRef(connection);
-            verifyDiskSize(vm, get, HDD_DISK_SIZE);
-            verifyDiskProperties(vm, get);
-        } finally {
-            if (vm != null) {
-                deleteVmAndWait(vm);
-            }
-        }
-    }
-
-    @Test
-    @Ignore("VCOM-2131")
-    public void deployFromLibraryCreateSnapshotsAndCheckSnapshotLimit() throws Throwable {
-        ComputeState vm = provisionVMWithSnapshotLimitAndGetState();
-        try {
-            if (vm == null) {
-                return;
-            }
-            createSnapshotAndWait(vm, false); // 1st snapshot will succeed
-            createSnapshotAndWaitFailure(vm); // 2nd snapshot will fail, since snapshot limit is set to "1"
-        } finally {
-            if (vm != null) {
-                deleteVmAndWait(vm);
-            }
-        }
-    }
-
-    @Test
-    @Ignore("VCOM-2131")
-    public void deployFromLibraryToNewFolder() throws Throwable {
-        final String vmFolder = "/Datacenters/Datacenter/vm/test-folder";
-        this.vcFolder = vmFolder; // setting an explicit folder for this vm, if folder is not present it will  be created
-        ComputeState vm = provisionVMAndGetState();
-        try {
-            if (vm == null) {
-                return;
-            }
-        } finally {
-            if (vm != null) {
-                deleteVmAndWait(vm);
-            }
+        if (vm != null) {
+            deleteVmAndWait(vm);
         }
     }
 }

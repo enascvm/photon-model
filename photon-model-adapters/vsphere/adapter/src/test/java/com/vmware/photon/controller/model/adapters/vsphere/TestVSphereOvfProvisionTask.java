@@ -48,6 +48,20 @@ public class TestVSphereOvfProvisionTask extends TestVSphereOvfProvisionTaskBase
     }
 
     @Test
+    public void deployOvfWithFullCloneAndCheckSnapshotLimit() throws Throwable {
+        Map<String, String> customProperties = new HashMap<>();
+        customProperties.put(CLONE_STRATEGY, InstanceClient.CLONE_STRATEGY_FULL);
+        deployOvfWithSnapshotLimitAndGetState(false, false, customProperties);
+    }
+
+    @Test
+    public void deployOvfWithFullCloneInNewFolder() throws Throwable {
+        Map<String, String> customProperties = new HashMap<>();
+        customProperties.put(CLONE_STRATEGY, InstanceClient.CLONE_STRATEGY_FULL);
+        deployOvfToNewFolder(false, false, customProperties);
+    }
+
+    @Test
     public void deployOvfWithThickEagerZeroedProvision() throws Throwable {
         Map<String, String> customProperties = new HashMap<>();
         customProperties.put(PROVISION_TYPE, VirtualDiskType.EAGER_ZEROED_THICK.value());

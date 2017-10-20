@@ -93,78 +93,127 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
         }
         ComputeService.ComputeState vm = null;
         try {
-            // Create a resource pool where the VM will be housed
-            this.resourcePool = createResourcePool();
-            this.auth = createAuth();
-
-            this.computeHostDescription = createComputeDescription();
-            this.computeHost = createComputeHost(this.computeHostDescription);
-
-            ComputeDescriptionService.ComputeDescription computeDesc = createTemplate();
-
-            ImportOvfRequest req = new ImportOvfRequest();
-            req.ovfUri = this.ovfUri;
-            req.template = computeDesc;
-
-            Operation op = Operation.createPatch(this.host, OvfImporterService.SELF_LINK)
-                    .setBody(req)
-                    .setReferer(this.host.getPublicUri());
-
-            CompletableFuture<Operation> f = this.host.sendWithFuture(op);
-
-            // depending on OVF location you may want to increase the timeout
-            f.get(300, TimeUnit.SECONDS);
-
-            snapshotFactoryState("ovf", ComputeDescriptionService.class);
-
-            enumerateComputes(this.computeHost);
-
-            String descriptionLink = findFirstOvfDescriptionLink();
-
-            this.bootDisk = createBootDiskWithCustomProperties(CLOUD_CONFIG_DATA, isStoragePolicyBased, customProperties);
-            vm = createVmState(descriptionLink, withAdditionalDisks, customProperties);
-
-            // set timeout for the next step, vmdk upload may take some time
-            host.setTimeoutSeconds(60 * 5);
-
-            // provision
-            ProvisionComputeTaskService.ProvisionComputeTaskState outTask = createProvisionTask(vm);
-            awaitTaskEnd(outTask);
-            vm = getComputeState(vm);
-
-            snapshotFactoryState("ovf", ComputeService.class);
-            if (!isMock() && withAdditionalDisks || customProperties.get(PROVISION_TYPE) != null) {
-                BasicConnection connection = createConnection();
-                GetMoRef get = new GetMoRef(connection);
-                List<VirtualDisk> virtualDisks = fetchAllVirtualDisks(vm, get);
-
-                if (customProperties.get(PROVISION_TYPE) != null) {
-                    VirtualDiskType diskProvisionType = VirtualDiskType.fromValue(customProperties.get(PROVISION_TYPE));
-                    VirtualDisk bootDisk = virtualDisks.stream()
-                            .filter(vd -> vd.getUnitNumber() == 0)
-                            .findFirst().orElse(null);
-
-                    VirtualDiskFlatVer2BackingInfo backing = (VirtualDiskFlatVer2BackingInfo) bootDisk.getBacking();
-
-                    if (VirtualDiskType.THIN == diskProvisionType) {
-                        assertTrue(backing.isThinProvisioned());
-                    } else if (VirtualDiskType.THICK == diskProvisionType) {
-                        assertFalse(backing.isThinProvisioned());
-                    } else if (VirtualDiskType.EAGER_ZEROED_THICK == diskProvisionType) {
-                        assertFalse(backing.isThinProvisioned());
-                        assertTrue(backing.isEagerlyScrub());
-                    }
-                }
-
-                if (withAdditionalDisks) {
-                    assertEquals(3, virtualDisks.size());
-                }
-            }
+            vm = deployOvfAndReturnComputeState(isStoragePolicyBased, withAdditionalDisks,
+                    customProperties, false);
         } finally {
             if (vm != null) {
                 deleteVmAndWait(vm);
             }
         }
+    }
+
+    protected void deployOvfWithSnapshotLimitAndGetState(boolean isStoragePolicyBased,
+                                                          boolean withAdditionalDisks,
+                                                          Map<String, String> customProperties) throws Throwable {
+        if (this.ovfUri == null) {
+            return;
+        }
+        ComputeService.ComputeState vm = null;
+        try {
+            vm = deployOvfAndReturnComputeState(isStoragePolicyBased, withAdditionalDisks,
+                    customProperties, true);
+            if (vm == null) {
+                return;
+            }
+            createSnapshotAndWait(vm, false); // 1st snapshot will succeed
+            createSnapshotAndWaitFailure(vm); // 2nd snapshot will fail, since snapshot limit is set to "1"
+        } finally {
+            deleteVmAndWait(vm);
+        }
+    }
+
+    protected void deployOvfToNewFolder(boolean isStoragePolicyBased,
+                                                         boolean withAdditionalDisks,
+                                                         Map<String, String> customProperties) throws Throwable {
+        if (this.ovfUri == null) {
+            return;
+        }
+        ComputeService.ComputeState vm = null;
+        final String vmFolder = "/Datacenters/Datacenter/vm/test-folder";
+        this.vcFolder = vmFolder; // setting an explicit folder for this vm, if folder is not present it will  be created
+        try {
+            vm = deployOvfAndReturnComputeState(isStoragePolicyBased, withAdditionalDisks,
+                    customProperties, false);
+        } finally {
+            if (vm != null) {
+                deleteVmAndWait(vm);
+            }
+        }
+    }
+
+    private ComputeService.ComputeState deployOvfAndReturnComputeState(boolean isStoragePolicyBased,
+                                                                       boolean withAdditionalDisks,
+                                                                       Map<String, String> customProperties,
+                                                                       boolean isSnapshotLimitCase) throws Throwable {
+        ComputeService.ComputeState vm = null;
+        // Create a resource pool where the VM will be housed
+        this.resourcePool = createResourcePool();
+        this.auth = createAuth();
+
+        this.computeHostDescription = createComputeDescription();
+        this.computeHost = createComputeHost(this.computeHostDescription);
+
+        ComputeDescriptionService.ComputeDescription computeDesc = createTemplate();
+
+        ImportOvfRequest req = new ImportOvfRequest();
+        req.ovfUri = this.ovfUri;
+        req.template = computeDesc;
+
+        Operation op = Operation.createPatch(this.host, OvfImporterService.SELF_LINK)
+                .setBody(req)
+                .setReferer(this.host.getPublicUri());
+
+        CompletableFuture<Operation> f = this.host.sendWithFuture(op);
+
+        // depending on OVF location you may want to increase the timeout
+        f.get(360, TimeUnit.SECONDS);
+
+        snapshotFactoryState("ovf", ComputeDescriptionService.class);
+
+        enumerateComputes(this.computeHost);
+
+        String descriptionLink = findFirstOvfDescriptionLink();
+
+        this.bootDisk = createBootDiskWithCustomProperties(CLOUD_CONFIG_DATA, isStoragePolicyBased, customProperties);
+        vm = createVmState(descriptionLink, withAdditionalDisks, customProperties, isSnapshotLimitCase);
+
+        // set timeout for the next step, vmdk upload may take some time
+        host.setTimeoutSeconds(60 * 5);
+
+        // provision
+        ProvisionComputeTaskService.ProvisionComputeTaskState outTask = createProvisionTask(vm);
+        awaitTaskEnd(outTask);
+        vm = getComputeState(vm);
+
+        snapshotFactoryState("ovf", ComputeService.class);
+        if (!isMock() && withAdditionalDisks || customProperties.get(PROVISION_TYPE) != null) {
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            List<VirtualDisk> virtualDisks = fetchAllVirtualDisks(vm, get);
+
+            if (customProperties.get(PROVISION_TYPE) != null) {
+                VirtualDiskType diskProvisionType = VirtualDiskType.fromValue(customProperties.get(PROVISION_TYPE));
+                VirtualDisk bootDisk = virtualDisks.stream()
+                        .filter(vd -> vd.getUnitNumber() == 0)
+                        .findFirst().orElse(null);
+
+                VirtualDiskFlatVer2BackingInfo backing = (VirtualDiskFlatVer2BackingInfo) bootDisk.getBacking();
+
+                if (VirtualDiskType.THIN == diskProvisionType) {
+                    assertTrue(backing.isThinProvisioned());
+                } else if (VirtualDiskType.THICK == diskProvisionType) {
+                    assertFalse(backing.isThinProvisioned());
+                } else if (VirtualDiskType.EAGER_ZEROED_THICK == diskProvisionType) {
+                    assertFalse(backing.isThinProvisioned());
+                    assertTrue(backing.isEagerlyScrub());
+                }
+            }
+
+            if (withAdditionalDisks) {
+                assertEquals(3, virtualDisks.size());
+            }
+        }
+        return vm;
     }
 
     protected String findFirstOvfDescriptionLink() throws Exception {
@@ -186,11 +235,11 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
     }
 
     protected ComputeService.ComputeState createVmState(String descriptionLink) throws Throwable {
-        return createVmState(descriptionLink, false, null);
+        return createVmState(descriptionLink, false, null, false);
     }
 
     private ComputeService.ComputeState createVmState(String descriptionLink, boolean withAdditionalDisks,
-            Map<String, String> customProperties) throws Throwable {
+                                                      Map<String, String> customProperties, boolean isSnapshotLimitCase) throws Throwable {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.id = computeState.name = nextName("from-ovf");
         computeState.documentSelfLink = computeState.id;
@@ -223,6 +272,10 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
                 .put(ComputeProperties.PLACEMENT_LINK, findFirstMatching(q, ComputeService.ComputeState.class).documentSelfLink);
+
+        if (isSnapshotLimitCase) {
+            computeState.customProperties.put(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT, "1");
+        }
 
         if (customProperties != null) {
             computeState.customProperties.putAll(customProperties);

@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
@@ -26,7 +25,6 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryProvisionTaskBase {
 
     @Test
-    @Ignore("VCOM-2131")
     public void deployFromLibraryWithReboot() throws Throwable {
         ComputeService.ComputeState vm = provisionVMAndGetState();
         try {
