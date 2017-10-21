@@ -315,6 +315,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         private ComputeDescription createComputeDescription(AvailabilityZone z) {
             ComputeDescriptionService.ComputeDescription cd = Utils
                     .clone(this.context.parentCompute.description);
+            cd.supportedChildren = new ArrayList<>();
+            cd.supportedChildren.add(ComputeType.VM_GUEST.toString());
             cd.documentSelfLink = null;
             cd.id = z.getZoneName();
             cd.zoneId = z.getZoneName();
