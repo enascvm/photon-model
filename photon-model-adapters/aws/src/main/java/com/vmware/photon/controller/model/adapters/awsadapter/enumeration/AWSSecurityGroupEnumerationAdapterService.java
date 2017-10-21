@@ -85,11 +85,15 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
 
         Query.Builder findSecurityGroupStates = Builder.create()
                 .addKindFieldClause(SecurityGroupState.class)
-                .addInClause(SecurityGroupState.FIELD_NAME_ID, context.enumExternalResourcesIds)
                 .addCompositeFieldClause(
                         SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                         ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                         context.request.parentCompute.documentSelfLink);
+
+        if (context.enumExternalResourcesIds != null && !context.enumExternalResourcesIds.isEmpty()) {
+            findSecurityGroupStates
+                    .addInClause(SecurityGroupState.FIELD_NAME_ID, context.enumExternalResourcesIds);
+        }
 
         QueryStrategy<SecurityGroupState> querySecurityGroupStates = new QueryTop<>(
                 context.service.getHost(),

@@ -13,15 +13,19 @@
 
 package com.vmware.photon.controller.model.adapters.util.instance;
 
+import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
@@ -92,6 +96,11 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     public final ComputeInstanceRequest computeRequest;
 
     /**
+     * Where the machine will be placed
+     */
+    public String placement;
+
+    /**
      * Supplier/Factory for creating context specific {@link BaseNicContext} instances.
      */
     protected final Supplier<S> nicContextSupplier;
@@ -130,7 +139,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     }
 
     /**
-     * Populate this context. Right now its main focus is to populate NIC related states.
+     * Populate this context.
      * <p>
      * Notes:
      * <ul>
@@ -143,6 +152,8 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
      */
     public final DeferredResult<T> populateContext() {
         return DeferredResult.completed(self())
+                .thenCompose(this::getPlacement)
+
                 .thenCompose(this::getNicStates)
                 .thenApply(log("getNicStates"))
                 .thenCompose(this::getNicSubnetStates)
@@ -154,6 +165,21 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
                 .thenCompose(this::customizeContext)
                 .thenApply(log("customizeContext"));
+    }
+
+    private DeferredResult<T> getPlacement(T context) {
+        return Optional.ofNullable(context.child.customProperties)
+                .map(p -> p.get(PLACEMENT_LINK))
+                .map(link -> {
+                    Operation getComputeState = Operation.createGet(service, link);
+
+                    return context.service
+                            .sendWithDeferredResult(getComputeState, ComputeState.class)
+                            .thenApply(cs -> cs.id);
+                }).orElse(DeferredResult.completed(null)).thenApply(pl -> {
+                    context.placement = pl;
+                    return context;
+                });
     }
 
     /**
