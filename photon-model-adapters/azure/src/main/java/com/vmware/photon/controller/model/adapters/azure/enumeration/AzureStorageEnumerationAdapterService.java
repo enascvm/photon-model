@@ -76,6 +76,7 @@ import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.RestClient;
+
 import org.apache.commons.lang3.EnumUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -88,6 +89,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -636,7 +638,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             logWarning("Failure getting Azure storage accounts [EndpointLink:%s] [Exception:%s]",
                     context.request.endpointLink, e.getMessage());
             handleError(context, e);
-            return;
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
@@ -660,28 +661,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private DeferredResult<StorageDescription> createStorageDescription(StorageEnumContext context,
             StorageAccount storageAccount, StorageAccountsInner stOps) {
+
         String resourceGroupName = getResourceGroupName(storageAccount.id);
-        AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler = new AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner>(
-                this, "Load account keys for storage:" + storageAccount.name) {
 
-            @Override
-            protected DeferredResult<StorageAccountListKeysResultInner> consumeSuccess(
-                    StorageAccountListKeysResultInner keys) {
-                logFine(() -> String.format("Retrieved the storage account keys for"
-                        + " storage account [%s].", storageAccount.name));
-                return DeferredResult.completed(keys);
-            }
-        };
-
-        Consumer<Throwable> failure = e -> {
-            logWarning("Failure getting Azure storage account keys [EndpointLink:%s] [Exception:%s]",
-                    context.request.endpointLink, e.getMessage());
-            return;
-        };
+        AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler = new Default<>(
+                this, "Load account keys for storage: " + storageAccount.name);
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
             stOps.listKeysAsync(resourceGroupName, storageAccount.name, handler);
-        }, failure);
+        }, handler::failure);
 
         return handler.toDeferredResult()
                 .thenCompose(keys -> AzureUtils.storeKeys(getHost(), keys,
@@ -734,7 +722,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             logWarning("Failure getting Azure storage accounts [EndpointLink:%s] [Exception:%s]",
                     context.request.endpointLink, e.getMessage());
             handleError(context, e);
-            return;
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
@@ -768,30 +755,16 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private DeferredResult<StorageDescription> patchStorageDetails(StorageAccountsInner stOps,
             StorageDescription storageDescription) {
+
         String resourceGroupName = getResourceGroupName(storageDescription.id);
         String storageName = storageDescription.name;
-        AzureDeferredResultServiceCallback<StorageAccountInner> handler =
-                new AzureDeferredResultServiceCallback<StorageAccountInner>(
-                        this, "Load storage account view:" + storageName) {
-                    @Override
-                    protected DeferredResult<StorageAccountInner> consumeSuccess(
-                            StorageAccountInner sa) {
-                        logFine(() -> String
-                                .format("Retrieved instance view for storage account [%s].",
-                                        storageName));
-                        return DeferredResult.completed(sa);
-                    }
-                };
 
-        Consumer<Throwable> failure = e -> {
-            logWarning("Error getting Azure storage account isntance view [Exception:%s]",
-                    e.getMessage());
-            return;
-        };
+        AzureDeferredResultServiceCallback<StorageAccountInner> handler =
+                new Default<StorageAccountInner>(this, "Load storage account view:" + storageName);
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
             stOps.getByResourceGroupAsync(resourceGroupName, storageName, handler);
-        }, failure);
+        }, handler::failure);
 
         return handler.toDeferredResult().thenApply(sa -> {
             if (sa.creationTime() != null) {
@@ -877,7 +850,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Consumer<Throwable> failure = e -> {
             logWarning("Failure getting Azure storage containers [EndpointLink:%s] [Exception:%s]",
                     context.request.endpointLink, e.getMessage());
-            return;
+            handleError(context, e);
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {

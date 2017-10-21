@@ -69,7 +69,6 @@ import com.microsoft.azure.management.network.PublicIPAddress;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
-
 import com.microsoft.rest.RestClient;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -82,6 +81,7 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
@@ -586,11 +586,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Enumerate VMs from Azure.
      */
     private void getVmList(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+
         Consumer<Throwable> failure = e -> {
             logWarning("Failure retrieving Azure VMs for [endpoint=%s] [Exception:%s]",
                     ctx.request.endpointLink, e.getMessage());
             handleError(ctx, e);
-            return;
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
@@ -1139,11 +1139,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void createNetworkInterfaceStates(EnumerationContext ctx,
             ComputeEnumerationSubStages next) {
+
         Consumer<Throwable> failure = e -> {
             logWarning("Failure getting Azure network interface states [endpointLink:%s] [Exception:%s]",
                     ctx.request.endpointLink, e.getMessage());
             handleError(ctx, e);
-            return;
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
@@ -1164,8 +1164,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                     rnics)))
                     .whenComplete(thenHandleSubStage(ctx, next));
         }, failure);
-
-
     }
 
     /**
@@ -1327,7 +1325,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Consumer<Throwable> failure = e -> {
             logWarning("Error getting public IP address from Azure [endpointLink:%s], [Exception:%s]",
                     ctx.request.endpointLink, e.getMessage());
-            return;
+
+            handleError(ctx, e);
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
@@ -1399,17 +1398,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private DeferredResult<Pair<NetworkInterfaceInner, String>> loadRemoteNic(
             Pair<NetworkInterfaceReferenceInner, String> pair, NetworkInterfacesInner netOps) {
-        AzureDeferredResultServiceCallback<NetworkInterfaceInner> handler = new AzureDeferredResultServiceCallback<NetworkInterfaceInner>(
-                this, "Load Nic: " + pair.getLeft().id()) {
-            @Override
-            protected DeferredResult<NetworkInterfaceInner> consumeSuccess(
-                    NetworkInterfaceInner nic) {
-                if (nic == null) {
-                    logWarning("Failed to get information for nic: %s", pair.getLeft().id());
-                }
-                return DeferredResult.completed(nic);
-            }
-        };
+
+        AzureDeferredResultServiceCallback<NetworkInterfaceInner> handler = new Default<>(
+                this, "Getting Azure NIC: " + pair.getLeft().id());
+
         String networkInterfaceName = UriUtils.getLastPathSegment(pair.getLeft().id());
         String nicRG = getResourceGroupName(pair.getLeft().id());
         String resourceGroupName = getResourceGroupName(pair.getRight());
@@ -1419,19 +1411,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     resourceGroupName, nicRG, pair.getLeft().id());
         }
 
-        Consumer<Throwable> failure = e -> {
-            logWarning("Error getting Azure NIC [Exception:%s]", e.getMessage());
-            return;
-        };
-
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
             netOps.getByResourceGroupAsync(resourceGroupName, networkInterfaceName,
                     "ipConfigurations/publicIPAddress", handler);
-        }, failure);
+        }, handler::failure);
 
         return handler.toDeferredResult()
                 .thenApply(loaded -> Pair.of(loaded, pair.getRight()));
-
     }
 
     private DeferredResult<Map<String, String>> loadSubnets(EnumerationContext ctx,
@@ -1591,7 +1577,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // If we patch more fields, this number should be increased accordingly.
         Consumer<Throwable> failure = e -> {
             logWarning("Failure getting Azure Virtual Machines");
-            return;
+            handleError(ctx, e);
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
@@ -1625,25 +1611,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         String resourceGroupName = getResourceGroupName(computeState.id);
         String vmName = computeState.name;
-        AzureDeferredResultServiceCallback<VirtualMachineInner> handler = new AzureDeferredResultServiceCallback<VirtualMachineInner>(
-                this, "Load virtual machine instance view:" + vmName) {
-            @Override
-            protected DeferredResult<VirtualMachineInner> consumeSuccess(
-                    VirtualMachineInner vm) {
-                logFine(() -> String.format("Retrieved instance view for vm [%s].", vmName));
-                return DeferredResult.completed(vm);
-            }
-        };
 
-        Consumer<Throwable> failure = e -> {
-            logWarning("Error getting Azure VM instance view [endpointLink:%s] [Exception:%s]",
-                    ctx.request.endpointLink, e.getMessage());
-            return;
-        };
+        AzureDeferredResultServiceCallback<VirtualMachineInner> handler = new Default<>(
+                this, "Load virtual machine instance view:" + vmName);
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
             vmOps.getByResourceGroupAsync(resourceGroupName, vmName, InstanceViewTypes.INSTANCE_VIEW, handler);
-        }, failure);
+        }, handler::failure);
 
         return handler.toDeferredResult().thenApply(vm -> {
             for (InstanceViewStatus status : vm.instanceView().statuses()) {
