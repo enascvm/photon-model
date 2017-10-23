@@ -29,6 +29,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
+import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE;
+import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.IOException;
@@ -67,6 +69,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -164,10 +167,14 @@ public class AzureEndpointAdapterService extends StatelessService {
                                     e = e.getCause();
                                 }
                                 // Azure doesn't send us any meaningful status code to work with
-                                ServiceErrorResponse rsp = new ServiceErrorResponse();
-                                rsp.message = e.getMessage();
+                                LocalizableValidationException localizableValidationException = new LocalizableValidationException(
+                                        e, PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
+                                        PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
+
+                                ServiceErrorResponse rsp = Utils.toServiceErrorResponse
+                                        (localizableValidationException);
                                 rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
-                                callback.accept(rsp, e);
+                                callback.accept(rsp, localizableValidationException);
                                 return;
                             }
                             callback.accept(null, null);

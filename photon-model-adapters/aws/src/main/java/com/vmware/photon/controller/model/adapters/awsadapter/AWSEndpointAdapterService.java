@@ -17,6 +17,8 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
+import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE;
+import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.net.URI;
@@ -49,6 +51,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
@@ -113,9 +116,14 @@ public class AWSEndpointAdapterService extends StatelessService {
                             if (e instanceof AmazonServiceException) {
                                 AmazonServiceException ase = (AmazonServiceException) e;
                                 if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED) {
-                                    ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
+
+                                    LocalizableValidationException localizableValidationException = new LocalizableValidationException(
+                                            e, PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
+                                            PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
+                                    ServiceErrorResponse r = Utils
+                                            .toServiceErrorResponse(localizableValidationException);
                                     r.statusCode = STATUS_CODE_UNAUTHORIZED;
-                                    callback.accept(r, e);
+                                    callback.accept(r, localizableValidationException);
                                     return;
                                 }
                             }
