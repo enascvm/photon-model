@@ -396,6 +396,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         QueryTask resourceQueryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(resourceQuery)
                 .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.INDEXED_METADATA)
                 .build();
         resourceQueryTask.tenantLinks = tenantLinks;
 

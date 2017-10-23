@@ -91,6 +91,9 @@ public class QueryUtils {
      */
     public static DeferredResult<QueryTask> startInventoryQueryTask(Service service,
             QueryTask queryTask) {
+        if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
+            queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
+        }
 
         Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask,
                 ServiceTypeCluster.INVENTORY_SERVICE);
