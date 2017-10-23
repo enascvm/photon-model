@@ -1358,8 +1358,8 @@ public class AzureInstanceService extends StatelessService {
             azureOsDisk.withDiskSizeGB(diskSizeInGB);
         } else {
             logInfo(() -> String.format(
-                    "Proceeding with Default OS Disk Size defined by VHD %s",
-                    azureOsDisk.vhd().uri()));
+                    "Proceeding with default OS Disk Size defined by the image for the disk %s",
+                    azureOsDisk.name()));
         }
 
         return azureOsDisk;
