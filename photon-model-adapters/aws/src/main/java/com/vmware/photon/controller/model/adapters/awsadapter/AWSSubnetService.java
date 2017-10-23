@@ -281,6 +281,8 @@ public class AWSSubnetService extends StatelessService {
                 context.subnetState.zoneId)
                 .thenApply(subnet -> {
                     context.awsSubnetId = subnet.getSubnetId();
+                    context.subnetState.zoneId = context.subnetState.zoneId == null ?
+                            subnet.getAvailabilityZone() : context.subnetState.zoneId;
                     return context;
                 });
     }
