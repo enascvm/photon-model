@@ -22,7 +22,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
@@ -115,8 +114,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     public int awsAccountLimit = 1000;
 
     public static List<String> testComputeDescriptions = new ArrayList<String>(
-            Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE,
-                    zoneId + "~" + instanceType));
+            Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE));
 
     private Map<String, Object> awsTestContext;
     private String subnetId;
@@ -245,7 +243,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     firstSpawnCycle = false;
                 }
                 instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, instancesToSpawn,
-                        instanceType, this.subnetId, this.securityGroupId);
+                        T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
                 instancesToCleanUp.addAll(instanceIds);
                 this.host.log("Instances to cleanup is %d", instancesToCleanUp.size());
                 waitForProvisioningToComplete(instanceIds, this.host, this.client, this.errorRate);
