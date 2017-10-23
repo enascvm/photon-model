@@ -760,7 +760,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         String storageName = storageDescription.name;
 
         AzureDeferredResultServiceCallback<StorageAccountInner> handler =
-                new Default<StorageAccountInner>(this, "Load storage account view:" + storageName);
+                new Default<>(this, "Load storage account view:" + storageName);
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
             stOps.getByResourceGroupAsync(resourceGroupName, storageName, handler);

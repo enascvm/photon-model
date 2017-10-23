@@ -71,7 +71,7 @@ public class AzureDiskService extends StatelessService {
                 ExecutorService executorService,
                 DiskInstanceRequest request) {
 
-            super(service, request);
+            super(service, executorService, request);
 
             this.diskRequest = request;
         }
@@ -135,7 +135,7 @@ public class AzureDiskService extends StatelessService {
      * Get disk state from the disk link, which is like a disk specification
      */
     private DeferredResult<AzureDiskContext> getDiskState(AzureDiskContext context) {
-        return this.sendWithDeferredResult(
+        return context.service.sendWithDeferredResult(
                 Operation.createGet(context.diskRequest.resourceReference),
                 DiskService.DiskState.class)
                 .thenApply(diskState -> {
@@ -159,22 +159,17 @@ public class AzureDiskService extends StatelessService {
                 // no need to go the end-point; just generate Azure disk Id.
                 context.diskState.id = UUID.randomUUID().toString();
             } else {
-                execution = execution
-                        .thenCompose(this::createDisk);
+                execution = execution.thenCompose(this::createDisk);
             }
             return execution.thenCompose(this::updateDiskState);
         case DELETE:
             if (!context.diskRequest.isMockRequest) {
-                execution = execution
-                        .thenCompose(this::deleteDiskOnAzure);
+                execution = execution.thenCompose(this::deleteDiskOnAzure);
             }
             return execution.thenCompose(this::deleteDiskState);
         default:
-            IllegalStateException ex = new IllegalStateException("unsupported request type");
-            return DeferredResult.failed(ex);
-
+            return DeferredResult.failed(new IllegalStateException("unsupported request type"));
         }
-
     }
 
     /**
@@ -192,6 +187,32 @@ public class AzureDiskService extends StatelessService {
                     PREFIX_OF_RESOURCE_GROUP_FOR_DISK,
                     PREFIX_OF_RESOURCE_GROUP_FOR_DISK.length() + 5);
         }
+
+        StorageAccountTypes accountType = StorageAccountTypes.STANDARD_LRS;
+        if (context.diskState.customProperties != null && context.diskState.customProperties
+                .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
+
+            accountType = StorageAccountTypes.fromString(
+                    context.diskState.customProperties.get(AzureConstants.AZURE_MANAGED_DISK_TYPE));
+        }
+
+        Disk.DefinitionStages.WithGroup basicDiskDefinition = context.azureSdkClients
+                .getComputeManager()
+                .disks()
+                .define(context.diskState.name)
+                .withRegion(context.diskState.regionId);
+
+        Disk.DefinitionStages.WithDiskSource diskDefinitionIncludingResourceGroup;
+        // Create new resource group or resuse existing one
+        if (context.diskState.customProperties != null && context.diskState.customProperties
+                .containsKey(AzureConstants.AZURE_RESOURCE_GROUP_NAME)) {
+            diskDefinitionIncludingResourceGroup = basicDiskDefinition
+                    .withExistingResourceGroup(context.resourceGroupName);
+        } else {
+            diskDefinitionIncludingResourceGroup = basicDiskDefinition
+                    .withNewResourceGroup(context.resourceGroupName);
+        }
+
 
         final String msg = "Creating new independent disk with name [" + context.diskState.name +
                 "]";
@@ -213,45 +234,23 @@ public class AzureDiskService extends StatelessService {
             @Override
             protected Runnable checkProvisioningStateCall(
                     ServiceCallback<Disk> checkProvisioningStateCallback) {
-                return () -> context.azureSdkClients.getComputeManagementClientImpl()
+                return () -> context.azureSdkClients
+                        .getComputeManager()
                         .disks()
-                        .getByResourceGroup(
+                        .getByResourceGroupAsync(
                                 context.resourceGroupName,
-                                context.diskState.name);
+                                context.diskState.name,
+                                checkProvisioningStateCallback);
             }
         };
 
-        StorageAccountTypes accountType = StorageAccountTypes.STANDARD_LRS;
-        if (context.diskState.customProperties != null && context.diskState.customProperties
-                .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
-
-            accountType = StorageAccountTypes.fromString(
-                    context.diskState.customProperties.get(AzureConstants.AZURE_MANAGED_DISK_TYPE));
-        }
-
-        Disk.DefinitionStages.WithGroup basicDiskDefinition = context.azureSdkClients
-                .getComputeManager().disks()
-                .define(context.diskState.name)
-                .withRegion(context.diskState.regionId);
-
-        Disk.DefinitionStages.WithDiskSource diskDefinitionIncludingResourceGroup;
-        // Create new resource group or resuse existing one
-        if (context.diskState.customProperties != null && context.diskState.customProperties
-                .containsKey(AzureConstants.AZURE_RESOURCE_GROUP_NAME)) {
-            diskDefinitionIncludingResourceGroup = basicDiskDefinition
-                    .withExistingResourceGroup(context.resourceGroupName);
-        } else {
-            diskDefinitionIncludingResourceGroup = basicDiskDefinition
-                    .withNewResourceGroup(context.resourceGroupName);
-        }
-
-        diskDefinitionIncludingResourceGroup.withData()
+        diskDefinitionIncludingResourceGroup
+                .withData()
                 .withSizeInGB((int) context.diskState.capacityMBytes / 1024)
                 .withSku(new DiskSkuTypes(accountType))
                 .createAsync(handler);
 
-        return handler.toDeferredResult()
-                .thenApply(ignore -> context);
+        return handler.toDeferredResult().thenApply(ignore -> context);
     }
 
     /**

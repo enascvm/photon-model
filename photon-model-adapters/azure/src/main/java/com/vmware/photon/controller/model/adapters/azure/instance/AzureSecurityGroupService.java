@@ -349,7 +349,7 @@ public class AzureSecurityGroupService extends StatelessService {
         NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
                 .getNetworkManagementClientImpl().networkSecurityGroups();
 
-        AzureDeferredResultServiceCallback<Void> handler = new Default<Void>(this, msg);
+        AzureDeferredResultServiceCallback<Void> handler = new Default<>(this, msg);
 
         azureSecurityGroupClient.deleteAsync(rgName, securityGroupName, handler);
 

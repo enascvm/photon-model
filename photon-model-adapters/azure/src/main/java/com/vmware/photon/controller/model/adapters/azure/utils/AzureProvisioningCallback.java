@@ -55,7 +55,7 @@ public abstract class AzureProvisioningCallback<RES>
     }
 
     @Override
-    protected DeferredResult<RES> consumeSuccess(RES body) {
+    protected final DeferredResult<RES> consumeSuccess(RES body) {
         return waitProvisioningToSucceed(body).thenCompose(this::consumeProvisioningSuccess);
     }
 
@@ -140,8 +140,7 @@ public abstract class AzureProvisioningCallback<RES>
 
         @Override
         public void onSuccess(RES result) {
-            AzureProvisioningCallback.this
-                    .waitProvisioningToSucceed(result);
+            AzureProvisioningCallback.this.waitProvisioningToSucceed(result);
         }
     }
 }

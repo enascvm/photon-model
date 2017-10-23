@@ -90,7 +90,7 @@ public class AzureLoadBalancerService extends StatelessService {
                 ExecutorService executorService,
                 LoadBalancerInstanceRequest request) {
 
-            super(service, request);
+            super(service, executorService, request);
 
             this.loadBalancerRequest = request;
         }
