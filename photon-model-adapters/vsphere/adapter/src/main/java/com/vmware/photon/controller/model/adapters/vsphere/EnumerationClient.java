@@ -378,7 +378,7 @@ public class EnumerationClient extends BaseHelper {
     private void destroyCollectorQuietly(ManagedObjectReference pc) {
         try {
             getVimPort().destroyCollector(pc);
-        } catch (RuntimeFaultFaultMsg ignore) {
+        } catch (Throwable ignore) {
 
         }
     }
