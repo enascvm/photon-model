@@ -695,7 +695,13 @@ public class AWSInstanceService extends StatelessService {
         for (DiskState diskState : dataDisks) {
             if (diskState.customProperties == null) {
                 diskState.customProperties = new HashMap<>();
+            }
+
+            if (diskState.customProperties.get(DEVICE_TYPE) == null) {
                 diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
+            }
+
+            if (diskState.customProperties.get(VOLUME_TYPE) == null) {
                 diskState.customProperties.put(VOLUME_TYPE, VOLUME_TYPE_GENERAL_PURPOSED_SSD);
             }
         }
