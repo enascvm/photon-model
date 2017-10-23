@@ -99,7 +99,7 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
             computeState.diskLinks.add(createDiskWithStoragePolicy("boot", DiskService.DiskType.HDD,
                     1, null, HDD_DISK_SIZE, buildDiskCustomProperties()).documentSelfLink);
         } else {
-            computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, 1, null,
+            computeState.diskLinks.add(createDiskWithDatastore("boot", DiskService.DiskType.HDD, 1, null,
                     HDD_DISK_SIZE, buildDiskCustomProperties()).documentSelfLink);
         }
 

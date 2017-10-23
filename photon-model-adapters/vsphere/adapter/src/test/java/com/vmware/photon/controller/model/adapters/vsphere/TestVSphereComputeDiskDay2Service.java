@@ -234,7 +234,6 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
                             ProvisionDiskTaskService.ProvisionDiskTaskState.class,
                             documentSelfLink);
                 }
-
             }
         }
     }

@@ -109,8 +109,42 @@ public class VSphereComputeDiskManagementService extends StatelessService {
 
                     InstanceDiskClient diskClient = new InstanceDiskClient(connection, ctx, getHost());
                     try {
-                        diskClient.attachDiskToVM();
-                        updateComputeAndDiskStateForAttach(ctx);
+                        String contentToUpload = CustomProperties.of(ctx.diskState).getString
+                                (PhotonModelConstants.DISK_CONTENT_BASE_64);
+
+                        if (contentToUpload == null || contentToUpload.isEmpty()) {
+                            diskClient.attachDiskToVM();
+                            updateComputeAndDiskStateForAttach(ctx);
+                            return;
+                        }
+
+                        diskClient.uploadISOContents(contentToUpload)
+                                .whenComplete((ds, t) -> {
+                                    if (t != null) {
+                                        logSevere("Upload of ISO contents failed. Error: %s", t
+                                                .getMessage());
+                                        ctx.fail(t);
+                                        return;
+                                    }
+                                    // Create a new thread pool here as the upload content uses a
+                                    // custom service client, it empties vim port in the
+                                    // connection. Hence subsequent call fails with NPE.
+                                    ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
+                                            (newConn, excep) -> {
+                                                if (ctx.fail(excep)) {
+                                                    return;
+                                                }
+                                                InstanceDiskClient newClient = new
+                                                        InstanceDiskClient(newConn, ctx, getHost());
+                                                try {
+                                                    ctx.diskState = ds;
+                                                    newClient.attachDiskToVM();
+                                                    updateComputeAndDiskStateForAttach(ctx);
+                                                } catch (Exception e) {
+                                                    ctx.fail(e);
+                                                }
+                                            });
+                                });
                     } catch (Exception e) {
                         ctx.fail(e);
                     }

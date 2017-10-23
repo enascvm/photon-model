@@ -1971,6 +1971,8 @@ public class InstanceClient extends BaseHelper {
                     getResourcePool(datastore, pbmSpec), mapping, getDiskProvisioningType(this.bootDisk));
 
             if (!result.get("succeeded").asBoolean()) {
+                // Log here to understand why deploy from library fails.
+                logger.warn("Error deploying from library {}", result.toString());
                 throw new Exception("Error deploying from library");
             }
 

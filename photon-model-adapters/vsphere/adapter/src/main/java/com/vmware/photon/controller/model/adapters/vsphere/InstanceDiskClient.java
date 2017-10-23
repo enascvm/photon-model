@@ -38,7 +38,6 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import java.net.URI;
 import java.util.List;
 import java.util.Optional;
-import java.util.logging.Level;
 
 import javax.net.ssl.TrustManager;
 
@@ -49,7 +48,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMo
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.vim25.ArrayOfDatastoreHostMount;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -70,6 +68,7 @@ import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualMachineConfigSpec;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.vim25.VirtualSCSIController;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceClient;
 import com.vmware.xenon.common.ServiceHost;
@@ -132,9 +131,6 @@ public class InstanceDiskClient extends BaseHelper {
             int availableUnitNumber = nextUnitNumber(ideUnit);
             deviceConfigSpec = createCdrom(ideController, availableUnitNumber);
             fillInControllerUnitNumber(this.diskState, availableUnitNumber);
-
-            // copy the contents to an ISO file to the DC
-            uploadISOContents();
 
             if (diskPath != null) {
                 // mount iso image
@@ -205,27 +201,20 @@ public class InstanceDiskClient extends BaseHelper {
     }
 
     /**
-     * Find matching VirtualDisk for the given disk information using its controller unit number
-     * filled in during creation of the disk.
+     * Uploads ISO content into the chosen datastore
      */
-    private VirtualDisk findMatchingVirtualDisk(ArrayOfVirtualDevice devices) {
-        return devices.getVirtualDevice().stream()
-                .filter(d -> d instanceof VirtualDisk)
-                .map(d -> (VirtualDisk) d)
-                .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(this.diskState))
-                .findFirst().orElse(null);
-    }
-
-    private void uploadISOContents() throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg,
-            InvalidDatastoreFaultMsg, FileFaultFaultMsg, FinderException {
+    public DeferredResult<DiskService.DiskStateExpanded> uploadISOContents(String contentToUpload)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, InvalidDatastoreFaultMsg,
+            FileFaultFaultMsg, FinderException {
 
         // 1) fetch data store for the disk
-        String dataStoreName = this.context.datastoreName != null && !this.context.datastoreName
-                .isEmpty() ? this.context.datastoreName : ClientUtils.getDefaultDatastore(
-                this.finder);
-
+        String dsName = this.context.datastoreName;
+        if (dsName == null || dsName.isEmpty()) {
+            dsName = ClientUtils.getDefaultDatastore(this.finder);
+        }
+        String dataStoreName = dsName;
         List<Element> datastoreList = this.finder.datastoreList(dataStoreName);
-        ManagedObjectReference dsFromSp = null;
+        ManagedObjectReference dsFromSp;
         Optional<Element> datastoreOpt = datastoreList.stream().findFirst();
         if (datastoreOpt.isPresent()) {
             dsFromSp = datastoreOpt.get().object;
@@ -276,38 +265,38 @@ public class InstanceDiskClient extends BaseHelper {
 
         // 7) PUT operation for the iso content
 
-        String contentToUpload = CustomProperties.of(this.diskState).getString
-                (PhotonModelConstants.DISK_CONTENT_BASE_64);
-
         Operation putISO = Operation.createPut(URI.create(isoUrl));
         putISO.addRequestHeader("Content-Type", "application/octet-stream")
                 .addRequestHeader("Content-Length", String.valueOf(contentToUpload.length()))
                 .addRequestHeader("Cookie", "vmware_cgi_ticket=" + ticket)
                 .setBody(contentToUpload)
-                .setReferer(this.host.getUri())
-                .setCompletion(((operation, throwable) -> {
+                .setReferer(this.host.getUri());
 
-                                if (throwable != null) {
-                                    this.host.log(Level.SEVERE,
-                                            "Could not upload ISO file %s to folder %s.",
-                                            filename, folderName);
-                                    this.context.fail(throwable);
-                                }
-                                // Update the details of the disk
-                                CustomProperties.of(this.diskState)
-                                        .put(DISK_FULL_PATH, String.format(FULL_PATH,
-                                                dataStoreName, folderName, filename))
-                                        .put(DISK_PARENT_DIRECTORY, String.format(PARENT_DIR,
-                                                dataStoreName, folderName))
-                                        .put(DISK_DATASTORE_NAME, dataStoreName);
-                            }
-                    )
-
-            );
-
-        serviceClient.sendRequest(putISO);
+        return serviceClient.sendWithDeferredResult(putISO)
+                .thenApply(op -> {
+                    String diskFullPath = String.format(FULL_PATH, dataStoreName, folderName, filename);
+                    // Update the details of the disk
+                    CustomProperties.of(this.diskState)
+                            .put(DISK_FULL_PATH, diskFullPath)
+                            .put(DISK_PARENT_DIRECTORY, String.format(PARENT_DIR,
+                                    dataStoreName, folderName))
+                            .put(DISK_DATASTORE_NAME, dataStoreName);
+                    this.diskState.sourceImageReference = VimUtils.datastorePathToUri(diskFullPath);
+                    return this.diskState;
+                });
     }
 
 
-
+    /**
+     * Find matching VirtualDisk for the given disk information using its controller unit number
+     * filled in during creation of the disk.
+     */
+    private VirtualDisk findMatchingVirtualDisk(ArrayOfVirtualDevice devices) {
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d)
+                .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(this.diskState))
+                .findFirst()
+                .orElse(null);
+    }
 }

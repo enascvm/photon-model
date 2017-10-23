@@ -42,6 +42,7 @@ import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualDiskAdapterType;
+import com.vmware.vim25.VirtualDiskType;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.xenon.common.Utils;
 
@@ -55,7 +56,6 @@ public class DiskClient extends BaseHelper {
             .getTime().getTime();
     public static final String TOKEN_DELIMITER = "-";
     private final DiskContext diskContext;
-    private String defaultDatastore;
     private final Finder finder;
     private final DiskService.DiskStateExpanded diskState;
 
@@ -162,7 +162,10 @@ public class DiskClient extends BaseHelper {
 
         FileBackedVirtualDiskSpec diskSpec = new FileBackedVirtualDiskSpec();
         diskSpec.setCapacityKb(toKb(diskStateExpanded.capacityMBytes));
-        diskSpec.setDiskType(getDiskProvisioningType(diskStateExpanded).value());
+        VirtualDiskType provisionType = getDiskProvisioningType(diskStateExpanded);
+        if (provisionType != null) {
+            diskSpec.setDiskType(provisionType.value());
+        }
         diskSpec.setAdapterType(VirtualDiskAdapterType.LSI_LOGIC.value());
 
         if (pbmSpec != null) {
