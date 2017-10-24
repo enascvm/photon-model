@@ -74,10 +74,13 @@ public class QueryUtils {
      * @param cluster
      *            The cluster, the query runs against.
      */
-    public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask,
+    public static DeferredResult<QueryTask> startQueryTask(
+            Service service,
+            QueryTask queryTask,
             ServiceTypeCluster cluster) {
 
         Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster);
+
         return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
     }
 
@@ -89,18 +92,16 @@ public class QueryUtils {
      * @param queryTask
      *            The query task.
      */
-    public static DeferredResult<QueryTask> startInventoryQueryTask(Service service,
+    public static DeferredResult<QueryTask> startInventoryQueryTask(
+            Service service,
             QueryTask queryTask) {
+
         if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
             queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
         }
 
-        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask,
-                ServiceTypeCluster.INVENTORY_SERVICE);
-        return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
+        return startQueryTask(service, queryTask, ServiceTypeCluster.INVENTORY_SERVICE);
     }
-
-
 
     /**
      * Executes the given query task.
@@ -111,9 +112,11 @@ public class QueryUtils {
      *            The query task.
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
+
         if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
             queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
         }
+
         return startQueryTask(service, queryTask, null);
     }
 
@@ -125,23 +128,41 @@ public class QueryUtils {
      * @param queryTask The query queryTask.
      * @param serviceEndpointLocator The Service Endpoint Locator.
      */
+    public static Operation createQueryTaskOperation(
+            Service service, QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator) {
 
-    public static Operation createQueryTaskOperation(Service service,
-                                                 QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator) {
+        return createQueryTaskOperation(service.getHost(), queryTask, serviceEndpointLocator);
+    }
+
+    /**
+     * Create a query queryTask operation with a URI
+     *
+     * @param serviceHost The service host executing the query queryTask.
+     * @param queryTask The query queryTask.
+     * @param serviceEndpointLocator The Service Endpoint Locator.
+     */
+    public static Operation createQueryTaskOperation(
+            ServiceHost serviceHost,
+            QueryTask queryTask,
+            ServiceEndpointLocator serviceEndpointLocator) {
+
         boolean isCountQuery = queryTask.querySpec.options.contains(QueryOption.COUNT);
 
         if (!isCountQuery) {
             // We don't want any unbounded queries. By default, we cap the query results to 10000.
             if (queryTask.querySpec.resultLimit == null) {
-                service.getHost().log(Level.WARNING,
+                serviceHost.log(Level.WARNING,
                         "No result limit set on the query: %s. Defaulting to %d",
                         Utils.toJson(queryTask), MAX_RESULT_LIMIT);
+
                 queryTask.querySpec.options.add(QueryOption.TOP_RESULTS);
                 queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
+
             } else if (queryTask.querySpec.resultLimit > MAX_RESULT_LIMIT) {
-                service.getHost().log(Level.WARNING,
+                serviceHost.log(Level.WARNING,
                         "The result limit set on the query is too high: %s. Defaulting to %d",
                         Utils.toJson(queryTask), MAX_RESULT_LIMIT);
+
                 queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
             }
         }
@@ -151,12 +172,12 @@ public class QueryUtils {
                     + QueryUtils.TEN_MINUTES_IN_MICROS;
         }
 
-        URI buildUri = UriUtils.buildUri(
-                ClusterUtil.getClusterUri(service.getHost(), serviceEndpointLocator),
+        URI createQueryTaskUri = UriUtils.buildUri(
+                ClusterUtil.getClusterUri(serviceHost, serviceEndpointLocator),
                 ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
 
         return Operation
-                .createPost(buildUri)
+                .createPost(createQueryTaskUri)
                 .setBody(queryTask)
                 .setConnectionSharing(true);
     }
@@ -205,8 +226,8 @@ public class QueryUtils {
     /**
      * Query strategy template.
      *
-     * @see {#link {@link QueryTop}
-     * @see {#link {@link QueryByPages}
+     * @see QueryTop
+     * @see QueryByPages
      */
     public abstract static class QueryTemplate<T extends ServiceDocument>
             implements QueryStrategy<T> {
@@ -427,20 +448,12 @@ public class QueryUtils {
             // Prepare QueryTask
             final QueryTask queryTask = queryTaskBuilder.build();
             queryTask.tenantLinks = this.tenantLinks;
-            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
-                    + QueryUtils.TEN_MINUTES_IN_MICROS;
-
-            // Build PhM URI to query against
-            final URI uri = UriUtils.buildUri(
-                    ClusterUtil.getClusterUri(this.host, this.serviceLocator),
-                    ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
 
             // Prepare 'query-task' create/POST request
-            final Operation createQueryTaskOp = Operation
-                    .createPost(uri)
-                    .setReferer(this.referer)
-                    .setBody(queryTask)
-                    .setConnectionSharing(true);
+            final Operation createQueryTaskOp = createQueryTaskOperation(
+                    this.host, queryTask, this.serviceLocator);
+
+            createQueryTaskOp.setReferer(this.referer);
 
             this.host.log(this.level,
                     this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));
