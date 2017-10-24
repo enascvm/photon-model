@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.util.StartServicesHelper.Servic
 import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ContentService;
 import com.vmware.photon.controller.model.resources.DeploymentService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
@@ -73,7 +74,8 @@ public class PhotonModelServices {
             factoryService(TagService.class, TagFactoryService::new),
             factoryService(LoadBalancerDescriptionService.class),
             factoryService(LoadBalancerService.class),
-            factoryService(RouterService.class)
+            factoryService(RouterService.class),
+            factoryService(ContentService.class)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);

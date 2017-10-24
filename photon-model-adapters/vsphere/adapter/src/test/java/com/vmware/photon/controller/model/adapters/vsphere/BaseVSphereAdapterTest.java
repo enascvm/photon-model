@@ -29,7 +29,6 @@ import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapter
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -37,6 +36,7 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -76,6 +76,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ContentService;
+import com.vmware.photon.controller.model.resources.ContentService.ContentState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -1140,8 +1142,16 @@ public class BaseVSphereAdapterTest {
         DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
                 capacityMBytes, customProperties);
 
-        String isoContent = "Some content to be uploaded";
-        CustomProperties.of(diskState).put(PhotonModelConstants.DISK_CONTENT_BASE_64, isoContent);
+        byte[] iso = new byte[150 * 1024]; //150KB
+        Arrays.fill(iso, (byte) 0); //of zeroes
+
+        ContentState state = new ContentState();
+        state.binaryData = iso;
+
+        state = doPost(this.host, state, ContentState.class, UriUtils.buildUri(this.host,
+                ContentService.FACTORY_LINK));
+
+        CustomProperties.of(diskState).put(PhotonModelConstants.DISK_LINK, state.documentSelfLink);
 
         diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
         return doPost(this.host, diskState, DiskState.class,

@@ -181,6 +181,6 @@ public class PhotonModelConstants {
     // Key to identify documents containing the bill processed time
     public static final String CONTAINS_BILL_PROCESSED_TIME_STAT = "containsBillProcessedTimeStat";
 
-    // Contents of the ISO files that need to be uploaded for CDROM disk
-    public static final String DISK_CONTENT_BASE_64 = "diskContentBase64";
+    // Link to a ContentState document that holds the base64 encoded content
+    public static final String DISK_CONTENT_LINK = "diskContentBase64Link";
 }

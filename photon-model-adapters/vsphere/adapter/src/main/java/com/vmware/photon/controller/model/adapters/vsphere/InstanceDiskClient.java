@@ -34,6 +34,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.up
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
+import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.net.URI;
 import java.util.List;
@@ -203,87 +204,96 @@ public class InstanceDiskClient extends BaseHelper {
     /**
      * Uploads ISO content into the chosen datastore
      */
-    public DeferredResult<DiskService.DiskStateExpanded> uploadISOContents(String contentToUpload)
+    public DeferredResult<DiskService.DiskStateExpanded> uploadISOContents(byte[] contentToUpload)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, InvalidDatastoreFaultMsg,
             FileFaultFaultMsg, FinderException {
-
-        // 1) fetch data store for the disk
-        String dsName = this.context.datastoreName;
-        if (dsName == null || dsName.isEmpty()) {
-            dsName = ClientUtils.getDefaultDatastore(this.finder);
-        }
-        String dataStoreName = dsName;
-        List<Element> datastoreList = this.finder.datastoreList(dataStoreName);
-        ManagedObjectReference dsFromSp;
-        Optional<Element> datastoreOpt = datastoreList.stream().findFirst();
-        if (datastoreOpt.isPresent()) {
-            dsFromSp = datastoreOpt.get().object;
-        } else {
-            throw new IllegalArgumentException(String.format("No Datastore [%s] present on datacenter", dataStoreName));
-        }
-
-        // 2) Get available hosts for direct upload
-        String hostName = null;
-
-        ArrayOfDatastoreHostMount dsHosts = this.get.entityProp(dsFromSp, VimPath.res_host);
-        if (dsHosts != null && dsHosts.getDatastoreHostMount() != null) {
-            DatastoreHostMount dsHost = dsHosts.getDatastoreHostMount().stream()
-                    .filter(hostMount -> hostMount.getMountInfo() != null && hostMount.getMountInfo()
-                            .isAccessible() && hostMount.getMountInfo().isMounted())
-                    .findFirst().orElse(null);
-            if (dsHost != null) {
-                hostName = this.get.entityProp(dsHost.getKey(), VimPath.host_summary_config_name);
+        try {
+            // 1) fetch data store for the disk
+            String dsName = this.context.datastoreName;
+            if (dsName == null || dsName.isEmpty()) {
+                dsName = ClientUtils.getDefaultDatastore(this.finder);
             }
+            String dataStoreName = dsName;
+            List<Element> datastoreList = this.finder.datastoreList(dataStoreName);
+            ManagedObjectReference dsFromSp;
+            Optional<Element> datastoreOpt = datastoreList.stream().findFirst();
+            if (datastoreOpt.isPresent()) {
+                dsFromSp = datastoreOpt.get().object;
+            } else {
+                throw new IllegalArgumentException(
+                        String.format("No Datastore [%s] present on datacenter", dataStoreName));
+            }
+
+            // 2) Get available hosts for direct upload
+            String hostName = null;
+
+            ArrayOfDatastoreHostMount dsHosts = this.get.entityProp(dsFromSp, VimPath.res_host);
+            if (dsHosts != null && dsHosts.getDatastoreHostMount() != null) {
+                DatastoreHostMount dsHost = dsHosts.getDatastoreHostMount().stream()
+                        .filter(hostMount -> hostMount.getMountInfo() != null && hostMount
+                                .getMountInfo()
+                                .isAccessible() && hostMount.getMountInfo().isMounted())
+                        .findFirst().orElse(null);
+                if (dsHost != null) {
+                    hostName = this.get
+                            .entityProp(dsHost.getKey(), VimPath.host_summary_config_name);
+                }
+            }
+
+            if (hostName == null) {
+                throw new IllegalStateException(String.format("No host found to upload ISO content "
+                        + "for Data Store Disk %s", dataStoreName));
+            }
+
+            // 3) Choose some unique filename
+            String filename = ClientUtils.getUniqueName(ISO_FILE) + ISO_EXTENSION;
+
+            // 4 ) Choose some unique folder name and create it.
+            String folderName = ClientUtils.getUniqueName(ISO_FOLDER);
+
+            ClientUtils.createFolder(this.connection, this.context.datacenterMoRef,
+                    String.format(VM_PATH_FORMAT, dataStoreName, folderName));
+
+            // 5) form the upload url and acquire generic service ticket for it
+            String isoUrl = String.format(ISO_UPLOAD_URL, hostName, folderName, filename,
+                    dataStoreName);
+
+            String ticket = this.connection.getGenericServiceTicket(isoUrl);
+
+            // 6) create external client that accepts all certificates
+            TrustManager[] trustManagers = new TrustManager[] {
+                    ClientUtils.getDefaultTrustManager() };
+
+            ServiceClient serviceClient = ClientUtils
+                    .getCustomServiceClient(trustManagers, this.host,
+                            URI.create(isoUrl), this.getClass().getSimpleName());
+
+            // 7) PUT operation for the iso content
+
+            Operation putISO = Operation.createPut(URI.create(isoUrl));
+            putISO.setContentType(MEDIA_TYPE_APPLICATION_OCTET_STREAM)
+                    .setContentLength(contentToUpload.length)
+                    .addRequestHeader("Cookie", "vmware_cgi_ticket=" + ticket)
+                    .setBody(contentToUpload)
+                    .setReferer(this.host.getUri());
+
+            return serviceClient.sendWithDeferredResult(putISO)
+                    .thenApply(op -> {
+                        String diskFullPath = String
+                                .format(FULL_PATH, dataStoreName, folderName, filename);
+                        // Update the details of the disk
+                        CustomProperties.of(this.diskState)
+                                .put(DISK_FULL_PATH, diskFullPath)
+                                .put(DISK_PARENT_DIRECTORY, String.format(PARENT_DIR,
+                                        dataStoreName, folderName))
+                                .put(DISK_DATASTORE_NAME, dataStoreName);
+                        this.diskState.sourceImageReference = VimUtils
+                                .datastorePathToUri(diskFullPath);
+                        return this.diskState;
+                    });
+        } catch (Exception e) {
+            return DeferredResult.failed(e);
         }
-
-        if (hostName == null) {
-            throw new IllegalStateException(String.format("No host found to upload ISO content "
-                            + "for Data Store Disk %s", dataStoreName));
-        }
-
-        // 3) Choose some unique filename
-        String filename = ClientUtils.getUniqueName(ISO_FILE) + ISO_EXTENSION;
-
-        // 4 ) Choose some unique folder name and create it.
-        String folderName = ClientUtils.getUniqueName(ISO_FOLDER);
-
-        ClientUtils.createFolder(this.connection, this.context.datacenterMoRef ,
-                String.format(VM_PATH_FORMAT, dataStoreName, folderName));
-
-
-        // 5) form the upload url and acquire generic service ticket for it
-        String isoUrl = String.format(ISO_UPLOAD_URL, hostName, folderName, filename,
-                dataStoreName);
-
-        String ticket = this.connection.getGenericServiceTicket(isoUrl);
-
-        // 6) create external client that accepts all certificates
-        TrustManager[] trustManagers = new TrustManager[]{ClientUtils.getDefaultTrustManager()};
-
-        ServiceClient serviceClient = ClientUtils.getCustomServiceClient(trustManagers, this.host,
-                URI.create(isoUrl), this.getClass().getSimpleName());
-
-        // 7) PUT operation for the iso content
-
-        Operation putISO = Operation.createPut(URI.create(isoUrl));
-        putISO.addRequestHeader("Content-Type", "application/octet-stream")
-                .addRequestHeader("Content-Length", String.valueOf(contentToUpload.length()))
-                .addRequestHeader("Cookie", "vmware_cgi_ticket=" + ticket)
-                .setBody(contentToUpload)
-                .setReferer(this.host.getUri());
-
-        return serviceClient.sendWithDeferredResult(putISO)
-                .thenApply(op -> {
-                    String diskFullPath = String.format(FULL_PATH, dataStoreName, folderName, filename);
-                    // Update the details of the disk
-                    CustomProperties.of(this.diskState)
-                            .put(DISK_FULL_PATH, diskFullPath)
-                            .put(DISK_PARENT_DIRECTORY, String.format(PARENT_DIR,
-                                    dataStoreName, folderName))
-                            .put(DISK_DATASTORE_NAME, dataStoreName);
-                    this.diskState.sourceImageReference = VimUtils.datastorePathToUri(diskFullPath);
-                    return this.diskState;
-                });
     }
 
 

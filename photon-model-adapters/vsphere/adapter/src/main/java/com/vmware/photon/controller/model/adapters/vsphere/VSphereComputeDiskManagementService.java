@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.registry.operations.Re
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVIDER_DISK_UNIQUE_ID;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
+import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.util.ArrayList;
 
@@ -107,43 +108,71 @@ public class VSphereComputeDiskManagementService extends StatelessService {
                         return;
                     }
 
-                    InstanceDiskClient diskClient = new InstanceDiskClient(connection, ctx, getHost());
+                    InstanceDiskClient diskClient = new InstanceDiskClient(connection, ctx,
+                            getHost());
                     try {
-                        String contentToUpload = CustomProperties.of(ctx.diskState).getString
-                                (PhotonModelConstants.DISK_CONTENT_BASE_64);
+                        String contentLink = CustomProperties.of(ctx.diskState).getString
+                                (PhotonModelConstants.DISK_CONTENT_LINK);
 
-                        if (contentToUpload == null || contentToUpload.isEmpty()) {
+
+                        if (contentLink == null || contentLink.isEmpty()) {
                             diskClient.attachDiskToVM();
                             updateComputeAndDiskStateForAttach(ctx);
                             return;
                         }
 
-                        diskClient.uploadISOContents(contentToUpload)
-                                .whenComplete((ds, t) -> {
-                                    if (t != null) {
-                                        logSevere("Upload of ISO contents failed. Error: %s", t
-                                                .getMessage());
-                                        ctx.fail(t);
+                        this.sendWithDeferredResult(
+                                Operation.createGet(UriUtils.buildUri(this.getHost(), contentLink))
+                                        .setContentType(MEDIA_TYPE_APPLICATION_OCTET_STREAM))
+                                .whenComplete((o, e) -> {
+                                    if (e != null) {
+                                        logSevere(e);
+                                        ctx.fail(e);
                                         return;
                                     }
-                                    // Create a new thread pool here as the upload content uses a
-                                    // custom service client, it empties vim port in the
-                                    // connection. Hence subsequent call fails with NPE.
-                                    ctx.pool.submit(ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
-                                            (newConn, excep) -> {
-                                                if (ctx.fail(excep)) {
-                                                    return;
-                                                }
-                                                InstanceDiskClient newClient = new
-                                                        InstanceDiskClient(newConn, ctx, getHost());
-                                                try {
-                                                    ctx.diskState = ds;
-                                                    newClient.attachDiskToVM();
-                                                    updateComputeAndDiskStateForAttach(ctx);
-                                                } catch (Exception e) {
-                                                    ctx.fail(e);
-                                                }
-                                            });
+                                    try {
+                                        byte[] contentToUpload = o.getBody(byte[].class);
+
+                                        diskClient.uploadISOContents(contentToUpload)
+                                                .whenComplete((ds, t) -> {
+                                                    if (t != null) {
+                                                        logSevere(
+                                                                "Upload of ISO contents failed. Error: %s",
+                                                                t.getMessage());
+                                                        ctx.fail(t);
+                                                        return;
+                                                    }
+
+                                                    //upload succeeded - delete asynchronously
+                                                    Operation.createDelete(this.getHost(),
+                                                            contentLink).sendWith(this);
+                                                    // Create a new thread pool here as the upload content uses a
+                                                    // custom service client, it empties vim port in the
+                                                    // connection. Hence subsequent call fails with NPE.
+                                                    ctx.pool.submit(
+                                                            ctx.getAdapterManagementReference(),
+                                                            ctx.vSphereCredentials,
+                                                            (newConn, excep) -> {
+                                                                if (ctx.fail(excep)) {
+                                                                    return;
+                                                                }
+                                                                InstanceDiskClient newClient = new
+                                                                        InstanceDiskClient(
+                                                                        newConn,
+                                                                        ctx, getHost());
+                                                                try {
+                                                                    ctx.diskState = ds;
+                                                                    newClient.attachDiskToVM();
+                                                                    updateComputeAndDiskStateForAttach(
+                                                                            ctx);
+                                                                } catch (Exception ex) {
+                                                                    ctx.fail(ex);
+                                                                }
+                                                            });
+                                                });
+                                    } catch (Exception exc) {
+                                        ctx.fail(exc);
+                                    }
                                 });
                     } catch (Exception e) {
                         ctx.fail(e);
