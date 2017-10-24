@@ -165,6 +165,9 @@ public class DiskClient extends BaseHelper {
         VirtualDiskType provisionType = getDiskProvisioningType(diskStateExpanded);
         if (provisionType != null) {
             diskSpec.setDiskType(provisionType.value());
+        } else {
+            // Default it to THIN
+            diskSpec.setDiskType(VirtualDiskType.THIN.value());
         }
         diskSpec.setAdapterType(VirtualDiskAdapterType.LSI_LOGIC.value());
 
