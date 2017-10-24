@@ -587,8 +587,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        long latestAcceptableModification = System.currentTimeMillis()
-                - VM_FERMENTATION_PERIOD_MILLIS;
         spec = client.createVmFilterSpec(client.getDatacenter());
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
@@ -606,7 +604,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         logWarning(() -> String.format("Cannot process a VM without"
                                         + " instanceUuid: %s",
                                 VimUtils.convertMoRefToString(vm.getId())));
-                    } else if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
+                    } else {
                         ctx.getVmTracker().register();
                         processFoundVm(ctx, vm);
                     }
@@ -1739,13 +1737,21 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param vm
      */
     private void processFoundVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
+        long latestAcceptableModification = System.currentTimeMillis()
+                - VM_FERMENTATION_PERIOD_MILLIS;
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), vm.getInstanceUuid());
         withTaskResults(task, result -> {
             String vmSelfLink = null;
             if (result.documentLinks.isEmpty()) {
-                createNewVm(enumerationProgress, vm);
+                if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
+                    // If vm is not settled down don't create a new resource
+                    createNewVm(enumerationProgress, vm);
+                } else {
+                    enumerationProgress.getVmTracker().arrive();
+                }
             } else {
+                // always update state of a vm even if modified recently
                 ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
                 updateVm(oldDocument, enumerationProgress, vm);
                 vmSelfLink = oldDocument.documentSelfLink;
