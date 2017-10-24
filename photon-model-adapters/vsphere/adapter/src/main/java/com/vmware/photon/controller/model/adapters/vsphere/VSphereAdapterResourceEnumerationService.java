@@ -1940,6 +1940,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             snapshot.endpointLinks = new HashSet<String>();
         }
         snapshot.endpointLinks.add(enumerationProgress.getRequest().endpointLink);
+        CustomProperties.of(snapshot)
+                .put(CustomProperties.MOREF, VimUtils.convertMoRefToString(current.getSnapshot()))
+                .put(CustomProperties.TYPE, current.getSnapshot().getType());
         return snapshot;
     }
 
