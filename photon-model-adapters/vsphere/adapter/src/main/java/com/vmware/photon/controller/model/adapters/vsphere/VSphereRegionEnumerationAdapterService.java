@@ -23,6 +23,7 @@ import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.DatacenterLister;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -68,7 +69,7 @@ public class VSphereRegionEnumerationAdapterService extends StatelessService {
                             connection.setURI(URI.create("https://" + request.endpointProperties
                                     .get(HOST_NAME_KEY) + "/sdk"));
                             connection.setUsername(creds.privateKeyId);
-                            connection.setPassword(creds.privateKey);
+                            connection.setPassword(EncryptionUtils.decrypt(creds.privateKey));
                             connection.setIgnoreSslErrors(true);
                             connection.connect();
 
