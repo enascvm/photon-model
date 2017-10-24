@@ -143,6 +143,11 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                     .thenCompose(ctx -> super.getEndpointState(ctx));
         }
 
+        @Override
+        public String getEndpointRegion() {
+            return this.request.regionId;
+        }
+
         /**
          * Extract {@link ImageEnumerationTaskState} from {@code request.taskReference} and set it
          * to {@link #imageEnumTaskState}.

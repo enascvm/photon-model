@@ -44,4 +44,9 @@ public class ImageEnumerateRequest extends ResourceRequest {
      */
     public EnumerationAction enumerationAction;
 
+    /**
+     * Optional region to restrict the enumeration to.
+     */
+    public String regionId;
+
 }

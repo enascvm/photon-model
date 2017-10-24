@@ -22,7 +22,6 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.concurrent.TimeUnit;
 
@@ -36,7 +35,6 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
-import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
@@ -192,19 +190,11 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     // Regions match -> should go to the adapter
                     { MockSuccessImageEnumerationAdapter.class,
                             MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EPT_EP_WITH_REGION_REQ_WITH_REGION },
-                    // Regions do not match -> should not go to the adapter
-                    { MockFailOperationImageEnumerationAdapter.class,
-                            TaskStage.FINISHED,
-                            EPT_EP_WITH_REGION_REQ_WITH_REGION1 },
-                    // Request does not provide Region -> adapter with region is a match
+                            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION },
+                    // No regions -> should not go to the adapter
                     { MockSuccessImageEnumerationAdapter.class,
                             MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EPT_EP_WITH_REGION_REQ_WITHOUT_REGION },
-                    // Request does provide Region -> adapter without a region is not a match
-                    { MockFailOperationImageEnumerationAdapter.class,
-                            TaskStage.FINISHED,
-                            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION }
+                            EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION }
             });
         }
 
@@ -224,17 +214,11 @@ public class ImageEnumerationTaskServiceTest extends Suite {
         static final String EPT_SINGLE_EP = "EPT_SINGLE_EP";
 
         // End-point with region AND request with same region
-        static final String EPT_EP_WITH_REGION_REQ_WITH_REGION = RegionTestConfig.EPT_EP_WITH_REGION_REQ_WITH_REGION
-                .name();
+        static final String EPT_EP_WITHOUT_REGION_REQ_WITH_REGION =
+                RegionTestConfig.EPT_EP_WITHOUT_REGION_REQ_WITH_REGION.name();
         // End-point with region AND request with different region
-        static final String EPT_EP_WITH_REGION_REQ_WITH_REGION1 = RegionTestConfig.EPT_EP_WITH_REGION_REQ_WITH_REGION1
-                .name();
-        // End-point with region AND request with no region
-        static final String EPT_EP_WITH_REGION_REQ_WITHOUT_REGION = RegionTestConfig.EPT_EP_WITH_REGION_REQ_WITHOUT_REGION
-                .name();
-        // End-point with no region AND request with region
-        static final String EPT_EP_WITHOUT_REGION_REQ_WITH_REGION = RegionTestConfig.EPT_EP_WITHOUT_REGION_REQ_WITH_REGION
-                .name();
+        static final String EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION =
+                RegionTestConfig.EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION.name();
         // }}
 
         static boolean isPublicImageEnumeration(String endpoinType) {
@@ -243,17 +227,13 @@ public class ImageEnumerationTaskServiceTest extends Suite {
 
         private enum RegionTestConfig {
 
-            EPT_EP_WITH_REGION_REQ_WITH_REGION("REGION", "REGION"),
-            EPT_EP_WITH_REGION_REQ_WITH_REGION1("REGION", "REGION_1"),
-            EPT_EP_WITH_REGION_REQ_WITHOUT_REGION("REGION", null),
-            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION(null, "REGION");
+            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION("REGION"),
+            EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION(null);
 
-            public final String epRegion;
-            public final String requestRegion;
+            public final String region;
 
-            private RegionTestConfig(String epRegion, String requestRegion) {
-                this.epRegion = epRegion;
-                this.requestRegion = requestRegion;
+            private RegionTestConfig(String region) {
+                this.region = region;
             }
         }
 
@@ -310,11 +290,6 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             endpointToCreate.endpointType = this.endpointType;
             endpointToCreate.tenantLinks = singletonList(this.endpointType + "-tenant");
 
-            if (this.regionConfig != null && this.regionConfig.epRegion != null) {
-                endpointToCreate.endpointProperties = Collections.singletonMap(
-                        EndpointConfigRequest.REGION_KEY, this.regionConfig.epRegion);
-            }
-
             this.endpointState = postServiceSynchronously(
                     EndpointService.FACTORY_LINK,
                     endpointToCreate,
@@ -369,8 +344,8 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                 taskState.endpointLink = buildUriPath(EndpointService.FACTORY_LINK, EP_NONE);
             }
 
-            if (this.regionConfig != null && this.regionConfig.requestRegion != null) {
-                taskState.regionId = this.regionConfig.requestRegion;
+            if (this.regionConfig != null) {
+                taskState.regionId = this.regionConfig.region;
             }
 
             return taskState;

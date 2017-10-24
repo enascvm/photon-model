@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
 import java.util.Arrays;
@@ -29,7 +28,6 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.model.Filter;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -41,7 +39,6 @@ import org.junit.rules.Stopwatch;
 import org.junit.rules.TestName;
 import org.junit.runner.Description;
 
-import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService.PartitionedIterator;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -84,6 +81,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     // As of now uniquely identify a SINGLE AWS image.
     private static final String AMAZON_PUBLIC_IMAGE_FILTER_SINGLE;
+
+    private static final String ENDPOINT_REGION = Regions.US_EAST_1.getName();
 
     static {
         Filter nameFilter = new Filter("name").withValues("*" + "Amazon-Linux_WordPress" + "*");
@@ -486,6 +485,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
             taskState.tenantLinks = endpointState.tenantLinks;
         }
 
+        taskState.regionId = ENDPOINT_REGION;
         taskState.filter = filter;
         taskState.options = this.isMock
                 ? EnumSet.of(TaskOption.IS_MOCK)
@@ -528,8 +528,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         image.id = "dummy-" + this.currentTestName.getMethodName();
 
         image.regionId = epRegion
-                ? endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY)
-                : endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY) + "_diff";
+                ? ENDPOINT_REGION
+                : ENDPOINT_REGION + "_diff";
 
         return postServiceSynchronously(
                 ImageService.FACTORY_LINK,
@@ -565,7 +565,6 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
             endpoint.endpointProperties = new HashMap<>();
             endpoint.endpointProperties.put(PRIVATE_KEY_KEY, this.secretKey);
             endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, this.accessKey);
-            endpoint.endpointProperties.put(REGION_KEY, Regions.US_EAST_1.getName());
         }
 
         EndpointAllocationTaskState allocateEndpoint = new EndpointAllocationTaskState();
@@ -590,9 +589,6 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         endpoint.endpointType = endpointType.name();
         endpoint.id = endpointType.name() + "-id";
         endpoint.name = endpointType.name() + "-name";
-
-        endpoint.endpointProperties = new HashMap<>();
-        endpoint.endpointProperties.put(REGION_KEY, endpointType.name() + "-region");
 
         return TestUtils.doPost(host, endpoint, EndpointState.class,
                 UriUtils.buildUri(host, EndpointService.FACTORY_LINK));

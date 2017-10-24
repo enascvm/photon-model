@@ -26,7 +26,7 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Sets;
-
+import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -34,7 +34,6 @@ import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -86,6 +85,8 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
 
     private static final String OS_TYPE_WINDOWS_NAME = "Windows";
     private static final String OS_TYPE_LINUX_NAME = "Linux";
+
+    private static final String ENDPOINT_REGION = Region.US_WEST.name();
 
     @After
     public final void afterImageEnumTest() throws Throwable {
@@ -511,6 +512,8 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
             taskState.endpointLink = endpoint.documentSelfLink;
             taskState.tenantLinks = endpoint.tenantLinks;
         }
+
+        taskState.regionId = ENDPOINT_REGION;
         taskState.filter = filter;
         taskState.options = this.isMock
                 ? EnumSet.of(TaskOption.IS_MOCK)
@@ -553,8 +556,8 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         image.id = "dummy-" + this.currentTestName.getMethodName();
 
         image.regionId = epRegion
-                ? endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY)
-                : endpoint.endpointProperties.get(EndpointConfigRequest.REGION_KEY) + "_diff";
+                ? ENDPOINT_REGION
+                : ENDPOINT_REGION + "_diff";
 
         return postServiceSynchronously(
                 ImageService.FACTORY_LINK,

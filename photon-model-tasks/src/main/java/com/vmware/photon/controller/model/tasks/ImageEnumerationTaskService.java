@@ -41,7 +41,6 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
-import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
@@ -572,6 +571,7 @@ public class ImageEnumerationTaskService
         // In case of Public, end-point credentials are used to run the enumeration
         adapterReq.resourceReference = createInventoryUri(this.getHost(),
                 ctx.endpointState.documentSelfLink);
+        adapterReq.regionId = ctx.taskState.regionId;
         adapterReq.taskReference = buildUri(getHost(), ctx.taskState.documentSelfLink);
         adapterReq.isMockRequest = ctx.taskState.options.contains(TaskOption.IS_MOCK);
 
@@ -595,13 +595,6 @@ public class ImageEnumerationTaskService
                         ctx.taskState.endpointType,
                         MatchType.TERM,
                         Occurance.MUST_OCCUR);
-
-        if (!isNullOrEmpty(ctx.taskState.regionId)) {
-            endpointsByTypeQuery.addCompositeFieldClause(
-                    EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
-                    EndpointConfigRequest.REGION_KEY,
-                    ctx.taskState.regionId);
-        }
 
         return endpointsByTypeQuery;
     }
