@@ -145,7 +145,7 @@ public class AzureConstants {
     public static final String DISK_WRITE_BYTES_PER_SECOND = "\\PhysicalDisk\\WriteBytesPerSecond";
 
     // Storage credentials related constants
-    public static final String STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=http;" +
+    public static final String STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;" +
                     "AccountName=%s;" +
                     "AccountKey=%s;";
 

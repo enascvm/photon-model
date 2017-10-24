@@ -344,21 +344,26 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             queryForDiskStates(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_INTERNAL_TYPE_TAG);
             break;
         case CREATE_COMPUTE_INTERNAL_TYPE_TAG:
-            logFine("IN CREATE_COMPUTE_INTERNAL_TYPE_TAG [endpointLink:%s]", ctx.request.endpointLink);
-            createInternalTypeTag(ctx, ComputeEnumerationSubStages.CREATE_COMPUTE_EXTERNAL_TAG_STATES);
+            logFine("IN CREATE_COMPUTE_INTERNAL_TYPE_TAG [endpointLink:%s]",
+                    ctx.request.endpointLink);
+            createInternalTypeTag(ctx,
+                    ComputeEnumerationSubStages.CREATE_COMPUTE_EXTERNAL_TAG_STATES);
             break;
         case CREATE_COMPUTE_EXTERNAL_TAG_STATES:
-            logFine("IN CREATE_COMPUTE_EXTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_COMPUTE_EXTERNAL_TAG_STATES [endpointLink:%s]",
+                    ctx.request.endpointLink);
             createTagStates(ctx,
                     ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES);
             break;
         case CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES:
-            logFine("IN CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_NETWORK_INTERFACE_INTERNAL_TAG_STATES [endpointLink:%s]",
+                    ctx.request.endpointLink);
             createNetworkInterfaceInternalTagStates(ctx,
                     ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES);
             break;
         case CREATE_NETWORK_INTERFACE_STATES:
-            logFine("IN CREATE_NETWORK_INTERFACE_STATES [endpointLink:%s]", ctx.request.endpointLink);
+            logFine("IN CREATE_NETWORK_INTERFACE_STATES [endpointLink:%s]",
+                    ctx.request.endpointLink);
             createNetworkInterfaceStates(ctx, ComputeEnumerationSubStages.UPDATE_DISK_STATES);
             break;
         case UPDATE_DISK_STATES:
@@ -424,7 +429,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         };
     }
 
-    private void createInternalTypeTag(EnumerationContext context, ComputeEnumerationSubStages next) {
+    private void createInternalTypeTag(EnumerationContext context,
+            ComputeEnumerationSubStages next) {
         TagService.TagState typeTag = newTagState(TAG_KEY_TYPE, azure_vm.toString(),
                 false, context.parentCompute.tenantLinks);
 
@@ -434,7 +440,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 context.internalTagLinks.add(typeTag.documentSelfLink);
             } else {
                 // log the error and continue the enumeration
-                logWarning(() -> String.format("Error creating internal tag: %s", failure.getMessage()));
+                logWarning(() -> String
+                        .format("Error creating internal tag: %s", failure.getMessage()));
             }
             context.subStage = next;
             handleSubStage(context);
@@ -447,14 +454,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     /**
      * Deletes undiscovered resources.
-     *
+     * <p>
      * The logic works by recording a timestamp when enumeration starts. This timestamp is used to
      * lookup resources which haven't been touched as part of current enumeration cycle. The other
      * data point this method uses is the virtual machines discovered as part of list vm call.
-     *
+     * <p>
      * Finally, delete on a resource is invoked only if it meets two criteria: - Timestamp older
      * than current enumeration cycle. - VM not present on Azure.
-     *
+     * <p>
      * The method paginates through list of resources for deletion.
      */
     private void deleteComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
@@ -546,10 +553,22 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             computeState.documentSelfLink));
 
                     if (computeState.diskLinks != null && !computeState.diskLinks.isEmpty()) {
-                        operations.add(Operation
-                                .createDelete(this, computeState.diskLinks.get(0)));
-                        logFine(() -> String.format("Deleting disk state %s",
-                                computeState.diskLinks.get(0)));
+                        computeState.diskLinks.forEach(dl -> {
+                            operations.add(Operation
+                                    .createDelete(this, dl));
+                            logFine(() -> String.format("Deleting disk state %s of "
+                                    + "machine %s", dl, computeState.documentSelfLink));
+                        });
+                    }
+
+                    if (computeState.networkInterfaceLinks != null && !computeState
+                            .networkInterfaceLinks.isEmpty()) {
+                        computeState.networkInterfaceLinks.forEach(nil -> {
+                            operations.add(Operation
+                                    .createDelete(this, nil));
+                            logFine(() -> String.format("Deleting NetworkInterface state %s of "
+                                    + "machine %s", nil, computeState.documentSelfLink));
+                        });
                     }
                 }
             }
@@ -577,8 +596,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         };
         logFine(() -> String.format("Querying page [%s] for resources to be %s",
                 ctx.deletionNextPageLink, ctx.request.preserveMissing ? "retire" : "delete"));
-        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), ctx.deletionNextPageLink))
-                .setCompletion(completionHandler));
+        sendRequest(
+                Operation.createGet(createInventoryUri(this.getHost(), ctx.deletionNextPageLink))
+                        .setCompletion(completionHandler));
     }
 
     /**
@@ -613,10 +633,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Completion handler for VM enumeration call.
-     * For async calls to list VMs, Azure returns Observable<Page<VirtualMachineInner>>. The following
-     * completion subscribes to the Observable and Overrides call(<T>) to include logic to process pages of VMs
-     * when we receive them.
+     * Completion handler for VM enumeration call. For async calls to list VMs, Azure returns
+     * Observable<Page<VirtualMachineInner>>. The following completion subscribes to the Observable
+     * and Overrides call(<T>) to include logic to process pages of VMs when we receive them.
      */
     private Action1<Page<VirtualMachineInner>> vmEnumerationCompletion(EnumerationContext ctx,
             ComputeEnumerationSubStages next) {
@@ -632,7 +651,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     return;
                 }
 
-                logInfo(() -> String.format("Retrieved %d VMs from Azure", virtualMachineInners.size()));
+                logInfo(() -> String
+                        .format("Retrieved %d VMs from Azure", virtualMachineInners.size()));
                 logFine(() -> String.format("Next page link %s", ctx.enumNextPageLink));
 
                 for (VirtualMachineInner virtualMachine : virtualMachineInners) {
@@ -987,7 +1007,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
             if (virtualMachine.hardwareProfile() != null
                     && virtualMachine.hardwareProfile().vmSize() != null) {
-                computeDescription.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
+                computeDescription.instanceType = virtualMachine.hardwareProfile().vmSize()
+                        .toString();
             }
             computeDescription.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
             computeDescription.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
@@ -1142,7 +1163,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             ComputeEnumerationSubStages next) {
 
         Consumer<Throwable> failure = e -> {
-            logWarning("Failure getting Azure network interface states [endpointLink:%s] [Exception:%s]",
+            logWarning(
+                    "Failure getting Azure network interface states [endpointLink:%s] [Exception:%s]",
                     ctx.request.endpointLink, e.getMessage());
             handleError(ctx, e);
         };
@@ -1161,7 +1183,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             DeferredResult.allOf(remoteNics)
                     .thenCompose(rnics -> loadSubnets(ctx, rnics)
-                            .thenCompose(subnetPerNicId -> doCreateUpdateDeleteNics(ctx, subnetPerNicId,
+                            .thenCompose(subnetPerNicId -> doCreateUpdateNics(ctx, subnetPerNicId,
                                     rnics)))
                     .whenComplete(thenHandleSubStage(ctx, next));
         }, failure);
@@ -1171,7 +1193,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Manages creating and updating Network Interfaces resources based on network interfaces
      * associated with virtual machines.
      */
-    private DeferredResult<List<NetworkInterfaceState>> doCreateUpdateDeleteNics(EnumerationContext ctx,
+    private DeferredResult<List<NetworkInterfaceState>> doCreateUpdateNics(EnumerationContext ctx,
             Map<String, String> subnetPerNicId,
             List<Pair<NetworkInterfaceInner, String>> remoteNics) {
 
@@ -1189,14 +1211,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
-                localNics -> requestCreateUpdateDeleteNic(localNics, remoteStates, ctx, subnetPerNicId,
+                localNics -> requestCreateUpdateNic(localNics, remoteStates, ctx, subnetPerNicId,
                         remoteNics));
     }
 
     /**
      * Serves request for creating and updating Network Interfaces resources
      */
-    private DeferredResult<List<NetworkInterfaceState>> requestCreateUpdateDeleteNic(
+    private DeferredResult<List<NetworkInterfaceState>> requestCreateUpdateNic(
             List<NetworkInterfaceState> localNics,
             Map<String, Pair<NetworkInterfaceInner, String>> remoteStates, EnumerationContext ctx,
             Map<String, String> subnetPerNicId,
@@ -1213,56 +1235,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // create new network interfaces identified as 'remoteStates'. Here, 'remoteStates' includes
         // ONLY newly identified nics.
         createNic(remoteStates, ctx, subnetPerNicId, ops);
-        // Delete the NICs that exist locally but not on remote.
-        List<String> remoteNicIds = new ArrayList<>();
-        // Collect IDs of all remote network interfaces. Delete all local states that
-        // have IDs other than remoteNicIds (i.e. stale states).
-        remoteNics.stream()
-                .filter(pair -> pair != null
-                        && pair.getLeft() != null
-                        && pair.getLeft().id() != null)
-                .forEach(pair -> remoteNicIds.add(pair.getLeft().id()));
-
-        deleteNicHelper(remoteNicIds, ctx);
 
         return DeferredResult.allOf(ops);
-    }
-
-    /**
-     * Helper for deleting stale network interfaces.
-     */
-    private DeferredResult<List<Operation>> deleteNicHelper(
-            List<String> remoteNicIds, EnumerationContext ctx) {
-
-        Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(NetworkInterfaceState.class);
-
-        QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
-                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
-
-        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-
-        return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
-                allLocalNics -> deleteNics(remoteNicIds, allLocalNics));
-    }
-
-    /**
-     * Deletes stale network interface states that are deleted from the remote.
-     */
-    private DeferredResult<List<Operation>> deleteNics(
-            List<String> remoteNicIds, List<NetworkInterfaceState> allLocalNics) {
-
-        List<DeferredResult<Operation>> deleteOps = new ArrayList<>();
-
-        allLocalNics.stream()
-                .filter(localNic -> !remoteNicIds.contains(localNic.id))
-                .forEach(localNic -> {
-                    deleteOps.add(sendWithDeferredResult(Operation.createDelete(this.getHost(),
-                            localNic.documentSelfLink).setReferer(this.getUri())));
-                });
-
-        return DeferredResult.allOf(deleteOps);
     }
 
     private void updateNic(List<NetworkInterfaceState> localNics,
@@ -1328,7 +1302,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // It is available as a SubResource, We use the SubResource ID of IP address from
         // NetworkInterfaceIPConfigurationInner to obtain the IP address.
         Consumer<Throwable> failure = e -> {
-            logWarning("Error getting public IP address from Azure [endpointLink:%s], [Exception:%s]",
+            logWarning(
+                    "Error getting public IP address from Azure [endpointLink:%s], [Exception:%s]",
                     ctx.request.endpointLink, e.getMessage());
 
             handleError(ctx, e);
@@ -1343,9 +1318,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         public void call(PublicIPAddress publicIPAddress) {
                             nicMeta.publicIp = publicIPAddress.ipAddress();
                             if (publicIPAddress.inner().dnsSettings() != null) {
-                                nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings().fqdn();
+                                nicMeta.publicDnsName = publicIPAddress.inner().dnsSettings()
+                                        .fqdn();
                             }
-                            executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta, isCreate);
+                            executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta,
+                                    isCreate);
                         }
                     });
         }, failure);
@@ -1494,7 +1471,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         });
     }
 
-    private ComputeState createComputeState(EnumerationContext ctx, VirtualMachineInner virtualMachine) {
+    private ComputeState createComputeState(EnumerationContext ctx,
+            VirtualMachineInner virtualMachine) {
 
         List<String> vmDisks = new ArrayList<>();
         if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
@@ -1595,11 +1573,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     .values().stream()
                     .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
                     .map(dr -> dr.thenCompose(c -> sendWithDeferredResult(
-                            Operation.createPatch(ctx.request.buildUri(c.documentSelfLink)).setBody(c)
+                            Operation.createPatch(ctx.request.buildUri(c.documentSelfLink))
+                                    .setBody(c)
                                     .setCompletion((o, e) -> {
                                         if (e != null) {
                                             logWarning(() -> String.format(
-                                                    "Error updating VM:[%s], reason: %s", c.name, e));
+                                                    "Error updating VM:[%s], reason: %s", c.name,
+                                                    e));
                                         }
                                     }))))
                     .collect(Collectors.toList()))
@@ -1623,7 +1603,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 this, "Load virtual machine instance view:" + vmName);
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
-            vmOps.getByResourceGroupAsync(resourceGroupName, vmName, InstanceViewTypes.INSTANCE_VIEW, handler);
+            vmOps.getByResourceGroupAsync(resourceGroupName, vmName,
+                    InstanceViewTypes.INSTANCE_VIEW, handler);
         }, handler::failure);
 
         return handler.toDeferredResult().thenApply(vm -> {
@@ -1673,9 +1654,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private Azure getAzureClient(EnumerationContext ctx) {
         if (ctx.azure == null) {
             if (ctx.restClient == null) {
-                ctx.restClient = buildRestClient(ctx.credentials,this.executorService);
+                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
             }
-            ctx.azure = Azure.authenticate(ctx.restClient, ctx.parentAuth.customProperties.get(AZURE_TENANT_ID))
+            ctx.azure = Azure.authenticate(ctx.restClient,
+                    ctx.parentAuth.customProperties.get(AZURE_TENANT_ID))
                     .withSubscription(ctx.parentAuth.userLink);
         }
         return ctx.azure;
