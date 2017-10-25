@@ -1692,7 +1692,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
 
         return QueryUtils.startInventoryQueryTask(this, queryTask)
-        .thenCompose(result -> {
+                .thenCompose(result -> {
                     if (result.results != null && result.results.documentCount != 0) {
                         logFine(() -> String.format(
                                 "Won't disassociate disk state %s, as it is attached to machine",
@@ -1703,7 +1703,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             diskState.documentSelfLink));
                     Operation operation = AdapterUtils.createEndpointLinksUpdateOperation
                             (this, context.request.endpointLink,
-                            diskState.documentSelfLink, diskState.endpointLinks);
+                                    diskState.documentSelfLink, diskState.endpointLinks);
                     if (operation == null) {
                         return DeferredResult.completed(new Operation());
                     }

@@ -1343,7 +1343,7 @@ public class AzureTestUtil {
                 if (subnetState.endpointLinks == null) {
                     subnetState.endpointLinks = new HashSet<>();
                 }
-               subnetState.endpointLinks.add(endpointSate.documentSelfLink);
+                subnetState.endpointLinks.add(endpointSate.documentSelfLink);
                 subnetState.tenantLinks = endpointSate.tenantLinks;
                 subnetState.tagLinks = Collections.singleton(TagsUtil.newTagState(TAG_KEY_TYPE,
                         azure_subnet.name(), false, endpointSate.tenantLinks).documentSelfLink);
