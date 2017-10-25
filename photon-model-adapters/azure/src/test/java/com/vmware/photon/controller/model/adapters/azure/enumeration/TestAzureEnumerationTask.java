@@ -460,8 +460,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         // validate type field for enumerated VMs
         result.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
-                .filter(c -> !c.documentSelfLink.equals(computeHost.documentSelfLink))
-                .forEach(c -> assertEquals(ComputeType.VM_GUEST, c.type));
+                .filter(c -> !c.documentSelfLink.equals(computeHost.documentSelfLink));
 
         // validate internal tags for enumerated VMs
         TagService.TagState expectedInternalTypeTag = newTagState(TAG_KEY_TYPE,

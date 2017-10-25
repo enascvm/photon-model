@@ -32,6 +32,7 @@ import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagSt
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
@@ -77,6 +78,8 @@ import rx.functions.Action1;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse;
+import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse.RegionInfo;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
@@ -97,6 +100,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.LifecycleStat
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -105,6 +109,7 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -173,6 +178,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Azure azure;
         RestClient restClient;
         ResourceState resourceDeletionState;
+        Map<String, RegionInfo> regions = new ConcurrentHashMap<>();
+        Set<String> regionIds = new HashSet<>();
 
         EnumerationContext(ComputeEnumerateAdapterRequest request, Operation op) {
             this.request = request.original;
@@ -197,6 +204,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Substages to handle Azure VM data collection.
      */
     private enum ComputeEnumerationSubStages {
+        COLLECT_REGIONS,
         LISTVMS,
         GET_COMPUTE_STATES,
         CREATE_COMPUTE_EXTERNAL_TAG_STATES,
@@ -287,7 +295,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 handleEnumeration(ctx);
                 break;
             case REFRESH:
-                ctx.subStage = ComputeEnumerationSubStages.LISTVMS;
+                ctx.subStage = ComputeEnumerationSubStages.COLLECT_REGIONS;
                 handleSubStage(ctx);
                 break;
             case STOP:
@@ -331,6 +339,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void handleSubStage(EnumerationContext ctx) {
         switch (ctx.subStage) {
+        case COLLECT_REGIONS:
+            logFine("IN COLLECT_REGIONS [endpointLink:%s]", ctx.request.endpointLink);
+            collectRegions(ctx, ComputeEnumerationSubStages.LISTVMS);
+            break;
         case LISTVMS:
             logFine("IN LISTVMS [endpointLink:%s]", ctx.request.endpointLink);
             getVmList(ctx, ComputeEnumerationSubStages.GET_COMPUTE_STATES);
@@ -409,6 +421,90 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             handleEnumeration(ctx);
             break;
         }
+    }
+
+    private void collectRegions(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+        Operation getEndpoint = Operation.createGet(this, ctx.parentCompute.endpointLink);
+
+        DeferredResult<EndpointState> getEndpointDR = sendWithDeferredResult(getEndpoint,
+                EndpointState.class);
+        getEndpointDR
+                .thenCompose(endpoint -> {
+                    Operation getRegions = Operation
+                            .createPost(this, AzureRegionEnumerationAdapterService.SELF_LINK)
+                            .setBody(endpoint);
+
+                    return sendWithDeferredResult(getRegions, RegionEnumerationResponse.class);
+                }).whenComplete((regionsResponse, e) -> {
+                    if (e != null) {
+                        logWarning("Resource enumeration failed at stage %s with exception %s",
+                                ctx.stage, Utils.toString(e));
+                        handleError(ctx, e);
+                    } else {
+                        ctx.regions.putAll(regionsResponse.regions.stream()
+                                .collect(Collectors.toMap(r -> r.regionId, r -> r)));
+                        ctx.regionIds.addAll(ctx.regions.keySet());
+                        ctx.subStage = next;
+                        handleSubStage(ctx);
+                    }
+                });
+    }
+
+    private ComputeDescription createComputeDescriptionForRegion(EnumerationContext context, RegionInfo r) {
+        ComputeDescriptionService.ComputeDescription cd = Utils
+                .clone(context.parentCompute.description);
+        cd.supportedChildren = new ArrayList<>();
+        cd.supportedChildren.add(ComputeType.VM_GUEST.toString());
+        cd.documentSelfLink = null;
+        cd.id = r.regionId;
+        cd.name = r.name;
+        cd.regionId = r.regionId;
+        cd.endpointLink = context.request.endpointLink;
+        if (cd.endpointLinks == null) {
+            cd.endpointLinks = new HashSet<>();
+        }
+        cd.endpointLinks.add(context.request.endpointLink);
+        // Book keeping information about the creation of the compute description in the system.
+        if (cd.customProperties == null) {
+            cd.customProperties = new HashMap<>();
+        }
+        cd.customProperties.put(SOURCE_TASK_LINK,
+                ResourceEnumerationTaskService.FACTORY_LINK);
+        cd.documentSelfLink = cd.id;
+
+        return cd;
+    }
+
+    private ComputeState createComputeInstanceForRegion(EnumerationContext context, RegionInfo regionInfo) {
+        ComputeService.ComputeState computeState = new ComputeService.ComputeState();
+        computeState.name = regionInfo.name;
+        computeState.id = regionInfo.regionId;
+        computeState.adapterManagementReference = context.parentCompute.adapterManagementReference;
+        computeState.parentLink = context.parentCompute.documentSelfLink;
+        computeState.resourcePoolLink = context.request.resourcePoolLink;
+        computeState.endpointLink = context.request.endpointLink;
+        if (computeState.endpointLinks == null) {
+            computeState.endpointLinks = new HashSet<>();
+        }
+        computeState.endpointLinks.add(context.request.endpointLink);
+        computeState.descriptionLink = UriUtils
+                .buildUriPath(ComputeDescriptionService.FACTORY_LINK,
+                        context.computeDescriptionIds.get(regionInfo.regionId));
+        computeState.type = ComputeType.VM_HOST;
+        computeState.regionId = regionInfo.regionId;
+        computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+
+        computeState.powerState = PowerState.ON;
+
+        computeState.customProperties = context.parentCompute.customProperties;
+        if (computeState.customProperties == null) {
+            computeState.customProperties = new HashMap<>();
+        }
+        computeState.customProperties.put(SOURCE_TASK_LINK,
+                ResourceEnumerationTaskService.FACTORY_LINK);
+
+        computeState.tenantLinks = context.parentCompute.tenantLinks;
+        return computeState;
     }
 
     /**
@@ -534,7 +630,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                 // Since we only update disks during update, some compute states might be
                 // present in Azure but have older timestamp in local repository.
-                if (ctx.vmIds.contains(vmId)) {
+                if (ctx.vmIds.contains(vmId) || ctx.regionIds.contains(vmId)) {
                     continue;
                 }
 
@@ -700,9 +796,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
         }
 
+        // also get compute states representing regions
+        for (RegionInfo region : ctx.regions.values()) {
+            Query instanceIdFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
+                    .addFieldClause(ComputeState.FIELD_NAME_ID, region.regionId)
+                    .build();
+            instanceIdFilterParentQuery.addClause(instanceIdFilter);
+        }
+
         qBuilder.addClause(instanceIdFilterParentQuery.build());
 
-        QueryByPages<ComputeState> queryLocalStates = new QueryByPages<ComputeState>(
+        QueryByPages<ComputeState> queryLocalStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 ComputeState.class,
@@ -761,6 +865,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             handleSubStage(ctx);
             return;
         }
+
+        Set<String> existingRegionIds = ctx.computeStates.keySet().stream()
+                .filter(k -> ctx.regions.containsKey(k)).collect(Collectors.toSet());
+
+        ctx.regions.keySet().removeAll(existingRegionIds);
+        ctx.computeStates.keySet().removeAll(existingRegionIds);
 
         DeferredResult.allOf(ctx.computeStates.values().stream().map(c -> {
             VirtualMachineInner virtualMachine = ctx.virtualMachines.remove(c.id);
@@ -1025,6 +1135,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
                     .setBody(computeDescription);
             ctx.computeDescriptionIds.put(virtualMachine.name(), computeDescription.id);
+            opCollection.add(compDescOp);
+        }
+
+        for (RegionInfo region : ctx.regions.values()) {
+            ComputeDescription computeDescriptionForRegion = createComputeDescriptionForRegion(ctx,
+                    region);
+            Operation compDescOp = Operation
+                    .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
+                    .setBody(computeDescriptionForRegion);
+            ctx.computeDescriptionIds.put(region.regionId, computeDescriptionForRegion.id);
             opCollection.add(compDescOp);
         }
 
@@ -1454,7 +1574,21 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         }))
                 .collect(java.util.stream.Collectors.toList());
 
-        DeferredResult.allOf(results).whenComplete((all, e) -> {
+
+        List<DeferredResult<ComputeState>> regionResults = ctx.regions.values()
+                .stream()
+                .map(regionInfo -> createComputeInstanceForRegion(ctx, regionInfo))
+                .map(computeState -> sendWithDeferredResult(Operation.createPost(
+                        ctx.request.buildUri(ComputeService.FACTORY_LINK))
+                        .setBody(computeState), ComputeState.class))
+                .collect(java.util.stream.Collectors.toList());
+
+        List<DeferredResult<ComputeState>> allRequests = new ArrayList<>();
+
+        allRequests.addAll(results);
+        allRequests.addAll(regionResults);
+
+        DeferredResult.allOf(allRequests).whenComplete((all, e) -> {
             if (e != null) {
                 logWarning(() -> String.format("Error: %s", e));
             }
