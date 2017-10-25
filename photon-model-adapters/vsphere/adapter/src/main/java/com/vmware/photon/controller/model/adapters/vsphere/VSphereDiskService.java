@@ -17,6 +17,9 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -154,12 +157,14 @@ public class VSphereDiskService extends StatelessService {
         if (diskDescLink != null && !diskDescLink.isEmpty()) {
             seq = OperationSequence.create(deleteDisk(diskDescLink));
         }
+        List<Operation> nextOps = new ArrayList<>(2);
         if (seq == null) {
             seq = OperationSequence.create(deleteDisk(ctx.diskState.documentSelfLink));
         } else {
-            seq.next(deleteDisk(ctx.diskState.documentSelfLink));
+            nextOps.add(deleteDisk(ctx.diskState.documentSelfLink));
         }
-        seq.next(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED))
+        nextOps.add(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED));
+        seq.next(nextOps.toArray(new Operation[nextOps.size()]))
                 .setCompletion(ctx.failTaskOnError())
                 .sendWith(this);
     }
