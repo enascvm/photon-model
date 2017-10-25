@@ -697,7 +697,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             });
         } else {
             // DVS or opaque network
-            QueryTask task = queryForNetwork(enumerationProgress, net.getName());
+            QueryTask task = queryForNetwork(enumerationProgress, net);
             withTaskResults(task, result -> {
                 if (result.documentLinks.isEmpty()) {
                     createNewNetwork(enumerationProgress, net);
@@ -776,6 +776,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private void updateNetwork(NetworkState oldDocument, EnumerationProgress enumerationProgress, NetworkOverlay net) {
         NetworkState networkState = makeNetworkStateFromResults(enumerationProgress, net);
+        //restore original selfLink
         networkState.documentSelfLink = oldDocument.documentSelfLink;
         networkState.resourcePoolLink = null;
 
@@ -964,7 +965,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 + VimUtils.buildStableManagedObjectId(ref, endpointLink);
     }
 
-    private QueryTask queryForNetwork(EnumerationProgress ctx, String name) {
+    private QueryTask queryForNetwork(EnumerationProgress ctx, NetworkOverlay net) {
         URI adapterManagementReference = ctx.getRequest().adapterManagementReference;
         String regionId = ctx.getRegionId();
 
@@ -972,8 +973,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
                         adapterManagementReference.toString())
                 .addKindFieldClause(NetworkState.class)
-                .addCaseInsensitiveFieldClause(NetworkState.FIELD_NAME_NAME, name, MatchType.TERM, Occurance.MUST_OCCUR)
-                .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId);
+                .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.MOREF,
+                        VimUtils.convertMoRefToString(net.getId()), Occurance.MUST_OCCUR);
+
         QueryUtils.addEndpointLink(builder, NetworkState.class, ctx.getRequest().endpointLink);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
 
