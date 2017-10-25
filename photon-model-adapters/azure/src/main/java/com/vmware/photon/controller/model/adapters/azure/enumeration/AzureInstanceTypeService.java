@@ -49,6 +49,8 @@ public class AzureInstanceTypeService extends StatelessService {
 
     public static final String URI_PARAM_ENDPOINT = "endpoint";
 
+    public static final String URI_PARAM_REGION_ID = "regionId";
+
     private static class Context implements AutoCloseable {
 
         final StatelessService service;
@@ -67,9 +69,10 @@ public class AzureInstanceTypeService extends StatelessService {
          */
         InstanceTypeList instanceTypesList = new InstanceTypeList();
 
-        Context(StatelessService service, String endpointLink) {
+        Context(StatelessService service, String endpointLink, String regionId) {
             this.service = service;
             this.endpointLink = endpointLink;
+            this.regionId = regionId;
         }
 
         public final DeferredResult<Context> populate() {
@@ -86,12 +89,18 @@ public class AzureInstanceTypeService extends StatelessService {
 
             return ctx.service
                     .sendWithDeferredResult(op, EndpointState.class)
-                    .thenApply(state -> {
+                    .thenCompose(state -> {
                         ctx.endpointState = state;
 
-                        ctx.regionId = state.endpointProperties.get(REGION_KEY);
+                        if (ctx.regionId == null) {
+                            ctx.regionId = state.endpointProperties.get(REGION_KEY);
+                        }
 
-                        return ctx;
+                        if (ctx.regionId == null) {
+                            return DeferredResult.failed(new IllegalArgumentException("Unable to determine regionId"));
+                        }
+
+                        return DeferredResult.completed(ctx);
                     });
         }
 
@@ -193,7 +202,9 @@ public class AzureInstanceTypeService extends StatelessService {
             return;
         }
 
-        Context context = new Context(this, endpointLink);
+        String regionId = queryParams.get(URI_PARAM_REGION_ID);
+
+        Context context = new Context(this, endpointLink, regionId);
 
         final String msg = "Instance types enumeration";
 
