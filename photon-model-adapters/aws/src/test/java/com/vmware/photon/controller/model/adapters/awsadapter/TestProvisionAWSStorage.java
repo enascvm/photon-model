@@ -79,6 +79,9 @@ public class TestProvisionAWSStorage extends TestAWSProvisionTask {
                         getSupportedInstanceStoreDiskSize(TestAWSSetupUtils.instanceType)
                                 .intValue(),
                         (int) diskState.capacityMBytes);
+
+                assertEquals("Data disk attach status is not matching",
+                        DiskService.DiskStatus.ATTACHED, diskState.status);
             }
         }
     }
@@ -94,6 +97,8 @@ public class TestProvisionAWSStorage extends TestAWSProvisionTask {
                     INSTANCE_STORE_AMI, INSTANCE_TYPE),
                     getSupportedInstanceStoreDiskSize(INSTANCE_TYPE).intValue(),
                     (int) bootDisk.capacityMBytes);
+            assertEquals("Boot disk attach status is not matching",
+                    DiskService.DiskStatus.ATTACHED, bootDisk.status);
         }
     }
 

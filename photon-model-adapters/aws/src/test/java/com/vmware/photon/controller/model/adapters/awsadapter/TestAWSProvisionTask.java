@@ -82,6 +82,7 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -682,6 +683,8 @@ public class TestAWSProvisionTask {
                 "Boot disk iops in diskstate is the same as the iops of the volume attached to the VM",
                 Integer.parseInt(diskState.customProperties.get("iops")),
                 bootVolume.getIops().intValue());
+
+        assertEquals("Boot disk attach status is not matching", DiskService.DiskStatus.ATTACHED, diskState.status);
     }
 
     protected void assertDataDiskConfiguration(AmazonEC2AsyncClient client,
@@ -723,6 +726,9 @@ public class TestAWSProvisionTask {
             assertEquals("Disk speeds are not matching", provisionedIops,
                     volume.getIops().intValue());
         }
+
+        assertEquals("Additional disk attach status is not matching",
+                DiskService.DiskStatus.ATTACHED, diskState.status);
     }
 
     protected DiskState getDiskState(String diskLink) {

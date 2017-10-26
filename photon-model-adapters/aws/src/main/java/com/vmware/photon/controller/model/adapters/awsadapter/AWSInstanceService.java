@@ -768,7 +768,7 @@ public class AWSInstanceService extends StatelessService {
                 patchOperations.addAll(createPatchNICStatesOperations(this.context.nics,
                         ((Instance) instance)));
 
-                updateDiskIds(this.context.bootDisk, this.context.imageDisks,
+                updateDiskIdAndStatus(this.context.bootDisk, this.context.imageDisks,
                         this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings());
 
                 DeferredResult<ComputeState> dr = new DeferredResult<>();
@@ -851,7 +851,7 @@ public class AWSInstanceService extends StatelessService {
         /**
          * update diskstate with the corresponding volume Id.
          */
-        private void updateDiskIds(DiskState bootDisk, List<DiskState> imageDisks,
+        private void updateDiskIdAndStatus(DiskState bootDisk, List<DiskState> imageDisks,
                 List<DiskState> additionalDisks,
                 List<InstanceBlockDeviceMapping> blockDeviceMappings) {
             List<DiskState> diskStateList = new ArrayList<>();
@@ -860,6 +860,7 @@ public class AWSInstanceService extends StatelessService {
             diskStateList.addAll(additionalDisks);
 
             for (DiskState diskState : diskStateList) {
+                diskState.status = DiskService.DiskStatus.ATTACHED;
                 String deviceType = diskState.customProperties.get(DEVICE_TYPE);
                 if (deviceType.equals(AWSStorageType.EBS.getName())) {
                     String deviceName = diskState.customProperties.get(DEVICE_NAME);
