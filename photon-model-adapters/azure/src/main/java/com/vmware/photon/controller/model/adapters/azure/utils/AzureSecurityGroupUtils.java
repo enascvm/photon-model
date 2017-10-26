@@ -66,7 +66,7 @@ public class AzureSecurityGroupUtils {
         }
     }
 
-    private static DeferredResult<NetworkSecurityGroupInner> createOrUpdateSecurityGroup(
+    public static DeferredResult<NetworkSecurityGroupInner> createOrUpdateSecurityGroup(
             StatelessService service, NetworkSecurityGroupsInner azureClient,
             String resourceGroupName, String sgName, NetworkSecurityGroupInner securityGroup,
             String msg) {

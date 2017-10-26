@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
@@ -29,17 +30,25 @@ import com.microsoft.azure.CloudException;
 import com.microsoft.azure.SubResource;
 import com.microsoft.azure.management.network.IPAllocationMethod;
 import com.microsoft.azure.management.network.ProbeProtocol;
+import com.microsoft.azure.management.network.SecurityRuleAccess;
+import com.microsoft.azure.management.network.SecurityRuleDirection;
+import com.microsoft.azure.management.network.SecurityRuleProtocol;
 import com.microsoft.azure.management.network.TransportProtocol;
 import com.microsoft.azure.management.network.implementation.BackendAddressPoolInner;
 import com.microsoft.azure.management.network.implementation.FrontendIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.LoadBalancerInner;
 import com.microsoft.azure.management.network.implementation.LoadBalancersInner;
 import com.microsoft.azure.management.network.implementation.LoadBalancingRuleInner;
+import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 import com.microsoft.azure.management.network.implementation.ProbeInner;
 import com.microsoft.azure.management.network.implementation.PublicIPAddressInner;
 import com.microsoft.azure.management.network.implementation.PublicIPAddressesInner;
+import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
+
 import com.microsoft.rest.ServiceCallback;
 
 import org.apache.commons.collections.CollectionUtils;
@@ -50,6 +59,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -57,6 +67,8 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -82,6 +94,8 @@ public class AzureLoadBalancerService extends StatelessService {
         String resourceGroupName;
         List<NetworkInterfaceState> networkInterfaceStates;
         List<NetworkInterfaceInner> networkInterfaceInners;
+        List<SecurityGroupState> securityGroupStates;
+        List<NetworkSecurityGroupInner> securityGroupInners;
         String publicIPAddressInnerId;
         LoadBalancerInner loadBalancerAzure;
 
@@ -201,12 +215,15 @@ public class AzureLoadBalancerService extends StatelessService {
                 return execution
                         .thenCompose(this::getNetworkInterfaceStates)
                         .thenCompose(this::getNetworkInterfaceInners)
+                        .thenCompose(this::getSecurityGroupStates)
+                        .thenCompose(this::getNetworkSecurityGroupInners)
                         .thenCompose(this::createPublicIP)
                         .thenCompose(this::createLoadBalancer)
                         .thenCompose(this::updateLoadBalancerState)
                         .thenCompose(this::addHealthProbes)
                         .thenCompose(this::addLoadBalancingRules)
-                        .thenCompose(this::addBackendPoolMembers);
+                        .thenCompose(this::addBackendPoolMembers)
+                        .thenCompose(this::updateSecurityGroupRules);
             }
         case DELETE:
             if (context.loadBalancerRequest.isMockRequest) {
@@ -319,6 +336,68 @@ public class AzureLoadBalancerService extends StatelessService {
                 .getByResourceGroupAsync(context.resourceGroupName, networkInterfaceName, null /* expand */,
                         callback);
         return callback.toDeferredResult();
+    }
+
+    /**
+     * Populate SecurityGroupStates in the context
+     *
+     * @param context Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> getSecurityGroupStates(
+            AzureLoadBalancerContext context) {
+        if (CollectionUtils.isEmpty(context.loadBalancerStateExpanded.securityGroupLinks)) {
+            return DeferredResult.completed(context);
+        }
+
+        List<DeferredResult<SecurityGroupState>> securityGroupStates =
+                context.loadBalancerStateExpanded.securityGroupLinks.stream()
+                        .map(securityGroupLink -> sendWithDeferredResult(Operation
+                                        .createGet(context.service.getHost(), securityGroupLink),
+                                SecurityGroupState.class))
+                        .collect(Collectors.toList());
+
+        return DeferredResult.allOf(securityGroupStates)
+                .thenApply(securityGroupStateList -> {
+                    context.securityGroupStates = securityGroupStateList;
+                    return context;
+                });
+    }
+
+    /**
+     * Get security groups from Azure and store in context
+     * These are updated to add firewall rules to allow traffic to flow through the load balancer
+     *
+     * @param context Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> getNetworkSecurityGroupInners(
+            AzureLoadBalancerContext context) {
+        if (CollectionUtils.isEmpty(context.securityGroupStates)) {
+            return DeferredResult.completed(context);
+        }
+
+        NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
+                .getNetworkManagementClientImpl().networkSecurityGroups();
+
+        List<DeferredResult<NetworkSecurityGroupInner>> networkSecurityGroupInners =
+                context.securityGroupStates.stream()
+                        .map(securityGroupState -> {
+                            String securityGroupName = securityGroupState.name;
+                            final String msg = "Getting Azure Security Group [" +
+                                    securityGroupName + "].";
+                            return AzureSecurityGroupUtils
+                                    .getSecurityGroup(this, azureSecurityGroupClient,
+                                            AzureUtils.getResourceGroupName(securityGroupState.id),
+                                            securityGroupName, msg);
+                        })
+                        .collect(Collectors.toList());
+
+        return DeferredResult.allOf(networkSecurityGroupInners)
+                .thenApply(networkSecurityGroupInnerList -> {
+                    context.securityGroupInners = networkSecurityGroupInnerList;
+                    return context;
+                });
     }
 
     /**
@@ -627,6 +706,12 @@ public class AzureLoadBalancerService extends StatelessService {
             loadBalancingRule.withBackendAddressPool(new SubResource()
                     .withId(context.loadBalancerAzure.backendAddressPools().get(0).id()));
 
+            //Converting HTTP and HTTPS to TCP to send to Azure as Azure only supports TCP or UCP
+            if (StringUtils.equalsIgnoreCase("HTTP", routes.protocol) ||
+                    StringUtils.equalsIgnoreCase("HTTPS", routes.protocol)) {
+                routes.protocol = TransportProtocol.TCP.toString();
+            }
+
             boolean isTcpProtocol = StringUtils
                     .equalsIgnoreCase(TransportProtocol.TCP.toString(), routes.protocol);
             boolean isUdpProtocol = StringUtils
@@ -670,6 +755,10 @@ public class AzureLoadBalancerService extends StatelessService {
      */
     private DeferredResult<AzureLoadBalancerContext> addBackendPoolMembers(
             AzureLoadBalancerContext context) {
+        final String msg = "Adding backendpool members to [" + context.loadBalancerAzure.name()
+                + "] in resource " + "group [" + context.resourceGroupName + "].";
+        logInfo(() -> msg);
+
         if (CollectionUtils.isEmpty(context.networkInterfaceInners)) {
             return DeferredResult.completed(context);
         }
@@ -683,6 +772,95 @@ public class AzureLoadBalancerService extends StatelessService {
                     context.networkInterfaceInners = networkInterfaceInner;
                     return context;
                 });
+    }
+
+    /**
+     * Update isolation security group with rule to allow traffic on load balancing ports for VMs
+     * being load balanced
+     *
+     * @param context Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> updateSecurityGroupRules(
+            AzureLoadBalancerContext context) {
+        if (CollectionUtils.isEmpty(context.securityGroupInners)) {
+            return DeferredResult.completed(context);
+        }
+        //Add security group firewall rules to allow traffic to flow through load balancer routes
+        updateSecurityRules(context);
+
+        NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
+                .getNetworkManagementClientImpl().networkSecurityGroups();
+
+        List<DeferredResult<NetworkSecurityGroupInner>> networkSecurityGroupInnerList = context
+                .securityGroupInners
+                .stream().map(networkSecurityGroupInner -> {
+                    final String msg =
+                            "Updating security group rules for [" + networkSecurityGroupInner.name()
+                                    + "] for load balancer ["
+                                    + context.loadBalancerStateExpanded.name + "].";
+                    logInfo(() -> msg);
+                    return AzureSecurityGroupUtils
+                            .createOrUpdateSecurityGroup(this, azureSecurityGroupClient,
+                                    AzureUtils.getResourceGroupName(networkSecurityGroupInner.id()),
+                                    networkSecurityGroupInner.name(), networkSecurityGroupInner,
+                                    msg);
+                })
+                .collect(Collectors.toList());
+
+        return DeferredResult.allOf(networkSecurityGroupInnerList).thenApply(ignored -> context);
+    }
+
+    /**
+     * Build a list of Security group firewall rules to allow traffic through load balancer routes
+     *
+     * @param context Azure load balancer context
+     */
+    private void updateSecurityRules(AzureLoadBalancerContext context) {
+        List<SecurityRuleInner> securityRuleInnerList = Lists.newArrayList();
+
+        final AtomicInteger priority = new AtomicInteger(2000);
+        context.loadBalancerAzure.loadBalancingRules().forEach(loadBalancingRuleInner -> {
+            SecurityRuleInner securityRuleInner = new SecurityRuleInner();
+            securityRuleInner.withName(String.format("%s-sg-rule", loadBalancingRuleInner.name()));
+            securityRuleInner.withDirection(SecurityRuleDirection.INBOUND);
+            securityRuleInner.withAccess(SecurityRuleAccess.ALLOW);
+            securityRuleInner.withPriority(priority.getAndIncrement());
+            securityRuleInner.withProtocol(new SecurityRuleProtocol(loadBalancingRuleInner
+                    .protocol().toString()));
+            securityRuleInner.withSourcePortRange(SecurityGroupService.ANY);
+            securityRuleInner.withSourceAddressPrefix(SecurityGroupService.ANY);
+            securityRuleInner.withDestinationPortRange(Integer.toString(loadBalancingRuleInner
+                    .backendPort()));
+            securityRuleInner.withDestinationAddressPrefix(getDestinationAddressPrefix(context));
+
+            securityRuleInnerList.add(securityRuleInner);
+        });
+
+        //update rules
+        context.securityGroupInners.forEach(securityGroupInner -> {
+            if (securityGroupInner != null) {
+                securityGroupInner.securityRules().addAll(securityRuleInnerList);
+                securityGroupInner.withSecurityRules(securityGroupInner.securityRules());
+            }
+        });
+    }
+
+    /**
+     * Collect the list of IPs for the VMs being load balanced
+     *
+     * @param context Azure load balancer context
+     * @return comma separated list of all IPs being load balanced
+     */
+    private String getDestinationAddressPrefix(AzureLoadBalancerContext context) {
+        List<NetworkInterfaceIPConfigurationInner> ipConfigs = Lists.newArrayList();
+        if (context.networkInterfaceInners != null) {
+            context.networkInterfaceInners.forEach(
+                    networkInterfaceInner -> ipConfigs.addAll(networkInterfaceInner
+                            .ipConfigurations()));
+        }
+        return ipConfigs.stream().map(NetworkInterfaceIPConfigurationInner::privateIPAddress)
+                .collect(Collectors.joining(","));
     }
 
     /**
