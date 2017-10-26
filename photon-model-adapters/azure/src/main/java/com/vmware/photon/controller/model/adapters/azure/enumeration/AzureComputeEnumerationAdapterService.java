@@ -455,8 +455,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .clone(context.parentCompute.description);
         cd.supportedChildren = new ArrayList<>();
         cd.supportedChildren.add(ComputeType.VM_GUEST.toString());
-        cd.documentSelfLink = null;
         cd.id = r.regionId;
+        cd.documentSelfLink = generateRegionComputeDescriptionLinkId(r.regionId, context.request.endpointLink);
         cd.name = r.name;
         cd.regionId = r.regionId;
         cd.endpointLink = context.request.endpointLink;
@@ -470,7 +470,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
         cd.customProperties.put(SOURCE_TASK_LINK,
                 ResourceEnumerationTaskService.FACTORY_LINK);
-        cd.documentSelfLink = cd.id;
 
         return cd;
     }
@@ -479,7 +478,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.name = regionInfo.name;
         computeState.id = regionInfo.regionId;
+
         computeState.adapterManagementReference = context.parentCompute.adapterManagementReference;
+        computeState.instanceAdapterReference = context.parentCompute.description.instanceAdapterReference;
+        computeState.statsAdapterReference = context.parentCompute.description.statsAdapterReference;
         computeState.parentLink = context.parentCompute.documentSelfLink;
         computeState.resourcePoolLink = context.request.resourcePoolLink;
         computeState.endpointLink = context.request.endpointLink;
@@ -487,9 +489,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeState.endpointLinks = new HashSet<>();
         }
         computeState.endpointLinks.add(context.request.endpointLink);
+
+        String descriptionLinkId = generateRegionComputeDescriptionLinkId(regionInfo.regionId, context.request.endpointLink);
         computeState.descriptionLink = UriUtils
-                .buildUriPath(ComputeDescriptionService.FACTORY_LINK,
-                        context.computeDescriptionIds.get(regionInfo.regionId));
+                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, descriptionLinkId);
         computeState.type = ComputeType.VM_HOST;
         computeState.regionId = regionInfo.regionId;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
@@ -500,11 +503,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         if (computeState.customProperties == null) {
             computeState.customProperties = new HashMap<>();
         }
-        computeState.customProperties.put(SOURCE_TASK_LINK,
-                ResourceEnumerationTaskService.FACTORY_LINK);
+        computeState.customProperties
+                .put(SOURCE_TASK_LINK, ResourceEnumerationTaskService.FACTORY_LINK);
 
         computeState.tenantLinks = context.parentCompute.tenantLinks;
         return computeState;
+    }
+
+    private String generateRegionComputeDescriptionLinkId(String regionId, String endpointLink) {
+        return UUID.nameUUIDFromBytes((regionId + endpointLink).getBytes()).toString();
     }
 
     /**
