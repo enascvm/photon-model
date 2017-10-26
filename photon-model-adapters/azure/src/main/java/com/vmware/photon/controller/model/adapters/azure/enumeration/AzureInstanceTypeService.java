@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
-
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
@@ -47,35 +45,42 @@ public class AzureInstanceTypeService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_INSTANCE_TYPE_ADAPTER;
 
+    /**
+     * The end-point link for which to return instance types. Must be passed as GET request
+     * parameter.
+     */
     public static final String URI_PARAM_ENDPOINT = "endpoint";
 
+    /**
+     * The region id for which to return instance types. Must be passed as GET request parameter.
+     */
     public static final String URI_PARAM_REGION_ID = "regionId";
 
-    private static class Context implements AutoCloseable {
+    private static class AzureInstanceTypeContext implements AutoCloseable {
 
-        final StatelessService service;
+        final AzureInstanceTypeService service;
         final String endpointLink;
+        final String regionId;
 
         // Extracted from endpointLink {{
         EndpointState endpointState;
-        String regionId;
-        AuthCredentialsServiceState endpointAuthState;
-        // }}
-
         AzureSdkClients azureSdkClients;
+        // }}
 
         /**
          * The result object that's served by this service.
          */
         InstanceTypeList instanceTypesList = new InstanceTypeList();
 
-        Context(StatelessService service, String endpointLink, String regionId) {
+        AzureInstanceTypeContext(AzureInstanceTypeService service, String endpointLink,
+                String regionId) {
             this.service = service;
+
             this.endpointLink = endpointLink;
             this.regionId = regionId;
         }
 
-        public final DeferredResult<Context> populate() {
+        public final DeferredResult<AzureInstanceTypeContext> populate() {
 
             return DeferredResult.completed(this)
                     .thenCompose(this::getEndpointState)
@@ -83,45 +88,34 @@ public class AzureInstanceTypeService extends StatelessService {
                     .thenCompose(this::loadInstanceTypes);
         }
 
-        protected DeferredResult<Context> getEndpointState(Context ctx) {
+        DeferredResult<AzureInstanceTypeContext> getEndpointState(
+                AzureInstanceTypeContext ctx) {
 
             Operation op = Operation.createGet(ctx.service, ctx.endpointLink);
 
             return ctx.service
                     .sendWithDeferredResult(op, EndpointState.class)
-                    .thenCompose(state -> {
+                    .thenApply(state -> {
                         ctx.endpointState = state;
-
-                        if (ctx.regionId == null) {
-                            ctx.regionId = state.endpointProperties.get(REGION_KEY);
-                        }
-
-                        if (ctx.regionId == null) {
-                            return DeferredResult.failed(new IllegalArgumentException("Unable to determine regionId"));
-                        }
-
-                        return DeferredResult.completed(ctx);
+                        return ctx;
                     });
         }
 
-        protected DeferredResult<Context> getEndpointAuthState(Context ctx) {
+        DeferredResult<AzureInstanceTypeContext> getEndpointAuthState(
+                AzureInstanceTypeContext ctx) {
 
             Operation op = Operation.createGet(ctx.service, ctx.endpointState.authCredentialsLink);
 
             return ctx.service
                     .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
-                    .thenApply(state -> {
-                        ctx.endpointAuthState = state;
-
+                    .thenApply(authState -> {
                         ctx.azureSdkClients = new AzureSdkClients(
-                                ((AzureInstanceTypeService) ctx.service).executorService,
-                                ctx.endpointAuthState);
-
+                                ctx.service.executorService, authState);
                         return ctx;
                     });
         }
 
-        protected DeferredResult<Context> loadInstanceTypes(Context ctx) {
+        DeferredResult<AzureInstanceTypeContext> loadInstanceTypes(AzureInstanceTypeContext ctx) {
 
             VirtualMachineSizesInner virtualMachineSizes = ctx.azureSdkClients
                     .getComputeManager()
@@ -131,33 +125,32 @@ public class AzureInstanceTypeService extends StatelessService {
             String msg = "Getting Azure instance types for ["
                     + ctx.regionId + "/" + ctx.endpointState.name + "] Endpoint";
 
-            AzureDeferredResultServiceCallback<List<VirtualMachineSizeInner>> handler =
-                    new Default<>(ctx.service, msg);
+            AzureDeferredResultServiceCallback<List<VirtualMachineSizeInner>> handler = new Default<>(
+                    ctx.service, msg);
 
             virtualMachineSizes.listAsync(ctx.regionId, handler);
 
-            return handler.toDeferredResult()
-                    .thenApply(vmSizes -> {
+            return handler.toDeferredResult().thenApply(vmSizes -> {
 
-                        ctx.instanceTypesList.tenantLinks = ctx.endpointState.tenantLinks;
+                ctx.instanceTypesList.tenantLinks = ctx.endpointState.tenantLinks;
 
-                        ctx.instanceTypesList.instanceTypes = vmSizes.stream()
-                                .map(vmSize -> {
-                                    InstanceType instanceType = new InstanceType(
-                                            vmSize.name(), vmSize.name());
+                ctx.instanceTypesList.instanceTypes = vmSizes.stream()
+                        .map(vmSize -> {
+                            InstanceType instanceType = new InstanceType(
+                                    vmSize.name(), vmSize.name());
 
-                                    instanceType.cpuCount = vmSize.numberOfCores();
-                                    instanceType.memoryInMB = vmSize.memoryInMB();
-                                    instanceType.bootDiskSizeInMB = vmSize.osDiskSizeInMB();
-                                    instanceType.dataDiskSizeInMB = vmSize.resourceDiskSizeInMB();
-                                    instanceType.dataDiskMaxCount = vmSize.maxDataDiskCount();
+                            instanceType.cpuCount = vmSize.numberOfCores();
+                            instanceType.memoryInMB = vmSize.memoryInMB();
+                            instanceType.bootDiskSizeInMB = vmSize.osDiskSizeInMB();
+                            instanceType.dataDiskSizeInMB = vmSize.resourceDiskSizeInMB();
+                            instanceType.dataDiskMaxCount = vmSize.maxDataDiskCount();
 
-                                    return instanceType;
-                                })
-                                .collect(Collectors.toList());
+                            return instanceType;
+                        })
+                        .collect(Collectors.toList());
 
-                        return ctx;
-                    });
+                return ctx;
+            });
         }
 
         @Override
@@ -194,7 +187,7 @@ public class AzureInstanceTypeService extends StatelessService {
 
         Map<String, String> queryParams = UriUtils.parseUriQueryParams(op.getUri());
 
-        String endpointLink = queryParams.get(URI_PARAM_ENDPOINT);
+        final String endpointLink = queryParams.get(URI_PARAM_ENDPOINT);
 
         if (endpointLink == null || endpointLink.isEmpty()) {
             op.fail(new IllegalArgumentException(
@@ -202,9 +195,16 @@ public class AzureInstanceTypeService extends StatelessService {
             return;
         }
 
-        String regionId = queryParams.get(URI_PARAM_REGION_ID);
+        final String regionId = queryParams.get(URI_PARAM_REGION_ID);
 
-        Context context = new Context(this, endpointLink, regionId);
+        if (regionId == null || regionId.isEmpty()) {
+            op.fail(new IllegalArgumentException(
+                    "'" + URI_PARAM_REGION_ID + "' query param is required"));
+            return;
+        }
+
+        AzureInstanceTypeContext context = new AzureInstanceTypeContext(
+                this, endpointLink, regionId);
 
         final String msg = "Instance types enumeration";
 
@@ -212,7 +212,6 @@ public class AzureInstanceTypeService extends StatelessService {
 
         context.populate().whenComplete((ignoreCtx, err) -> {
             try {
-                // NOTE: In case of error 'ignoreCtx' is null so use passed context!
                 if (err == null) {
                     logFine(() -> msg + ": COMPLETED");
                     op.setBodyNoCloning(context.instanceTypesList).complete();
@@ -222,9 +221,9 @@ public class AzureInstanceTypeService extends StatelessService {
                     op.fail(finalErr);
                 }
             } finally {
+                // NOTE: In case of error 'ignoreCtx' is null so use passed context!
                 context.close();
             }
         });
     }
-
 }
