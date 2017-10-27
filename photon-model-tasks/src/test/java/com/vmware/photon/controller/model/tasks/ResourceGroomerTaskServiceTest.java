@@ -123,12 +123,12 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
             return;
         }
 
-        HashSet<String> endpointLinksTenant1 = new HashSet<>();
+        Set<String> endpointLinksTenant1 = new HashSet<>();
         endpointLinksTenant1.add(VALID_ENDPOINT_LINK_1);
         endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
         endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_2);
 
-        HashSet<String> endpointLinksTenant2 = new HashSet<>();
+        Set<String> endpointLinksTenant2 = new HashSet<>();
         endpointLinksTenant2.add(VALID_ENDPOINT_LINK_2);
         endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_1);
         endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_2);
@@ -212,16 +212,16 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
             return;
         }
 
-        HashSet<String> invalidEndpointLinksTenant1 = new HashSet<>();
+        Set<String> invalidEndpointLinksTenant1 = new HashSet<>();
         invalidEndpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
         invalidEndpointLinksTenant1.add(INVALID_ENDPOINT_LINK_2);
 
-        HashSet<String> endpointLinksTenant1 = new HashSet<>();
+        Set<String> endpointLinksTenant1 = new HashSet<>();
         endpointLinksTenant1.add(VALID_ENDPOINT_LINK_1);
         endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
         endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_2);
 
-        HashSet<String> endpointLinksTenant2 = new HashSet<>();
+        Set<String> endpointLinksTenant2 = new HashSet<>();
         endpointLinksTenant2.add(VALID_ENDPOINT_LINK_2);
         endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_1);
         endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_2);
@@ -282,7 +282,7 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
 
         Operation postResponse = this.host.waitForResponse(postOp);
 
-        assertEquals( 400, postResponse.getStatusCode());
+        assertEquals(400, postResponse.getStatusCode());
     }
 
     /**
@@ -410,6 +410,6 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
         assertEquals(deletedDocumentCount, stats.entries.get(ResourceGroomerTaskService
                 .STAT_NAME_DOCUMENTS_DELETED).latestValue, 0);
         assertEquals(patchedDocumentCount, stats.entries.get(ResourceGroomerTaskService
-                .STAT_NAME_DOCUMENTS_PATCHED).latestValue, 0);
+                .STAT_NAME_ENDPOINT_LINKS_PATCHED).latestValue, 0);
     }
 }

@@ -44,6 +44,7 @@ public class RouterService extends StatefulService {
          * Link to the endpoint the router belongs to.
          */
         @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.REQUIRED)
+        @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String endpointLink;
 
         /**

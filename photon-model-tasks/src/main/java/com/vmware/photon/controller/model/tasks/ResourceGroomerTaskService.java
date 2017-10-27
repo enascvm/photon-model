@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -29,10 +31,13 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -71,8 +76,10 @@ public class ResourceGroomerTaskService
     public static final int QUERY_RESULT_LIMIT = QueryUtils.MAX_RESULT_LIMIT;
     public static final int OPERATION_BATCH_SIZE = PhotonModelConstants.OPERATION_BATCH_SIZE;
 
+    public static final String EMPTY_STRING = "";
     public static final String STAT_NAME_DOCUMENTS_DELETED = "documentsDeletedCount";
-    public static final String STAT_NAME_DOCUMENTS_PATCHED = "documentsPatchedCount";
+    public static final String STAT_NAME_ENDPOINT_LINKS_PATCHED = "endpointLinksPatchedCount";
+    public static final String STAT_NAME_ENDPOINT_LINK_PATCHED = "endpointLinkPatchedCount";
     public static final String STAT_UNIT_COUNT = "count";
 
     public static final String COMPUTE_STATE_DOCUMENT_KIND = Utils.buildKind(ComputeState.class);
@@ -88,6 +95,9 @@ public class ResourceGroomerTaskService
     public static final String LOAD_BALANCER_DOCUMENT_KIND = Utils.buildKind(LoadBalancerState.class);
     public static final String STORAGE_DESCRIPTION_DOCUMENT_KIND = Utils.buildKind(
             StorageDescription.class);
+    public static final String RESOURCE_GROUP_DOCUMENT_KIND = Utils.buildKind(ResourceGroupState.class);
+    public static final String IMAGE_STATE_KIND = Utils.buildKind(ImageState.class);
+    public static final String ROUTER_STATE_KIND = Utils.buildKind(RouterState.class);
 
     /**
      * List holding document kinds to check for deletion.
@@ -101,7 +111,10 @@ public class ResourceGroomerTaskService
             SECURITY_GROUP_STATE_DOCUMENT_KIND,
             SUBNET_STATE_DOCUMENT_KIND,
             LOAD_BALANCER_DOCUMENT_KIND,
-            STORAGE_DESCRIPTION_DOCUMENT_KIND
+            STORAGE_DESCRIPTION_DOCUMENT_KIND,
+            RESOURCE_GROUP_DOCUMENT_KIND,
+            IMAGE_STATE_KIND,
+            ROUTER_STATE_KIND
     );
 
     public enum SubStage {
@@ -173,7 +186,7 @@ public class ResourceGroomerTaskService
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public Set<String> tenantLinks;
 
-        // Invalid endpointLinks.
+        // Valid endpointLinks.
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public Set<String> validEndpointLinks;
 
@@ -181,13 +194,21 @@ public class ResourceGroomerTaskService
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public Set<String> documentsToBeDeletedLinks;
 
-        // Map of stale documents to be disassociated by endpointLink.
+        // Map of endpointLinks by stale document link.
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public Map<String, Set<String>> endpointLinksByDocumentsToBeDisassociated;
+
+        // Map of endpointLink to be PATCHed by document link.
+        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
+        public Map<String, String> endpointLinkToBePatchedByDocumentLinks;
 
         // Map of all documentLinks with their associated endpointLinks.
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public Map<String, Set<String>> endpointLinksByDocumentLinks;
+
+        // Map of all documentLinks with their associated endpointLink.
+        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
+        public Map<String, String> endpointLinkByDocumentLinks;
 
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public String nextPageLink;
@@ -196,14 +217,19 @@ public class ResourceGroomerTaskService
         public int documentsDeletedCount;
 
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
-        public int documentsPatchedCount;
+        public int endpointLinksPatchedCount;
+
+        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
+        public int endpointLinkPatchedCount;
 
         public EndpointResourceDeletionRequest() {
             this.subStage = SubStage.QUERY_DOCUMENT_LINKS_AND_ASSOCIATED_ENDPOINT_LINKS;
             this.validEndpointLinks = new HashSet<>();
             this.documentsToBeDeletedLinks = new HashSet<>();
+            this.endpointLinkToBePatchedByDocumentLinks = new ConcurrentHashMap<>();
             this.endpointLinksByDocumentsToBeDisassociated = new ConcurrentHashMap<>();
             this.endpointLinksByDocumentLinks = new ConcurrentHashMap<>();
+            this.endpointLinkByDocumentLinks = new ConcurrentHashMap<>();
         }
     }
 
@@ -231,12 +257,16 @@ public class ResourceGroomerTaskService
 
         currentTask.validEndpointLinks = patchBody.validEndpointLinks;
         currentTask.documentsToBeDeletedLinks = patchBody.documentsToBeDeletedLinks;
+        currentTask.endpointLinkToBePatchedByDocumentLinks = patchBody
+                .endpointLinkToBePatchedByDocumentLinks;
         currentTask.endpointLinksByDocumentsToBeDisassociated = patchBody
                 .endpointLinksByDocumentsToBeDisassociated;
         currentTask.endpointLinksByDocumentLinks = patchBody.endpointLinksByDocumentLinks;
+        currentTask.endpointLinkByDocumentLinks = patchBody.endpointLinkByDocumentLinks;
         currentTask.nextPageLink = patchBody.nextPageLink;
         currentTask.documentsDeletedCount = patchBody.documentsDeletedCount;
-        currentTask.documentsPatchedCount = patchBody.documentsPatchedCount;
+        currentTask.endpointLinksPatchedCount = patchBody.endpointLinksPatchedCount;
+        currentTask.endpointLinkPatchedCount = patchBody.endpointLinkPatchedCount;
 
         super.updateState(currentTask, patchBody);
     }
@@ -292,7 +322,7 @@ public class ResourceGroomerTaskService
             collectDocumentsToBeDeletedAndDisassociated(task, SubStage.DELETE_OR_DISASSOCIATE_STALE_DOCUMENTS);
             break;
         case DELETE_OR_DISASSOCIATE_STALE_DOCUMENTS:
-            deleteStaleDocuments(task, SubStage.GET_NEXT_PAGE_OR_FINISH);
+            deleteDisassociatePatchStaleDocuments(task, SubStage.GET_NEXT_PAGE_OR_FINISH);
             break;
         case FINISHED:
             setStats(task);
@@ -320,10 +350,8 @@ public class ResourceGroomerTaskService
 
         QueryTask queryTask = buildQueryTask(task);
 
-        Operation.createPost(this.getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setReferer(this.getUri())
-                .setBody(queryTask)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((response, e) -> {
                     if (e != null) {
                         task.failureMessage = e.getMessage();
                         task.subStage = SubStage.FAILED;
@@ -331,11 +359,9 @@ public class ResourceGroomerTaskService
                         return;
                     }
 
-                    QueryTask response = o.getBody(QueryTask.class);
-
                     if (response.results != null && response.results.documents != null) {
                         populateEndpointLinksByDocumentLinks(response.results.documents,
-                                task.endpointLinksByDocumentLinks);
+                                task.endpointLinksByDocumentLinks, task.endpointLinkByDocumentLinks);
                     }
 
                     task.nextPageLink = null;
@@ -346,7 +372,7 @@ public class ResourceGroomerTaskService
 
                     task.subStage = next;
                     sendSelfPatch(task);
-                }).sendWith(this);
+                });
     }
 
     /**
@@ -362,8 +388,10 @@ public class ResourceGroomerTaskService
         }
 
         task.endpointLinksByDocumentLinks.clear();
+        task.endpointLinkByDocumentLinks.clear();
         task.validEndpointLinks.clear();
         task.documentsToBeDeletedLinks.clear();
+        task.endpointLinkToBePatchedByDocumentLinks.clear();
         task.endpointLinksByDocumentsToBeDisassociated.clear();
 
         Operation.createGet(this.getHost(), task.nextPageLink)
@@ -380,7 +408,7 @@ public class ResourceGroomerTaskService
 
                     if (response.results != null && response.results.documents != null) {
                         populateEndpointLinksByDocumentLinks(response.results.documents,
-                                task.endpointLinksByDocumentLinks);
+                                task.endpointLinksByDocumentLinks, task.endpointLinkByDocumentLinks);
                     }
 
                     task.nextPageLink = null;
@@ -401,12 +429,13 @@ public class ResourceGroomerTaskService
     private void collectValidEndpoints(EndpointResourceDeletionRequest task,
             SubStage next) {
 
-        // Collect endpointLinks for all documents.
+        // Collect endpointLink and endpointLinks for all documents.
         Set<String> currentEndpointLinks = new HashSet<>();
         task.endpointLinksByDocumentLinks.values().stream()
                 .forEach(links -> {
                     currentEndpointLinks.addAll(links);
                 });
+        currentEndpointLinks.addAll(task.endpointLinkByDocumentLinks.values());
 
         if (currentEndpointLinks.isEmpty()) {
             task.subStage = next;
@@ -416,18 +445,14 @@ public class ResourceGroomerTaskService
 
         QueryTask queryTask = buildQueryTask(task, true, currentEndpointLinks);
 
-        Operation.createPost(this.getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask)
-                .setReferer(this.getUri())
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((response, e) -> {
                     if (e != null) {
                         task.failureMessage = e.getMessage();
                         task.subStage = SubStage.FAILED;
                         sendSelfPatch(task);
                         return;
                     }
-
-                    QueryTask response = o.getBody(QueryTask.class);
 
                     if (response.results != null && response.results.documentLinks != null) {
                         task.validEndpointLinks.addAll(response.results.documentLinks);
@@ -441,7 +466,7 @@ public class ResourceGroomerTaskService
 
                     task.subStage = next;
                     sendSelfPatch(task);
-                }).sendWith(this);
+                });
     }
 
     /**
@@ -490,27 +515,45 @@ public class ResourceGroomerTaskService
 
         task.endpointLinksByDocumentLinks.entrySet().stream()
                 .forEach(entry -> {
-                    // If endpointLinks set for a documentLink is empty, that means there are no
-                    // endpoints associated with it, so we can directly collect it for deletion.
-                    // Otherwise, find the invalid endpointLinks for a document by removing all
-                    // valid endpointLinks.
-                    // If all links in a documents endpointLinks are invalid, we will disassociate
+                    // If endpointLinks set for a documentLink is empty, check the endpointLink for
+                    // that document. If the document has a null/empty/invalid endpointLink,
+                    // delete the document.
+                    // Otherwise, if endpointLinks set is not empty, find the invalid endpointLinks
+                    // for a document by removing all valid endpointLinks from the set.
+                    // If all links in a documents endpointLinks set are invalid, we will disassociate
                     // all of them and later be able to delete that document. So instead, directly
                     // collect that document for deletion.
                     // Otherwise, collect the document for disassociation if one or some of it's
-                    // endpointLinks are invalid.
+                    // endpointLinks are invalid. At the same time, check if the endpointLink for
+                    // this document exists and is valid. If it is not, then we PATCH the document
+                    // with one of the remaining valid endpointLinks.
                     if (entry.getValue().isEmpty()) {
-                        task.documentsToBeDeletedLinks.add(entry.getKey());
+                        String endpointLink = task.endpointLinkByDocumentLinks.get(entry.getKey());
+                        if (endpointLink == null) {
+                            task.documentsToBeDeletedLinks.add(entry.getKey());
+                        } else if (endpointLink.equals(EMPTY_STRING)
+                                    || !endpointLink.equals(EMPTY_STRING)
+                                    && !task.validEndpointLinks.contains(endpointLink)) {
+                            task.documentsToBeDeletedLinks.add(entry.getKey());
+                        }
                     } else {
                         Set<String> endpointLinks = new HashSet<>(entry.getValue());
-
-                        endpointLinks.removeAll(task.validEndpointLinks);
-
-                        if (endpointLinks.size() == entry.getValue().size()) {
+                        endpointLinks.removeIf(link -> !task.validEndpointLinks.contains(link));
+                        if (endpointLinks.isEmpty()) {
                             task.documentsToBeDeletedLinks.add(entry.getKey());
                         } else if (!endpointLinks.isEmpty()) {
-                            task.endpointLinksByDocumentsToBeDisassociated
-                                    .put(entry.getKey(), endpointLinks);
+                            entry.getValue().removeAll(endpointLinks);
+                            if (!entry.getValue().isEmpty()) {
+                                task.endpointLinksByDocumentsToBeDisassociated
+                                        .put(entry.getKey(), entry.getValue());
+                            }
+                            String endpointLink = task.endpointLinkByDocumentLinks
+                                    .get(entry.getKey());
+                            if (endpointLink != null && !endpointLinks.isEmpty() &&
+                                    !endpointLinks.contains(endpointLink)) {
+                                task.endpointLinkToBePatchedByDocumentLinks
+                                        .put(entry.getKey(), endpointLinks.iterator().next());
+                            }
                         }
                     }
                 });
@@ -524,7 +567,7 @@ public class ResourceGroomerTaskService
      * Disassociate documents if they have invalid endpointLinks by sending a collection update
      * patch.
      */
-    private void deleteStaleDocuments(EndpointResourceDeletionRequest task,
+    private void deleteDisassociatePatchStaleDocuments(EndpointResourceDeletionRequest task,
             SubStage next) {
 
         if (task.documentsToBeDeletedLinks.isEmpty()
@@ -546,10 +589,8 @@ public class ResourceGroomerTaskService
                 .forEach(entry -> {
                     Map<String, Collection<Object>> itemsToRemove = Collections.singletonMap
                             (ResourceState.FIELD_NAME_ENDPOINT_LINKS, new ArrayList<>(entry.getValue()));
-                    Map<String, Collection<Object>> itemsToAdd = Collections.singletonMap
-                            (ResourceState.FIELD_NAME_ENDPOINT_LINKS, Collections.EMPTY_LIST);
                     ServiceStateCollectionUpdateRequest request
-                            = ServiceStateCollectionUpdateRequest.create(itemsToAdd, itemsToRemove);
+                            = ServiceStateCollectionUpdateRequest.create(null, itemsToRemove);
                     deletePatchOperations.add(Operation.createPatch(this.getHost(), entry.getKey())
                             .setBody(request)
                             .setReferer(this.getUri()));
@@ -557,20 +598,34 @@ public class ResourceGroomerTaskService
                             entry.getValue(), entry.getKey());
                 });
 
+        task.endpointLinkToBePatchedByDocumentLinks.entrySet().stream()
+                .forEach(entry -> {
+                    ComputeState computeState = new ComputeState();
+                    computeState.endpointLink = entry.getValue();
+                    deletePatchOperations.add(Operation.createPatch(this.getHost(), entry.getKey())
+                            .setReferer(this.getUri())
+                            .setBody(computeState));
+                    logInfo("Changing endpointLink to %s from resource: %s",
+                            entry.getValue(), entry.getKey());
+                });
+
         logInfo("Deleting stale documents that have invalid endpointLinks. [documentCount=%s]",
                 task.documentsToBeDeletedLinks.size());
-        logInfo("Patching stale documents that have invalid endpointLinks. [documentCount=%s]",
+        logInfo("Patching stale documents that have invalid endpointLinks list. [documentCount=%s]",
                 task.endpointLinksByDocumentsToBeDisassociated.size());
+        logInfo("Patching stale documents that have invalid endpointLink. [documentCount=%s]",
+                task.endpointLinkToBePatchedByDocumentLinks.size());
 
         task.documentsDeletedCount += task.documentsToBeDeletedLinks.size();
-        task.documentsPatchedCount += task.endpointLinksByDocumentsToBeDisassociated.size();
+        task.endpointLinksPatchedCount += task.endpointLinksByDocumentsToBeDisassociated.size();
+        task.endpointLinkPatchedCount += task.endpointLinkToBePatchedByDocumentLinks.size();
 
         OperationJoin.create(deletePatchOperations)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        task.failureMessage = e.get(0).getMessage();
+                        task.failureMessage = e.values().iterator().next().getMessage();
                         task.subStage = SubStage.FAILED;
-                        sendSelfPatch(task);
+                        sendSelfFailurePatch(task, task.failureMessage);
                         return;
                     }
 
@@ -627,7 +682,8 @@ public class ResourceGroomerTaskService
      * to store selfLink and endpointLink.
      */
     private static void populateEndpointLinksByDocumentLinks(Map<String, Object> documents,
-            Map<String, Set<String>> endpointLinksByDocumentLinks) {
+            Map<String, Set<String>> endpointLinksByDocumentLinks,
+            Map<String, String> endpointLinkByDocumentLinks) {
 
         documents.values().stream()
                 .forEach(document -> {
@@ -640,42 +696,101 @@ public class ResourceGroomerTaskService
                             endpointLinks.addAll(state.endpointLinks);
                         }
                         endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
                     } else if (doc.documentKind.equals(DISK_STATE_DOCUMENT_KIND)) {
                         DiskState state = Utils.fromJson(document, DiskState.class);
                         if (state.endpointLinks != null) {
                             endpointLinks.addAll(state.endpointLinks);
                         }
                         endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
                     } else if (doc.documentKind.equals(COMPUTE_DESCRIPTION_DOCUMENT_KIND)) {
                         ComputeDescription state = Utils.fromJson(document, ComputeDescription.class);
                         if (state.endpointLinks != null) {
                             endpointLinks.addAll(state.endpointLinks);
                         }
                         endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
                     } else if (doc.documentKind.equals(NETWORK_STATE_DOCUMENT_KIND)) {
                         NetworkState state = Utils.fromJson(document, NetworkState.class);
                         if (state.endpointLinks != null) {
                             endpointLinks.addAll(state.endpointLinks);
                         }
                         endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
                     } else if (doc.documentKind.equals(NETWORK_INTERFACE_STATE_DOCUMENT_KIND)) {
                         NetworkInterfaceState state = Utils.fromJson(document, NetworkInterfaceState.class);
                         if (state.endpointLinks != null) {
                             endpointLinks.addAll(state.endpointLinks);
                         }
                         endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
                     } else if (doc.documentKind.equals(SECURITY_GROUP_STATE_DOCUMENT_KIND)) {
                         SecurityGroupState state = Utils.fromJson(document, SecurityGroupState.class);
                         if (state.endpointLinks != null) {
                             endpointLinks.addAll(state.endpointLinks);
                         }
                         endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
                     } else if (doc.documentKind.equals(SUBNET_STATE_DOCUMENT_KIND)) {
                         SubnetState state = Utils.fromJson(document, SubnetState.class);
                         if (state.endpointLinks != null) {
                             endpointLinks.addAll(state.endpointLinks);
                         }
                         endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
+                    }  else if (doc.documentKind.equals(LOAD_BALANCER_DOCUMENT_KIND)) {
+                        LoadBalancerState state = Utils.fromJson(document, LoadBalancerState.class);
+                        if (state.endpointLinks != null) {
+                            endpointLinks.addAll(state.endpointLinks);
+                        }
+                        endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
+                    } else if (doc.documentKind.equals(STORAGE_DESCRIPTION_DOCUMENT_KIND)) {
+                        StorageDescription state = Utils.fromJson(document, StorageDescription.class);
+                        if (state.endpointLinks != null) {
+                            endpointLinks.addAll(state.endpointLinks);
+                        }
+                        endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
+                    } else if (doc.documentKind.equals(RESOURCE_GROUP_DOCUMENT_KIND)) {
+                        ResourceGroupState state = Utils.fromJson(document, ResourceGroupState.class);
+                        if (state.endpointLinks != null) {
+                            endpointLinks.addAll(state.endpointLinks);
+                        }
+                        endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        if (state.customProperties != null && state.customProperties
+                                .get(CUSTOM_PROP_ENDPOINT_LINK) != null) {
+                            endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                    state.customProperties.get(CUSTOM_PROP_ENDPOINT_LINK));
+                        } else {
+                            endpointLinkByDocumentLinks.put(state.documentSelfLink, EMPTY_STRING);
+                        }
+                    } else if (doc.documentKind.equals(IMAGE_STATE_KIND)) {
+                        ImageState state = Utils.fromJson(document, ImageState.class);
+                        if (state.endpointLinks != null) {
+                            endpointLinks.addAll(state.endpointLinks);
+                        }
+                        endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
+                    } else if (doc.documentKind.equals(ROUTER_STATE_KIND)) {
+                        RouterState state = Utils.fromJson(document, RouterState.class);
+                        if (state.endpointLinks != null) {
+                            endpointLinks.addAll(state.endpointLinks);
+                        }
+                        endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
+                        endpointLinkByDocumentLinks.put(state.documentSelfLink,
+                                state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
                     }
                 });
     }
@@ -686,7 +801,9 @@ public class ResourceGroomerTaskService
     private void setStats(EndpointResourceDeletionRequest task) {
         PhotonModelUtils.setStat(this, STAT_NAME_DOCUMENTS_DELETED, STAT_UNIT_COUNT,
                 task.documentsDeletedCount);
-        PhotonModelUtils.setStat(this, STAT_NAME_DOCUMENTS_PATCHED, STAT_UNIT_COUNT,
-                task.documentsPatchedCount);
+        PhotonModelUtils.setStat(this, STAT_NAME_ENDPOINT_LINKS_PATCHED, STAT_UNIT_COUNT,
+                task.endpointLinksPatchedCount);
+        PhotonModelUtils.setStat(this, STAT_NAME_ENDPOINT_LINK_PATCHED, STAT_UNIT_COUNT,
+                task.endpointLinkPatchedCount);
     }
 }

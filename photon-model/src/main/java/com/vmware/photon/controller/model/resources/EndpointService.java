@@ -20,6 +20,7 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.logging.Level;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
@@ -143,7 +144,21 @@ public class EndpointService extends StatefulService {
         EndpointState newState = patch.getBody(EndpointState.class);
         validateUpdates(currentState, newState);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                EndpointState.class, null);
+                EndpointState.class, t -> {
+                    EndpointState patchBody = patch.getBody(EndpointState.class);
+                    boolean hasStateChanged = false;
+                    log(Level.INFO, "current values: %s - %s", currentState.computeLink, currentState.computeDescriptionLink);
+                    log(Level.INFO, "patch values: %s - %s", patchBody.computeLink, patchBody.computeDescriptionLink);
+                    if (patchBody.computeLink != null && patchBody.computeLink != currentState.computeLink) {
+                        currentState.computeLink = patchBody.computeLink;
+                        hasStateChanged = true;
+                    }
+                    if (patchBody.computeDescriptionLink != null && patchBody.computeDescriptionLink != currentState.computeDescriptionLink) {
+                        currentState.computeDescriptionLink = patchBody.computeDescriptionLink;
+                        hasStateChanged = true;
+                    }
+                    return hasStateChanged;
+                });
     }
 
     @Override
