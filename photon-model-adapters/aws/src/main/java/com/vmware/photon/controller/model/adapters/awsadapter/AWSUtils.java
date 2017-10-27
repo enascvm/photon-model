@@ -126,10 +126,9 @@ public class AWSUtils {
      */
     private static String awsMockHost = null;
 
-
     /**
-     * Flag to use s3proxy, will be set in test files. s3proxy is a open-source tool for testing
-     * AWS services in a mock S3 environment.
+     * Flag to use s3proxy, will be set in test files. s3proxy is a open-source tool for testing AWS
+     * services in a mock S3 environment.
      *
      * @see <a href="https://https://github.com/andrewgaul/s3proxy">s3proxy</a>
      */
@@ -140,7 +139,6 @@ public class AWSUtils {
      */
     private static String awsS3ProxyHost = null;
 
-
     /**
      * Custom retry condition with exception logs.
      */
@@ -148,8 +146,8 @@ public class AWSUtils {
 
         @Override
         public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
-                                   AmazonClientException exception,
-                                   int retriesAttempted) {
+                AmazonClientException exception,
+                int retriesAttempted) {
             Utils.log(CustomRetryCondition.class, CustomRetryCondition.class.getSimpleName(),
                     Level.FINE, () -> String
                             .format("Encountered exception %s for request %s, retries attempted: %d",
@@ -200,7 +198,8 @@ public class AWSUtils {
     }
 
     public static boolean isAwsClientMock() {
-        return System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY) == null ? IS_AWS_CLIENT_MOCK : true;
+        return System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY) == null ? IS_AWS_CLIENT_MOCK
+                : true;
     }
 
     public static void setAwsClientMock(boolean isAwsClientMock) {
@@ -228,19 +227,21 @@ public class AWSUtils {
     public static AmazonEC2AsyncClient getAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
+
         ClientConfiguration configuration = new ClientConfiguration();
         configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
                 DEFAULT_BACKOFF_STRATEGY,
                 DEFAULT_MAX_ERROR_RETRY,
-                true));
+                false));
 
         AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
                 new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
 
-        AmazonEC2AsyncClientBuilder ec2AsyncClientBuilder = AmazonEC2AsyncClientBuilder.standard()
-                .withCredentials(awsStaticCredentialsProvider)
+        AmazonEC2AsyncClientBuilder ec2AsyncClientBuilder = AmazonEC2AsyncClientBuilder
+                .standard()
                 .withClientConfiguration(configuration)
+                .withCredentials(awsStaticCredentialsProvider)
                 .withExecutorFactory(() -> executorService);
 
         if (region == null) {
@@ -267,9 +268,9 @@ public class AWSUtils {
     }
 
     public static void validateCredentials(AmazonEC2AsyncClient ec2Client,
-                                           AWSClientManager clientManager, AuthCredentialsServiceState credentials,
-                                           ComputeEnumerateAdapterRequest context, Operation op, StatelessService service,
-                                           Consumer<DescribeAvailabilityZonesResult> onSuccess, Consumer<Throwable> onFail) {
+            AWSClientManager clientManager, AuthCredentialsServiceState credentials,
+            ComputeEnumerateAdapterRequest context, Operation op, StatelessService service,
+            Consumer<DescribeAvailabilityZonesResult> onSuccess, Consumer<Throwable> onFail) {
 
         if (clientManager.isEc2ClientInvalid(credentials, context.regionId)) {
             op.complete();
@@ -295,7 +296,7 @@ public class AWSUtils {
 
                     @Override
                     public void onSuccess(DescribeAvailabilityZonesRequest request,
-                                          DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
+                            DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
                         onSuccess.accept(describeAvailabilityZonesResult);
                     }
                 });
@@ -304,12 +305,20 @@ public class AWSUtils {
     public static AmazonCloudWatchAsyncClient getStatsAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService, boolean isMockRequest) {
+
+        ClientConfiguration configuration = new ClientConfiguration();
+        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
+                DEFAULT_BACKOFF_STRATEGY,
+                DEFAULT_MAX_ERROR_RETRY,
+                false));
+
         AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
                 new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
 
         AmazonCloudWatchAsyncClientBuilder amazonCloudWatchAsyncClientBuilder = AmazonCloudWatchAsyncClientBuilder
                 .standard()
+                .withClientConfiguration(configuration)
                 .withCredentials(awsStaticCredentialsProvider)
                 .withExecutorFactory(() -> executorService);
 
@@ -318,12 +327,10 @@ public class AWSUtils {
         }
 
         if (isAwsClientMock()) {
-            ClientConfiguration configuration = new ClientConfiguration();
             configuration.addHeader(AWS_REGION_HEADER, region);
             amazonCloudWatchAsyncClientBuilder.setClientConfiguration(configuration);
-            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
-                    new AwsClientBuilder.EndpointConfiguration(
-                            getAWSMockHost() + AWS_MOCK_CLOUDWATCH_ENDPOINT, region);
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
+                    getAWSMockHost() + AWS_MOCK_CLOUDWATCH_ENDPOINT, region);
             amazonCloudWatchAsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
         } else {
             amazonCloudWatchAsyncClientBuilder.setRegion(region);
@@ -333,7 +340,7 @@ public class AWSUtils {
     }
 
     public static TransferManager getS3TransferManager(AuthCredentialsServiceState credentials,
-                                                       String region, ExecutorService executorService) {
+            String region, ExecutorService executorService) {
 
         AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
                 new BasicAWSCredentials(credentials.privateKeyId,
@@ -347,8 +354,6 @@ public class AWSUtils {
             region = Regions.DEFAULT_REGION.getName();
         }
 
-
-
         if (isAwsS3Proxy()) {
             AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
                     getAwsS3ProxyHost(), region);
@@ -356,7 +361,6 @@ public class AWSUtils {
         } else {
             amazonS3ClientBuilder.setRegion(region);
         }
-
 
         TransferManagerBuilder transferManagerBuilder = TransferManagerBuilder.standard()
                 .withS3Client(amazonS3ClientBuilder.build())
@@ -369,23 +373,30 @@ public class AWSUtils {
     public static AmazonElasticLoadBalancingAsyncClient getLoadBalancingAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
-                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+
+        ClientConfiguration configuration = new ClientConfiguration();
+        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
+                DEFAULT_BACKOFF_STRATEGY,
+                DEFAULT_MAX_ERROR_RETRY,
+                false));
+
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+                new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
 
-        AmazonElasticLoadBalancingAsyncClientBuilder amazonElasticLoadBalancingAsyncClientBuilder =
-                AmazonElasticLoadBalancingAsyncClientBuilder.standard()
-                        .withCredentials(awsStaticCredentialsProvider)
-                        .withExecutorFactory(() -> executorService);
+        AmazonElasticLoadBalancingAsyncClientBuilder amazonElasticLoadBalancingAsyncClientBuilder = AmazonElasticLoadBalancingAsyncClientBuilder
+                .standard()
+                .withClientConfiguration(configuration)
+                .withCredentials(awsStaticCredentialsProvider)
+                .withExecutorFactory(() -> executorService);
 
         if (region == null) {
             region = Regions.DEFAULT_REGION.getName();
         }
 
         if (isAwsClientMock()) {
-            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
-                    new AwsClientBuilder.EndpointConfiguration(
-                            getAWSMockHost() + AWS_MOCK_LOAD_BALANCING_ENDPOINT, region);
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
+                    getAWSMockHost() + AWS_MOCK_LOAD_BALANCING_ENDPOINT, region);
             amazonElasticLoadBalancingAsyncClientBuilder
                     .setEndpointConfiguration(endpointConfiguration);
         } else {
@@ -396,12 +407,22 @@ public class AWSUtils {
                 .build();
     }
 
-    public static AmazonS3Client getS3Client(AuthCredentialsServiceState credentials, String regionId) {
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
-                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+    public static AmazonS3Client getS3Client(AuthCredentialsServiceState credentials,
+            String regionId) {
+
+        ClientConfiguration configuration = new ClientConfiguration();
+        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
+                DEFAULT_BACKOFF_STRATEGY,
+                DEFAULT_MAX_ERROR_RETRY,
+                false));
+
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+                new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
 
-        AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder.standard()
+        AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder
+                .standard()
+                .withClientConfiguration(configuration)
                 .withCredentials(awsStaticCredentialsProvider)
                 .withRegion(regionId);
 
@@ -416,7 +437,7 @@ public class AWSUtils {
      * Synchronous UnTagging of one or many AWS resources with the provided tags.
      */
     public static void unTagResources(AmazonEC2AsyncClient client, Collection<Tag> tags,
-                                      String... resourceIds) {
+            String... resourceIds) {
         if (isAwsClientMock()) {
             return;
         }
@@ -432,7 +453,7 @@ public class AWSUtils {
      * Synchronous Tagging of one or many AWS resources with the provided tags.
      */
     public static void tagResources(AmazonEC2AsyncClient client,
-                                    Collection<Tag> tags, String... resourceIds) {
+            Collection<Tag> tags, String... resourceIds) {
         if (isAwsClientMock()) {
             return;
         }
@@ -447,7 +468,7 @@ public class AWSUtils {
      * Synchronous Tagging of one or many AWS resources with the provided name.
      */
     public static void tagResourcesWithName(AmazonEC2AsyncClient client, String name,
-                                            String... resourceIds) {
+            String... resourceIds) {
         Tag awsNameTag = new Tag().withKey(AWS_TAG_NAME).withValue(name);
         tagResources(client, Collections.singletonList(awsNameTag), resourceIds);
     }
@@ -456,7 +477,7 @@ public class AWSUtils {
      * Return the tags for a giving resource
      */
     public static List<TagDescription> getResourceTags(String resourceID,
-                                                       AmazonEC2AsyncClient client) {
+            AmazonEC2AsyncClient client) {
         Filter resource = new Filter().withName(AWS_FILTER_RESOURCE_ID)
                 .withValues(resourceID);
         DescribeTagsRequest req = new DescribeTagsRequest()
@@ -532,7 +553,7 @@ public class AWSUtils {
      * above method discover a security group, a new security group is created
      */
     public static List<String> getOrCreateSecurityGroups(AWSInstanceContext aws,
-                                                         AWSNicContext nicCtx) {
+            AWSNicContext nicCtx) {
 
         String groupId;
         SecurityGroup group;
@@ -587,7 +608,7 @@ public class AWSUtils {
     }
 
     public static List<String> getOrCreateDefaultSecurityGroup(AmazonEC2AsyncClient amazonEC2Client,
-                                                               AWSNicContext nicCtx) {
+            AWSNicContext nicCtx) {
 
         AWSSecurityGroupClient client = new AWSSecurityGroupClient(amazonEC2Client);
         // in case no group is configured in the properties, attempt to discover the default one
@@ -690,7 +711,7 @@ public class AWSUtils {
         double averageBurnRate = (latestDatapoint.getAverage()
                 - oldestDatapoint.getAverage())
                 / getDateDifference(oldestDatapoint.getTimestamp(),
-                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
         // If there are only 2 datapoints and the oldestDatapoint is greater than the
         // latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
@@ -728,7 +749,7 @@ public class AWSUtils {
         double currentBurnRate = (latestDatapoint.getAverage()
                 - dayOldDatapoint.getAverage())
                 / getDateDifference(dayOldDatapoint.getTimestamp(),
-                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
         // If there are only 2 datapoints and the oldestDatapoint is greater than the
         // latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
@@ -758,9 +779,9 @@ public class AWSUtils {
     }
 
     public static void waitForTransitionCompletion(ServiceHost host,
-                                                   List<InstanceStateChange> stateChangeList,
-                                                   final String desiredState, AmazonEC2AsyncClient client,
-                                                   BiConsumer<InstanceState, Exception> callback) {
+            List<InstanceStateChange> stateChangeList,
+            final String desiredState, AmazonEC2AsyncClient client,
+            BiConsumer<InstanceState, Exception> callback) {
         InstanceStateChange stateChange = stateChangeList.get(0);
 
         try {
