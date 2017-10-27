@@ -56,6 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.CloudError;
@@ -1963,11 +1964,62 @@ public class AzureInstanceService extends StatelessService {
                                         new IllegalStateException("Boot disk is required"));
                                 return;
                             }
+                            if (!validateDiskStates(ctx)) {
+                                handleError(ctx, new IllegalStateException("Azure VMs can either "
+                                        + "have managed disk or un-managed disk. Not Both."));
+                                return;
+                            }
 
                             handleAllocation(ctx, nextStage);
                         });
         operationJoin.sendWith(this);
     }
+
+
+    private boolean validateDiskStates(AzureInstanceContext ctx) {
+
+        if (ctx.useManagedDisks()) {
+            //Check if all data disks are of managed disk type
+            return ctx.dataDiskStates.size() == ctx.dataDiskStates.stream()
+                    .filter(isManagedDisk())
+                    .count();
+        } else if (ctx.reuseExistingStorageAccount() || ctx.bootDiskState.customProperties.containsKey(AZURE_STORAGE_ACCOUNT_NAME)) {
+            //check if all data disk are of unmanaged type
+            return ctx.dataDiskStates.size() == ctx.dataDiskStates.stream()
+                    .filter(isUnManagedDisk())
+                    .count();
+        }
+        return true;
+    }
+
+    // returns predicate to check if a disk is of managed type
+    public static Predicate<DiskService.DiskStateExpanded> isManagedDisk() {
+        return disk -> {
+            if (disk.customProperties != null && disk.customProperties.containsKey
+                    (AZURE_MANAGED_DISK_TYPE)) {
+                return true;
+            } else {
+                return false;
+            }
+        };
+    }
+
+    // returns predicate to check if disk is of un-managed type
+    public static Predicate<DiskService.DiskStateExpanded> isUnManagedDisk() {
+        return disk -> {
+            // Storage account linked through storage description or Storage account name
+            // specified in custom properties
+            if (disk.storageDescription != null || (disk.customProperties != null && disk
+                    .customProperties.containsKey(AZURE_STORAGE_ACCOUNT_NAME))) {
+                return true;
+            } else {
+                return false;
+            }
+        };
+    }
+
+
+
 
     /**
      * Differentiate between Windows and Linux Images
