@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.44-SNAPSHOT
+
 ## 0.6.43
 * Azure provisioning adapter synchronous SDK calls now run in a dedicated threadpool.
 * Added inventory service to cluster utils.
