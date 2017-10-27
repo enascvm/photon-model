@@ -422,7 +422,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool(datastore, pbmSpec);
+        ManagedObjectReference resourcePool = getResourcePool();
 
         Map<String, Object> props = this.get.entityProps(template, VimPath.vm_config_hardware_device);
 
@@ -596,7 +596,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference ds = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool(ds, pbmSpec);
+        ManagedObjectReference resourcePool = getResourcePool();
 
         String vmName = "pmt-" + deployer.getRetriever().hash(ovfUri);
 
@@ -1383,7 +1383,7 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference folder = getVmFolder();
         List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.bootDisk);
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
-        ManagedObjectReference resourcePool = getResourcePool(datastore, pbmSpec);
+        ManagedObjectReference resourcePool = getResourcePool();
         ManagedObjectReference host = getHost();
 
         // If datastore for disk is null, if storage policy is configured pick the compatible
@@ -1841,8 +1841,7 @@ public class InstanceClient extends BaseHelper {
         return this.get.entityProp(target, VimPath.res_datastore);
     }
 
-    private ManagedObjectReference getResourcePool(ManagedObjectReference datastoreForDisk,
-            List<VirtualMachineDefinedProfileSpec> pbmSpec)
+    private ManagedObjectReference getResourcePool()
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         if (this.resourcePool != null) {
             return this.resourcePool;
@@ -1901,7 +1900,7 @@ public class InstanceClient extends BaseHelper {
             Map<String, String> mapping = new HashMap<>();
             ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
                     datastore, pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
-                    getResourcePool(datastore, pbmSpec), mapping, getDiskProvisioningType(this.bootDisk));
+                    getResourcePool(), mapping, getDiskProvisioningType(this.bootDisk));
 
             if (!result.get("succeeded").asBoolean()) {
                 // Log here to understand why deploy from library fails.

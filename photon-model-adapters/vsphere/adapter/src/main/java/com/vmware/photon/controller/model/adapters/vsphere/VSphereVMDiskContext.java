@@ -15,7 +15,9 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_CONTENT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
+import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.net.URI;
 import java.util.EnumSet;
@@ -45,6 +47,8 @@ public class VSphereVMDiskContext {
     public String datastoreName;
 
     protected DiskService.DiskStateExpanded diskState;
+    protected String contentLink;
+    protected byte[] contentToUpload;
     protected ComputeService.ComputeStateWithDescription computeDesc;
     protected ComputeService.ComputeStateWithDescription parentComputeDesc;
     protected VSphereIOThreadPool pool;
@@ -146,7 +150,24 @@ public class VSphereVMDiskContext {
                         }
                     }
                 }
-                populateVMDiskContextThen(service, ctx, onSuccess);
+                // If the disk type is of CD-ROM, then check it has content to be uploaded. If so
+                // fetch the content from the content service
+                if (ctx.diskState.type == DiskService.DiskType.CDROM) {
+                    String contentUriStr = CustomProperties.of(ctx.diskState).getString(DISK_CONTENT_LINK, null);
+                    if (contentUriStr != null) {
+                        ctx.contentLink = contentUriStr;
+                        URI contentUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+                                UriUtils.buildUri(service.getHost(), contentUriStr));
+                        AdapterUtils.getServiceState(service, contentUri,
+                                MEDIA_TYPE_APPLICATION_OCTET_STREAM,
+                                operation -> {
+                                    ctx.contentToUpload = operation.getBody(byte[].class);
+                                    populateVMDiskContextThen(service, ctx, onSuccess);
+                                }, ctx.errorHandler);
+                    }
+                } else {
+                    populateVMDiskContextThen(service, ctx, onSuccess);
+                }
             }, ctx.errorHandler);
             return;
         }

@@ -181,6 +181,9 @@ public class PhotonModelConstants {
     // Key to identify documents containing the bill processed time
     public static final String CONTAINS_BILL_PROCESSED_TIME_STAT = "containsBillProcessedTimeStat";
 
+    // Set to true then it will insert into the existing CD-ROM drive.
+    public static final String INSERT_CDROM = "insertCDRom";
+
     // Link to a ContentState document that holds the base64 encoded content
     public static final String DISK_CONTENT_LINK = "diskContentBase64Link";
 }

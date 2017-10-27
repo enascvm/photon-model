@@ -179,7 +179,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             // Step 4: Attach a CD-ROM disk
             // prepare a disk with CD-ROM type
             DiskService.DiskState cdDiskState = createCDROMwithISO("cdrom-1", DiskService.DiskType.CDROM,
-                    0, null, 1024, null);
+                    0, null, 1024, null, false);
 
             request = createResourceOperationRequest(cdDiskState, createComputeDiskTaskService(),
                     ResourceOperation.ATTACH_DISK);
@@ -238,18 +238,76 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
         }
     }
 
-    private void cleanupISOFolder() {
-
-        this.CDDiskState = this.host.getServiceState(null, DiskService.DiskState.class,
-                UriUtils.buildUri(this.host, this.CDDiskState.documentSelfLink));
-        BasicConnection conn = createConnection();
-        String path = CustomProperties.of(this.CDDiskState).getString(DISK_PARENT_DIRECTORY);
-        ManagedObjectReference datacenterMoRef = VimUtils.convertStringToMoRef(this.datacenterId);
-
+    @Test
+    public void testCDROMInsertOnCompute() throws Throwable {
         try {
-            ClientUtils.deleteFolder(conn, datacenterMoRef, path);
-        } catch (Exception ex) {
-            this.host.log(Level.WARNING, "Unable to cleanup folder %s", path);
+            // Step 1: Create VM
+            prepareEnvironment();
+            if (isMock()) {
+                createNetwork(networkId);
+            }
+            snapshotFactoryState("clone-refresh", NetworkService.class);
+            ComputeDescriptionService.ComputeDescription vmDescription = createVmDescription();
+            this.vm = createVmState(vmDescription, true, null, false);
+
+            // kick off a provision task to do the actual VM creation
+            ProvisionComputeTaskService.ProvisionComputeTaskState provisionTask = createProvisionTask(
+                    this.vm);
+            awaitTaskEnd(provisionTask);
+
+            this.vm = getComputeState(this.vm);
+
+            // put fake moref in the vm
+            if (isMock()) {
+                ManagedObjectReference moref = new ManagedObjectReference();
+                moref.setValue("vm-0");
+                moref.setType(VimNames.TYPE_VM);
+                CustomProperties.of(this.vm).put(MOREF, moref);
+                this.vm = doPost(this.host, this.vm,
+                        ComputeState.class,
+                        UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+            }
+
+            // Step 1: Attach a CD-ROM disk
+            // prepare a disk with CD-ROM type
+            DiskService.DiskState cdDiskState = createCDROMwithISO("cdrom-1", DiskService.DiskType.CDROM,
+                    0, null, 1024, null, true);
+
+            ResourceOperationRequest request = createResourceOperationRequest(cdDiskState,
+                    createComputeDiskTaskService(),
+                    ResourceOperation.ATTACH_DISK);
+            sendRequest(request, DiskService.DiskType.CDROM, computeAttachWaitHandler());
+
+            this.vm = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, this.vm.documentSelfLink));
+
+            this.CDDiskState = cdDiskState;
+
+            this.vm = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, this.vm.documentSelfLink));
+            assertNotNull(this.vm.diskLinks);
+            assertEquals(3, this.vm.diskLinks.size());
+        } finally {
+            if (!isMock()) {
+                cleanupISOFolder();
+                // Step 2: Delete VM
+                cleanUpVm(this.vm, null);
+            }
+        }
+    }
+
+    private void cleanupISOFolder() {
+        if (this.CDDiskState != null) {
+            BasicConnection conn = createConnection();
+            String path = CustomProperties.of(this.CDDiskState).getString(DISK_PARENT_DIRECTORY);
+            ManagedObjectReference datacenterMoRef = VimUtils
+                    .convertStringToMoRef(this.datacenterId);
+
+            try {
+                ClientUtils.deleteFolder(conn, datacenterMoRef, path);
+            } catch (Exception ex) {
+                this.host.log(Level.WARNING, "Unable to cleanup folder %s", path);
+            }
         }
     }
 

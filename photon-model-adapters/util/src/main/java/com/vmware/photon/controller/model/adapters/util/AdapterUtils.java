@@ -60,7 +60,21 @@ public class AdapterUtils {
      */
     public static void getServiceState(Service service, URI computeUri, Consumer<Operation> success,
             Consumer<Throwable> failure) {
-        service.sendRequest(Operation.createGet(computeUri).setCompletion((o, e) -> {
+        getServiceState(service, computeUri, null, success, failure);
+    }
+
+    /**
+     * Method will be responsible for getting the service state for the
+     * requested resource and invoke Consumer callback for success and
+     * failure
+     */
+    public static void getServiceState(Service service, URI computeUri, String contentType,
+            Consumer<Operation> success, Consumer<Throwable> failure) {
+        Operation getOp = Operation.createGet(computeUri);
+        if (contentType != null) {
+            getOp.setContentType(contentType);
+        }
+        service.sendRequest(getOp.setCompletion((o, e) -> {
             if (e != null) {
                 failure.accept(e);
                 return;

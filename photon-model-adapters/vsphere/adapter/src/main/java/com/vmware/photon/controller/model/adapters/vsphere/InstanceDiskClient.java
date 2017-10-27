@@ -34,6 +34,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.up
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
 import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.net.URI;
@@ -113,6 +114,7 @@ public class InstanceDiskClient extends BaseHelper {
 
         String diskPath = VimUtils.uriToDatastorePath(this.diskState.sourceImageReference);
         String diskFullPath = CustomProperties.of(this.diskState).getString(DISK_FULL_PATH, null);
+        Boolean insertCdRom = CustomProperties.of(this.diskState).getBoolean(INSERT_CDROM, false);
 
         VirtualDeviceConfigSpec deviceConfigSpec = null;
         VirtualSCSIController scsiController = getFirstScsiController(devices);
@@ -126,19 +128,39 @@ public class InstanceDiskClient extends BaseHelper {
                     this.finder.datastore(CustomProperties.of(this.diskState)
                             .getString(DISK_DATASTORE_NAME)).object, pbmSpec, false);
         } else if (this.diskState.type == DiskService.DiskType.CDROM) {
-            VirtualDevice ideController = getFirstIdeController(devices);
-            int ideUnit = findFreeUnit(ideController, devices.getVirtualDevice());
+            if (insertCdRom) {
+                if (diskPath == null) {
+                    throw new IllegalStateException(
+                            String.format("Cannot insert empty iso file into CD-ROM"));
+                }
+                // Find first available CD ROM to insert the iso file
+                VirtualCdrom cdrom = devices.getVirtualDevice().stream()
+                        .filter(d -> d instanceof VirtualCdrom)
+                        .map(d -> (VirtualCdrom) d).findFirst().orElse(null);
+                if (cdrom == null) {
+                    throw new IllegalStateException(
+                            String.format("Could not find Virtual CD ROM to insert %s.", diskPath));
+                }
+                insertCdrom(cdrom, diskPath);
 
-            int availableUnitNumber = nextUnitNumber(ideUnit);
-            deviceConfigSpec = createCdrom(ideController, availableUnitNumber);
-            fillInControllerUnitNumber(this.diskState, availableUnitNumber);
+                deviceConfigSpec = new VirtualDeviceConfigSpec();
+                deviceConfigSpec.setDevice(cdrom);
+                deviceConfigSpec.setOperation(VirtualDeviceConfigSpecOperation.EDIT);
+            } else {
+                VirtualDevice ideController = getFirstIdeController(devices);
+                int ideUnit = findFreeUnit(ideController, devices.getVirtualDevice());
 
-            if (diskPath != null) {
-                // mount iso image
-                insertCdrom((VirtualCdrom) deviceConfigSpec.getDevice(), diskPath);
+                int availableUnitNumber = nextUnitNumber(ideUnit);
+                deviceConfigSpec = createCdrom(ideController, availableUnitNumber);
+                fillInControllerUnitNumber(this.diskState, availableUnitNumber);
+
+                if (diskPath != null) {
+                    // mount iso image
+                    insertCdrom((VirtualCdrom) deviceConfigSpec.getDevice(), diskPath);
+                }
+                // Power off is needed to attach cd-rom
+                powerOffVM(this.connection, getVimPort(), this.vm);
             }
-            // Power off is needed to attach cd-rom
-            powerOffVM(this.connection, getVimPort(), this.vm);
         } else if (this.diskState.type == DiskService.DiskType.FLOPPY) {
             VirtualDevice sioController = getFirstSioController(devices);
             int sioUnit = findFreeUnit(sioController, devices.getVirtualDevice());
@@ -171,7 +193,9 @@ public class InstanceDiskClient extends BaseHelper {
         } else {
             // This means it is CDROM or Floppy. Hence power on the VM as it is powered off to
             // perform the operation
-            powerOnVM(this.connection, getVimPort(), this.vm);
+            if (!insertCdRom) {
+                powerOnVM(this.connection, getVimPort(), this.vm);
+            }
             this.diskState.status = DiskService.DiskStatus.ATTACHED;
         }
     }

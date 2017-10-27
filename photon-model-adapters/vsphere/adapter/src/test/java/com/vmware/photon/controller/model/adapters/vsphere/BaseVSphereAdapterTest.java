@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResizeComputeService.COMPUTE_CPU_COUNT;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResizeComputeService.REBOOT_VM_FLAG;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.io.File;
@@ -77,7 +78,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ContentService;
-import com.vmware.photon.controller.model.resources.ContentService.ContentState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -1138,20 +1138,23 @@ public class BaseVSphereAdapterTest {
      */
     protected DiskState createCDROMwithISO(String alias, DiskService.DiskType type, int bootOrder,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String>
-            customProperties) throws Throwable {
+            customProperties, boolean insertCDRom) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
                 capacityMBytes, customProperties);
 
         byte[] iso = new byte[150 * 1024]; //150KB
         Arrays.fill(iso, (byte) 0); //of zeroes
 
-        ContentState state = new ContentState();
+        ContentService.ContentState state = new ContentService.ContentState();
         state.binaryData = iso;
 
-        state = doPost(this.host, state, ContentState.class, UriUtils.buildUri(this.host,
+        state = doPost(this.host, state, ContentService.ContentState.class, UriUtils.buildUri(this.host,
                 ContentService.FACTORY_LINK));
 
-        CustomProperties.of(diskState).put(PhotonModelConstants.DISK_LINK, state.documentSelfLink);
+        CustomProperties.of(diskState).put(PhotonModelConstants.DISK_CONTENT_LINK, state.documentSelfLink);
+        if (insertCDRom) {
+            CustomProperties.of(diskState).put(INSERT_CDROM, true);
+        }
 
         diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
         return doPost(this.host, diskState, DiskState.class,
