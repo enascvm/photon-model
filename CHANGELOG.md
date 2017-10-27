@@ -1,6 +1,11 @@
 # CHANGELOG
 
-## 0.6.43-SNAPSHOT
+## 0.6.43
+* Azure provisioning adapter synchronous SDK calls now run in a dedicated threadpool.
+* Added inventory service to cluster utils.
+* Added Azure region enumeration adapter.
+* Moved large fields of DiskState into a new object - ContentState.
+* vSphere enumeration adapter now enumerates all visible datacenters.
 
 ## 0.6.42
 * Refactored photon-model adapters to use common QueryUtils.
