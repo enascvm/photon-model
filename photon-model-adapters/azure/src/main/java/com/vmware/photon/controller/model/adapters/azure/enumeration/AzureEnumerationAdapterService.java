@@ -204,13 +204,16 @@ public class AzureEnumerationAdapterService extends StatelessService {
             AzureEnumerationStages next) {
         Operation.CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
-                String error = String
-                        .format("Error triggering Azure enumeration adapter %s", adapterSelfLink);
-                logSevere(error);
-                context.error = new IllegalStateException(error);
+                context.error = new IllegalStateException(String.format(
+                        "Error triggering Azure enumeration adapter %s", adapterSelfLink), e);
+
                 context.taskManager.patchTaskToFailure(context.error);
+
+                logSevere(context.error);
+
                 return;
             }
+
             logFine(() -> String.format("Completed Azure enumeration adapter %s", adapterSelfLink));
             context.stage = next;
             handleEnumerationRequest(context);
