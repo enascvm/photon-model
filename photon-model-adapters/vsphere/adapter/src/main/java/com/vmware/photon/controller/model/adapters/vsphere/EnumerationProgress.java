@@ -55,10 +55,6 @@ public class EnumerationProgress {
         this.overlays = new MoRefKeyedMap<>();
     }
 
-    public Set<String> getResourceLinks() {
-        return this.resourceLinks;
-    }
-
     public VapiConnection getEndpoint() {
         return this.endpoint;
     }

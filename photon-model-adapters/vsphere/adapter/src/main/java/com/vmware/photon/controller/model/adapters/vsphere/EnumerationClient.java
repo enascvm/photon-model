@@ -53,10 +53,24 @@ public class EnumerationClient extends BaseHelper {
     private final ManagedObjectReference datacenter;
 
     public EnumerationClient(Connection connection, ComputeStateWithDescription parent) {
+        this(connection, parent, null);
+    }
+
+    public EnumerationClient(Connection connection, ComputeStateWithDescription parent,
+            ManagedObjectReference datacenter) {
         super(connection);
 
-        // the regionId is used as a ref to a vSphere datacenter name
-        this.datacenter = VimUtils.convertStringToMoRef(parent.description.regionId);
+        if (datacenter == null) {
+            // / the regionId is used as a ref to a vSphere datacenter name
+            this.datacenter = VimUtils.convertStringToMoRef(parent.description.regionId);
+        } else {
+            this.datacenter = datacenter;
+        }
+
+        if (this.datacenter == null) {
+            throw new IllegalStateException("Datacenter cannot be extracted from compute resources"
+                    + " and is not explicitly provided");
+        }
     }
 
     public ManagedObjectReference getDatacenter() {

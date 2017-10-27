@@ -27,6 +27,8 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.DatacenterLister;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.LibraryClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiClient;
@@ -37,6 +39,8 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
@@ -125,11 +129,21 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             Connection connection,
             TaskManager mgr) {
 
+        DatacenterLister lister = new DatacenterLister(connection);
         try {
-            EnumerationClient client = new EnumerationClient(connection, parent);
-            processAllTemplates(oldImages, request.resourceLink(), request.taskLink(), client, parent.tenantLinks);
-        } catch (Throwable e) {
-            mgr.patchTaskToFailure("Error processing library items", e);
+            for (Element element : lister.listAllDatacenters()) {
+                ManagedObjectReference datacenter = element.object;
+                try {
+                    EnumerationClient client = new EnumerationClient(connection, parent, datacenter);
+                    processAllTemplates(oldImages, request.resourceLink(), request.taskLink(), client,
+                            parent.tenantLinks);
+                } catch (Throwable e) {
+                    mgr.patchTaskToFailure("Error processing vm templates in " + element.path, e);
+                    return;
+                }
+            }
+        } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
+            mgr.patchTaskToFailure("Error getting datacenters", e);
             return;
         }
 

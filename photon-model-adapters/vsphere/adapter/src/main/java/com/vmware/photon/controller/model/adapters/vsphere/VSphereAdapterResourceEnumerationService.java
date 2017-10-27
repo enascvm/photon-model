@@ -63,6 +63,8 @@ import com.vmware.photon.controller.model.adapters.vsphere.tagging.TagCache;
 import com.vmware.photon.controller.model.adapters.vsphere.util.MoRefKeyedMap;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.DatacenterLister;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.TaggingClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
@@ -96,10 +98,12 @@ import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.OpaqueNetworkSummary;
 import com.vmware.vim25.PropertyFilterSpec;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualEthernetCard;
@@ -400,14 +404,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ComputeStateWithDescription parent,
             TaskManager mgr) {
 
-        EnumerationClient client;
-        try {
-            client = new EnumerationClient(connection, parent);
-        } catch (Exception e) {
-            mgr.patchTaskToFailure(e);
-            return;
-        }
-
         VapiConnection vapiConnection = VapiConnection.createFromVimConnection(connection);
 
         try {
@@ -418,13 +414,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
-                parent, vapiConnection);
+        DatacenterLister lister = new DatacenterLister(connection);
 
         try {
-            refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
-        } catch (Exception e) {
-            logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
+            for (Element element : lister.listAllDatacenters()) {
+                ManagedObjectReference datacenter = element.object;
+                log(Level.INFO, "Processing datacenter %s", element.path);
+                EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
+                        parent, vapiConnection);
+
+                processDatacenter(connection, parent, datacenter, mgr, enumerationProgress);
+            }
+        } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
+            mgr.patchTaskToFailure(e);
         }
 
         try {
@@ -434,7 +436,30 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     Utils.toString(e)));
         }
 
-        garbageCollectUntouchedComputeResources(request, enumerationProgress, mgr);
+        // after all dc's are enumerated untouched resource links are the only ones left
+        // in resourceLinks
+        garbageCollectUntouchedComputeResources(request, resourceLinks, mgr);
+    }
+
+    private void processDatacenter(
+            Connection connection,
+            ComputeStateWithDescription parent,
+            ManagedObjectReference datacenter,
+            TaskManager mgr,
+            EnumerationProgress enumerationProgress) {
+        EnumerationClient client;
+        try {
+            client = new EnumerationClient(connection, parent, datacenter);
+        } catch (Exception e) {
+            mgr.patchTaskToFailure(e);
+            return;
+        }
+
+        try {
+            refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
+        } catch (Exception e) {
+            logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
+        }
     }
 
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,
@@ -641,15 +666,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void garbageCollectUntouchedComputeResources(ComputeEnumerateResourceRequest request,
-            EnumerationProgress progress, TaskManager mgr) {
-        if (progress.getResourceLinks().isEmpty()) {
+            Set<String> untouchedResources, TaskManager mgr) {
+        if (untouchedResources.isEmpty()) {
             mgr.patchTask(TaskStage.FINISHED);
             return;
         }
 
         if (!request.preserveMissing) {
             // delete dependent resources without waiting for response
-            for (String resourceLink : progress.getResourceLinks()) {
+            for (String resourceLink : untouchedResources) {
                 Operation.createDelete(
                         PhotonModelUriUtils.createInventoryUri(getHost(), resourceLink))
                         .sendWith(this);
@@ -659,7 +684,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         List<Operation> deleteOps = new ArrayList<>();
-        for (String resourceLink : progress.getResourceLinks()) {
+        for (String resourceLink : untouchedResources) {
             if (resourceLink.startsWith(ComputeService.FACTORY_LINK)) {
                 ResourceCleanRequest patch = new ResourceCleanRequest();
                 patch.resourceLink = resourceLink;
@@ -1241,8 +1266,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(ResourceMetrics.PROPERTY_RESOURCE_LINK, selfLink);
 
         Operation.createPost(UriUtils.buildUri(
-                    ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
-                    ResourceMetricsService.FACTORY_LINK))
+                ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
+                ResourceMetricsService.FACTORY_LINK))
                 .setBodyNoCloning(metrics)
                 .sendWith(this);
     }
@@ -1871,8 +1896,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void processSnapshot(VirtualMachineSnapshotTree current, String parentLink,
-                                 EnumerationProgress enumerationProgress,
-                                 VmOverlay vm, String vmSelfLink) {
+            EnumerationProgress enumerationProgress,
+            VmOverlay vm, String vmSelfLink) {
         QueryTask task = queryForSnapshot(enumerationProgress, current.getId().toString(),
                 vmSelfLink);
         withTaskResults(task, (ServiceDocumentQueryResult result) -> {
@@ -1881,18 +1906,21 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (result.documentLinks.isEmpty()) {
                 createSnapshot(snapshotState)
                         .thenCompose(createdSnapshotState ->
-                                trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink, createdSnapshotState));
+                                trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink,
+                                        createdSnapshotState));
             } else {
                 SnapshotState oldState = convertOnlyResultToDocument(result, SnapshotState.class);
                 updateSnapshot(enumerationProgress, vm, oldState, snapshotState, current.getId().toString())
                         .thenCompose(updatedSnapshotState ->
-                                trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink, updatedSnapshotState));
+                                trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink,
+                                        updatedSnapshotState));
             }
         });
     }
 
-    private DeferredResult<Object> trackAndProcessChildSnapshots(VirtualMachineSnapshotTree current, EnumerationProgress enumerationProgress,
-                                                                 VmOverlay vm, String vmSelfLink, SnapshotState updatedSnapshotState) {
+    private DeferredResult<Object> trackAndProcessChildSnapshots(VirtualMachineSnapshotTree current,
+            EnumerationProgress enumerationProgress,
+            VmOverlay vm, String vmSelfLink, SnapshotState updatedSnapshotState) {
         trackSnapshot(enumerationProgress, vm);
         List<VirtualMachineSnapshotTree> childSnapshotList = current.getChildSnapshotList();
         if (!CollectionUtils.isEmpty(childSnapshotList)) {
@@ -1954,8 +1982,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private DeferredResult<SnapshotState> updateSnapshot(EnumerationProgress enumerationProgress,
-                                                         VmOverlay vm, SnapshotState oldState,
-                                                         SnapshotState newState, String id) {
+            VmOverlay vm, SnapshotState oldState,
+            SnapshotState newState, String id) {
         newState.documentSelfLink = oldState.documentSelfLink;
         newState.id = id;
         newState.regionId = enumerationProgress.getRegionId();
@@ -1982,7 +2010,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private CompletionHandler trackSnapshot(EnumerationProgress enumerationProgress,
-                                            VmOverlay vm) {
+            VmOverlay vm) {
         return (o, e) -> {
             enumerationProgress.touchResource(getSelfLinkFromOperation(o));
         };
