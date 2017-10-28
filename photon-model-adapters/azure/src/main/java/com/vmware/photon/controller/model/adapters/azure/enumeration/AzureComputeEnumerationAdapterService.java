@@ -1069,7 +1069,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void createComputeDescriptions(EnumerationContext ctx,
             ComputeEnumerationSubStages next) {
-        if (ctx.virtualMachines.size() == 0) { // nothing to create
+        if (ctx.virtualMachines.size() == 0 && ctx.regions.isEmpty()) { // nothing to create
             if (ctx.enumNextPageLink != null) {
                 ctx.subStage = ComputeEnumerationSubStages.LISTVMS;
                 handleSubStage(ctx);
@@ -1562,7 +1562,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Create compute state for each VM
      */
     private void createComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
-        if (ctx.virtualMachines.isEmpty()) {
+        if (ctx.virtualMachines.isEmpty() && ctx.regions.isEmpty()) {
             logFine(() -> "No computes to create.");
             ctx.subStage = next;
             handleSubStage(ctx);
