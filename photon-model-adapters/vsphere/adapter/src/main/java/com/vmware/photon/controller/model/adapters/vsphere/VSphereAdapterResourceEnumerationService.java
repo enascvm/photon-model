@@ -98,12 +98,10 @@ import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
-import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.OpaqueNetworkSummary;
 import com.vmware.vim25.PropertyFilterSpec;
-import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualEthernetCard;
@@ -419,13 +417,21 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         try {
             for (Element element : lister.listAllDatacenters()) {
                 ManagedObjectReference datacenter = element.object;
-                log(Level.INFO, "Processing datacenter %s", element.path);
-                EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
-                        parent, vapiConnection);
+                log(Level.INFO, "Processing datacenter %s (%s)", element.path, VimUtils.convertMoRefToString(element.object));
 
-                processDatacenter(connection, parent, datacenter, mgr, enumerationProgress);
+                EnumerationClient client = new EnumerationClient(connection, parent, datacenter);
+
+                EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
+                        parent, vapiConnection, VimUtils.convertMoRefToString(datacenter));
+
+
+                try {
+                    refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
+                } catch (Exception e) {
+                    logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
+                }
             }
-        } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
+        } catch (Exception e) {
             mgr.patchTaskToFailure(e);
         }
 
@@ -439,27 +445,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         // after all dc's are enumerated untouched resource links are the only ones left
         // in resourceLinks
         garbageCollectUntouchedComputeResources(request, resourceLinks, mgr);
-    }
-
-    private void processDatacenter(
-            Connection connection,
-            ComputeStateWithDescription parent,
-            ManagedObjectReference datacenter,
-            TaskManager mgr,
-            EnumerationProgress enumerationProgress) {
-        EnumerationClient client;
-        try {
-            client = new EnumerationClient(connection, parent, datacenter);
-        } catch (Exception e) {
-            mgr.patchTaskToFailure(e);
-            return;
-        }
-
-        try {
-            refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
-        } catch (Exception e) {
-            logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
-        }
     }
 
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,

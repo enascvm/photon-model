@@ -43,9 +43,10 @@ public class EnumerationProgress {
 
     private Phaser vmTracker;
     private Phaser snapshotTracker;
+    private String regionId;
 
     public EnumerationProgress(Set<String> resourceLinks, ComputeEnumerateResourceRequest request,
-            ComputeStateWithDescription parent, VapiConnection endpoint) {
+            ComputeStateWithDescription parent, VapiConnection endpoint, String regionId) {
         this.resourceLinks = resourceLinks;
         this.request = request;
         this.parent = parent;
@@ -53,6 +54,7 @@ public class EnumerationProgress {
         this.vmTracker = new Phaser(1);
         this.snapshotTracker = new Phaser(1);
         this.overlays = new MoRefKeyedMap<>();
+        this.regionId = regionId;
     }
 
     public VapiConnection getEndpoint() {
@@ -64,7 +66,7 @@ public class EnumerationProgress {
     }
 
     public String getRegionId() {
-        return getParent().description.regionId;
+        return this.regionId;
     }
 
     public ComputeStateWithDescription getParent() {
