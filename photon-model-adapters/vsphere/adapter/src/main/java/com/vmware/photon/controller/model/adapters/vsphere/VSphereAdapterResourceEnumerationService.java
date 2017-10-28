@@ -759,6 +759,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ManagedObjectReference parentSwitch = net.getParentSwitch();
         state.networkLink = buildStableDvsLink(parentSwitch, request.endpointLink);
 
+        state.regionId = enumerationProgress.getRegionId();
+
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
@@ -813,6 +815,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
         subnet.networkLink = networkState.documentSelfLink;
         subnet.tenantLinks = enumerationProgress.getTenantLinks();
+        subnet.regionId = networkState.regionId;
         enumerationProgress.touchResource(subnet.documentSelfLink);
 
         CustomProperties.of(subnet)
@@ -851,6 +854,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
         subnet.networkLink = networkState.documentSelfLink;
         subnet.tenantLinks = enumerationProgress.getTenantLinks();
+        subnet.regionId = networkState.regionId;
 
         CustomProperties.of(subnet)
                 .put(CustomProperties.MOREF, net.getId())
