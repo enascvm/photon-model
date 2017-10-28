@@ -77,6 +77,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -1778,6 +1779,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = makeVmFromResults(enumerationProgress, vm);
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
+        state.lifecycleState = LifecycleState.READY;
 
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationProgress.getTenantLinks();
