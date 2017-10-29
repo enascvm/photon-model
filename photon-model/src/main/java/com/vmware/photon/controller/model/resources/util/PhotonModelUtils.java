@@ -474,7 +474,7 @@ public class PhotonModelUtils {
                                                 .toString()));
                                 return;
                             }
-                        });
+                        }).sendWith(service);
     }
 
     public static void handleIdempotentPut(StatefulService s, Operation put) {

@@ -49,6 +49,7 @@ public class ResourceGroupService extends StatefulService {
          * Link to the cloud account endpoint the resource group belongs to.
          */
         @VersionFieldSerializer.Since(ReleaseConstants.RELEASE_VERSION_0_6_42)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String endpointLink;
     }
 

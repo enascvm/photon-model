@@ -90,6 +90,7 @@ public class StorageDescriptionService extends StatefulService {
          * Link to the cloud account endpoint the disk belongs to.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String endpointLink;
 
         /**
