@@ -175,12 +175,18 @@ public class QueryUtils {
         }
 
         if (PhotonModelUtils.ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(stateClass)) {
-            qBuilder.addFieldClause(
-                    PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
-                    endpointLink, Query.Occurance.SHOULD_OCCUR);
-            return qBuilder.addCollectionItemClause(
-                    PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS,
-                    endpointLink, Query.Occurance.SHOULD_OCCUR);
+            Query.Builder epQBuilder = Query.Builder.create(Query.Occurance.MUST_OCCUR);
+
+            Query endpointLinkClause = Query.Builder.create(Query.Occurance.SHOULD_OCCUR)
+                    .addFieldClause(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
+                            endpointLink).build();
+            Query endpointLinksClause = Query.Builder.create(Query.Occurance.SHOULD_OCCUR)
+                    .addCollectionItemClause(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS,
+                            endpointLink).build();
+            epQBuilder.addClause(endpointLinkClause);
+            epQBuilder.addClause(endpointLinksClause);
+
+            return qBuilder.addClause(epQBuilder.build());
         }
 
         if (PhotonModelUtils.ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {
