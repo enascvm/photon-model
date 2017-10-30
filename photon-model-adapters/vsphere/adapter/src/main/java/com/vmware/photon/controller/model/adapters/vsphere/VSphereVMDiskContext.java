@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_CONTENT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.net.URI;
@@ -80,7 +81,7 @@ public class VSphereVMDiskContext {
             Consumer<VSphereVMDiskContext> onSuccess) {
 
         if (ctx.computeDesc == null) {
-            URI computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+            URI computeUri = createInventoryUri(service.getHost(),
                     UriUtils.extendUriWithQuery(ctx.request.resourceReference,
                             UriUtils.URI_PARAM_ODATA_EXPAND,
                             Boolean.TRUE.toString()));
@@ -98,7 +99,7 @@ public class VSphereVMDiskContext {
         }
 
         if (ctx.diskState == null) {
-            URI diskUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+            URI diskUri = createInventoryUri(service.getHost(),
                     DiskService.DiskStateExpanded.buildUri(UriUtils.buildUri(service.getHost(),
                             ctx.request.payload.get(DISK_LINK))));
             AdapterUtils.getServiceState(service, diskUri, op -> {
@@ -173,7 +174,7 @@ public class VSphereVMDiskContext {
         }
 
         if (ctx.parentComputeDesc == null && ctx.computeDesc.parentLink != null) {
-            URI computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+            URI computeUri = createInventoryUri(service.getHost(),
                     UriUtils.extendUriWithQuery(
                             UriUtils.buildUri(service.getHost(), ctx.computeDesc.parentLink),
                             UriUtils.URI_PARAM_ODATA_EXPAND,
@@ -195,9 +196,8 @@ public class VSphereVMDiskContext {
                 return;
             }
 
-            URI credUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
-                    UriUtils.buildUri(service.getHost(),
-                            ctx.parentComputeDesc.description.authCredentialsLink));
+            URI credUri = createInventoryUri(service.getHost(),
+                    ctx.parentComputeDesc.description.authCredentialsLink);
             AdapterUtils.getServiceState(service, credUri, op -> {
                 ctx.vSphereCredentials = op
                         .getBody(AuthCredentialsService.AuthCredentialsServiceState.class);

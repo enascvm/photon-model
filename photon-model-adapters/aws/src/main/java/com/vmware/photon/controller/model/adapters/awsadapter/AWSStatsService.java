@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -187,7 +189,8 @@ public class AWSStatsService extends StatelessService {
         } else {
             authLink = statsData.parentDesc.description.authCredentialsLink;
         }
-        AdapterUtils.getServiceState(this, authLink, onSuccess, getFailureConsumer(statsData));
+        URI authURI = createInventoryUri(this.getHost(), authLink);
+        AdapterUtils.getServiceState(this, authURI, onSuccess, getFailureConsumer(statsData));
     }
 
     private Consumer<Throwable> getFailureConsumer(AWSStatsDataHolder statsData) {

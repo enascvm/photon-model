@@ -13,11 +13,12 @@
 
 package com.vmware.photon.controller.model.tasks.helpers;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.List;
 
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -84,7 +85,8 @@ public class AuthTranslationService extends StatelessService {
         case POST:
             validateOperation(op);
             Operation post = Operation
-                    .createPost(this, AuthCredentialsService.FACTORY_LINK)
+                    .createPost(
+                            createInventoryUri(this.getHost(), AuthCredentialsService.FACTORY_LINK))
                     .setBody(translateCredentials(op))
                     .setCompletion(
                             (o, ex) -> {

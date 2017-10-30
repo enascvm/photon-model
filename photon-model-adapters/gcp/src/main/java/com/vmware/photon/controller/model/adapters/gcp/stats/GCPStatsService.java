@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.gcp.stats;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -450,7 +452,8 @@ public class GCPStatsService extends StatelessService {
         } else {
             authLink = statsData.parentDesc.description.authCredentialsLink;
         }
-        AdapterUtils.getServiceState(this, authLink, onSuccess, getFailureConsumer(statsData));
+        AdapterUtils.getServiceState(this, createInventoryUri(this.getHost(), authLink), onSuccess,
+                getFailureConsumer(statsData));
     }
 
     /**

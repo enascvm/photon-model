@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -81,8 +83,8 @@ public class AzureDiskService extends StatelessService {
          */
         @Override
         protected URI getParentAuthRef(AzureDiskContext context) {
-            return UriUtils.buildUri(
-                    context.service.getHost(), context.diskState.authCredentialsLink);
+            return UriUtils.buildUri(createInventoryUri(context.service.getHost(),
+                    context.diskState.authCredentialsLink));
         }
     }
 

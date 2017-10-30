@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.util;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.UriUtils.buildFactoryUri;
 
 import java.net.URI;
@@ -250,7 +251,8 @@ public class EndpointAdapterUtils {
                         Pair.of(cd, endpoint.computeDescriptionLink),
                         Pair.of(cs, endpoint.computeLink),
                         Pair.of(es, endpoint.documentSelfLink))
-                        .map((p) -> Operation.createPatch(service.getHost(), p.right)
+                        .map((p) -> Operation
+                                .createPatch(createInventoryUri(service.getHost(), p.right))
                                 .setBody(p.left)
                                 .setReferer(service.getUri()));
 
@@ -318,7 +320,8 @@ public class EndpointAdapterUtils {
             EndpointState endpointState = o.getBody(EndpointState.class);
 
             if (endpointState.authCredentialsLink != null) {
-                AdapterUtils.getServiceState(service, endpointState.authCredentialsLink,
+                AdapterUtils.getServiceState(service,
+                        createInventoryUri(service.getHost(), endpointState.authCredentialsLink),
                         onSuccessGetCredentials, op::fail);
             } else {
                 onSuccessGetCredentials.accept(getEmptyAuthCredentialState(configRequest));

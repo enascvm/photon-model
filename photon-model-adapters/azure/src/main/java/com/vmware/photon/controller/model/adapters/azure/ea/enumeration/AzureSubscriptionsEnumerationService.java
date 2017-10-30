@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea.enumeration;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -108,8 +110,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
 
         @Override
         protected URI getParentAuthRef(AzureSubscriptionsEnumerationContext context) {
-            return UriUtils.extendUri(ClusterUtil.getClusterUri(context.service.getHost(),
-                    ServiceTypeCluster.INVENTORY_SERVICE),
+            return createInventoryUri(context.service.getHost(),
                     context.parent.description.authCredentialsLink);
         }
     }

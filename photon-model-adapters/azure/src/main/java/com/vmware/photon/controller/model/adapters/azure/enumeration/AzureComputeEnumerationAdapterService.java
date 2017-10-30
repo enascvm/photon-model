@@ -1109,7 +1109,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     auth.documentSelfLink);
 
             Operation authOp = Operation
-                    .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
+                    .createPost(createInventoryUri(getHost(), AuthCredentialsService.FACTORY_LINK))
                     .setBody(auth);
             opCollection.add(authOp);
 

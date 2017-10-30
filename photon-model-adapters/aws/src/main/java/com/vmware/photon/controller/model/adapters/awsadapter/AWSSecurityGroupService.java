@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_SECURITY_GROUP_DESC;
 import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.HashMap;
@@ -149,7 +150,7 @@ public class AWSSecurityGroupService extends StatelessService {
 
     private DeferredResult<AWSSecurityGroupContext> getCredentials(
             AWSSecurityGroupContext context) {
-        URI uri = context.request.buildUri(context.securityGroup.authCredentialsLink);
+        URI uri = createInventoryUri(this.getHost(), context.securityGroup.authCredentialsLink);
         return this.sendWithDeferredResult(
                 Operation.createGet(uri),
                 AuthCredentialsServiceState.class)

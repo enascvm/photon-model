@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_NAT_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.HashMap;
@@ -210,7 +211,7 @@ public class AWSSubnetService extends StatelessService {
     }
 
     private DeferredResult<AWSSubnetContext> getCredentials(AWSSubnetContext context) {
-        URI uri = context.request.buildUri(context.endpoint.authCredentialsLink);
+        URI uri = createInventoryUri(this.getHost(), context.endpoint.authCredentialsLink);
         return this.sendWithDeferredResult(
                 Operation.createGet(uri),
                 AuthCredentialsServiceState.class)

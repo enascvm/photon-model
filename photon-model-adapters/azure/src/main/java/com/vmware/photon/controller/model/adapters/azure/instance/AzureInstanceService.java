@@ -34,6 +34,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getStorageAccountKeyName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.File;
@@ -1709,7 +1710,8 @@ public class AzureInstanceService extends StatelessService {
                                     key.value());
                         }
                         Operation patchStorageDescriptionWithKeys = Operation
-                                .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
+                                .createPost(createInventoryUri(getHost(),
+                                        AuthCredentialsService.FACTORY_LINK))
                                 .setBody(storageAuth).setCompletion((o, e) -> {
                                     if (e != null) {
                                         handleError(ctx, e);
@@ -1880,7 +1882,9 @@ public class AzureInstanceService extends StatelessService {
             ctx.childAuth = op.getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
             handleAllocation(ctx, next);
         };
-        AdapterUtils.getServiceState(this, childAuthLink, onSuccess, getFailureConsumer(ctx));
+        AdapterUtils
+                .getServiceState(this, createInventoryUri(this.getHost(), childAuthLink), onSuccess,
+                        getFailureConsumer(ctx));
     }
 
     private Consumer<Throwable> getFailureConsumer(AzureInstanceContext ctx) {

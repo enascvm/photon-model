@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 import static com.vmware.photon.controller.model.resources.SecurityGroupService.FACTORY_LINK;
 import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -187,8 +188,8 @@ public class AWSLoadBalancerService extends StatelessService {
     }
 
     private DeferredResult<AWSLoadBalancerContext> getCredentials(AWSLoadBalancerContext context) {
-        URI uri = context.request
-                .buildUri(context.loadBalancerStateExpanded.endpointState.authCredentialsLink);
+        URI uri = createInventoryUri(this.getHost(),
+                context.loadBalancerStateExpanded.endpointState.authCredentialsLink);
         return this.sendWithDeferredResult(
                 Operation.createGet(uri), AuthCredentialsServiceState.class)
                 .thenApply(authCredentialsServiceState -> {

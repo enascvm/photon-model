@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.List;
@@ -114,9 +115,9 @@ public class AzureLoadBalancerService extends StatelessService {
          */
         @Override
         protected URI getParentAuthRef(AzureLoadBalancerContext context) {
-            return UriUtils.buildUri(
+            return UriUtils.buildUri(createInventoryUri(
                     context.service.getHost(),
-                    context.loadBalancerStateExpanded.endpointState.authCredentialsLink);
+                    context.loadBalancerStateExpanded.endpointState.authCredentialsLink));
         }
     }
 

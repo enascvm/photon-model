@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.util.instance;
 
 import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -118,7 +119,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     @Override
     protected URI getParentAuthRef(T context) {
         if (context.computeRequest.requestType == InstanceRequestType.VALIDATE_CREDENTIALS) {
-            return UriUtils.buildUri(
+            return createInventoryUri(
                     context.service.getHost(),
                     context.computeRequest.authCredentialsLink);
         }

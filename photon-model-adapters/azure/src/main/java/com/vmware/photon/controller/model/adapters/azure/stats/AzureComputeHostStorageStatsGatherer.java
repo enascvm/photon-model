@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureStorageClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -231,8 +232,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
      */
     private void getParentAuth(AzureStorageStatsDataHolder statsDataHolder,
             StorageMetricsStages next) {
-        URI authUri = UriUtils.buildUri(this.getHost(),
-                statsDataHolder.computeHostDesc.description.authCredentialsLink);
+        URI authUri = UriUtils.buildUri(createInventoryUri(this.getHost(),
+                statsDataHolder.computeHostDesc.description.authCredentialsLink));
         Consumer<Operation> onSuccess = (op) -> {
             statsDataHolder.parentAuth = op.getBody(AuthCredentialsService
                     .AuthCredentialsServiceState.class);

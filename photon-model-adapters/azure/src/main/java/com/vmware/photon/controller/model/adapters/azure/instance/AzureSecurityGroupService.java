@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.HashSet;
@@ -83,9 +84,9 @@ public class AzureSecurityGroupService extends StatelessService {
          */
         @Override
         protected URI getParentAuthRef(AzureSecurityGroupContext context) {
-            return UriUtils.buildUri(
+            return UriUtils.buildUri(createInventoryUri(
                     context.service.getHost(),
-                    context.securityGroupState.authCredentialsLink);
+                    context.securityGroupState.authCredentialsLink));
         }
     }
 

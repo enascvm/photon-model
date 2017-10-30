@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.util;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -203,10 +205,10 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     protected URI getParentAuthRef(T context) {
         return context.parent != null
                 // 'parent' is already resolved so used it
-                ? UriUtils.buildUri(context.service.getHost(),
-                context.parent.description.authCredentialsLink)
+                ? createInventoryUri(context.service.getHost(),
+                        context.parent.description.authCredentialsLink)
                 // state machine starts from here so resRef should point to the parentAuth
-                : context.resourceReference;
+                : createInventoryUri(context.service.getHost(), context.resourceReference);
     }
 
     /**

@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.function.Consumer;
@@ -25,7 +27,6 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
-import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
@@ -72,7 +73,7 @@ public class DiskContext {
             Consumer<DiskContext> onSuccess) {
         // Step 1: Get disk details
         if (ctx.diskState == null) {
-            URI diskUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+            URI diskUri = createInventoryUri(service.getHost(),
                     DiskService.DiskStateExpanded.buildUri(ctx.diskReference));
             AdapterUtils.getServiceState(service, diskUri, op -> {
                 ctx.diskState = op.getBody(DiskService.DiskStateExpanded.class);
@@ -134,8 +135,7 @@ public class DiskContext {
                 return;
             }
 
-            URI credUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
-                    UriUtils.buildUri(service.getHost(), ctx.diskState.authCredentialsLink));
+            URI credUri = createInventoryUri(service.getHost(), ctx.diskState.authCredentialsLink);
             AdapterUtils.getServiceState(service, credUri, op -> {
                 ctx.vSphereCredentials = op
                         .getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
@@ -146,7 +146,7 @@ public class DiskContext {
 
         // Step 4: Get the endpoint compute link
         if (ctx.endpointComputeLink == null) {
-            URI endpointUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+            URI endpointUri = createInventoryUri(service.getHost(),
                     UriUtils.buildUri(service.getHost(), ctx.diskState.endpointLink));
             AdapterUtils.getServiceState(service, endpointUri, op -> {
                 EndpointService.EndpointState endpointState = op
@@ -159,7 +159,7 @@ public class DiskContext {
 
         // Step 5: Get the adapter reference to from the endpoint compute link
         if (ctx.adapterManagementReference == null) {
-            URI computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+            URI computeUri = createInventoryUri(service.getHost(),
                     UriUtils.buildUri(service.getHost(), ctx.endpointComputeLink));
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ComputeService.ComputeState computeState = op

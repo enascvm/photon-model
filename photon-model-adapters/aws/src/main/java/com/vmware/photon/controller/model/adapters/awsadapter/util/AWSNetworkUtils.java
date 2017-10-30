@@ -84,7 +84,7 @@ public class AWSNetworkUtils {
         networkState.resourcePoolLink = resourcePoolLink;
         networkState.endpointLink = endpointLink;
         if (networkState.endpointLinks == null) {
-            networkState.endpointLinks = new HashSet<String>();
+            networkState.endpointLinks = new HashSet<>();
         }
         networkState.endpointLinks.add(endpointLink);
         networkState.authCredentialsLink = authCredentialsLink;

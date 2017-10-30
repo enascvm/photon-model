@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.stream.Collectors;
@@ -46,7 +47,8 @@ public class VSphereRegionEnumerationAdapterService extends StatelessService {
             credentialsDr = new DeferredResult<>();
             credentialsDr.complete(new AuthCredentialsServiceState());
         } else {
-            Operation getCredentials = Operation.createGet(this, request.authCredentialsLink);
+            Operation getCredentials = Operation
+                    .createGet(createInventoryUri(this.getHost(), request.authCredentialsLink));
             credentialsDr = sendWithDeferredResult(getCredentials,
                     AuthCredentialsServiceState.class);
         }

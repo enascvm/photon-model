@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.function.Consumer;
 
@@ -85,8 +87,8 @@ public class VSphereVMContext extends BaseAdapterContext<VSphereVMContext> {
                 return;
             }
 
-            URI credUri = UriUtils
-                    .buildUri(service.getHost(), ctx.parent.description.authCredentialsLink);
+            URI credUri = createInventoryUri(service.getHost(),
+                    ctx.parent.description.authCredentialsLink);
             AdapterUtils.getServiceState(service, credUri, op -> {
                 ctx.parentAuth = op.getBody(AuthCredentialsServiceState.class);
                 populateVMContextThen(service, ctx, onSuccess);

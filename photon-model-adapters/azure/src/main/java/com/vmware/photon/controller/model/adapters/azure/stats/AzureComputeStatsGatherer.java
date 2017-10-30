@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.io.IOException;
 import java.net.URI;
@@ -170,9 +171,9 @@ public class AzureComputeStatsGatherer extends StatelessService {
                     .getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
             getBootDisk(statsData);
         };
-        String authLink = statsData.parentDesc.description.authCredentialsLink;
-        AdapterUtils.getServiceState(this, authLink,
-                onSuccess, getFailureConsumer(statsData));
+        AdapterUtils.getServiceState(this, createInventoryUri(this.getHost(),
+                statsData.parentDesc.description.authCredentialsLink), onSuccess,
+                getFailureConsumer(statsData));
     }
 
     private void getBootDisk(AzureStatsDataHolder statsData) {
@@ -215,7 +216,8 @@ public class AzureComputeStatsGatherer extends StatelessService {
             statsData.storageAccountAuth = op.getBody(AuthCredentialsServiceState.class);
             getStats(statsData);
         };
-        AdapterUtils.getServiceState(this, statsData.storageDescripton.authCredentialsLink, onSuccess,
+        AdapterUtils.getServiceState(this,
+                createInventoryUri(this.getHost(), statsData.storageDescripton.authCredentialsLink), onSuccess,
                 getFailureConsumer(statsData));
     }
 

@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_LINKED_ACCOUNT_IDS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_EBS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.STORAGE_TYPE_S3;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -393,8 +394,8 @@ public class AWSCostStatsService extends StatelessService {
             statsData.stage = next;
             handleCostStatsCreationRequest(statsData);
         };
-        String authLink = statsData.computeDesc.description.authCredentialsLink;
-        URI authUri = UriUtils.extendUri(getInventoryServiceUri(), authLink);
+        URI authUri = createInventoryUri(this.getHost(),
+                statsData.computeDesc.description.authCredentialsLink);
         AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(statsData));
     }
 

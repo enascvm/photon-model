@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +37,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -115,7 +116,7 @@ public class ProvisionContext {
                     .extendUriWithQuery(ctx.computeReference,
                             UriUtils.URI_PARAM_ODATA_EXPAND,
                             Boolean.TRUE.toString());
-            computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), computeUri);
+            computeUri = createInventoryUri(service.getHost(), computeUri);
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ctx.child = op.getBody(ComputeStateWithDescription.class);
@@ -133,7 +134,7 @@ public class ProvisionContext {
         // in all other cases ignore the presence of the template
         if (templateLink != null && ctx.templateMoRef == null
                 && ctx.instanceRequestType == InstanceRequestType.CREATE) {
-            URI computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), templateLink);
+            URI computeUri = createInventoryUri(service.getHost(), templateLink);
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ImageState body = op.getBody(ImageState.class);
@@ -155,7 +156,7 @@ public class ProvisionContext {
             String snapshotLink = CustomProperties.of(ctx.child).getString(CustomProperties.SNAPSHOT_LINK);
 
             if (snapshotLink != null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
-                URI snapshotUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), snapshotLink);
+                URI snapshotUri = createInventoryUri(service.getHost(), snapshotLink);
 
                 AdapterUtils.getServiceState(service, snapshotUri, op -> {
                     SnapshotService.SnapshotState snapshotState = op.getBody(SnapshotService.SnapshotState.class);
@@ -172,7 +173,7 @@ public class ProvisionContext {
                         String refComputeLink = snapshotState.computeLink;
 
                         if (refComputeLink != null) {
-                            URI refComputeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), refComputeLink);
+                            URI refComputeUri = createInventoryUri(service.getHost(), refComputeLink);
 
                             AdapterUtils.getServiceState(service, refComputeUri, opCompute -> {
                                 ComputeStateWithDescription refComputeState = opCompute.getBody(ComputeStateWithDescription.class);
@@ -201,7 +202,7 @@ public class ProvisionContext {
                             UriUtils.URI_PARAM_ODATA_EXPAND,
                             Boolean.TRUE.toString());
 
-            computeUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), computeUri);
+            computeUri = createInventoryUri(service.getHost(), computeUri);
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ctx.parent = op.getBody(ComputeStateWithDescription.class);
@@ -218,8 +219,8 @@ public class ProvisionContext {
                 return;
             }
 
-            URI credUri = PhotonModelUriUtils.createInventoryUri(
-                    service.getHost(), ctx.parent.description.authCredentialsLink);
+            URI credUri = createInventoryUri(service.getHost(),
+                    ctx.parent.description.authCredentialsLink);
             AdapterUtils.getServiceState(service, credUri, op -> {
                 ctx.vSphereCredentials = op.getBody(AuthCredentialsServiceState.class);
                 populateContextThen(service, ctx, onSuccess);
@@ -314,11 +315,11 @@ public class ProvisionContext {
             }
 
             URI expandedPlacementUri = UriUtils.extendUriWithQuery(
-                    PhotonModelUriUtils.createInventoryUri(service.getHost(), placementLink),
+                    createInventoryUri(service.getHost(), placementLink),
                     UriUtils.URI_PARAM_ODATA_EXPAND,
                     Boolean.TRUE.toString());
 
-            expandedPlacementUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), expandedPlacementUri);
+            expandedPlacementUri = createInventoryUri(service.getHost(), expandedPlacementUri);
 
             Operation.createGet(expandedPlacementUri).setCompletion((o, e) -> {
                 if (e != null) {
@@ -374,8 +375,8 @@ public class ProvisionContext {
             // collect disks in parallel
             Stream<Operation> opsGetDisk = ctx.child.diskLinks.stream()
                     .map(link -> {
-                        URI diskStateUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), link);
-                        return Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(),
+                        URI diskStateUri = createInventoryUri(service.getHost(), link);
+                        return Operation.createGet(createInventoryUri(service.getHost(),
                                 DiskStateExpanded.buildUri(diskStateUri)));
                     });
 
@@ -405,7 +406,7 @@ public class ProvisionContext {
         );
         if (libraryItemLink != null && ctx.image == null
                 && ctx.instanceRequestType == InstanceRequestType.CREATE) {
-            URI libraryUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), libraryItemLink);
+            URI libraryUri = createInventoryUri(service.getHost(), libraryItemLink);
 
             AdapterUtils.getServiceState(service, libraryUri, op -> {
                 ImageState body = op.getBody(ImageState.class);
@@ -423,7 +424,7 @@ public class ProvisionContext {
                         .findFirst().orElse(null);
 
                 if (bootDisk != null) {
-                    URI bootImageRef = PhotonModelUriUtils.createInventoryUri(service.getHost(), bootDisk.imageLink);
+                    URI bootImageRef = createInventoryUri(service.getHost(), bootDisk.imageLink);
                     AdapterUtils.getServiceState(service, bootImageRef, op -> {
                         ImageState body = op.getBody(ImageState.class);
                         ctx.image = body;

@@ -334,7 +334,8 @@ public class EndpointAllocationTaskService
         OperationSequence sequence;
         if (es.authCredentialsLink == null) {
             AuthCredentialsServiceState auth = configureAuth(es);
-            Operation authOp = Operation.createPost(this, AuthCredentialsService.FACTORY_LINK)
+            Operation authOp = Operation.createPost(
+                    createInventoryUri(this.getHost(), AuthCredentialsService.FACTORY_LINK))
                     .setBody(auth);
             sequence = OperationSequence.create(authOp)
                     .setCompletion((ops, exs) -> {

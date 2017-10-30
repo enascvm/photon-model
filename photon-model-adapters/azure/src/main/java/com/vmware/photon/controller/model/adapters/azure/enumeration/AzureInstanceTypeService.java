@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
@@ -104,7 +106,8 @@ public class AzureInstanceTypeService extends StatelessService {
         DeferredResult<AzureInstanceTypeContext> getEndpointAuthState(
                 AzureInstanceTypeContext ctx) {
 
-            Operation op = Operation.createGet(ctx.service, ctx.endpointState.authCredentialsLink);
+            Operation op = Operation.createGet(createInventoryUri(ctx.service.getHost(),
+                    ctx.endpointState.authCredentialsLink));
 
             return ctx.service
                     .sendWithDeferredResult(op, AuthCredentialsServiceState.class)

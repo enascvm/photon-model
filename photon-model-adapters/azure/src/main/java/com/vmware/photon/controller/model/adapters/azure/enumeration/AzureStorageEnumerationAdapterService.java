@@ -39,6 +39,7 @@ import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagSt
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EMPTY_STR;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -1702,7 +1703,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     private DeferredResult<AuthCredentialsServiceState> loadStorageAuth(StorageEnumContext context,
             StorageDescription storageDesc) {
         return sendWithDeferredResult(
-                Operation.createGet(context.request.buildUri(storageDesc.authCredentialsLink))
+                Operation.createGet(
+                        createInventoryUri(this.getHost(), storageDesc.authCredentialsLink))
                         .setCompletion(
                                 (op, ex) -> {
                                     if (ex != null) {

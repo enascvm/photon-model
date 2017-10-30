@@ -300,10 +300,14 @@ public class EndpointRemovalTaskService
     private void doInstanceDeletes(EndpointRemovalTaskState currentState, SubStage next) {
         EndpointState endpoint = currentState.endpoint;
 
-        Operation crdOp = Operation.createDelete(this, endpoint.authCredentialsLink);
-        Operation cdsOp = Operation.createDelete(this, endpoint.computeDescriptionLink);
-        Operation csOp = Operation.createDelete(this, endpoint.computeLink);
-        Operation epOp = Operation.createDelete(this, endpoint.documentSelfLink);
+        Operation crdOp = Operation
+                .createDelete(createInventoryUri(this.getHost(), endpoint.authCredentialsLink));
+        Operation cdsOp = Operation
+                .createDelete(createInventoryUri(this.getHost(), endpoint.computeDescriptionLink));
+        Operation csOp = Operation
+                .createDelete(createInventoryUri(this.getHost(), endpoint.computeLink));
+        Operation epOp = Operation
+                .createDelete(createInventoryUri(this.getHost(), endpoint.documentSelfLink));
         // custom header identifier for endpoint service to validate before deleting endpoint
         epOp.addRequestHeader(ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME,
                 ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE);

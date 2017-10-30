@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
@@ -75,9 +77,9 @@ public class AzureRegionEnumerationAdapterService extends StatelessService {
                 return DeferredResult.completed(context);
             }
 
-            Operation op = Operation.createGet(
+            Operation op = Operation.createGet(createInventoryUri(
                     context.service.getHost(),
-                    context.request.authCredentialsLink);
+                    context.request.authCredentialsLink));
 
             return context.service
                     .sendWithDeferredResult(op, AuthCredentialsServiceState.class)

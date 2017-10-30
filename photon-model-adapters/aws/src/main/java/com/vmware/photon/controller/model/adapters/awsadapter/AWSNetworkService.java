@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.HashMap;
 
@@ -283,7 +284,8 @@ public class AWSNetworkService extends StatelessService {
 
     private void getCredentials(AWSNetworkContext context, AWSNetworkStage next) {
 
-        sendRequest(Operation.createGet(this.getHost(), context.networkRequest.authCredentialsLink)
+        sendRequest(Operation.createGet(
+                createInventoryUri(this.getHost(), context.networkRequest.authCredentialsLink))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         handleStages(context, e);

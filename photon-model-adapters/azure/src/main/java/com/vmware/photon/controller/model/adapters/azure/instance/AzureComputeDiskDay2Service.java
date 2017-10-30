@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -88,8 +89,8 @@ public class AzureComputeDiskDay2Service extends StatelessService {
          */
         @Override
         protected URI getParentAuthRef(AzureComputeDiskDay2Context context) {
-            return UriUtils.buildUri(
-                    context.service.getHost(), context.endpointState.authCredentialsLink);
+            return UriUtils.buildUri(createInventoryUri(context.service.getHost(),
+                    context.endpointState.authCredentialsLink));
         }
     }
 

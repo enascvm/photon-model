@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAME_SEPARATOR;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.HashMap;
@@ -50,7 +51,6 @@ import com.microsoft.rest.LogLevel;
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceResponseBuilder.Factory;
 import okhttp3.OkHttpClient;
-
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -298,7 +298,7 @@ public class AzureUtils {
         }
 
         Operation storageAuthOp = Operation
-                .createPost(host, AuthCredentialsService.FACTORY_LINK)
+                .createPost(createInventoryUri(host, AuthCredentialsService.FACTORY_LINK))
                 .setReferer(host.getPublicUri())
                 .setBody(storageAuth);
         return host.sendWithDeferredResult(storageAuthOp, AuthCredentialsServiceState.class);
@@ -348,7 +348,7 @@ public class AzureUtils {
         }
 
         Operation storageAuthOp = Operation
-                .createPost(host, AuthCredentialsService.FACTORY_LINK)
+                .createPost(createInventoryUri(host, AuthCredentialsService.FACTORY_LINK))
                 .setBody(storageAuth);
         storageAuthOp.setReferer(UriUtils.buildUri(host.getPublicUri(), serviceSelfLink));
         host.sendRequest(storageAuthOp);

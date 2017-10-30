@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.validateSizeSupportedByVolumeType;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -367,7 +368,8 @@ public class AWSDiskService extends StatelessService {
 
     private void getCredentials(AWSDiskContext context, AwsDiskStage next) {
 
-        sendRequest(Operation.createGet(this.getHost(), context.disk.authCredentialsLink)
+        sendRequest(Operation
+                .createGet(createInventoryUri(this.getHost(), context.disk.authCredentialsLink))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         handleStages(context, e);

@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils.ext
 import static com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils.extractRegionFromZone;
 import static com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils.privateKeyFromPkcs8;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_GCP;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.io.IOException;
 import java.net.URI;
@@ -796,8 +797,9 @@ public class GCPEnumerationAdapterService extends StatelessService {
             ctx.stage = next;
             handleEnumerationRequest(ctx);
         };
-        URI authUri = UriUtils.buildUri(this.getHost(), ctx.computeHostDesc.authCredentialsLink);
-        AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(ctx));
+        AdapterUtils.getServiceState(this,
+                createInventoryUri(this.getHost(), ctx.computeHostDesc.authCredentialsLink),
+                onSuccess, getFailureConsumer(ctx));
     }
 
     /**

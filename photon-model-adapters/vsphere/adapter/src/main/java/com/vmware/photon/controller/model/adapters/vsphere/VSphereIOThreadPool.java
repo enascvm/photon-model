@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants.VSPHERE_IGNORE_CERTIFICATE_WARNINGS;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.concurrent.Executors;
@@ -27,7 +28,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
 import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
-import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.Service;
@@ -83,7 +83,7 @@ public class VSphereIOThreadPool {
      */
     public void submit(Service sender, URI adapterReference, String authLink,
             ConnectionCallback callback) {
-        URI authUri = PhotonModelUriUtils.createInventoryUri(this.host, authLink);
+        URI authUri = createInventoryUri(this.host, authLink);
 
         Operation op = Operation.createGet(authUri)
                 .setCompletion((o, e) -> {

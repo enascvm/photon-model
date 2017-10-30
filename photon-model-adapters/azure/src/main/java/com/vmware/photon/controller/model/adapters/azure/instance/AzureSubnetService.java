@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -179,7 +181,7 @@ public class AzureSubnetService extends StatelessService {
     }
 
     private DeferredResult<AzureSubnetContext> getAuthentication(AzureSubnetContext context) {
-        URI uri = context.request.buildUri(context.endpoint.authCredentialsLink);
+        URI uri = createInventoryUri(this.getHost(), context.endpoint.authCredentialsLink);
         return this.sendWithDeferredResult(
                 Operation.createGet(uri),
                 AuthCredentialsServiceState.class)

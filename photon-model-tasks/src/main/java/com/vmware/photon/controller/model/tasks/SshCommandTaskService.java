@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.List;
@@ -182,7 +184,7 @@ public class SshCommandTaskService extends TaskService<SshCommandTaskService.Ssh
     private void getAuth(SshCommandTaskState state) {
         try {
             sendRequest(Operation
-                    .createGet(this, state.authCredentialLink)
+                    .createGet(createInventoryUri(this.getHost(), state.authCredentialLink))
                     .setCompletion((o, e) -> {
                         if (e != null) {
                             fail(state, e);

@@ -18,6 +18,7 @@ import static java.util.stream.Collectors.groupingBy;
 
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.setEndpointLink;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
 import java.net.URI;
@@ -352,8 +353,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      */
     protected DeferredResult<T> getEndpointAuthState(T context) {
 
-        Operation op = Operation.createGet(context.service,
-                context.endpointState.authCredentialsLink);
+        Operation op = Operation.createGet(createInventoryUri(context.service.getHost(),
+                context.endpointState.authCredentialsLink));
 
         return context.service
                 .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
