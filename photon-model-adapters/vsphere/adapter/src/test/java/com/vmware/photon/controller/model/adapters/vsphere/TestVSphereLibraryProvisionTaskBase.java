@@ -62,7 +62,6 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
     protected ComputeService.ComputeState computeHost;
 
     protected String libraryItemName = System.getProperty("vc.libItemName");
-    protected String placementClusterName = System.getProperty("vc.placementClusterName");
 
     protected static final long HDD_DISK_SIZE = 9216;
     protected EndpointService.EndpointState endpoint;
@@ -133,14 +132,6 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
         customProperties.put(DISK_MODE_INDEPENDENT, "true");
 
         return customProperties;
-    }
-
-    private String selectPlacement() {
-        QueryTask.Query q = QueryTask.Query.Builder.create()
-                .addKindFieldClause(ComputeService.ComputeState.class)
-                .addFieldClause(ComputeService.ComputeState.FIELD_NAME_NAME, this.placementClusterName.toLowerCase())
-                .build();
-        return findFirstMatching(q, ComputeService.ComputeState.class).documentSelfLink;
     }
 
     private ComputeDescriptionService.ComputeDescription createVmDescription() throws Throwable {

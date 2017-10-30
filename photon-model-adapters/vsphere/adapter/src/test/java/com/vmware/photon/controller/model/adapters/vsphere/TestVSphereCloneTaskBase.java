@@ -217,11 +217,11 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
                     .add(createDiskWithStoragePolicy("AdditionalDisk2", DiskService.DiskType.HDD, 0, null,
                             ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
         }
-        String placementLink = findRandomResourcePoolOwningCompute();
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
-                .put(ComputeProperties.PLACEMENT_LINK, placementLink);
+                .put(ComputeProperties.PLACEMENT_LINK, isMock() ?
+                        findRandomResourcePoolOwningCompute() : selectPlacement());
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
@@ -296,7 +296,8 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
-                .put(ComputeProperties.PLACEMENT_LINK, findRandomResourcePoolOwningCompute());
+                .put(ComputeProperties.PLACEMENT_LINK, isMock() ?
+                        findRandomResourcePoolOwningCompute() : selectPlacement());
 
         ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeService.ComputeState.class,

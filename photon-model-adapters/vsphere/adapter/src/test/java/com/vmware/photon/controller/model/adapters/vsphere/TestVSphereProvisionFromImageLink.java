@@ -57,7 +57,6 @@ public class TestVSphereProvisionFromImageLink extends BaseVSphereAdapterTest {
     private ComputeState computeHost;
 
     public String libraryItemName = System.getProperty("vc.libItemName");
-    public String placementClusterName = System.getProperty("vc.placementClusterName");
 
     private EndpointState endpoint;
 
@@ -120,14 +119,6 @@ public class TestVSphereProvisionFromImageLink extends BaseVSphereAdapterTest {
         return doPost(this.host, res,
                 DiskService.DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
-    }
-
-    private String selectPlacement() {
-        Query q = Query.Builder.create()
-                .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_NAME, this.placementClusterName.toLowerCase())
-                .build();
-        return findFirstMatching(q, ComputeState.class).documentSelfLink;
     }
 
     private ComputeDescription createVmDescription() throws Throwable {

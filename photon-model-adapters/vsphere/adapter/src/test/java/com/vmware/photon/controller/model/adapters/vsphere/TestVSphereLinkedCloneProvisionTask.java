@@ -152,13 +152,6 @@ public class TestVSphereLinkedCloneProvisionTask extends TestVSphereLibraryProvi
         return returnState;
     }
 
-    private String selectPlacement() {
-        QueryTask.Query q = QueryTask.Query.Builder.create().addKindFieldClause(ComputeService.ComputeState.class)
-                .addFieldClause(ComputeService.ComputeState.FIELD_NAME_NAME, this.placementClusterName.toLowerCase())
-                .build();
-        return findFirstMatching(q, ComputeService.ComputeState.class).documentSelfLink;
-    }
-
     private Operation sendOperationSynchronously(Operation op) throws Throwable {
         final Operation[] returnedOp = { null };
         TestContext ctx = this.host.testCreate(1);

@@ -208,8 +208,15 @@ public class VSphereVMDiskContext {
 
         if (ctx.datacenterMoRef == null) {
             try {
-                ctx.datacenterMoRef = VimUtils.convertStringToMoRef(ctx.diskState.regionId ==
-                        null ? ctx.parentComputeDesc.regionId : ctx.diskState.regionId);
+                String regionId = ctx.diskState.regionId;
+                if (regionId == null || regionId.isEmpty()) {
+                    if (ctx.computeDesc.regionId != null) {
+                        regionId = ctx.computeDesc.regionId;
+                    } else if (ctx.parentComputeDesc.regionId != null) {
+                        regionId = ctx.parentComputeDesc.regionId;
+                    }
+                }
+                ctx.datacenterMoRef = VimUtils.convertStringToMoRef(regionId);
             } catch (IllegalArgumentException ex) {
                 ctx.fail(ex);
                 return;

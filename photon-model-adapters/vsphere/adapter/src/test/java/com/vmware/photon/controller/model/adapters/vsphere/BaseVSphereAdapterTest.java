@@ -162,6 +162,7 @@ public class BaseVSphereAdapterTest {
     public String vcFolder = System.getProperty(TestProperties.VC_FOLDER);
     public String spName = System.getProperty(TestProperties.VC_STORAGE_POLICY_NAME, "");
     public String spId = System.getProperty(TestProperties.VC_STORAGE_POLICY_ID, "");
+    protected String placementClusterName = System.getProperty(TestProperties.VC_CLUSTER_NAME, "");
 
     protected VerificationHost host;
     protected AuthCredentialsServiceState auth;
@@ -361,6 +362,14 @@ public class BaseVSphereAdapterTest {
                         ProvisionComputeTaskService.FACTORY_LINK));
 
         return outTask;
+    }
+
+    protected String selectPlacement() {
+        QueryTask.Query q = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeService.ComputeState.class)
+                .addFieldClause(ComputeService.ComputeState.FIELD_NAME_NAME, this.placementClusterName.toLowerCase())
+                .build();
+        return findFirstMatching(q, ComputeService.ComputeState.class).documentSelfLink;
     }
 
     protected ComputeState getComputeState(ComputeState vm) throws Throwable {
