@@ -71,7 +71,6 @@ import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 import org.apache.commons.lang3.EnumUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.Constraint.Condition;
 import com.vmware.photon.controller.model.Constraint.Condition.Enforcement;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -420,8 +419,6 @@ public class AWSInstanceService extends StatelessService {
 
                     DiskState diskState = new DiskState();
 
-                    copyConstraint(diskState, bootDisk);
-
                     copyCustomProperties(diskState, bootDisk);
 
                     addMandatoryProperties(diskState, blockDeviceMapping, aws.instanceTypeInfo);
@@ -612,24 +609,6 @@ public class AWSInstanceService extends StatelessService {
 
     private String getDeviceType(EbsBlockDevice ebs) {
         return ebs != null ? AWSStorageType.EBS.getName() : AWSStorageType.INSTANCE_STORE.getName();
-    }
-
-    /**
-     * Copy constraints of boot disk into existing disk.
-     */
-    private void copyConstraint(DiskState diskState, DiskState bootDisk) {
-        Constraint bootDiskConstraint = bootDisk.constraint;
-        if (bootDiskConstraint != null && bootDiskConstraint.conditions != null) {
-            diskState.constraint = new Constraint();
-            diskState.constraint.conditions = new ArrayList<>();
-            for (Condition condition : bootDiskConstraint.conditions) {
-                Condition diskStateCondition = new Condition();
-                diskStateCondition.enforcement = condition.enforcement;
-                diskStateCondition.expression = condition.expression;
-                diskStateCondition.occurrence = condition.occurrence;
-                diskStateCondition.type = condition.type;
-            }
-        }
     }
 
     /**
