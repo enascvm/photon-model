@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -449,7 +451,9 @@ public class PhotonModelUtils {
             return null;
         }
 
-        for (String endpointLink : endpointLinks) {
+        SortedSet<String> sortedEndpointLinks = new TreeSet<>();
+        sortedEndpointLinks.addAll(endpointLinks);
+        for (String endpointLink : sortedEndpointLinks) {
             if (!endpointLink.equals(resourceEndpointLink)) {
                 endpointLinkVal = endpointLink;
                 break;
