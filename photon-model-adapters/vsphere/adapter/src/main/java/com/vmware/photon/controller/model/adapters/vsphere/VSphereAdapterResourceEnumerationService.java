@@ -253,6 +253,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             String parentLink) {
         Query.Builder builder = Query.Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, req.endpointLink)
+                .addFieldClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE, LifecycleState.PROVISIONING.toString(),
+                        MatchType.TERM, Occurance.MUST_NOT_OCCUR)
                 .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK, parentLink, Occurance.MUST_NOT_OCCUR)
                 .addInClause(ServiceDocument.FIELD_NAME_KIND, Arrays.asList(
                         Utils.buildKind(ComputeState.class),
@@ -1023,6 +1025,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private QueryTask queryForStoragePolicy(EnumerationProgress ctx, String id, String name) {
         Builder builder = Query.Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ID, id)
+                .addKindFieldClause(ResourceGroupState.class)
                 .addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.getRegionId())
                 .addCaseInsensitiveFieldClause(ResourceState.FIELD_NAME_NAME, name,
                         MatchType.TERM, Occurance.MUST_OCCUR);
@@ -1315,6 +1318,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private QueryTask queryForStorage(EnumerationProgress ctx, String name, String groupLink) {
         Builder builder = Query.Builder.create()
+                .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
                         ctx.getRequest().adapterManagementReference.toString())
                 .addFieldClause(StorageDescription.FIELD_NAME_REGION_ID, ctx.getRegionId());
@@ -1577,6 +1581,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private QueryTask queryForCluster(EnumerationProgress ctx, String parentComputeLink,
             String moRefId) {
         Builder builder = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink)
                 .addFieldClause(ComputeState.FIELD_NAME_ID, moRefId);
 
@@ -1925,6 +1930,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private QueryTask queryForSnapshot(EnumerationProgress ctx, String id, String vmSelfLink) {
         Builder builder = Query.Builder.create()
+                .addKindFieldClause(SnapshotState.class)
                 .addFieldClause(SnapshotState.FIELD_NAME_ID, id)
                 .addFieldClause(SnapshotState.FIELD_NAME_COMPUTE_LINK, vmSelfLink);
 
@@ -2194,7 +2200,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param handler
      */
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
-        task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.INDEXED_METADATA);
+        task.querySpec.options = EnumSet.of(
+                QueryOption.EXPAND_CONTENT,
+                QueryOption.INDEXED_METADATA,
+                QueryOption.TOP_RESULTS);
+        task.querySpec.resultLimit = 1;
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
 
         QueryUtils.startInventoryQueryTask(this, task)
@@ -2222,6 +2232,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private QueryTask queryForVm(EnumerationProgress ctx, String parentComputeLink,
             String instanceUuid) {
         Builder builder = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink);
 
@@ -2243,6 +2254,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      */
     private QueryTask queryForHostSystem(EnumerationProgress ctx, String parentComputeLink, String moRefId) {
         Builder builder = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_ID, moRefId)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink);
         QueryUtils.addEndpointLink(builder, ComputeState.class, ctx.getRequest().endpointLink);

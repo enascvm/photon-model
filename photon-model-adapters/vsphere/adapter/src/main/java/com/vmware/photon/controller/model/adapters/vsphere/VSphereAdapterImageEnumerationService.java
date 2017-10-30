@@ -185,6 +185,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
                 state.endpointLink = endpointLink;
                 state.tenantLinks = tenantLinks;
+                state.regionId = VimUtils.convertMoRefToString(client.getDatacenter());
 
                 oldImages.remove(state.documentSelfLink);
                 phaser.register();
