@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.tasks;
 
 import static io.netty.util.internal.StringUtil.isNullOrEmpty;
 
-import static com.vmware.photon.controller.model.util.AssertUtil.assertTrue;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.EXPAND;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.FIXED_ITEM_NAME;
@@ -34,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -105,8 +105,8 @@ public class ImageEnumerationTaskService
         @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public String endpointType;
 
-        @Documentation(description = "Optional identifier of the region for which public images"
-                + " enumeration should be triggered. Only applicable with endpointType property.")
+        @Documentation(description = "Optional identifier of the region for which images"
+                + " enumeration should be triggered.")
         @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public String regionId;
 
@@ -207,36 +207,23 @@ public class ImageEnumerationTaskService
 
         // Do annotation based validation
         if (taskState != null) {
+            Function<String, String> fieldLogger = field -> ImageEnumerationTaskState.class
+                    .getSimpleName() + "." + field;
             try {
                 // Default validation
                 Utils.validateState(getStateDescription(), taskState);
 
                 if (!taskState.enumeratePrivateImages() && !taskState.enumeratePublicImages()) {
-                    throw new IllegalArgumentException(
-                            "Either " + ImageEnumerationTaskState.class.getSimpleName()
-                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE +
-                                    " or " + ImageEnumerationTaskState.class.getSimpleName()
-                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_LINK +
-                                    " must be set.");
+                    throw new IllegalArgumentException(String.format(
+                            "Either %s or %s must be set.",
+                            fieldLogger.apply(ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE),
+                            fieldLogger.apply(ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_LINK)));
                 }
                 if (taskState.enumeratePrivateImages() && taskState.enumeratePublicImages()) {
-                    throw new IllegalArgumentException(
-                            "Both " + ImageEnumerationTaskState.class.getSimpleName()
-                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE +
-                                    " and " + ImageEnumerationTaskState.class.getSimpleName()
-                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_LINK +
-                                    " cannot be set.");
-                }
-
-                if (!isNullOrEmpty(taskState.regionId)) {
-                    assertTrue(
-                            taskState.enumeratePublicImages(),
-                            ImageEnumerationTaskState.class.getSimpleName()
-                                    + "." + ImageEnumerationTaskState.FIELD_NAME_REGION_ID +
-                                    " must be used in conjunction with "
-                                    + ImageEnumerationTaskState.class.getSimpleName()
-                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE
-                                    + ".");
+                    throw new IllegalArgumentException(String.format(
+                            "Both %s and %s cannot be set.",
+                            fieldLogger.apply(ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE),
+                            fieldLogger.apply(ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_LINK)));
                 }
             } catch (Throwable t) {
                 startOp.fail(t);
@@ -364,8 +351,9 @@ public class ImageEnumerationTaskService
             sendWithDeferredResult(Operation.createDelete(getUri()))
                     .whenComplete((o, e) -> {
                         if (e != null) {
-                            logSevere(() -> String.format("Self-delete upon %s stage: FAILED with %s",
-                                    taskState.taskInfo.stage, Utils.toString(e)));
+                            logSevere(
+                                    () -> String.format("Self-delete upon %s stage: FAILED with %s",
+                                            taskState.taskInfo.stage, Utils.toString(e)));
                         } else {
                             logFine(() -> String.format("Self-delete upon %s stage: SUCCESS",
                                     taskState.taskInfo.stage));
@@ -659,6 +647,7 @@ public class ImageEnumerationTaskService
         sendSelfFinishedPatch(ctx.taskState);
         return DeferredResult.completed(ctx);
     }
+
     /**
      * @see ImageEnumerationTaskService#sendImageEnumerationAdapterRequest(ImageEnumerationTaskState)
      */

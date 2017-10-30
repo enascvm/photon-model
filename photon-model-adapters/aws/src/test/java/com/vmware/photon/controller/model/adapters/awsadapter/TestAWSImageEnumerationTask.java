@@ -173,8 +173,10 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     /*
      * The image that must be returned:
-     * https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=owned-
-     * by-me;imageId=ami-2929923f;sort=name
+     *
+     * https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=private-images;imageId=ami-caf25eb0;sort=name
+     *
+     * under  prelude_test @ https://537227425989.signin.aws.amazon.com/console
      */
     @Test
     @Ignore("https://jira-hzn.eng.vmware.com/browse/VCOM-832")
@@ -205,9 +207,9 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 endpointState.tenantLinks, image.tenantLinks);
 
         Assert.assertEquals("Private image id is incorrect.",
-                "ami-2929923f", image.id);
+                "ami-caf25eb0", image.id);
         Assert.assertEquals("Private image name is incorrect.",
-                "alexs-test", image.name);
+                "tapestryPipelineServiceTestService", image.name);
 
         Assert.assertEquals("Private image 'Name' tag is missing.", 1, image.tagLinks.size());
 
@@ -215,7 +217,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 image.tagLinks.iterator().next(),
                 TagState.class);
 
-        Assert.assertEquals("photon-model-test-doNOTdelete", nameTag.value);
+        Assert.assertEquals(image.name, nameTag.value);
     }
 
     /**

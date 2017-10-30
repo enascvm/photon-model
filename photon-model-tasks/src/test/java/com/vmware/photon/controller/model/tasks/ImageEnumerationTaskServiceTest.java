@@ -115,6 +115,8 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             // Either should be set
             {
                 ImageEnumerationTaskState invalidState = new ImageEnumerationTaskState();
+                invalidState.endpointLink = null;
+                invalidState.endpointType = null;
 
                 postServiceSynchronously(
                         ImageEnumerationTaskService.FACTORY_LINK,
@@ -183,18 +185,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                             EPT_NONE_EP },
                     { MockSuccessImageEnumerationAdapter.class,
                             MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EPT_SINGLE_EP },
-
-                    // Tests covering Region handling
-
-                    // Regions match -> should go to the adapter
-                    { MockSuccessImageEnumerationAdapter.class,
-                            MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION },
-                    // No regions -> should not go to the adapter
-                    { MockSuccessImageEnumerationAdapter.class,
-                            MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION }
+                            EPT_SINGLE_EP }
             });
         }
 
@@ -213,28 +204,8 @@ public class ImageEnumerationTaskServiceTest extends Suite {
         // Single end-point for End-point type
         static final String EPT_SINGLE_EP = "EPT_SINGLE_EP";
 
-        // End-point with region AND request with same region
-        static final String EPT_EP_WITHOUT_REGION_REQ_WITH_REGION =
-                RegionTestConfig.EPT_EP_WITHOUT_REGION_REQ_WITH_REGION.name();
-        // End-point with region AND request with different region
-        static final String EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION =
-                RegionTestConfig.EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION.name();
-        // }}
-
         static boolean isPublicImageEnumeration(String endpoinType) {
             return endpoinType.startsWith("EPT_");
-        }
-
-        private enum RegionTestConfig {
-
-            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION("REGION"),
-            EPT_EP_WITHOUT_REGION_REQ_WITHOUT_REGION(null);
-
-            public final String region;
-
-            private RegionTestConfig(String region) {
-                this.region = region;
-            }
         }
 
         static final Class<? extends Service> NO_ADAPTER = null;
@@ -245,8 +216,6 @@ public class ImageEnumerationTaskServiceTest extends Suite {
         private final TaskStage expectedCompletedStage;
         private final String endpointType;
 
-        private RegionTestConfig regionConfig;
-
         public EndToEndTest(
                 Class<? extends Service> adapterClass,
                 TaskStage expectedCompletedStage,
@@ -255,14 +224,10 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             this.adapterClass = adapterClass;
             this.expectedCompletedStage = expectedCompletedStage;
             this.endpointType = endpointType;
-
-            try {
-                this.regionConfig = RegionTestConfig.valueOf(endpointType);
-            } catch (IllegalArgumentException e) {
-            }
         }
 
         private EndpointState endpointState;
+
         private int tasksCountBeforeRun;
 
         @Before
@@ -344,9 +309,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                 taskState.endpointLink = buildUriPath(EndpointService.FACTORY_LINK, EP_NONE);
             }
 
-            if (this.regionConfig != null) {
-                taskState.regionId = this.regionConfig.region;
-            }
+            taskState.regionId = this.endpointType;
 
             return taskState;
         }
