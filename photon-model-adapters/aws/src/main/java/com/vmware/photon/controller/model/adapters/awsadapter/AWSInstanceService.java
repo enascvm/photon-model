@@ -175,8 +175,8 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Shortcut method that sets the next stage into the context and delegates to
-     * {@link #handleAllocation(AWSInstanceContext)}.
+     * Shortcut method that sets the next stage into the context and delegates to {@link
+     * #handleAllocation(AWSInstanceContext)}.
      */
     private void handleAllocation(AWSInstanceContext context, AWSInstanceStage nextStage) {
         context.stage = nextStage;
@@ -184,9 +184,8 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Shortcut method that stores the error into context, sets next stage to
-     * {@link AWSInstanceStage#ERROR} and delegates to
-     * {@link #handleAllocation(AWSInstanceContext)}.
+     * Shortcut method that stores the error into context, sets next stage to {@link
+     * AWSInstanceStage#ERROR} and delegates to {@link #handleAllocation(AWSInstanceContext)}.
      */
     private void handleError(AWSInstanceContext context, Throwable e) {
         context.error = e;
@@ -195,8 +194,8 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * {@code handleAllocation} version suitable for chaining to
-     * {@code DeferredResult.whenComplete}.
+     * {@code handleAllocation} version suitable for chaining to {@code
+     * DeferredResult.whenComplete}.
      */
     private BiConsumer<AWSInstanceContext, Throwable> thenAllocation(AWSInstanceContext context,
             AWSInstanceStage next) {
@@ -217,7 +216,6 @@ public class AWSInstanceService extends StatelessService {
      * service. Each call to the service will result in a synchronous execution of the stages below
      * Each stage is responsible for setting the next stage on success -- the next stage is passed
      * into action methods
-     *
      * @see #handleError(AWSInstanceContext, Throwable)
      * @see #handleAllocation(AWSInstanceContext, AWSInstanceStage)
      */
@@ -499,7 +497,7 @@ public class AWSInstanceService extends StatelessService {
      * Instance Type(like r3.large etc) supports a limited number of instance-store disks. All the
      * extra instance-store mappings that are more than those supported by the instance-type are
      * termed as excess. Excess mappings does not result in provisioning a disk.
-     *
+     * <p>
      * Suppress the excess instance-store mappings in the image by setting NoDevice to 'true'.
      */
     private void suppressExcessInstanceStoreDevices(List<BlockDeviceMapping> deviceMappings,
@@ -636,7 +634,8 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Add the disk information to disk state so that the disk state reflects the volume information
+     * Add the disk information to disk state so that the disk state reflects the volume
+     * information
      */
     private void addMandatoryProperties(DiskState diskState, BlockDeviceMapping deviceMapping,
             InstanceType instanceType) {
@@ -723,8 +722,8 @@ public class AWSInstanceService extends StatelessService {
                 cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
                 cs.address = ((Instance) instance).getPublicIpAddress();
                 cs.regionId = getRequestRegionId(this.context);
-                cs.zoneId = ((Instance)instance).getPlacement().getAvailabilityZone();
-                cs.powerState = AWSUtils.mapToPowerState(((Instance)instance).getState());
+                cs.zoneId = ((Instance) instance).getPlacement().getAvailabilityZone();
+                cs.powerState = AWSUtils.mapToPowerState(((Instance) instance).getState());
                 if (this.context.child.customProperties == null) {
                     cs.customProperties = new HashMap<>();
                 } else {
@@ -805,7 +804,7 @@ public class AWSInstanceService extends StatelessService {
                 dr.whenComplete((computeState, throwable) -> {
                     if (throwable != null) {
                         this.service.logSevere(() -> String.format(" [AWSInstanceService] Error "
-                                        + "updating VM state. %s", Utils.toString(throwable)));
+                                + "updating VM state. %s", Utils.toString(throwable)));
                         this.context.taskManager.patchTaskToFailure(
                                 new IllegalStateException("Error updating VM state"));
                         return;
@@ -911,7 +910,8 @@ public class AWSInstanceService extends StatelessService {
 
                 AWSTaskStatusChecker
                         .create(this.context.amazonEC2Client, instanceId,
-                                AWSTaskStatusChecker.AWS_RUNNING_NAME, consumer,
+                                AWSTaskStatusChecker.AWS_RUNNING_NAME,
+                                Arrays.asList(AWSTaskStatusChecker.AWS_TERMINATED_NAME), consumer,
                                 this.context.taskManager,
                                 this.service, this.context.taskExpirationMicros)
                         .start(new Instance());
@@ -1261,7 +1261,8 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Count the number of instance-store disks configured in the image that are marked for provisioning.
+     * Count the number of instance-store disks configured in the image that are marked for
+     * provisioning.
      */
     private int countInstanceStoreDisksInImage(List<BlockDeviceMapping> blockDeviceMappings) {
         List<BlockDeviceMapping> unsuppressedInstanceStoreMappings =
@@ -1271,8 +1272,9 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     *  Get the list of instance store mappings available in the image and are mapped for provisioning.
-     *  If noDevice != null then that device is suppressed and cannot provision a disk.
+     * Get the list of instance store mappings available in the image and are mapped for
+     * provisioning. If noDevice != null then that device is suppressed and cannot provision a
+     * disk.
      */
     private List<BlockDeviceMapping> getUnsuppressedInstanceStoreMappings(
             List<BlockDeviceMapping> blockDeviceMappings) {
@@ -1353,7 +1355,6 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     *
      * Creates device mappings for the instance-store disks.
      */
     private List<BlockDeviceMapping> createInstanceStoreMappings(List<DiskState> instanceStoreDisks,
@@ -1402,7 +1403,6 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     *
      * Returns the list of device names that can be used for provisioning additional disks
      */
     private List<String> getAvailableDeviceNames(List<String> usedDeviceNames,
@@ -1425,7 +1425,8 @@ public class AWSInstanceService extends StatelessService {
 
     /**
      * Returns the list of virtual names that can be used for additional instance-store disks.
-     * @param usedVirtualNames virtual names used by the existing disks.
+     * @param usedVirtualNames
+     *         virtual names used by the existing disks.
      * @return The list of virtual names available for additional disks.
      */
     private List<String> getAvailableVirtualNames(List<String> usedVirtualNames) {
