@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setDefaultVolumeTypeIfNotSet;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.validateSizeSupportedByVolumeType;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_SSH_KEY_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
@@ -1300,10 +1301,10 @@ public class AWSInstanceService extends StatelessService {
                         ebsBlockDevice.setVolumeSize(diskSize);
 
                         if (diskState.customProperties != null) {
-                            //If volume type is null standard volume is provisioned.
-                            if (diskState.customProperties.containsKey(VOLUME_TYPE)) {
-                                ebsBlockDevice
-                                        .setVolumeType(diskState.customProperties.get(VOLUME_TYPE));
+                            String requestedVolumeType = diskState.customProperties.get(VOLUME_TYPE);
+                            if (requestedVolumeType != null) {
+                                validateSizeSupportedByVolumeType(diskSize, requestedVolumeType);
+                                ebsBlockDevice.setVolumeType(requestedVolumeType);
                             }
                             String diskIops = diskState.customProperties.get(DISK_IOPS);
                             if (diskIops != null && !diskIops.isEmpty()) {

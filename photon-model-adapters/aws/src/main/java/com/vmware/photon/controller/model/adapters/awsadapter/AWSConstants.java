@@ -192,6 +192,8 @@ public class AWSConstants {
     public static final String BUCKET_OWNER_NAME = "ownerName";
     public static final String STORAGE_TYPE_EBS = "EBS";
     public static final String STORAGE_TYPE_S3 = "S3";
+    public static final long PROVISIONED_SSD_MAX_SIZE_IN_MB = 16384 * 1024;
+    public static final long PROVISIONED_SSD_MIN_SIZE_IN_MB = 4 * 1024;
 
     // AWS Metric Unit related constants
     public static final String UNIT_COUNT = "Count";

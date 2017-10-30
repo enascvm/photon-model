@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.validateSizeSupportedByVolumeType;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -279,6 +280,8 @@ public class AWSDiskService extends StatelessService {
         req.withEncrypted(encrypted);
 
         AWSUtils.setDefaultVolumeTypeIfNotSet(diskState);
+
+        validateSizeSupportedByVolumeType(diskSize, diskState.customProperties.get(VOLUME_TYPE));
 
         //set volume type
         if (diskState.customProperties.containsKey(VOLUME_TYPE)) {

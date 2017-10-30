@@ -26,8 +26,11 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_SHUTTING_DOWN;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_STOPPED;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_STOPPING;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PROVISIONED_SSD_MAX_SIZE_IN_MB;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PROVISIONED_SSD_MIN_SIZE_IN_MB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_GENERAL_PURPOSED_SSD;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_SECURITY_GROUP_NAME;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
@@ -827,6 +830,19 @@ public class AWSUtils {
 
         if (diskState.customProperties.get(VOLUME_TYPE) == null) {
             diskState.customProperties.put(VOLUME_TYPE, VOLUME_TYPE_GENERAL_PURPOSED_SSD);
+        }
+    }
+
+    public static void validateSizeSupportedByVolumeType(int capacityGiB, String volumeType) {
+        if (volumeType.equals(VOLUME_TYPE_PROVISIONED_SSD)) {
+            long capacityMBytes = capacityGiB * 1024;
+            if (capacityMBytes < PROVISIONED_SSD_MIN_SIZE_IN_MB ||
+                    capacityMBytes > PROVISIONED_SSD_MAX_SIZE_IN_MB) {
+                String message = String
+                        .format("Cannot provision a %s GiB IOPS disk. An io1 type of "
+                                + "volume must be at least 4 GiB in size.", capacityGiB);
+                throw new IllegalArgumentException(message);
+            }
         }
     }
 }
