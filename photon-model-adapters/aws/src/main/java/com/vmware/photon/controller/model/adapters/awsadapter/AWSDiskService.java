@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
@@ -245,6 +246,13 @@ public class AWSDiskService extends StatelessService {
             throw new IllegalArgumentException(message);
         }
 
+        if (diskState.customProperties != null && diskState.customProperties.get(DEVICE_TYPE)
+                .equals(AWSConstants.AWSStorageType.INSTANCE_STORE.getName())) {
+            String message = "Independent Instance Store disk cannot be created.";
+            this.logWarning(() -> "[AWSDiskService] " + message);
+            throw new IllegalArgumentException(message);
+        }
+
         CreateVolumeRequest req = new CreateVolumeRequest();
 
         String zoneId = diskState.zoneId;
@@ -270,29 +278,28 @@ public class AWSDiskService extends StatelessService {
         Boolean encrypted = diskState.encrypted == null ? false : diskState.encrypted;
         req.withEncrypted(encrypted);
 
-        if (diskState.customProperties != null) {
+        AWSUtils.setDefaultVolumeTypeIfNotSet(diskState);
 
-            //set volume type
-            if (diskState.customProperties.containsKey(VOLUME_TYPE)) {
-                req.withVolumeType(diskState.customProperties.get(VOLUME_TYPE));
+        //set volume type
+        if (diskState.customProperties.containsKey(VOLUME_TYPE)) {
+            req.withVolumeType(diskState.customProperties.get(VOLUME_TYPE));
+        }
+
+        //set iops
+        String diskIops = diskState.customProperties.get(DISK_IOPS);
+        if (diskIops != null && !diskIops.isEmpty()) {
+            int iops = Integer.parseInt(diskIops);
+            if (iops > diskSize * MAX_IOPS_PER_GiB) {
+
+                String info = String.format("[AWSDiskService] Requested IOPS (%s) exceeds"
+                                + " the maximum value supported by %sGiB disk. Continues "
+                                + "provisioning the disk with %s iops", iops, diskSize,
+                        diskSize * MAX_IOPS_PER_GiB);
+
+                this.logInfo(() -> info);
+                iops = diskSize * MAX_IOPS_PER_GiB;
             }
-
-            //set iops
-            String diskIops = diskState.customProperties.get(DISK_IOPS);
-            if (diskIops != null && !diskIops.isEmpty()) {
-                int iops = Integer.parseInt(diskIops);
-                if (iops > diskSize * MAX_IOPS_PER_GiB) {
-
-                    String info = String.format("[AWSDiskService] Requested IOPS (%s) exceeds"
-                                    + " the maximum value supported by %sGiB disk. Continues "
-                                    + "provisioning the disk with %s iops", iops, diskSize,
-                            diskSize * MAX_IOPS_PER_GiB);
-
-                    this.logInfo(() -> info);
-                    iops = diskSize * MAX_IOPS_PER_GiB;
-                }
-                req.withIops(iops);
-            }
+            req.withIops(iops);
         }
 
         AsyncHandler<CreateVolumeRequest, CreateVolumeResult> creationHandler =

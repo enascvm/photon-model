@@ -25,8 +25,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_GENERAL_PURPOSED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setDefaultVolumeTypeIfNotSet;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_SSH_KEY_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
@@ -678,19 +678,11 @@ public class AWSInstanceService extends StatelessService {
      */
     private void setDefaultVolumeTypeIfNotSpecified(List<DiskState> dataDisks) {
         for (DiskState diskState : dataDisks) {
-            if (diskState.customProperties == null) {
-                diskState.customProperties = new HashMap<>();
-            }
-
-            if (diskState.customProperties.get(DEVICE_TYPE) == null) {
-                diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
-            }
-
-            if (diskState.customProperties.get(VOLUME_TYPE) == null) {
-                diskState.customProperties.put(VOLUME_TYPE, VOLUME_TYPE_GENERAL_PURPOSED_SSD);
-            }
+            setDefaultVolumeTypeIfNotSet(diskState);
         }
     }
+
+
 
     private class AWSCreationHandler
             extends AWSAsyncHandler<RunInstancesRequest, RunInstancesResult> {
