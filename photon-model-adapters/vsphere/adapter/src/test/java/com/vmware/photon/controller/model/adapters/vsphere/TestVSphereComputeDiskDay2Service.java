@@ -178,8 +178,9 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
 
             // Step 4: Attach a CD-ROM disk
             // prepare a disk with CD-ROM type
-            DiskService.DiskState cdDiskState = createCDROMwithISO("cdrom-1", DiskService.DiskType.CDROM,
-                    0, null, 1024, null, false);
+            DiskService.DiskState cdDiskState = createCDromWithIso("cdrom-1", DiskService.DiskType
+                    .CDROM,
+                    0, null, 1024, null, false, true);
 
             request = createResourceOperationRequest(cdDiskState, createComputeDiskTaskService(),
                     ResourceOperation.ATTACH_DISK);
@@ -239,7 +240,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
     }
 
     @Test
-    public void testCDROMInsertOnCompute() throws Throwable {
+    public void testCDRomInsertOnCompute() throws Throwable {
         try {
             // Step 1: Create VM
             prepareEnvironment();
@@ -270,8 +271,8 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
 
             // Step 1: Attach a CD-ROM disk
             // prepare a disk with CD-ROM type
-            DiskService.DiskState cdDiskState = createCDROMwithISO("cdrom-1", DiskService.DiskType.CDROM,
-                    0, null, 1024, null, true);
+            DiskService.DiskState cdDiskState = createCDromWithIso("cdrom-1", DiskService.DiskType.CDROM,
+                    0, null, 1024, null, true, false);
 
             ResourceOperationRequest request = createResourceOperationRequest(cdDiskState,
                     createComputeDiskTaskService(),

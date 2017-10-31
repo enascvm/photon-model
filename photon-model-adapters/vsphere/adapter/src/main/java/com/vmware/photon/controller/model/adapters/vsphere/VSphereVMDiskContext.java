@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
+import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResourceEnumerationService.PREFIX_DATASTORE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_CONTENT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
@@ -22,13 +23,16 @@ import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STR
 
 import java.net.URI;
 import java.util.EnumSet;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
-import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
@@ -47,11 +51,13 @@ public class VSphereVMDiskContext {
 
     public String datastoreName;
 
+    protected ComputeStateWithDescription computePlacementHost;
+    protected Set<String> computeGroupLinks;
     protected DiskService.DiskStateExpanded diskState;
     protected String contentLink;
     protected byte[] contentToUpload;
-    protected ComputeService.ComputeStateWithDescription computeDesc;
-    protected ComputeService.ComputeStateWithDescription parentComputeDesc;
+    protected ComputeStateWithDescription computeDesc;
+    protected ComputeStateWithDescription parentComputeDesc;
     protected VSphereIOThreadPool pool;
     protected AuthCredentialsService.AuthCredentialsServiceState vSphereCredentials;
     protected ManagedObjectReference datacenterMoRef;
@@ -86,7 +92,7 @@ public class VSphereVMDiskContext {
                             UriUtils.URI_PARAM_ODATA_EXPAND,
                             Boolean.TRUE.toString()));
             AdapterUtils.getServiceState(service, computeUri, op -> {
-                ctx.computeDesc = op.getBody(ComputeService.ComputeStateWithDescription.class);
+                ctx.computeDesc = op.getBody(ComputeStateWithDescription.class);
                 if (CustomProperties.of(ctx.computeDesc).getString(CustomProperties.MOREF, null) == null) {
                     ctx.fail(new IllegalStateException(
                             String.format("VM Moref is not defined in resource %s",
@@ -182,7 +188,7 @@ public class VSphereVMDiskContext {
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ctx.parentComputeDesc = op
-                        .getBody(ComputeService.ComputeStateWithDescription.class);
+                        .getBody(ComputeStateWithDescription.class);
                 populateVMDiskContextThen(service, ctx, onSuccess);
             }, ctx.errorHandler);
             return;
@@ -223,6 +229,27 @@ public class VSphereVMDiskContext {
             }
         }
 
+        if (ctx.computePlacementHost == null) {
+            String placementLink = CustomProperties.of(ctx.computeDesc).getString(ComputeProperties
+                    .PLACEMENT_LINK);
+            // Placement link will be not null here.
+            URI expandedPlacementUri = UriUtils.extendUriWithQuery(
+                    PhotonModelUriUtils.createInventoryUri(service.getHost(), placementLink),
+                    UriUtils.URI_PARAM_ODATA_EXPAND,
+                    Boolean.TRUE.toString());
+            expandedPlacementUri = PhotonModelUriUtils.createInventoryUri(service.getHost(), expandedPlacementUri);
+
+            AdapterUtils.getServiceState(service, expandedPlacementUri, op -> {
+                ctx.computePlacementHost = op.getBody(ComputeStateWithDescription.class);
+                if (ctx.computePlacementHost.groupLinks != null) {
+                    ctx.computeGroupLinks = ctx.computePlacementHost.groupLinks.stream()
+                            .filter(link -> link.contains(PREFIX_DATASTORE))
+                            .collect(Collectors.toSet());
+                }
+                populateVMDiskContextThen(service, ctx, onSuccess);
+            }, ctx.errorHandler);
+        }
+
         // populate datastore name
         if (ctx.datastoreName == null) {
             if (ctx.diskState.customProperties != null && ctx.diskState.customProperties
@@ -247,6 +274,17 @@ public class VSphereVMDiskContext {
                                 ctx.datastoreName = "";
                             }
                         });
+            } else if (ctx.computeGroupLinks != null) {
+                // try to get the datastore form the placement link of compute
+                String datastoreLink = ctx.computeGroupLinks.iterator().next();
+                URI dsUri = PhotonModelUriUtils.createInventoryUri(service.getHost(),
+                        UriUtils.buildUri(service.getHost(), datastoreLink));
+                AdapterUtils.getServiceState(service, dsUri, op -> {
+                    ResourceGroupService.ResourceGroupState rgState = op
+                            .getBody(ResourceGroupService.ResourceGroupState.class);
+                    ctx.datastoreName = rgState.id;
+                    populateVMDiskContextThen(service, ctx, onSuccess);
+                }, ctx.errorHandler);
             }
         }
 

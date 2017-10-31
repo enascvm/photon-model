@@ -1145,9 +1145,9 @@ public class BaseVSphereAdapterTest {
     /**
      * Create a new CD ROM disk state with ISO Image data.
      */
-    protected DiskState createCDROMwithISO(String alias, DiskService.DiskType type, int bootOrder,
+    protected DiskState createCDromWithIso(String alias, DiskService.DiskType type, int bootOrder,
             URI sourceImageReference, long capacityMBytes, HashMap<String, String>
-            customProperties, boolean insertCDRom) throws Throwable {
+            customProperties, boolean insertCDRom, boolean withStorageDescription) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, bootOrder, sourceImageReference,
                 capacityMBytes, customProperties);
 
@@ -1165,7 +1165,9 @@ public class BaseVSphereAdapterTest {
             CustomProperties.of(diskState).put(INSERT_CDROM, true);
         }
 
-        diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
+        if (withStorageDescription) {
+            diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
+        }
         return doPost(this.host, diskState, DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
