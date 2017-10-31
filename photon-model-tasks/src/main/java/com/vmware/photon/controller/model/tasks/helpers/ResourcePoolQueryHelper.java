@@ -67,6 +67,7 @@ public class ResourcePoolQueryHelper {
 
     // input fields
     private final ServiceHost host;
+    private List<String> tenantLinks;
     private Collection<String> resourcePoolLinks;
     private Collection<String> computeLinks;
     private boolean expandComputes = false;
@@ -130,16 +131,30 @@ public class ResourcePoolQueryHelper {
      * Creates a new instance.
      */
     private ResourcePoolQueryHelper(ServiceHost host) {
+        this(host, null);
+    }
+
+    private ResourcePoolQueryHelper(ServiceHost host, List<String> tenantLinks) {
         this.host = host;
+        this.tenantLinks = tenantLinks;
     }
 
     public static ResourcePoolQueryHelper create(ServiceHost host) {
-        return new ResourcePoolQueryHelper(host);
+        return create(host, null);
+    }
+
+    public static ResourcePoolQueryHelper create(ServiceHost host, List<String> tenantLinks) {
+        return new ResourcePoolQueryHelper(host, tenantLinks);
     }
 
     public static ResourcePoolQueryHelper createForResourcePool(ServiceHost host,
             String resourcePoolLink) {
-        ResourcePoolQueryHelper helper = new ResourcePoolQueryHelper(host);
+        return createForResourcePool(host, resourcePoolLink, null);
+    }
+
+    public static ResourcePoolQueryHelper createForResourcePool(ServiceHost host,
+            String resourcePoolLink, List<String> tenantLinks) {
+        ResourcePoolQueryHelper helper = new ResourcePoolQueryHelper(host, tenantLinks);
         helper.resourcePoolLinks = new ArrayList<>();
         helper.resourcePoolLinks.add(resourcePoolLink);
         return helper;
@@ -147,14 +162,24 @@ public class ResourcePoolQueryHelper {
 
     public static ResourcePoolQueryHelper createForResourcePools(ServiceHost host,
             Collection<String> resourcePoolLinks) {
-        ResourcePoolQueryHelper helper = new ResourcePoolQueryHelper(host);
+        return createForResourcePools(host, resourcePoolLinks, null);
+    }
+
+    public static ResourcePoolQueryHelper createForResourcePools(ServiceHost host,
+            Collection<String> resourcePoolLinks, List<String> tenantLinks) {
+        ResourcePoolQueryHelper helper = new ResourcePoolQueryHelper(host, tenantLinks);
         helper.resourcePoolLinks = new ArrayList<>(resourcePoolLinks);
         return helper;
     }
 
     public static ResourcePoolQueryHelper createForComputes(ServiceHost host,
             Collection<String> computeLinks) {
-        ResourcePoolQueryHelper helper = new ResourcePoolQueryHelper(host);
+        return createForComputes(host, computeLinks, null);
+    }
+
+    public static ResourcePoolQueryHelper createForComputes(ServiceHost host,
+            Collection<String> computeLinks, List<String> tenantLinks) {
+        ResourcePoolQueryHelper helper = new ResourcePoolQueryHelper(host, tenantLinks);
         helper.computeLinks = new ArrayList<>(computeLinks);
         return helper;
     }
@@ -218,7 +243,7 @@ public class ResourcePoolQueryHelper {
         }
 
         QueryByPages<ResourcePoolState> queryByPages = new QueryByPages<>(
-                this.host, queryBuilder.build(), ResourcePoolState.class, null);
+                this.host, queryBuilder.build(), ResourcePoolState.class, this.tenantLinks);
         queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         return queryByPages.setMaxPageSize(PAGE_SIZE).queryDocuments(rp -> storeResourcePool(rp));
     }
@@ -241,8 +266,8 @@ public class ResourcePoolQueryHelper {
             }
 
             QueryByPages<ComputeState> computeQuery =
-                    new QueryByPages<>(this.host, queryBuilder.build(), ComputeState.class, null)
-                            .setMaxPageSize(PAGE_SIZE);
+                    new QueryByPages<>(this.host, queryBuilder.build(), ComputeState.class, this
+                            .tenantLinks).setMaxPageSize(PAGE_SIZE);
             computeQuery.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
             DeferredResult<Map<String, ComputeState>> rpQueryDR;
             if (this.expandComputes) {
@@ -294,7 +319,7 @@ public class ResourcePoolQueryHelper {
         }
 
         QueryByPages<ComputeState> queryByPages = new QueryByPages<>(this.host,
-                queryBuilder.build(), ComputeState.class, null);
+                queryBuilder.build(), ComputeState.class, this.tenantLinks);
         queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         return queryByPages.setMaxPageSize(PAGE_SIZE)
                 .collectLinks(Collectors.toCollection(ArrayList::new));
@@ -316,7 +341,7 @@ public class ResourcePoolQueryHelper {
                 .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, missingComputeLinks)
                 .build();
         QueryByPages<ComputeState> queryByPages = new QueryByPages<>(this.host, query,
-                ComputeState.class, null);
+                ComputeState.class, this.tenantLinks);
         queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         return queryByPages
                 .setMaxPageSize(PAGE_SIZE)
