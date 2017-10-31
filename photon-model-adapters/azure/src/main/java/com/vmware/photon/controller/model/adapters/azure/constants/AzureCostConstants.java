@@ -17,6 +17,7 @@ import java.io.File;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import com.google.common.collect.ImmutableMap;
@@ -34,28 +35,42 @@ public class AzureCostConstants {
     private static final Logger logger = Logger.getLogger("AzureCostConstants");
 
     // EA-specific
+    private static final String PROPERTY_PREFIX_AZURE_COST_COLLECTION = "azure.costCollection.";
     // Azure keeps updating the bill for past days. This number is an approximate indicator of those
     // number of days.
     public static final int NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL = 5;
-    public static final long NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL_IN_MILLIS =
-            NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL * 60 * 60 * 24 * 1000;
+    public static final long NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL_IN_MILLIS = TimeUnit.DAYS
+            .toMillis(NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL);
+
     // By default we will collect the following number of months bills from Azure.
     public static final int DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS = 11;
 
+    public static final String BILLS_BACK_IN_TIME_MONTHS_KEY =
+            UriPaths.PROPERTY_PREFIX + PROPERTY_PREFIX_AZURE_COST_COLLECTION + "backInTime.months";
+    // Past months for which cost stats need to be collected, default is 11,
+    // excluding current month's stats.
+    public static final int NO_OF_MONTHS_TO_GET_PAST_BILLS = Integer
+            .getInteger(BILLS_BACK_IN_TIME_MONTHS_KEY, DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS);
+
     // Time to wait for response from Azure servers
     public static final int INTERNAL_REQUEST_TIMEOUT_SECONDS = Integer.getInteger(
-            UriPaths.PROPERTY_PREFIX + "azure.costCollection.internalRequestTimeoutSecs", 300);
+            UriPaths.PROPERTY_PREFIX + PROPERTY_PREFIX_AZURE_COST_COLLECTION
+                    + "internalRequestTimeoutSecs", 300);
 
     // Time to wait for response from metrics server (internal)
     public static final int EXTERNAL_REQUEST_TIMEOUT_SECONDS = Integer.getInteger(
-            UriPaths.PROPERTY_PREFIX + "azure.costCollection.externalRequestTimeoutSecs", 120);
+            UriPaths.PROPERTY_PREFIX + PROPERTY_PREFIX_AZURE_COST_COLLECTION
+                    + "externalRequestTimeoutSecs", 120);
 
     // Should refresh lucene index while querying for metrics.
     public static final boolean SHOULD_REFRESH_INDEX = Boolean.valueOf(System.getProperty(
-            UriPaths.PROPERTY_PREFIX + "azure.costCollection.shouldRefreshLuceneIndex",
-            Boolean.FALSE.toString()));
+            UriPaths.PROPERTY_PREFIX + PROPERTY_PREFIX_AZURE_COST_COLLECTION
+                    + "shouldRefreshLuceneIndex", Boolean.FALSE.toString()));
 
-    public static final int DOWNLOAD_CHUNK_SIZE = 2048; //Same as Okio Segment.SIZE
+    // Dictates whether past months' bills should be downloaded for existing accounts.
+    public static final boolean SHOULD_REFRESH_PAST_MONTHS_COST = Boolean.getBoolean(
+            UriPaths.PROPERTY_PREFIX + PROPERTY_PREFIX_AZURE_COST_COLLECTION
+                    + "refreshPastMonthsCost");
 
     // Maximum number of times to re-try a request on failure before aborting
     public static final int MAX_RETRIES_ON_REQUEST_FAILURE = 3;
@@ -159,6 +174,11 @@ public class AzureCostConstants {
     // is being reused in Azure for code-reuse in analysis.
     public static final String LINKED_SUBSCRIPTION_GUIDS = "linkedAccountIds";
 
+    // Custom property key to store service metadata like bill processed time, month downloaded, etc.
+    public static final String CUSTOM_PROP_CONTAINS_SERVICE_METADATA = "containsAzureCostStatsServiceMetadata";
+
+    public static final String OLDEST_BILL_PROCESSED_MILLIS = "OldestBillProcessedMillis";
+
     public static final String AZURE_BILL_FIELD_DATE_DEFAULT_DELIMITER = "/";
     public static final String TIMESTAMP_FORMAT_WITH_DATE_FORMAT_MM_DD_YYYY_WITH_OBLIQUE_DELIMITER =
             "MM/dd/yyyy";
@@ -213,6 +233,10 @@ public class AzureCostConstants {
             setDefaultExchangeRates();
         }
     }
+
+    // Cost will be stored in this currency; independent of the currency in which the bills
+    // are obtained in. Currency conversion needs to convert cost.
+    public static final String DEFAULT_CURRENCY_VALUE = "USD";
 
     /**
      * This map will store currency values with respect to USD. Last updated on 20 April 2017.

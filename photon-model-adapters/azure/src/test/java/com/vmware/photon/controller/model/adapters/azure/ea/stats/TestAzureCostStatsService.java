@@ -24,6 +24,7 @@ import java.util.HashMap;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
@@ -115,7 +116,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
                         state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
                                 .ordinal());
 
-        System.setProperty(AzureCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY,
+        System.setProperty(AzureCostConstants.BILLS_BACK_IN_TIME_MONTHS_KEY,
                 Integer.toString(NO_OF_MONTHS_COST_REQUIRED - 1));
 
         triggerStatsCollection(resourcePool);
@@ -129,7 +130,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
         verifyPersistedStats(completeState,
                 PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, 1);
 
-        System.clearProperty(AzureCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
+        System.clearProperty(AzureCostConstants.BILLS_BACK_IN_TIME_MONTHS_KEY);
     }
 
     private void triggerStatsCollection(ResourcePoolService.ResourcePoolState pool) {

@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.ea;
+package com.vmware.photon.controller.model.adapters.azure.ea.utils;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL_IN_MILLIS;

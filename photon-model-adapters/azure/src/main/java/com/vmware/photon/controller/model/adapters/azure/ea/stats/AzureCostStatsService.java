@@ -66,12 +66,12 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
-import com.vmware.photon.controller.model.adapters.azure.ea.AzureCostHelper;
-import com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler;
 import com.vmware.photon.controller.model.adapters.azure.ea.enumeration
         .AzureSubscriptionsEnumerationService;
 import com.vmware.photon.controller.model.adapters.azure.ea.enumeration
         .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.azure.ea.utils.AzureCostHelper;
+import com.vmware.photon.controller.model.adapters.azure.ea.utils.AzureDetailedBillHandler;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureErrorResponse;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureResource;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureService;
@@ -122,14 +122,13 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  * Collects cost data for Azure EA accounts in the following stages:
  * 1. Gets the credentials of the configured account.
  * 2. Checks which past months EA account costs need to be collected based on
- *    a configurable property. In case of Azure EA accounts, this collects only the EA
- *    account-level costs for past months. Azure subscription-level costs are collected only
- *    for current months.
- * 3. Downloads current month's bill
- * 4. Starts processing the bill in the following manner:
+ *    a configurable property. Azure EA account-level costs, subscription-level costs, service-level
+ *    costs and resource-level costs are collected for these n months. These costs are downloaded
+ *    and processed in a reverse-chronological order starting from the current month.
+ * 4. Processing of each of these bills is done in the following manner:
  *    a. Processes a day's bill and gets the subscriptions in this bill
  *    b. Segregates cost by Azure subscription, service and resource-level costs.
- *    b. Checks if any of these subscriptions have never appeared before in the current month's bill
+ *    b. Checks if any of these subscriptions have ever appeared before in the current month's bill
  *    c. For all such subscriptions which are new, sends a request to the enumerator to create
  *       compute states for these subscriptions
  *    d. Creates daily cost stats for services
@@ -141,19 +140,6 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  */
 public class AzureCostStatsService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_COST_STATS_ADAPTER;
-
-    // Past months for which cost stats need to be collected, default is 11,
-    // excluding current month's stats.
-    static final String BILLS_BACK_IN_TIME_MONTHS_KEY =
-            "azure.costsCollection.backInTime.months";
-
-    // Indicates the number of months' whose detailed bills are to be processed (including current
-    /// month). So 1 indicates process only current month's detailed bill.
-    private static final int NO_OF_DETAILED_BILLS_TO_DOWNLOAD = 1;
-
-    // Cost will be stored in this currency; independent of the currency in which the bills
-    // are obtained in. Currency conversion needs to convert cost.
-    public static final String DEFAULT_CURRENCY_VALUE = "USD";
 
     private ExecutorService executor;
 
@@ -173,7 +159,8 @@ public class AzureCostStatsService extends StatelessService {
         CREATE_MONTHLY_STATS_AND_POST,
         CREATE_DAILY_STATS_AND_POST,
         QUERY_RESOURCES_FOR_EXISTING_SUBSCRIPTIONS,
-        CREATE_RESOURCES_DAILY_STATS_AND_POST
+        CREATE_RESOURCES_DAILY_STATS_AND_POST,
+        FINISH
     }
 
     public AzureCostStatsService() {
@@ -190,15 +177,17 @@ public class AzureCostStatsService extends StatelessService {
         protected AuthCredentialsServiceState auth;
         private File billFile;
         private CSVReader csvReader;
-        // The month for which cost stats need to be downloaded.
-        private LocalDate billMonthToDownload = LocalDate.now(DateTimeZone.UTC).minusMonths(
-                Integer.getInteger(BILLS_BACK_IN_TIME_MONTHS_KEY,
-                        AzureCostConstants.DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS));
+        private LocalDate billMonthToDownload;
         protected long billProcessedTimeMillis = 0;
         protected ComputeStateWithDescription computeHostDesc;
-        private String currency = DEFAULT_CURRENCY_VALUE;
-        private Map<String, AzureSubscription> monthlyBillBatch = new ConcurrentHashMap<>();
+        private String currency = AzureCostConstants.DEFAULT_CURRENCY_VALUE;
+        protected long currentMonthBillParsedMillis = 0;
         private Map<LocalDate, EaAccountCost> eaAcCost = new ConcurrentHashMap<>();
+        // Indicates if the batch of stats being posted is the last batch in
+        private boolean isFinalBatch = false;
+        private Map<String, AzureSubscription> monthlyBillBatch = new ConcurrentHashMap<>();
+        private int numberBillsAvailable;
+        private long oldestBillProcessedMillis = 0;
         private OperationContext opContext = OperationContext.getOperationContext();
         private Double storedCurrentMonthEaUsageCost;
         protected Stages stage = Stages.GET_COMPUTE_HOST;
@@ -211,8 +200,8 @@ public class AzureCostStatsService extends StatelessService {
         private Set<String> subscriptionsAddedAfterLastRun = Sets.newConcurrentHashSet();
         private Set<LocalDate> summarizedBillsToGet = Sets.newConcurrentHashSet();
         private TaskManager taskManager;
-        // billParsingCompleteTimeMillis is populated once the entire bill is parsed
-        private long billParsingCompleteTimeMillis = 0;
+        // billParsedMillis is populated once the entire bill is parsed
+        private long billParsedMillis = 0;
 
         Context(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -286,7 +275,7 @@ public class AzureCostStatsService extends StatelessService {
                 getAuth(context, Stages.GET_BILL_MONTH_TO_FETCH_STATS_FOR);
                 break;
             case GET_BILL_MONTH_TO_FETCH_STATS_FOR:
-                getBillProcessedTime(context, Stages.QUERY_EXISTING_LINKED_SUBSCRIPTIONS);
+                getServiceMetadata(context, Stages.QUERY_EXISTING_LINKED_SUBSCRIPTIONS);
                 break;
             case QUERY_EXISTING_LINKED_SUBSCRIPTIONS:
                 queryLinkedSubscriptions(context, Stages.FILTER_SUBSCRIPTIONS_ADDED_AFTER_LAST_RUN);
@@ -322,7 +311,18 @@ public class AzureCostStatsService extends StatelessService {
                 createStats(context);
                 break;
             case CREATE_MONTHLY_STATS_AND_POST:
-                createMonthlyStats(context, Stages.PARSE_DETAILED_BILL);
+                Stages next;
+                if (!AzureCostHelper.haveProcessedAllPastBills(context.billParsedMillis,
+                                context.oldestBillProcessedMillis, context.numberBillsAvailable)) {
+                    next = Stages.DOWNLOAD_DETAILED_BILL;
+                } else {
+                    context.isFinalBatch = true;
+                    next = Stages.FINISH;
+                }
+                createMonthlyStats(context, next);
+                break;
+            case FINISH:
+                finishStatsCollection(context);
                 break;
             default:
                 logSevere(() -> String.format("Unknown Azure Cost Stats stage %s ",
@@ -533,13 +533,13 @@ public class AzureCostStatsService extends StatelessService {
                 });
     }
 
-    private void getBillProcessedTime(Context context, Stages next) {
+    private void getServiceMetadata(Context context, Stages next) {
         Query.Builder builder = Query.Builder.create();
         builder.addKindFieldClause(ResourceMetrics.class);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 ResourceMetrics.PROPERTY_RESOURCE_LINK, context.computeHostDesc.documentSelfLink);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
-                PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
+                AzureCostConstants.CUSTOM_PROP_CONTAINS_SERVICE_METADATA, Boolean.TRUE.toString());
 
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
@@ -558,10 +558,11 @@ public class AzureCostStatsService extends StatelessService {
         }
 
         QueryTask queryTask = queryTaskBuilder.build();
+        queryTask.tenantLinks = context.computeHostDesc.tenantLinks;
         Operation queryTaskOp = QueryUtils.createQueryTaskOperation(this, queryTask,
-                ServiceTypeCluster
-                .METRIC_SERVICE).setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros
-                (INTERNAL_REQUEST_TIMEOUT_SECONDS)));
+                ServiceTypeCluster.METRIC_SERVICE)
+                .setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros
+                        (INTERNAL_REQUEST_TIMEOUT_SECONDS)));
 
         this.sendWithDeferredResult(queryTaskOp, QueryTask.class)
                 .whenComplete((response, exception) -> {
@@ -586,6 +587,9 @@ public class AzureCostStatsService extends StatelessService {
                                 .getOrDefault(
                                         PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS,
                                         0d).longValue();
+                        context.oldestBillProcessedMillis = rawResourceMetrics.entries
+                                .getOrDefault(AzureCostConstants.OLDEST_BILL_PROCESSED_MILLIS,
+                                        0d).longValue();
                     }
                     context.stage = next;
                     handleRequest(context);
@@ -595,20 +599,15 @@ public class AzureCostStatsService extends StatelessService {
 
     /**
      * Azure provides an API which will fetch the total EA account cost for a given month.
-     * This API is invoked iteratively to the get the past (@code BILLS_BACK_IN_TIME_MONTHS_KEY}
+     * This API is invoked iteratively to the get the past (@code NO_OF_MONTHS_TO_GET_PAST_BILLS}
      * months' cost.
      * @param context data holder for current run.
      * @param next next stage to proceed to.
      */
     @OldApi
     private void getPastAndCurrentMonthsEaAccountCostUsingOldApi(Context context, Stages next) {
-        populateBillMonthToDownload(context);
-        LocalDate billMonthToDownload = context.billMonthToDownload;
-        logInfo(() -> String.format("Getting historical cost using old API " +
-                        "from month %s for endpoint %s ", context.billMonthToDownload,
-                context.computeHostDesc.endpointLink));
-
-        if (billMonthToDownload.isBefore(AzureCostHelper.getFirstDayOfCurrentMonth())) {
+        if (context.billProcessedTimeMillis == 0) {
+            // For the first collection, collect all past summarized bills.
             AzureCostHelper
                     .getOldBillAvailableMonths(context.auth.privateKeyId, context.auth.privateKey)
                     .setCompletion((op, ex) -> {
@@ -634,26 +633,30 @@ public class AzureCostStatsService extends StatelessService {
                         List<Operation> summarizedBillOps = createSummarizedBillOps(context);
                         joinOldSummarizedBillOpsSendAndProcessRequest(context, next,
                                 summarizedBillOps);
-                    })
-                    .sendWith(this);
+                    }).sendWith(this);
         } else {
+            context.summarizedBillsToGet = AzureCostHelper.getSummarizedBillsToDownload(
+                    context.billProcessedTimeMillis);
             List<Operation> summarizedBillOps = createSummarizedBillOps(context);
-            joinOldSummarizedBillOpsSendAndProcessRequest(context, next, summarizedBillOps);
+            joinOldSummarizedBillOpsSendAndProcessRequest(context, next,
+                    summarizedBillOps);
+
         }
     }
 
     private List<Operation> createSummarizedBillOps(Context context) {
         List<Operation> summarizedBillOps = new ArrayList<>();
         if (context.summarizedBillsToGet.isEmpty()) {
-            // Get the summarized bill for the current month
-            LocalDate currentMonth = AzureCostHelper.getFirstDayOfCurrentMonth();
-            context.summarizedBillsToGet = Collections.singleton(currentMonth);
+            // Get the summarized bill only for the current month
+            context.summarizedBillsToGet.add(AzureCostHelper.getFirstDayOfCurrentMonth());
         }
         for (LocalDate bill : context.summarizedBillsToGet) {
             summarizedBillOps.add(AzureCostHelper
                     .getOldBillOperation(context.auth.privateKeyId, context.auth.privateKey, bill,
                             AzureCostConstants.QUERY_PARAM_BILL_TYPE_VALUE_SUMMARY));
         }
+        context.numberBillsAvailable = Math.min(context.summarizedBillsToGet.size() - 1,
+                AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS);
         return summarizedBillOps;
     }
 
@@ -661,7 +664,7 @@ public class AzureCostStatsService extends StatelessService {
         LocalDate billMonthToDownload = context.billMonthToDownload;
         List<Operation> summarizedBillOps = new ArrayList<>();
         while (!billMonthToDownload.isAfter(AzureCostHelper.getFirstDayOfCurrentMonth())) {
-            // Get past BILLS_BACK_IN_TIME_MONTHS_KEY months' and the current month's
+            // Get past NO_OF_MONTHS_TO_GET_PAST_BILLS months' and the current month's
             // EA account cost.
             Operation summarizedBillOp = AzureCostHelper
                     .getOldBillOperation(context.auth.privateKeyId, context.auth.privateKey,
@@ -673,8 +676,8 @@ public class AzureCostStatsService extends StatelessService {
         // Since billMonthToDownload has advanced until current month, subtract
         // NO_OF_DETAILED_BILLS_TO_DOWNLOAD to download detailed bills for the past
         // NO_OF_DETAILED_BILLS_TO_DOWNLOAD months including that of current month.
-        context.billMonthToDownload = billMonthToDownload.minusMonths(
-                NO_OF_DETAILED_BILLS_TO_DOWNLOAD);
+        context.billMonthToDownload = billMonthToDownload
+                .minusMonths(AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS);
 
         joinOldSummarizedBillOpsSendAndProcessRequest(context, next, summarizedBillOps);
 
@@ -714,7 +717,7 @@ public class AzureCostStatsService extends StatelessService {
 
     /**
      * Azure provides an API which will fetch the total EA account cost for a given month.
-     * This API is invoked iteratively to the get the past (@code BILLS_BACK_IN_TIME_MONTHS_KEY}
+     * This API is invoked iteratively to the get the past (@code NO_OF_MONTHS_TO_GET_PAST_BILLS}
      * months' cost.
      * @param context data holder for current run.
      * @param next next stage to proceed to.
@@ -726,7 +729,7 @@ public class AzureCostStatsService extends StatelessService {
         List<Operation> summarizedBillOps = new ArrayList<>();
 
         while (!billMonthToDownload.isAfter(AzureCostHelper.getFirstDayOfCurrentMonth())) {
-            // Get past BILLS_BACK_IN_TIME_MONTHS_KEY months' and the current month's
+            // Get past NO_OF_MONTHS_TO_GET_PAST_BILLS months' and the current month's
             // EA account cost.
             Operation summarizedBillOp = AzureCostHelper
                     .getSummarizedBillOp(context.auth.privateKeyId, context.auth.privateKey,
@@ -737,18 +740,17 @@ public class AzureCostStatsService extends StatelessService {
         // Since billMonthToDownload has advanced until current month, subtract
         // NO_OF_DETAILED_BILLS_TO_DOWNLOAD to download detailed bills for the past
         // NO_OF_DETAILED_BILLS_TO_DOWNLOAD months including that of current month.
-        context.billMonthToDownload = billMonthToDownload.minusMonths(
-                NO_OF_DETAILED_BILLS_TO_DOWNLOAD);
+        context.billMonthToDownload = billMonthToDownload
+                .minusMonths(AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS);
 
         joinSummarizedBillOpsSendAndProcessRequest(context, next, summarizedBillOps);
 
     }
 
     /**
-     * Will set (@code Context.billMonthToDownload} to infer which months' bills
-     * have to be downloaded. Summarized bills will be downloaded starting from this month up to
-     * the current month. These number of months are configurable, specified by
-     * the SystemProperty {@code BILLS_BACK_IN_TIME_MONTHS_KEY}
+     * Will set (@code Context.billMonthToDownload} to infer which months' bill
+     * has to be downloaded. These number of months are configurable, specified by
+     * the SystemProperty {@code NO_OF_MONTHS_TO_GET_PAST_BILLS}
      * TODO gjobin: This will only determine which months' summarized bill need to be downloaded
      * Construct a method to determine which detailed bills need to be downloaded.
      * @param context has the context for this running thread, is used to populate
@@ -760,19 +762,55 @@ public class AzureCostStatsService extends StatelessService {
         LocalDate billProcessedLocalDate = new LocalDate(billProcessedTime, DateTimeZone.UTC);
         billProcessedLocalDate = billProcessedLocalDate
                 .minusDays(AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL);
-        int noPastMonthsBills = Integer.getInteger(BILLS_BACK_IN_TIME_MONTHS_KEY,
-                AzureCostConstants.DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS);
         LocalDate currentMonth = LocalDate.now(DateTimeZone.UTC);
         // currentMonth will indicate the last day of the current month e.g. 31-MM-yyyy
         currentMonth = currentMonth.withDayOfMonth(currentMonth.dayOfMonth().getMaximumValue());
         LocalDate start = billProcessedLocalDate;
         if (billProcessedLocalDate.isBefore(currentMonth)) {
-            LocalDate trendMinMonth = currentMonth.minusMonths(noPastMonthsBills);
+            LocalDate trendMinMonth = currentMonth
+                    .minusMonths(AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS);
             if (billProcessedLocalDate.isBefore(trendMinMonth)) {
                 start = trendMinMonth;
             }
         }
         context.billMonthToDownload = start.withDayOfMonth(1);
+        logInfo(() -> String.format("Downloading bills since %s for Azure endpoint %s",
+                context.billMonthToDownload, context.computeHostDesc.endpointLink));
+    }
+
+    private void populateDetailedBillMonthToDownload(Context context) {
+
+        LocalDate currentMonth = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1);
+
+        if (AzureCostConstants.SHOULD_REFRESH_PAST_MONTHS_COST ||
+                AzureCostHelper.shouldDownloadPastBills(context.billProcessedTimeMillis,
+                        context.oldestBillProcessedMillis, context.numberBillsAvailable)) {
+            if (context.billProcessedTimeMillis == 0) {
+                context.billMonthToDownload = currentMonth;
+            } else {
+                // Set bill processed time to zero, since the previous month's bill is being
+                // processed after the current month's bill. Not doing this will set ask the
+                // parser to consider only those rows which are after the bill processed time,
+                // which will prevent parsing any row of previous month's bill.
+                if (!AzureCostHelper.haveProcessedAllPastBills(context.billProcessedTimeMillis,
+                        context.oldestBillProcessedMillis, context.numberBillsAvailable)) {
+                    if (context.billMonthToDownload == null) {
+                        context.billMonthToDownload = currentMonth;
+                    } else {
+                        context.billProcessedTimeMillis = 0;
+                        context.billMonthToDownload = context.billMonthToDownload.withDayOfMonth(1)
+                                .minusMonths(1);
+                    }
+                } else {
+                    context.billMonthToDownload = currentMonth;
+                }
+            }
+        } else {
+            context.billMonthToDownload = currentMonth;
+        }
+
+        logInfo(() -> String.format("Downloading bill for the month of %s for Azure endpoint %s",
+                context.billMonthToDownload, context.computeHostDesc.endpointLink));
     }
 
     /**
@@ -783,27 +821,26 @@ public class AzureCostStatsService extends StatelessService {
     private void downloadDetailedBill(Context context, Stages next) {
         EaAccountCost eaAcCost = context.eaAcCost.get(AzureCostHelper.getFirstDayOfCurrentMonth());
         if (eaAcCost != null && !AzureCostHelper
-                .shouldDownloadBill(context.storedCurrentMonthEaUsageCost,
+                .shouldDownloadCurrentMonthBill(context.storedCurrentMonthEaUsageCost,
                         eaAcCost.monthlyEaAccountUsageCost,
                         context.subscriptionsAddedAfterLastRun)) {
             logInfo(() -> String
                     .format("Microsoft Azure hasn't updated the bill for the endpoint: %s "
                                     + "since the last run. " + "Aborting this run.",
                             context.computeHostDesc.endpointLink));
-            postStats(context, true);
+            context.isFinalBatch = true;
+            postStats(context);
             return;
         }
 
-        logInfo(() -> String.format("Downloading bills since %s for Azure endpoint %s",
-                context.billMonthToDownload, context.computeHostDesc.endpointLink));
         this.executor.submit(() -> {
             // Restore context since this is a new thread
             OperationContext.restoreOperationContext(context.opContext);
-            final LocalDate firstDayOfCurrentMonth = AzureCostHelper.getFirstDayOfCurrentMonth();
+            populateDetailedBillMonthToDownload(context);
 
             Request oldDetailedBillRequest = AzureCostHelper
                     .getOldDetailedBillRequest(context.auth.privateKeyId, context.auth.privateKey,
-                            firstDayOfCurrentMonth);
+                            context.billMonthToDownload);
             OkHttpClient.Builder b = new OkHttpClient.Builder();
             b.readTimeout(AzureCostConstants.EXTERNAL_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             b.connectTimeout(AzureCostConstants.EXTERNAL_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -842,7 +879,7 @@ public class AzureCostStatsService extends StatelessService {
                         Path workingDirectory = Files.createDirectories(workingDirPath);
                         File downloadedFile = new File(workingDirectory.toString(), AzureCostHelper
                                 .getCsvBillFileName(context.auth.privateKeyId,
-                                        firstDayOfCurrentMonth));
+                                        context.billMonthToDownload));
                         try (BufferedSink sink = Okio.buffer(Okio.sink(downloadedFile))) {
                             sink.writeAll(response.body().source());
                         } catch (Exception ex) {
@@ -986,6 +1023,7 @@ public class AzureCostStatsService extends StatelessService {
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(azureSubscriptionsQuery).build();
+
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeHostDesc.tenantLinks;
 
@@ -1021,12 +1059,13 @@ public class AzureCostStatsService extends StatelessService {
         return (newMonthlyBillBatch, parsingCompleteTimeMillis) -> {
             if (newMonthlyBillBatch.size() == 0) {
                 // There are no stats to be posted
-                postStats(context, true);
+                context.isFinalBatch = true;
+                postStats(context);
                 return;
             }
             if (parsingCompleteTimeMillis != null) {
                 // This means bill parsing is complete
-                context.billParsingCompleteTimeMillis = parsingCompleteTimeMillis;
+                context.billParsedMillis = parsingCompleteTimeMillis;
             }
             List<AzureSubscription> newSubscriptions = getNewSubscriptions(
                     newMonthlyBillBatch, context.allSubscriptionsCost);
@@ -1090,9 +1129,10 @@ public class AzureCostStatsService extends StatelessService {
                     .forEach(service -> createServiceStatsForSubscription(context, subscription));
             subscription.getServices().clear();
         });
-        postStats(context, false);
+        context.isFinalBatch = false;
+        postStats(context);
         // Check if the entire bill is parsed
-        if (context.billParsingCompleteTimeMillis > 0) {
+        if (context.billParsedMillis > 0) {
             context.stage = Stages.CREATE_MONTHLY_STATS_AND_POST;
         } else {
             context.stage = Stages.PARSE_DETAILED_BILL;
@@ -1101,18 +1141,25 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private void createMonthlyStats(Context context, Stages next) {
-        context.billProcessedTimeMillis = context.billParsingCompleteTimeMillis;
+        context.billProcessedTimeMillis = context.billParsedMillis;
+        if (AzureCostHelper.isCurrentMonth(
+                new LocalDate(context.billParsedMillis, DateTimeZone.UTC))) {
+            context.currentMonthBillParsedMillis = context.billParsedMillis;
+        }
         context.allSubscriptionsCost.values()
                 .forEach(subscription -> createAzureSubscriptionStats(context, subscription));
         List<ComputeStats> eaAccountStats = createEaAccountStats(
                 context.eaAcCost, context.computeHostDesc,
-                context.billParsingCompleteTimeMillis, context.auth.privateKey);
+                context.currentMonthBillParsedMillis, context.billParsedMillis,
+                context.oldestBillProcessedMillis, context.auth.privateKey);
         if (eaAccountStats.size() > 0) {
             context.statsResponse.statsList.addAll(eaAccountStats);
-            postStats(context, true);
-            logInfo(() -> String.format("Finished collecting cost stats for endpoint %s ",
+            logInfo(() -> String.format("Finished collecting cost stats for the month of %s "
+                            + "for endpoint %s ", context.billMonthToDownload,
                     context.computeHostDesc.endpointLink));
+            postStats(context);
         }
+        cleanUpMonthlyData(context);
         context.stage = next;
         handleRequest(context);
     }
@@ -1123,7 +1170,8 @@ public class AzureCostStatsService extends StatelessService {
             subscriptionComputeStates.forEach(subscriptionComputeState -> {
                 String costStatName = AzureStatsNormalizer
                         .getNormalizedStatKeyValue(AzureCostConstants.COST);
-                String costUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
+                String costUnit = AzureStatsNormalizer
+                        .getNormalizedUnitValue(AzureCostConstants.DEFAULT_CURRENCY_VALUE);
 
                 ComputeStats subscriptionStats = new ComputeStats();
                 subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
@@ -1164,14 +1212,16 @@ public class AzureCostStatsService extends StatelessService {
      * separately billed cost and total cost are stored on a month-level.
      * @param monthlyEaAccountCost map of monthly EA usage, marketplace and separately billed cost.
      * @param computeHostDesc compute host of EA account
-     * @param billProcessedTime time when the bill was processed in the current run.
-     * @param privateKey the usage API key.
-     * @return list of created stats.
+     * @param billParsedMillis time when the bill was processed in the current run.
+     * @param oldestBillParsedMillis time when the oldest bill was parsed
+     *@param privateKey the usage API key.  @return list of created stats.
      */
     private static List<ComputeStats> createEaAccountStats(
             Map<LocalDate, EaAccountCost> monthlyEaAccountCost,
-            ComputeStateWithDescription computeHostDesc, long billProcessedTime,
-            String privateKey) {
+            ComputeStateWithDescription computeHostDesc,
+            long currentMonthBillParsedMillis,
+            long billParsedMillis,
+            long oldestBillParsedMillis, String privateKey) {
         List<ComputeStats> eaAccountStats = new ArrayList<>();
 
         Map<LocalDate, Double> monthlyEaAccountTotalCost = getEaAccountTotalCost(
@@ -1182,7 +1232,13 @@ public class AzureCostStatsService extends StatelessService {
         eaAccountStats.addAll(createMonthlyEaAccountCostStats(monthlyEaAccountCost,
                 monthlyEaAccountTotalCost, computeHostDesc));
 
-        eaAccountStats.add(createBillProcessedTimeStat(computeHostDesc, billProcessedTime));
+        eaAccountStats.add(createBillProcessedTimeStat(computeHostDesc, currentMonthBillParsedMillis));
+
+        oldestBillParsedMillis = oldestBillParsedMillis > 0 ?
+                Math.min(oldestBillParsedMillis, billParsedMillis) : billParsedMillis;
+
+        eaAccountStats.add(createOldestBillDownloadedStat(computeHostDesc, oldestBillParsedMillis,
+                currentMonthBillParsedMillis));
 
         eaAccountStats.add(createApiKeyExpiresTimeStat(computeHostDesc,
                 AzureCostHelper.getUsageKeyExpiryTime(privateKey)));
@@ -1215,7 +1271,8 @@ public class AzureCostStatsService extends StatelessService {
         String usageCostStatName = AzureCostConstants.USAGE_COST;
         String marketplaceCostStatName = AzureCostConstants.MARKETPLACE_COST;
         String separatelyBilledCostStatName = AzureCostConstants.SEPARATELY_BILLED_COST;
-        String costUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
+        String costUnit = AzureStatsNormalizer
+                .getNormalizedUnitValue(AzureCostConstants.DEFAULT_CURRENCY_VALUE);
 
         for (Entry<LocalDate, Double> monthlyTotalCost : monthlyTotalCosts.entrySet()) {
             ComputeStats accountStat = new ComputeStats();
@@ -1257,23 +1314,39 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private static ComputeStats createBillProcessedTimeStat(
-            ComputeStateWithDescription computeHostDesc, long billProcessedTime) {
+            ComputeStateWithDescription computeHostDesc, long billProcessedTimeMillis) {
         // Create bill processed time stat: will be linked with the EA account's compute state
         // since the bill is obtained and processed at the EA account level.
         ComputeStats accountStats = new ComputeStats();
         accountStats.computeLink = computeHostDesc.documentSelfLink;
         accountStats.statValues = new ConcurrentSkipListMap<>();
-        accountStats.addCustomProperty(PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT,
+        accountStats.addCustomProperty(AzureCostConstants.CUSTOM_PROP_CONTAINS_SERVICE_METADATA,
                 Boolean.TRUE.toString());
 
         ServiceStat billProcessedTimeStat = AzureCostHelper.createServiceStat(
-                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS,
-                billProcessedTime,
-                PhotonModelConstants.UNIT_MILLISECONDS,
-                billProcessedTime);
+                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, billProcessedTimeMillis,
+                PhotonModelConstants.UNIT_MILLISECONDS, billProcessedTimeMillis);
         accountStats.statValues.put(billProcessedTimeStat.name,
                 Collections.singletonList(billProcessedTimeStat));
         return accountStats;
+    }
+
+    private static ComputeStats createOldestBillDownloadedStat(
+            ComputeStateWithDescription computeHostDesc, long billParsedMillis,
+            long currentMonthBillParsedMillis) {
+        ComputeStats stats = new ComputeStats();
+        stats.computeLink = computeHostDesc.documentSelfLink;
+        stats.statValues = new ConcurrentSkipListMap<>();
+        stats.addCustomProperty(AzureCostConstants.CUSTOM_PROP_CONTAINS_SERVICE_METADATA,
+                Boolean.TRUE.toString());
+
+        ServiceStat oldestBillDownloadedStat = AzureCostHelper
+                .createServiceStat(AzureCostConstants.OLDEST_BILL_PROCESSED_MILLIS,
+                        billParsedMillis, PhotonModelConstants.UNIT_MILLISECONDS,
+                        currentMonthBillParsedMillis);
+        stats.statValues.put(oldestBillDownloadedStat.name,
+                Collections.singletonList(oldestBillDownloadedStat));
+        return stats;
     }
 
     private static ComputeStats createApiKeyExpiresTimeStat(
@@ -1354,7 +1427,8 @@ public class AzureCostStatsService extends StatelessService {
 
     private Map<String, List<ServiceStat>> createStatsForAzureService(Context context,
                  AzureService service, List<ComputeStats> resourceCostStats) {
-        String currencyUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
+        String currencyUnit = AzureStatsNormalizer
+                .getNormalizedUnitValue(AzureCostConstants.DEFAULT_CURRENCY_VALUE);
         String serviceCode = service.meterCategory.replaceAll(" ", "");
         Map<String, List<ServiceStat>> stats = new HashMap<>();
 
@@ -1406,7 +1480,8 @@ public class AzureCostStatsService extends StatelessService {
 
     private ComputeStats createComputeStatsForResource(String resourceLink,
             AzureResource azureResource) {
-        String currencyUnit = AzureStatsNormalizer.getNormalizedUnitValue(DEFAULT_CURRENCY_VALUE);
+        String currencyUnit = AzureStatsNormalizer
+                .getNormalizedUnitValue(AzureCostConstants.DEFAULT_CURRENCY_VALUE);
         String costStatName = AzureStatsNormalizer
                 .getNormalizedStatKeyValue(AzureCostConstants.COST);
         ComputeStats resourceComputeStats = new ComputeStats();
@@ -1427,11 +1502,9 @@ public class AzureCostStatsService extends StatelessService {
      * Send stats for persistence.
      * @param context Holds data to be posted for persistence in
      * {@code context.statsResponse.statsList}
-     * @param isFinalBatch indicates if the batch of stats being posted is the last batch in
-     *                     this run.
      */
-    private void postStats(Context context, boolean isFinalBatch) {
-        if (!isFinalBatch && context.statsResponse.statsList.size() == 0) {
+    private void postStats(Context context) {
+        if (!context.isFinalBatch && context.statsResponse.statsList.size() == 0) {
             return;
         }
         SingleResourceStatsCollectionTaskState respBody =
@@ -1441,7 +1514,7 @@ public class AzureCostStatsService extends StatelessService {
         respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
         respBody.statsList = context.statsResponse.statsList;
         respBody.computeLink = context.computeHostDesc.documentSelfLink;
-        respBody.isFinalBatch = isFinalBatch;
+        respBody.isFinalBatch = context.isFinalBatch;
         sendRequest(Operation.createPatch(context.statsRequest.taskReference).setBody(respBody)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
@@ -1449,6 +1522,18 @@ public class AzureCostStatsService extends StatelessService {
                     }
                 }));
         context.statsResponse.statsList = new ArrayList<>();
+    }
+
+    /**
+     * Cleans up data related to parsing and processing of each month's data.
+     * @param context data holder for current run.
+     */
+    private void cleanUpMonthlyData(Context context) {
+        if (context.billParsedMillis > 0) {
+            // Clean-up only in case parsing has been completed for a month.
+            context.billParsedMillis = 0;
+            context.csvReader = null;
+        }
     }
 
     private void joinOpSendRequest(Context context, List<Operation> queryOps, Stages next) {
@@ -1620,7 +1705,7 @@ public class AzureCostStatsService extends StatelessService {
             }
             billElement = AzureCostHelper.sanitizeSummarizedBillElementUsingOldApi(billElement);
             String serviceCommitment = billElement.serviceCommitment;
-            context.currency = DEFAULT_CURRENCY_VALUE;
+            context.currency = AzureCostConstants.DEFAULT_CURRENCY_VALUE;
             if (serviceCommitment == null) {
                 continue;
             }
@@ -1641,8 +1726,6 @@ public class AzureCostStatsService extends StatelessService {
                         .forPattern(
                                 AzureCostConstants.SERVICE_COMMITMENT_REPORT_GENERATION_DATE_FORMAT);
                 date = formatter.parseLocalDate(billElement.amount);
-                // The report generation date will the chronologically last date in the detailed bill.
-                context.billProcessedTimeMillis = AzureCostHelper.getMillisForDate(date);
                 break;
             case AzureCostConstants.SERVICE_COMMITMENT_CHARGES_BILLED_SEPARATELY:
                 accountSeparatelyBilledCost = getBillElementAmountUsingOldApi(billElement);
@@ -1682,7 +1765,7 @@ public class AzureCostStatsService extends StatelessService {
         // genuine zero values will then be unidentifiable; this will
         // help to distinguish unknown values from real zero costs.
         LocalDate billMonth = AzureCostHelper.getMonthFromRequestUri(requestUri);
-        context.currency = DEFAULT_CURRENCY_VALUE;
+        context.currency = AzureCostConstants.DEFAULT_CURRENCY_VALUE;
         if (AzureCostConstants.exchangeRates.get(billElement.currencyCode) != null) {
             context.currency = billElement.currencyCode;
         }
@@ -1727,6 +1810,11 @@ public class AzureCostStatsService extends StatelessService {
             eaAccountCost.monthlyEaAccountSeparatelyBilledCost = separatelyBilledCost;
         }
         context.eaAcCost.put(billMonth, eaAccountCost);
+    }
+
+    private void finishStatsCollection(Context context) {
+        logInfo(() -> String.format("Finished collecting cost stats for endpoint %s ",
+                context.computeHostDesc.endpointLink));
     }
 
     private void handleJoinOpErrors(Context context, Stages next, Map<Long, Throwable> exceptions) {

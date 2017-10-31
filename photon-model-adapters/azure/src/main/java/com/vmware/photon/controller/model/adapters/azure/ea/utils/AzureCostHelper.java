@@ -11,86 +11,70 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.ea;
+package com.vmware.photon.controller.model.adapters.azure.ea.utils;
 
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.API_VERSION_HEADER;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.API_VERSION_HEADER_VALUE;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.BILL_FORMAT;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.DETAILED_CSV_BILL_NAME_MID;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.EXTERNAL_REQUEST_TIMEOUT_SECONDS;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.OLD_EA_BILL_AVAILABLE_MONTHS;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.OLD_EA_USAGE_REPORT;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.PATH_PARAM_BILLING_PERIODS;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.QUERY_PARAM_BILL_MONTH;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.QUERY_PARAM_BILL_TYPE;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.QUERY_PARAM_BILL_TYPE_VALUE_DETAILED;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_CSV;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_JSON;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.SUMMARIZED_BILL;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.THRESHOLD_FOR_TIME_IN_SECONDS;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_MM_DD_YYYY_WITH_OBLIQUE_DELIMITER;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_HYPHEN_MM;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_MM;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.UNKNOWN_SERVICE_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.UNKNOWN_SUBSCRIPTION;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureCostConstants.USAGE_API_KEY_JSON_EXPIRES_KEY;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.ACCOUNT_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.ACCOUNT_OWNER_ID;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.ADDITIONAL_INFO;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.CONSUMED_QUANTITY;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.CONSUMED_SERVICE;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.COST_CENTER;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.DATE;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.DAY;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.DEPARTMENT_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.EXTENDED_COST;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.INSTANCE_ID;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_CATEGORY;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_ID;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_REGION;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_SUB_CATEGORY;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.MONTH;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.PRODUCT;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.RESOURCE_GROUP;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.RESOURCE_LOCATION;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.RESOURCE_RATE;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SERVICE_ADMINISTRATOR_ID;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_1;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_2;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.STORE_SERVICE_IDENTIFIER;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_GUID;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_ID;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.TAGS;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.UNIT_OF_MEASURE;
-import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.YEAR;
-import static com.vmware.photon.controller.model.adapters.azure.ea.stats.AzureCostStatsService.DEFAULT_CURRENCY_VALUE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.ACCOUNT_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.ACCOUNT_OWNER_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.ADDITIONAL_INFO;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.CONSUMED_QUANTITY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.CONSUMED_SERVICE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.COST_CENTER;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.DATE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.DAY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.DEPARTMENT_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.EXTENDED_COST;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.INSTANCE_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.METER_CATEGORY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.METER_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.METER_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.METER_REGION;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.METER_SUB_CATEGORY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.MONTH;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.PRODUCT;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.RESOURCE_GROUP;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.RESOURCE_LOCATION;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.RESOURCE_RATE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.SERVICE_ADMINISTRATOR_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_1;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_2;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.STORE_SERVICE_IDENTIFIER;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_GUID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.TAGS;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.UNIT_OF_MEASURE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.utils
+        .AzureDetailedBillHandler.BillHeaders.YEAR;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -102,6 +86,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -117,6 +102,7 @@ import org.joda.time.LocalDate;
 import org.joda.time.LocalDateTime;
 import org.joda.time.format.DateTimeFormat;
 
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaDetailedBillElement;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.OldApi;
@@ -141,7 +127,7 @@ public interface AzureCostHelper {
     static Operation getSummarizedBillOp(String enrollmentNumber, String accessToken,
             LocalDate billMonthToDownload) {
         String baseUri = AdapterUriUtil
-                .expandUriPathTemplate(SUMMARIZED_BILL, enrollmentNumber,
+                .expandUriPathTemplate(AzureCostConstants.SUMMARIZED_BILL, enrollmentNumber,
                         dateInNewApiExpectedFormat(billMonthToDownload));
 
         logger.info(String.format("Request: %s", baseUri));
@@ -158,37 +144,41 @@ public interface AzureCostHelper {
     static Request getOldDetailedBillRequest(String enrollmentNumber, String accessToken,
             LocalDate billMonthToDownload) {
         String baseUri = AdapterUriUtil
-                .expandUriPathTemplate(OLD_EA_USAGE_REPORT, enrollmentNumber);
+                .expandUriPathTemplate(AzureCostConstants.OLD_EA_USAGE_REPORT, enrollmentNumber);
         String dateInBillingApiExpectedFormat = getDateInBillingApiFormat(
                 billMonthToDownload);
 
         URI uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(baseUri),
-                QUERY_PARAM_BILL_MONTH, dateInBillingApiExpectedFormat,
-                QUERY_PARAM_BILL_TYPE, QUERY_PARAM_BILL_TYPE_VALUE_DETAILED,
-                QUERY_PARAM_RESPONSE_FORMAT, QUERY_PARAM_RESPONSE_FORMAT_VALUE_CSV);
+                AzureCostConstants.QUERY_PARAM_BILL_MONTH, dateInBillingApiExpectedFormat,
+                AzureCostConstants.QUERY_PARAM_BILL_TYPE,
+                AzureCostConstants.QUERY_PARAM_BILL_TYPE_VALUE_DETAILED,
+                AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT,
+                AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_CSV);
 
-        return new Request.Builder()
+        return new Request
+                .Builder()
                 .url(uri.toString())
-                .addHeader(Operation.AUTHORIZATION_HEADER, AUTH_HEADER_BEARER_PREFIX + accessToken)
-                .addHeader(API_VERSION_HEADER, API_VERSION_HEADER_VALUE)
-                .build();
+                .addHeader(Operation.AUTHORIZATION_HEADER,
+                AzureConstants.AUTH_HEADER_BEARER_PREFIX + accessToken)
+                .addHeader(AzureCostConstants.API_VERSION_HEADER,
+                        AzureCostConstants.API_VERSION_HEADER_VALUE).build();
     }
 
     @OldApi
     static Operation getOldBillOperation(String enrollmentNumber, String accessToken,
             LocalDate billMonthToDownload, String billType) {
         String baseUri = AdapterUriUtil
-                .expandUriPathTemplate(OLD_EA_USAGE_REPORT, enrollmentNumber);
+                .expandUriPathTemplate(AzureCostConstants.OLD_EA_USAGE_REPORT, enrollmentNumber);
         // Get the summarized bill in JSON format and detailed bill in CSV format.
-        String billFormat = billType.equals(QUERY_PARAM_BILL_TYPE_VALUE_DETAILED) ?
-                QUERY_PARAM_RESPONSE_FORMAT_VALUE_CSV :
-                QUERY_PARAM_RESPONSE_FORMAT_VALUE_JSON;
+        String billFormat = billType.equals(AzureCostConstants.QUERY_PARAM_BILL_TYPE_VALUE_DETAILED) ?
+                AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_CSV :
+                AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_JSON;
         String dateInBillingApiExpectedFormat = getDateInBillingApiFormat(
                 billMonthToDownload);
         URI uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(baseUri),
-                QUERY_PARAM_BILL_MONTH, dateInBillingApiExpectedFormat,
-                QUERY_PARAM_BILL_TYPE, billType,
-                QUERY_PARAM_RESPONSE_FORMAT, billFormat);
+                AzureCostConstants.QUERY_PARAM_BILL_MONTH, dateInBillingApiExpectedFormat,
+                AzureCostConstants.QUERY_PARAM_BILL_TYPE, billType,
+                AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT, billFormat);
 
         logger.info(String.format("Request: %s", uri.toString()));
 
@@ -203,7 +193,7 @@ public interface AzureCostHelper {
     @OldApi
     static Operation getOldBillAvailableMonths(String enrollmentNumber, String accessToken) {
         String baseUri = AdapterUriUtil
-                .expandUriPathTemplate(OLD_EA_BILL_AVAILABLE_MONTHS, enrollmentNumber);
+                .expandUriPathTemplate(AzureCostConstants.OLD_EA_BILL_AVAILABLE_MONTHS, enrollmentNumber);
         // Get the summarized bill in JSON format and detailed bill in CSV format.
         URI uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(baseUri));
 
@@ -237,8 +227,8 @@ public interface AzureCostHelper {
             monthStrBuffer.append('0');
         }
         monthStrBuffer.append(month);
-        return enrollmentNumber + DETAILED_CSV_BILL_NAME_MID + "-" + year + "-" + monthStrBuffer
-                + BILL_FORMAT;
+        return enrollmentNumber + AzureCostConstants.DETAILED_CSV_BILL_NAME_MID + "-" + year + "-" + monthStrBuffer
+                + AzureCostConstants.BILL_FORMAT;
     }
 
     static ServiceStat createServiceStat(String serviceResourceCostMetric, Number value,
@@ -258,9 +248,9 @@ public interface AzureCostHelper {
      */
     static void addDefaultRequestHeaders(Operation operation, String accessToken) {
         operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                AUTH_HEADER_BEARER_PREFIX + accessToken);
-        operation.addRequestHeader(API_VERSION_HEADER,
-                API_VERSION_HEADER_VALUE);
+                AzureConstants.AUTH_HEADER_BEARER_PREFIX + accessToken);
+        operation.addRequestHeader(AzureCostConstants.API_VERSION_HEADER,
+                AzureCostConstants.API_VERSION_HEADER_VALUE);
     }
 
     static boolean isCurrentMonth(LocalDate month) {
@@ -315,14 +305,14 @@ public interface AzureCostHelper {
     }
 
     static LocalDate getLocalDateFromYearHyphenMonthString(String yearMonth) {
-        return LocalDateTime.parse(yearMonth,
-                DateTimeFormat.forPattern(TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_HYPHEN_MM))
+        return LocalDateTime.parse(yearMonth, DateTimeFormat
+                .forPattern(AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_HYPHEN_MM))
                 .toLocalDate();
     }
 
     static LocalDate getLocalDateFromYearMonthString(String yearMonth) {
-        return LocalDateTime.parse(yearMonth,
-                DateTimeFormat.forPattern(TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_MM))
+        return LocalDateTime.parse(yearMonth, DateTimeFormat
+                .forPattern(AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_MM))
                 .toLocalDate();
     }
 
@@ -337,9 +327,8 @@ public interface AzureCostHelper {
                     dateString));
             return 0;
         }
-        LocalDate localDate = LocalDateTime.parse(dateString,
-                DateTimeFormat.forPattern(
-                        TIMESTAMP_FORMAT_WITH_DATE_FORMAT_MM_DD_YYYY_WITH_OBLIQUE_DELIMITER))
+        LocalDate localDate = LocalDateTime.parse(dateString, DateTimeFormat.forPattern(
+                AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_MM_DD_YYYY_WITH_OBLIQUE_DELIMITER))
                 .toLocalDate();
         return getMillisForDate(localDate);
     }
@@ -369,13 +358,13 @@ public interface AzureCostHelper {
         EaDetailedBillElement detailedBillElement = constructDetailedBillElementObject(billRow);
         // set meter category to unknown in case meter category is absent.
         detailedBillElement.meterCategory = StringUtils.isBlank(detailedBillElement.meterCategory) ?
-                UNKNOWN_SERVICE_NAME :
+                AzureCostConstants.UNKNOWN_SERVICE_NAME :
                 detailedBillElement.meterCategory;
 
         // set subscription name to unknown in case subscription name is absent.
         detailedBillElement.subscriptionName = StringUtils
                 .isBlank(detailedBillElement.subscriptionName) ?
-                UNKNOWN_SUBSCRIPTION :
+                AzureCostConstants.UNKNOWN_SUBSCRIPTION :
                 detailedBillElement.subscriptionName;
 
         // set epochDate to epoch format of date.
@@ -472,7 +461,7 @@ public interface AzureCostHelper {
 
     static void convertToUsd(EaDetailedBillElement detailedBillElement, String currency) {
         if (detailedBillElement.extendedCost != 0 && !StringUtils.isBlank(currency) && !currency
-                .equalsIgnoreCase(DEFAULT_CURRENCY_VALUE)) {
+                .equalsIgnoreCase(AzureCostConstants.DEFAULT_CURRENCY_VALUE)) {
             Double exchangeRate = AzureCostConstants.exchangeRates.get(currency);
             if (exchangeRate == null) {
                 // Will log for every line item in the bill.
@@ -502,8 +491,8 @@ public interface AzureCostHelper {
         try {
             List<String> jwtDecodedJson = getJwtDecodedJson(usageApiKey);
             long expiryTime = new JsonParser().parse(jwtDecodedJson.get(1)).getAsJsonObject()
-                    .get(USAGE_API_KEY_JSON_EXPIRES_KEY).getAsLong();
-            if (expiryTime < THRESHOLD_FOR_TIME_IN_SECONDS) {
+                    .get(AzureCostConstants.USAGE_API_KEY_JSON_EXPIRES_KEY).getAsLong();
+            if (expiryTime < AzureCostConstants.THRESHOLD_FOR_TIME_IN_SECONDS) {
                 // convert to millis
                 expiryTime *= 1000;
             }
@@ -530,9 +519,8 @@ public interface AzureCostHelper {
 
     @OldApi
     static LocalDate getMonthFromOldRequestUri(String requestUri) {
-        int monthParamEndIndex =
-                requestUri.indexOf(QUERY_PARAM_BILL_MONTH + "=") + QUERY_PARAM_BILL_MONTH.length()
-                        + 1;
+        int monthParamEndIndex = requestUri.indexOf(AzureCostConstants.QUERY_PARAM_BILL_MONTH + "=")
+                + AzureCostConstants.QUERY_PARAM_BILL_MONTH.length() + 1;
         int ampersand = requestUri.indexOf("&");
         return getLocalDateFromYearHyphenMonthString(requestUri.substring(monthParamEndIndex, ampersand))
                 .withDayOfMonth(1);
@@ -540,8 +528,8 @@ public interface AzureCostHelper {
 
     static LocalDate getMonthFromRequestUri(String requestUri) {
         int monthParamEndIndex =
-                requestUri.indexOf(PATH_PARAM_BILLING_PERIODS + "/") + PATH_PARAM_BILLING_PERIODS
-                        .length() + 1;
+                requestUri.indexOf(AzureCostConstants.PATH_PARAM_BILLING_PERIODS + "/")
+                        + AzureCostConstants.PATH_PARAM_BILLING_PERIODS.length() + 1;
         return getLocalDateFromYearMonthString(
                 requestUri.substring(monthParamEndIndex, monthParamEndIndex + 6)).withDayOfMonth(1);
     }
@@ -552,7 +540,27 @@ public interface AzureCostHelper {
      * @param op operation whose expiration has to be increased.
      */
     static Operation setExpirationForExternalRequests(Operation op) {
-        return op.setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(EXTERNAL_REQUEST_TIMEOUT_SECONDS)));
+        return op.setExpiration(Utils.fromNowMicrosUtc(
+                TimeUnit.SECONDS.toMicros(AzureCostConstants.EXTERNAL_REQUEST_TIMEOUT_SECONDS)));
+    }
+
+    static Set<LocalDate> getSummarizedBillsToDownload(long billProcessedTimeMillis) {
+        LocalDate billProcessedDate = new LocalDate(billProcessedTimeMillis, DateTimeZone.UTC);
+        LocalDate today = LocalDate.now(DateTimeZone.UTC).dayOfMonth().withMaximumValue();;
+        if (billProcessedTimeMillis == 0) {
+            billProcessedDate = today
+                    .minusMonths(AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS);
+        }
+        Set<LocalDate> summarizedBillsToGet = new HashSet<>();
+        for (; billProcessedDate.isBefore(today) || billProcessedDate
+                .isEqual(today); billProcessedDate = billProcessedDate.plusMonths(1)) {
+            if (billProcessedDate.getDayOfMonth()
+                    <= AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL) {
+                summarizedBillsToGet.add(billProcessedDate.minusMonths(1));
+            }
+            summarizedBillsToGet.add(billProcessedDate);
+        }
+        return summarizedBillsToGet;
     }
 
     /**
@@ -566,8 +574,88 @@ public interface AzureCostHelper {
      * @param newSubscriptions explicitly added subscriptions
      * @return true if the bill has to be downloaded, false otherwise.
      */
-    static boolean shouldDownloadBill(Double oldCost, Double newCost, Set<String> newSubscriptions) {
+    static boolean shouldDownloadCurrentMonthBill(Double oldCost, Double newCost,
+            Set<String> newSubscriptions) {
         return oldCost == null || newCost == null
                 || !oldCost.equals(newCost) || !newSubscriptions.isEmpty();
     }
+
+    static boolean haveProcessedAllPastBills(long billProcessedMillis,
+            long oldestBillProcessedMillis, int noBillsAvailable) {
+        if (billProcessedMillis == 0) {
+            return false;
+        }
+        if (AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS > 0) {
+            long oldestTimeToConsiderMillis;
+            // If we have parsed the past bills at least once, oldest bill processed time will be
+            // populated; consider this metric while considering whether all bills have been
+            // processed, else use the current bill processed time since this will indicate which
+            // past bill is being processed.
+            oldestTimeToConsiderMillis = oldestBillProcessedMillis > 0 ?
+                    Math.min(billProcessedMillis, oldestBillProcessedMillis) : billProcessedMillis;
+            LocalDate oldestBillProcessedDate = new LocalDate(oldestTimeToConsiderMillis,
+                    DateTimeZone.UTC);
+            LocalDate currentMonth = LocalDate.now(DateTimeZone.UTC);
+            int maxPastBillsToDownload = Math
+                    .min(AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS, noBillsAvailable);
+            LocalDate oldestMonthToProcess = currentMonth.minusMonths(maxPastBillsToDownload)
+                    .dayOfMonth().withMaximumValue();
+            if (oldestBillProcessedDate.isBefore(oldestMonthToProcess) ||
+                    oldestBillProcessedDate.equals(oldestMonthToProcess)) {
+                // Even if we have processed all past bills, process previous month's bills on
+                // the first five days of the current month.
+                if (currentMonth.getDayOfMonth()
+                        <= AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL) {
+                    if (isPreviousMonth(new LocalDate(billProcessedMillis))) {
+                        logger.fine("Previous month's bills have been processed.");
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Past months bills be downloaded in the following case:
+     *   1. The bill processed time is 0: This means this is the first run for the account
+     *   2. The cost is being collected on the first
+     *      AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL days of the month.
+     *      Azure will keep updating the past month's bill for these days and hence we'll have to
+     *      collect past month's cost.
+     * @param billProcessedTimeMillis the last time when the current month's bill was processed.
+     * @param oldestBillProcessedMillis latest time from the oldest bill parsed for an account.
+     * @param noPastBillsAvailable the minimum of number of bills that are actually available after
+     *                             the account was created and
+     *                             AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS
+     * @return true only in the above cases
+     */
+    static boolean shouldDownloadPastBills(long billProcessedTimeMillis,
+            long oldestBillProcessedMillis, int noPastBillsAvailable) {
+        if (billProcessedTimeMillis == 0) {
+            return true;
+        }
+        if (AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS > 0) {
+            LocalDate currentMonth = LocalDate.now(DateTimeZone.UTC);
+            if (currentMonth.getDayOfMonth()
+                    <= AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL) {
+                // Download past month's bill if today is 5th or less of the month since Azure keeps
+                // updating the bill for the past month
+                return true;
+            }
+            if (oldestBillProcessedMillis == 0 ||
+                    !haveProcessedAllPastBills(billProcessedTimeMillis,
+                            oldestBillProcessedMillis, noPastBillsAvailable)) {
+                // Download past months bills in case all bills have not been downloaded and
+                // current month's bill has been parsed.
+                return true;
+            }
+        }
+        return false;
+    }
+
 }
