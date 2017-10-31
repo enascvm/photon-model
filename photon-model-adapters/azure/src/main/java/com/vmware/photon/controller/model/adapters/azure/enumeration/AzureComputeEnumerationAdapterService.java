@@ -749,7 +749,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 ctx.enumNextPageLink = virtualMachineInnerPage.nextPageLink();
 
                 if (virtualMachineInners == null || virtualMachineInners.size() == 0) {
-                    ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+                    ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
                     handleSubStage(ctx);
                     return;
                 }
@@ -785,7 +785,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void queryForComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         if (ctx.virtualMachines.isEmpty()) {
-            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+            ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
             handleSubStage(ctx);
             return;
         }
