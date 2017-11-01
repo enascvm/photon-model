@@ -38,9 +38,8 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
- * Service that returns a list of instance types that are supported by AWS.
- * The caller is required to provide a valid endpointLink in the "endpoint"
- * uri parameter.
+ * Service that returns a list of instance types that are supported by AWS. The caller is required
+ * to provide a valid endpointLink in the "endpoint" uri parameter.
  */
 public class AWSInstanceTypeService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_INSTANCE_TYPE_ADAPTER;
@@ -89,9 +88,12 @@ public class AWSInstanceTypeService extends StatelessService {
                     if (instanceTypeId != null) {
                         InstanceTypeList.InstanceType instanceType = context.instanceTypes.instanceTypes
                                 .stream().filter(type -> type.id.equals(instanceTypeId))
-                                .findFirst()
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                        String.format("%s not found", instanceTypeId)));
+                                .findFirst().orElse(null);
+                        if (instanceType == null) {
+                            op.fail(new IllegalArgumentException(
+                                    String.format("%s not found", instanceTypeId)));
+                            return;
+                        }
                         op.setBody(instanceType).complete();
                         return;
                     }

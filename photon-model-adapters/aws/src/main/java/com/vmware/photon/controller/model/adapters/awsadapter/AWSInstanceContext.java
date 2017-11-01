@@ -654,8 +654,8 @@ public class AWSInstanceContext
         }).handle((all, err) -> {
             if (err != null) {
                 String msg = String.format(
-                        "Error getting instance-type info for [%s] VM.",
-                        context.child.name);
+                        "Error getting instance-type info for [%s] VM. Reason [%s]",
+                        context.child.name, err.getMessage());
                 throw new IllegalStateException(msg, err);
             }
             return context;
