@@ -749,7 +749,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 ctx.enumNextPageLink = virtualMachineInnerPage.nextPageLink();
 
                 if (virtualMachineInners == null || virtualMachineInners.size() == 0) {
-                    ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
+                    ctx.subStage = ComputeEnumerationSubStages.GET_COMPUTE_STATES;
                     handleSubStage(ctx);
                     return;
                 }
@@ -784,8 +784,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Query all compute states for the cluster filtered by the received set of instance Ids.
      */
     private void queryForComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
-        if (ctx.virtualMachines.isEmpty()) {
-            ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
+        if (ctx.virtualMachines.isEmpty() && ctx.regions.isEmpty()) {
+            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
             handleSubStage(ctx);
             return;
         }
@@ -836,9 +836,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (context.virtualMachines.isEmpty()) {
             logFine("No VMs found, so no tags need to be created/updated. Continue to update compute states.");
-            context.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
-            handleSubStage(context);
-            return;
+
+            if (context.regions.isEmpty()) {
+                context.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+                handleSubStage(context);
+                return;
+            } else {
+                context.subStage = ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES;
+                handleSubStage(context);
+                return;
+            }
         }
 
         // POST each of the tags. If a tag exists it won't be created again. We don't want the name
@@ -910,9 +917,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void queryForDiskStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         if (ctx.virtualMachines.size() == 0) {
             logFine(() -> "No virtual machines found to be associated with local disks");
-            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
-            handleSubStage(ctx);
-            return;
+
+            if (ctx.regions.isEmpty()) {
+                ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+                handleSubStage(ctx);
+                return;
+            } else {
+                ctx.subStage = ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES;
+                handleSubStage(ctx);
+                return;
+            }
         }
         ctx.diskStates.clear();
 
@@ -1175,9 +1189,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void updateDiskStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         if (ctx.virtualMachines.isEmpty()) {
             logFine(() -> "No virtual machines found to be associated with local disks");
-            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
-            handleSubStage(ctx);
-            return;
+
+            if (ctx.regions.isEmpty()) {
+                ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+                handleSubStage(ctx);
+                return;
+            } else {
+                ctx.subStage = ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES;
+                handleSubStage(ctx);
+                return;
+            }
         }
         Iterator<Entry<String, VirtualMachineInner>> iterator = ctx.virtualMachines.entrySet()
                 .iterator();
