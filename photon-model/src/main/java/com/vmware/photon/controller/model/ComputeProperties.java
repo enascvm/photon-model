@@ -86,6 +86,12 @@ public class ComputeProperties {
      */
     public static final String CUSTOM_PROP_COMPUTE_HAS_SNAPSHOTS = "__hasSnapshot";
 
+    /**
+     * A key for the custom properties in compute which stores flag as whether the adapter should
+     * wait for IP address assignment before reporting success.
+     */
+    public static final String CUSTOM_PROP_COMPUTE_AWAIT_IP = "awaitIp";
+
     public enum OSType {
         WINDOWS, LINUX;
     }

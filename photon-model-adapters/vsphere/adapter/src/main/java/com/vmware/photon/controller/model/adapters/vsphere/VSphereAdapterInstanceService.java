@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 
 import io.netty.util.internal.StringUtil;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
@@ -165,7 +166,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                 CustomizationClient cc = new CustomizationClient(connection,
                                         ctx.child, vmOverlay.getGuestId());
                                 CustomizationSpec template = new CustomizationSpec();
-                                cc.customizeNic(vmOverlay.getPrimaryMac(), ctx.child.hostName, nic.address, subnet, template);
+                                cc.customizeNic(vmOverlay.getPrimaryMac(), ctx.child.hostName,
+                                        nic.address, subnet, template);
                                 cc.customizeDns(subnet.dnsServerAddresses, subnet.dnsSearchDomains,
                                         template);
                                 ManagedObjectReference task = cc
@@ -185,14 +187,21 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             state.powerState = PowerState.ON;
 
                             Operation op = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
+                            Boolean awaitIp = CustomProperties.of(ctx.child)
+                                    .getBoolean(ComputeProperties.CUSTOM_PROP_COMPUTE_AWAIT_IP,
+                                            true);
+                            if (awaitIp) {
+                                Runnable runnable = createCheckForIpTask(ctx.pool, op,
+                                        client.getVm(),
+                                        connection.createUnmanagedCopy(),
+                                        ctx.child.documentSelfLink, ctx);
 
-                            Runnable runnable = createCheckForIpTask(ctx.pool, op, client.getVm(),
-                                    connection.createUnmanagedCopy(),
-                                    ctx.child.documentSelfLink, ctx);
-
-                            ctx.pool.schedule(runnable,
-                                    IP_CHECK_INTERVAL_SECONDS,
-                                    TimeUnit.SECONDS);
+                                ctx.pool.schedule(runnable,
+                                        IP_CHECK_INTERVAL_SECONDS,
+                                        TimeUnit.SECONDS);
+                            } else {
+                                finishTask = op;
+                            }
                         } else {
                             // only finish the task without waiting for IP
                             finishTask = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
@@ -287,13 +296,16 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         .stream()
                         .allMatch(entry -> !entry.getValue().isEmpty())) {
                     connection.close();
-                    List<String> ips = ipV4Addresses.values().stream().flatMap(List::stream).collect(Collectors.toList());
-                    List<Operation> updateIpAddressOperations = createUpdateIPOperationsForComputeAndNics(computeLink, ip, ipV4Addresses, ctx);
+                    List<String> ips = ipV4Addresses.values().stream().flatMap(List::stream)
+                            .collect(Collectors.toList());
+                    List<Operation> updateIpAddressOperations = createUpdateIPOperationsForComputeAndNics(
+                            computeLink, ip, ipV4Addresses, ctx);
                     OperationJoin.create(updateIpAddressOperations)
                             .setCompletion((o, e) -> {
 
                                 log(Level.INFO, "Update compute IP [%s] and networkInterfaces ip"
-                                        + " addresses [%s] for computeLink [%s]: ", ip, ips, computeLink);
+                                                + " addresses [%s] for computeLink [%s]: ", ip, ips,
+                                        computeLink);
                                 // finish task
                                 taskFinisher.sendWith(VSphereAdapterInstanceService.this);
                             })
@@ -313,12 +325,15 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         // not all ips are ready still update the ones that are ready
                         List<Operation> updateIpAddressOperations = createUpdateIPOperationsForComputeAndNics(
                                 computeLink, ip, ipV4Addresses, ctx);
-                        List<String> ips = ipV4Addresses.values().stream().flatMap(List::stream).collect(Collectors.toList());
+                        List<String> ips = ipV4Addresses.values().stream().flatMap(List::stream)
+                                .collect(Collectors.toList());
                         OperationJoin.create(updateIpAddressOperations)
                                 .setCompletion((o, e) -> {
-                                    log(Level.INFO, "Not all ips are ready. Update compute IP [%s] and "
-                                            + "networkInterfaces ip addresses [%s] for "
-                                            + "computeLink [%s]: ", ip != null ? ip : "", ips, computeLink);
+                                    log(Level.INFO,
+                                            "Not all ips are ready. Update compute IP [%s] and "
+                                                    + "networkInterfaces ip addresses [%s] for "
+                                                    + "computeLink [%s]: ", ip != null ? ip : "",
+                                            ips, computeLink);
                                     taskFinisher.sendWith(VSphereAdapterInstanceService.this);
                                 })
                                 .sendWith(VSphereAdapterInstanceService.this);
@@ -426,13 +441,15 @@ public class VSphereAdapterInstanceService extends StatelessService {
     }
 
     private void createDiskOnDemand(DiskState ds) {
-        Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), DiskService.FACTORY_LINK))
+        Operation.createPost(
+                PhotonModelUriUtils.createInventoryUri(getHost(), DiskService.FACTORY_LINK))
                 .setBody(ds)
                 .sendWith(this);
     }
 
     private void createDiskPatch(DiskState ds) {
-        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ds.documentSelfLink))
+        Operation
+                .createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), ds.documentSelfLink))
                 .setBody(ds)
                 .sendWith(this);
     }
