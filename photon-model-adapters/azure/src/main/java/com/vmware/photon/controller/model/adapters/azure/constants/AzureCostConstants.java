@@ -50,6 +50,11 @@ public class AzureCostConstants {
     public static final int EXTERNAL_REQUEST_TIMEOUT_SECONDS = Integer.getInteger(
             UriPaths.PROPERTY_PREFIX + "azure.costCollection.externalRequestTimeoutSecs", 120);
 
+    // Should refresh lucene index while querying for metrics.
+    public static final boolean SHOULD_REFRESH_INDEX = Boolean.valueOf(System.getProperty(
+            UriPaths.PROPERTY_PREFIX + "azure.costCollection.shouldRefreshLuceneIndex",
+            Boolean.FALSE.toString()));
+
     public static final int DOWNLOAD_CHUNK_SIZE = 2048; //Same as Okio Segment.SIZE
 
     // Maximum number of times to re-try a request on failure before aborting

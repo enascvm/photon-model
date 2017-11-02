@@ -109,6 +109,7 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Collects cost data for Azure EA accounts in the following stages:
@@ -534,15 +535,14 @@ public class AzureCostStatsService extends StatelessService {
     }
 
     private void getBillProcessedTime(Context context, Stages next) {
-        QueryTask.Query.Builder builder = QueryTask.Query.Builder
-                .create(QueryTask.Query.Occurance.SHOULD_OCCUR);
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create();
         builder.addKindFieldClause(ResourceMetricsService.ResourceMetrics.class);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 ResourceMetrics.PROPERTY_RESOURCE_LINK, context.computeHostDesc.documentSelfLink);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
 
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+        QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
                 .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
                 // No-op in photon-model. Required for special handling of immutable documents.
@@ -552,8 +552,13 @@ public class AzureCostStatsService extends StatelessService {
                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
                         ServiceDocumentDescription.TypeName.STRING)
                 .setResultLimit(1)
-                .setQuery(builder.build()).build();
+                .setQuery(builder.build());
 
+        if (!AzureCostConstants.SHOULD_REFRESH_INDEX) {
+            queryTaskBuilder.addOption(QueryOption.DO_NOT_REFRESH);
+        }
+
+        QueryTask queryTask = queryTaskBuilder.build();
         Operation queryTaskOp = QueryUtils.createQueryTaskOperation(this, queryTask,
                 ServiceTypeCluster
                 .METRIC_SERVICE).setExpiration(Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros

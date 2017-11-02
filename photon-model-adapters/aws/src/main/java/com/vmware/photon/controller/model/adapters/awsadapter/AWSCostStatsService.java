@@ -1148,14 +1148,14 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     private QueryTask getQueryTaskForMetric(ComputeState accountComputeState) {
-        Query.Builder builder = Query.Builder.create(Occurance.SHOULD_OCCUR);
+        Query.Builder builder = Query.Builder.create();
         builder.addKindFieldClause(ResourceMetrics.class);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 ResourceMetrics.PROPERTY_RESOURCE_LINK, accountComputeState.documentSelfLink);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
 
-        QueryTask qTask = QueryTask.Builder.createDirectTask()
+        QueryTask.Builder qTaskBuilder = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.SORT)
                 .addOption(QueryOption.TOP_RESULTS)
                 // No-op in photon-model. Required for special handling of immutable documents.
@@ -1164,7 +1164,13 @@ public class AWSCostStatsService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK, ServiceDocumentDescription.TypeName.STRING)
                 .setResultLimit(1)
-                .setQuery(builder.build()).build();
+                .setQuery(builder.build());
+
+        if (!AWSConstants.SHOULD_REFRESH_INDEX) {
+            qTaskBuilder.addOption(QueryOption.DO_NOT_REFRESH);
+        }
+
+        QueryTask qTask = qTaskBuilder.build();
         qTask.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QueryUtils.TEN_MINUTES_IN_MICROS);
         return qTask;
     }

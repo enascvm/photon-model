@@ -84,6 +84,12 @@ public class AWSConstants {
     private static int QUERY_PAGE_SIZE = Integer.getInteger(PROPERTY_NAME_QUERY_PAGE_SIZE, 50);
     public static final String PROPERTY_NAME_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".QUERY_RESULT_LIMIT";
+
+    // Should refresh lucene index while querying for metrics.
+    public static final boolean SHOULD_REFRESH_INDEX = Boolean.valueOf(System.getProperty(
+            UriPaths.PROPERTY_PREFIX + "aws.costCollection.shouldRefreshLuceneIndex",
+            Boolean.FALSE.toString()));
+
     private static int QUERY_RESULT_LIMIT = Integer.getInteger(PROPERTY_NAME_QUERY_RESULT_LIMIT,
             100);
     public static final String URI_PARAM_ENDPOINT = "endpoint";
