@@ -294,6 +294,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
                 state.endpointLink = endpointLink;
                 state.tenantLinks = tenantLinks;
+                state.regionId = "";
 
                 oldImages.remove(state.documentSelfLink);
                 phaser.register();
