@@ -80,7 +80,7 @@ public class VSphereRegionEnumerationAdapterService extends StatelessService {
                             RegionEnumerationResponse res = new RegionEnumerationResponse();
                             res.regions = lister.listAllDatacenters().stream()
                                     .map(dc -> new RegionEnumerationResponse.RegionInfo(
-                                            dc.path,
+                                            DatacenterLister.prettifyPath(dc.path),
                                             VimUtils.convertMoRefToString(dc.object))).collect(
                                             Collectors.toList());
 

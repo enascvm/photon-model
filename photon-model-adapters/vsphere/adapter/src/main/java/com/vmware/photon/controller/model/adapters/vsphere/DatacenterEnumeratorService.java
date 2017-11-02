@@ -70,7 +70,7 @@ public class DatacenterEnumeratorService extends StatelessService {
 
                     lister.listAllDatacenters().stream()
                             .forEach(el -> {
-                                res.datacenters.add(el.path);
+                                res.datacenters.add(DatacenterLister.prettifyPath(el.path));
                                 res.moRefs.add(VimUtils.convertMoRefToString(el.object));
                             });
 

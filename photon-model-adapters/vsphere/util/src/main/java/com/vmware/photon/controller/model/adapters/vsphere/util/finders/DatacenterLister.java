@@ -38,6 +38,8 @@ import com.vmware.vim25.TraversalSpec;
  * a list of Elements.
  */
 public class DatacenterLister extends BaseHelper {
+    public static final String DATACENTERS_PREFIX = "/Datacenters/";
+
     public DatacenterLister(Connection connection) {
         super(connection);
     }
@@ -143,5 +145,17 @@ public class DatacenterLister extends BaseHelper {
         ManagedObjectReference pc = this.connection.getServiceContent().getPropertyCollector();
 
         return this.connection.getVimPort().retrieveProperties(pc, Arrays.asList(spec));
+    }
+
+    public static String prettifyPath(String path) {
+        if (path == null) {
+            return null;
+        }
+
+        if (path.startsWith(DATACENTERS_PREFIX)) {
+            return path.substring(DATACENTERS_PREFIX.length());
+        }
+
+        return path;
     }
 }
