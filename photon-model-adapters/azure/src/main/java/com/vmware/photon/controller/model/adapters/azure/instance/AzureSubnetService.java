@@ -36,7 +36,6 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.photon.controller.model.util.AssertUtil;
@@ -148,12 +147,10 @@ public class AzureSubnetService extends StatelessService {
                 "context.parentNetwork.groupLinks is null.");
         AssertUtil.assertTrue(context.parentNetwork.groupLinks.size() == 1,
                 "context.parentNetwork.groupLinks doesn't contain exactly one element.");
-        URI uri = context.request.buildUri(context.parentNetwork.groupLinks.iterator().next());
-        return this.sendWithDeferredResult(
-                Operation.createGet(uri),
-                ResourceGroupState.class)
-                .thenApply(resourceGroup -> {
-                    context.parentNetworkResourceGroupName = resourceGroup.name;
+        return AzureUtils.filterRGsByType(this.getHost(), context.parentNetwork.groupLinks, context
+                .parentNetwork.endpointLink, context.parentNetwork.tenantLinks)
+                .thenApply(rgState -> {
+                    context.parentNetworkResourceGroupName = rgState.name;
                     return context;
                 });
     }
