@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.45-SNAPSHOT
+
+
 ## 0.6.44
 
 * [Utility] Introduced utility methods to build OData expressions.
