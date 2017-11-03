@@ -56,8 +56,10 @@ import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.DatastoreHostMount;
 import com.vmware.vim25.FileFaultFaultMsg;
 import com.vmware.vim25.InvalidDatastoreFaultMsg;
+import com.vmware.vim25.InvalidDeviceSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
@@ -158,9 +160,11 @@ public class InstanceDiskClient extends BaseHelper {
                     // mount iso image
                     insertCdrom((VirtualCdrom) deviceConfigSpec.getDevice(), diskPath);
                 }
-                // Power off is needed to attach cd-rom
-                powerOffVM(this.connection, getVimPort(), this.vm);
             }
+            // Based on some of the guest os live addition / insert of cd-rom is not possible.
+            // Hence it needs to be powered off
+            // Power off is needed to attach cd-rom
+            powerOffVm();
         } else if (this.diskState.type == DiskService.DiskType.FLOPPY) {
             VirtualDevice sioController = getFirstSioController(devices);
             int sioUnit = findFreeUnit(sioController, devices.getVirtualDevice());
@@ -172,15 +176,35 @@ public class InstanceDiskClient extends BaseHelper {
                 insertFloppy((VirtualFloppy) deviceConfigSpec.getDevice(), diskPath);
             }
             // Power off is needed to attach floppy
-            powerOffVM(this.connection, getVimPort(), this.vm);
+            powerOffVm();
         }
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
         spec.getDeviceChange().add(deviceConfigSpec);
 
-        ManagedObjectReference reconfigureTask = getVimPort().reconfigVMTask(this.vm, spec);
-        TaskInfo info = VimUtils.waitTaskEnd(this.connection, reconfigureTask);
-        if (info.getState() == TaskInfoState.ERROR) {
-            VimUtils.rethrow(info.getError());
+        try {
+            ManagedObjectReference reconfigureTask = getVimPort().reconfigVMTask(this.vm, spec);
+            TaskInfo info = VimUtils.waitTaskEnd(this.connection, reconfigureTask);
+            if (info.getState() == TaskInfoState.ERROR) {
+                MethodFault fault = info.getError().getFault();
+                if (fault instanceof InvalidDeviceSpec) {
+                    // try here will null operation as it would have been the local datastore. Even
+                    // then it fails give up
+                    deviceConfigSpec.setOperation(null);
+                    reconfigureTask = getVimPort().reconfigVMTask(this.vm, spec);
+                    info = VimUtils.waitTaskEnd(this.connection, reconfigureTask);
+                    if (info.getState() == TaskInfoState.ERROR) {
+                        VimUtils.rethrow(info.getError());
+                    }
+                } else {
+                    VimUtils.rethrow(info.getError());
+                }
+            }
+        } catch (Exception e) {
+            // if compute is in powered off state, then power it on.
+            if (this.diskState.type != DiskService.DiskType.HDD) {
+                powerOnVM(this.connection, getVimPort(), this.vm);
+            }
+            throw e;
         }
         // Update the diskState
         if (this.diskState.type == DiskService.DiskType.HDD) {
@@ -193,9 +217,7 @@ public class InstanceDiskClient extends BaseHelper {
         } else {
             // This means it is CDROM or Floppy. Hence power on the VM as it is powered off to
             // perform the operation
-            if (!insertCdRom) {
-                powerOnVM(this.connection, getVimPort(), this.vm);
-            }
+            powerOnVM(this.connection, getVimPort(), this.vm);
             this.diskState.status = DiskService.DiskStatus.ATTACHED;
         }
     }
@@ -332,5 +354,13 @@ public class InstanceDiskClient extends BaseHelper {
                 .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(this.diskState))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private void powerOffVm() {
+        try {
+            powerOffVM(this.connection, getVimPort(), this.vm);
+        } catch (Exception e) {
+            // Ignore the error message. Don't log. Attempt with the rest of the flow.
+        }
     }
 }

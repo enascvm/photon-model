@@ -189,7 +189,8 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
 
-            this.CDDiskState = cdDiskState;
+            this.CDDiskState = this.host.getServiceState(null, DiskService.DiskState.class,
+                    UriUtils.buildUri(this.host, cdDiskState.documentSelfLink));
 
             // Step 5: Attach a floppy disk
             DiskService.DiskState floppyDiskState = createDisk("floppy-1", DiskService.DiskType.FLOPPY,
@@ -282,7 +283,8 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
 
-            this.CDDiskState = cdDiskState;
+            this.CDDiskState = this.host.getServiceState(null, DiskService.DiskState.class,
+                    UriUtils.buildUri(this.host, cdDiskState.documentSelfLink));
 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
