@@ -1,6 +1,14 @@
 # CHANGELOG
 
-## 0.6.44-SNAPSHOT
+## 0.6.44
+
+* [Utility] Introduced utility methods to build OData expressions.
+* Refactor auth credentials lookup to use inventory service if provided.
+* [AWS] Added validation on min and max size of io1 type of disks.
+* [vsphere] Use TOP_RESULTS when detecting existing resources.
+* Introduce "computeHostLink" attribute for resources.
+* [vSphere] Set the region id on discovered subnets.
+* [vsphere] Pass regionId explicitly.
 
 ## 0.6.43
 * Azure provisioning adapter synchronous SDK calls now run in a dedicated threadpool.
