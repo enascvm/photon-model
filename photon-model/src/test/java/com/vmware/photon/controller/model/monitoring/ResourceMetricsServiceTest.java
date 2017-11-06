@@ -39,6 +39,8 @@ import org.junit.runners.model.RunnerBuilder;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -51,10 +53,9 @@ import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
- * This class implements tests for the {@link ResourceMetricService} class.
+ * This class implements tests for the {@link ResourceMetricsService} class.
  */
 @RunWith(ResourceMetricsServiceTest.class)
 @SuiteClasses({ ResourceMetricsServiceTest.ConstructorTest.class,
@@ -261,9 +262,9 @@ public class ResourceMetricsServiceTest extends Suite {
                         .addOption(QueryOption.EXPAND_CONTENT)
                         .build();
 
-                Operation queryOp = Operation.createPost(
-                        UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                        .setBody(queryTask).setReferer(this.host.getUri());
+                Operation queryOp = QueryUtils.createQueryTaskOperation(this.host, queryTask,
+                        ClusterUtil.ServiceTypeCluster.METRIC_SERVICE).setReferer
+                        (this.host.getUri());
                 Operation queryResponse = this.host.waitForResponse(queryOp);
                 assertEquals(200, queryResponse.getStatusCode());
 

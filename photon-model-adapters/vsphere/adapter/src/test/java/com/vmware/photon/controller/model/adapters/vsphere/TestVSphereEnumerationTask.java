@@ -52,6 +52,7 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
@@ -60,7 +61,6 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
@@ -257,9 +257,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation op = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qt);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, qt, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
 
@@ -280,9 +279,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation op = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qt);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, qt, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
 
@@ -326,8 +324,9 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
         task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
-        Operation op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(task);
+
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, task, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
         handler.accept(result.results);

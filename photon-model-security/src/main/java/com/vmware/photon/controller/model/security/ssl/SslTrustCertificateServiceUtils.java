@@ -62,10 +62,8 @@ class SslTrustCertificateServiceUtils {
      */
     static void subscribe(ServiceHost host, Consumer<Operation> consumer) {
         QueryTask task = getQueryTask();
-        Operation.createPost(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(task)
+        QueryUtils.createQueryTaskOperation(host, task, null)
                 .setReferer(host.getUri())
-                .setConnectionSharing(true)
                 .setCompletion((o, e) -> {
                     if (e != null && o.getStatusCode() != Operation.STATUS_CODE_CONFLICT) {
                         host.log(Level.SEVERE, Utils.toString(e));

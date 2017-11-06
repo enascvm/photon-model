@@ -24,17 +24,18 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.ImportOvfRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 @Ignore
 public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
@@ -75,8 +76,8 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
                 .setQuery(q)
                 .build();
 
-        op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(task);
+        QueryUtils.createQueryTaskOperation(this.host, task, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         task = this.host.waitForResponse(op).getBody(QueryTask.class);
 

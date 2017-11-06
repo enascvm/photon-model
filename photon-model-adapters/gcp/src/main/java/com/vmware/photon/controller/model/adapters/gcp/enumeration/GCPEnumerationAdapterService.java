@@ -64,6 +64,7 @@ import com.vmware.photon.controller.model.adapters.gcp.utils.JSONWebToken;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -75,8 +76,8 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
@@ -87,7 +88,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Enumeration Adapter for the Google Cloud Platform. Performs a list call to the GCP API and
@@ -296,8 +296,6 @@ public class GCPEnumerationAdapterService extends StatelessService {
      * @param ctx The Enumeration Context.
      */
     private void delete(EnumerationContext ctx) {
-        CompletionHandler completionHandler = (o, e) -> deleteQueryCompletionHandler(ctx, o, e);
-
         QueryTask.Query query = QueryTask.Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
@@ -316,11 +314,8 @@ public class GCPEnumerationAdapterService extends StatelessService {
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
         logFine(() -> "Querying compute resources for deletion");
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setConnectionSharing(true)
-                .setBody(q)
-                .setCompletion(completionHandler));
+        QueryUtils.startInventoryQueryTask(this, q)
+                .whenComplete((o, e) -> deleteQueryCompletionHandler(ctx, o, e));
     }
 
     /**
@@ -378,15 +373,15 @@ public class GCPEnumerationAdapterService extends StatelessService {
     /**
      * The completion handler of the operation of deletion query.
      * @param ctx The Enumeration Context.
-     * @param o The Operation of completion handler.
+     * @param queryTask The query task.
      * @param e The Error of completion handler.
      */
-    private void deleteQueryCompletionHandler(EnumerationContext ctx, Operation o, Throwable e) {
+    private void deleteQueryCompletionHandler(EnumerationContext ctx, QueryTask queryTask,
+                                              Throwable e) {
         if (e != null) {
             handleError(ctx, e);
             return;
         }
-        QueryTask queryTask = o.getBody(QueryTask.class);
         deleteHelper(ctx, queryTask.results);
     }
 
@@ -398,10 +393,14 @@ public class GCPEnumerationAdapterService extends StatelessService {
      */
     private void checkLinkAndFinishDeleting(EnumerationContext ctx, String deletionNextPageLink) {
         if (deletionNextPageLink != null) {
+            URI nextPageInventoryLinkUri = PhotonModelUriUtils.createInventoryUri(this.getHost(),
+                    deletionNextPageLink);
+
             logFine(() -> String.format("Querying page [%s] for resources to be deleted",
-                    deletionNextPageLink));
-            Operation.createGet(this, deletionNextPageLink)
-                    .setCompletion((o, e) -> deleteQueryCompletionHandler(ctx, o, e))
+                    nextPageInventoryLinkUri));
+            Operation.createGet(nextPageInventoryLinkUri)
+                    .setCompletion((o, e) -> deleteQueryCompletionHandler(ctx, o.getBody
+                            (QueryTask.class), e))
                     .sendWith(this);
             return;
         }
@@ -682,16 +681,12 @@ public class GCPEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setConnectionSharing(true)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startInventoryQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(ctx, e);
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
 
                     logFine(() -> String.format("Found %d matching compute states for GCP Instances",
                             queryTask.results.documentCount));
@@ -709,7 +704,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
                         ctx.subStage = EnumerationSubStages.CREATE_LOCAL_VMS;
                     }
                     handleSubStage(ctx);
-                }));
+                });
     }
 
     /**

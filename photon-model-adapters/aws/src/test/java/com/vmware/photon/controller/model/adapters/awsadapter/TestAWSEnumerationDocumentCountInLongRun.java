@@ -58,6 +58,7 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -74,6 +75,7 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
@@ -506,8 +508,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation queryComputeState = Operation.createPost(UriUtils.buildUri(this.host.getUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)).setReferer(this.host.getUri()).setBody(q);
+        Operation queryComputeState = QueryUtils.createQueryTaskOperation(this.host, q,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
 
         Operation queryResponse = this.host.waitForResponse(queryComputeState);
 
@@ -562,8 +564,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation queryNetworkInterface = Operation.createPost(UriUtils.buildUri(this.host.getUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)).setReferer(this.host.getUri()).setBody(q);
+        Operation queryNetworkInterface = QueryUtils.createQueryTaskOperation(this.host, q,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
 
         Operation queryResponse = this.host.waitForResponse(queryNetworkInterface);
 
@@ -674,8 +676,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                 .setQuery(documentCountQuery)
                 .build();
 
-        Operation queryDocumentCount = Operation.createPost(UriUtils.buildUri(this.host.getUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)).setReferer(this.host.getUri()).setBody(q);
+        Operation queryDocumentCount = QueryUtils.createQueryTaskOperation(this.host, q,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
 
         Operation queryResponse = this.host.waitForResponse(queryDocumentCount);
 
@@ -697,8 +699,9 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                 .setQuery(query)
                 .build();
 
-        Operation queryDocument = Operation.createPost(UriUtils.buildUri(this.host.getUri(),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)).setReferer(this.host.getUri()).setBody(q);
+        Operation queryDocument = QueryUtils.createQueryTaskOperation(this.host, q,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this
+                .host.getUri());
         Operation queryResponse = this.host.waitForResponse(queryDocument);
 
         Assert.assertTrue("Error retrieving enumerated documents",

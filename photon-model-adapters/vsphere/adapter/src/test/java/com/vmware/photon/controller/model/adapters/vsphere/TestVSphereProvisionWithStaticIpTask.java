@@ -30,6 +30,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -50,6 +51,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -59,7 +61,6 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * This test provisions a VM from a template. It populates the OVF environment with a "user-data"
@@ -144,9 +145,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
                 .setQuery(q)
                 .build();
 
-        Operation op = Operation
-                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(task);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, task, ServiceTypeCluster.INVENTORY_SERVICE);
 
         Operation result = this.host.waitForResponse(op);
 
@@ -172,9 +171,8 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
                         .build());
         QueryTask qt = QueryTask.create(qs).setDirect(true);
 
-        Operation op = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qt);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, qt, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))
                 .get(10, TimeUnit.SECONDS);

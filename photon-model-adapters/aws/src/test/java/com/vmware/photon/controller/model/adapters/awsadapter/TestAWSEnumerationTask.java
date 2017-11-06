@@ -118,6 +118,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -143,6 +144,7 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
@@ -155,7 +157,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Test to enumerate instances on AWS and tear it down. The test creates VM using the Provisioning
@@ -994,8 +995,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation s3QueryOp = Operation.createPost(this.host,ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask).setReferer(this.host.getUri());
+        Operation s3QueryOp = QueryUtils.createQueryTaskOperation(this.host, queryTask,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
 
         Operation s3QueryResponse = this.host.waitForResponse(s3QueryOp);
 
@@ -1024,8 +1025,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 .setQuery(s3TagsQuery)
                 .build();
 
-        Operation s3QueryOp = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask).setReferer(this.host.getUri());
+        Operation s3QueryOp = QueryUtils.createQueryTaskOperation(this.host, queryTask,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
 
         Operation s3QueryResponse = this.host.waitForResponse(s3QueryOp);
 
@@ -1055,8 +1056,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation getTestBucketState = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask).setReferer(this.host.getUri());
+        Operation getTestBucketState = QueryUtils.createQueryTaskOperation(this.host, queryTask,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
 
         Operation response = this.host.waitForResponse(getTestBucketState);
 
@@ -1092,8 +1093,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 .setQuery(query)
                 .build();
 
-        Operation getTestBucketState = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask).setReferer(this.host.getUri());
+        Operation getTestBucketState = QueryUtils.createQueryTaskOperation(this.host, queryTask,
+                ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
 
         Operation response = this.host.waitForResponse(getTestBucketState);
 

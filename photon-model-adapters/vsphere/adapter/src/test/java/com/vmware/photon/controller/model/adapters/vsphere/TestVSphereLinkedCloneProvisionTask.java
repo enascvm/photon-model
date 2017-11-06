@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -33,6 +34,7 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -43,13 +45,13 @@ import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.vim25.SharesLevel;
 import com.vmware.vim25.VirtualDiskType;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class TestVSphereLinkedCloneProvisionTask extends TestVSphereLibraryProvisionTaskBase {
 
@@ -233,7 +235,8 @@ public class TestVSphereLinkedCloneProvisionTask extends TestVSphereLibraryProvi
 
         QueryTask task = QueryTask.Builder.createDirectTask().setQuery(q).build();
 
-        Operation op = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS).setBody(task);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, task, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         Operation result = this.host.waitForResponse(op);
 

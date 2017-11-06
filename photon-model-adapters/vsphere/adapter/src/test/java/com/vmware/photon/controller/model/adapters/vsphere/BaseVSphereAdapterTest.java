@@ -50,6 +50,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -72,6 +73,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -114,6 +116,7 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
@@ -143,7 +146,6 @@ import com.vmware.xenon.services.common.QueryTask.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 public class BaseVSphereAdapterTest {
@@ -1035,8 +1037,8 @@ public class BaseVSphereAdapterTest {
                 .build();
 
         Operation result = this.host.waitForResponse(
-                Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                        .setBody(qt));
+                QueryUtils.createQueryTaskOperation(this.host, qt, ServiceTypeCluster
+                        .INVENTORY_SERVICE));
 
         QueryResultsProcessor rp = QueryResultsProcessor.create(result);
         if (!rp.hasResults()) {
@@ -1317,9 +1319,8 @@ public class BaseVSphereAdapterTest {
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation postOperation = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask);
+        Operation postOperation = QueryUtils.createQueryTaskOperation(this.host, qTask,
+                ServiceTypeCluster.INVENTORY_SERVICE);
 
         TestRequestSender sender = new TestRequestSender(this.host);
         Operation responseOp = sender.sendAndWait(postOperation);
@@ -1348,9 +1349,8 @@ public class BaseVSphereAdapterTest {
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                 .build();
 
-        Operation postOperation = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(qTask);
+        Operation postOperation = QueryUtils.createQueryTaskOperation(this.host, qTask,
+                ServiceTypeCluster.INVENTORY_SERVICE);
 
         TestRequestSender sender = new TestRequestSender(this.host);
         Operation responseOp = sender.sendAndWait(postOperation);

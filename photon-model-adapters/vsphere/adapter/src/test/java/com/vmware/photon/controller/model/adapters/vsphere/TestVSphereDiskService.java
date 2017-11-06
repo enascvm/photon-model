@@ -35,6 +35,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -48,12 +49,12 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Test case to verify all disk related operations on vSphere adapter.
@@ -269,9 +270,8 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
                 .setQuery(builder.build())
                 .build();
 
-        Operation op = Operation.createPost(
-                UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
-                .setBody(task);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, task, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
         return result.results.documentLinks.get(0);

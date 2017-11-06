@@ -40,12 +40,14 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -340,7 +342,8 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                                         .createDoubleRange(0.0, Double.MAX_VALUE, true, true))
                         .build())
                 .build();
-        Operation op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, qt, ServiceTypeCluster
+                .METRIC_SERVICE)
                 .setReferer(this.host.getUri()).setBody(qt).setCompletion((o, e) -> {
                     if (e != null) {
                         this.host.log(Level.WARNING, e.toString());

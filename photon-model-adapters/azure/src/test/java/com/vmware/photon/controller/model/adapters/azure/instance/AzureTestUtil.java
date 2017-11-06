@@ -109,6 +109,7 @@ import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInst
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -152,6 +153,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskS
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
@@ -166,7 +168,6 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class AzureTestUtil {
     public static final String AZURE_ADMIN_USERNAME = "azureuser";
@@ -1669,13 +1670,15 @@ public class AzureTestUtil {
                                         .createDoubleRange(0.0, Double.MAX_VALUE, true, true))
                         .build())
                 .build();
-        Operation op = Operation
-                .createPost(UriUtils.buildUri(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+
+        Operation op = QueryUtils.createQueryTaskOperation(host, qt, ClusterUtil
+                .ServiceTypeCluster.METRIC_SERVICE)
                 .setReferer(host.getUri()).setBody(qt).setCompletion((o, e) -> {
                     if (e != null) {
                         host.log(Level.INFO, e.toString());
                     }
                 });
+
         Operation result = host.waitForResponse(op);
         QueryTask qtResult = result.getBody(QueryTask.class);
         ResourceMetrics resourceMetric = null;

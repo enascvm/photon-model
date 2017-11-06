@@ -24,6 +24,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -41,12 +42,12 @@ import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.Imag
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  */
@@ -152,9 +153,8 @@ public class TestVSphereProvisionFromImageLink extends BaseVSphereAdapterTest {
                 .setQuery(q)
                 .build();
 
-        Operation op = Operation
-                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(task);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, task, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         Operation result = this.host.waitForResponse(op);
 

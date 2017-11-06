@@ -59,6 +59,7 @@ import com.google.api.services.compute.model.ServiceAccount;
 
 import com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants;
 import com.vmware.photon.controller.model.adapters.gcp.enumeration.GCPEnumerationAdapterService;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -73,6 +74,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStats;
@@ -82,7 +84,6 @@ import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class GCPTestUtil {
     private static final String ADAPTER_TEST_INSTANCE = "adapter-test-instance-";
@@ -700,10 +701,8 @@ public class GCPTestUtil {
                 .setQuery(query)
                 .build();
 
-        host.sendRequest(Operation
-                .createPost(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(q)
-                .setReferer(host.getUri())
+        host.sendRequest(QueryUtils.createQueryTaskOperation(host, q, ServiceTypeCluster
+                .INVENTORY_SERVICE).setReferer(host.getUri())
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         host.log(Level.WARNING, String.format("Error: %s", e.getMessage()));

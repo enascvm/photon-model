@@ -18,7 +18,6 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -38,15 +37,15 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.DeploymentService.DeploymentState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * This class implements tests for the {@link DeploymentService} class.
@@ -375,15 +374,16 @@ public class DeploymentServiceTest extends Suite {
             createWithDesc("match");
             createWithDesc("this should notmatch");
 
-            URI queryuri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
             Query query = Query.Builder.create()
                     .addKindFieldClause(DeploymentState.class)
                     .addFieldClause(DeploymentState.FIELD_NAME_DESC, "match")
                     .build();
             QueryTask queryTask = QueryTask.Builder.createDirectTask().setQuery(query).build();
 
+            Operation op = QueryUtils.createQueryTaskOperation(getHost(), queryTask,
+                    ServiceTypeCluster.INVENTORY_SERVICE);
             Operation response = host
-                    .waitForResponse(Operation.createPost(queryuri).setBody(queryTask));
+                    .waitForResponse(op);
             assertNotNull(response);
             assertEquals(Operation.STATUS_CODE_OK, response.getStatusCode());
 

@@ -22,6 +22,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -32,12 +33,12 @@ import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * This test provisions a VM from a template. It populates the OVF environment with a "user-data"
@@ -130,9 +131,8 @@ public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
                 .setQuery(q)
                 .build();
 
-        Operation op = Operation
-                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(task);
+        Operation op = QueryUtils.createQueryTaskOperation(this.host, task, ServiceTypeCluster
+                .INVENTORY_SERVICE);
 
         Operation result = this.host.waitForResponse(op);
 
