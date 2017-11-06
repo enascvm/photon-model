@@ -198,6 +198,11 @@ public class PhotonModelUtils {
                                 return;
                             }
 
+                            service.getHost().log(Level.INFO, () -> String.format("PATCH to " +
+                                            "update endpointLink in endpointLinks " +
+                                            "to instance service %s finished successfully",
+                                    updateOp.getUri()));
+
                             String resourceEndpointLink;
                             Set<String> resourceEndpointLinks;
                             ServiceDocument serviceDocument = Utils.fromJson(document,
@@ -447,7 +452,7 @@ public class PhotonModelUtils {
             endpointLinks) {
 
         String endpointLinkVal = null;
-        if (endpointLinks.size() == 1) {
+        if (endpointLinks.size() == 1 && endpointLinks.contains(resourceEndpointLink)) {
             return null;
         }
 

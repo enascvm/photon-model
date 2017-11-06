@@ -30,7 +30,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -63,7 +62,6 @@ import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -320,18 +318,26 @@ public class EndpointRemovalTaskService
     private void doInstanceDelete(EndpointRemovalTaskState currentState, SubStage next) {
         EndpointState endpoint = currentState.endpoint;
 
+        Operation crdOp = Operation.createDelete(this, endpoint.authCredentialsLink);
         Operation epOp = Operation.createDelete(this, endpoint.documentSelfLink);
         // custom header identifier for endpoint service to validate before deleting endpoint
         epOp.addRequestHeader(ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME,
                 ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE);
 
-        epOp.setCompletion((op, ex) -> {
-            if (ex != null) {
+        OperationJoin.create(crdOp, epOp).setCompletion((ops, exc) -> {
+            if (exc != null) {
                 // failing to delete the endpoint itself is considered a critical error
-                sendFailureSelfPatch(ex);
-                return;
+                Throwable endpointRemovalException = exc.get(epOp.getId());
+                if (endpointRemovalException != null) {
+                    sendFailureSelfPatch(endpointRemovalException);
+                    return;
+                }
+
+                // other removal exceptions are just warnings
+                logFine(() -> String.format("Failed delete some of the associated resources,"
+                        + " reason %s", Utils.toString(exc)));
             }
-            // Endpoint deleted; mark the operation as complete
+            // Endpoint and AuthCredentials are deleted; mark the operation as complete
             sendSelfPatch(TaskStage.STARTED, next);
         }).sendWith(this);
     }
@@ -388,7 +394,6 @@ public class EndpointRemovalTaskService
                         .get(selfLink);
                 ResourceState resourceState = Utils.fromJson(document, ResourceState.class);
                 Set<String> endpointLinks = resourceState.endpointLinks;
-                ServiceDocument serviceDocument = Utils.fromJson(document, ServiceDocument.class);
                 Operation operation = PhotonModelUtils.createRemoveEndpointLinksOperation(this,
                         endpointLink, document, selfLink, endpointLinks);
                 if (operation != null) {
@@ -420,34 +425,6 @@ public class EndpointRemovalTaskService
         };
         sendRequest(Operation.createGet(createInventoryUri(this.getHost(), nextPageLink))
                 .setCompletion(completionHandler));
-    }
-
-    private void createEndpointLinksUpdateOperation(String endpointLink,
-                    List<Operation> updateOperations, String selfLink, Set<String> endpointLinks) {
-        if (endpointLinks == null || !endpointLinks.contains(endpointLink)) {
-            return;
-        }
-
-        Set<String> newEndpointLinks = new HashSet<>();
-        newEndpointLinks.add(endpointLink);
-        Map<String, Collection<Object>> endpointsToRemove = Collections.singletonMap(
-                EndpointState.FIELD_NAME_ENDPOINT_LINKS, new HashSet<>(newEndpointLinks));
-        ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
-                ServiceStateCollectionUpdateRequest.create(null, endpointsToRemove);
-
-        updateOperations.add(Operation
-                .createPatch(UriUtils.buildUri(getHost(), selfLink))
-                .setReferer(getUri())
-                .setBody(serviceStateCollectionUpdateRequest)
-                .setCompletion(
-                        (updateOp, exception) -> {
-                            if (exception != null) {
-                                logWarning(() -> String.format("PATCH to instance service %s, " +
-                                        "failed: %s", updateOp.getUri(), exception.toString()));
-                                return;
-                            }
-                        }));
-
     }
 
     private Query getAssociatedDocumentsQuery(EndpointRemovalTaskState state,
