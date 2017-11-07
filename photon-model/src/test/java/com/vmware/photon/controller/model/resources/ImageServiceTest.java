@@ -18,13 +18,16 @@ import static java.util.Collections.singletonList;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -34,6 +37,7 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -71,6 +75,22 @@ public class ImageServiceTest extends Suite {
         image.groupLinks = singleton(
                 buildUriPath(ResourceGroupService.FACTORY_LINK, "the-A-folder"));
         image.tenantLinks = singletonList(buildUriPath(TenantService.FACTORY_LINK, "the-A-tenant"));
+
+        DiskConfiguration osDiskConfig = new DiskConfiguration();
+        osDiskConfig.id = Integer.toString(0);
+        osDiskConfig.capacityMBytes = Integer.MAX_VALUE;
+        osDiskConfig.encrypted = true;
+        osDiskConfig.persistent = true;
+        osDiskConfig.properties = Collections.singletonMap("disk.cp.name", "disk.cp.value");
+
+        DiskConfiguration dataDiskConfig = new DiskConfiguration();
+        dataDiskConfig.id = Integer.toString(1);
+        dataDiskConfig.capacityMBytes = Integer.MAX_VALUE;
+        dataDiskConfig.encrypted = true;
+        dataDiskConfig.persistent = true;
+        dataDiskConfig.properties = Collections.singletonMap("disk.cp.name", "disk.cp.value");
+
+        image.diskConfigs = Arrays.asList(osDiskConfig, dataDiskConfig);
 
         return image;
     }
@@ -129,7 +149,8 @@ public class ImageServiceTest extends Suite {
 
             {
                 // Both cannot be set
-                invalidState.endpointLink = buildUriPath(EndpointService.FACTORY_LINK, "endpointLink");
+                invalidState.endpointLink = buildUriPath(EndpointService.FACTORY_LINK,
+                        "endpointLink");
                 invalidState.endpointType = "someEndpointType";
 
                 postServiceSynchronously(
@@ -186,16 +207,22 @@ public class ImageServiceTest extends Suite {
      */
     public static class HandlePatchTest extends BaseModelTest {
 
-        private final ImageState startState = buildValidStartState();
+        private ImageState startState;
+
+        @Before
+        public void beforeTest() {
+            this.startState = buildValidStartState();
+        }
 
         @Test
         public void testPatch() throws Throwable {
 
-            ImageState returnState = postServiceSynchronously(
+            ImageState currentState = postServiceSynchronously(
                     ImageService.FACTORY_LINK,
                     this.startState, ImageState.class);
 
             ImageState patchState = new ImageState();
+            patchState.documentSelfLink = currentState.documentSelfLink;
             patchState.name = "patchName";
             patchState.description = "patchDesc";
             patchState.regionId = "patchRegion";
@@ -204,29 +231,114 @@ public class ImageServiceTest extends Suite {
             patchState.customProperties = Collections.singletonMap("patchCPKey", "patchCPValue");
             patchState.tenantLinks = Collections.singletonList("patchTenant");
             patchState.groupLinks = Collections.singleton("patchGroup");
+            patchState.diskConfigs = null;
 
-            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+            currentState = patch(patchState);
 
-            returnState = getServiceSynchronously(returnState.documentSelfLink, ImageState.class);
-
-            assertEquals(patchState.name, returnState.name);
-            assertEquals(patchState.description, returnState.description);
+            assertEquals(patchState.name, currentState.name);
+            assertEquals(patchState.description, currentState.description);
             // region ID should not be updated
-            assertEquals(this.startState.regionId, returnState.regionId);
-            assertEquals(patchState.osFamily, returnState.osFamily);
+            assertEquals(this.startState.regionId, currentState.regionId);
+            assertEquals(patchState.osFamily, currentState.osFamily);
 
-            assertEquals(patchState.customProperties, returnState.customProperties);
+            assertEquals(patchState.customProperties, currentState.customProperties);
 
-            assertEquals(2, returnState.tenantLinks.size());
-            assertTrue(returnState.tenantLinks.contains("patchTenant"));
-            assertTrue(returnState.tenantLinks.contains(this.startState.tenantLinks.get(0)));
+            assertEquals(2, currentState.tenantLinks.size());
+            assertTrue(currentState.tenantLinks.contains("patchTenant"));
+            assertTrue(currentState.tenantLinks.contains(this.startState.tenantLinks.get(0)));
 
-            assertEquals(2, returnState.groupLinks.size());
-            assertTrue(returnState.groupLinks.contains("patchGroup"));
+            assertEquals(2, currentState.groupLinks.size());
+            assertTrue(currentState.groupLinks.contains("patchGroup"));
             assertTrue(
-                    returnState.groupLinks.contains(this.startState.groupLinks.iterator().next()));
+                    currentState.groupLinks.contains(this.startState.groupLinks.iterator().next()));
+
+            // Still 2, cause null patch value does nothing
+            assertEquals(2, currentState.diskConfigs.size());
+        }
+
+        /**
+         * Test currentState.diskConfigs-X-patchState.diskConfigs matrix.
+         */
+        @Test
+        public void testPatchDiskConfigs() throws Throwable {
+
+            ImageState currentState = postServiceSynchronously(
+                    ImageService.FACTORY_LINK,
+                    this.startState, ImageState.class);
+
+            // current diskConfigs == patch diskConfigs -> NO change
+            {
+                ImageState patchState = this.startState;
+                patchState.documentSelfLink = currentState.documentSelfLink;
+
+                currentState = patch(patchState);
+
+                // Existing 2 diskConfigs are NOT overridden
+                assertEquals(this.startState.diskConfigs, currentState.diskConfigs);
+            }
+
+            // current diskConfigs = 2; patch diskConfigs = 1 -> effective diskConfigs = 1
+            {
+                ImageState patchState = new ImageState();
+                patchState.documentSelfLink = currentState.documentSelfLink;
+                patchState.diskConfigs = Arrays.asList(new DiskConfiguration());
+
+                currentState = patch(patchState);
+
+                // Existing 2 diskConfigs are overridden by the single patch disk
+                assertEquals(1, currentState.diskConfigs.size());
+            }
+
+            // current diskConfigs = 1; patch diskConfigs = null -> effective diskConfigs = 1
+            {
+                ImageState patchState = new ImageState();
+                patchState.documentSelfLink = currentState.documentSelfLink;
+                patchState.diskConfigs = null;
+
+                currentState = patch(patchState);
+
+                // Still 1, cause null patch value does nothing
+                assertEquals(1, currentState.diskConfigs.size());
+            }
+
+            this.startState.diskConfigs = null;
+            currentState = postServiceSynchronously(
+                    ImageService.FACTORY_LINK,
+                    this.startState, ImageState.class);
+
+            // current diskConfigs = null; patch diskConfigs = null -> effective diskConfigs = null
+            {
+                ImageState patchState = new ImageState();
+                patchState.documentSelfLink = currentState.documentSelfLink;
+                patchState.diskConfigs = null;
+
+                currentState = patch(patchState);
+
+                // Still null, cause null patch value does nothing
+                assertNull(currentState.diskConfigs);
+            }
+
+            // current diskConfigs = null; patch diskConfigs = 1 -> effective diskConfigs = 1
+            {
+                ImageState patchState = new ImageState();
+                patchState.documentSelfLink = currentState.documentSelfLink;
+                patchState.diskConfigs = Arrays.asList(new DiskConfiguration());
+
+                currentState = patch(patchState);
+
+                // null diskConfigs are overridden by the single patch disk
+                assertEquals(1, currentState.diskConfigs.size());
+            }
+        }
+
+        private ImageState patch(ImageState patchState) throws Throwable {
+
+            patchServiceSynchronously(patchState.documentSelfLink, patchState);
+
+            return getServiceSynchronously(patchState.documentSelfLink, ImageState.class);
         }
     }
+
 
     /**
      * This class implements tests for query ImageStates.

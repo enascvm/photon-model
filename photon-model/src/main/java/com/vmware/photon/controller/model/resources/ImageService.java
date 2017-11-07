@@ -21,6 +21,8 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
@@ -57,6 +59,7 @@ public class ImageService extends StatefulService {
          * Represents the properties of a data disk.
          */
         public static class DiskConfiguration {
+
             /**
              * Identifier of the disk.
              */
@@ -80,14 +83,48 @@ public class ImageService extends StatefulService {
             /**
              * Map to capture endpoint specific disk properties.
              */
-            public Map<String,String> properties;
+            public Map<String, String> properties;
+
+            /**
+             * Hash code is based on all fields.
+             */
+            @Override
+            public int hashCode() {
+                return Objects.hash(
+                        this.id,
+                        this.encrypted,
+                        this.persistent,
+                        this.capacityMBytes,
+                        this.properties);
+            }
+
+            /**
+             * Two {@code DiskConfiguration}s are considered equal if and only if their fields are
+             * equal.
+             */
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) {
+                    return true;
+                }
+                if (obj == null) {
+                    return false;
+                }
+
+                final DiskConfiguration that = (DiskConfiguration) obj;
+
+                return Objects.equals(this.id, that.id)
+                        && Objects.equals(this.encrypted, that.encrypted)
+                        && Objects.equals(this.persistent, that.persistent)
+                        && Objects.equals(this.capacityMBytes, that.capacityMBytes)
+                        && Objects.equals(this.properties, that.properties);
+            }
         }
 
         /**
          * Captures the properties of each disk specified in the image.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_17)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public List<DiskConfiguration> diskConfigs;
 
         /**
@@ -168,8 +205,36 @@ public class ImageService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patchOp) {
+
+        final ImageState currentState = getState(patchOp);
+
+        final ImageState patchBody = patchOp.getBody(ImageState.class);
+
+        // If more sophisticated logic is needed use ServiceStateCollectionUpdateRequest
+        final Function<Operation, Boolean> diskConfigsHandler = (op) -> {
+            if (patchBody.diskConfigs == null) {
+                // unmodified
+                return false;
+            }
+
+            // For the sake of optimization first check size and only then actually compare
+            if (currentState.diskConfigs != null
+                    && currentState.diskConfigs.size() == patchBody.diskConfigs.size()
+                    && currentState.diskConfigs.equals(patchBody.diskConfigs)) {
+                // unmodified: same size and same disks
+                return false;
+            }
+
+            // and override with patched value
+            currentState.diskConfigs = patchBody.diskConfigs;
+
+            // modified
+            return true;
+        };
+
+        // Delegate to built-in PATCH logic
         ResourceUtils.handlePatch(
-                patchOp, getState(patchOp), getStateDescription(), ImageState.class, null);
+                patchOp, currentState, getStateDescription(), ImageState.class, diskConfigsHandler);
     }
 
     /**
@@ -214,8 +279,8 @@ public class ImageService extends StatefulService {
 
         ImageState image = (ImageState) super.getDocumentTemplate();
         // enable metadata indexing
-        image.documentDescription.documentIndexingOptions =
-                EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
+        image.documentDescription.documentIndexingOptions = EnumSet
+                .of(DocumentIndexingOption.INDEX_METADATA);
         ServiceUtils.setRetentionLimit(image);
 
         image.id = "endpoint-specific-image-id";
