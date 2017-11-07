@@ -98,6 +98,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -200,6 +201,8 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     public static String azureVMNamePrefix = "enumtest-";
     public static String azureVMName;
     public boolean isMock = true;
+    public boolean isAzureClientMock = false;
+    public String azureMockEndpointReference = null;
     public String mockedStorageAccountName = randomString(15);
 
     // object counts
@@ -279,19 +282,29 @@ public class TestAzureEnumerationTask extends BaseModelTest {
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(AzureAdapters.LINKS);
-
+            AzureUtils.setAzureClientMock(this.isAzureClientMock);
+            AzureUtils.setAzureMockHost(this.azureMockEndpointReference);
             if (!this.isMock) {
-                ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
-                        this.clientID,
-                        this.tenantId, this.clientKey, AzureEnvironment.AZURE);
-                this.computeManagementClient = new ComputeManagementClientImpl(credentials)
-                        .withSubscriptionId(this.subscriptionId);
+                if (AzureUtils.isAzureClientMock()) {
+                    AzureEnvironment azureEnv = AzureEnvironment.AZURE;
+                    azureEnv.endpoints().put(AzureEnvironment.Endpoint.ACTIVE_DIRECTORY.toString(),
+                              AzureUtils.getAzureBaseUri());
+                    ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(this.clientID, this.tenantId, this.clientKey,
+                              azureEnv);
+                    this.computeManagementClient = new ComputeManagementClientImpl(AzureUtils.getAzureBaseUri(), credentials)
+                             .withSubscriptionId(this.subscriptionId);
 
-                this.resourceManagementClient = new ResourceManagementClientImpl(credentials)
-                        .withSubscriptionId(this.subscriptionId);
-
-                this.networkManagementClient = new NetworkManagementClientImpl(credentials)
-                        .withSubscriptionId(this.subscriptionId);
+                    this.resourceManagementClient = new ResourceManagementClientImpl(AzureUtils.getAzureBaseUri(), credentials)
+                            .withSubscriptionId(this.subscriptionId);
+                    this.networkManagementClient = new NetworkManagementClientImpl(AzureUtils.getAzureBaseUri(), credentials)
+                            .withSubscriptionId(this.subscriptionId);
+                } else {
+                    ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
+                             this.clientID, this.tenantId, this.clientKey, AzureEnvironment.AZURE);
+                    this.computeManagementClient = new ComputeManagementClientImpl(credentials).withSubscriptionId(this.subscriptionId);;
+                    this.resourceManagementClient = new ResourceManagementClientImpl(credentials).withSubscriptionId(this.subscriptionId);;
+                    this.networkManagementClient = new NetworkManagementClientImpl(credentials).withSubscriptionId(this.subscriptionId);;
+                }
             }
         } catch (Throwable e) {
             throw new Exception(e);
@@ -727,7 +740,10 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 queryLocalTags.collectDocuments(Collectors.toList()));
         this.host.log(Level.INFO, "external tag states discovered: " + tagStates.size());
 
-        assertEquals("TagStates were not discovered.", expectedTags.size(), tagStates.size());
+        if (!AzureUtils.isAzureClientMock()) {
+            assertEquals("TagStates were not discovered.", expectedTags.size(), tagStates.size());
+        }
+
         for (TagState tag : tagStates) {
             assertEquals(expectedTags.get(tag.key), tag.value);
         }
@@ -828,7 +844,9 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         // The test is only suitable for real (non-mocking env).
         Assume.assumeFalse(this.isMock);
-
+        if (AzureUtils.isAzureClientMock()) {
+            return;
+        }
         createResourceGroupWithSharedNetwork(this.resourceManagementClient,
                 this.networkManagementClient, SHARED_NETWORK_NIC_SPEC);
 
