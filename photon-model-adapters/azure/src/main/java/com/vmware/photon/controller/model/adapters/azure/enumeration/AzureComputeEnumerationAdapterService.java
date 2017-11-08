@@ -81,6 +81,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
@@ -957,7 +958,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         List<Query> diskUriFilters = new ArrayList<>();
         for (String instanceId : ctx.virtualMachines.keySet()) {
-            String diskId = getVhdUri(ctx.virtualMachines.get(instanceId));
+            String diskId = AzureUtils.canonizeId(getVhdUri(ctx.virtualMachines.get(instanceId)));
 
             if (diskId == null) {
                 continue;
@@ -1223,7 +1224,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         while (iterator.hasNext()) {
             Entry<String, VirtualMachineInner> vmEntry = iterator.next();
             VirtualMachineInner virtualMachine = vmEntry.getValue();
-            String diskUri = getVhdUri(virtualMachine);
+            String diskUri = AzureUtils.canonizeId(getVhdUri(virtualMachine));
 
             if (diskUri == null) {
                 logFine(() -> String.format("Disk URI not found for vm: %s", virtualMachine.id()));
@@ -1285,7 +1286,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private DiskState createDiskState(VirtualMachineInner vm) {
         DiskState diskState = new DiskState();
-        diskState.id = getVhdUri(vm);
+        diskState.id = AzureUtils.canonizeId(getVhdUri(vm));
         if (vm.storageProfile() != null
                 && vm.storageProfile().osDisk() != null
                 && vm.storageProfile().osDisk().diskSizeGB() != null) {
@@ -1661,7 +1662,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         List<String> vmDisks = new ArrayList<>();
         if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
-            String diskUri = getVhdUri(virtualMachine);
+            String diskUri = AzureUtils.canonizeId(getVhdUri(virtualMachine));
             if (diskUri != null) {
                 DiskState state = ctx.diskStates.remove(diskUri);
                 if (state != null) {
@@ -1869,15 +1870,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             if (osDisk.vhd() == null || osDisk.vhd().uri() == null) {
                 return osDisk.managedDisk().id();
             } else {
-                return httpsToHttp(vm.storageProfile().osDisk().vhd().uri());
+                return vm.storageProfile().osDisk().vhd().uri();
             }
         }
     }
 
-    /**
-     * Converts https to http.
-     */
-    private String httpsToHttp(String uri) {
-        return (uri.startsWith("https")) ? uri.replace("https", "http") : uri;
-    }
 }

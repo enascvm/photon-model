@@ -627,4 +627,15 @@ public class AzureUtils {
         return resourceGroupName;
     }
 
+    public static String canonizeId(String id) {
+        if (id == null) {
+            return null;
+        }
+        int index = id.indexOf("://");
+        if (index == -1) {
+            return id;
+        }
+        return id.substring(index + 3);
+    }
+
 }
