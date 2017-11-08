@@ -510,10 +510,10 @@ public class SingleResourceStatsCollectionTaskService
             metricsObjToUpdate.documentExpirationTimeMicros = expirationTime;
             metricsObjToUpdate.customProperties = new HashMap<>();
             metricsObjToUpdate.customProperties.put(ResourceMetrics.PROPERTY_RESOURCE_LINK, computeLink);
-            if (props != null) {
-                metricsObjToUpdate.customProperties.putAll(props);
-            }
             metricsList.add(metricsObjToUpdate);
+        }
+        if (props != null) {
+            metricsObjToUpdate.customProperties.putAll(props);
         }
         metricsObjToUpdate.entries.put(metricName, serviceStat.latestValue);
     }
