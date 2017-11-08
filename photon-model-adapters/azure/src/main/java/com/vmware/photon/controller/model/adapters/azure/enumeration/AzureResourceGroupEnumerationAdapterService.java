@@ -99,7 +99,8 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
                         if (results.value != null) {
                             results.value.forEach(resourceGroup -> {
-                                page.resourcesPage.put(resourceGroup.id, resourceGroup);
+                                page.resourcesPage.put(AzureUtils.removeHttpProtocolFromId
+                                        (resourceGroup.id), resourceGroup);
                             });
                         }
                         page.nextPageLink = results.nextLink;

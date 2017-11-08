@@ -656,6 +656,9 @@ public class AzureUtils {
     }
 
 
-
+    public static String removeHttpProtocolFromId(String id) {
+        String[] idArray = id.split("://");
+        return (idArray.length == 2) ? idArray[1] : id;
+    }
 
 }

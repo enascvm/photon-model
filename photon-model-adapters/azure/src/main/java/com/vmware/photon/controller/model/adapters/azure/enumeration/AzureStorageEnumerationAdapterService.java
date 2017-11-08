@@ -1110,7 +1110,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             CloudBlobContainer container, String storageLink,
             ResourceGroupState oldResourceGroupState) {
         ResourceGroupState resourceGroupState = new ResourceGroupState();
-        resourceGroupState.id = container.getUri().toString();
+        resourceGroupState.id = AzureUtils.removeHttpProtocolFromId(container.getUri().toString());
         resourceGroupState.name = container.getName();
         resourceGroupState.computeHostLink = context.parentCompute.documentSelfLink;
         if (storageLink != null) {
@@ -1622,7 +1622,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         } else {
             StorageAccount storageAccount = context.storageAccountBlobUriMap
                     .get(blob.getUri().toString());
-            diskState.id = blob.getUri().toString();
+            diskState.id = AzureUtils.removeHttpProtocolFromId(blob.getUri().toString());
             diskState.documentSelfLink = UUID.randomUUID().toString();
             if (storageAccount != null) {
                 diskState.regionId = storageAccount.location;
