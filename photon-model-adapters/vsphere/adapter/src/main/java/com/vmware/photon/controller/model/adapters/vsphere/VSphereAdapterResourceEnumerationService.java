@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_PORTGROUP;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_AVAILABLE_BYTES;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
@@ -106,7 +107,9 @@ import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualEthernetCard;
+import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
+import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
 import com.vmware.vim25.VirtualMachineSnapshotTree;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -147,6 +150,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private static final long VM_FERMENTATION_PERIOD_MILLIS = 3 * 60 * 1000;
     public static final String PREFIX_NETWORK = "network";
     public static final String PREFIX_DATASTORE = "datastore";
+
+    public enum InterfaceStateMode {
+        INTERFACE_STATE_WITH_OPAQUE_NETWORK,
+        INTERFACE_STATE_WITH_DISTRIBUTED_VIRTUAL_PORT
+    }
 
     /**
      * Stores currently running enumeration processes.
@@ -700,7 +708,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (net.getParentSwitch() != null) {
             // portgroup: create subnet
             QueryTask task = queryForSubnet(enumerationProgress, net);
-            withTaskResults(task, result -> {
+            withTaskResults(task, (ServiceDocumentQueryResult result) -> {
                 if (result.documentLinks.isEmpty()) {
                     createNewSubnet(enumerationProgress, net, allNetworks.get(net.getParentSwitch()));
                 } else {
@@ -787,6 +795,32 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
                 .build();
+    }
+
+    /***
+     * Query sub networks and networks for distributed port group id and opaque network id
+     * @param ctx The context
+     * @param fieldKey The field key to query
+     * @param fieldValue The field value to query
+     * @param type The type
+     * @return The query task operation
+     */
+    private Operation queryByPortGroupIdOrByOpaqueNetworkId(EnumerationProgress ctx, String
+            fieldKey, String fieldValue, Class<? extends ServiceDocument> type) {
+
+        Builder builder = Query.Builder.create()
+                .addKindFieldClause(type)
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        fieldKey, fieldValue);
+        QueryUtils.addEndpointLink(builder, NetworkState.class, ctx.getRequest().endpointLink);
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .build();
+
+        return QueryUtils.createQueryTaskOperation(this, queryTask, ServiceTypeCluster
+                .INVENTORY_SERVICE);
     }
 
     private void updateNetwork(NetworkState oldDocument, EnumerationProgress enumerationProgress, NetworkOverlay net) {
@@ -1746,7 +1780,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (ov.getParentSwitch() != null) {
                 // instead of a portgroup add the switch
                 res.add(computeGroupStableLink(ov.getParentSwitch(), PREFIX_NETWORK, ctx.getRequest().endpointLink));
-            } else if (!VimNames.TYPE_PORTGROUP.equals(ov.getId().getType())) {
+            } else if (!TYPE_PORTGROUP.equals(ov.getId().getType())) {
                 // skip portgroups and care only about opaque nets and standard swtiches
                 res.add(computeGroupStableLink(ov.getId(), PREFIX_NETWORK, ctx.getRequest().endpointLink));
             }
@@ -1789,6 +1823,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
         state.lifecycleState = LifecycleState.READY;
+        state.networkInterfaceLinks = oldDocument.networkInterfaceLinks;
 
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationProgress.getTenantLinks();
@@ -1827,7 +1862,90 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         TagsUtil.updateLocalTagStates(this, patchResponse, remoteTagMap);
     }
 
-    private void createNewVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
+    /***
+     * Create new network interface state
+     * @param id The id of the distributed virtual port or opaque network
+     * @param networkLink The network link
+     * @param subnetworkLink The subnetwork link
+     * @return The network interface state
+     */
+    private NetworkInterfaceState createNewInterfaceState(String id, String networkLink, String
+            subnetworkLink) {
+        NetworkInterfaceState iface = new NetworkInterfaceState();
+        iface.name = id;
+        iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK, getHost().nextUUID());
+        iface.networkLink = networkLink;
+        iface.subnetLink = subnetworkLink;
+        Operation.createPost(PhotonModelUriUtils.createInventoryUri
+                (getHost(),
+                NetworkInterfaceService.FACTORY_LINK))
+                .setBody(iface)
+                .sendWith(this);
+        return iface;
+    }
+
+    /***
+     * Add new interface state to compute network interface links
+     * @param enumerationProgress Enumeration progress
+     * @param state Compute state
+     * @param id The id of distributed virtual port or opaque network
+     * @param mode Either using distributed virtual port or opaque network
+     * @param docType The document class type
+     * @param type The type
+     */
+    private <T> Operation addNewInterfaceState(EnumerationProgress enumerationProgress,
+            ComputeState state, String id, InterfaceStateMode mode,
+            Class<? extends ServiceDocument> docType, Class<T> type) {
+
+        String fieldKey;
+        String fieldValue;
+
+        switch (mode) {
+        case INTERFACE_STATE_WITH_DISTRIBUTED_VIRTUAL_PORT: {
+            fieldKey = CustomProperties.MOREF;
+            fieldValue = TYPE_PORTGROUP + ":" + id;
+            break;
+        }
+        case INTERFACE_STATE_WITH_OPAQUE_NETWORK: {
+            fieldKey = NsxProperties.OPAQUE_NET_ID;
+            fieldValue = id;
+            break;
+        }
+        default: {
+            logFine(() -> String.format("invalid mode when creating compute state with "
+                    + "network interface links: [%s]", mode));
+            return null;
+        }
+        }
+
+        Operation operation = queryByPortGroupIdOrByOpaqueNetworkId(enumerationProgress, fieldKey, fieldValue, docType)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logWarning(() -> String.format("Error processing queryByPortGroupIdOrByOpaqueNetworkId for id: [%s], error: [%s]", fieldValue, e.toString()));
+                        return;
+                    }
+                    QueryTask task = o.getBody(QueryTask.class);
+                    if (task.results != null && !task.results.documentLinks.isEmpty()) {
+                        T netState = convertOnlyResultToDocument(task.results, type);
+                        NetworkInterfaceState iface = null;
+                        if (netState instanceof SubnetState) {
+                            SubnetState subnetState = (SubnetState) netState;
+                            iface = createNewInterfaceState(id, subnetState.networkLink, subnetState.documentSelfLink);
+                        } else if (netState instanceof NetworkState) {
+                            NetworkState networkState = (NetworkState) netState;
+                            iface = createNewInterfaceState(id, null, networkState.documentSelfLink);
+                        }
+                        if (iface != null ) {
+                            state.networkInterfaceLinks.add(iface.documentSelfLink);
+                        }
+                    } else {
+                        logFine(() -> String.format("Will not add nic with id: [%s]", fieldValue));
+                    }
+                });
+        return operation;
+    }
+
+    private <T> void createNewVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
         ComputeDescription desc = makeDescriptionForVm(enumerationProgress, vm);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
@@ -1839,12 +1957,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = enumerationProgress.getTenantLinks();
 
+        List<Operation> operations = new ArrayList<>();
+
         submitWorkToVSpherePool(() -> {
             populateTags(enumerationProgress, vm, state);
             state.networkInterfaceLinks = new ArrayList<>();
             for (VirtualEthernetCard nic : vm.getNics()) {
                 VirtualDeviceBackingInfo backing = nic.getBacking();
-
                 if (backing instanceof VirtualEthernetCardNetworkBackingInfo) {
                     VirtualEthernetCardNetworkBackingInfo veth = (VirtualEthernetCardNetworkBackingInfo) backing;
                     NetworkInterfaceState iface = new NetworkInterfaceState();
@@ -1853,13 +1972,31 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     iface.name = nic.getDeviceInfo().getLabel();
                     iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                             getHost().nextUUID());
-
                     Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(),
                             NetworkInterfaceService.FACTORY_LINK))
                             .setBody(iface)
                             .sendWith(this);
-
                     state.networkInterfaceLinks.add(iface.documentSelfLink);
+                } else if (backing instanceof VirtualEthernetCardDistributedVirtualPortBackingInfo) {
+                    VirtualEthernetCardDistributedVirtualPortBackingInfo veth =
+                            (VirtualEthernetCardDistributedVirtualPortBackingInfo) backing;
+                    String portgroupKey = veth.getPort().getPortgroupKey();
+                    Operation op = addNewInterfaceState(enumerationProgress, state, portgroupKey,
+                            InterfaceStateMode.INTERFACE_STATE_WITH_DISTRIBUTED_VIRTUAL_PORT,
+                            SubnetState.class, SubnetState.class);
+                    if (op != null) {
+                        operations.add(op);
+                    }
+                } else if (backing instanceof VirtualEthernetCardOpaqueNetworkBackingInfo) {
+                    VirtualEthernetCardOpaqueNetworkBackingInfo veth =
+                            (VirtualEthernetCardOpaqueNetworkBackingInfo)  backing;
+                    String opaqueNetworkId = veth.getOpaqueNetworkId();
+                    Operation op = addNewInterfaceState(enumerationProgress, state, opaqueNetworkId,
+                            InterfaceStateMode.INTERFACE_STATE_WITH_OPAQUE_NETWORK,
+                            NetworkState.class, NetworkState.class);
+                    if (op != null) {
+                        operations.add(op);
+                    }
                 } else {
                     // TODO add support for DVS
                     logFine(() -> String.format("Will not add nic of type %s",
@@ -1868,10 +2005,20 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             }
 
             logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
-            Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), ComputeService.FACTORY_LINK))
-                    .setBody(state)
-                    .setCompletion(trackVm(enumerationProgress))
-                    .sendWith(this);
+            if (operations.isEmpty()) {
+                Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), ComputeService.FACTORY_LINK))
+                        .setBody(state)
+                        .setCompletion(trackVm(enumerationProgress))
+                        .sendWith(this);
+            } else {
+                OperationJoin.create(operations).setCompletion((operationMap, exception) -> {
+                    Operation.createPost(PhotonModelUriUtils
+                            .createInventoryUri(getHost(), ComputeService.FACTORY_LINK))
+                            .setBody(state)
+                            .setCompletion(trackVm(enumerationProgress))
+                            .sendWith(this);
+                }).sendWith(this);
+            }
         });
     }
 
