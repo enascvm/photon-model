@@ -483,6 +483,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.instanceAdapterReference = context.parentCompute.description.instanceAdapterReference;
         computeState.statsAdapterReference = context.parentCompute.description.statsAdapterReference;
         computeState.parentLink = context.parentCompute.documentSelfLink;
+        computeState.computeHostLink = context.parentCompute.documentSelfLink;
         computeState.resourcePoolLink = context.request.resourcePoolLink;
         computeState.endpointLink = context.request.endpointLink;
         if (computeState.endpointLinks == null) {
