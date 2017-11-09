@@ -493,7 +493,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         String descriptionLinkId = generateRegionComputeDescriptionLinkId(regionInfo.regionId, context.request.endpointLink);
         computeState.descriptionLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, descriptionLinkId);
-        computeState.type = ComputeType.VM_HOST;
+        computeState.type = ComputeType.ZONE;
         computeState.regionId = regionInfo.regionId;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
