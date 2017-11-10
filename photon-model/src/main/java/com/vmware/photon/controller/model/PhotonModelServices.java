@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model;
 
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
 
-import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ContentService;
@@ -43,6 +42,7 @@ import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -68,7 +68,6 @@ public class PhotonModelServices {
             factoryService(SecurityGroupService.class),
             factoryService(FirewallService.class),
             factoryService(StorageDescriptionService.class),
-            factoryService(InMemoryResourceMetricService.class),
             factoryService(EndpointService.class),
             factoryService(ImageService.class),
             factoryService(TagService.class, TagFactoryService::new),

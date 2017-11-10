@@ -23,11 +23,13 @@ import java.util.function.Predicate;
 
 import org.junit.Before;
 
+import com.vmware.photon.controller.model.PhotonModelInMemoryServices;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService;
+
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -50,6 +52,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
             return;
         }
         PhotonModelServices.startServices(test.getHost());
+        PhotonModelInMemoryServices.startServices(test.getHost());
         PhotonModelMetricServices.startServices(test.getHost());
         test.getHost().waitForServiceAvailable(PhotonModelServices.LINKS);
     }
