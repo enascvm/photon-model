@@ -671,6 +671,7 @@ public class EndpointAllocationTaskService
         scheduledTaskState.initialStateJson = Utils.toJson(enumTaskState);
         scheduledTaskState.intervalMicros = intervalMicros;
         scheduledTaskState.delayMicros = currentState.enumerationRequest.delayMicros;
+        scheduledTaskState.noDelayOnInitialExecution = Boolean.TRUE;
         scheduledTaskState.tenantLinks = endpoint.tenantLinks;
         scheduledTaskState.customProperties = new HashMap<>();
         scheduledTaskState.customProperties.put(ENDPOINT_LINK_PROP_NAME,

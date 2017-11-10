@@ -22,7 +22,6 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -87,6 +86,14 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_10)
         public Boolean enabled = Boolean.TRUE;
+
+        /**
+         * Whether to execute the task immediately on creation even if {@link #delayMicros} is
+         * given. This has no effect on periodic executions.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_45)
+        public Boolean noDelayOnInitialExecution;
     }
 
     public ScheduledTaskService() {
@@ -127,7 +134,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             }
             state.delayMicros = state.delayMicros != null ? state.delayMicros
                     : new Random().longs(1, 0, state.intervalMicros).findFirst().getAsLong();
-            invokeTask(state);
+            invokeTask(state, true);
             start.complete();
         } catch (Throwable e) {
             start.fail(e);
@@ -148,7 +155,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                         return;
                     }
                     ScheduledTaskState state = getOp.getBody(ScheduledTaskState.class);
-                    invokeTask(state);
+                    invokeTask(state, false);
                     maintenanceOp.complete();
                 }));
     }
@@ -172,19 +179,36 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         }
     }
 
-    private void invokeTask(ScheduledTaskState state) {
+    private void invokeTask(ScheduledTaskState state, boolean isInitial) {
         if (!state.enabled) {
             return;
         }
+
+        // determine the delay
+        final long delayMicros;
+        if (isInitial && state.noDelayOnInitialExecution == Boolean.TRUE) {
+            delayMicros = 0;
+        } else {
+            delayMicros = state.delayMicros;
+        }
+
         getHost().schedule(() -> {
             Operation op = Operation.createPost(this, state.factoryLink);
-            if (getHost().isAuthorizationEnabled() && state.userLink != null) {
-                try {
-                    TaskUtils.assumeIdentity(this, op, state.userLink);
-                } catch (Exception e) {
-                    logWarning(() -> String.format("Unhandled exception while assuming identity"
-                                    + " for %s: %s", state.userLink, e.getMessage()));
-                    return;
+
+            if (getHost().isAuthorizationEnabled()) {
+                if (isInitial && state.userLink == null) {
+                    // make sure system authz context is used for the initial execution so that
+                    // it does not differ from periodic ones
+                    setAuthorizationContext(op, getSystemAuthorizationContext());
+                } else if (!isInitial && state.userLink != null) {
+                    // inject user identity into the op authz context
+                    try {
+                        TaskUtils.assumeIdentity(this, op, state.userLink);
+                    } catch (Exception e) {
+                        logWarning(() -> String.format("Unhandled exception while assuming identity"
+                                + " for %s: %s", state.userLink, e.getMessage()));
+                        return;
+                    }
                 }
             }
 
@@ -202,6 +226,6 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                                     return;
                                 }
                             }));
-        }, state.delayMicros, TimeUnit.MICROSECONDS);
+        }, delayMicros, TimeUnit.MICROSECONDS);
     }
 }
