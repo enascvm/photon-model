@@ -16,8 +16,11 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.NIC_EXTERNAL_ID;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.NIC_MAC_ADDRESS;
 import static com.vmware.photon.controller.model.adapters.vsphere.util.VimPath.vm_guest_net;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -27,13 +30,15 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.vim25.ArrayOfGuestNicInfo;
 import com.vmware.vim25.GuestNicInfo;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 
-public class VmOverlayTest {
+public class VmOverlayTest{
     private VmOverlay overlay;
 
     @Before
@@ -49,10 +54,14 @@ public class VmOverlayTest {
         List<GuestNicInfo> listGuestNicInfo = arrayOfGuestNicInfo.getGuestNicInfo();
         GuestNicInfo nic1 = new GuestNicInfo();
         List<String> ipsNic1 = nic1.getIpAddress();
+        String mac1Address = "00:50:56:8b:54:bd";
+        String mac2Address = "98:87:fd:9e:ed:6d";
+        nic1.setMacAddress(mac1Address);
         ipsNic1.add("192.168.1.10");
         ipsNic1.add("192.168.1.11");
         GuestNicInfo nic2 = new GuestNicInfo();
         List<String> ipsNic2 = nic2.getIpAddress();
+        nic2.setMacAddress(mac2Address);
         ipsNic2.add("10.10.10.20");
         listGuestNicInfo.add(nic1);
         listGuestNicInfo.add(nic2);
@@ -134,16 +143,98 @@ public class VmOverlayTest {
     }
 
     @Test
+    public void findPublicIpAddress() {
+        NetworkInterfaceStateWithDetails n1 = new NetworkInterfaceStateWithDetails();
+        NetworkInterfaceStateWithDetails n2 = new NetworkInterfaceStateWithDetails();
+        List<NetworkInterfaceStateWithDetails> nics = new ArrayList();
+        nics.add(n1);
+        nics.add(n2);
+
+        String publicIpAddress = this.overlay.findPublicIpV4Address(nics);
+        Assert.assertTrue("publicIpAddress is null", publicIpAddress != null);
+    }
+
+    @Test
+    public void findPublicIpAddressWithMacAddresses() {
+
+        NetworkInterfaceStateWithDetails n1 = new NetworkInterfaceStateWithDetails();
+        NetworkInterfaceStateWithDetails n2 = new NetworkInterfaceStateWithDetails();
+        String mac1Address = "00:50:56:8b:54:bd";
+        String mac2Address = "98:87:fd:9e:ed:6d";
+
+        List<NetworkInterfaceStateWithDetails> nics = new ArrayList();
+        nics.add(n1);
+        n1.customProperties = new HashMap<>();
+        n1.customProperties.put(NIC_MAC_ADDRESS, mac1Address);
+        nics.add(n2);
+        n2.customProperties = new HashMap<>();
+        n2.customProperties.put(NIC_MAC_ADDRESS, mac2Address);
+
+        String publicIpAddress = this.overlay.findPublicIpV4Address(nics);
+        Assert.assertTrue("publicIpAddress is null", publicIpAddress != null);
+
+        // test with assignPublicIpAddress
+        n1.description = new NetworkInterfaceDescription();
+        n1.description.assignPublicIpAddress = true;
+
+        publicIpAddress = this.overlay.findPublicIpV4Address(nics);
+        Assert.assertTrue("publicIpAddress is null", publicIpAddress != null);
+        Assert.assertTrue("publicIpAddress is null", publicIpAddress.equals("192.168.1.10"));
+    }
+
+    @Test
+    public void findPublicIpAddressWithNicExternalId() {
+
+        NetworkInterfaceStateWithDetails n1 = new NetworkInterfaceStateWithDetails();
+        NetworkInterfaceStateWithDetails n2 = new NetworkInterfaceStateWithDetails();
+        String mac1Address = "00:50:56:8b:54:bd";
+        String mac2Address = "98:87:fd:9e:ed:6d";
+
+        List<NetworkInterfaceStateWithDetails> nics = new ArrayList();
+        nics.add(n1);
+        n1.customProperties = new HashMap<>();
+        n1.customProperties.put(NIC_EXTERNAL_ID, Integer.toString(0));
+        nics.add(n2);
+        n2.customProperties = new HashMap<>();
+        n2.customProperties.put(NIC_EXTERNAL_ID, Integer.toString(0));
+
+        String publicIpAddress = this.overlay.findPublicIpV4Address(nics);
+        Assert.assertTrue("publicIpAddress is null", publicIpAddress != null);
+
+        // test with assignPublicIpAddress
+        n1.description = new NetworkInterfaceDescription();
+        n1.description.assignPublicIpAddress = true;
+
+        publicIpAddress = this.overlay.findPublicIpV4Address(nics);
+        Assert.assertTrue("publicIpAddress is null", publicIpAddress != null);
+    }
+
+
+    @Test
     public void getMapNic2IpV4Addresses() {
-        Map<Integer, List<String>> mapNics = this.overlay.getMapNic2IpV4Addresses();
-        Assert.assertTrue("mapNic2IpV4Addresses size is different from 2",mapNics.size() == 2);
-        List<String> nic1Ips = mapNics.get(0);
-        List<String> nic2Ips = mapNics.get(1);
+        String mac1Address = "00:50:56:8b:54:bd";
+        String mac2Address = "98:87:fd:9e:ed:6d";
+        Map<String, List<String>> mapNics = this.overlay.getMapNic2IpV4Addresses();
+        Assert.assertTrue("mapNic2IpV4Addresses size is different from 4",mapNics.size() == 4);
+        List<String> nic1Ips = mapNics.get(Integer.toString(0));
+        List<String> nic2Ips = mapNics.get(Integer.toString(1));
         Assert.assertTrue("nic ips size is different from 2", nic1Ips.size() == 2);
         Assert.assertTrue("nic ips size is different from 1", nic2Ips.size() == 1);
         Assert.assertTrue("ip is different from 192.168.1.10", nic1Ips.get(0).equals("192.168.1.10"));
         Assert.assertTrue("ip is different from 192.168.1.11", nic1Ips.get(1).equals("192.168.1.11"));
         Assert.assertTrue("ip is different from 10.10.10.20", nic2Ips.get(0).equals("10.10.10.20"));
+
+        List<String> nic1IpsByMacAddress = mapNics.get(mac1Address);
+        List<String> nic2IpsByMacAddress = mapNics.get(mac2Address);
+        Assert.assertTrue("nic ips by mac address size is different from 2", nic1IpsByMacAddress
+                .size
+                () == 2);
+        Assert.assertTrue("nic ips by mac address size is different from 1", nic2IpsByMacAddress
+                .size() == 1);
+        Assert.assertTrue("ip is different from 192.168.1.10",
+                nic1IpsByMacAddress.get(0).equals("192.168.1.10"));
+        Assert.assertTrue("ip is different from 192.168.1.11", nic1IpsByMacAddress.get(1).equals("192.168.1.11"));
+        Assert.assertTrue("ip is different from 10.10.10.20", nic2IpsByMacAddress.get(0).equals("10.10.10.20"));
     }
 
 }

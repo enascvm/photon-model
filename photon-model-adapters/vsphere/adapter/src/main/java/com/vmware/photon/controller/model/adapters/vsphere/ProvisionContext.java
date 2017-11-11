@@ -435,6 +435,13 @@ public class ProvisionContext {
             }
         }
 
+        // Order networks by deviceIndex so that nics are created in the same order
+        if (ctx.nics != null) {
+            // configure network
+            ctx.nics.sort((lnis, rnis) -> {
+                return Integer.compare(lnis.deviceIndex, rnis.deviceIndex);
+            });
+        }
         // context populated, invoke handler
         onSuccess.accept(ctx);
     }

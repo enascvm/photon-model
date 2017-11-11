@@ -141,6 +141,11 @@ public class CustomProperties {
      */
     public static final String NIC_EXTERNAL_ID = "external_id";
 
+    /**
+     * Nic mac address
+     */
+    public static final String NIC_MAC_ADDRESS = "mac_address";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -185,26 +186,86 @@ public class VmOverlay extends AbstractOverlay {
                 .flatMap(gni -> gni.getIpAddress().stream()).collect(Collectors.toList());
     }
 
-    public Map<Integer, List<String>> getMapNic2IpV4Addresses() {
+    /***
+     * Builds a map of external device index and ips or mac addresses and ips
+     * @return Map
+     */
+    public Map<String, List<String>> getMapNic2IpV4Addresses() {
         ArrayOfGuestNicInfo arr = (ArrayOfGuestNicInfo) getOrDefault(VimPath.vm_guest_net, null);
         if (arr == null) {
             return Collections.emptyMap();
         }
-        HashMap<Integer, List<String>> mapNicIpAddresses = new HashMap<>();
+        HashMap<String, List<String>> mapNicIpAddresses = new HashMap<>();
         if (arr.getGuestNicInfo() != null) {
             for (int index = 0; index < arr.getGuestNicInfo().size(); index++) {
                 List<String> ips = arr.getGuestNicInfo().get(index).getIpAddress().stream()
                         .filter(s -> !s.contains(":")).collect(Collectors.toList());
-                mapNicIpAddresses.put(index, ips);
+                mapNicIpAddresses.put(Integer.toString(index), ips);
+                String macAddress = arr.getGuestNicInfo().get(index).getMacAddress();
+                if (macAddress != null) {
+                    mapNicIpAddresses.put(macAddress, ips);
+                }
             }
         }
         return mapNicIpAddresses;
     }
 
+    /***
+     * Gets the device key for nic. The network device key is the nic external id or the nic mac
+     * address
+     * @param nic The network interface
+     * @return The network device key
+     */
+    public static String getDeviceKey(NetworkInterfaceStateWithDetails nic) {
+        String deviceKey = null;
+        if (nic.customProperties != null) {
+            deviceKey = nic.customProperties.get(CustomProperties.NIC_EXTERNAL_ID);
+        }
+        if (deviceKey == null) {
+            deviceKey = nic.customProperties.get(CustomProperties.NIC_MAC_ADDRESS);
+        }
+        return deviceKey;
+    }
+
+
     /**
-     * Tries to guess the "public" IP of a VM. IPv6 addresses are excluded. It prefer routable
+     * If there is a nic with assignPublicIpAddress use the ip associated with that nic
+     * otherwise rely on previous logic where it tries to guess the "public" IP of a VM. IPv6
+     * addresses are excluded. It prefer routable
      * addresses, then class A, then class B, then class C. Return null if not candidates.
      *
+     * @return
+     */
+    public String findPublicIpV4Address(List<NetworkInterfaceStateWithDetails> nics) {
+        //check if any of the nics is marked as assignPublicIpAddress
+        if (nics != null) {
+            boolean assignPublicIpAddress = false;
+            NetworkInterfaceStateWithDetails networkInterfaceStateWithDetails = nics.stream()
+                    .filter(nic -> nic.description != null && nic.description.assignPublicIpAddress != null &&
+                            nic.description.assignPublicIpAddress == true)
+                    .findFirst().orElse(null);
+            if (networkInterfaceStateWithDetails != null) {
+                assignPublicIpAddress = true;
+            }
+            if (assignPublicIpAddress == true) {
+                String deviceKey = null;
+                deviceKey = getDeviceKey(networkInterfaceStateWithDetails);
+                if (deviceKey != null) {
+                    Map<String, List<String>> mapNics2IpAddresses = getMapNic2IpV4Addresses();
+                    if (mapNics2IpAddresses.containsKey(deviceKey)) {
+                        List<String> ips = mapNics2IpAddresses.get(deviceKey);
+                        return guessPublicIpV4Address(ips);
+                    }
+                }
+            }
+        }
+        return guessPublicIpV4Address(getAllIps());
+    }
+
+    /***
+     * Tries to guess the "public" IP of a VM. IPv6
+     * addresses are excluded. It prefer routable
+     * addresses, then class A, then class B, then class C. Return null if not candidates.
      * @return
      */
     public String guessPublicIpV4Address() {

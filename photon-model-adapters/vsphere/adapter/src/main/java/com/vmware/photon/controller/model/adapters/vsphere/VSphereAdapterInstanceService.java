@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
+
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 
@@ -29,12 +30,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+
 import io.netty.util.internal.StringUtil;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
+import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
+import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
@@ -56,9 +60,13 @@ import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.StorageIOAllocationInfo;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
+import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
+import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
+import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
+import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -228,7 +236,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
     }
 
     private List<Operation> createUpdateIPOperationsForComputeAndNics(String computeLink,
-            String ip, Map<Integer, List<String>> ipV4Addresses, ProvisionContext ctx) {
+            String ip, Map<String, List<String>> ipV4Addresses, ProvisionContext ctx) {
         List<Operation> updateIpAddressOperations = new ArrayList<>();
 
         if (ip != null) {
@@ -244,10 +252,13 @@ public class VSphereAdapterInstanceService extends StatelessService {
         if (ipV4Addresses != null) {
             int sizeIpV4Addresses = ipV4Addresses.size();
             for (NetworkInterfaceStateWithDetails nic : ctx.nics) {
-                int deviceIndex = nic.deviceIndex;
-                if (deviceIndex < sizeIpV4Addresses) {
-                    List<String> ipsV4 = ipV4Addresses.containsKey(deviceIndex) ? ipV4Addresses
-                            .get(deviceIndex) : Collections.emptyList();
+                String deviceKey = null;
+                deviceKey = VmOverlay.getDeviceKey(nic);
+                if (deviceKey == null && nic.deviceIndex < sizeIpV4Addresses) {
+                    deviceKey = Integer.toString(nic.deviceIndex);
+                }
+                if (deviceKey != null) {
+                    List<String> ipsV4 = ipV4Addresses.containsKey(deviceKey) ? ipV4Addresses.get(deviceKey) : Collections.emptyList();
                     if (ipsV4.size() > 0) {
                         NetworkInterfaceState patchNic = new NetworkInterfaceState();
                         // if nic has multiple ip addresses for ipv4 only pick 1st ip address
@@ -274,13 +285,13 @@ public class VSphereAdapterInstanceService extends StatelessService {
             @Override
             public void run() {
                 String ip;
-                Map<Integer, List<String>> ipV4Addresses = null;
+                Map<String, List<String>> ipV4Addresses = null;
                 try {
                     GetMoRef get = new GetMoRef(connection);
                     // fetch enough to make guessPublicIpV4Address() work
                     Map<String, Object> props = get.entityProps(vmRef, VimPath.vm_guest_net);
                     VmOverlay vm = new VmOverlay(vmRef, props);
-                    ip = vm.guessPublicIpV4Address();
+                    ip = vm.findPublicIpV4Address(ctx.nics);
                     ipV4Addresses = vm.getMapNic2IpV4Addresses();
                 } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
                     log(Level.WARNING, "Error getting IP of vm %s, %s, aborting ",
@@ -302,10 +313,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             computeLink, ip, ipV4Addresses, ctx);
                     OperationJoin.create(updateIpAddressOperations)
                             .setCompletion((o, e) -> {
-
                                 log(Level.INFO, "Update compute IP [%s] and networkInterfaces ip"
-                                                + " addresses [%s] for computeLink [%s]: ", ip, ips,
-                                        computeLink);
+                                                + " addresses [%s] for computeLink [%s]: ", ip, ips, computeLink);
                                 // finish task
                                 taskFinisher.sendWith(VSphereAdapterInstanceService.this);
                             })
@@ -343,23 +352,85 @@ public class VSphereAdapterInstanceService extends StatelessService {
         };
     }
 
+    private NetworkInterfaceStateWithDetails findNic(ProvisionContext ctx, String key, String value) {
+        NetworkInterfaceStateWithDetails nic = null;
+        nic = ctx.nics.stream().filter(nics -> nics.subnet != null && nics.subnet
+                .customProperties.containsKey(key) &&
+                nics.subnet.customProperties.get(key).contains(value))
+                .findFirst().orElse(null);
+        if (nic == null) {
+            nic = ctx.nics.stream().filter(nics -> nics.network != null && nics.network
+                    .customProperties.containsKey(key) &&
+                    nics.network.customProperties.get(key).contains
+                            (value)).findFirst().orElse(null);
+        }
+        return nic;
+    }
+
     /**
      * Update the details of nics into compute state after the provisioning is successful
      */
-    private void updateNicsAfterProvisionSuccess(List<VirtualEthernetCard> virtualEthernetCards,
-            ProvisionContext ctx) {
-        for (NetworkInterfaceStateWithDetails nic : ctx.nics) {
-            VirtualEthernetCard virtualEthernetCard = virtualEthernetCards.get(nic.deviceIndex);
-            if (!StringUtil.isNullOrEmpty(virtualEthernetCard.getExternalId())) {
-                NetworkInterfaceState patchNic = new NetworkInterfaceState();
-                patchNic.customProperties = new HashMap<>(1);
-                // Update nic external id
-                patchNic.customProperties
-                        .put(CustomProperties.NIC_EXTERNAL_ID, virtualEthernetCard.getExternalId());
-                Operation.createPatch(
-                        PhotonModelUriUtils.createInventoryUri(getHost(), nic.documentSelfLink))
-                        .setBody(patchNic)
-                        .sendWith(this);
+    private void updateNicsAfterProvisionSuccess(List<VirtualEthernetCard> virtualEthernetCards, ProvisionContext ctx) {
+        boolean changed = false;
+        NetworkInterfaceState nic = null;
+
+        if (ctx.nics.size() == 0) {
+            return;
+        }
+        for (VirtualEthernetCard virtualEthernetCard: virtualEthernetCards) {
+            VirtualDeviceBackingInfo deviceBackingInfo = virtualEthernetCard.getBacking();
+            if (deviceBackingInfo instanceof VirtualEthernetCardDistributedVirtualPortBackingInfo) {
+                VirtualEthernetCardDistributedVirtualPortBackingInfo info =
+                        (VirtualEthernetCardDistributedVirtualPortBackingInfo) deviceBackingInfo;
+                String portGroupKey = info.getPort().getPortgroupKey();
+                nic = findNic(ctx, DvsProperties.PORT_GROUP_KEY, portGroupKey);
+
+            } else if (deviceBackingInfo instanceof VirtualEthernetCardOpaqueNetworkBackingInfo) {
+                VirtualEthernetCardOpaqueNetworkBackingInfo info =
+                        (VirtualEthernetCardOpaqueNetworkBackingInfo) deviceBackingInfo;
+                String opaqueNetworkId = info.getOpaqueNetworkId();
+                nic = findNic(ctx, NsxProperties.OPAQUE_NET_ID, opaqueNetworkId);
+
+            } else if ( deviceBackingInfo instanceof VirtualEthernetCardNetworkBackingInfo) {
+                VirtualEthernetCardNetworkBackingInfo info =
+                        (VirtualEthernetCardNetworkBackingInfo) deviceBackingInfo;
+                String deviceName = info.getDeviceName();
+                nic = ctx.nics.stream().filter(nics -> deviceName != null && nics.network != null
+                        && nics.network.name != null && nics.network.name.equals(deviceName))
+                        .findFirst().orElse(null);
+            }
+
+            if (nic != null) {
+                if (nic.customProperties == null) {
+                    nic.customProperties = new HashMap<>(1);
+                }
+                if (!StringUtil.isNullOrEmpty(virtualEthernetCard.getExternalId())) {
+                    // Update nic external id
+                    nic.customProperties.put(CustomProperties.NIC_EXTERNAL_ID,
+                            virtualEthernetCard.getExternalId());
+                    changed = true;
+                }
+                if (!StringUtil.isNullOrEmpty(virtualEthernetCard.getMacAddress())) {
+                    // Update nic mac address
+                    nic.customProperties.put(CustomProperties.NIC_MAC_ADDRESS,
+                            virtualEthernetCard.getMacAddress());
+                    changed = true;
+                }
+                if (changed) {
+                    NetworkInterfaceState patchNic = new NetworkInterfaceState();
+                    patchNic.customProperties = nic.customProperties;
+                    Operation.createPatch(
+                            PhotonModelUriUtils.createInventoryUri(getHost(), nic.documentSelfLink))
+                            .setBody(patchNic)
+                            .sendWith(this);
+                }
+            } else {
+                log(Level.WARNING, "NetworkInterfaceState not found for vsphere network adapter "
+                                + "with mac address:"
+                        + " [%s]. The custom properties NIC_EXTERNAL_ID or NIC_MAC_ADDRESS were "
+                        + "not updated for: [%s]", virtualEthernetCard.getMacAddress(),
+                        ctx.nics.stream().map(ic -> ic.documentSelfLink).collect(Collectors.toList())
+                        .toString());
             }
         }
     }
