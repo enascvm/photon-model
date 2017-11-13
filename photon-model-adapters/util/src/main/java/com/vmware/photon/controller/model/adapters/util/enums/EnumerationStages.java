@@ -40,6 +40,11 @@ public enum EnumerationStages {
     CLIENT,
 
     /**
+     * Stage to create internal tag/tags for a resource
+     */
+    CREATE_INTERNAL_TAGS,
+
+    /**
      * Stage to start enumeration of resources.
      */
     ENUMERATE,

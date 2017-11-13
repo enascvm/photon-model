@@ -915,7 +915,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     if (tags != null && !tags.isEmpty()) {
                         Set<String> tagLinks = cs.tagLinks;
                         cs.tagLinks = null;
-                        result = updateLocalTagStates(this, cs, tagLinks, tags);
+                        result = updateLocalTagStates(this, cs, tagLinks, tags, null);
                     }
                     // add internal type tags
                     if (cs.tagLinks == null) {

@@ -595,7 +595,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     }
                 }
                 updateCSTagLinksOps
-                        .add(updateLocalTagStates(this, existingComputeState, remoteTags));
+                        .add(updateLocalTagStates(this, existingComputeState, remoteTags, null));
             }
             return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> context);
         }

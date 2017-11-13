@@ -1859,7 +1859,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             remoteTagMap.put(ts.key, ts.value);
         }
 
-        TagsUtil.updateLocalTagStates(this, patchResponse, remoteTagMap);
+        TagsUtil.updateLocalTagStates(this, patchResponse, remoteTagMap, null);
     }
 
     /***

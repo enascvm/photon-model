@@ -315,7 +315,8 @@ public class AWSConstants {
         s3_bucket("s3_bucket"),
         ec2_vpc("ec2_vpc"),
         ec2_subnet("ec2_subnet"),
-        ec2_net_interface("ec2_net_interface");
+        ec2_net_interface("ec2_net_interface"),
+        ec2_security_group("ec2_security_group");
 
         private final String value;
 

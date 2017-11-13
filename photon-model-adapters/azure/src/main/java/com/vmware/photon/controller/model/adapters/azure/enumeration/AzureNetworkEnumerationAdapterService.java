@@ -943,7 +943,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     }
                 }
                 updateNetwLinksOps
-                        .add(updateLocalTagStates(this, existingNetworkState, remoteTags));
+                        .add(updateLocalTagStates(this, existingNetworkState, remoteTags, null));
             }
 
             return DeferredResult.allOf(updateNetwLinksOps).thenApply(gnore -> context);

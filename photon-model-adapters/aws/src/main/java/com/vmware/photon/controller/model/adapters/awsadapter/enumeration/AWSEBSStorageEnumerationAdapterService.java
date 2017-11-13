@@ -689,7 +689,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                         }
                     }
                     updateCSTagLinksOps.add(TagsUtil
-                            .updateLocalTagStates(this.service, existingDiskState, remoteTags));
+                            .updateLocalTagStates(this.service, existingDiskState, remoteTags, null));
                 }
                 return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> this.context);
             }

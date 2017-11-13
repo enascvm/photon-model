@@ -112,6 +112,7 @@ public class AWSInstanceTypeService extends StatelessService {
                     String fileContent = IOUtils.toString(stream);
                     this.instanceTypeInfo = Utils.fromJson(fileContent,
                             AWSInstanceTypesInfo.class).instanceTypes;
+                    stream.close();
                 } else {
                     this.logWarning("No embedded file with additional AWS instance type data.");
                 }

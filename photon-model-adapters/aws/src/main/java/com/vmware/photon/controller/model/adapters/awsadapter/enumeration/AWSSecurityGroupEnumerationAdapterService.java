@@ -13,8 +13,11 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_security_group;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupUtils.generateSecurityRuleFromAWSIpPermission;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.resources.SecurityGroupService.FACTORY_LINK;
 
 import java.util.ArrayList;
@@ -43,6 +46,7 @@ import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
@@ -115,6 +119,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             BaseComputeEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState, SecurityGroup> {
 
         public AmazonEC2AsyncClient amazonEC2Client;
+        public String internalTagLink;
 
         public SecurityGroupEnumContext(StatelessService service,
                 ComputeEnumerateAdapterRequest request, Operation op) {
@@ -204,7 +209,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     }
                 }
             }
-
+            // Add internalTagLink ("ec2_security_group") to the enumerated security group.
+            stateHolder.internalTagLinks.add(this.internalTagLink);
             return DeferredResult.completed(stateHolder);
         }
 
@@ -259,7 +265,10 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         switch (context.stage) {
 
         case CLIENT:
-            getAWSAsyncClient(context, EnumerationStages.ENUMERATE);
+            getAWSAsyncClient(context, EnumerationStages.CREATE_INTERNAL_TAGS);
+            break;
+        case CREATE_INTERNAL_TAGS:
+            createInternalTypeTag(context, EnumerationStages.ENUMERATE);
             break;
         case ENUMERATE:
             switch (context.request.original.enumerationAction) {
@@ -321,4 +330,25 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         handleEnumeration(ctx);
     }
 
+    private void createInternalTypeTag(SecurityGroupEnumContext context, EnumerationStages next) {
+        TagService.TagState typeTag = newTagState(TAG_KEY_TYPE, ec2_security_group.toString(),
+                false, context.request.parentCompute.tenantLinks);
+
+        Operation.CompletionHandler handler = (op, ex) -> {
+            if (ex != null) {
+                // log the error and continue the enumeration
+                logWarning(() -> String
+                        .format("Error creating internal tag: %s", ex.getMessage()));
+            } else {
+                // if no error, store the internal tag into context
+                context.internalTagLink = typeTag.documentSelfLink;
+            }
+            context.stage = next;
+            handleEnumeration(context);
+        };
+
+        sendRequest(Operation.createPost(this, TagService.FACTORY_LINK)
+                .setBody(typeTag)
+                .setCompletion(handler));
+    }
 }

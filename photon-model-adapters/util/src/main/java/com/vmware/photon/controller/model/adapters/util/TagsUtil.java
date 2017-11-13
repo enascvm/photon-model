@@ -47,42 +47,47 @@ public class TagsUtil {
      * Create or update the tag states of the provided ResourceState. In case there is an existing
      * state (currentState), update the resource's links, returning the updated links set.
      * In case of update, the resource already has the updated links caller is not responsible for this.
-     *
-     * In case of create, create the tag states for the state currently in process of creation (localState).
+     * <p>
+     * In case of create, create the tag states for the state currently in process of creation (localState)
+     * which includes internal and external(remote) tags.
      * Returned are the new tag links, caller is responsible to update the processed resource state.
      */
     public static DeferredResult<Set<String>> createOrUpdateTagStates(
             StatelessService service,
             ResourceState localState,
             ResourceState currentState,
-            Map<String, String> remoteTagsMap) {
+            Map<String, String> remoteTagsMap,
+            Set<String> internalTagLinks) {
 
         final DeferredResult<Set<String>> tagsDR;
 
         if (currentState == null
                 || currentState.tagLinks == null
                 || currentState.tagLinks.isEmpty()) {
-            tagsDR = createLocalTagStates(service, localState, remoteTagsMap);
+            tagsDR = createLocalTagStates(service, localState, remoteTagsMap, internalTagLinks);
         } else {
-            tagsDR = updateLocalTagStates(service, currentState, remoteTagsMap);
+            tagsDR = updateLocalTagStates(service, currentState, remoteTagsMap, internalTagLinks);
         }
-
         return tagsDR;
     }
 
     /**
-     * For a newly created local ResourceState, create tag states and return the new links.
+     * For a newly created local ResourceState, create tag states for both internal and external(remote) tags
+     * and return the new links.
      * Caller of the method is responsible to add the links to the processed resource state.
      */
     public static DeferredResult<Set<String>> createLocalTagStates(
             StatelessService service,
             ResourceState localState,
-            Map<String, String> remoteTagsMap) {
+            Map<String, String> remoteTagsMap,
+            Set<String> internalTagLinks) {
 
         if (remoteTagsMap == null || remoteTagsMap.isEmpty()) {
+            if (internalTagLinks != null && !internalTagLinks.isEmpty()) {
+                return DeferredResult.completed((internalTagLinks));
+            }
             return DeferredResult.completed(Collections.emptySet());
         }
-
         String msg = "Create local TagStates (for %s.name=%s) to match %d remote tags: %s";
 
         service.logFine(
@@ -103,11 +108,18 @@ public class TagsUtil {
             service.logFine(
                     () -> String.format(msg, localState.getClass().getSimpleName(), localState.name,
                             remoteTagsMap.size(), "COMPLETED"));
+            Set<String> tagLinks = tagStatesList
+                    .stream()
+                    .map(tagState -> {
+                        TagState state = newTagState(tagState.key, tagState.value, true, localState.tenantLinks);
+                        return state.documentSelfLink;
+                    })
+                    .collect(Collectors.toSet());
+            if (internalTagLinks != null && !internalTagLinks.isEmpty()) {
+                tagLinks.addAll(internalTagLinks);
+            }
 
-            return tagStatesList.stream().map(tagState -> {
-                TagState state = newTagState(tagState.key, tagState.value, true, localState.tenantLinks);
-                return state.documentSelfLink;
-            }).collect(Collectors.toSet());
+            return tagLinks;
         });
     }
 
@@ -119,9 +131,9 @@ public class TagsUtil {
     public static DeferredResult<Set<String>> updateLocalTagStates(
             StatelessService service,
             ResourceState localState,
-            Map<String, String> remoteTagsMap) {
+            Map<String, String> remoteTagsMap, Set<String> internalTagLinks) {
 
-        return updateLocalTagStates(service, localState, localState.tagLinks, remoteTagsMap);
+        return updateLocalTagStates(service, localState, localState.tagLinks, remoteTagsMap, internalTagLinks);
     }
 
     /**
@@ -132,10 +144,10 @@ public class TagsUtil {
     public static DeferredResult<Set<String>> updateLocalTagStates(
             StatelessService service,
             ResourceState localState, Set<String> currentTagLinks,
-            Map<String, String> remoteTagsMap) {
+            Map<String, String> remoteTagsMap,
+            Set<String> internalTagLinks) {
 
         Map<String, TagState> remoteTagStates;
-
         if (remoteTagsMap == null) {
             remoteTagStates = new HashMap<>();
         } else {
@@ -243,6 +255,9 @@ public class TagsUtil {
                     service.logFine(
                             () -> String.format("Update local TagStates (for %s.name=%s) to match %d remote tags: %s;",
                                     localState.getClass().getSimpleName(), localState.name, remoteTagsMap.size(), "COMPLETED"));
+                    if (internalTagLinks != null && !internalTagLinks.isEmpty()) {
+                        resultTagLinks.addAll(internalTagLinks);
+                    }
                     return DeferredResult.completed(resultTagLinks);
                 });
     }
@@ -290,7 +305,7 @@ public class TagsUtil {
      * Private method used to generate structure containing the tag states to add and tag states to
      * remove to the specified resource state (specified by its document self link).
      */
-    @SuppressWarnings({ "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private static DeferredResult<Void> updateResourceTagLinks(
             StatelessService service,
             Collection<String> tagLinksToDelete,

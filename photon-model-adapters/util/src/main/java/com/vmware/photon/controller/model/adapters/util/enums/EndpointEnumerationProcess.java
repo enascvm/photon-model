@@ -172,6 +172,11 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
          * list is updated with the new remote tags, and the local-only tags are preserved.
          */
         public Map<String, String> remoteTags = new HashMap<>();
+        /**
+         * Each enumerated resource is associated with an internal tag/tags and are created the very
+         * first time the resource is enumerated.
+         */
+        public Set<String> internalTagLinks = new HashSet<>();
     }
 
     /**
@@ -586,7 +591,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 this.service,
                 localState,
                 currentState,
-                localStateHolder.remoteTags);
+                localStateHolder.remoteTags, localStateHolder.internalTagLinks);
 
         return tagLinksDR
                 .thenApply(tagLinks -> {

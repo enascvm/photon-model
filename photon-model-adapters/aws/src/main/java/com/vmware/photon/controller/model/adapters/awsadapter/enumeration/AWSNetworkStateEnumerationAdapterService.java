@@ -651,7 +651,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                     }
                 }
                 updateNetworkSubnetTagLinksOps
-                        .add(updateLocalTagStates(this, existingNetworkState, remoteTags));
+                        .add(updateLocalTagStates(this, existingNetworkState, remoteTags, null));
             }
             // update tag links for the existing SubnetStates
             for (String subnetId : context.awsSubnets.keySet()) {
@@ -667,7 +667,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                     }
                 }
                 updateNetworkSubnetTagLinksOps
-                        .add(updateLocalTagStates(this, existingSubnetState, remoteTags));
+                        .add(updateLocalTagStates(this, existingSubnetState, remoteTags, null));
             }
 
             return DeferredResult.allOf(updateNetworkSubnetTagLinksOps)

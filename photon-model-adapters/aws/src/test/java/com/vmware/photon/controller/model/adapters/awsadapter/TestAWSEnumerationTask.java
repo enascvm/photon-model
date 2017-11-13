@@ -71,6 +71,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getSubnetStates;
 import static com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSLoadBalancerEnumerationAdapterService.ENABLE_LOAD_BALANCER_PROPERTY;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryAllFactoryResources;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
@@ -874,9 +875,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                     ProvisioningUtils.<SecurityGroupState> getResourceStates(this.host,
                             SecurityGroupService.FACTORY_LINK, SecurityGroupState.class);
             SecurityGroupState defaultSgState = allSecurityGroupStatesMap.get(this.securityGroupId);
-            // ensure one link is deleted and one new is added to the sg state
+            // ensure one link is deleted and one new is added to the sg state. One additional
+            // link is an internal tag.
             assertNotNull(defaultSgState.tagLinks);
-            assertEquals(1, defaultSgState.tagLinks.size());
+            assertEquals("Wrong number of security-group tag links found.", 1 + internalTagsCount1, defaultSgState.tagLinks.size());
 
             // validate vpc tags
             Map<String, NetworkState> allNetworkStatesMap =
@@ -1305,7 +1307,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     /**
      * Validates the taglinks for the security group to follow the expected norm
      * i.e. /resources/security-groups/UUID
-    */
+     */
     private void validateSecurityGroupTagLinks(Map<String, SecurityGroupState> allSecurityGroupStatesMap) {
         for (Map.Entry<String, SecurityGroupState> securityGroupState : allSecurityGroupStatesMap.entrySet()) {
             Set<String> tagLinks = securityGroupState.getValue().tagLinks;
@@ -1314,6 +1316,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                     assertTrue(tag.startsWith(TagService.FACTORY_LINK));
                 }
             }
+            TagService.TagState expectedInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                    AWSConstants.AWSResourceType.ec2_security_group.toString(), false,
+                    securityGroupState.getValue().tenantLinks);
+            assertTrue(tagLinks.contains(expectedInternalTypeTag.documentSelfLink));
         }
     }
 

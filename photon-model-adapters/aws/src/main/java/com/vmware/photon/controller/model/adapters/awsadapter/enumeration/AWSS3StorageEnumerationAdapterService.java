@@ -704,10 +704,9 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
 
         aws.diskStatesEnumerated.stream()
                 .filter(diskState -> aws.tagsByBucketName.get(diskState.id) != null)
-                .forEach(diskState -> {
-                    updateCSTagLinksOps.add(TagsUtil.updateLocalTagStates(aws.service, diskState,
-                            aws.tagsByBucketName.get(diskState.id)));
-                });
+                .forEach(diskState ->
+                        updateCSTagLinksOps.add(TagsUtil.updateLocalTagStates(aws.service, diskState,
+                                aws.tagsByBucketName.get(diskState.id), null)));
 
         return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> aws);
     }
