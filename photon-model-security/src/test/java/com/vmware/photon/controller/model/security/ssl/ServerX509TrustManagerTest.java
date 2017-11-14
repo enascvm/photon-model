@@ -27,7 +27,6 @@ import java.util.Collection;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.xenon.common.ServiceHost;
@@ -54,13 +53,12 @@ public class ServerX509TrustManagerTest {
     }
 
     @Test
-    @Ignore
     public void testTrustedCertificates() throws Exception {
 
-        // Validate a public certificate chain, e.g. the Docker registry one.
+        // Validate a public certificate chain, e.g. the www.vmware.com one.
         // Is should work because the default cacerts from the JRE is always included and trusted
 
-        trustManager.checkServerTrusted(getCertificates("/certs/docker.com.chain.crt"), "RSA");
+        trustManager.checkServerTrusted(getCertificates("/certs/vmware.com.chain.crt"), "RSA");
 
         // Validate a custom certificate.
         // It should work because a truststore which contains the cert is passed as argument.
