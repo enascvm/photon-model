@@ -451,9 +451,9 @@ public class PhotonModelUtils {
     private static String getUpdatedEndpointLink(String resourceEndpointLink, Set<String>
             endpointLinks) {
 
-        String endpointLinkVal = null;
+        String endpointLinkVal = "";
         if (endpointLinks.size() == 1 && endpointLinks.contains(resourceEndpointLink)) {
-            return null;
+            return "";
         }
 
         SortedSet<String> sortedEndpointLinks = new TreeSet<>();
