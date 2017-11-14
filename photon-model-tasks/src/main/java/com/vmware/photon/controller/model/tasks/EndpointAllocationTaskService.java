@@ -908,6 +908,11 @@ public class EndpointAllocationTaskService
                 ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
         ComputeState computeHost = new ComputeState();
         computeHost.name = endpointRegionId != null ? endpointRegionId : state.name;
+
+        computeHost.customProperties = new HashMap<>();
+        if (state.customProperties != null) {
+            computeHost.customProperties.putAll(state.customProperties);
+        }
         return computeHost;
     }
 

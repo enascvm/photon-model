@@ -520,6 +520,12 @@ public class ComputeService extends StatefulService {
                 hasStateChanged = true;
                 currentState.regionId = patchBody.regionId;
             }
+
+            if (patchBody.customProperties != null && currentState.customProperties != null) {
+                hasStateChanged = true;
+                currentState.customProperties.putAll(patchBody.customProperties);
+            }
+
             return hasStateChanged;
         };
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
