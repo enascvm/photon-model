@@ -688,15 +688,19 @@ public class AWSInstanceService extends StatelessService {
             extends AWSAsyncHandler<RunInstancesRequest, RunInstancesResult> {
 
         private StatelessService service;
+        private final OperationContext opContext;
         private AWSInstanceContext context;
 
         private AWSCreationHandler(StatelessService service, AWSInstanceContext context) {
+            this.opContext = OperationContext.getOperationContext();
             this.service = service;
             this.context = context;
         }
 
         @Override
         protected void handleError(Exception exception) {
+            OperationContext.restoreOperationContext(this.opContext);
+
             this.context.taskManager.patchTaskToFailure(exception);
         }
 
@@ -709,6 +713,8 @@ public class AWSInstanceService extends StatelessService {
 
             // consumer to be invoked once a VM is in the running state
             Consumer<Object> consumer = instance -> {
+                OperationContext.restoreOperationContext(this.opContext);
+
                 List<Operation> patchOperations = new ArrayList<>();
                 if (instance == null) {
                     this.context.taskManager.patchTaskToFailure(
@@ -940,6 +946,7 @@ public class AWSInstanceService extends StatelessService {
 
             Stream<Operation> getTagOperations = tagLinks.stream()
                     .map(tagLink -> Operation.createGet(this.service, tagLink));
+            OperationContext.restoreOperationContext(this.opContext);
             OperationJoin.create(getTagOperations).setCompletion(joinedCompletionHandler)
                     .sendWith(this.service);
         }
