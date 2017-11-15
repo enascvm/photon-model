@@ -116,4 +116,10 @@ public class EndpointConfigRequest extends ResourceRequest {
     @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_12)
     public List<String> tenantLinks;
+
+    /**
+     * If specified an endpoint uniqueness check will be performed.
+     */
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_45)
+    public Boolean checkForEndpointUniqueness;
 }

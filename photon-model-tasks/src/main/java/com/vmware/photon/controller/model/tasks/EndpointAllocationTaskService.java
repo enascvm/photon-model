@@ -134,6 +134,10 @@ public class EndpointAllocationTaskService
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
         public CertificateInfo certificateInfo;
 
+        @Documentation(description = "If specified endpoint uniqueness validation will be "
+                + "performed.")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
+        public Boolean checkForEndpointUniqueness;
     }
 
     public static class ResourceEnumerationRequest {
@@ -574,6 +578,7 @@ public class EndpointAllocationTaskService
         req.requestType = RequestType.VALIDATE;
         req.endpointProperties = currentState.endpointState.endpointProperties;
         req.tenantLinks = currentState.tenantLinks;
+        req.checkForEndpointUniqueness = currentState.checkForEndpointUniqueness;
 
         if (currentState.endpointState.documentSelfLink != null) {
             req.resourceReference = UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
@@ -772,6 +777,11 @@ public class EndpointAllocationTaskService
 
         if (body.options != null && !body.options.isEmpty()) {
             currentState.options = body.options;
+            isUpdate = true;
+        }
+
+        if (body.checkForEndpointUniqueness != null) {
+            currentState.checkForEndpointUniqueness = body.checkForEndpointUniqueness;
             isUpdate = true;
         }
 

@@ -13,11 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.util;
 
+import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_ENDPOINT_NOT_UNIQUE_MESSAGE;
+import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_ENDPOINT_NOT_UNIQUE_MESSAGE_CODE;
+import static com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.UriUtils.buildFactoryUri;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -32,10 +38,13 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.Reque
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -43,6 +52,8 @@ import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 public class EndpointAdapterUtils {
 
@@ -369,5 +380,85 @@ public class EndpointAdapterUtils {
             return get(key).orElseThrow(
                     () -> new IllegalArgumentException(String.format("%s is required", key)));
         }
+    }
+
+    /**
+     * Validates that no endpoint exists that have the same credentials and identifier.
+     *
+     * @param host
+     *         The host to use to query the photon-model
+     * @param authQuery
+     *         (Optional) Query used to express the criteria for @{@link
+     *         AuthCredentialsServiceState}
+     * @param endpointQuery
+     *         (Optional) Query used to express the criteria for @{@link EndpointState}
+     * @param endpointType
+     *         The endpoint type of the adapter
+     * @return A void DeferredResult when validation is successful and a failed DeferredResult when
+     * validation is not successful
+     */
+    public static DeferredResult<Void> validateEndpointUniqueness(ServiceHost host, Query authQuery,
+            Query endpointQuery, String endpointType) {
+
+        return getAuthLinks(host, authQuery)
+                .thenCompose(links -> getEndpointLinks(host,
+                        endpointQuery, links, endpointType))
+                .thenCompose(EndpointAdapterUtils::verifyLinks)
+                .thenApply(ignore -> null);
+    }
+
+    private static DeferredResult<List<String>> getAuthLinks(ServiceHost host, Query
+            authQuery) {
+        Query.Builder authQueryBuilder = Builder.create()
+                .addKindFieldClause(AuthCredentialsServiceState.class);
+
+        if (authQuery != null) {
+            authQueryBuilder.addClause(authQuery);
+        }
+
+        QueryTop<AuthCredentialsServiceState> queryAuth = new QueryTop<>(
+                host,
+                authQueryBuilder.build(),
+                AuthCredentialsServiceState.class,
+                null);
+        queryAuth.setClusterType(INVENTORY_SERVICE);
+
+        return queryAuth.collectLinks(Collectors.toList());
+    }
+
+    private static DeferredResult<List<String>> getEndpointLinks(ServiceHost host, Query
+            endpointQuery, List<String> credentialsLinks, String endpointType) {
+        if (credentialsLinks.isEmpty()) {
+            return DeferredResult.completed(Collections.emptyList());
+        }
+
+        Query.Builder qBuilder = Builder.create()
+                .addKindFieldClause(EndpointState.class)
+                .addFieldClause(EndpointState.FIELD_NAME_ENDPOINT_TYPE, endpointType)
+                .addInClause(EndpointState.FIELD_NAME_AUTH_CREDENTIALS_LINK, credentialsLinks);
+
+        if (endpointQuery != null) {
+            qBuilder.addClause(endpointQuery);
+        }
+
+        QueryTop<EndpointState> queryEndpoints = new QueryTop<>(
+                host,
+                qBuilder.build(),
+                EndpointState.class,
+                null)
+                .setMaxResultsLimit(1);
+        queryEndpoints.setClusterType(INVENTORY_SERVICE);
+
+        return queryEndpoints.collectLinks(Collectors.toList());
+    }
+
+    private static DeferredResult<Void> verifyLinks(List<String> links) {
+        if (!links.isEmpty()) {
+            return DeferredResult.failed(
+                    new LocalizableValidationException(
+                            PHOTON_MODEL_ADAPTER_ENDPOINT_NOT_UNIQUE_MESSAGE,
+                            PHOTON_MODEL_ADAPTER_ENDPOINT_NOT_UNIQUE_MESSAGE_CODE));
+        }
+        return DeferredResult.completed(null);
     }
 }

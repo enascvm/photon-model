@@ -95,6 +95,13 @@ public class TestAzureEndpointAdapterService extends BasicReusableHostTestCase {
                 .testShouldFailOnMissingData(createEndpointState());
     }
 
+    @Test
+    public void testShouldFailOnDuplicateEndpoint() throws Throwable {
+        new EndpointServiceTests(this.host, this.region, this.isMock,
+                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE)
+                .testShouldFailOnCreatingDuplicateEndpoint(createEndpointState());
+    }
+
     public EndpointService.EndpointState createEndpointState() {
         EndpointService.EndpointState endpoint = new EndpointService.EndpointState();
         endpoint.endpointType = PhotonModelConstants.EndpointType.azure.name();

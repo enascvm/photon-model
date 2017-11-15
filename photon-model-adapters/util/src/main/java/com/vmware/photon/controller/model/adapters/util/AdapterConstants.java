@@ -20,4 +20,10 @@ public class AdapterConstants {
 
     public static final String PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE = "photon.model"
             + ".adapter.unauthorized";
+
+    public static final String PHOTON_MODEL_ADAPTER_ENDPOINT_NOT_UNIQUE_MESSAGE =
+            "An endpoint already exists with this identifier";
+
+    public static final String PHOTON_MODEL_ADAPTER_ENDPOINT_NOT_UNIQUE_MESSAGE_CODE = "photon.model"
+            + ".adapter.endpoint.not.unique";
 }

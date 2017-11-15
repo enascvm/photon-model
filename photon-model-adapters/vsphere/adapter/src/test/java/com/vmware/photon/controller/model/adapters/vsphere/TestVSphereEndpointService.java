@@ -68,6 +68,13 @@ public class TestVSphereEndpointService extends BaseVSphereAdapterTest {
                 .testShouldFailOnMissingData(createEndpointState());
     }
 
+    @Test
+    public void testShouldFailOnDuplicateEndpoint() throws Throwable {
+        new EndpointServiceTests(this.host, this.datacenterId, isMock(),
+                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE)
+                .testShouldFailOnCreatingDuplicateEndpoint(createEndpointState());
+    }
+
     public EndpointService.EndpointState createEndpointState() throws MalformedURLException {
         EndpointService.EndpointState endpoint = new EndpointService.EndpointState();
         endpoint.endpointType = PhotonModelConstants.EndpointType.vsphere.name();

@@ -26,13 +26,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
@@ -43,14 +43,17 @@ import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientB
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -58,6 +61,8 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 /**
  * Adapter to validate and enhance AWS based endpoints.
@@ -101,42 +106,67 @@ public class AWSEndpointAdapterService extends StatelessService {
             EndpointConfigRequest body) {
 
         return (credentials, callback) -> {
-            String regionId = body.endpointProperties.get(REGION_KEY);
-            if (regionId == null) {
-                regionId = Regions.DEFAULT_REGION.getName();
-            }
-            AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(credentials, regionId,
-                    this.clientManager.getExecutor(getHost()));
+            String regionId = body.endpointProperties.get(REGION_KEY) == null ?
+                    Regions.DEFAULT_REGION.getName() :
+                    body.endpointProperties.get(REGION_KEY);
 
-            // make a call to validate credentials
-            client.describeAvailabilityZonesAsync(new DescribeAvailabilityZonesRequest(),
-                    new AsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult>() {
-                        @Override
-                        public void onError(Exception e) {
-                            if (e instanceof AmazonServiceException) {
-                                AmazonServiceException ase = (AmazonServiceException) e;
-                                if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED) {
-
-                                    LocalizableValidationException localizableValidationException = new LocalizableValidationException(
-                                            e, PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
-                                            PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
-                                    ServiceErrorResponse r = Utils
-                                            .toServiceErrorResponse(localizableValidationException);
-                                    r.statusCode = STATUS_CODE_UNAUTHORIZED;
-                                    callback.accept(r, localizableValidationException);
-                                    return;
-                                }
+            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
+                    .thenCompose(aVoid -> validateCredentials(credentials, regionId))
+                    .whenComplete((aVoid, e) -> {
+                        if (e != null) {
+                            if (e instanceof CompletionException) {
+                                e = e.getCause();
                             }
-                            callback.accept(null, e);
-                        }
 
-                        @Override
-                        public void onSuccess(DescribeAvailabilityZonesRequest request,
-                                DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
-                            callback.accept(null, null);
+                            ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
+                            callback.accept(r, e);
+                            return;
                         }
+                        callback.accept(null, null);
                     });
         };
+    }
+
+    private DeferredResult<Void> validateCredentials(
+            AuthCredentialsServiceState credentials, String regionId) {
+        AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(credentials, regionId,
+                this.clientManager.getExecutor(getHost()));
+
+        AWSDeferredResultAsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult> asyncHandler = new AWSDeferredResultAsyncHandler<>(
+                this, "Validate Credentials");
+
+        client.describeAvailabilityZonesAsync(asyncHandler);
+
+        return asyncHandler
+                .toDeferredResult()
+                .handle((describeAvailabilityZonesResult, e) -> {
+                    if (e instanceof AmazonServiceException) {
+                        AmazonServiceException ase = (AmazonServiceException) e;
+                        if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED) {
+
+                            throw new LocalizableValidationException(
+                                    e,
+                                    PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
+                                    PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
+                        }
+                    }
+                    return null;
+                });
+    }
+
+    /**
+     * Validate that the endpoint is unique by comparing the Access key ID
+     */
+    private DeferredResult<Void> validateEndpointUniqueness(AuthCredentialsServiceState credentials,
+            Boolean endpointUniqueness) {
+        if (Boolean.TRUE.equals(endpointUniqueness)) {
+            Query authQuery = Builder.create()
+                    .addFieldClause(PRIVATE_KEYID_KEY, credentials.privateKeyId).build();
+
+            return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery,
+                    null, EndpointType.aws.name());
+        }
+        return DeferredResult.completed(null);
     }
 
     private BiConsumer<AuthCredentialsServiceState, Retriever> credentials() {

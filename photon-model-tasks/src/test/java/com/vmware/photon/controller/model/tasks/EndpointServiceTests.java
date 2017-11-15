@@ -24,6 +24,7 @@ import java.util.EnumSet;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.ServiceDocument;
@@ -183,6 +184,54 @@ public class EndpointServiceTests {
                         outTask.documentSelfLink);
 
         assertEquals(failedTask.taskInfo.stage, TaskState.TaskStage.FAILED);
+    }
+
+    public void testShouldFailOnCreatingDuplicateEndpoint(EndpointState ep) throws Throwable {
+        if (!this.isMock) {
+            EndpointAllocationTaskState createEndpoint = new EndpointAllocationTaskState();
+            createEndpoint.endpointState = ep;
+            createEndpoint.options = this.isMock ? EnumSet.of(TaskOption.IS_MOCK) : null;
+            createEndpoint.checkForEndpointUniqueness = Boolean.TRUE;
+
+            EndpointAllocationTaskState outTask = TestUtils
+                    .doPost(this.host, createEndpoint,
+                            EndpointAllocationTaskState.class,
+                            UriUtils.buildUri(this.host,
+                                    EndpointAllocationTaskService.FACTORY_LINK));
+
+            this.host.waitForFinishedTask(
+                    EndpointAllocationTaskState.class,
+                    outTask.documentSelfLink);
+
+            EndpointAllocationTaskState taskState = getServiceSynchronously(
+                    outTask.documentSelfLink,
+                    EndpointAllocationTaskState.class);
+            assertNotNull(taskState);
+            assertNotNull(taskState.endpointState);
+
+            ServiceDocument endpointState = taskState.endpointState;
+            assertNotNull(endpointState.documentSelfLink);
+
+            // check endpoint document was created
+            getServiceSynchronously(
+                    endpointState.documentSelfLink,
+                    EndpointState.class);
+
+            // Run the task again with the same endpoint
+            EndpointAllocationTaskState duplicateEndpointTask = TestUtils
+                    .doPost(this.host, createEndpoint,
+                            EndpointAllocationTaskState.class,
+                            UriUtils.buildUri(this.host,
+                                    EndpointAllocationTaskService.FACTORY_LINK));
+
+            EndpointAllocationTaskState failedTask = BasicReusableHostTestCase
+                    .waitForFailedTask(
+                            EndpointAllocationTaskState.class,
+                            duplicateEndpointTask.documentSelfLink);
+
+            assertEquals(failedTask.taskInfo.stage, TaskState.TaskStage.FAILED);
+        }
+
     }
 
     protected <T extends ServiceDocument> T getServiceSynchronously(

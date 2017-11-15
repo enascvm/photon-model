@@ -46,7 +46,6 @@ import java.util.function.BiConsumer;
 import com.microsoft.azure.management.resources.SubscriptionState;
 import com.microsoft.azure.management.resources.implementation.SubscriptionClientImpl;
 import com.microsoft.azure.management.resources.implementation.SubscriptionInner;
-
 import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -59,6 +58,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -71,6 +71,8 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 /**
  * Adapter to validate and enhance Azure based endpoints.
@@ -124,41 +126,11 @@ public class AzureEndpointAdapterService extends StatelessService {
         return (credentials, callback) -> {
             RestClient restClient = AzureUtils.buildRestClient(getAzureConfig(credentials), this.executorService);
             try {
-                SubscriptionClientImpl subscriptionClient = new SubscriptionClientImpl(restClient);
-
-                String msg = "Getting Azure Subscription [" + credentials.userLink
-                        + "] for endpoint validation";
-
-                AzureDeferredResultServiceCallback<SubscriptionInner> handler = new AzureDeferredResultServiceCallback<SubscriptionInner>(
-                        this, msg) {
-                    @Override
-                    protected DeferredResult<SubscriptionInner> consumeSuccess(
-                            SubscriptionInner subscription) {
-                        logFine(() -> String.format("Got subscription %s with id %s",
-                                        subscription.displayName(),
-                                        subscription.id()));
-
-                        if (!SubscriptionState.ENABLED.equals(subscription.state())) {
-                            logFine(() ->
-                                    String.format("Subscription with id %s is not in active"
-                                            + " state but in %s",
-                                    subscription.id(),
-                                    subscription.state()));
-                            return DeferredResult.failed(
-                                    new IllegalStateException("Subscription is not active"));
-                        }
-                        return DeferredResult.completed(subscription);
-                    }
-                };
-
-                subscriptionClient.subscriptions()
-                        .getAsync(credentials.userLink, handler);
-
                 String shouldProvision = body.endpointProperties.get(AZURE_PROVISIONING_PERMISSION);
 
-                handler.toDeferredResult()
-                        .thenCompose(
-                                subscription -> getPermissions(credentials))
+                validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
+                        .thenCompose(aVoid -> validateCredentials(credentials, restClient))
+                        .thenCompose(subscription -> getPermissions(credentials))
                         .thenCompose(permissionList -> verifyPermissions(permissionList,
                                 Boolean.parseBoolean(shouldProvision)))
                         .whenComplete((aVoid, e) -> {
@@ -166,10 +138,17 @@ public class AzureEndpointAdapterService extends StatelessService {
                                 if (e instanceof CompletionException) {
                                     e = e.getCause();
                                 }
-                                // Azure doesn't send us any meaningful status code to work with
-                                LocalizableValidationException localizableValidationException = new LocalizableValidationException(
-                                        e, PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
-                                        PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
+
+                                LocalizableValidationException localizableValidationException;
+                                if (e instanceof LocalizableValidationException) {
+                                    localizableValidationException = (LocalizableValidationException) e;
+                                } else {
+                                    // Azure doesn't send us any meaningful status code to work with
+                                    localizableValidationException = new
+                                            LocalizableValidationException(
+                                            e, PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
+                                            PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
+                                }
 
                                 ServiceErrorResponse rsp = Utils.toServiceErrorResponse
                                         (localizableValidationException);
@@ -190,6 +169,59 @@ public class AzureEndpointAdapterService extends StatelessService {
 
             }
         };
+    }
+
+    private DeferredResult<SubscriptionInner> validateCredentials(
+            AuthCredentialsServiceState credentials, RestClient restClient) {
+        SubscriptionClientImpl subscriptionClient = new SubscriptionClientImpl(restClient);
+
+        String msg = "Getting Azure Subscription [" + credentials.userLink
+                + "] for endpoint validation";
+
+        AzureDeferredResultServiceCallback<SubscriptionInner> handler = new AzureDeferredResultServiceCallback<SubscriptionInner>(
+                this, msg) {
+            @Override
+            protected DeferredResult<SubscriptionInner> consumeSuccess(
+                    SubscriptionInner subscription) {
+                logFine(() -> String.format("Got subscription %s with id %s",
+                        subscription.displayName(),
+                        subscription.id()));
+
+                if (!SubscriptionState.ENABLED.equals(subscription.state())) {
+                    logFine(() ->
+                            String.format("Subscription with id %s is not in active"
+                                            + " state but in %s",
+                                    subscription.id(),
+                                    subscription.state()));
+                    return DeferredResult.failed(
+                            new IllegalStateException("Subscription is not active"));
+                }
+                return DeferredResult.completed(subscription);
+            }
+        };
+
+        subscriptionClient.subscriptions()
+                .getAsync(credentials.userLink, handler);
+
+        return handler.toDeferredResult();
+    }
+
+    /**
+     * Validate that the endpoint is unique by comparing the Subscription and Tenant
+     */
+    private DeferredResult<Void> validateEndpointUniqueness(AuthCredentialsServiceState credentials,
+            Boolean endpointUniqueness) {
+        if (Boolean.TRUE.equals(endpointUniqueness)) {
+            Query authQuery = Builder.create()
+                    .addFieldClause(USER_LINK_KEY, credentials.userLink)
+                    .addCompositeFieldClause(AuthCredentialsServiceState
+                            .FIELD_NAME_CUSTOM_PROPERTIES, AZURE_TENANT_ID, credentials.customProperties
+                            .get(AZURE_TENANT_ID)).build();
+
+            return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery ,
+                    null, EndpointType.azure.name());
+        }
+        return DeferredResult.completed(null);
     }
 
     public static BiConsumer<AuthCredentialsServiceState, Retriever> credentials() {

@@ -128,6 +128,13 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
                 .testShouldFailOnMissingData(createEndpointState());
     }
 
+    @Test
+    public void testShouldFailOnDuplicateEndpoint() throws Throwable {
+        new EndpointServiceTests(this.host, this.regionId, this.isMock,
+                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
+                .testShouldFailOnCreatingDuplicateEndpoint(createEndpointState());
+    }
+
     @After
     public void tearDown() throws InterruptedException {
         setAwsClientMockInfo(false, null);

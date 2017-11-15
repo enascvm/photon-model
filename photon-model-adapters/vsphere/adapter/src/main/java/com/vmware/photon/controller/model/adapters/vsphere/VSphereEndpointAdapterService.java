@@ -25,6 +25,7 @@ import static com.vmware.xenon.common.Operation.STATUS_CODE_BAD_REQUEST;
 import java.net.URI;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -35,15 +36,18 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.security.util.CertificateUtil;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -51,6 +55,8 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 /**
  * Adapter to validate and enhance vSphere based endpoints.
@@ -97,38 +103,72 @@ public class VSphereEndpointAdapterService extends StatelessService {
             URI adapterManagementUri = getAdapterManagementUri(host);
             String id = body.endpointProperties.get(REGION_KEY);
 
-            // certificate to trust in the request
-            String certPEM = body.endpointProperties
-                    .get(EndpointConfigRequest.CERTIFICATE_PROP_NAME);
-            if (certPEM != null) {
-                X509Certificate[] certificates = CertificateUtil.createCertificateChain(certPEM);
-                storeCertificate(certificates[0], body.tenantLinks, (o, e) -> {
-                    doValidate(credentials, callback, adapterManagementUri, id);
-                });
-                return;
-            } else {
-                // check certificate if the endpoint.
-                X509TrustManagerResolver resolver = CertificateUtil
-                        .resolveCertificate(adapterManagementUri, CERT_RESOLVE_TIMEOUT);
+            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness, host)
+                    .whenComplete((aVoid, throwable) -> {
+                        if (throwable != null) {
+                            if (throwable instanceof CompletionException) {
+                                throwable = throwable.getCause();
+                            }
+                            callback.accept(null, throwable);
+                            return;
+                        }
+                        // certificate to trust in the request
+                        String certPEM = body.endpointProperties
+                                .get(EndpointConfigRequest.CERTIFICATE_PROP_NAME);
+                        if (certPEM != null) {
+                            X509Certificate[] certificates = CertificateUtil
+                                    .createCertificateChain(certPEM);
+                            storeCertificate(certificates[0], body.tenantLinks, (o, e) -> {
+                                doValidate(credentials, callback, adapterManagementUri, id);
+                            });
+                            return;
+                        } else {
+                            // check certificate if the endpoint.
+                            X509TrustManagerResolver resolver = CertificateUtil
+                                    .resolveCertificate(adapterManagementUri, CERT_RESOLVE_TIMEOUT);
 
-                if (!resolver.isCertsTrusted()) {
-                    // bad cert
-                    if (body.endpointProperties
-                            .get(EndpointConfigRequest.ACCEPT_SELFSIGNED_CERTIFICATE) != null) {
-                        // lax policy
-                        storeCertificate(resolver.getCertificate(), body.tenantLinks, (o, e) -> {
-                            doValidate(credentials, callback, adapterManagementUri, id);
-                        });
-                    } else {
-                        // reply with error
-                        handleBadCertificate(resolver, callback);
-                    }
-                    return;
-                }
-            }
+                            if (!resolver.isCertsTrusted()) {
+                                // bad cert
+                                if (body.endpointProperties
+                                        .get(EndpointConfigRequest.ACCEPT_SELFSIGNED_CERTIFICATE)
+                                        != null) {
+                                    // lax policy
+                                    storeCertificate(resolver.getCertificate(), body.tenantLinks,
+                                            (o, e) -> {
+                                                doValidate(credentials, callback,
+                                                        adapterManagementUri, id);
+                                            });
+                                } else {
+                                    // reply with error
+                                    handleBadCertificate(resolver, callback);
+                                }
+                                return;
+                            }
+                        }
 
-            doValidate(credentials, callback, adapterManagementUri, id);
+                        doValidate(credentials, callback, adapterManagementUri, id);
+                    });
         };
+    }
+
+    /**
+     * Validate that the endpoint is unique by comparing the User and Host
+     */
+    private DeferredResult<Void> validateEndpointUniqueness(AuthCredentialsServiceState credentials,
+            Boolean endpointUniqueness, String host) {
+        if (Boolean.TRUE.equals(endpointUniqueness)) {
+
+            Query authQuery = Builder.create()
+                    .addFieldClause(PRIVATE_KEYID_KEY, credentials.privateKeyId).build();
+
+            Query endpointQuery = Builder.create()
+                    .addCompositeFieldClause(EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
+                            HOST_NAME_KEY, host).build();
+
+            return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery,
+                    endpointQuery, EndpointType.vsphere.name());
+        }
+        return DeferredResult.completed(null);
     }
 
     private void doValidate(AuthCredentialsServiceState credentials,
