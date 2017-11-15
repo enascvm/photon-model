@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createSecurityGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 import static com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import static com.vmware.photon.controller.model.tasks.ProvisionLoadBalancerTaskService.FACTORY_LINK;
@@ -37,6 +38,7 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.google.common.collect.Lists;
 import com.microsoft.azure.management.network.AddressSpace;
 import com.microsoft.azure.management.network.implementation.LoadBalancerInner;
 import com.microsoft.azure.management.network.implementation.LoadBalancersInner;
@@ -65,6 +67,7 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.LifecycleState;
@@ -95,10 +98,12 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     private String vNetName = this.azurePrefix + "-vNet";
     private String subnetName = this.azurePrefix + "-sNet";
     private String loadBalancerName = this.azurePrefix + "-lb";
+    private String securityGroupName = this.azurePrefix + "-sg";
 
     private static ComputeState computeHost;
     private static EndpointState endpointState;
     private static NetworkState networkState;
+    private static SecurityGroupState securityGroupState;
     private static ComputeState vmState;
     private static SubnetState subnetState;
     private static ResourceGroupState rgState;
@@ -124,6 +129,8 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                 ResourceGroupStateType.AzureResourceGroup);
 
         networkState = createNetworkState(rgState.documentSelfLink);
+        securityGroupState = createSecurityGroupState(this.host, endpointState, rgState,
+                this.securityGroupName, Lists.newArrayList(), Lists.newArrayList());
 
         vmState = createDefaultVMResource(getHost(), this.rgName,
                 computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC, rgState.documentSelfLink, 0);
@@ -153,7 +160,6 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
 
             kickOffComputeProvision();
             kickOffSubnetProvision(InstanceRequestType.CREATE, subnetState, TaskStage.FINISHED);
-
         }
     }
 
@@ -312,6 +318,9 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
 
         loadBalancerState.computeLinks = Stream.of(vmState.documentSelfLink)
                 .collect(Collectors.toSet());
+
+        loadBalancerState.securityGroupLinks = Stream.of(securityGroupState.documentSelfLink)
+                .collect(Collectors.toList());
 
         loadBalancerState.address = "1.1.1.1";
         loadBalancerState.groupLinks = Collections.singleton(rgState.documentSelfLink);

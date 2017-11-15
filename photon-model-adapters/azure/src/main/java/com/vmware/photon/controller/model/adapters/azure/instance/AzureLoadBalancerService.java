@@ -68,6 +68,7 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.util.AssertUtil;
@@ -170,6 +171,7 @@ public class AzureLoadBalancerService extends StatelessService {
             AzureLoadBalancerContext context) {
         return DeferredResult.completed(context)
                 .thenCompose(this::getLoadBalancerState)
+                .thenCompose(this::getResourceGroup)
                 .thenCompose(c -> c.populateBaseContext(BaseAdapterStage.PARENTAUTH));
     }
 
@@ -188,11 +190,28 @@ public class AzureLoadBalancerService extends StatelessService {
                         LoadBalancerStateExpanded.class)
                 .thenApply(state -> {
                     context.loadBalancerStateExpanded = state;
-                    //We create load balancer in the same resource group as the compute that is being load balanced
-                    if (CollectionUtils.isNotEmpty(state.computes)) {
-                        context.resourceGroupName = AzureUtils
-                                .getResourceGroupName(state.computes.iterator().next().id);
-                    }
+                    return context;
+                });
+    }
+
+    /**
+     * Populate the context with Resource group name
+     *
+     * @param context Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> getResourceGroup(
+            AzureLoadBalancerContext context) {
+        if (CollectionUtils.isEmpty(context.loadBalancerStateExpanded.subnets)) {
+            return DeferredResult.completed(context);
+        }
+        return this
+                .sendWithDeferredResult(Operation.createGet(context.service.getHost(),
+                        context.loadBalancerStateExpanded.subnets.iterator().next().networkLink),
+                        NetworkState.class)
+                .thenApply(state -> {
+                    //We create load balancer in the same resource group as the VIP network
+                    context.resourceGroupName = AzureUtils.getResourceGroupName(state.id);
                     return context;
                 });
     }
@@ -292,8 +311,7 @@ public class AzureLoadBalancerService extends StatelessService {
         List<DeferredResult<NetworkInterfaceInner>> networkInterfaceInners =
                 context.networkInterfaceStates.stream()
                         .map(networkInterfacesState -> {
-                            String networkInterfaceName = networkInterfacesState.name;
-                            return getNetworkInterfaceInner(context, networkInterfaceName);
+                            return getNetworkInterfaceInner(context, networkInterfacesState);
                         })
                         .collect(Collectors.toList());
 
@@ -308,14 +326,15 @@ public class AzureLoadBalancerService extends StatelessService {
      * Fetch single Network Interface from Azure
      *
      * @param context              Azure load balancer context
-     * @param networkInterfaceName name of the network interface to be fetched from Azure
+     * @param networkInterfaceState state of the network interface to be fetched from Azure
      * @return DeferredResult
      */
     private DeferredResult<NetworkInterfaceInner> getNetworkInterfaceInner(
-            AzureLoadBalancerContext context, String networkInterfaceName) {
+            AzureLoadBalancerContext context, NetworkInterfaceState networkInterfaceState) {
+        String networkInterfaceResGrp = AzureUtils.getResourceGroupName(networkInterfaceState.id);
         final String msg =
-                "Getting network Interface [" + networkInterfaceName + "] in resource group ["
-                        + context.resourceGroupName + "].";
+                "Getting network Interface [" + networkInterfaceState.name + "] in resource group ["
+                        + networkInterfaceResGrp + "].";
         logInfo(() -> msg);
 
         AzureDeferredResultServiceCallback<NetworkInterfaceInner> callback = new AzureDeferredResultServiceCallback<NetworkInterfaceInner>(
@@ -325,7 +344,7 @@ public class AzureLoadBalancerService extends StatelessService {
                     NetworkInterfaceInner networkInterface) {
                 if (networkInterface == null) {
                     logWarning("Failed to get information for network interface: %s",
-                            networkInterfaceName);
+                            networkInterfaceState.name);
                 }
                 return DeferredResult.completed(networkInterface);
             }
@@ -334,7 +353,7 @@ public class AzureLoadBalancerService extends StatelessService {
         NetworkInterfacesInner azureNetworkInterfaceClient = context.azureSdkClients
                 .getNetworkManagementClientImpl().networkInterfaces();
         azureNetworkInterfaceClient
-                .getByResourceGroupAsync(context.resourceGroupName, networkInterfaceName, null /* expand */,
+                .getByResourceGroupAsync(networkInterfaceResGrp, networkInterfaceState.name, null /* expand */,
                         callback);
         return callback.toDeferredResult();
     }
@@ -890,10 +909,11 @@ public class AzureLoadBalancerService extends StatelessService {
      */
     private DeferredResult<NetworkInterfaceInner> createOrUpdateNetworkInterface(
             AzureLoadBalancerContext context, NetworkInterfaceInner networkInterfaceInner) {
+        String networkInterfaceResGrp = AzureUtils.getResourceGroupName(networkInterfaceInner.id());
         final String msg =
                 "Update network Interface [" + networkInterfaceInner.name()
                         + "] in resource group ["
-                        + context.resourceGroupName + "].";
+                        + networkInterfaceResGrp + "].";
         logInfo(() -> msg);
 
         NetworkInterfacesInner azureNetworkInterfaceClient = context.azureSdkClients
@@ -911,7 +931,7 @@ public class AzureLoadBalancerService extends StatelessService {
                     protected Runnable checkProvisioningStateCall(
                             ServiceCallback<NetworkInterfaceInner> checkProvisioningStateCallback) {
                         return () -> azureNetworkInterfaceClient.getByResourceGroupAsync(
-                                context.resourceGroupName,
+                                networkInterfaceResGrp,
                                 networkInterfaceInner.name(),
                                 null /* expand */,
                                 checkProvisioningStateCallback);
@@ -924,7 +944,7 @@ public class AzureLoadBalancerService extends StatelessService {
                 };
 
         azureNetworkInterfaceClient
-                .createOrUpdateAsync(context.resourceGroupName, networkInterfaceInner.name(),
+                .createOrUpdateAsync(networkInterfaceResGrp, networkInterfaceInner.name(),
                         networkInterfaceInner, handler);
         return handler.toDeferredResult();
     }

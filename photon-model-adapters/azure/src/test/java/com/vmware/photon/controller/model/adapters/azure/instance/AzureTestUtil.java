@@ -59,6 +59,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.microsoft.azure.CloudException;
 import com.microsoft.azure.SubResource;
@@ -1189,6 +1190,30 @@ public class AzureTestUtil {
 
         return TestUtils.doPost(host, rGroupState,
                 ResourceGroupState.class,
+                UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
+    }
+
+    public static SecurityGroupState createSecurityGroupState(VerificationHost host, EndpointState
+            endpointState, ResourceGroupState rgState, String name,
+            List<Rule> inboundRules, List<Rule> outboudRules) throws
+            Throwable {
+        SecurityGroupState securityGroupState = new SecurityGroupState();
+        securityGroupState.id = name;
+        securityGroupState.name = name;
+        securityGroupState.instanceAdapterReference = UriUtils.buildUri(host,
+                AzureSecurityGroupService.SELF_LINK);
+        securityGroupState.endpointLink = endpointState.documentSelfLink;
+        securityGroupState.tenantLinks = endpointState.tenantLinks;
+        securityGroupState.ingress = inboundRules;
+        securityGroupState.egress = outboudRules;
+        securityGroupState.groupLinks = Stream.of(rgState.documentSelfLink)
+                .collect(Collectors.toSet());
+        securityGroupState.authCredentialsLink = endpointState.authCredentialsLink;
+        securityGroupState.resourcePoolLink = "test-resource-pool-link";
+        securityGroupState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+
+        return TestUtils.doPost(host, securityGroupState,
+                SecurityGroupState.class,
                 UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
     }
 
