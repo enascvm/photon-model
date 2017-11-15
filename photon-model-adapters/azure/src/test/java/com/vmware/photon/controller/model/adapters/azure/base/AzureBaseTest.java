@@ -110,7 +110,7 @@ public abstract class AzureBaseTest extends BaseModelTest {
         }
 
         if (this.azureSdkClients == null) {
-            this.azureSdkClients = new AzureSdkClients(null /* executorService */, this.authState);
+            this.azureSdkClients = new AzureSdkClients(this.authState);
         }
 
         return this.azureSdkClients;

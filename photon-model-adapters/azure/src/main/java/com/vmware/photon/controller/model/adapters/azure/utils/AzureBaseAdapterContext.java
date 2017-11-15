@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
-import java.util.concurrent.ExecutorService;
-
 import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.xenon.common.DeferredResult;
@@ -30,31 +28,11 @@ public abstract class AzureBaseAdapterContext<T extends AzureBaseAdapterContext<
 
     public AzureSdkClients azureSdkClients;
 
-    protected final ExecutorService executorService;
-
-    /**
-     * Should be used if you want to create {@link AzureSdkClients} <b>manually</b>.
-     */
     protected AzureBaseAdapterContext(
             StatelessService service,
-            ResourceRequest resourceRequest) {
-
-        this(service, null /* ExecutorService */, resourceRequest);
-    }
-
-    /**
-     * Should be used if you want {@link AzureSdkClients} to be <b>auto</b> created as part of
-     * {@link BaseAdapterContext#populateBaseContext(com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage)}
-     * method using {@link BaseAdapterContext#parentAuth}.
-     */
-    protected AzureBaseAdapterContext(
-            StatelessService service,
-            ExecutorService executorService,
             ResourceRequest resourceRequest) {
 
         super(service, resourceRequest);
-
-        this.executorService = executorService;
     }
 
     /**
@@ -63,13 +41,8 @@ public abstract class AzureBaseAdapterContext<T extends AzureBaseAdapterContext<
     @Override
     protected DeferredResult<T> customizeBaseContext(T context) {
 
-        if (context.azureSdkClients == null
-                && context.executorService != null
-                && context.parentAuth != null) {
-
-            context.azureSdkClients = new AzureSdkClients(
-                    context.executorService,
-                    context.parentAuth);
+        if (context.azureSdkClients == null && context.parentAuth != null) {
+            context.azureSdkClients = new AzureSdkClients(context.parentAuth);
         }
 
         return DeferredResult.completed(context);

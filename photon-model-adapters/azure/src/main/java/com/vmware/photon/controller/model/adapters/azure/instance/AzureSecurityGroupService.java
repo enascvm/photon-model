@@ -19,7 +19,6 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 import java.net.URI;
 import java.util.HashSet;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
@@ -32,7 +31,6 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResu
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -71,10 +69,9 @@ public class AzureSecurityGroupService extends StatelessService {
 
         AzureSecurityGroupContext(
                 AzureSecurityGroupService service,
-                ExecutorService executorService,
                 SecurityGroupInstanceRequest request) {
 
-            super(service, executorService, request);
+            super(service, request);
 
             this.securityGroupRequest = request;
         }
@@ -90,24 +87,6 @@ public class AzureSecurityGroupService extends StatelessService {
         }
     }
 
-    private ExecutorService executorService;
-
-    @Override
-    public void handleStart(Operation op) {
-
-        this.executorService = getHost().allocateExecutor(this);
-
-        super.handleStart(op);
-    }
-
-    @Override
-    public void handleStop(Operation op) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-
-        super.handleStop(op);
-    }
-
     @Override
     public void handlePatch(Operation op) {
 
@@ -118,9 +97,7 @@ public class AzureSecurityGroupService extends StatelessService {
 
         // initialize context object
         AzureSecurityGroupContext context = new AzureSecurityGroupContext(
-                this,
-                this.executorService,
-                op.getBody(SecurityGroupInstanceRequest.class));
+                this, op.getBody(SecurityGroupInstanceRequest.class));
 
         // Immediately complete the Operation from calling task.
         op.complete();

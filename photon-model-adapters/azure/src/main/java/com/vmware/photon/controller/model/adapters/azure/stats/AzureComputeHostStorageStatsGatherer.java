@@ -37,8 +37,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
 import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.ResultContinuation;
@@ -53,8 +51,6 @@ import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.azure.storage.blob.PageRange;
 
-import com.microsoft.rest.RestClient;
-
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
@@ -66,8 +62,8 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.StatelessService;
@@ -82,9 +78,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_HOST_STORAGE_STATS_GATHERER;
     public static final Integer QUERY_RESULT_LIMIT = 50;
 
-    private ExecutorService executorService;
-
-    private enum StorageMetricsStages {
+    private static enum StorageMetricsStages {
         GET_PARENT_AUTH,
         GET_CLIENT,
         GET_COMPUTE_HOST,
@@ -93,6 +87,48 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
         FINISHED,
         ERROR
     }
+
+    private static class AzureStorageStatsDataHolder implements AutoCloseable {
+
+        final Operation azureStorageStatsOperation;
+        final ComputeStatsRequest statsRequest;
+        final ComputeStatsResponse.ComputeStats statsResponse;
+
+        ComputeService.ComputeStateWithDescription computeHostDesc;
+        AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+
+        StorageMetricsStages stage;
+        long utilizedBytes = 0;
+
+        // Storage account specific properties
+        final Map<String, StorageAccount> storageAccounts = new ConcurrentHashMap<>();
+        final List<CloudBlob> snapshots = Collections.synchronizedList(new ArrayList<>());
+
+        Throwable error;
+
+        AzureSdkClients azureClients;
+
+        AzureStorageStatsDataHolder(Operation op) {
+            this.azureStorageStatsOperation = op;
+            this.statsRequest = op.getBody(ComputeStatsRequest.class);;
+
+            // create a thread safe map to hold stats values for resource
+            this.statsResponse = new ComputeStatsResponse.ComputeStats();
+            this.statsResponse.statValues = new ConcurrentSkipListMap<>();
+
+            this.stage = StorageMetricsStages.GET_COMPUTE_HOST;
+        }
+
+        @Override
+        public void close() {
+            if (this.azureClients != null) {
+                this.azureClients.close();
+                this.azureClients = null;
+            }
+        }
+    }
+
+    private ExecutorService executorService;
 
     @Override
     public void handleStart(Operation startPost) {
@@ -107,43 +143,6 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
         super.handleStop(delete);
     }
 
-    private class AzureStorageStatsDataHolder {
-        public ComputeService.ComputeStateWithDescription computeHostDesc;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeStatsRequest statsRequest;
-        public ApplicationTokenCredentials credentials;
-        public ComputeStatsResponse.ComputeStats statsResponse;
-        public StorageMetricsStages stage;
-        public Operation azureStorageStatsOperation;
-        public long utilizedBytes = 0;
-
-        // Storage account specific properties
-        Map<String, StorageAccount> storageAccounts = new ConcurrentHashMap<>();
-        final List<CloudBlob> snapshots = Collections.synchronizedList(new ArrayList<>());
-
-        // Azure clients
-        Azure azureClient;
-        RestClient restClient;
-
-        public Throwable error;
-
-        private AzureSdkClients azureClients;
-
-        public AzureStorageStatsDataHolder(Operation op) {
-            this.statsResponse = new ComputeStatsResponse.ComputeStats();
-            // create a thread safe map to hold stats values for resource
-            this.statsResponse.statValues = new ConcurrentSkipListMap<>();
-            this.azureStorageStatsOperation = op;
-            this.stage = StorageMetricsStages.GET_COMPUTE_HOST;
-        }
-
-        void close() {
-            if (this.azureClients != null) {
-                this.azureClients.close();
-            }
-        }
-    }
-
     @Override
     public void handlePatch(Operation op) {
         if (!op.hasBody()) {
@@ -151,10 +150,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
             return;
         }
 
-        ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
-
         AzureStorageStatsDataHolder statsData = new AzureStorageStatsDataHolder(op);
-        statsData.statsRequest = statsRequest;
+
         handleStorageMetricDiscovery(statsData);
     }
 
@@ -175,8 +172,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
         case GET_CLIENT:
             try {
                 if (dataHolder.azureClients == null) {
-                    dataHolder.azureClients = new AzureSdkClients(this.executorService,
-                            dataHolder.parentAuth);
+                    dataHolder.azureClients = new AzureSdkClients(dataHolder.parentAuth);
                 }
             } catch (Throwable e) {
                 logSevere(e);
@@ -296,9 +292,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
 
     private void getBlobUsedBytesAsync(AzureStorageStatsDataHolder statsData,
             StorageMetricsStages next) {
-        OperationContext origContext = OperationContext.getOperationContext();
-        this.executorService.submit(() -> {
-            OperationContext.restoreOperationContext(origContext);
+
+        Runnable getBlobsAsync = () -> {
             String metricName = PhotonModelConstants.STORAGE_USED_BYTES;
             List<ServiceStats.ServiceStat> statDatapoints = new ArrayList<>();
 
@@ -442,7 +437,12 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                             }
                         });
             }
-        });
+        };
+
+        PhotonModelUtils.runInExecutor(
+                this.executorService,
+                getBlobsAsync,
+                throwable -> handleError(statsData, throwable));
     }
 
     private void handleError(AzureStorageStatsDataHolder dataHolder, Throwable e) {

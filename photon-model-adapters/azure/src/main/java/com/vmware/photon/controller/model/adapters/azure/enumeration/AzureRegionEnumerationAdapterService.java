@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.resources.implementation.LocationInner;
@@ -28,7 +27,6 @@ import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointA
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.DeferredResult;
@@ -91,9 +89,7 @@ public class AzureRegionEnumerationAdapterService extends StatelessService {
 
         protected DeferredResult<Context> getAzureClient(Context context) {
 
-            context.azureSdkClients = new AzureSdkClients(
-                    context.service.executorService,
-                    context.authentication);
+            context.azureSdkClients = new AzureSdkClients(context.authentication);
 
             return DeferredResult.completed(context);
         }
@@ -117,24 +113,8 @@ public class AzureRegionEnumerationAdapterService extends StatelessService {
         }
     }
 
-    private ExecutorService executorService;
-
     public AzureRegionEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-    }
-
-    @Override
-    public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-
-        super.handleStart(startPost);
-    }
-
-    @Override
-    public void handleStop(Operation delete) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-        super.handleStop(delete);
     }
 
     @Override

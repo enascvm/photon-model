@@ -15,8 +15,6 @@ package com.vmware.photon.controller.model.adapters.azure.power;
 
 import static com.vmware.photon.controller.model.resources.ComputeService.PowerState.OFF;
 
-import java.util.concurrent.ExecutorService;
-
 import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
 
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
@@ -24,7 +22,6 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
@@ -48,28 +45,12 @@ public class AzurePowerService extends StatelessService {
 
         private AzurePowerContext(
                 AzurePowerService service,
-                ExecutorService executorService,
                 ComputePowerRequest request) {
 
-            super(service, executorService, request);
+            super(service, request);
 
             this.request = request;
         }
-    }
-
-    private ExecutorService executorService;
-
-    @Override
-    public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-        super.handleStart(startPost);
-    }
-
-    @Override
-    public void handleStop(Operation delete) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-        super.handleStop(delete);
     }
 
     @Override
@@ -83,7 +64,7 @@ public class AzurePowerService extends StatelessService {
 
         op.complete();
 
-        AzurePowerContext ctx = new AzurePowerContext(this, this.executorService, request);
+        AzurePowerContext ctx = new AzurePowerContext(this, request);
 
         if (request.isMockRequest) {
             updateComputeState(ctx);

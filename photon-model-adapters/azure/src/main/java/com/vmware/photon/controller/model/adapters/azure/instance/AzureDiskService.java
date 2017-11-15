@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.logging.Level;
 
 import com.microsoft.azure.management.compute.Disk;
@@ -36,7 +35,6 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -55,8 +53,6 @@ public class AzureDiskService extends StatelessService {
 
     private static final String PREFIX_OF_RESOURCE_GROUP_FOR_DISK = "DiskRG";
 
-    private ExecutorService executorService;
-
     /**
      * Azure Disk request context.
      */
@@ -70,10 +66,9 @@ public class AzureDiskService extends StatelessService {
 
         AzureDiskContext(
                 AzureDiskService service,
-                ExecutorService executorService,
                 DiskInstanceRequest request) {
 
-            super(service, executorService, request);
+            super(service, request);
 
             this.diskRequest = request;
         }
@@ -89,21 +84,6 @@ public class AzureDiskService extends StatelessService {
     }
 
     @Override
-    public void handleStart(Operation op) {
-
-        this.executorService = getHost().allocateExecutor(this);
-        super.handleStart(op);
-    }
-
-    @Override
-    public void handleStop(Operation op) {
-
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-        super.handleStop(op);
-    }
-
-    @Override
     public void handlePatch(Operation op) {
 
         if (!op.hasBody()) {
@@ -112,8 +92,8 @@ public class AzureDiskService extends StatelessService {
         }
 
         // initialize context object
-        AzureDiskContext context = new AzureDiskContext(this, this.executorService,
-                op.getBody(DiskInstanceRequest.class));
+        AzureDiskContext context = new AzureDiskContext(
+                this, op.getBody(DiskInstanceRequest.class));
 
         // Immediately complete the Operation from calling task.
         op.setStatusCode(Operation.STATUS_CODE_ACCEPTED).complete();

@@ -51,7 +51,6 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -176,8 +175,6 @@ public class AzureInstanceService extends StatelessService {
     public static final int WINDOWS_COMPUTER_NAME_MAX_LENGTH = 15;
     // disk size on Azure is 1023 GB
 
-    private ExecutorService executorService;
-
     /**
      * The class represents the context of async calls(either single or batch) to Azure cloud.
      *
@@ -210,20 +207,6 @@ public class AzureInstanceService extends StatelessService {
         static AzureCallContext newBatchCallContext(int numberOfCalls) {
             return new AzureCallContext(numberOfCalls);
         }
-    }
-
-    @Override
-    public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-
-        super.handleStart(startPost);
-    }
-
-    @Override
-    public void handleStop(Operation delete) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-        super.handleStop(delete);
     }
 
     @Override
@@ -317,7 +300,7 @@ public class AzureInstanceService extends StatelessService {
             switch (ctx.stage) {
             case CLIENT:
                 if (ctx.azureSdkClients == null) {
-                    ctx.azureSdkClients = new AzureSdkClients(this.executorService, ctx.parentAuth);
+                    ctx.azureSdkClients = new AzureSdkClients(ctx.parentAuth);
                 }
                 switch (ctx.computeRequest.requestType) {
                 case CREATE:

@@ -21,7 +21,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -49,7 +48,6 @@ import com.microsoft.azure.management.network.implementation.ProbeInner;
 import com.microsoft.azure.management.network.implementation.PublicIPAddressInner;
 import com.microsoft.azure.management.network.implementation.PublicIPAddressesInner;
 import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
-
 import com.microsoft.rest.ServiceCallback;
 
 import org.apache.commons.collections.CollectionUtils;
@@ -62,7 +60,6 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResu
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
@@ -103,10 +100,9 @@ public class AzureLoadBalancerService extends StatelessService {
 
         AzureLoadBalancerContext(
                 StatelessService service,
-                ExecutorService executorService,
                 LoadBalancerInstanceRequest request) {
 
-            super(service, executorService, request);
+            super(service, request);
 
             this.loadBalancerRequest = request;
         }
@@ -122,22 +118,6 @@ public class AzureLoadBalancerService extends StatelessService {
         }
     }
 
-    private ExecutorService executorService;
-
-    @Override
-    public void handleStart(Operation op) {
-        this.executorService = getHost().allocateExecutor(this);
-        super.handleStart(op);
-    }
-
-    @Override
-    public void handleStop(Operation op) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-
-        super.handleStop(op);
-    }
-
     @Override
     public void handlePatch(Operation op) {
         if (!op.hasBody()) {
@@ -147,7 +127,7 @@ public class AzureLoadBalancerService extends StatelessService {
 
         // initialize context object
         AzureLoadBalancerContext context = new AzureLoadBalancerContext(
-                this, this.executorService, op.getBody(LoadBalancerInstanceRequest.class));
+                this, op.getBody(LoadBalancerInstanceRequest.class));
 
         // Immediately complete the Operation from calling task.
         op.complete();

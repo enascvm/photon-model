@@ -27,7 +27,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_PERMISSIONS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE;
 import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE;
@@ -40,19 +39,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 
 import com.microsoft.azure.management.resources.SubscriptionState;
 import com.microsoft.azure.management.resources.implementation.SubscriptionClientImpl;
 import com.microsoft.azure.management.resources.implementation.SubscriptionInner;
-import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.Permission;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.PermissionList;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
@@ -82,15 +80,6 @@ public class AzureEndpointAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENDPOINT_CONFIG_ADAPTER;
 
-    private ExecutorService executorService;
-
-    @Override
-    public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-
-        super.handleStart(startPost);
-    }
-
     @Override
     public void handlePatch(Operation op) {
         if (!op.hasBody()) {
@@ -103,16 +92,16 @@ public class AzureEndpointAdapterService extends StatelessService {
                 computeDesc(), compute(), endpoint(), validate(body));
     }
 
-    public static BiConsumer<EndpointService.EndpointState,Retriever> endpoint() {
-        return (e , r) -> {
+    public static BiConsumer<EndpointService.EndpointState, Retriever> endpoint() {
+        return (e, r) -> {
             e.endpointProperties.put(PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
             e.endpointProperties.put(USER_LINK_KEY, r.getRequired(USER_LINK_KEY));
             e.endpointProperties.put(AZURE_TENANT_ID, r.getRequired(AZURE_TENANT_ID));
 
             r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
             r.get(ZONE_KEY).ifPresent(zk -> e.endpointProperties.put(ZONE_KEY, zk));
-            r.get(AZURE_PROVISIONING_PERMISSION).ifPresent(pr -> e.endpointProperties.put
-                    (AZURE_PROVISIONING_PERMISSION, pr));
+            r.get(AZURE_PROVISIONING_PERMISSION)
+                    .ifPresent(pr -> e.endpointProperties.put(AZURE_PROVISIONING_PERMISSION, pr));
 
             // Azure end-point does support public images enumeration
             e.endpointProperties.put(SUPPORT_PUBLIC_IMAGES, Boolean.TRUE.toString());
@@ -124,39 +113,39 @@ public class AzureEndpointAdapterService extends StatelessService {
     private BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validate(
             EndpointConfigRequest body) {
         return (credentials, callback) -> {
-            RestClient restClient = AzureUtils.buildRestClient(getAzureConfig(credentials), this.executorService);
-            try {
-                String shouldProvision = body.endpointProperties.get(AZURE_PROVISIONING_PERMISSION);
+            try (AzureSdkClients azureSdkClients = new AzureSdkClients(credentials)) {
+                Boolean shouldProvision = Boolean.parseBoolean(
+                        body.endpointProperties.get(AZURE_PROVISIONING_PERMISSION));
 
                 validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
-                        .thenCompose(aVoid -> validateCredentials(credentials, restClient))
+                        .thenCompose(aVoid -> validateCredentials(credentials, azureSdkClients))
                         .thenCompose(subscription -> getPermissions(credentials))
-                        .thenCompose(permissionList -> verifyPermissions(permissionList,
-                                Boolean.parseBoolean(shouldProvision)))
+                        .thenCompose(permList -> verifyPermissions(permList, shouldProvision))
                         .whenComplete((aVoid, e) -> {
-                            if (e != null) {
-                                if (e instanceof CompletionException) {
-                                    e = e.getCause();
-                                }
-
-                                LocalizableValidationException localizableValidationException;
-                                if (e instanceof LocalizableValidationException) {
-                                    localizableValidationException = (LocalizableValidationException) e;
-                                } else {
-                                    // Azure doesn't send us any meaningful status code to work with
-                                    localizableValidationException = new
-                                            LocalizableValidationException(
-                                            e, PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
-                                            PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
-                                }
-
-                                ServiceErrorResponse rsp = Utils.toServiceErrorResponse
-                                        (localizableValidationException);
-                                rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
-                                callback.accept(rsp, localizableValidationException);
+                            if (e == null) {
+                                callback.accept(null, null);
                                 return;
                             }
-                            callback.accept(null, null);
+
+                            if (e instanceof CompletionException) {
+                                e = e.getCause();
+                            }
+
+                            final LocalizableValidationException localizableExc;
+                            if (e instanceof LocalizableValidationException) {
+                                localizableExc = (LocalizableValidationException) e;
+                            } else {
+                                // Azure doesn't send us any meaningful status code to work with
+                                localizableExc = new LocalizableValidationException(
+                                        e,
+                                        PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
+                                        PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE);
+                            }
+
+                            ServiceErrorResponse rsp = Utils.toServiceErrorResponse(localizableExc);
+                            rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
+
+                            callback.accept(rsp, localizableExc);
                         });
             } catch (Throwable e) {
                 logSevere(e);
@@ -164,16 +153,13 @@ public class AzureEndpointAdapterService extends StatelessService {
                 rsp.message = "Invalid Azure credentials";
                 rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
                 callback.accept(rsp, e);
-            } finally {
-                cleanUpHttpClient(restClient);
-
             }
         };
     }
 
     private DeferredResult<SubscriptionInner> validateCredentials(
-            AuthCredentialsServiceState credentials, RestClient restClient) {
-        SubscriptionClientImpl subscriptionClient = new SubscriptionClientImpl(restClient);
+            AuthCredentialsServiceState credentials, AzureSdkClients azureSdkClients) {
+        SubscriptionClientImpl subscriptionClient = azureSdkClients.getSubscriptionClientImpl();
 
         String msg = "Getting Azure Subscription [" + credentials.userLink
                 + "] for endpoint validation";
@@ -188,11 +174,10 @@ public class AzureEndpointAdapterService extends StatelessService {
                         subscription.id()));
 
                 if (!SubscriptionState.ENABLED.equals(subscription.state())) {
-                    logFine(() ->
-                            String.format("Subscription with id %s is not in active"
-                                            + " state but in %s",
-                                    subscription.id(),
-                                    subscription.state()));
+                    logFine(() -> String.format("Subscription with id %s is not in active"
+                            + " state but in %s",
+                            subscription.id(),
+                            subscription.state()));
                     return DeferredResult.failed(
                             new IllegalStateException("Subscription is not active"));
                 }
@@ -214,11 +199,13 @@ public class AzureEndpointAdapterService extends StatelessService {
         if (Boolean.TRUE.equals(endpointUniqueness)) {
             Query authQuery = Builder.create()
                     .addFieldClause(USER_LINK_KEY, credentials.userLink)
-                    .addCompositeFieldClause(AuthCredentialsServiceState
-                            .FIELD_NAME_CUSTOM_PROPERTIES, AZURE_TENANT_ID, credentials.customProperties
-                            .get(AZURE_TENANT_ID)).build();
+                    .addCompositeFieldClause(
+                            AuthCredentialsServiceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            AZURE_TENANT_ID, credentials.customProperties
+                                    .get(AZURE_TENANT_ID))
+                    .build();
 
-            return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery ,
+            return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery,
                     null, EndpointType.azure.name());
         }
         return DeferredResult.completed(null);
@@ -246,7 +233,8 @@ public class AzureEndpointAdapterService extends StatelessService {
             }
 
             if (c.customProperties != null && c.customProperties.containsKey(AZURE_TENANT_ID)) {
-                r.get(AZURE_TENANT_ID).ifPresent(tenant -> c.customProperties.put(AZURE_TENANT_ID, tenant));
+                r.get(AZURE_TENANT_ID)
+                        .ifPresent(tenant -> c.customProperties.put(AZURE_TENANT_ID, tenant));
             } else {
                 c.customProperties = new HashMap<>();
                 c.customProperties.put(AZURE_TENANT_ID, r.getRequired(AZURE_TENANT_ID));
@@ -313,15 +301,16 @@ public class AzureEndpointAdapterService extends StatelessService {
 
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + getAzureConfig(credentials).getToken(AzureUtils.getAzureBaseUri()));
+                    AUTH_HEADER_BEARER_PREFIX
+                            + getAzureConfig(credentials).getToken(AzureUtils.getAzureBaseUri()));
         } catch (IOException e) {
             return DeferredResult.failed(e);
         }
         return sendWithDeferredResult(operation, PermissionList.class);
     }
 
-    private DeferredResult<Void> verifyPermissions(PermissionList permissions, boolean
-            shouldProvision) {
+    private DeferredResult<Void> verifyPermissions(PermissionList permissions,
+            boolean shouldProvision) {
 
         if (permissions == null || permissions.value == null) {
             throw new LocalizableValidationException("The account does not have permissions",

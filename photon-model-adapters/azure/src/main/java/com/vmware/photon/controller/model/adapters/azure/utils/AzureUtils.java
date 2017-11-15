@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
@@ -44,13 +43,9 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.storage.StorageAccountKey;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
-import com.microsoft.azure.serializer.AzureJacksonAdapter;
 import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.StorageCredentials;
-import com.microsoft.rest.LogLevel;
-import com.microsoft.rest.RestClient;
-import com.microsoft.rest.ServiceResponseBuilder.Factory;
-import okhttp3.OkHttpClient;
+
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -60,7 +55,6 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
@@ -102,8 +96,6 @@ public class AzureUtils {
     // ownerName-subscriptionName
     public static final String COMPUTES_NAME_FORMAT_WITH_PARENT_NAME_ENTITY_NAME =
             "%s" + COMPUTE_NAME_SEPARATOR + "%s";
-
-    public static final String LOG_LEVEL_PROPERTY = "photon-model.adapter.azure.rest.log.level";
 
     /**
      * Flag to use azure-mock, will be set in test files. Azure-mock is a tool for testing
@@ -515,45 +507,6 @@ public class AzureUtils {
     }
 
     /**
-     * Create Azure RestClient with specified executor and credentials.
-     * @param credentials Azure credentials
-     * @param executorService Reference to executor
-     * @return Azure RestClient
-     */
-    public static RestClient buildRestClient(ApplicationTokenCredentials credentials, ExecutorService executorService) {
-        RestClient.Builder restClientBuilder = new RestClient.Builder();
-
-        restClientBuilder.withBaseUrl(AzureUtils.getAzureBaseUri());
-        restClientBuilder.withCredentials(credentials);
-        restClientBuilder.withSerializerAdapter(new AzureJacksonAdapter());
-        restClientBuilder.withLogLevel(getRestClientLogLevel());
-        if (executorService != null) {
-            restClientBuilder.withCallbackExecutor(executorService);
-        }
-        restClientBuilder.withResponseBuilderFactory(new Factory());
-
-        return restClientBuilder.build();
-    }
-
-    /**
-     * Clean up Azure SDK HTTP client.
-     */
-    public static void cleanUpHttpClient(RestClient restClient) {
-        if (restClient == null || restClient.httpClient() == null) {
-            return;
-        }
-
-        OkHttpClient httpClient = restClient.httpClient();
-
-        httpClient.connectionPool().evictAll();
-        ExecutorService httpClientExecutor = httpClient.dispatcher().executorService();
-        httpClientExecutor.shutdown();
-
-        AdapterUtils.awaitTermination(httpClientExecutor);
-        httpClient = null;
-    }
-
-    /**
      * Utility method to handle failures of operations executed parallely.
      * @param service  Instance of service calling this method
      * @param exs  Map of operationIds to exceptions
@@ -638,21 +591,6 @@ public class AzureUtils {
         }
 
         return resourceGroupName;
-    }
-
-    /**
-     * Get {@code LogLevel} from {@value #LOG_LEVEL_PROPERTY} system property.
-     *
-     * @return by default return {@link LogLevel#NONE}
-     */
-    private static LogLevel getRestClientLogLevel() {
-        String argLogLevel = System.getProperty(LOG_LEVEL_PROPERTY, LogLevel.NONE.name());
-
-        try {
-            return LogLevel.valueOf(argLogLevel);
-        } catch (Exception exc) {
-            return LogLevel.NONE;
-        }
     }
 
 }

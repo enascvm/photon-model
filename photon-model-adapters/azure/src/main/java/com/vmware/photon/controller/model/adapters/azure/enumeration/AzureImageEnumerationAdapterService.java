@@ -56,7 +56,6 @@ import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EndpointEnumerationProcess;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
-import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -270,9 +269,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         protected AzureImageEnumerationContext createAzureClient(
                 AzureImageEnumerationContext context) {
 
-            context.azureClient = new AzureSdkClients(
-                    ((AzureImageEnumerationAdapterService) context.service).executorService,
-                    context.endpointAuthState);
+            context.azureClient = new AzureSdkClients(context.endpointAuthState);
 
             return context;
         }
@@ -282,21 +279,13 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
          */
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
+
             ExecutorService executorService =
                     ((AzureImageEnumerationAdapterService) this.service).executorService;
-            DeferredResult<RemoteResourcesPage> r = new DeferredResult<>();
 
-            PhotonModelUtils
-                    .runInExecutor(executorService, () -> getAzureImagesPage(getAzureImagesLoader())
-                            .handle((result, err) -> {
-                                if (err != null) {
-                                    r.fail(err);
-                                } else {
-                                    r.complete(result);
-                                }
-                                return null;
-                            }), r::fail);
-            return r;
+            return DeferredResult.completed(getAzureImagesLoader())
+                    // AzureImagesLoader is NOT async so execute load-images-page in Executor!
+                    .thenComposeAsync(this::getAzureImagesPage, executorService);
         }
 
         /**

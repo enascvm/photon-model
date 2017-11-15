@@ -19,13 +19,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_net_interface;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vm;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
@@ -57,7 +51,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.Page;
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.InstanceViewStatus;
 import com.microsoft.azure.management.compute.InstanceViewTypes;
@@ -71,8 +64,9 @@ import com.microsoft.azure.management.network.PublicIPAddress;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
-import com.microsoft.rest.RestClient;
+
 import org.apache.commons.lang3.tuple.Pair;
+
 import rx.functions.Action1;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -82,8 +76,10 @@ import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse;
 import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse.RegionInfo;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
@@ -132,17 +128,20 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  * Enumeration adapter for data collection of VMs on Azure.
  */
 public class AzureComputeEnumerationAdapterService extends StatelessService {
+
     public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_ENUMERATION_ADAPTER;
-    public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList("Deleting",
+
+    public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList(
+            "Deleting",
             "Deleted");
-    private ExecutorService executorService;
-    private static final String NETWORK_INTERFACE_TAG_TYPE_VALUE = azure_net_interface.toString();
+
+    private static final String NETWORK_INTERFACE_TAG_TYPE_VALUE = AzureResourceType.azure_net_interface.toString();
 
     /**
      * The enumeration service context that holds all the information needed to determine the list
      * of instances that need to be represented in the system.
      */
-    private static class EnumerationContext {
+    private static class EnumerationContext implements AutoCloseable {
         // Stored operation to signal completion to the Azure storage enumeration once all the
         // stages
         // are successfully completed.
@@ -172,11 +171,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // Compute States for patching additional fields.
         Map<String, ComputeState> computeStatesForPatching = new ConcurrentHashMap<>();
         List<String> vmIds = new ArrayList<>();
-        // Azure specific fields
-        ApplicationTokenCredentials credentials;
+
         // Azure clients
-        Azure azure;
-        RestClient restClient;
+        AzureSdkClients azureSdkClients;
+
         ResourceState resourceDeletionState;
         Map<String, RegionInfo> regions = new ConcurrentHashMap<>();
         Set<String> regionIds = new HashSet<>();
@@ -190,6 +188,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             this.operation = op;
             this.resourceDeletionState = getDeletionState(request.original
                     .deletedResourceExpirationMicros);
+        }
+
+        @Override
+        public void close() {
+            if (this.azureSdkClients != null) {
+                this.azureSdkClients.close();
+                this.azureSdkClients = null;
+            }
         }
     }
 
@@ -222,10 +228,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         FINISHED
     }
 
-    public AzureComputeEnumerationAdapterService() {
-        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-    }
-
     /**
      * Constrain every query with endpointLink and tenantLinks, if presented.
      */
@@ -237,6 +239,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria
         QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+    }
+
+    private ExecutorService executorService;
+
+    public AzureComputeEnumerationAdapterService() {
+        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
     @Override
@@ -263,6 +271,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (ctx.request.isMockRequest) {
             op.complete();
+            ctx.close();
             return;
         }
         handleEnumeration(ctx);
@@ -271,9 +280,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void handleEnumeration(EnumerationContext ctx) {
         switch (ctx.stage) {
         case CLIENT:
-            if (ctx.credentials == null) {
+            if (ctx.azureSdkClients == null) {
                 try {
-                    ctx.credentials = getAzureConfig(ctx.parentAuth);
+                    ctx.azureSdkClients = new AzureSdkClients(ctx.parentAuth);
                 } catch (Throwable e) {
                     logSevere(e);
                     ctx.error = e;
@@ -315,15 +324,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         case FINISHED:
             logInfo(() -> String.format("Azure compute enumeration finished for %s",
                     ctx.request.getEnumKey()));
-            cleanUpHttpClient(ctx.restClient);
             ctx.operation.complete();
+            ctx.close();
             break;
         case ERROR:
             logWarning(() -> String
                     .format("Azure compute enumeration error for %s, Failed due to %s",
                             ctx.request.getEnumKey(), Utils.toString(ctx.error)));
-            cleanUpHttpClient(ctx.restClient);
             ctx.operation.fail(ctx.error);
+            ctx.close();
             break;
         default:
             String msg = String.format("Unknown Azure compute enumeration stage %s ",
@@ -331,6 +340,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             logSevere(() -> msg);
             ctx.error = new IllegalStateException(msg);
             ctx.operation.fail(ctx.error);
+            ctx.close();
         }
     }
 
@@ -535,7 +545,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private void createInternalTypeTag(EnumerationContext context,
             ComputeEnumerationSubStages next) {
-        TagService.TagState typeTag = newTagState(TAG_KEY_TYPE, azure_vm.toString(),
+        TagService.TagState typeTag = newTagState(TAG_KEY_TYPE,
+                AzureResourceType.azure_vm.toString(),
                 false, context.parentCompute.tenantLinks);
 
         Operation.CompletionHandler handler = (completedOp, failure) -> {
@@ -719,7 +730,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
             logFine(() -> "Enumerating VMs from Azure");
 
-            Azure azureClient = getAzureClient(ctx);
+            Azure azureClient = ctx.azureSdkClients.getAzureClient();
 
             ctx.virtualMachines.clear();
 
@@ -1321,7 +1332,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
-            Azure azureClient = getAzureClient(ctx);
+
+            Azure azureClient = ctx.azureSdkClients.getAzureClient();
+
             NetworkInterfacesInner netOps = azureClient.networkInterfaces().inner();
             List<DeferredResult<Pair<NetworkInterfaceInner, String>>> remoteNics = ctx.virtualMachines
                     .values().stream()
@@ -1462,7 +1475,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
-            Azure azure = getAzureClient(ctx);
+
+            Azure azure = ctx.azureSdkClients.getAzureClient();
+
             azure.publicIPAddresses()
                     .getByIdAsync(nicIPConf.publicIPAddress().id())
                     .subscribe(new Action1<PublicIPAddress>() {
@@ -1733,9 +1748,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
-            Azure azureClient = getAzureClient(ctx);
-            VirtualMachinesInner vmOps = azureClient
-                    .virtualMachines().inner();
+
+            Azure azureClient = ctx.azureSdkClients.getAzureClient();
+
+            VirtualMachinesInner vmOps = azureClient.virtualMachines().inner();
+
             DeferredResult.allOf(ctx.computeStatesForPatching
                     .values().stream()
                     .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
@@ -1816,18 +1833,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private String imageReferenceToImageId(ImageReferenceInner imageReference) {
         return imageReference.publisher() + ":" + imageReference.offer() + ":"
                 + imageReference.sku() + ":" + imageReference.version();
-    }
-
-    private Azure getAzureClient(EnumerationContext ctx) {
-        if (ctx.azure == null) {
-            if (ctx.restClient == null) {
-                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
-            }
-            ctx.azure = Azure.authenticate(ctx.restClient,
-                    ctx.parentAuth.customProperties.get(AZURE_TENANT_ID))
-                    .withSubscription(ctx.parentAuth.userLink);
-        }
-        return ctx.azure;
     }
 
     /**

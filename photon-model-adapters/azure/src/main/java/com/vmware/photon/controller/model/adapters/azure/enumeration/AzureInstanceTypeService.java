@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.compute.implementation.VirtualMachineSizeInner;
@@ -28,7 +27,6 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.support.InstanceTypeList;
 import com.vmware.photon.controller.model.support.InstanceTypeList.InstanceType;
@@ -112,8 +110,7 @@ public class AzureInstanceTypeService extends StatelessService {
             return ctx.service
                     .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
                     .thenApply(authState -> {
-                        ctx.azureSdkClients = new AzureSdkClients(
-                                ctx.service.executorService, authState);
+                        ctx.azureSdkClients = new AzureSdkClients(authState);
                         return ctx;
                     });
         }
@@ -165,24 +162,8 @@ public class AzureInstanceTypeService extends StatelessService {
         }
     }
 
-    private ExecutorService executorService;
-
     public AzureInstanceTypeService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-    }
-
-    @Override
-    public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-
-        super.handleStart(startPost);
-    }
-
-    @Override
-    public void handleStop(Operation delete) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-        super.handleStop(delete);
     }
 
     @Override

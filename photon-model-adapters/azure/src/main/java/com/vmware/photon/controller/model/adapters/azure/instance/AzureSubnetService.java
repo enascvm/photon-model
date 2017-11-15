@@ -17,13 +17,9 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 
 import java.net.URI;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.implementation.SubnetInner;
 import com.microsoft.azure.management.network.implementation.SubnetsInner;
-import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
 
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
@@ -31,8 +27,8 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -54,14 +50,14 @@ public class AzureSubnetService extends StatelessService {
     /**
      * Subnet request context.
      */
-    private static class AzureSubnetContext {
+    private static class AzureSubnetContext implements AutoCloseable {
 
         final SubnetInstanceRequest request;
 
         EndpointState endpoint;
         AuthCredentialsServiceState authentication;
-        RestClient restClient;
-        SubnetsInner azureClient;
+
+        AzureSdkClients azureSdkClients;
 
         SubnetState subnetState;
         NetworkState parentNetwork;
@@ -74,24 +70,14 @@ public class AzureSubnetService extends StatelessService {
             this.taskManager = new TaskManager(service, request.taskReference,
                     request.resourceLink());
         }
-    }
 
-    private ExecutorService executorService;
-
-    @Override
-    public void handleStart(Operation op) {
-
-        this.executorService = getHost().allocateExecutor(this);
-
-        super.handleStart(op);
-    }
-
-    @Override
-    public void handleStop(Operation op) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-
-        super.handleStop(op);
+        @Override
+        public void close() {
+            if (this.azureSdkClients != null) {
+                this.azureSdkClients.close();
+                this.azureSdkClients = null;
+            }
+        }
     }
 
     @Override
@@ -119,6 +105,7 @@ public class AzureSubnetService extends StatelessService {
                     } else {
                         context.taskManager.patchTaskToFailure(e);
                     }
+                    context.close();
                 });
     }
 
@@ -147,8 +134,8 @@ public class AzureSubnetService extends StatelessService {
                 "context.parentNetwork.groupLinks is null.");
         AssertUtil.assertTrue(context.parentNetwork.groupLinks.size() == 1,
                 "context.parentNetwork.groupLinks doesn't contain exactly one element.");
-        return AzureUtils.filterRGsByType(this.getHost(), context.parentNetwork.groupLinks, context
-                .parentNetwork.endpointLink, context.parentNetwork.tenantLinks)
+        return AzureUtils.filterRGsByType(this.getHost(), context.parentNetwork.groupLinks,
+                context.parentNetwork.endpointLink, context.parentNetwork.tenantLinks)
                 .thenApply(rgState -> {
                     context.parentNetworkResourceGroupName = rgState.name;
                     return context;
@@ -200,7 +187,7 @@ public class AzureSubnetService extends StatelessService {
                 context.subnetState.id = UUID.randomUUID().toString();
             } else {
                 execution = execution
-                        //.thenCompose(this::checkSubnetCIDR)
+                        // .thenCompose(this::checkSubnetCIDR)
                         .thenCompose(this::createSubnet);
             }
 
@@ -224,12 +211,8 @@ public class AzureSubnetService extends StatelessService {
 
     private DeferredResult<AzureSubnetContext> getAzureClient(AzureSubnetContext ctx) {
 
-        // Creating a shared singleton Http client instance
-        // Reference
-        // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
-        // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
-        if (ctx.azureClient == null) {
-            ctx.azureClient = getNetworkManagementClientImpl(ctx).subnets();
+        if (ctx.azureSdkClients == null) {
+            ctx.azureSdkClients = new AzureSdkClients(ctx.authentication);
         }
 
         return DeferredResult.completed(ctx);
@@ -246,6 +229,11 @@ public class AzureSubnetService extends StatelessService {
         final String msg = "Creating Azure Subnet [" + subnet.name()
                 + "] in vNet [" + vNetName
                 + "] in resource group [" + rgName + "].";
+
+        SubnetsInner subnetsInner = context.azureSdkClients
+                .getNetworkManagementClientImpl()
+                .subnets();
+
         AzureProvisioningCallback<SubnetInner> handler = new AzureProvisioningCallback<SubnetInner>(
                 this, msg) {
 
@@ -264,7 +252,7 @@ public class AzureSubnetService extends StatelessService {
             @Override
             protected Runnable checkProvisioningStateCall(
                     ServiceCallback<SubnetInner> checkProvisioningStateCallback) {
-                return () -> context.azureClient.getAsync(
+                return () -> subnetsInner.getAsync(
                         rgName,
                         vNetName,
                         subnet.name(),
@@ -273,20 +261,9 @@ public class AzureSubnetService extends StatelessService {
             }
         };
 
-        context.azureClient.createOrUpdateAsync(rgName, vNetName, subnet.name(),
-                subnet, handler);
+        subnetsInner.createOrUpdateAsync(rgName, vNetName, subnet.name(), subnet, handler);
 
-        return handler.toDeferredResult()
-                .thenApply(ignore -> context);
-    }
-
-    private NetworkManagementClientImpl getNetworkManagementClientImpl(AzureSubnetContext ctx) {
-        ApplicationTokenCredentials credentials =
-                AzureUtils.getAzureConfig(ctx.authentication);
-        ctx.restClient = AzureUtils.buildRestClient(credentials, this.executorService);
-        NetworkManagementClientImpl client = new NetworkManagementClientImpl(ctx.restClient)
-                .withSubscriptionId(ctx.authentication.userLink);
-        return client;
+        return handler.toDeferredResult().thenApply(ignore -> context);
     }
 
     private DeferredResult<AzureSubnetContext> updateSubnetState(AzureSubnetContext context) {
@@ -310,7 +287,9 @@ public class AzureSubnetService extends StatelessService {
 
         AzureDeferredResultServiceCallback<Void> handler = new Default<>(this, msg);
 
-        context.azureClient.deleteAsync(rgName, vNetName, subnetName, handler);
+        context.azureSdkClients.getNetworkManagementClientImpl()
+                .subnets()
+                .deleteAsync(rgName, vNetName, subnetName, handler);
 
         return handler.toDeferredResult().thenApply(ignore -> context);
     }

@@ -59,6 +59,7 @@ import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
  *
  */
 public class AzureComputeHostStatsGatherer extends StatelessService {
+
     public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_HOST_STATS_GATHERER;
 
     private ExecutorService executorService;
@@ -109,10 +110,10 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
 
         AzureStatsDataHolder statsData = new AzureStatsDataHolder(op);
-        statsData.statsRequest = statsRequest;
+        statsData.statsRequest = op.getBody(ComputeStatsRequest.class);;
+
         handleMetricDiscovery(statsData);
     }
 

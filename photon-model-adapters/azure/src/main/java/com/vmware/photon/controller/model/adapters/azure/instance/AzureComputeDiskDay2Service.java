@@ -76,10 +76,9 @@ public class AzureComputeDiskDay2Service extends StatelessService {
 
         public AzureComputeDiskDay2Context(
                 StatelessService service,
-                ExecutorService executorService,
                 ResourceOperationRequest request) {
 
-            super(service, executorService, request);
+            super(service, request);
 
             this.request = request;
         }
@@ -134,7 +133,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         op.complete();
 
         // initialize context object
-        AzureComputeDiskDay2Context context = new AzureComputeDiskDay2Context(this, this.executorService, request);
+        AzureComputeDiskDay2Context context = new AzureComputeDiskDay2Context(this, request);
 
         DeferredResult<AzureComputeDiskDay2Context> execution = DeferredResult.completed(context);
 

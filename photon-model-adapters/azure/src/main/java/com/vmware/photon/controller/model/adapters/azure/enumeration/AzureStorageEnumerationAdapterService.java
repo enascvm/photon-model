@@ -23,16 +23,12 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_STATUS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_DISKS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
@@ -60,7 +56,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
@@ -76,7 +71,6 @@ import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
-import com.microsoft.rest.RestClient;
 
 import org.apache.commons.lang3.EnumUtils;
 
@@ -91,6 +85,7 @@ import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAc
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -144,7 +139,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      * storage descriptions that are required to be created in the system based on the enumeration
      * data received from Azure.
      */
-    public static class StorageEnumContext {
+    public static class StorageEnumContext implements AutoCloseable {
         public Throwable error;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public StorageEnumStages subStage;
@@ -183,11 +178,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         List<String> blobIds = new ArrayList<>();
         Map<String, DiskState> diskStates = new ConcurrentHashMap<>();
+
         // Azure clients
-        Azure azure;
-        RestClient restClient;
-        // Azure specific properties
-        ApplicationTokenCredentials credentials;
+        AzureSdkClients azureSdkClients;
 
         public StorageEnumContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
@@ -199,6 +192,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             this.operation = op;
             this.resourceDeletionState = getDeletionState(request.original
                     .deletedResourceExpirationMicros);
+        }
+
+        @Override
+        public void close() {
+            if (this.azureSdkClients != null) {
+                this.azureSdkClients.close();
+                this.azureSdkClients = null;
+            }
         }
     }
 
@@ -252,6 +253,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         if (context.request.isMockRequest) {
             op.complete();
+            context.close();
             return;
         }
 
@@ -268,9 +270,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     private void handleEnumeration(StorageEnumContext context) {
         switch (context.stage) {
         case CLIENT:
-            if (context.credentials == null) {
+            if (context.azureSdkClients == null) {
                 try {
-                    context.credentials = getAzureConfig(context.parentAuth);
+                    context.azureSdkClients = new AzureSdkClients(context.parentAuth);
                 } catch (Throwable e) {
                     logSevere(e);
                     context.error = e;
@@ -313,14 +315,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             logInfo(() -> String.format("Azure storage enumeration finished for %s",
                     getEnumKey(context)));
             logStatsInformation(context);
-            cleanUpHttpClient(context.restClient);
             context.operation.complete();
+            context.close();
             break;
         case ERROR:
             logWarning(() -> String.format("Azure storage enumeration error for %s",
                     getEnumKey(context)));
-            cleanUpHttpClient(context.restClient);
             context.operation.fail(context.error);
+            context.close();
             break;
         default:
             String msg = String.format("Unknown Azure storage enumeration stage %s ",
@@ -328,6 +330,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
             context.operation.fail(context.error);
+            context.close();
         }
     }
 
@@ -440,7 +443,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 Operation.MEDIA_TYPE_APPLICATION_JSON);
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + context.credentials
+                    AUTH_HEADER_BEARER_PREFIX + context.azureSdkClients.credentials
                             .getToken(AzureUtils.getAzureBaseUri()));
         } catch (Exception ex) {
             this.handleError(context, ex);
@@ -645,8 +648,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
-            StorageAccountsInner stOps = getAzureClient(
-                    context).storageAccounts().inner();
+
+            StorageAccountsInner stOps = context.azureSdkClients.getAzureClient()
+                    .storageAccounts().inner();
 
             List<DeferredResult<StorageDescription>> results = context.storageAccountsToUpdateCreate
                     .values().stream()
@@ -729,9 +733,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         };
 
         PhotonModelUtils.runInExecutor(this.executorService, () -> {
-            Azure azureClient = getAzureClient(context);
-            StorageAccountsInner stOps = azureClient
-                    .storageAccounts().inner();
+
+            Azure azureClient = context.azureSdkClients.getAzureClient();
+
+            StorageAccountsInner stOps = azureClient.storageAccounts().inner();
+
             DeferredResult.allOf(context.storageDescriptionsForPatching
                     .values().stream()
                     .map(storageDescription -> patchStorageDetails(stOps, storageDescription))
@@ -1679,18 +1685,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                 }
                             });
                 });
-    }
-
-    private Azure getAzureClient(StorageEnumContext context) {
-        if (context.azure == null) {
-            if (context.restClient == null) {
-                context.restClient = buildRestClient(context.credentials, this.executorService);
-            }
-            context.azure = Azure.authenticate(context.restClient,
-                    context.parentAuth.customProperties.get(AZURE_TENANT_ID))
-                    .withSubscription(context.parentAuth.userLink);
-        }
-        return context.azure;
     }
 
     // Only page blobs that have the .vhd extension are disks.

@@ -57,10 +57,9 @@ public class AzureLifecycleOperationService extends StatelessService {
 
         private AzureLifecycleOperationContext(
                 AzureLifecycleOperationService service,
-                ExecutorService executorService,
                 ResourceOperationRequest request) {
 
-            super(service, executorService, request);
+            super(service, request);
 
             this.request = request;
         }
@@ -122,8 +121,7 @@ public class AzureLifecycleOperationService extends StatelessService {
 
         op.complete();
 
-        AzureLifecycleOperationContext ctx = new AzureLifecycleOperationContext(
-                this, this.executorService, request);
+        AzureLifecycleOperationContext ctx = new AzureLifecycleOperationContext(this, request);
 
         logInfo("Handle operation %s for compute %s.",
                 request.operation, request.resourceLink());
