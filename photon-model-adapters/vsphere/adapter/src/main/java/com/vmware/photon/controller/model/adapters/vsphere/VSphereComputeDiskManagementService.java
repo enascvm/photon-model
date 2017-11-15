@@ -69,6 +69,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
             op.fail(e);
             return;
         }
+        op.setStatusCode(Operation.STATUS_CODE_CREATED);
         op.complete();
 
         TaskManager taskManager = new TaskManager(this, request.taskReference,

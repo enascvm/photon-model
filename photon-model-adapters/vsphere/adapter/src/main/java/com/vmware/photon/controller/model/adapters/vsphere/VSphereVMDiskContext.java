@@ -171,6 +171,8 @@ public class VSphereVMDiskContext {
                                     ctx.contentToUpload = operation.getBody(byte[].class);
                                     populateVMDiskContextThen(service, ctx, onSuccess);
                                 }, ctx.errorHandler);
+                    } else {
+                        populateVMDiskContextThen(service, ctx, onSuccess);
                     }
                 } else {
                     populateVMDiskContextThen(service, ctx, onSuccess);
@@ -227,6 +229,8 @@ public class VSphereVMDiskContext {
                 ctx.fail(ex);
                 return;
             }
+            populateVMDiskContextThen(service, ctx, onSuccess);
+            return;
         }
 
         if (ctx.computePlacementHost == null) {
@@ -248,6 +252,7 @@ public class VSphereVMDiskContext {
                 }
                 populateVMDiskContextThen(service, ctx, onSuccess);
             }, ctx.errorHandler);
+            return;
         }
 
         // populate datastore name
@@ -255,8 +260,10 @@ public class VSphereVMDiskContext {
             if (ctx.diskState.customProperties != null && ctx.diskState.customProperties
                     .get(DISK_DATASTORE_NAME) != null) {
                 ctx.datastoreName = ctx.diskState.customProperties.get(DISK_DATASTORE_NAME);
+                populateVMDiskContextThen(service, ctx, onSuccess);
             } else if (ctx.diskState.storageDescription != null) {
                 ctx.datastoreName = ctx.diskState.storageDescription.id;
+                populateVMDiskContextThen(service, ctx, onSuccess);
             } else if (ctx.diskState.resourceGroupStates != null && !ctx.diskState
                     .resourceGroupStates.isEmpty()) {
                 // There will always be only one resource group state existing for a disk
@@ -273,6 +280,7 @@ public class VSphereVMDiskContext {
                                 // Since no result found default to the available datastore.
                                 ctx.datastoreName = "";
                             }
+                            populateVMDiskContextThen(service, ctx, onSuccess);
                         });
             } else if (ctx.computeGroupLinks != null) {
                 // try to get the datastore form the placement link of compute
@@ -285,7 +293,11 @@ public class VSphereVMDiskContext {
                     ctx.datastoreName = rgState.id;
                     populateVMDiskContextThen(service, ctx, onSuccess);
                 }, ctx.errorHandler);
+            } else {
+                ctx.datastoreName = "";
+                populateVMDiskContextThen(service, ctx, onSuccess);
             }
+            return;
         }
 
         // context populated, invoke handler

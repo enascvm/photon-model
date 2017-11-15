@@ -157,6 +157,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
                 this.vm = doPost(this.host, this.vm,
                         ComputeState.class,
                         UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+                return;
             }
 
             // Step 2: Create Disk
@@ -268,6 +269,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
                 this.vm = doPost(this.host, this.vm,
                         ComputeState.class,
                         UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+                return;
             }
 
             // Step 1: Attach a CD-ROM disk

@@ -173,8 +173,8 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
     }
 
     protected ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription
-            vmDescription, boolean
-            diskCustomization, String bootDiskSelfLink, boolean withAdditionalDisks)
+            vmDescription, boolean diskCustomization, String bootDiskSelfLink, boolean
+            withAdditionalDisks, String externalDiskLink)
             throws Throwable {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.id = vmDescription.name;
@@ -219,6 +219,10 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
                             ADDITIONAL_DISK_SIZE, buildCustomProperties()).documentSelfLink);
         }
 
+        if (externalDiskLink != null) {
+            computeState.diskLinks.add(externalDiskLink);
+        }
+
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
                 .put(ComputeProperties.PLACEMENT_LINK, isMock() ?
@@ -231,6 +235,13 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
+    }
+
+    protected ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription
+            vmDescription, boolean diskCustomization, String bootDiskSelfLink, boolean withAdditionalDisks)
+            throws Throwable {
+        return createVmState(vmDescription, diskCustomization, bootDiskSelfLink,
+                withAdditionalDisks, null);
     }
 
     protected ComputeService.ComputeState createVmState(ComputeDescriptionService.ComputeDescription

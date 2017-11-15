@@ -14,27 +14,11 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.VM_PATH_FORMAT;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createCdrom;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createFloppy;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createHdd;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.fillInControllerUnitNumber;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findFreeScsiUnit;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findFreeUnit;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDiskControllerUnitNumber;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getFirstIdeController;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getFirstScsiController;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getFirstSioController;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getPbmProfileSpec;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.insertCdrom;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.insertFloppy;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.nextUnitNumber;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.powerOffVM;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.powerOnVM;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
 import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.net.URI;
@@ -56,27 +40,19 @@ import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.DatastoreHostMount;
 import com.vmware.vim25.FileFaultFaultMsg;
 import com.vmware.vim25.InvalidDatastoreFaultMsg;
-import com.vmware.vim25.InvalidDeviceSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
-import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
-import com.vmware.vim25.VirtualCdrom;
-import com.vmware.vim25.VirtualDevice;
 import com.vmware.vim25.VirtualDeviceConfigSpec;
 import com.vmware.vim25.VirtualDeviceConfigSpecOperation;
 import com.vmware.vim25.VirtualDisk;
-import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualMachineConfigSpec;
-import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
-import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceClient;
 import com.vmware.xenon.common.ServiceHost;
-
 
 /**
  * A simple client for vsphere which handles compute day 2 disk related operation. Consist of a
@@ -113,99 +89,17 @@ public class InstanceDiskClient extends BaseHelper {
     public void attachDiskToVM() throws Exception {
         ArrayOfVirtualDevice devices = this.get
                 .entityProp(this.vm, VimPath.vm_config_hardware_device);
+        String diskDatastoreName = CustomProperties.of(this.diskState)
+                .getString(DISK_DATASTORE_NAME);
 
-        String diskPath = VimUtils.uriToDatastorePath(this.diskState.sourceImageReference);
-        String diskFullPath = CustomProperties.of(this.diskState).getString(DISK_FULL_PATH, null);
-        Boolean insertCdRom = CustomProperties.of(this.diskState).getBoolean(INSERT_CDROM, false);
-
-        VirtualDeviceConfigSpec deviceConfigSpec = null;
-        VirtualSCSIController scsiController = getFirstScsiController(devices);
-
-        // Get available free unit numbers for the given scsi controller.
-        Integer[] scsiUnits = findFreeScsiUnit(scsiController, devices.getVirtualDevice());
-        if (this.diskState.type == DiskService.DiskType.HDD) {
-            List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(this.diskState);
-            deviceConfigSpec = createHdd(scsiController.getKey(), scsiUnits[0],
-                    this.diskState, diskFullPath,
-                    this.finder.datastore(CustomProperties.of(this.diskState)
-                            .getString(DISK_DATASTORE_NAME)).object, pbmSpec, false);
-        } else if (this.diskState.type == DiskService.DiskType.CDROM) {
-            if (insertCdRom) {
-                if (diskPath == null) {
-                    throw new IllegalStateException(
-                            String.format("Cannot insert empty iso file into CD-ROM"));
-                }
-                // Find first available CD ROM to insert the iso file
-                VirtualCdrom cdrom = devices.getVirtualDevice().stream()
-                        .filter(d -> d instanceof VirtualCdrom)
-                        .map(d -> (VirtualCdrom) d).findFirst().orElse(null);
-                if (cdrom == null) {
-                    throw new IllegalStateException(
-                            String.format("Could not find Virtual CD ROM to insert %s.", diskPath));
-                }
-                insertCdrom(cdrom, diskPath);
-
-                deviceConfigSpec = new VirtualDeviceConfigSpec();
-                deviceConfigSpec.setDevice(cdrom);
-                deviceConfigSpec.setOperation(VirtualDeviceConfigSpecOperation.EDIT);
-            } else {
-                VirtualDevice ideController = getFirstIdeController(devices);
-                int ideUnit = findFreeUnit(ideController, devices.getVirtualDevice());
-
-                int availableUnitNumber = nextUnitNumber(ideUnit);
-                deviceConfigSpec = createCdrom(ideController, availableUnitNumber);
-                fillInControllerUnitNumber(this.diskState, availableUnitNumber);
-
-                if (diskPath != null) {
-                    // mount iso image
-                    insertCdrom((VirtualCdrom) deviceConfigSpec.getDevice(), diskPath);
-                }
-            }
-            // Based on some of the guest os live addition / insert of cd-rom is not possible.
-            // Hence it needs to be powered off
-            // Power off is needed to attach cd-rom
-            powerOffVm();
-        } else if (this.diskState.type == DiskService.DiskType.FLOPPY) {
-            VirtualDevice sioController = getFirstSioController(devices);
-            int sioUnit = findFreeUnit(sioController, devices.getVirtualDevice());
-
-            int availableUnitNumber = nextUnitNumber(sioUnit);
-            deviceConfigSpec = createFloppy(sioController, availableUnitNumber);
-            fillInControllerUnitNumber(this.diskState, availableUnitNumber);
-            if (diskPath != null) {
-                insertFloppy((VirtualFloppy) deviceConfigSpec.getDevice(), diskPath);
-            }
-            // Power off is needed to attach floppy
-            powerOffVm();
+        ManagedObjectReference diskDsMoref = null;
+        if (diskDatastoreName != null) {
+            diskDsMoref = this.finder.datastore(diskDatastoreName).object;
         }
-        VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
-        spec.getDeviceChange().add(deviceConfigSpec);
 
-        try {
-            ManagedObjectReference reconfigureTask = getVimPort().reconfigVMTask(this.vm, spec);
-            TaskInfo info = VimUtils.waitTaskEnd(this.connection, reconfigureTask);
-            if (info.getState() == TaskInfoState.ERROR) {
-                MethodFault fault = info.getError().getFault();
-                if (fault instanceof InvalidDeviceSpec) {
-                    // try here will null operation as it would have been the local datastore. Even
-                    // then it fails give up
-                    deviceConfigSpec.setOperation(null);
-                    reconfigureTask = getVimPort().reconfigVMTask(this.vm, spec);
-                    info = VimUtils.waitTaskEnd(this.connection, reconfigureTask);
-                    if (info.getState() == TaskInfoState.ERROR) {
-                        VimUtils.rethrow(info.getError());
-                    }
-                } else {
-                    VimUtils.rethrow(info.getError());
-                }
-            }
-        } catch (Exception e) {
-            // if compute is in powered off state, then power it on.
-            if (this.diskState.type != DiskService.DiskType.HDD) {
-                powerOnVM(this.connection, getVimPort(), this.vm);
-            }
-            throw e;
-        }
+        String diskFullPath = ClientUtils.attachDiskToVM(devices, this.vm, this.diskState,
+                diskDsMoref, this.connection, this.getVimPort());
+
         // Update the diskState
         if (this.diskState.type == DiskService.DiskType.HDD) {
             this.diskState.sourceImageReference = VimUtils.datastorePathToUri(diskFullPath);
@@ -215,9 +109,6 @@ public class InstanceDiskClient extends BaseHelper {
                 updateDiskStateFromVirtualDisk(vd, this.diskState);
             }
         } else {
-            // This means it is CDROM or Floppy. Hence power on the VM as it is powered off to
-            // perform the operation
-            powerOnVM(this.connection, getVimPort(), this.vm);
             this.diskState.status = DiskService.DiskStatus.ATTACHED;
         }
     }
@@ -354,13 +245,5 @@ public class InstanceDiskClient extends BaseHelper {
                 .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(this.diskState))
                 .findFirst()
                 .orElse(null);
-    }
-
-    private void powerOffVm() {
-        try {
-            powerOffVM(this.connection, getVimPort(), this.vm);
-        } catch (Exception e) {
-            // Ignore the error message. Don't log. Attempt with the rest of the flow.
-        }
     }
 }

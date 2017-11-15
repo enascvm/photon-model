@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_INDEPENDENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.LIMIT_IOPS;
@@ -21,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -62,8 +64,10 @@ import com.vmware.vim25.FileFaultFaultMsg;
 import com.vmware.vim25.FileNotFoundFaultMsg;
 import com.vmware.vim25.InvalidDatastoreFaultMsg;
 import com.vmware.vim25.InvalidDatastorePathFaultMsg;
+import com.vmware.vim25.InvalidDeviceSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.SharesInfo;
 import com.vmware.vim25.SharesLevel;
@@ -87,6 +91,7 @@ import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualFloppyDeviceBackingInfo;
 import com.vmware.vim25.VirtualFloppyImageBackingInfo;
 import com.vmware.vim25.VirtualIDEController;
+import com.vmware.vim25.VirtualMachineConfigSpec;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSIOController;
@@ -671,4 +676,104 @@ public class ClientUtils {
                 });
     }
 
+    public static String attachDiskToVM(ArrayOfVirtualDevice devices, ManagedObjectReference vm,
+            DiskService.DiskStateExpanded diskState, ManagedObjectReference diskDatastore,
+            Connection connection, VimPortType vimPort) throws Exception {
+
+        String diskPath = VimUtils.uriToDatastorePath(diskState.sourceImageReference);
+        String diskFullPath = CustomProperties.of(diskState).getString(DISK_FULL_PATH, null);
+        Boolean insertCdRom = CustomProperties.of(diskState).getBoolean(INSERT_CDROM, false);
+
+        VirtualDeviceConfigSpec deviceConfigSpec = null;
+        if (diskState.type == DiskService.DiskType.HDD) {
+            VirtualSCSIController scsiController = getFirstScsiController(devices);
+            // Get available free unit numbers for the given scsi controller.
+            Integer[] scsiUnits = findFreeScsiUnit(scsiController, devices.getVirtualDevice());
+            List<VirtualMachineDefinedProfileSpec> pbmSpec = getPbmProfileSpec(diskState);
+            deviceConfigSpec = createHdd(scsiController.getKey(), scsiUnits[0],
+                    diskState, diskFullPath, diskDatastore, pbmSpec, false);
+        } else if (diskState.type == DiskService.DiskType.CDROM) {
+            if (insertCdRom) {
+                if (diskPath == null) {
+                    throw new IllegalStateException(
+                            String.format("Cannot insert empty iso file into CD-ROM"));
+                }
+                // Find first available CD ROM to insert the iso file
+                VirtualCdrom cdrom = devices.getVirtualDevice().stream()
+                        .filter(d -> d instanceof VirtualCdrom)
+                        .map(d -> (VirtualCdrom) d).findFirst().orElse(null);
+                if (cdrom == null) {
+                    throw new IllegalStateException(
+                            String.format("Could not find Virtual CD ROM to insert %s.", diskPath));
+                }
+                insertCdrom(cdrom, diskPath);
+
+                deviceConfigSpec = new VirtualDeviceConfigSpec();
+                deviceConfigSpec.setDevice(cdrom);
+                deviceConfigSpec.setOperation(VirtualDeviceConfigSpecOperation.EDIT);
+            } else {
+                VirtualDevice ideController = getFirstIdeController(devices);
+                int ideUnit = findFreeUnit(ideController, devices.getVirtualDevice());
+
+                int availableUnitNumber = nextUnitNumber(ideUnit);
+                deviceConfigSpec = createCdrom(ideController, availableUnitNumber);
+                fillInControllerUnitNumber(diskState, availableUnitNumber);
+
+                if (diskPath != null) {
+                    // mount iso image
+                    insertCdrom((VirtualCdrom) deviceConfigSpec.getDevice(), diskPath);
+                }
+                // Live add of cd-rom is not possible. Hence it needs to be powered off
+                // Power off is needed to ADD cd-rom
+                powerOffVm(connection, vimPort, vm);
+            }
+        } else if (diskState.type == DiskService.DiskType.FLOPPY) {
+            VirtualDevice sioController = getFirstSioController(devices);
+            int sioUnit = findFreeUnit(sioController, devices.getVirtualDevice());
+
+            int availableUnitNumber = nextUnitNumber(sioUnit);
+            deviceConfigSpec = createFloppy(sioController, availableUnitNumber);
+            fillInControllerUnitNumber(diskState, availableUnitNumber);
+            if (diskPath != null) {
+                insertFloppy((VirtualFloppy) deviceConfigSpec.getDevice(), diskPath);
+            }
+            // Power off is needed to ADD floppy
+            powerOffVm(connection, vimPort, vm);
+        }
+        VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
+        spec.getDeviceChange().add(deviceConfigSpec);
+
+        ManagedObjectReference reconfigureTask = vimPort.reconfigVMTask(vm, spec);
+        TaskInfo info = VimUtils.waitTaskEnd(connection, reconfigureTask);
+        if (info.getState() == TaskInfoState.ERROR) {
+            MethodFault fault = info.getError().getFault();
+            if (fault instanceof InvalidDeviceSpec) {
+                // try here will null operation once. Even then it fails give up
+                deviceConfigSpec.setOperation(null);
+                reconfigureTask = vimPort.reconfigVMTask(vm, spec);
+                info = VimUtils.waitTaskEnd(connection, reconfigureTask);
+                if (info.getState() == TaskInfoState.ERROR) {
+                    VimUtils.rethrow(info.getError());
+                }
+            } else {
+                VimUtils.rethrow(info.getError());
+            }
+        }
+
+        if (!insertCdRom && diskState.type != DiskService.DiskType.HDD) {
+            // This means it is CDROM or Floppy. Hence power on the VM as it is powered off to
+            // perform the operation
+            powerOnVM(connection, vimPort, vm);
+        }
+        return diskFullPath;
+    }
+
+    private static void powerOffVm(Connection connection, VimPortType vimPort,
+            ManagedObjectReference vm) {
+        try {
+            powerOffVM(connection, vimPort, vm);
+        } catch (Exception e) {
+            // Ignore the error message. Don't log. Attempt with the rest of the flow.
+        }
+    }
 }

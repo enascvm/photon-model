@@ -35,6 +35,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.in
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.makePathToVmdkFile;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.nextUnitNumber;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.toKb;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_REFERENCE;
 
 import java.net.URI;
@@ -164,6 +165,7 @@ public class InstanceClient extends BaseHelper {
     private DiskStateExpanded bootDisk;
     private List<DiskStateExpanded> imageDisks;
     private List<DiskStateExpanded> dataDisks;
+    private List<DiskStateExpanded> externalDisks;
     private ManagedObjectReference vm;
     private ManagedObjectReference datastore;
     private ManagedObjectReference resourcePool;
@@ -177,12 +179,17 @@ public class InstanceClient extends BaseHelper {
         if (ctx.disks != null) {
             this.dataDisks = new ArrayList<>(ctx.disks.size());
             this.imageDisks = new ArrayList<>(ctx.disks.size());
+            this.externalDisks = new ArrayList<>(ctx.disks.size());
 
             ctx.disks.stream().forEach(ds -> {
                 if (ds.bootOrder != null) {
                     this.imageDisks.add(ds);
                 } else {
-                    this.dataDisks.add(ds);
+                    if (ds.status == DiskStatus.AVAILABLE) {
+                        this.externalDisks.add(ds);
+                    } else {
+                        this.dataDisks.add(ds);
+                    }
                 }
             });
             this.bootDisk = findBootDisk();
@@ -349,6 +356,9 @@ public class InstanceClient extends BaseHelper {
         if (this.dataDisks != null && !this.dataDisks.isEmpty()) {
             attachDisks(this.dataDisks, false);
         }
+
+        // If there are any external disks, then attach then to the VM
+        attachExternalDisks();
     }
 
     /**
@@ -517,13 +527,6 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
-     * Returns true if it is ovf based deployment. Else false.
-     */
-    public boolean isOvfDeploy() {
-        return getOvfUri() != null;
-    }
-
-    /**
      * Does provisioning and return a patchable state to patch the resource.
      *
      * @return
@@ -550,6 +553,9 @@ public class InstanceClient extends BaseHelper {
         if (this.dataDisks != null && !this.dataDisks.isEmpty()) {
             attachDisks(this.dataDisks, false);
         }
+
+        // If there are any external disks, then attach then to the VM
+        attachExternalDisks();
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
@@ -1000,6 +1006,29 @@ public class InstanceClient extends BaseHelper {
                 .filter(d -> d.type == DiskType.HDD && d.bootOrder != null && d.bootOrder == 1)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Attach any externally created disks to the VM if any.
+     */
+    public void attachExternalDisks() throws Exception {
+        if (this.externalDisks == null || this.externalDisks.isEmpty()) {
+            return;
+        }
+
+        if (this.vm == null) {
+            throw new IllegalStateException("Cannot attach diskStates if VM is not created");
+        }
+
+        for (DiskStateExpanded diskState: this.externalDisks) {
+            ArrayOfVirtualDevice devices = this.get
+                    .entityProp(this.vm, VimPath.vm_config_hardware_device);
+            String diskDatastoreName = CustomProperties.of(diskState).getString(DISK_DATASTORE_NAME);
+
+            ClientUtils.attachDiskToVM(devices, this.vm, diskState,
+                    this.finder.datastore(diskDatastoreName).object, this.connection,
+                    this.getVimPort());
+        }
     }
 
     /**
