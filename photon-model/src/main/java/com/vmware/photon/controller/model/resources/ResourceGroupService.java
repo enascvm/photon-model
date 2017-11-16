@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.util.EnumSet;
+import java.util.function.Function;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
@@ -92,8 +93,21 @@ public class ResourceGroupService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ResourceGroupState currentState = getState(patch);
+        Function<Operation, Boolean> customPatchHandler = new Function<Operation, Boolean>() {
+            @Override
+            public Boolean apply(Operation t) {
+                ResourceGroupState patchBody = patch.getBody(ResourceGroupState.class);
+                boolean hasStateChanged = false;
+                if (patchBody.computeHostLink != null && currentState.computeHostLink == null) {
+                    currentState.computeHostLink = patchBody.computeHostLink;
+                    hasStateChanged = true;
+                }
+                return hasStateChanged;
+            }
+        };
+
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                ResourceGroupState.class, null);
+                ResourceGroupState.class, customPatchHandler);
     }
 
     @Override

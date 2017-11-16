@@ -1506,7 +1506,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         diskState.resourcePoolLink = context.request.resourcePoolLink;
         diskState.computeHostLink = context.parentCompute.documentSelfLink;
         diskState.endpointLink = context.request.endpointLink;
-        diskState.computeHostLink = context.parentCompute.documentSelfLink;
         diskState.tenantLinks = context.parentCompute.tenantLinks;
         long bLength = 0;
         if (blob instanceof CloudBlob) {

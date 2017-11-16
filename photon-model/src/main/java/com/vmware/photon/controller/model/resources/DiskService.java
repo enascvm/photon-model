@@ -287,6 +287,7 @@ public class DiskService extends StatefulService {
                 targetState.currencyUnit = this.currencyUnit;
                 targetState.computeHostLink = this.computeHostLink;
                 targetState.endpointLink = this.endpointLink;
+                targetState.endpointLinks = this.endpointLinks;
                 targetState.diskAdapterReference = this.diskAdapterReference;
             }
         }

@@ -193,7 +193,9 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 AzureImageEnumerationAdapterService service,
                 ImageEnumerateRequest request) {
 
-            super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
+            // TODO: set "computeHostLink" value for Azure image resources.
+            super(service, request.resourceReference,
+                    null, ImageState.class, ImageService.FACTORY_LINK);
 
             this.taskManager = new TaskManager(this.service,
                     request.taskReference,

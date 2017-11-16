@@ -114,7 +114,9 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 AWSImageEnumerationAdapterService service,
                 ImageEnumerateRequest request) {
 
-            super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
+            // TODO: set "computeHostLink" value for AWS image resources.
+            super(service, request.resourceReference,
+                    null, ImageState.class, ImageService.FACTORY_LINK);
 
             this.taskManager = new TaskManager(this.service,
                     request.taskReference,

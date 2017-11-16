@@ -86,6 +86,11 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      */
     public final URI endpointReference;
 
+    /**
+     * Resource link to current resource's compute host.
+     */
+    public final String computeHostLink;
+
     // Extracted from endpointReference {{
     public EndpointState endpointState;
     public AuthCredentialsServiceState endpointAuthState;
@@ -176,18 +181,21 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      *            The service that is creating and using this enumeration logic.
      * @param endpointReference
      *            Reference to the end-point that is target of this enumeration.
+     * @param computeHostLink
+     *            Parent compute host link for resource.
      * @param localStateClass
      *            The class representing the local resource states.
      * @param localStateServiceFactoryLink
      *            The factory link of the service handling the local resource states.
      */
     public EndpointEnumerationProcess(StatelessService service,
-            URI endpointReference,
+            URI endpointReference, String computeHostLink,
             Class<LOCAL_STATE> localStateClass,
             String localStateServiceFactoryLink) {
 
         this.service = service;
         this.endpointReference = endpointReference;
+        this.computeHostLink = computeHostLink;
         this.localStateClass = localStateClass;
         this.localStateServiceFactoryLink = localStateServiceFactoryLink;
     }
@@ -199,6 +207,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      *            The service that is creating and using this enumeration logic.
      * @param endpointReference
      *            Reference to the end-point that is target of this enumeration.
+     * @param computeHostLink
+     *            Parent compute host link for resource.
      * @param localStateClass
      *            The class representing the local resource states.
      * @param localStateServiceFactoryLink
@@ -207,12 +217,13 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      *            Time in micros at which to expire deleted resources.
      */
     public EndpointEnumerationProcess(StatelessService service,
-            URI endpointReference,
+            URI endpointReference, String computeHostLink,
             Class<LOCAL_STATE> localStateClass,
             String localStateServiceFactoryLink,
             long deletedResourceExpirationMicros) {
         this.service = service;
         this.endpointReference = endpointReference;
+        this.computeHostLink = computeHostLink;
         this.localStateClass = localStateClass;
         this.localStateServiceFactoryLink = localStateServiceFactoryLink;
         this.resourceDeletionState = getDeletionState(deletedResourceExpirationMicros);
@@ -563,9 +574,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 localState.tenantLinks = this.endpointState.tenantLinks;
                 // By default populate ENDPOINT_ILNK
                 setEndpointLink(localState, this.endpointState.documentSelfLink);
-                localState.computeHostLink = this.endpointState.computeLink;
             }
-
+            localState.computeHostLink = this.computeHostLink;
             localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         } else {
             // Update case
