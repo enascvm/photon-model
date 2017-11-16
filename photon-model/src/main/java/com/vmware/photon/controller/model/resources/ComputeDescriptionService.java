@@ -232,6 +232,7 @@ public class ComputeDescriptionService extends StatefulService {
          * Types of Compute hosts.
          */
         public enum ComputeType {
+            ENDPOINT_HOST,
             VM_HOST,
             VM_GUEST,
             CLUSTER_HOST,
@@ -273,6 +274,8 @@ public class ComputeDescriptionService extends StatefulService {
                 break;
             case OS_ON_PHYSICAL:
                 break;
+            case ENDPOINT_HOST:
+                break;
             case VM_GUEST:
                 break;
             default:
@@ -300,6 +303,8 @@ public class ComputeDescriptionService extends StatefulService {
             case OS_ON_PHYSICAL:
                 break;
             case PHYSICAL:
+                break;
+            case ENDPOINT_HOST:
                 break;
             case VM_GUEST:
                 if (state.instanceAdapterReference == null) {

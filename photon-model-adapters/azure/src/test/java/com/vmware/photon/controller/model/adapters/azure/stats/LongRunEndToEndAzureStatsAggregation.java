@@ -288,7 +288,7 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
             ComputeState state = Utils
                     .fromJson(resourceMap.getValue(), ComputeState.class);
 
-            if (state.type == ComputeType.VM_HOST) {
+            if (state.type == ComputeType.ENDPOINT_HOST) {
                 assertNotNull(getResourceMetrics(this.host, resourceMap.getKey(),
                         PhotonModelConstants.STORAGE_USED_BYTES));
             } else if (state.type == ComputeType.VM_GUEST &&

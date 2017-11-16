@@ -636,7 +636,7 @@ public class AzureTestUtil {
         ComputeState azureComputeHost = new ComputeState();
         azureComputeHost.id = UUID.randomUUID().toString();
         azureComputeHost.documentSelfLink = azureComputeHost.id;
-        azureComputeHost.type = ComputeType.VM_HOST;
+        azureComputeHost.type = ComputeType.ENDPOINT_HOST;
         azureComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureComputeHost.name = azureHostDescription.name;
         azureComputeHost.descriptionLink = azureHostDescription.documentSelfLink;

@@ -934,6 +934,7 @@ public class EndpointAllocationTaskService
         return authState;
     }
 
+
     private ComputeDescription configureDescription(EndpointAllocationTaskState currentState,
             EndpointState state) {
         ComputeDescription cd = new ComputeDescription();
@@ -949,7 +950,7 @@ public class EndpointAllocationTaskService
             cd.endpointLinks.add(state.documentSelfLink);
             return cd;
         }
-        // setting up a host, so all have VM_HOST as a child
+        // setting up a host, so all have ENDPOINT_HOST as a child
         cd.tenantLinks = state.tenantLinks;
         cd.endpointLink = state.documentSelfLink;
 

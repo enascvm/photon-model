@@ -234,7 +234,7 @@ public class ComputeDescriptionServiceTest extends Suite {
             patchState.tenantLinks.add("tenant1");
             patchState.groupLinks = new HashSet<>();
             patchState.groupLinks.add("group1");
-            patchState.supportedChildren = Arrays.asList(ComputeType.VM_HOST.toString(),
+            patchState.supportedChildren = Arrays.asList(ComputeType.ENDPOINT_HOST.toString(),
                     ComputeType.ZONE.toString());
 
             Constraint constraint = new Constraint();
@@ -253,7 +253,7 @@ public class ComputeDescriptionServiceTest extends Suite {
             assertEquals(returnState.tenantLinks, patchState.tenantLinks);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
             assertEquals(2, returnState.constraints.get("placement").conditions.size());
-            assertEquals(Arrays.asList(ComputeType.VM_HOST.toString(),
+            assertEquals(Arrays.asList(ComputeType.VM_HOST.toString(), ComputeType.ENDPOINT_HOST.toString(),
                     ComputeType.ZONE.toString()), returnState.supportedChildren);
         }
 

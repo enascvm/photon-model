@@ -75,7 +75,7 @@ public class AzureEaEndpointAdapterService extends StatelessService {
 
     private BiConsumer<ComputeState, Retriever> compute() {
         return (c, r) -> {
-            c.type = ComputeType.VM_HOST;
+            c.type = ComputeType.ENDPOINT_HOST;
             c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             c.adapterManagementReference = UriUtils.buildUri(AzureUtils.getAzureEaBaseUri());
             addEntryToCustomProperties(c, PhotonModelConstants.CLOUD_ACCOUNT_ID,

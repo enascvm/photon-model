@@ -272,7 +272,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             ComputeService.ComputeState doc = response.getBody(ComputeService.ComputeState.class);
 
-            if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type)
+            if (!ComputeDescriptionService.ComputeDescription.ComputeType.ENDPOINT_HOST.equals(doc.type)
                     && !ComputeDescriptionService.ComputeDescription.ComputeType.ZONE.equals(doc.type)) {
                 assertNotNull(doc.endpointLink);
                 if (StringUtils.isEmpty(expectedEndpoint)) {

@@ -673,7 +673,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 ComputeState compute = Utils
                         .fromJson(resourceMap.getValue(), ComputeState.class);
                 if (!compute.type.equals(ComputeType.ZONE)
-                        && !compute.type.equals(ComputeType.VM_HOST)) {
+                        && !compute.type.equals(ComputeType.ENDPOINT_HOST)) {
                     assertTrue(compute.tagLinks.contains(tagLink));
                 }
             } else {

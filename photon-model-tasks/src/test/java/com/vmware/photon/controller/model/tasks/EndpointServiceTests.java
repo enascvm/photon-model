@@ -115,7 +115,7 @@ public class EndpointServiceTests {
                 ComputeService.ComputeState.class);
         assertNotNull(cs);
         assertNotNull(cs.adapterManagementReference);
-        assertEquals(ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST, cs.type);
+        assertEquals(ComputeDescriptionService.ComputeDescription.ComputeType.ENDPOINT_HOST, cs.type);
         assertEquals(this.environmentName, cs.environmentName);
         assertEquals(ComputeService.PowerState.ON, cs.powerState);
     }

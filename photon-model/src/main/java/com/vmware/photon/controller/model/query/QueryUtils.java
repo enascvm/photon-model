@@ -936,7 +936,7 @@ public class QueryUtils {
             List<String> tenantLinks) {
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.ENDPOINT_HOST)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         "__endpointType", accountType)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,

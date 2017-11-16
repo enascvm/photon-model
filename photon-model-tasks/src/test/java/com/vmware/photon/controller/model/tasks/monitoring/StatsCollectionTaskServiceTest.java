@@ -306,9 +306,9 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
 
         // Create 20 Computes of different type.
         for (int i = 0; i < 20; i++) {
-            // Set even computes to be VM_HOST, the odd one -> VM_GUEST
+            // Set even computes to be ENDPOINT_HOST, the odd one -> VM_GUEST
             if (i % 2 == 0) {
-                computeState.type = ComputeType.VM_HOST;
+                computeState.type = ComputeType.ENDPOINT_HOST;
             } else {
                 computeState.type = ComputeType.VM_GUEST;
             }
@@ -335,7 +335,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         Query typeQuery = new Query();
         typeQuery.setOccurance(Occurance.MUST_OCCUR);
         typeQuery.setTermPropertyName(ComputeState.FIELD_NAME_TYPE);
-        typeQuery.setTermMatchValue(ComputeType.VM_HOST.name());
+        typeQuery.setTermMatchValue(ComputeType.ENDPOINT_HOST.name());
         queries.add(typeQuery);
 
         // create a stats collection task
@@ -367,12 +367,12 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         int vmGuests = 0;
 
         // Traverse through [computeLink/stats] URL and find statistics. Only Computes of type
-        // VM_HOST should provide statistics.
+        // ENDPOINT_HOST should provide statistics.
         for (Map.Entry<String, Object> map : res.documents.entrySet()) {
             String uri = String.format("%s/stats", map.getKey());
             ServiceStats stats = getServiceSynchronously(uri, ServiceStats.class);
             ComputeState state = Utils.fromJson(map.getValue(), ComputeState.class);
-            if (state.type == ComputeType.VM_HOST) {
+            if (state.type == ComputeType.ENDPOINT_HOST) {
                 assertTrue(!stats.entries.isEmpty());
                 vmHosts++;
             } else {

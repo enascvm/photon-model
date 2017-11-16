@@ -194,7 +194,7 @@ public class GCPTestUtil {
 
         ComputeService.ComputeState gcpComputeHost = new ComputeService.ComputeState();
         gcpComputeHost.id = UUID.randomUUID().toString();
-        gcpComputeHost.type = ComputeType.VM_HOST;
+        gcpComputeHost.type = ComputeType.ENDPOINT_HOST;
         gcpComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_GCP;
         gcpComputeHost.name = gcpHostDescription.name;
         gcpComputeHost.documentSelfLink = gcpComputeHost.id;

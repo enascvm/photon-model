@@ -305,7 +305,7 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
             ComputeState state = Utils
                     .fromJson(resourceMap.getValue(), ComputeState.class);
 
-            if (state.type == ComputeType.VM_HOST) {
+            if (state.type == ComputeType.ENDPOINT_HOST) {
                 assertNotNull(getResourceMetrics(resourceMap.getKey(),
                         PhotonModelConstants.ESTIMATED_CHARGES));
             } else if (state.type == ComputeType.VM_GUEST) {

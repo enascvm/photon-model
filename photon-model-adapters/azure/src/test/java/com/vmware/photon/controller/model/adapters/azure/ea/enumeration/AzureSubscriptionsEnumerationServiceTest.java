@@ -449,14 +449,14 @@ public class AzureSubscriptionsEnumerationServiceTest {
 
     private QueryTask createQueryTaskForAzureComputes(String azureEnrollmentNumber,
                                                       List<String> tenantLinks) {
-        //Fetch ComputeStates having custom property endPointType as Azure, Type as VM_HOST
+        //Fetch ComputeStates having custom property endPointType as Azure, Type as ENDPOINT_HOST
         Query azureEndpointsQuery = Query.Builder.create().addKindFieldClause(ComputeState.class)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY, azureEnrollmentNumber)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.ENDPOINT_HOST)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -481,7 +481,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
         Assert.assertEquals(Boolean.TRUE.toString(),
                 cs.customProperties.get(PhotonModelConstants.AUTO_DISCOVERED_ENTITY));
         Assert.assertEquals(expectedEndpointLink, cs.endpointLink);
-        Assert.assertEquals(ComputeType.VM_HOST, cs.type);
+        Assert.assertEquals(ComputeType.ENDPOINT_HOST, cs.type);
         Assert.assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE, cs.environmentName);
         Assert.assertEquals(expectedTenantLinks, cs.tenantLinks);
         Assert.assertNotNull(cs.creationTimeMicros);

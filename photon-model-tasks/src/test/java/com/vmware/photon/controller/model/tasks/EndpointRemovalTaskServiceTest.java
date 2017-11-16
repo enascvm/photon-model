@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -172,6 +173,9 @@ public class EndpointRemovalTaskServiceTest extends Suite {
 
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));
+
+            // Adding few sec sleep so that indexes get updated. (intermittently seen that it picks old versions)
+            TimeUnit.SECONDS.sleep(2);
 
             // the associated documents should still be found, but with endpointLink removed
             long assocDocCount = getAssociatedDocumentsCount(this, endpoint.documentSelfLink,

@@ -855,7 +855,7 @@ public class TestAWSSetupUtils {
         awsComputeHost.id = awsComputeHostDesc.id;
         awsComputeHost.documentSelfLink = awsComputeHost.id;
         awsComputeHost.name = awsComputeHostDesc.name;
-        awsComputeHost.type = ComputeType.VM_HOST;
+        awsComputeHost.type = ComputeType.ENDPOINT_HOST;
         awsComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awsComputeHost.descriptionLink = awsComputeHostDesc.documentSelfLink;
         awsComputeHost.tagLinks = tagLinks;

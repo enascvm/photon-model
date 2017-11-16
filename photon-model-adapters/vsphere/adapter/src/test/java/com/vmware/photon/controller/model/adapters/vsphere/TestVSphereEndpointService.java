@@ -46,7 +46,7 @@ public class TestVSphereEndpointService extends BaseVSphereAdapterTest {
     }
 
     @Test
-    @Ignore("Test expects ComputeDescription to be of type VM_HOST, but is null")
+    @Ignore("Test expects ComputeDescription to be of type ENDPOINT_HOST, but is null")
     public void testCreateEndpoint() throws Throwable {
         new EndpointServiceTests(this.host, this.datacenterId, isMock(),
                 ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE)

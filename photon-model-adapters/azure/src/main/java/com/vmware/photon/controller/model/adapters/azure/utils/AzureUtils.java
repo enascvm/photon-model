@@ -429,7 +429,7 @@ public class AzureUtils {
                 EndpointType.azure.name());
         cs.customProperties = customProperties;
         cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-        cs.type = ComputeType.VM_HOST;
+        cs.type = ComputeType.ENDPOINT_HOST;
         cs.descriptionLink = descriptionLink;
         cs.resourcePoolLink = resourcePoolLink;
         cs.creationTimeMicros = Utils.getNowMicrosUtc();

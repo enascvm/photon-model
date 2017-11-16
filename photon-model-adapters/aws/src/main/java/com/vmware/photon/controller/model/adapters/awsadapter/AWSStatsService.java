@@ -545,6 +545,6 @@ public class AWSStatsService extends StatelessService {
      * Returns if the given compute description is a compute host or not.
      */
     private boolean isComputeHost(ComputeStateWithDescription computeStateWithDescription) {
-        return computeStateWithDescription.type == ComputeType.VM_HOST;
+        return computeStateWithDescription.type == ComputeType.ENDPOINT_HOST;
     }
 }

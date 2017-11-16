@@ -367,7 +367,7 @@ public class AWSCostStatsService extends StatelessService {
             statsData.computeDesc = compute;
             inferEndpointLink(statsData);
             String accountId = AWSUtils.isAwsS3Proxy() ? "mock" : compute.customProperties.get(AWS_ACCOUNT_ID_KEY);
-            if (compute.type != ComputeType.VM_HOST || compute.parentLink != null
+            if (compute.type != ComputeType.ENDPOINT_HOST || compute.parentLink != null
                     || compute.endpointLink == null || accountId == null ||
                     CollectionUtils.isEmpty(compute.endpointLinks)) {
 
@@ -481,7 +481,7 @@ public class AWSCostStatsService extends StatelessService {
     protected Operation createQueryForComputeStatesByAccount(AWSCostStatsCreationContext context,
             String accountId, Consumer<List<ComputeState>> queryResultConsumer) {
         Query awsAccountsQuery = Query.Builder.create().addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.ENDPOINT_HOST)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         PhotonModelConstants.EndpointType.aws.name())

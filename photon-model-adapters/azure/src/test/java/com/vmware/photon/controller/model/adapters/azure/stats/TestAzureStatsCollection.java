@@ -292,7 +292,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                 this.currentRunLastSuccessfulCollectionTimeInMicrosForVM;
 
         // Verify stats collection based on VM type.
-        if (computeState.type == ComputeType.VM_HOST) {
+        if (computeState.type == ComputeType.ENDPOINT_HOST) {
             this.resourceMetric = getResourceMetrics(selfLink, PhotonModelConstants.STORAGE_USED_BYTES);
             assertNotNull("No StorageUsedBytes metric present for host", this.resourceMetric);
             this.resourceMetric = getResourceMetrics(selfLink, PhotonModelConstants.MEMORY_USED_PERCENT);

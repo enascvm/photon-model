@@ -137,7 +137,7 @@ public class TestAWSMissingEnumerationResourcesService extends BaseModelTest {
                 .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, request
                                 .primaryAccountCompute.endpointLink,
                         QueryTask.Query.Occurance.MUST_OCCUR)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.ENDPOINT_HOST)
                 .build();
         querySpec.options.add(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
         return querySpec;
@@ -175,7 +175,7 @@ public class TestAWSMissingEnumerationResourcesService extends BaseModelTest {
         ComputeStateWithDescription primaryRootCompute = new ComputeStateWithDescription();
         primaryRootCompute.id = "456";
         primaryRootCompute.name = "MOCK_ACC";
-        primaryRootCompute.type = ComputeType.VM_HOST;
+        primaryRootCompute.type = ComputeType.ENDPOINT_HOST;
         primaryRootCompute.documentSelfLink = "selfLink";
         primaryRootCompute.description = new ComputeDescription();
         Set<URI> statsAdapterReferences = new HashSet<>();

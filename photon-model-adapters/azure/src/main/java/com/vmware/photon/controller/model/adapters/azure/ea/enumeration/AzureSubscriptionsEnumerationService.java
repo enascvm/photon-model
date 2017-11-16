@@ -306,7 +306,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
 
     private Query createQueryForAzureSubscriptionComputes(
             AzureSubscriptionsEnumerationContext enumerationContext) {
-        //Fetch ComputeStates having custom property endPointType as Azure, Type as VM_HOST
+        //Fetch ComputeStates having custom property endPointType as Azure, Type as ENDPOINT_HOST
         return Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
@@ -315,7 +315,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                         enumerationContext.endpointAuth.privateKeyId)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.ENDPOINT_HOST)
                 .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK,
                         enumerationContext.parent.endpointLink)
                 .build();

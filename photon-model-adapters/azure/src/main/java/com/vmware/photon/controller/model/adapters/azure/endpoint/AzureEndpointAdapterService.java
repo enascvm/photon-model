@@ -283,7 +283,7 @@ public class AzureEndpointAdapterService extends StatelessService {
 
     private BiConsumer<ComputeState, Retriever> compute() {
         return (c, r) -> {
-            c.type = ComputeType.VM_HOST;
+            c.type = ComputeType.ENDPOINT_HOST;
             c.regionId = r.get(REGION_KEY).orElse(null);
             c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             c.adapterManagementReference = UriUtils.buildUri("https://management.azure.com");

@@ -306,7 +306,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             b.append(r.get(REGION_KEY).orElse(""));
             b.append(".amazonaws.com");
 
-            c.type = ComputeType.VM_HOST;
+            c.type = ComputeType.ENDPOINT_HOST;
             c.regionId = r.get(REGION_KEY).orElse(null);
             c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             c.adapterManagementReference = UriUtils.buildUri(b.toString());

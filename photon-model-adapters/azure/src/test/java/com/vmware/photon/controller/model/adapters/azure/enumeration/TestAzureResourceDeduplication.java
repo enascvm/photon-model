@@ -201,7 +201,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             ComputeService.ComputeState doc = response.getBody(ComputeService.ComputeState.class);
 
-            if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type)) {
+            if (!ComputeDescriptionService.ComputeDescription.ComputeType.ENDPOINT_HOST.equals(doc.type)) {
 
                 Assert.assertEquals(computeHostLink, doc.computeHostLink);
                 assertNotNull(doc.documentCreationTimeMicros);

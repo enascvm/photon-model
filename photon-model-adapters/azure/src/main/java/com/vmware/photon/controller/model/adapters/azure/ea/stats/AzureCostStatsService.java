@@ -950,7 +950,7 @@ public class AzureCostStatsService extends StatelessService {
                         PhotonModelConstants.EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         PhotonModelConstants.CLOUD_ACCOUNT_ID, subscriptionGuid)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.ENDPOINT_HOST)
                 .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
                         context.computeHostDesc.tenantLinks)
                 .build();

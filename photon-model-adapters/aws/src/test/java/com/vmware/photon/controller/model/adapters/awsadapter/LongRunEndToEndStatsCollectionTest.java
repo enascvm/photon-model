@@ -223,10 +223,10 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
                 .getFactoryState(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(this.host,
                         ComputeService.FACTORY_LINK)));
 
-        // will have only 1 document of type 'VM_HOST'
+        // will have only 1 document of type 'ENDPOINT_HOST'
         assertEquals(1, result.documents.size());
         JsonObject jsonObject = (JsonObject) result.documents.get(result.documentLinks.get(0));
-        assertEquals(ComputeType.VM_HOST.toString(), jsonObject.get("type").getAsString());
+        assertEquals(ComputeType.ENDPOINT_HOST.toString(), jsonObject.get("type").getAsString());
 
         // perform resource enumeration on given AWS endpoint
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
@@ -297,11 +297,11 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
 
     /**
      * Performs query to fetch Resource metric for list of compute resources.
-     * Verifies the counts of resources to indicate number of VM_HOST, VM_GUEST and other compute
+     * Verifies the counts of resources to indicate number of ENDPOINT_HOST, VM_GUEST and other compute
      * types that includes compute type ZONE.
      */
     private void verifyMetricStats(ServiceDocumentQueryResult res, StatsToCheck statsToCheck) {
-        // count for resources of type VM_HOST
+        // count for resources of type ENDPOINT_HOST
         int vmHosts = 0;
         // count for resources of type VM_GUEST
         int vmGuests = 0;
@@ -327,18 +327,18 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
             ComputeState state = Utils
                     .fromJson(resourceMap.getValue(), ComputeState.class);
 
-            if (state.type == ComputeType.VM_HOST) {
+            if (state.type == ComputeType.ENDPOINT_HOST) {
                 // regionId should be null
                 assertNull(state.regionId);
                 resourceMetric = getResourceMetrics(resourceMap.getKey(),
                         PhotonModelConstants.ESTIMATED_CHARGES);
 
-                // EstimatedCharges metric will be available for VM_HOST resource
+                // EstimatedCharges metric will be available for ENDPOINT_HOST resource
                 assertNotNull(resourceMetric);
                 statsToCheck.estimatedCharges = resourceMetric.entries
                         .get(PhotonModelConstants.ESTIMATED_CHARGES);
 
-                // CPUUtilizationPercent metric will not be available for VM_HOST resource
+                // CPUUtilizationPercent metric will not be available for ENDPOINT_HOST resource
                 resourceMetric = getResourceMetrics(resourceMap.getKey(),
                         PhotonModelConstants.CPU_UTILIZATION_PERCENT);
                 assertNull(resourceMetric);
@@ -406,11 +406,11 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
         // There should be single host for a given Endpoint.
         assertEquals(1, vmHosts);
 
-        // sum of VM_GUEST's + ZONE's should be equal to total compute resources minus VM_HOST's
+        // sum of VM_GUEST's + ZONE's should be equal to total compute resources minus ENDPOINT_HOST's
         // this will throw exception if there are other types of compute resources discovered.
         assertEquals(this.totalComputeResources - vmHosts, vmGuests + zones);
 
-        // Number of VM_HOST's equals number of resources having metric for EstimatedCharges
+        // Number of ENDPOINT_HOST's equals number of resources having metric for EstimatedCharges
         assertEquals(vmHosts, resourcesWithEstChargesMetricCount);
 
         // count of other resources will equal to number of resources not having metric for EstimatedCharges

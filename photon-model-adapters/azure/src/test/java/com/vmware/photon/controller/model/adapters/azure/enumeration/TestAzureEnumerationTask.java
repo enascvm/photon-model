@@ -555,7 +555,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .forEach(c -> {
                     if (c.type == ComputeType.VM_GUEST) {
                         assertNotNull(c.creationTimeMicros);
-                    } else if (c.type == ComputeType.VM_HOST) {
+                    } else if (c.type == ComputeType.ENDPOINT_HOST) {
                         assertNull(c.creationTimeMicros);
                     }
                 });
