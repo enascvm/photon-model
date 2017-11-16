@@ -138,8 +138,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
             drDiskContext.thenCompose(c -> {
                 Throwable err = new IllegalArgumentException(
                         String.format("Unknown Operation %s for a disk", request.operation));
-                c.baseAdapterContext.taskManager.patchTaskToFailure(err);
-                return DeferredResult.failed(err);
+                return failTask(c, err);
             });
             return;
         }
@@ -149,11 +148,9 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 .thenCompose(this::setClient)
                 .thenCompose(fn)
                 .whenComplete((ctx, e) -> {
-                    if (e != null) {
-                        ctx.baseAdapterContext.taskManager.patchTaskToFailure(e);
-                        return;
+                    if (e == null) {
+                        ctx.baseAdapterContext.taskManager.finishTask();
                     }
-                    ctx.baseAdapterContext.taskManager.finishTask();
                 });
     }
 
@@ -179,7 +176,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         context.amazonEC2Client = this.clientManager
                 .getOrCreateEC2Client(context.baseAdapterContext.parentAuth,
                         context.baseAdapterContext.child.description.regionId, this,
-                        (t) -> context.baseAdapterContext.taskManager.patchTaskToFailure(t));
+                        (t) -> failTask(context, t));
         return DeferredResult.completed(context);
     }
 
@@ -210,46 +207,55 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
     private DeferredResult<DiskContext> performAttachOperation(DiskContext context) {
         DeferredResult<DiskContext> dr = new DeferredResult();
+        try {
+            if (context.request.isMockRequest) {
+                updateComputeAndDiskState(dr, context);
+                return dr;
+            }
 
-        if (context.request.isMockRequest) {
-            updateComputeAndDiskState(dr, context);
-            return dr;
+            String instanceId = context.computeState.id;
+            if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
+                return failTask(context, "compute id cannot be empty");
+            }
+
+            String diskId = context.diskState.id;
+            if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
+                return failTask(context, "disk id cannot be empty");
+            }
+
+            String deviceName = getAvailableDeviceName(context, instanceId);
+            if (deviceName == null) {
+                return failTask(context, "No device name is available for attaching new disk");
+            }
+
+            context.diskState.customProperties.put(DEVICE_NAME, deviceName);
+
+            AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
+                    .withInstanceId(instanceId)
+                    .withVolumeId(diskId)
+                    .withDevice(deviceName);
+
+            AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult> attachDiskHandler = new AWSAttachDiskHandler(
+                    this, dr, context);
+
+            context.amazonEC2Client.attachVolumeAsync(attachVolumeRequest, attachDiskHandler);
+
+        } catch (Exception e) {
+            return failTask(context, e);
         }
-
-        String instanceId = context.computeState.id;
-        if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
-            String message = "compute id cannot be empty";
-            this.logSevere("[AWSComputeDiskDay2Service] " + message);
-            return DeferredResult.failed(new IllegalArgumentException(message));
-        }
-
-        String diskId = context.diskState.id;
-        if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
-            String message = "disk id cannot be empty";
-            this.logSevere("[AWSComputeDiskDay2Service] " + message);
-            return DeferredResult.failed(new IllegalArgumentException(message));
-        }
-
-        String deviceName = getAvailableDeviceName(context, instanceId);
-        if (deviceName == null) {
-            String message = "No device name is available for attaching new disk";
-            this.logSevere("[AWSComputeDiskDay2Service] " + message);
-            return DeferredResult.failed(new IllegalArgumentException(message));
-        }
-
-        context.diskState.customProperties.put(DEVICE_NAME, deviceName);
-
-        AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
-                .withInstanceId(instanceId)
-                .withVolumeId(diskId)
-                .withDevice(deviceName);
-
-        AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult> attachDiskHandler = new AWSAttachDiskHandler(
-                this, dr, context);
-
-        context.amazonEC2Client.attachVolumeAsync(attachVolumeRequest, attachDiskHandler);
 
         return dr;
+    }
+
+    private DeferredResult<DiskContext> failTask(DiskContext context, String message) {
+        this.logSevere("[AWSComputeDiskDay2Service] " + message);
+        Throwable e = new IllegalArgumentException(message);
+        return failTask(context, e);
+    }
+
+    private DeferredResult<DiskContext> failTask(DiskContext context, Throwable e) {
+        context.baseAdapterContext.taskManager.patchTaskToFailure(e);
+        return DeferredResult.failed(e);
     }
 
     private DeferredResult<DiskContext> performDetachOperation(DiskContext context) {
@@ -257,66 +263,61 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         try {
             validateDetachInfo(context.diskState);
+
+            if (context.request.isMockRequest) {
+                updateComputeAndDiskState(dr, context);
+                return dr;
+            }
+
+            String instanceId = context.computeState.id;
+            if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
+                return failTask(context, "compute id cannot be empty");
+            }
+
+            String diskId = context.diskState.id;
+            if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
+                return failTask(context, "disk id cannot be empty");
+            }
+
+            //TODO: Ideally the volume must be unmounted before detaching the disk. Currently
+            // we don't have a way to unmount the disk. The solution is to stop the instance,
+            // detach the disk and then start the instance
+
+            //stop the instance, detach the disk and then start the instance.
+            if (context.baseAdapterContext.child.powerState.equals(ComputeService.PowerState.ON)) {
+                StopInstancesRequest stopRequest = new StopInstancesRequest();
+                stopRequest.withInstanceIds(context.baseAdapterContext.child.id);
+                context.amazonEC2Client.stopInstancesAsync(stopRequest,
+                        new AWSAsyncHandler<StopInstancesRequest, StopInstancesResult>() {
+                            @Override
+                            protected void handleError(Exception e) {
+                                dr.fail(e);
+                            }
+
+                            @Override
+                            protected void handleSuccess(StopInstancesRequest request,
+                                    StopInstancesResult result) {
+
+                                AWSUtils.waitForTransitionCompletion(getHost(),
+                                        result.getStoppingInstances(), "stopped",
+                                        context.amazonEC2Client, (is, e) -> {
+                                            if (e != null) {
+                                                dr.fail(e);
+                                                return;
+                                            }
+                                            logInfo(() -> String.format(
+                                                    "[AWSComputeDiskDay2Service] Successfully stopped "
+                                                            + "the instance %s", instanceId));
+                                            //detach disk from the instance.
+                                            detachVolume(context, dr, instanceId, diskId, true);
+                                        });
+                            }
+                        });
+            } else {
+                detachVolume(context, dr, instanceId, diskId, false);
+            }
         } catch (Exception e) {
-            dr.fail(e);
-            return dr;
-        }
-
-        if (context.request.isMockRequest) {
-            updateComputeAndDiskState(dr, context);
-            return dr;
-        }
-
-        String instanceId = context.computeState.id;
-        if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
-            String message = "compute id cannot be empty";
-            this.logSevere("[AWSComputeDiskDay2Service] " + message);
-            return DeferredResult.failed(new IllegalArgumentException(message));
-        }
-
-        String diskId = context.diskState.id;
-        if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
-            String message = "disk id cannot be empty";
-            this.logSevere("[AWSComputeDiskDay2Service] " + message);
-            return DeferredResult.failed(new IllegalArgumentException(message));
-        }
-
-        //TODO: Ideally the volume must be unmounted before detaching the disk. Currently
-        // we don't have a way to unmount the disk. The solution is to stop the instance,
-        // detach the disk and then start the instance
-
-        //stop the instance, detach the disk and then start the instance.
-        if (context.baseAdapterContext.child.powerState.equals(ComputeService.PowerState.ON)) {
-            StopInstancesRequest stopRequest = new StopInstancesRequest();
-            stopRequest.withInstanceIds(context.baseAdapterContext.child.id);
-            context.amazonEC2Client.stopInstancesAsync(stopRequest,
-                    new AWSAsyncHandler<StopInstancesRequest, StopInstancesResult>() {
-                        @Override
-                        protected void handleError(Exception e) {
-                            dr.fail(e);
-                        }
-
-                        @Override
-                        protected void handleSuccess(StopInstancesRequest request,
-                                StopInstancesResult result) {
-
-                            AWSUtils.waitForTransitionCompletion(getHost(),
-                                    result.getStoppingInstances(), "stopped",
-                                    context.amazonEC2Client, (is, e) -> {
-                                        if (e != null) {
-                                            dr.fail(e);
-                                            return;
-                                        }
-                                        logInfo(() -> String.format(
-                                                "[AWSComputeDiskDay2Service] Successfully stopped "
-                                                        + "the instance %s", instanceId));
-                                        //detach disk from the instance.
-                                        detachVolume(context, dr, instanceId, diskId, true);
-                                    });
-                        }
-                    });
-        } else {
-            detachVolume(context, dr, instanceId, diskId, false);
+            return failTask(context, e);
         }
 
         return dr;
@@ -489,7 +490,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                         this.logSevere(() -> String.format(
                                 "[AWSComputeDiskDay2Service] Error updating computeState and "
                                         + "diskState. %s", Utils.toString(e)));
-                        dr.fail(e);
+                        failTask(context, e);
                         return;
                     }
                     this.logInfo(() -> String
