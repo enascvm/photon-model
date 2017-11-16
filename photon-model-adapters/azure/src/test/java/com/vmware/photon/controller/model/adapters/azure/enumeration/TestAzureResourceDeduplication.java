@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 
+import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -30,6 +31,7 @@ import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -39,6 +41,8 @@ import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
+
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
 public class TestAzureResourceDeduplication extends AzureBaseTest {
 
@@ -68,6 +72,103 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
         System.out.println("Expected endpoint links: " + expectedEndpoints);
         validateEndpointLinks(2, expectedEndpoints);
     }
+
+
+    @Test
+    public void testEndpointDisassociationOnEndpointDeletion() throws Throwable {
+        this.host.log("Running test: " + this.currentTestName);
+
+        // if mock, simply return.
+        if (this.isMock) {
+            return;
+        }
+
+        // perform resource enumeration on given AWS endpoint
+        runEnumeration(this.endpointState);
+
+        List<String> expectedEndpoints = new ArrayList<>();
+        expectedEndpoints.add(this.endpointState.documentSelfLink);
+        System.out.println("Expected endpoint links: " + expectedEndpoints);
+        validateEndpointLinks(1, expectedEndpoints);
+
+        endpointState.computeLink = this.computeHost.documentSelfLink;
+        this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
+                .setBody(endpointState));
+
+        // delete endpoint
+        EndpointRemovalTaskService.EndpointRemovalTaskState endpointRemovalTaskState =
+                new EndpointRemovalTaskService.EndpointRemovalTaskState();
+        endpointRemovalTaskState.endpointLink = endpointState.documentSelfLink;
+        endpointRemovalTaskState.tenantLinks = endpointState.tenantLinks;
+        endpointRemovalTaskState.disableGroomer = true;
+
+        EndpointRemovalTaskService.EndpointRemovalTaskState returnState = TestUtils
+                .doPost(host, endpointRemovalTaskState,
+                        EndpointRemovalTaskService.EndpointRemovalTaskState.class,
+                        UriUtils.buildUri(host, EndpointRemovalTaskService.FACTORY_LINK));
+
+        host.waitForFinishedTask(EndpointRemovalTaskService.EndpointRemovalTaskState.class,
+                returnState.documentSelfLink);
+//        assertTrue(returnState.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+        expectedEndpoints.remove(this.endpointState.documentSelfLink);
+        validateEndpointLinks(0, expectedEndpoints);
+    }
+
+
+    @Test
+    public void testEndpointDisassociationOnEndpointDeletionWithMultipleEndpoints() throws Throwable {
+        this.host.log("Running test: " + this.currentTestName);
+
+        // if mock, simply return.
+        if (this.isMock) {
+            return;
+        }
+
+        // perform resource enumeration on given AWS endpoint
+        runEnumeration(this.endpointState);
+
+        List<String> expectedEndpoints = new ArrayList<>();
+        expectedEndpoints.add(this.endpointState.documentSelfLink);
+        System.out.println("Expected endpoint links: " + expectedEndpoints);
+        validateEndpointLinks(1, expectedEndpoints);
+
+        // Add duplicate end point and verify the endpoints again.
+        this.endpointState2 = createEndpointState();
+        runEnumeration(this.endpointState2);
+        expectedEndpoints.add(this.endpointState2.documentSelfLink);
+        System.out.println("Expected endpoint links: " + expectedEndpoints);
+        validateEndpointLinks(2, expectedEndpoints);
+
+        endpointState.computeLink = this.computeHost.documentSelfLink;
+        ComputeService.ComputeState computeHost2 = createComputeHostWithDescription();
+        endpointState2.computeLink = computeHost2.documentSelfLink;
+
+        this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
+                .setBody(endpointState));
+        this.host.waitForResponse(Operation.createPatch(this.host, endpointState2.documentSelfLink)
+                .setBody(endpointState2));
+
+        // delete endpoint
+        EndpointRemovalTaskService.EndpointRemovalTaskState endpointRemovalTaskState =
+                new EndpointRemovalTaskService.EndpointRemovalTaskState();
+        endpointRemovalTaskState.endpointLink = endpointState.documentSelfLink;
+        endpointRemovalTaskState.tenantLinks = endpointState.tenantLinks;
+        endpointRemovalTaskState.disableGroomer = true;
+
+        EndpointRemovalTaskService.EndpointRemovalTaskState returnState = TestUtils
+                .doPost(host, endpointRemovalTaskState,
+                        EndpointRemovalTaskService.EndpointRemovalTaskState.class,
+                        UriUtils.buildUri(host, EndpointRemovalTaskService.FACTORY_LINK));
+
+        host.waitForFinishedTask(EndpointRemovalTaskService.EndpointRemovalTaskState.class,
+                returnState.documentSelfLink);
+//        assertTrue(returnState.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+        expectedEndpoints.remove(this.endpointState.documentSelfLink);
+        validateEndpointLinks(1, expectedEndpoints);
+    }
+
 
 
     private void validateEndpointLinks(int size, List<String> expectedEndpoints) {
@@ -229,12 +330,12 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             SecurityGroupService.SecurityGroupState doc = response
                     .getBody(SecurityGroupService.SecurityGroupState.class);
-            Assert.assertNotNull(doc.endpointLink);
-
-            Assert.assertEquals(size, doc.endpointLinks.size());
-            for (String endpointLink : expectedEndpoints) {
-                Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
-            }
+//            Assert.assertNotNull(doc.endpointLink);
+//
+//            Assert.assertEquals(size, doc.endpointLinks.size());
+//            for (String endpointLink : expectedEndpoints) {
+//                Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
+//            }
         }
 
         List<String> imageDocLinks = getDocumentLinks(ImageService.ImageState.class);
@@ -253,6 +354,33 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
             }
+        }
+
+
+        List<String> resourceGroupLinks = getDocumentLinks(ResourceGroupService.ResourceGroupState.class);
+        System.out.println("ResourceGroup docs size: " + resourceGroupLinks.size());
+        for (String docLink : resourceGroupLinks) {
+            Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
+                    .setReferer(this.host.getUri());
+            Operation response = this.host.waitForResponse(op);
+            Assert.assertTrue("Error retrieving state",
+                    response.getStatusCode() == 200);
+            ResourceGroupService.ResourceGroupState doc = response
+                    .getBody(ResourceGroupService.ResourceGroupState.class);
+
+            if (doc.customProperties != null &&
+                    doc.customProperties
+                            .get(CUSTOM_PROP_ENDPOINT_LINK) != null) {
+                String customEndpointLink =
+                        doc.customProperties
+                                .get(CUSTOM_PROP_ENDPOINT_LINK);
+                Assert.assertNotNull(customEndpointLink);
+            }
+
+//            Assert.assertEquals(size, doc.endpointLinks.size());
+//            for (String endpointLink : expectedEndpoints) {
+//                Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
+//            }
         }
     }
 

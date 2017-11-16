@@ -1260,7 +1260,6 @@ public class AzureTestUtil {
 
         diskState.tenantLinks = endpointState.tenantLinks;
         diskState.endpointLink = endpointState.documentSelfLink;
-        diskState.endpointLinks = Collections.singleton(endpointState.documentSelfLink);
 
         List<String> tenantLinks = Collections.singletonList( EndpointType.azure.name() + "-tenant");
         diskState.tagLinks = Collections.singleton(TagsUtil.newTagState(TAG_KEY_TYPE,

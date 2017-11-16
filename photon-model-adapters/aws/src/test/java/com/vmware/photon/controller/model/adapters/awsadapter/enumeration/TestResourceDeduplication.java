@@ -20,6 +20,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,9 +51,11 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
+import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService;
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
@@ -72,9 +76,9 @@ public class TestResourceDeduplication extends BasicTestCase {
     public String awsMockEndpointReference = null;
 
     // configure endpoint details
-    public boolean isMock = true;
-    public String accessKey = "accessKey";
-    public String secretKey = "secretKey";
+    public boolean isMock = false;
+    public String accessKey = "AKIAJFDVYHWRMOTUAMKQ";
+    public String secretKey = "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";
 
     public boolean useAllRegions = true;
     public int timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
@@ -158,6 +162,14 @@ public class TestResourceDeduplication extends BasicTestCase {
                 null /*zoneId*/, this.useAllRegions ? null : regionId,
                 this.isAwsClientMock,
                 this.awsMockEndpointReference, null /*tags*/);
+
+        endpointState.computeLink = this.computeHost.documentSelfLink;
+        endpointState2.computeLink = this.computeHost2.documentSelfLink;
+
+        this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
+                .setBody(endpointState));
+        this.host.waitForResponse(Operation.createPatch(this.host, endpointState2.documentSelfLink)
+                .setBody(endpointState2));
     }
 
     @Test
@@ -176,16 +188,79 @@ public class TestResourceDeduplication extends BasicTestCase {
         List<String> expectedEndpoints = new ArrayList<>();
         expectedEndpoints.add(this.endpointState.documentSelfLink);
 
-        validateEndpointLinks(1, expectedEndpoints);
+        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink);
 
         // Add duplicate end point and verify the endpoints again.
         enumerateResources(this.host, this.computeHost2, this.endpointState2, this.isMock,
                 TEST_CASE_RUN);
         expectedEndpoints.add(this.endpointState2.documentSelfLink);
-        validateEndpointLinks(2, expectedEndpoints);
+        validateEndpointLinks(2, expectedEndpoints, this.endpointState.documentSelfLink);
     }
 
-    private void validateEndpointLinks(int size, List<String> expectedEndpoints) {
+
+    @Test
+    public void testEndpointDisassociationOnEndpointDeletion() throws Throwable {
+        this.host.log("Running test: " + this.currentTestName);
+
+        // if mock, simply return.
+        if (this.isMock) {
+            return;
+        }
+
+        // perform resource enumeration on given AWS endpoint
+        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
+                TEST_CASE_RUN);
+
+        List<String> expectedEndpoints = new ArrayList<>();
+        expectedEndpoints.add(this.endpointState.documentSelfLink);
+
+        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink);
+
+        // delete endpoint
+        EndpointRemovalTaskService.EndpointRemovalTaskState completeState = TestAWSSetupUtils
+                .deleteEndpointState(this.host, this.endpointState, true);
+        assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+        validateEndpointLinks(0, new ArrayList<>(), "");
+    }
+
+
+    @Test
+    public void testEndpointDisassociationOnEndpointDeletionWithMultipleEndpoints() throws
+            Throwable {
+        this.host.log("Running test: " + this.currentTestName);
+
+        // if mock, simply return.
+        if (this.isMock) {
+            return;
+        }
+
+        // perform resource enumeration on given AWS endpoint
+        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
+                TEST_CASE_RUN);
+
+        List<String> expectedEndpoints = new ArrayList<>();
+        expectedEndpoints.add(this.endpointState.documentSelfLink);
+
+        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink);
+
+        // Add duplicate end point and verify the endpoints again.
+        enumerateResources(this.host, this.computeHost2, this.endpointState2, this.isMock,
+                TEST_CASE_RUN);
+        expectedEndpoints.add(this.endpointState2.documentSelfLink);
+//        validateEndpointLinks(2, expectedEndpoints, this.endpointState.documentSelfLink);
+
+        // delete endpoint
+        EndpointRemovalTaskService.EndpointRemovalTaskState completeState = TestAWSSetupUtils
+                .deleteEndpointState(this.host, this.endpointState2, true);
+        assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+        expectedEndpoints.remove(this.endpointState2.documentSelfLink);
+        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink);
+    }
+
+    private void validateEndpointLinks(int size, List<String> expectedEndpoints, String
+            expectedEndpointLink) {
 
         List<String> computeDocLinks = getDocumentLinks(ComputeService.ComputeState.class);
         for (String docLink : computeDocLinks) {
@@ -196,6 +271,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             ComputeService.ComputeState doc = response.getBody(ComputeService.ComputeState.class);
             Assert.assertNotNull(doc.endpointLink);
+            assertEquals(expectedEndpointLink, doc.endpointLink);
 
             if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type)) {
                 Assert.assertEquals(size, doc.endpointLinks.size());
@@ -234,6 +310,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             DiskService.DiskState doc = response.getBody(DiskService.DiskState.class);
             Assert.assertNotNull(doc.endpointLink);
+//            assertEquals(expectedEndpointLink, doc.endpointLink);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -250,6 +327,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             NetworkService.NetworkState doc = response.getBody(NetworkService.NetworkState.class);
             Assert.assertNotNull(doc.endpointLink);
+            assertEquals(expectedEndpointLink, doc.endpointLink);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -266,6 +344,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             SubnetService.SubnetState doc = response.getBody(SubnetService.SubnetState.class);
             Assert.assertNotNull(doc.endpointLink);
+            assertEquals(expectedEndpointLink, doc.endpointLink);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -284,6 +363,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             NetworkInterfaceService.NetworkInterfaceState doc = response
                     .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
             Assert.assertNotNull(doc.endpointLink);
+            assertEquals(expectedEndpointLink, doc.endpointLink);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -301,6 +381,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             SecurityGroupService.SecurityGroupState doc = response
                     .getBody(SecurityGroupService.SecurityGroupState.class);
             Assert.assertNotNull(doc.endpointLink);
+            assertEquals(expectedEndpointLink, doc.endpointLink);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {

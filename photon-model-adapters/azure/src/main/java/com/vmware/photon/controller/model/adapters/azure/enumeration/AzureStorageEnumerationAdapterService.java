@@ -943,7 +943,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                                     nextBlobResults = blobsSegment.getContinuationToken();
                                     for (ListBlobItem blobItem : blobsSegment.getResults()) {
-                                        String blobId = blobItem.getUri().toString();
+                                        String blobId = AzureUtils.removeHttpProtocolFromId(
+                                                blobItem.getUri().toString());
                                         context.storageBlobs.put(blobId, blobItem);
                                         // populate mapping of blob uri and storage account for all storage
                                         // accounts as new disks can be added to already existing blobs
@@ -1367,7 +1368,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             qBuilder.addInClause(
                     ResourceState.FIELD_NAME_ID,
                     context.storageBlobs.values().stream()
-                            .map(sb -> QuerySpecification.toMatchValue(sb.getUri()))
+                            .map(sb -> AzureUtils.removeHttpProtocolFromId(QuerySpecification
+                                    .toMatchValue(sb.getUri())))
                             .collect(Collectors.toSet()));
         }
 

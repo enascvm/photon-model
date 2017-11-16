@@ -204,199 +204,110 @@ public class PhotonModelUtils {
                                     updateOp.getUri()));
 
                             String resourceEndpointLink;
-                            Set<String> resourceEndpointLinks;
                             ServiceDocument serviceDocument = Utils.fromJson(document,
                                     ServiceDocument.class);
                             String documentKind = serviceDocument.documentKind;
                             if (documentKind.equals(Utils.buildKind(ComputeState.class))) {
                                 ComputeState computeState = Utils.fromJson(document,
                                         ComputeState.class);
-                                resourceEndpointLinks = computeState.endpointLinks;
                                 resourceEndpointLink = computeState.endpointLink;
                                 //if the endpoint being deleted is the endpointLink of the
                                 //resourceState, then assign a new endpointLink
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    computeState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            computeState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals((Utils.buildKind(ComputeDescription
                                     .class)))) {
                                 ComputeDescription computeDescriptionState = Utils.fromJson(
                                         document, ComputeDescription.class);
-                                resourceEndpointLinks = computeDescriptionState.endpointLinks;
                                 resourceEndpointLink = computeDescriptionState.endpointLink;
                                 updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, resourceEndpointLinks);
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals((Utils.buildKind(
                                     ComputeStateWithDescription.class)))) {
                                 ComputeStateWithDescription computeStateWithDescriptionState =
                                         Utils.fromJson(document,
                                                 ComputeStateWithDescription.class);
-                                resourceEndpointLinks = computeStateWithDescriptionState
-                                        .endpointLinks;
                                 resourceEndpointLink = computeStateWithDescriptionState
                                         .endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    computeStateWithDescriptionState.endpointLink =
-                                            getUpdatedEndpointLink
-                                                    (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            computeStateWithDescriptionState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals((Utils.buildKind(DiskState.class)))) {
                                 DiskState diskState = Utils.fromJson(document,
                                         DiskState.class);
-                                resourceEndpointLinks = diskState.endpointLinks;
                                 resourceEndpointLink = diskState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    diskState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            diskState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(Utils.buildKind(NetworkState.class))) {
                                 NetworkState networkState = Utils.fromJson(document,
                                         NetworkState.class);
-                                resourceEndpointLinks = networkState.endpointLinks;
                                 resourceEndpointLink = networkState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    networkState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            networkState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals((Utils
                                     .buildKind(NetworkInterfaceState.class)))) {
                                 NetworkInterfaceState networkInterfaceState = Utils
                                         .fromJson(document,
                                                 NetworkInterfaceState.class);
-                                resourceEndpointLinks = networkInterfaceState.endpointLinks;
                                 resourceEndpointLink = networkInterfaceState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    networkInterfaceState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            networkInterfaceState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals((Utils
                                     .buildKind(NetworkInterfaceDescription.class)))) {
                                 NetworkInterfaceDescription networkInterfaceDescription =
                                         Utils.fromJson(document,
                                                 NetworkInterfaceDescription.class);
-                                resourceEndpointLinks = networkInterfaceDescription.endpointLinks;
                                 resourceEndpointLink = networkInterfaceDescription.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    networkInterfaceDescription.endpointLink =
-                                            getUpdatedEndpointLink
-                                                    (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            networkInterfaceDescription);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(Utils.buildKind(SubnetState.class))) {
                                 SubnetState subnetState = Utils.fromJson(document,
                                         SubnetState.class);
-                                resourceEndpointLinks = subnetState.endpointLinks;
                                 resourceEndpointLink = subnetState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    subnetState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            subnetState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(Utils
                                     .buildKind(SecurityGroupState.class))) {
                                 SecurityGroupState securityGroupState = Utils
                                         .fromJson(document,
                                                 SecurityGroupState.class);
-                                resourceEndpointLinks = securityGroupState.endpointLinks;
                                 resourceEndpointLink = securityGroupState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    securityGroupState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            securityGroupState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(Utils
                                     .buildKind(StorageDescription.class))) {
                                 StorageDescription storageDescriptionState = Utils
                                         .fromJson(document, StorageDescription.class);
-                                resourceEndpointLinks = storageDescriptionState.endpointLinks;
                                 resourceEndpointLink = storageDescriptionState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    storageDescriptionState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            storageDescriptionState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(Utils.buildKind(ImageState.class))) {
                                 ImageState imageState = Utils.fromJson(document,
                                         ImageState.class);
-                                resourceEndpointLinks = imageState.endpointLinks;
                                 resourceEndpointLink = imageState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    imageState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            imageState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(
                                     Utils.buildKind(RouterService.RouterState.class))) {
                                 RouterService.RouterState routerState = Utils
                                         .fromJson(document, RouterService.RouterState
                                                 .class);
-                                resourceEndpointLinks = routerState.endpointLinks;
                                 resourceEndpointLink = routerState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    routerState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            routerState);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(Utils
                                     .buildKind(LoadBalancerService.LoadBalancerState.class))) {
                                 LoadBalancerService.LoadBalancerState loadBalancerState =
                                         Utils.fromJson
                                                 (document, LoadBalancerService.LoadBalancerState
                                                         .class);
-                                resourceEndpointLinks = loadBalancerState.endpointLinks;
                                 resourceEndpointLink = loadBalancerState.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    loadBalancerState.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            loadBalancerState);
-                                }
-                            } else if (documentKind.equals(Utils.buildKind(StorageDescription
-                                    .class))) {
-                                StorageDescription storageDescription = Utils
-                                        .fromJson(document,
-                                                StorageDescription.class);
-                                resourceEndpointLinks = storageDescription.endpointLinks;
-                                resourceEndpointLink = storageDescription.endpointLink;
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    storageDescription.endpointLink = getUpdatedEndpointLink
-                                            (resourceEndpointLink, resourceEndpointLinks);
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            storageDescription);
-                                }
+                                updateEndpointLink(service, endpointLink, selfLink,
+                                        resourceEndpointLink, endpointLinks);
                             } else if (documentKind.equals(Utils.buildKind(ResourceGroupState
                                     .class))) {
                                 ResourceGroupState resourceGroupState = Utils
                                         .fromJson(document,
                                                 ResourceGroupState.class);
-                                resourceEndpointLinks = resourceGroupState.endpointLinks;
-                                resourceEndpointLink = resourceGroupState.endpointLink;
-                                String updatedEndpointLink = getUpdatedEndpointLink
-                                        (resourceEndpointLink, resourceEndpointLinks);
-
-                                //update both endpointLink and custom EndpointLink for consistency
-                                if (endpointLink.equals(resourceEndpointLink)) {
-                                    resourceGroupState.endpointLink = updatedEndpointLink;
-                                    handleResourceStateEndpointLinkUpdate(service, selfLink,
-                                            resourceGroupState);
-                                }
 
                                 if (resourceGroupState.customProperties != null &&
                                         resourceGroupState.customProperties
@@ -404,6 +315,10 @@ public class PhotonModelUtils {
                                     String resourceCustomEndpointLink =
                                             resourceGroupState.customProperties
                                                     .get(CUSTOM_PROP_ENDPOINT_LINK);
+
+                                    //update both endpointLink and custom EndpointLink for consistency
+                                    updateEndpointLink(service, endpointLink, selfLink,
+                                            resourceCustomEndpointLink, endpointLinks);
 
                                     if (endpointLink.equals(resourceCustomEndpointLink)) {
 
@@ -416,8 +331,8 @@ public class PhotonModelUtils {
                                                 ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                                                 Collections.singletonMap(CUSTOM_PROP_ENDPOINT_LINK,
                                                         getUpdatedEndpointLink(
-                                                        resourceEndpointLink,
-                                                        resourceEndpointLinks)));
+                                                        resourceCustomEndpointLink,
+                                                        endpointLinks)));
                                         ServiceStateMapUpdateRequest serviceStateMapUpdateRequest =
                                                 ServiceStateMapUpdateRequest
                                                         .create(customEndpointLinkToAdd,
@@ -447,7 +362,6 @@ public class PhotonModelUtils {
         String endpointLink;
     }
 
-
     private static String getUpdatedEndpointLink(String resourceEndpointLink, Set<String>
             endpointLinks) {
 
@@ -467,12 +381,11 @@ public class PhotonModelUtils {
         return endpointLinkVal;
     }
 
-
     private static void handleResourceStateEndpointLinkUpdate(Service service, String selfLink,
-                                                             Object resourceState) {
+                                                              Object endpointLinkPatchReq) {
         Operation.createPatch(UriUtils.buildUri(service.getHost(), selfLink))
                 .setReferer(service.getUri())
-                .setBody(resourceState)
+                .setBody(endpointLinkPatchReq)
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {

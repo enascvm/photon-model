@@ -82,7 +82,6 @@ public class EndpointRemovalTaskService
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);
 
-    public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
     public static final String FIELD_NAME_ENDPOINT_LINKS = "endpointLinks";
     public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
     public static final String RESOURCE_GROOMER_TASK_POSTFIX = "document-deletion";
@@ -191,6 +190,10 @@ public class EndpointRemovalTaskService
         @Documentation(description = "Indicates a mock request")
         @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE)
         public boolean isMock = false;
+
+        @Documentation(description = "Enable/Disable groomer for tests.")
+        @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE)
+        public boolean disableGroomer = false;
     }
 
     public EndpointRemovalTaskService() {
@@ -486,7 +489,7 @@ public class EndpointRemovalTaskService
         state.tenantLinks = new HashSet<>(task.tenantLinks);
         state.documentSelfLink = getResourceGroomerTaskUri(task.endpointLink);
 
-        if (task.isMock) {
+        if (task.isMock || task.disableGroomer) {
             task.taskSubStage = nextStage;
             sendSelfPatch(task);
             return;

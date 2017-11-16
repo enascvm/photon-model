@@ -2707,8 +2707,9 @@ public class TestAWSSetupUtils {
      * Delete endpoint using EndpointRemovalTaskService.
      */
     public static EndpointRemovalTaskState deleteEndpointState(VerificationHost host,
-            EndpointState endpointState) throws Throwable {
-        EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpointState);
+            EndpointState endpointState, boolean disableGroomer) throws Throwable {
+        EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpointState,
+                disableGroomer);
         EndpointRemovalTaskState returnState = TestUtils
                 .doPost(host, removalTaskState, EndpointRemovalTaskState.class,
                         UriUtils.buildUri(host, EndpointRemovalTaskService.FACTORY_LINK));
@@ -2717,10 +2718,11 @@ public class TestAWSSetupUtils {
     }
 
     private static EndpointRemovalTaskState createEndpointRemovalTaskState(
-            EndpointState endpoint) {
+            EndpointState endpoint, boolean disableGroomer) {
         EndpointRemovalTaskState endpointRemovalTaskState = new EndpointRemovalTaskState();
         endpointRemovalTaskState.endpointLink = endpoint.documentSelfLink;
         endpointRemovalTaskState.tenantLinks = endpoint.tenantLinks;
+        endpointRemovalTaskState.disableGroomer = disableGroomer;
         return endpointRemovalTaskState;
     }
 
