@@ -119,8 +119,7 @@ public class AzureDetailedBillHandler {
             }
             billProcessedTimeMillis =
                     billProcessedTimeMillis < curRowEpoch ?
-                            curRowEpoch :
-                            billProcessedTimeMillis;
+                            curRowEpoch : billProcessedTimeMillis;
             monthlyBill.put(detailedBillElement.subscriptionGuid, subscription);
             if (prevRowEpoch != null && !prevRowEpoch.equals(curRowEpoch)) {
                 // This indicates that we have processed all rows belonging to a
@@ -161,7 +160,7 @@ public class AzureDetailedBillHandler {
         if (subscription == null) {
             subscription = createSubscriptionDto(bRow);
         }
-        return subscription.addCost(bRow.extendedCost);
+        return subscription.addToDailyCosts(bRow.epochDate, bRow.extendedCost);
     }
 
     private AzureService populateServiceCost(AzureSubscription subscription,

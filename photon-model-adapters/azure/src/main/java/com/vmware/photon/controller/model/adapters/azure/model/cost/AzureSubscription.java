@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.cost;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,7 +26,8 @@ public class AzureSubscription extends AzureEntity {
 
     public String subscriptionName;
     private Map<String, AzureService> serviceDetailsMap = new ConcurrentHashMap<>();
-    private double cost = 0d;
+    // Stores the cost for a particular time-stamp
+    public Map<Long, Double> cost = new HashMap<>();
 
     public AzureSubscription() {
     }
@@ -74,8 +76,7 @@ public class AzureSubscription extends AzureEntity {
      */
     public AzureService addToServicesMap(EaDetailedBillElement detailedBillElement) {
         String meterCategory = detailedBillElement.meterCategory;
-        AzureService serviceDetails = this.serviceDetailsMap
-                .get(meterCategory);
+        AzureService serviceDetails = this.serviceDetailsMap.get(meterCategory);
         if (serviceDetails == null) {
             serviceDetails = createServiceDetailDto(detailedBillElement);
         } else {
@@ -86,14 +87,23 @@ public class AzureSubscription extends AzureEntity {
         return serviceDetails;
     }
 
-    public double getCost() {
-        return this.cost;
+    public double getCost(long timeStampMillis) {
+        return this.cost.get(timeStampMillis);
     }
 
-    public AzureSubscription addCost(double cost) {
-        if (cost != 0d) {
-            this.cost += cost;
+    /**
+     * Will add to map of direct costs: the map contains the day as the key for which the cost is
+     * being stored (with the cost as the value).
+     * @param timeMillis in epoch, representing the day
+     * @param cost the cost corresponding to the particular day.
+     */
+    public AzureSubscription addToDailyCosts(Long timeMillis, double cost) {
+        if (cost == 0 || timeMillis == null) {
+            return this;
         }
+        Double daysDirectCost = this.cost.get(timeMillis);
+        daysDirectCost = daysDirectCost == null ? cost : daysDirectCost + cost;
+        this.cost.put(timeMillis, daysDirectCost);
         return this;
     }
 

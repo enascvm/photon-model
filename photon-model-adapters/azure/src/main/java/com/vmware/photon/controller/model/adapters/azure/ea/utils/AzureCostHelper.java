@@ -109,7 +109,6 @@ import com.vmware.photon.controller.model.adapters.azure.model.cost.OldApi;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.OldEaSummarizedBillElement;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -231,10 +230,10 @@ public interface AzureCostHelper {
                 + AzureCostConstants.BILL_FORMAT;
     }
 
-    static ServiceStat createServiceStat(String serviceResourceCostMetric, Number value,
-            String currencyUnit, Long timestamp) {
-        ServiceStats.ServiceStat stat = new ServiceStats.ServiceStat();
-        stat.name = serviceResourceCostMetric;
+    static ServiceStat createServiceStat(String metricName, Number value, String currencyUnit,
+            Long timestamp) {
+        ServiceStat stat = new ServiceStat();
+        stat.name = metricName;
         stat.latestValue = value != null ? value.doubleValue() : 0.0d;
         stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp);
         stat.unit = currencyUnit;
@@ -449,16 +448,6 @@ public interface AzureCostHelper {
         }
     }
 
-    static double getDoubleOrZero(Object billElement, String value) {
-        try {
-            return Double.valueOf(value);
-        } catch (NumberFormatException numberFormatEx) {
-            logger.warning(String.format("Could not convert cost obtained from summarized bill " +
-                    "to a double value: %s", billElement.toString()));
-            return 0d;
-        }
-    }
-
     static void convertToUsd(EaDetailedBillElement detailedBillElement, String currency) {
         if (detailedBillElement.extendedCost != 0 && !StringUtils.isBlank(currency) && !currency
                 .equalsIgnoreCase(AzureCostConstants.DEFAULT_CURRENCY_VALUE)) {
@@ -472,14 +461,6 @@ public interface AzureCostHelper {
                 detailedBillElement.extendedCost = detailedBillElement.extendedCost / exchangeRate;
             }
         }
-    }
-
-    static int safeLongToInt(long l) {
-        if (l < Integer.MIN_VALUE || l > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException(
-                    l + " cannot be cast to int without changing its value.");
-        }
-        return (int) l;
     }
 
     /**
@@ -546,7 +527,7 @@ public interface AzureCostHelper {
 
     static Set<LocalDate> getSummarizedBillsToDownload(long billProcessedTimeMillis) {
         LocalDate billProcessedDate = new LocalDate(billProcessedTimeMillis, DateTimeZone.UTC);
-        LocalDate today = LocalDate.now(DateTimeZone.UTC).dayOfMonth().withMaximumValue();;
+        LocalDate today = LocalDate.now(DateTimeZone.UTC).dayOfMonth().withMaximumValue();
         if (billProcessedTimeMillis == 0) {
             billProcessedDate = today
                     .minusMonths(AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS);

@@ -174,9 +174,6 @@ public class AzureCostConstants {
     // is being reused in Azure for code-reuse in analysis.
     public static final String LINKED_SUBSCRIPTION_GUIDS = "linkedAccountIds";
 
-    // Custom property key to store service metadata like bill processed time, month downloaded, etc.
-    public static final String CUSTOM_PROP_CONTAINS_SERVICE_METADATA = "containsAzureCostStatsServiceMetadata";
-
     public static final String OLDEST_BILL_PROCESSED_MILLIS = "OldestBillProcessedMillis";
 
     public static final String AZURE_BILL_FIELD_DATE_DEFAULT_DELIMITER = "/";

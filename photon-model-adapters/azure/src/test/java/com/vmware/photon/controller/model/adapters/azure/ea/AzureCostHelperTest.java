@@ -69,6 +69,7 @@ public class AzureCostHelperTest {
 
     @Test
     public void testGetSummarizedBillsToDownload() {
+        // For collecting first time, get last 11 months and current month's summarized bill
         long billProcessedTimeMillis = 0;
         Set<LocalDate> summarizedBillsToDownload = getSummarizedBillsToDownload(
                 billProcessedTimeMillis);
@@ -76,17 +77,22 @@ public class AzureCostHelperTest {
                 AzureCostConstants.NO_OF_MONTHS_TO_GET_PAST_BILLS + 1,
                 summarizedBillsToDownload.size());
 
+        // If one collection has run, and bill processed time is pretty recent and in current
+        // month, collect only current months' summarized bills
         billProcessedTimeMillis = TimeUnit.MICROSECONDS.toMillis(Utils.getNowMicrosUtc());
         summarizedBillsToDownload = getSummarizedBillsToDownload(billProcessedTimeMillis);
         assertEquals("Number of summarized bills to download is incorrect.", 1,
                 summarizedBillsToDownload.size());
 
+        // If last collection ran was in the previous month, collect past and current month's
+        // summarized bill
         LocalDate lastMonth = LocalDate.now(DateTimeZone.UTC).minusMonths(1);
         long lastMonthMillis = getMillisForDate(lastMonth);
         summarizedBillsToDownload = getSummarizedBillsToDownload(lastMonthMillis);
         assertEquals("Number of summarized bills to download is incorrect.", 2,
                 summarizedBillsToDownload.size());
 
+        // If today is
         LocalDate firstDayOfCurrentMonth = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1);
         long firstDayOfCurrentMonthMillis = getMillisForDate(firstDayOfCurrentMonth);
         summarizedBillsToDownload = getSummarizedBillsToDownload(firstDayOfCurrentMonthMillis);

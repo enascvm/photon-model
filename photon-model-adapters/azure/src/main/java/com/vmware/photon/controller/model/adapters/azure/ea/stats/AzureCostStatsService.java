@@ -57,8 +57,6 @@ import okio.Okio;
 import org.apache.commons.io.FileUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
@@ -539,7 +537,7 @@ public class AzureCostStatsService extends StatelessService {
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 ResourceMetrics.PROPERTY_RESOURCE_LINK, context.computeHostDesc.documentSelfLink);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
-                AzureCostConstants.CUSTOM_PROP_CONTAINS_SERVICE_METADATA, Boolean.TRUE.toString());
+                PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT, Boolean.TRUE.toString());
 
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
@@ -1067,8 +1065,8 @@ public class AzureCostStatsService extends StatelessService {
                 // This means bill parsing is complete
                 context.billParsedMillis = parsingCompleteTimeMillis;
             }
-            List<AzureSubscription> newSubscriptions = getNewSubscriptions(
-                    newMonthlyBillBatch, context.allSubscriptionsCost);
+            List<AzureSubscription> newSubscriptions = getNewSubscriptions(newMonthlyBillBatch,
+                    context.allSubscriptionsCost);
             populateMonthlySubscriptionCost(context, newMonthlyBillBatch);
             context.monthlyBillBatch = newMonthlyBillBatch;
             // Call the subscription compute state enumeration service here and pass
@@ -1098,13 +1096,29 @@ public class AzureCostStatsService extends StatelessService {
                 AzureSubscription newSubscription = new AzureSubscription(
                         subscriptionGuid, subscription.entityName, subscription.parentEntityId,
                         subscription.parentEntityName);
-                newSubscription.addCost(subscription.getCost());
+                newSubscription.cost.putAll(subscription.cost);
                 context.allSubscriptionsCost.put(subscriptionGuid, newSubscription);
             } else {
                 AzureSubscription existingSubscription = context.allSubscriptionsCost
                         .get(subscriptionGuid);
-                context.allSubscriptionsCost.put(subscriptionGuid,
-                        existingSubscription.addCost(subscription.getCost()));
+                Long lastTime = existingSubscription.cost.keySet().stream()
+                        .max(Long::compare).orElse(0L);
+                Long latestTime = subscription.cost.keySet().stream().max(Long::compare)
+                        .orElse(0L);
+                if (latestTime == 0) {
+                    // If there are no new cost metrics for the current day
+                    continue;
+                }
+                if (lastTime == 0) {
+                    // If there were no cost metrics for the past days
+                    existingSubscription.cost.put(latestTime, subscription.cost.get(latestTime));
+                    context.allSubscriptionsCost.put(subscriptionGuid, existingSubscription);
+                } else {
+                    existingSubscription.cost.put(latestTime,
+                            subscription.cost.get(latestTime) + existingSubscription.cost
+                                    .get(lastTime));
+                    context.allSubscriptionsCost.put(subscriptionGuid, existingSubscription);
+                }
             }
         }
     }
@@ -1168,7 +1182,7 @@ public class AzureCostStatsService extends StatelessService {
     private void createAzureSubscriptionStats(Context context, AzureSubscription subscription) {
         Consumer<List<ComputeState>> subscriptionStatsProcessor = (subscriptionComputeStates) -> {
             subscriptionComputeStates.forEach(subscriptionComputeState -> {
-                String costStatName = AzureStatsNormalizer
+                String statName = AzureStatsNormalizer
                         .getNormalizedStatKeyValue(AzureCostConstants.COST);
                 String costUnit = AzureStatsNormalizer
                         .getNormalizedUnitValue(AzureCostConstants.DEFAULT_CURRENCY_VALUE);
@@ -1176,11 +1190,13 @@ public class AzureCostStatsService extends StatelessService {
                 ComputeStats subscriptionStats = new ComputeStats();
                 subscriptionStats.computeLink = subscriptionComputeState.documentSelfLink;
                 subscriptionStats.statValues = new ConcurrentSkipListMap<>();
-                ServiceStat azureAccountStat = AzureCostHelper
-                        .createServiceStat(costStatName, subscription.getCost(), costUnit,
-                                context.billProcessedTimeMillis);
-                subscriptionStats.statValues
-                        .put(costStatName, Collections.singletonList(azureAccountStat));
+                List<ServiceStat> costStats = new ArrayList<>();
+                for (Entry<Long, Double> cost : subscription.cost.entrySet()) {
+                    ServiceStat azureAccountStat = AzureCostHelper.createServiceStat(statName,
+                            cost.getValue(), costUnit, cost.getKey());
+                    costStats.add(azureAccountStat);
+                }
+                subscriptionStats.statValues.put(statName, costStats);
                 context.statsResponse.statsList.add(subscriptionStats);
             });
         };
@@ -1320,7 +1336,7 @@ public class AzureCostStatsService extends StatelessService {
         ComputeStats accountStats = new ComputeStats();
         accountStats.computeLink = computeHostDesc.documentSelfLink;
         accountStats.statValues = new ConcurrentSkipListMap<>();
-        accountStats.addCustomProperty(AzureCostConstants.CUSTOM_PROP_CONTAINS_SERVICE_METADATA,
+        accountStats.addCustomProperty(PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT,
                 Boolean.TRUE.toString());
 
         ServiceStat billProcessedTimeStat = AzureCostHelper.createServiceStat(
@@ -1337,7 +1353,7 @@ public class AzureCostStatsService extends StatelessService {
         ComputeStats stats = new ComputeStats();
         stats.computeLink = computeHostDesc.documentSelfLink;
         stats.statValues = new ConcurrentSkipListMap<>();
-        stats.addCustomProperty(AzureCostConstants.CUSTOM_PROP_CONTAINS_SERVICE_METADATA,
+        stats.addCustomProperty(PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT,
                 Boolean.TRUE.toString());
 
         ServiceStat oldestBillDownloadedStat = AzureCostHelper
@@ -1531,6 +1547,7 @@ public class AzureCostStatsService extends StatelessService {
     private void cleanUpMonthlyData(Context context) {
         if (context.billParsedMillis > 0) {
             // Clean-up only in case parsing has been completed for a month.
+            context.allSubscriptionsCost = new ConcurrentHashMap<>();
             context.billParsedMillis = 0;
             context.csvReader = null;
         }
@@ -1720,12 +1737,6 @@ public class AzureCostStatsService extends StatelessService {
                             .format("Could not convert cost obtained from summarized bill " +
                                     "to a double value: %s", finalBillElement));
                 }
-                break;
-            case AzureCostConstants.SERVICE_COMMITMENT_REPORT_GENERATION_DATE:
-                final DateTimeFormatter formatter = DateTimeFormat
-                        .forPattern(
-                                AzureCostConstants.SERVICE_COMMITMENT_REPORT_GENERATION_DATE_FORMAT);
-                date = formatter.parseLocalDate(billElement.amount);
                 break;
             case AzureCostConstants.SERVICE_COMMITMENT_CHARGES_BILLED_SEPARATELY:
                 accountSeparatelyBilledCost = getBillElementAmountUsingOldApi(billElement);
