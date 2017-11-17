@@ -102,6 +102,7 @@ public class AzureInstanceContext extends
     public StorageDescription storageDescription;
     public DiskService.DiskStateExpanded bootDiskState;
     public List<DiskService.DiskStateExpanded> dataDiskStates;
+    public List<DiskService.DiskStateExpanded> externalDataDisks;
 
     public String vmName;
     public String vmId;

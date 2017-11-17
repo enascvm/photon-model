@@ -37,6 +37,7 @@ import java.util.logging.Level;
 import com.microsoft.azure.management.compute.VirtualMachine;
 import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 import com.microsoft.azure.management.resources.fluentcore.utils.SdkContext;
+import com.microsoft.azure.management.storage.SkuName;
 
 import org.junit.After;
 import org.junit.Test;
@@ -148,28 +149,84 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         createDiskStateDesc();
         kickOffDiskProvisioning();
 
+        // attach disk
         performDiskOperationOnVM(DiskOpKind.ATTACH);
         assertAttachDiskToVM();
 
-        // Create and attach another additional disk
-        createDiskStateDesc();
-        kickOffDiskProvisioning();
-
-        // Save the VM's details after attaching one disk
+        // Save the VM's details after attaching a disk
         this.computeVM = this.host.getServiceState(null,
                 ComputeService.ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        performDiskOperationOnVM(DiskOpKind.ATTACH);
-        assertAttachDiskToVM();
-
-        // Save the VM's details after attaching second disk
-        this.computeVM = this.host.getServiceState(null,
-                ComputeService.ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
-
+        // detach disk
         performDiskOperationOnVM(DiskOpKind.DETACH);
-
         assertDetachDiskFromVM();
 
+        // Save the VM's details after detaching disk
+        this.computeVM = this.host.getServiceState(null,
+                ComputeService.ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+        this.diskState = this.host.getServiceState(null, DiskService.DiskState.class,
+                UriUtils.buildUri(this.host, this.diskState.documentSelfLink));
+
+        // attach the above detached disk
+        performDiskOperationOnVM(DiskOpKind.ATTACH);
+        assertAttachDiskToVM();
+    }
+
+    @Test
+    public void testExternalDiskAttachRequest() throws Throwable {
+        BaseComputeInstanceContext.ImageSource imageSource = createImageSource(getHost(),
+                this.endpointState, IMAGE_REFERENCE);
+
+        // create managed disk in a random RG
+        createDiskStateDesc();
+
+        this.diskState.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE, SkuName.STANDARD_LRS.toString());
+
+        this.diskState = TestUtils.doPost(this.host, this.diskState, DiskService
+                .DiskState.class, UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+
+        // provision managed disk
+        kickOffDiskProvisioning();
+
+        this.diskState = this.host.getServiceState(null, DiskService.DiskState.class,
+                UriUtils.buildUri(this.host, this.diskState.documentSelfLink));
+
+        List<String> externalDiskLinks = new ArrayList<>();
+        externalDiskLinks.add(this.diskState.documentSelfLink);
+
+        String resourceGroupName;
+        if (isMock) {
+            resourceGroupName = azureVMName;
+        } else {
+            resourceGroupName = this.diskState.customProperties.get(AzureConstants.AZURE_RESOURCE_GROUP_NAME);
+        }
+
+        // create VM with resourceGroupName same as disk
+        AzureTestUtil.VMResourceSpec vmResourceSpec = new AzureTestUtil.VMResourceSpec(getHost(),
+                this.computeHost, this.endpointState, resourceGroupName)
+                .withNicSpecs(DEFAULT_NIC_SPEC)
+                .withImageSource(imageSource)
+                .withManagedDisk(true)
+                .withNumberOfAdditionalDisks(1)
+                .withExternalDiskLinks(externalDiskLinks);
+        this.vmState = createVMResourceFromSpec(vmResourceSpec);
+
+        kickOffComputeVmProvisioning();
+
+        ComputeService.ComputeState provisionedVM = this.host.getServiceState(null,
+                ComputeService.ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+        assertEquals(provisionedVM.diskLinks.size(), 3);
+
+        if (!isMock) {
+            provisionedVM.diskLinks.stream()
+                    .forEach(diskLink -> {
+                        DiskService.DiskState attachedDiskState = this.host.getServiceState(null,
+                                DiskService.DiskState.class, UriUtils.buildUri(this.host, diskLink));
+                        assertEquals("Disk status is not matching", DiskService.DiskStatus.ATTACHED,
+                                attachedDiskState.status);
+                    });
+        }
     }
 
     @After
@@ -230,7 +287,6 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
     }
 
     private void createDiskStateDesc() throws Throwable {
-
         DiskService.DiskState diskDesc = new DiskService.DiskState();
         diskDesc.name = SdkContext.randomResourceName(DISK_NAME_PREFIX, DISK_NAME_PREFIX.length() + 5);
         diskDesc.capacityMBytes = DISK_SIZE;
@@ -242,13 +298,16 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         diskDesc.diskAdapterReference = UriUtils.buildUri(this.host, AzureDiskService.SELF_LINK);
 
         diskDesc.customProperties = new HashMap<>();
-        // create disk in same resourceGroup of VM
-        String resourceGroupName = this.vmState.customProperties.get(ComputeProperties.RESOURCE_GROUP_NAME);
-        diskDesc.customProperties.put(AzureConstants.AZURE_RESOURCE_GROUP_NAME, resourceGroupName);
+
+        // create disk in same resourceGroup of VM, otherwise disk is created in random RG
+        if (null != this.vmState && null != this.vmState.customProperties && null != this.vmState.customProperties
+                .get(ComputeProperties.RESOURCE_GROUP_NAME)) {
+            diskDesc.customProperties.put(AzureConstants.AZURE_RESOURCE_GROUP_NAME, this.vmState.customProperties
+                    .get(ComputeProperties.RESOURCE_GROUP_NAME));
+        }
 
         this.diskState = TestUtils.doPost(this.host, diskDesc, DiskService
                 .DiskState.class, UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
-
     }
 
     private void kickOffDiskProvisioning() throws Throwable {

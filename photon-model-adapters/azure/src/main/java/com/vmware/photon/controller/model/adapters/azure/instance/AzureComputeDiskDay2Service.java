@@ -239,7 +239,17 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                         + "detached volume %s from instance %s",
                         context.diskState.name, context.computeState.name);
                 this.service.logInfo(() -> msg);
-                return DeferredResult.completed(vm);
+                return toDeferredResult().completed(vm);
+            }
+
+            @Override
+            protected Throwable consumeError(Throwable exc) {
+                String msg = String.format(
+                        "[AzureComputeDiskDay2Service] Failure in detaching volume %s from instance %s : %s",
+                        context.diskState.name, context.computeState.name, exc);
+                this.service.logSevere(msg);
+                toDeferredResult().fail(exc);
+                return exc;
             }
         };
 
@@ -350,7 +360,17 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                         "[AzureComputeDiskDay2Service] Successfully attached volume %s to instance %s",
                         context.diskState.id, context.computeState.id);
                 this.service.logInfo(() -> msg);
-                return DeferredResult.completed(vm);
+                return toDeferredResult().completed(vm);
+            }
+
+            @Override
+            protected Throwable consumeError(Throwable exc) {
+                String msg = String.format(
+                        "[AzureComputeDiskDay2Service] Failure in attaching volume %s to instance %s : %s",
+                        context.diskState.id, context.computeState.id, exc);
+                this.service.logSevere(msg);
+                toDeferredResult().fail(exc);
+                return exc;
             }
         };
 

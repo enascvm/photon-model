@@ -1408,6 +1408,36 @@ public class AzureInstanceService extends StatelessService {
             lunIndex++;
         }
 
+        // Add the external existing disks
+        if (!ctx.externalDataDisks.isEmpty()) {
+            for (DiskService.DiskStateExpanded diskState : ctx.externalDataDisks) {
+                final DataDisk dataDisk = new DataDisk();
+
+                if (ctx.reuseExistingStorageAccount()) {
+                    dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
+                            lunIndex));
+                } else if (ctx.useManagedDisks()) {
+                    ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
+                    managedDiskParams.withId(diskState.id);
+                    dataDisk.withManagedDisk(managedDiskParams);
+                } else {
+                    dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
+                }
+
+                dataDisk.withCreateOption(DiskCreateOptionTypes.ATTACH);
+
+                dataDisk.withCaching(CachingTypes.fromString(
+                        diskState.customProperties.getOrDefault(
+                                AZURE_DATA_DISK_CACHING,
+                                CachingTypes.READ_WRITE.toString())));
+                dataDisk.withLun(lunIndex);
+
+                azureDataDisks.add(dataDisk);
+
+                lunIndex++;
+            }
+        }
+
         return azureDataDisks;
     }
 
@@ -1552,7 +1582,7 @@ public class AzureInstanceService extends StatelessService {
             } else {
                 diskStateToUpdate.id = azureOsDisk.vhd().uri();
             }
-
+            diskStateToUpdate.status = DiskService.DiskStatus.ATTACHED;
             Operation updateDiskState = Operation
                     .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
                     .setBody(diskStateToUpdate);
@@ -1582,44 +1612,16 @@ public class AzureInstanceService extends StatelessService {
                     .filter(dS -> azureDataDisk.name().equals(dS.name))
                     .findFirst();
 
+            Optional<DiskState> externalDiskOpt = ctx.externalDataDisks.stream()
+                    .map(DiskState.class::cast)
+                    .filter(dS -> azureDataDisk.name().equals(dS.name))
+                    .findFirst();
+
             // update disk state
             if (dataDiskOpt.isPresent()) {
-                // update VHD uri or disk id respectively for un-managed and managed disks
-                DiskState dataDiskState = dataDiskOpt.get();
-                final DiskState diskStateToUpdate = new DiskState();
-                diskStateToUpdate.documentSelfLink = dataDiskState.documentSelfLink;
-
-                if (ctx.useManagedDisks()) {
-                    diskStateToUpdate.id = azureDataDisk.managedDisk().id();
-                } else {
-                    diskStateToUpdate.id = azureDataDisk.vhd().uri();
-                }
-
-                // The LUN value of disk
-                if (diskStateToUpdate.customProperties == null) {
-                    diskStateToUpdate.customProperties = new HashMap<>();
-                }
-                diskStateToUpdate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
-
-                Operation updateDiskState = Operation
-                        .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
-                        .setBody(diskStateToUpdate);
-
-                DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)
-                        .whenComplete((op, exc) -> {
-                            if (exc != null) {
-                                logSevere(() -> String.format(
-                                        "Updating data DiskState [%s] with VHD URI [%s]: FAILED with %s",
-                                        dataDiskState.name, diskStateToUpdate.id, Utils.toString(exc)));
-
-                            } else {
-                                logFine(() -> String.format(
-                                        "Updating data DiskState [%s] with VHD URI [%s]: SUCCESS",
-                                        dataDiskState.name, diskStateToUpdate.id));
-                            }
-                        });
-
-                diskStateDRs.add(updateDR);
+                diskStateDRs.add(createDiskToUpdate(ctx, dataDiskOpt, azureDataDisk));
+            } else if (externalDiskOpt.isPresent()) {
+                diskStateDRs.add(createDiskToUpdate(ctx, externalDiskOpt, azureDataDisk));
             } else {
                 // additional disks were created by the custom image. Will always be of
                 // managed disk type. Create new disk state.
@@ -1655,7 +1657,7 @@ public class AzureInstanceService extends StatelessService {
                                         azureDataDisk.name(), azureDataDisk.managedDisk().id()));
                                 //update compute state with data disks present on custom image
                                 ComputeState cs = new ComputeState();
-                                List<String> disksLinks =  new ArrayList<>();
+                                List<String> disksLinks = new ArrayList<>();
                                 DiskState diskState = op.getBody(DiskState.class);
                                 disksLinks.add(diskState.documentSelfLink);
                                 cs.diskLinks = disksLinks;
@@ -1674,6 +1676,51 @@ public class AzureInstanceService extends StatelessService {
         }
 
         return DeferredResult.allOf(diskStateDRs).thenApply(ignored -> ctx);
+    }
+
+    /**
+     * Creates and returns a new diskState object which is updated with id, LUN, status and documentSelfLink
+     */
+    private DeferredResult<Operation> createDiskToUpdate(AzureInstanceContext ctx, Optional<DiskState> diskOpt,
+                                                         DataDisk azureDataDisk) {
+        // update VHD uri or disk id respectively for un-managed and managed disks
+        DiskState diskState = diskOpt.get();
+        final DiskState diskStateToUpdate = new DiskState();
+        diskStateToUpdate.documentSelfLink = diskState.documentSelfLink;
+
+        if (ctx.useManagedDisks()) {
+            diskStateToUpdate.id = azureDataDisk.managedDisk().id();
+        } else {
+            diskStateToUpdate.id = azureDataDisk.vhd().uri();
+        }
+
+        // The LUN value of disk
+        if (diskStateToUpdate.customProperties == null) {
+            diskStateToUpdate.customProperties = new HashMap<>();
+        }
+        diskStateToUpdate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
+
+        diskStateToUpdate.status = DiskService.DiskStatus.ATTACHED;
+
+        Operation updateDiskState = Operation
+                .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
+                .setBody(diskStateToUpdate);
+
+        DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)
+                .whenComplete((op, exc) -> {
+                    if (exc != null) {
+                        logSevere(() -> String.format(
+                                "Updating data DiskState [%s] with VHD URI [%s]: FAILED with %s",
+                                diskState.name, diskStateToUpdate.id, Utils.toString(exc)));
+
+                    } else {
+                        logFine(() -> String.format(
+                                "Updating data DiskState [%s] with VHD URI [%s]: SUCCESS",
+                                diskState.name, diskStateToUpdate.id));
+                    }
+                });
+
+        return updateDR;
     }
 
     /**
@@ -1945,6 +1992,7 @@ public class AzureInstanceService extends StatelessService {
                             }
 
                             ctx.dataDiskStates = new ArrayList<>();
+                            ctx.externalDataDisks = new ArrayList<>();
                             for (Operation op : ops.values()) {
                                 DiskService.DiskStateExpanded disk = op
                                         .getBody(DiskService.DiskStateExpanded.class);
@@ -1959,7 +2007,11 @@ public class AzureInstanceService extends StatelessService {
 
                                     ctx.bootDiskState = disk;
                                 } else {
-                                    ctx.dataDiskStates.add(disk);
+                                    if (disk.status == DiskService.DiskStatus.AVAILABLE) {
+                                        ctx.externalDataDisks.add(disk);
+                                    } else {
+                                        ctx.dataDiskStates.add(disk);
+                                    }
                                 }
                             }
 
@@ -1983,15 +2035,21 @@ public class AzureInstanceService extends StatelessService {
     private boolean validateDiskStates(AzureInstanceContext ctx) {
 
         if (ctx.useManagedDisks()) {
-            //Check if all data disks are of managed disk type
-            return ctx.dataDiskStates.size() == ctx.dataDiskStates.stream()
+            //Check if all data disks and external existing disks are of managed disk type
+            return (ctx.dataDiskStates.size() == ctx.dataDiskStates.stream()
                     .filter(isManagedDisk())
-                    .count();
+                    .count()) &&
+                    (ctx.externalDataDisks.size() == ctx.externalDataDisks.stream()
+                    .filter(isManagedDisk())
+                    .count());
         } else if (ctx.reuseExistingStorageAccount() || ctx.bootDiskState.customProperties.containsKey(AZURE_STORAGE_ACCOUNT_NAME)) {
-            //check if all data disk are of unmanaged type
-            return ctx.dataDiskStates.size() == ctx.dataDiskStates.stream()
+            //check if all data disk and external existing disks are of un-managed type
+            return (ctx.dataDiskStates.size() == ctx.dataDiskStates.stream()
                     .filter(isUnManagedDisk())
-                    .count();
+                    .count()) &&
+                    (ctx.externalDataDisks.size() == ctx.externalDataDisks.stream()
+                    .filter(isUnManagedDisk())
+                    .count());
         }
         return true;
     }

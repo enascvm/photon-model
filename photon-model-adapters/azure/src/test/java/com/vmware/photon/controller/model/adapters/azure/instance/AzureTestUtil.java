@@ -747,6 +747,7 @@ public class AzureTestUtil {
         public String networkRGLink;
         public ImageSource imageSource;
         public int numberOfAdditionalDisks;
+        public List<String> externalDiskLinks;
         public boolean isManagedDisk;
 
         public VMResourceSpec(VerificationHost host, ComputeState computeHost, EndpointState endpointState,
@@ -769,6 +770,11 @@ public class AzureTestUtil {
 
         public VMResourceSpec withNumberOfAdditionalDisks(int numberOfAdditionalDisks) {
             this.numberOfAdditionalDisks = numberOfAdditionalDisks;
+            return this;
+        }
+
+        public VMResourceSpec withExternalDiskLinks(List<String> externalDiskLinks) {
+            this.externalDiskLinks = externalDiskLinks;
             return this;
         }
 
@@ -911,6 +917,12 @@ public class AzureTestUtil {
             vmDisks.addAll(createAdditionalDisks(spec.host, spec.azureVmName,
                     spec.endpointState, spec.numberOfAdditionalDisks, spec.isManagedDisk));
         }
+
+        // Add external existing data disks (if present) to the list for attaching
+        if (null != spec.externalDiskLinks && spec.externalDiskLinks.size() > 0) {
+            vmDisks.addAll(spec.externalDiskLinks);
+        }
+
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
                 spec.host, spec.computeHost, spec.endpointState, networkRGLinks, sgRGLinks, spec.nicSpecs)
@@ -1078,7 +1090,6 @@ public class AzureTestUtil {
             dataDisk.type = DiskType.HDD;
             dataDisk.capacityMBytes = AZURE_CUSTOM_DATA_DISK_SIZE; // Custom Data Disk size of 20GB
             dataDisk.bootOrder = 2;
-
             dataDisk.endpointLink = endpointState.documentSelfLink;
             dataDisk.tenantLinks = endpointState.tenantLinks;
             dataDisk.storageType = AZURE_STORAGE_DISKS;
@@ -1102,7 +1113,6 @@ public class AzureTestUtil {
 
             diskStateArrayList.add(dataDisk.documentSelfLink);
         }
-
         return  diskStateArrayList;
 
     }
