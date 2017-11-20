@@ -233,7 +233,7 @@ public class AzureEndpointAdapterService extends StatelessService {
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
             List<String> children = new ArrayList<>();
-            children.add(ComputeType.VM_GUEST.toString());
+            children.add(ComputeType.ZONE.toString());
             cd.supportedChildren = children;
 
             cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),

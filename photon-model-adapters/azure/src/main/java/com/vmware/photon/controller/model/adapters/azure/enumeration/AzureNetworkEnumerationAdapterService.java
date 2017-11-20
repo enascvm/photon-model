@@ -558,6 +558,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         subnetState.customProperties = new HashMap<>();
         subnetState.regionId = location;
+        // on Azure, zoneId is the same as regionId
+        subnetState.zoneId = location;
         if (AzureConstants.GATEWAY_SUBNET_NAME.equalsIgnoreCase(subnet.name)) {
             // This is a subnet gateway. Mark it for infrastructure use only.
             subnetState.customProperties.put(ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME,
