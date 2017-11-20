@@ -43,7 +43,8 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
         return start
                 .thenCompose(this::fetchSubnet)
                 .thenCompose(this::fetchNetwork)
-                .thenCompose(this::deletePortgroup);
+                .thenCompose(this::deletePortgroup)
+                .thenCompose(this::deleteSubnet);
     }
 
     private DeferredResult<Operation> fetchNetwork(Operation stateOp) {
@@ -122,5 +123,12 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
                 PhotonModelUriUtils.createInventoryUri(getService().getHost(),getRequest()
                 .resourceReference));
         return getService().sendWithDeferredResult(op);
+    }
+
+    private DeferredResult<Void> deleteSubnet(Void start) {
+        Operation op = Operation.createDelete(
+                PhotonModelUriUtils.createInventoryUri(getService().getHost(),getRequest()
+                        .resourceReference));
+        return getService().sendWithDeferredResult(op).thenAccept(__ -> { });
     }
 }
