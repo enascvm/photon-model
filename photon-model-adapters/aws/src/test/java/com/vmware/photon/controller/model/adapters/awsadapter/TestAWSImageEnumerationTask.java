@@ -425,6 +425,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
             PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 3);
 
+            // Handle Page #0
+
             Assert.assertTrue(pIter.hasNext());
 
             Assert.assertEquals(0, pIter.pageNumber());
@@ -433,13 +435,25 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
             Assert.assertEquals(1, pIter.pageNumber());
 
+            // Handle Page #1
+
+            Assert.assertTrue(pIter.hasNext());
+            // after hasNext prev page is cleared
+            Assert.assertNull(original.get(0));
+            Assert.assertNull(original.get(1));
+            Assert.assertNull(original.get(2));
+
             Assert.assertEquals(Arrays.asList("4"), pIter.next());
 
             Assert.assertEquals(2, pIter.pageNumber());
 
-            Assert.assertFalse(pIter.hasNext());
-
+            // Assert TotalNumber after pages are read
             Assert.assertEquals(original.size(), pIter.totalNumber());
+
+            // Assert No more pages are available
+            Assert.assertFalse(pIter.hasNext());
+            // after hasNext prev page is cleared
+            Assert.assertNull(original.get(3));
         }
 
         {

@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
+import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -22,6 +23,13 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
@@ -37,15 +45,18 @@ import com.google.gson.reflect.TypeToken;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EndpointEnumerationProcess;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -61,31 +72,41 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_IMAGE_ENUMERATION_ADAPTER;
 
+    /**
+     * @see #getImagesPageSize()
+     */
     public static final String IMAGES_PAGE_SIZE_PROPERTY = "photon-model.adapter.aws.images.page.size";
 
     /**
-     * Get images page size from {@value #IMAGES_PAGE_SIZE_PROPERTY} system property.
+     * @see #getImagesMaxConcurrentEnums()
+     */
+    public static final String IMAGES_MAX_CONCURRENT_ENUMS_PROPERTY = "photon-model.adapter.aws.images.max.concurrent.enums";
+
+    /**
+     * Get images page size from {@value #IMAGES_PAGE_SIZE_PROPERTY} system property. The value is
+     * used to partition original AWS images list.
      *
      * @return by default return 1000
      */
     public static int getImagesPageSize() {
 
-        final int DEFAULT_IMAGES_PAGE_SIZE = 1000;
+        final int DEFAULT = 1000;
 
-        try {
-            String imagesPageSizeStr = System.getProperty(
-                    IMAGES_PAGE_SIZE_PROPERTY,
-                    String.valueOf(DEFAULT_IMAGES_PAGE_SIZE));
-
-            return Integer.parseInt(imagesPageSizeStr);
-
-        } catch (NumberFormatException exc) {
-
-            return DEFAULT_IMAGES_PAGE_SIZE;
-        }
+        return Integer.getInteger(IMAGES_PAGE_SIZE_PROPERTY, DEFAULT);
     }
 
-    private AWSClientManager clientManager;
+    /**
+     * Get max number of concurrent images enumerations from
+     * {@value #IMAGES_MAX_CONCURRENT_ENUMS_PROPERTY} system property.
+     *
+     * @return by default return 1, which implies sequential enumerations
+     */
+    public static int getImagesMaxConcurrentEnums() {
+
+        final int DEFAULT = 1;
+
+        return Integer.getInteger(IMAGES_MAX_CONCURRENT_ENUMS_PROPERTY, DEFAULT);
+    }
 
     /**
      * {@link EndpointEnumerationProcess} specialization that loads AWS {@link Image}s into
@@ -130,6 +151,11 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             }
         }
 
+        @Override
+        public String getEndpointRegion() {
+            return this.request.regionId;
+        }
+
         /**
          * <ul>
          * <li>Extract calling image-enum task state prior end-point loading.</li>
@@ -143,11 +169,6 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             return DeferredResult.completed(context)
                     .thenCompose(this::getImageEnumTaskState)
                     .thenCompose(ctx -> super.getEndpointState(ctx));
-        }
-
-        @Override
-        public String getEndpointRegion() {
-            return this.request.regionId;
         }
 
         /**
@@ -181,13 +202,16 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         protected DeferredResult<AWSImageEnumerationContext> createAmazonClient(
                 AWSImageEnumerationContext context) {
+
             DeferredResult<AWSImageEnumerationContext> r = new DeferredResult<>();
+
             context.awsClient = ((AWSImageEnumerationAdapterService) context.service).clientManager
                     .getOrCreateEC2Client(
                             context.endpointAuthState,
                             context.getEndpointRegion(),
                             context.service,
-                            t -> r.fail(t));
+                            r::fail);
+
             if (context.awsClient != null) {
                 r.complete(context);
             }
@@ -197,8 +221,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
 
-            // AWS does not support pagination of images so we internally partition all results thus
-            // simulating paging
+            // AWS does not support pagination of images so we internally partition
+            // all results thus simulating paging
             return loadExternalResources().thenApply(imagesIterator -> {
 
                 RemoteResourcesPage page = new RemoteResourcesPage();
@@ -253,8 +277,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             String msg = "Enumerating AWS images by " + request;
 
             // ALL AWS images are returned with a single call, NO pagination!
-            AWSDeferredResultAsyncHandler<DescribeImagesRequest, DescribeImagesResult> handler =
-                    new AWSDeferredResultAsyncHandler<>(this.service, msg);
+            AWSDeferredResultAsyncHandler<DescribeImagesRequest, DescribeImagesResult> handler = new AWSDeferredResultAsyncHandler<>(
+                    this.service, msg);
 
             this.awsClient.describeImagesAsync(request, handler);
 
@@ -333,6 +357,10 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         }
     }
 
+    private AWSClientManager clientManager;
+
+    private ExecutorService executorService;
+
     public AWSImageEnumerationAdapterService() {
 
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -344,8 +372,9 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
     @Override
     public void handleStart(Operation op) {
 
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.EC2);
+
+        this.executorService = allocateExecutor();
 
         super.handleStart(op);
     }
@@ -356,7 +385,10 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
     @Override
     public void handleStop(Operation op) {
 
-        returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+        returnClientManager(this.clientManager, AwsClientType.EC2);
+
+        this.executorService.shutdown();
+        AdapterUtils.awaitTermination(this.executorService);
 
         super.handleStop(op);
     }
@@ -381,22 +413,43 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        final String msg = ctx.request.requestType + " images enumeration";
+        // Encapsulate core images enum code as Supplier, so we can manipulate and pass it.
+        final Supplier<DeferredResult<AWSImageEnumerationContext>> imagesEnum = () -> {
 
-        logFine(() -> msg + ": STARTED");
+            final String msg = ctx.request.requestType + " images enumeration";
 
-        // Start image enumeration process...
-        ctx.enumerate()
-                .whenComplete((o, e) -> {
-                    // Once done patch the calling task with correct stage.
-                    if (e == null) {
-                        logFine(() -> msg + ": COMPLETED");
-                        completeWithSuccess(ctx);
-                    } else {
-                        logSevere(() -> msg + ": FAILED with " + Utils.toString(e));
-                        completeWithFailure(ctx, e);
-                    }
-                });
+            logFine(() -> msg + ": STARTED");
+
+            // Start image enumeration process...
+            DeferredResult<AWSImageEnumerationContext> imagesEnumDR = ctx.enumerate()
+                    .whenComplete((o, e) -> {
+                        // Once done patch the calling task with correct stage.
+                        if (e == null) {
+                            logFine(() -> msg + ": COMPLETED");
+                            completeWithSuccess(ctx);
+                        } else {
+                            logSevere(() -> msg + ": FAILED with " + Utils.toString(e));
+                            completeWithFailure(ctx, e);
+                        }
+                    });
+
+            return imagesEnumDR;
+        };
+
+        // Apply different execution strategies depending on enum type
+
+        if (ctx.request.requestType == ImageEnumerateRequestType.PRIVATE) {
+            // PRIVATE enums are handled immediately
+            imagesEnum.get();
+        } else {
+            // PUBLIC enums are executed sequentially in a dedicated Thread Pool
+            Runnable publicImagesEnum = () -> waitToComplete(imagesEnum.get());
+
+            PhotonModelUtils.runInExecutor(
+                    this.executorService,
+                    publicImagesEnum,
+                    exc -> completeWithFailure(ctx, exc));
+        }
     }
 
     private void completeWithFailure(AWSImageEnumerationContext ctx, Throwable exc) {
@@ -405,6 +458,35 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
     private void completeWithSuccess(AWSImageEnumerationContext ctx) {
         ctx.taskManager.finishTask();
+    }
+
+    /**
+     * Creates an executor specific to AWS public images enum, which by default is single threaded
+     * with a queue of size 20.
+     */
+    private ExecutorService allocateExecutor() {
+
+        // We always have 1 active thread
+        final int corePoolSize = 1;
+
+        // By default returns 1, so effectively we have single threaded executor;
+        // otherwise the pool size varies
+        final int imagesMaxConcurrentEnums = getImagesMaxConcurrentEnums();
+
+        final int maximumPoolSize = imagesMaxConcurrentEnums < corePoolSize
+                ? Utils.DEFAULT_THREAD_COUNT
+                : imagesMaxConcurrentEnums;
+
+        final long keepAliveTime = 0L;
+        final TimeUnit unit = TimeUnit.MILLISECONDS;
+
+        // Use queue with size 20, which is close to AWS regions count
+        final BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(20);
+
+        ThreadFactory tFactory = r -> new Thread(r, getUri() + "/" + Utils.getSystemNowMicrosUtc());
+
+        return new ThreadPoolExecutor(
+                corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, tFactory);
     }
 
     /**
@@ -422,6 +504,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         private int totalNumber = 0;
 
+        private List<T> page = null;
+
         public PartitionedIterator(List<T> originalList, int partitionSize) {
             // we are tolerant to null values
             this.originalList = originalList == null ? Collections.emptyList() : originalList;
@@ -430,7 +514,13 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         @Override
         public boolean hasNext() {
-            return this.lastIndex < this.originalList.size();
+            try {
+                return this.lastIndex < this.originalList.size();
+            } finally {
+                // Since AWS serves all images as single List,
+                // we do our best to release it as soon as possible.
+                clearLastPage();
+            }
         }
 
         /**
@@ -443,16 +533,31 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                         getClass().getSimpleName() + " has already been consumed.");
             }
 
-            int beginIndex = this.lastIndex;
+            // Store prev lastIndex as beginIndex
+            final int beginIndex = this.lastIndex;
 
+            // Calculate current lastIndex
             this.lastIndex = Math.min(beginIndex + this.partitionSize, this.originalList.size());
 
-            List<T> page = this.originalList.subList(beginIndex, this.lastIndex);
+            // Get a subList
+            this.page = this.originalList.subList(beginIndex, this.lastIndex);
 
             this.pageNumber++;
-            this.totalNumber += page.size();
+            this.totalNumber += this.page.size();
 
-            return page;
+            return this.page;
+        }
+
+        /**
+         * Clear consumed page to let GC do its work.
+         */
+        private void clearLastPage() {
+            if (this.page != null) {
+                for (int i = 0, size = this.page.size(); i < size; i++) {
+                    this.page.set(i, null);
+                }
+            }
+            this.page = null;
         }
 
         /**
