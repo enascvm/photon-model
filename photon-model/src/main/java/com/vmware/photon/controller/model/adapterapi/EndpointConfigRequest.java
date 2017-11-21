@@ -13,8 +13,11 @@
 
 package com.vmware.photon.controller.model.adapterapi;
 
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
@@ -40,8 +43,8 @@ public class EndpointConfigRequest extends ResourceRequest {
     public static final String REGION_KEY = "regionId";
     public static final String ZONE_KEY = "zoneId";
     /**
-     * A key for the property of {@link #endpointProperties} which specifies trusted certificate
-     * for the endpoint
+     * A key for the property of {@link #endpointProperties} which specifies trusted certificate for
+     * the endpoint
      */
     public static final String CERTIFICATE_PROP_NAME = "certificate";
 
@@ -57,6 +60,35 @@ public class EndpointConfigRequest extends ResourceRequest {
     public static final String SUPPORT_PUBLIC_IMAGES = "supportPublicImages";
 
     /**
+     * Supported/Allowed values for {@value #SUPPORT_PUBLIC_IMAGES} property.
+     */
+    public static enum PublicImagesEnumMode {
+        // For backward compatibility consider 'false' as NONE
+        NONE("none", "false"),
+        // For backward compatibility consider 'true' as PER_REGION
+        PER_REGION("perRegion", "true"),
+        PER_ENDPOINT("perEndpoint");
+
+        private final Set<String> literals;
+
+        private PublicImagesEnumMode(String... literals) {
+            this.literals = new LinkedHashSet<>(Arrays.asList(literals));
+        }
+
+        public static PublicImagesEnumMode fromString(String value) {
+            if (value == null) {
+                return NONE;
+            }
+            for (PublicImagesEnumMode mode : values()) {
+                if (mode.literals.contains(value.toLowerCase())) {
+                    return mode;
+                }
+            }
+            return NONE;
+        }
+    }
+
+    /**
      * Set this property to true if the end-point supports explicit datastores concept.
      */
     public static final String SUPPORT_DATASTORES = "supportDatastores";
@@ -65,8 +97,7 @@ public class EndpointConfigRequest extends ResourceRequest {
      * Endpoint request type.
      */
     public enum RequestType {
-        VALIDATE,
-        ENHANCE
+        VALIDATE, ENHANCE
     }
 
     /**

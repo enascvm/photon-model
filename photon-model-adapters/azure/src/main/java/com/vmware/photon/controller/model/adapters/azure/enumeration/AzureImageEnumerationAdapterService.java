@@ -743,9 +743,11 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             azureImageData.osFamily = imageRef.osFamily;
 
+            // For default images we use the region as passed in the request
+            azureImageData.regionId = this.ctx.getEndpointRegion();
+
             return azureImageData;
         }
-
     }
 
     /**
@@ -1052,6 +1054,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             azureImageData.description = azureImageData.id;
 
+            azureImageData.regionId = azureImage.location();
+
             if (azureImage.osDiskImage() != null
                     && azureImage.osDiskImage().operatingSystem() != null) {
                 azureImageData.osFamily = azureImage.osDiskImage().operatingSystem().name();
@@ -1126,6 +1130,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             azureImageData.name = azureCustomImage.name();
 
             azureImageData.description = azureImageData.name;
+
+            azureImageData.regionId = azureCustomImage.regionName();
 
             // Configure Disks
 
