@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -24,7 +27,12 @@ import com.microsoft.azure.management.resources.implementation.ResourceManagemen
 import com.microsoft.azure.management.resources.implementation.SubscriptionClientImpl;
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 import com.microsoft.rest.RestClient;
+import retrofit2.CallAdapter;
+import retrofit2.Retrofit;
+import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
+import rx.internal.schedulers.ExecutorScheduler;
 
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -58,6 +66,10 @@ public class AzureSdkClients implements AutoCloseable {
         this.credentials = AzureUtils.getAzureConfig(authentication);
 
         this.restClient = AzureUtils.buildRestClient(this.credentials, executorService);
+
+        if (executorService != null) {
+            this.fixRestClient(executorService);
+        }
     }
 
     public synchronized Azure getAzureClient() {
@@ -134,5 +146,34 @@ public class AzureSdkClients implements AutoCloseable {
 
         AzureUtils.cleanUpHttpClient(this.restClient);
         this.restClient = null;
+    }
+
+    /**
+     * Inject executor service in the rest client
+     */
+    private void fixRestClient(ExecutorService executorService) {
+        try {
+            Field adapterFactories_F = Retrofit.class.getDeclaredField("adapterFactories");
+            adapterFactories_F.setAccessible(true);
+
+            RxJavaCallAdapterFactory rxJava = RxJavaCallAdapterFactory
+                    .createWithScheduler(new ExecutorScheduler(executorService));
+
+            List<CallAdapter.Factory> factories = new ArrayList<>();
+            factories.add(rxJava);
+
+            List<CallAdapter.Factory> originalFactories = this.restClient.retrofit()
+                    .callAdapterFactories();
+
+            // add all of the original factories but the rxjava which was just created
+            originalFactories.stream()
+                    .filter(x -> !(x instanceof RxJavaCallAdapterFactory))
+                    .forEach(factories::add);
+
+            adapterFactories_F.set(this.restClient.retrofit(), factories);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            Utils.logWarning("Exception %s when injecting executor in RestClient : %s",
+                    e.getClass().getSimpleName(), e.getMessage());
+        }
     }
 }

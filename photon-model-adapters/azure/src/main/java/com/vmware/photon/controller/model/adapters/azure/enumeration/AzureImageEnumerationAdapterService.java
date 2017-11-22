@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -56,6 +56,7 @@ import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EndpointEnumerationProcess;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -71,15 +72,15 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_IMAGE_ENUMERATION_ADAPTER;
 
-    public static final String DEFAUL_IMAGES_SOURCE_PROPERTY = "photon-model.adapter.azure.images.default.source";
+    public static final String DEFAULT_IMAGES_SOURCE_PROPERTY = "photon-model.adapter.azure.images.default.source";
 
     /**
      * Public JSON file of default Azure images.
      */
-    public static final String DEFAUL_IMAGES_SOURCE_VALUE = "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json";
+    public static final String DEFAULT_IMAGES_SOURCE_VALUE = "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json";
 
     public static String getDefaultImagesSource() {
-        return System.getProperty(DEFAUL_IMAGES_SOURCE_PROPERTY, DEFAUL_IMAGES_SOURCE_VALUE);
+        return System.getProperty(DEFAULT_IMAGES_SOURCE_PROPERTY, DEFAULT_IMAGES_SOURCE_VALUE);
     }
 
     public static final String IMAGES_LOAD_MODE_PROPERTY = "photon-model.adapter.azure.images.load.mode";
@@ -281,8 +282,21 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
          */
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
+            ExecutorService executorService =
+                    ((AzureImageEnumerationAdapterService) this.service).executorService;
+            DeferredResult<RemoteResourcesPage> r = new DeferredResult<>();
 
-            return getAzureImagesPage(getAzureImagesLoader());
+            PhotonModelUtils
+                    .runInExecutor(executorService, () -> getAzureImagesPage(getAzureImagesLoader())
+                            .handle((result, err) -> {
+                                if (err != null) {
+                                    r.fail(err);
+                                } else {
+                                    r.complete(result);
+                                }
+                                return null;
+                            }), r::fail);
+            return r;
         }
 
         /**

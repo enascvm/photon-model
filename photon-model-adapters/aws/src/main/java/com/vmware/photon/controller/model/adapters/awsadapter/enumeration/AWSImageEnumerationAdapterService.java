@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -102,10 +102,9 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
      * @return by default return 1, which implies sequential enumerations
      */
     public static int getImagesMaxConcurrentEnums() {
-
         final int DEFAULT = 1;
 
-        return Integer.getInteger(IMAGES_MAX_CONCURRENT_ENUMS_PROPERTY, DEFAULT);
+        return Math.max(DEFAULT, Integer.getInteger(IMAGES_MAX_CONCURRENT_ENUMS_PROPERTY, DEFAULT));
     }
 
     /**
@@ -466,16 +465,9 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
      */
     private ExecutorService allocateExecutor() {
 
-        // We always have 1 active thread
-        final int corePoolSize = 1;
-
         // By default returns 1, so effectively we have single threaded executor;
         // otherwise the pool size varies
         final int imagesMaxConcurrentEnums = getImagesMaxConcurrentEnums();
-
-        final int maximumPoolSize = imagesMaxConcurrentEnums < corePoolSize
-                ? Utils.DEFAULT_THREAD_COUNT
-                : imagesMaxConcurrentEnums;
 
         final long keepAliveTime = 0L;
         final TimeUnit unit = TimeUnit.MILLISECONDS;
@@ -483,10 +475,11 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         // Use queue with size 20, which is close to AWS regions count
         final BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(20);
 
-        ThreadFactory tFactory = r -> new Thread(r, getUri() + "/" + Utils.getSystemNowMicrosUtc());
+        ThreadFactory tFactory = r -> new Thread(r,
+                "/" + getUri() + "/" + Utils.getSystemNowMicrosUtc());
 
         return new ThreadPoolExecutor(
-                corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, tFactory);
+                1, imagesMaxConcurrentEnums, keepAliveTime, unit, workQueue, tFactory);
     }
 
     /**
