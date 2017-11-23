@@ -103,6 +103,8 @@ public class AzureUtils {
     public static final String COMPUTES_NAME_FORMAT_WITH_PARENT_NAME_ENTITY_NAME =
             "%s" + COMPUTE_NAME_SEPARATOR + "%s";
 
+    public static final String LOG_LEVEL_PROPERTY = "photon-model.adapter.azure.rest.log.level";
+
     /**
      * Flag to use azure-mock, will be set in test files. Azure-mock is a tool for testing
      * Azure services in a mock environment.
@@ -524,7 +526,7 @@ public class AzureUtils {
         restClientBuilder.withBaseUrl(AzureUtils.getAzureBaseUri());
         restClientBuilder.withCredentials(credentials);
         restClientBuilder.withSerializerAdapter(new AzureJacksonAdapter());
-        restClientBuilder.withLogLevel(LogLevel.NONE);
+        restClientBuilder.withLogLevel(getRestClientLogLevel());
         if (executorService != null) {
             restClientBuilder.withCallbackExecutor(executorService);
         }
@@ -638,7 +640,19 @@ public class AzureUtils {
         return resourceGroupName;
     }
 
+    /**
+     * Get {@code LogLevel} from {@value #LOG_LEVEL_PROPERTY} system property.
+     *
+     * @return by default return {@link LogLevel#NONE}
+     */
+    private static LogLevel getRestClientLogLevel() {
+        String argLogLevel = System.getProperty(LOG_LEVEL_PROPERTY, LogLevel.NONE.name());
 
-
+        try {
+            return LogLevel.valueOf(argLogLevel);
+        } catch (Exception exc) {
+            return LogLevel.NONE;
+        }
+    }
 
 }
