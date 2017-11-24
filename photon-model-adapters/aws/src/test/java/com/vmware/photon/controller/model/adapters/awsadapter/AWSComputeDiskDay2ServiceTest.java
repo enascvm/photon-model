@@ -16,7 +16,9 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.avalabilityZoneIdentifier;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -30,7 +32,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.vpcIdExists;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestProvisionAWSDisk.createAWSDiskState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
@@ -108,7 +109,12 @@ public class AWSComputeDiskDay2ServiceTest {
     private Map<String, Object> awsTestContext;
 
     private ComputeState vmState;
-    private DiskState diskState;
+
+    //The disks added to this list are deleted with AWSDiskService.Delete
+    private List<DiskState> diskStates = new ArrayList<>();
+
+    //This volume is deleted directly with amazonEc2Client.deleteVolume().
+    private String volumeId;
 
     private ComputeState computeHost;
     private EndpointState endpointState;
@@ -116,6 +122,8 @@ public class AWSComputeDiskDay2ServiceTest {
     private String sgToCleanUp = null;
 
     private TestAWSSetupUtils.AwsNicSpecs singleNicSpec;
+
+    private String zoneId = TestAWSSetupUtils.regionId + avalabilityZoneIdentifier;
 
     public static class DiskTaskService
             extends TaskService<DiskTaskService.DiskTaskState> {
@@ -168,7 +176,7 @@ public class AWSComputeDiskDay2ServiceTest {
         this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor());
 
         this.awsTestContext = new HashMap<>();
-        setUpTestVpc(this.client, this.awsTestContext, this.isMock);
+        setUpTestVpc(this.client, this.awsTestContext, this.isMock, this.zoneId );
         this.singleNicSpec = (TestAWSSetupUtils.AwsNicSpecs) this.awsTestContext
                 .get(TestAWSSetupUtils.NIC_SPECS_KEY);
 
@@ -225,17 +233,27 @@ public class AWSComputeDiskDay2ServiceTest {
             resourcesToDelete.addAll(this.vmState.diskLinks);
         }
 
-        resourcesToDelete.add(this.diskState.documentSelfLink);
+        resourcesToDelete.add(this.diskStates.get(0).documentSelfLink);
 
         if (this.vmState.networkInterfaceLinks != null) {
             resourcesToDelete.addAll(this.vmState.networkInterfaceLinks);
         }
 
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
-        TestAWSSetupUtils.deleteDisks(this.diskState.documentSelfLink, this.isMock, this.host,
+
+        List<String> diskLinks = this.diskStates.stream()
+                .map(diskState -> diskState.documentSelfLink).collect(Collectors.toList());
+
+        TestAWSSetupUtils.deleteDisks(diskLinks, this.isMock, this.host,
                 this.endpointState.tenantLinks);
 
         if (!this.isMock) {
+
+            if (this.volumeId != null) {
+                //Explicitly delete the volume..
+                TestAWSSetupUtils.deleteVolume(this.client, this.volumeId);
+            }
+
             if (!vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
                 SecurityGroup securityGroup = new AWSSecurityGroupClient(this.client)
                         .getSecurityGroup(TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
@@ -257,78 +275,105 @@ public class AWSComputeDiskDay2ServiceTest {
     @Test
     public void testDiskOperations() throws Throwable {
         Gson gson = new Gson();
+        initResourcePoolAndComputeHost(this.zoneId);
 
-        provisionSingleAWS();
+        DiskState diskspec1 = createAWSDiskState(this.host, this.endpointState,
+                this.currentTestName.getMethodName() + "_disk1", this.zoneId, regionId);
+
+        //create a disk
+        provisionSingleDisk(diskspec1);
+
+        //attach a disk while provisioning the vm
+        provisionVMAndAttachDisk(this.zoneId, diskspec1.documentSelfLink);
 
         // check that the VM has been created
         ServiceDocumentQueryResult computeQueryResult = ProvisioningUtils
                 .queryComputeInstances(this.host, 2);
 
-        ComputeState compute = gson.fromJson(
+        ComputeState vmStateAfterAttach1 = gson.fromJson(
                 computeQueryResult.documents.get(this.vmState.documentSelfLink).toString(),
                 ComputeState.class);
-
-        String instanceZoneId = zoneId;
 
         if (!this.isMock) {
 
             List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
-                    Collections.singletonList(compute.id));
+                    Collections.singletonList(vmStateAfterAttach1.id));
             Instance instance = instances.get(0);
-            instanceZoneId = instance.getPlacement().getAvailabilityZone();
+            //            instanceZoneId = instance.getPlacement().getAvailabilityZone();
 
             ComputeState vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
             assertAndSetVMSecurityGroupsToBeDeleted(instance, vm);
+
+            //verify that the disk is attached while provisioning the vm.
+            DiskState attachedDisk1 = this.host.getServiceState(null, DiskState.class,
+                    UriUtils.buildUri(this.host, diskspec1.documentSelfLink));
+
+            assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
+                    attachedDisk1.status);
+
+            this.volumeId = attachedDisk1.id;
         }
 
-        provisionSingleDisk(instanceZoneId);
+        //create disk2
+        DiskState diskSpec2 = createAWSDiskState(this.host, this.endpointState,
+                this.currentTestName.getMethodName() + "_disk2", this.zoneId, regionId);
+        provisionSingleDisk(diskSpec2);
 
         ServiceDocumentQueryResult diskQueryResult = ProvisioningUtils
-                .queryDiskInstances(this.host, compute.diskLinks.size() + 1);
+                .queryDiskInstances(this.host, vmStateAfterAttach1.diskLinks.size() + 1);
 
-        DiskState availableDisk = gson
-                .fromJson(diskQueryResult.documents.get(this.diskState.documentSelfLink).toString(),
-                        DiskState.class);
+        DiskState provisionedDisk2 = gson.fromJson(
+                diskQueryResult.documents.get(diskSpec2.documentSelfLink).toString(),
+                DiskState.class);
 
         assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
-                availableDisk.status);
+                provisionedDisk2.status);
 
-        //attach disk to vm and verify the details
-        performDiskOperation(compute, this.diskState, ResourceOperation.ATTACH_DISK.operation);
+        //attach disk to an available vm and verify the details.
+        performDiskOperation(vmStateAfterAttach1, provisionedDisk2.documentSelfLink,
+                ResourceOperation.ATTACH_DISK.operation);
 
-        ComputeState vm = this.host.getServiceState(null, ComputeState.class,
+        ComputeState vmStateAfterAttach2 = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        assertEquals(compute.diskLinks.size() + 1, vm.diskLinks.size());
+        assertEquals(vmStateAfterAttach1.diskLinks.size() + 1,
+                vmStateAfterAttach2.diskLinks.size());
 
-        DiskState attachedDisk = this.host.getServiceState(null, DiskState.class,
-                UriUtils.buildUri(this.host, this.diskState.documentSelfLink));
+        DiskState attachedDisk2 = this.host.getServiceState(null, DiskState.class,
+                UriUtils.buildUri(this.host, provisionedDisk2.documentSelfLink));
 
         assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
-                attachedDisk.status);
-
+                attachedDisk2.status);
 
         //detach disk from the vm and verify the details
-        performDiskOperation(vm, attachedDisk, ResourceOperation.DETACH_DISK.operation);
+        ComputeState vmStateAfterDetach1 = detachDiskAndVerify(vmStateAfterAttach2, attachedDisk2);
 
-        vm = this.host.getServiceState(null, ComputeState.class,
+        this.vmState = vmStateAfterDetach1;
+    }
+
+    private ComputeState detachDiskAndVerify(ComputeState vmStateAfterAttach,
+            DiskState attachedDisk2) throws Throwable {
+        performDiskOperation(vmStateAfterAttach, attachedDisk2.documentSelfLink,
+                ResourceOperation.DETACH_DISK.operation);
+
+        ComputeState vmStateAfterDetach = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        assertEquals(compute.diskLinks.size(), vm.diskLinks.size());
+        assertEquals(vmStateAfterAttach.diskLinks.size() - 1, vmStateAfterDetach.diskLinks.size());
 
         DiskState detachedDisk = this.host.getServiceState(null, DiskState.class,
-                UriUtils.buildUri(this.host, this.diskState.documentSelfLink));
+                UriUtils.buildUri(this.host, attachedDisk2.documentSelfLink));
 
         assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
                 detachedDisk.status);
 
-        this.vmState = vm;
-        this.diskState = detachedDisk;
+        this.diskStates.add(detachedDisk);
+        return vmStateAfterDetach;
     }
 
-    private void performDiskOperation(ComputeState compute, DiskState diskState, String requestType) throws Throwable {
+    private void performDiskOperation(ComputeState compute, String diskLink, String requestType) throws Throwable {
         DiskTaskService.DiskTaskState diskOpTask = new DiskTaskService.DiskTaskState();
         diskOpTask.taskSubStage = DiskTaskService.DiskTaskState.SubStage.STARTED;
 
@@ -341,7 +386,7 @@ public class AWSComputeDiskDay2ServiceTest {
         request.isMockRequest = this.isMock;
         request.operation = requestType;
         request.payload = new HashMap<>();
-        request.payload.put(PhotonModelConstants.DISK_LINK, diskState.documentSelfLink);
+        request.payload.put(PhotonModelConstants.DISK_LINK, diskLink);
         request.resourceReference = UriUtils.buildUri(this.host, compute.documentSelfLink);
         request.taskReference = UriUtils.buildUri(this.host, diskOpTask.documentSelfLink);
 
@@ -446,15 +491,23 @@ public class AWSComputeDiskDay2ServiceTest {
         }
     }
 
-    private void provisionSingleAWS() throws Throwable {
-
-        initResourcePoolAndComputeHost();
-
+    private void provisionVMAndAttachDisk(String zoneId, String existingDiskLink) throws Throwable {
         // create a AWS VM compute resource
         boolean addNonExistingSecurityGroup = true;
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(), this.currentTestName.getMethodName() + "_vm1", zoneId,
                 regionId, null, this.singleNicSpec, addNonExistingSecurityGroup);
+
+        // set placement link
+        if (this.vmState.customProperties == null) {
+            this.vmState.customProperties = new HashMap<>();
+        }
+
+        this.vmState.customProperties.put(PLACEMENT_LINK, this.computeHost.documentSelfLink);
+        this.vmState.diskLinks.add(existingDiskLink);
+        TestUtils
+                .doPatch(this.host, this.vmState, ComputeState.class, UriUtils.buildUri(this.host,
+                        this.vmState.documentSelfLink));
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskService.ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -471,24 +524,20 @@ public class AWSComputeDiskDay2ServiceTest {
         provisionTask.tenantLinks = this.endpointState.tenantLinks;
 
         provisionTask = com.vmware.photon.controller.model.tasks.TestUtils.doPost(this.host,
-                provisionTask,
-                ProvisionComputeTaskService.ProvisionComputeTaskState.class,
+                provisionTask, ProvisionComputeTaskService.ProvisionComputeTaskState.class,
                 UriUtils.buildUri(this.host, ProvisionComputeTaskService.FACTORY_LINK));
 
         this.host.waitForFinishedTask(ProvisionComputeTaskService.ProvisionComputeTaskState.class,
                 provisionTask.documentSelfLink);
     }
 
-    private void provisionSingleDisk(String zoneId) throws Throwable {
-
-        this.diskState = createAWSDiskState(this.host, this.endpointState,
-                this.currentTestName.getMethodName() + "_disk1", zoneId, regionId);
+    private void provisionSingleDisk(DiskState diskState) throws Throwable {
 
         // start provision task to do the actual disk creation
         ProvisionDiskTaskService.ProvisionDiskTaskState provisionTask = new ProvisionDiskTaskService.ProvisionDiskTaskState();
         provisionTask.taskSubStage = ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.CREATING_DISK;
 
-        provisionTask.diskLink = this.diskState.documentSelfLink;
+        provisionTask.diskLink = diskState.documentSelfLink;
         provisionTask.isMockRequest = this.isMock;
 
         provisionTask.documentExpirationTimeMicros =
@@ -502,12 +551,13 @@ public class AWSComputeDiskDay2ServiceTest {
 
         this.host.waitForFinishedTask(ProvisionDiskTaskService.ProvisionDiskTaskState.class,
                 provisionTask.documentSelfLink);
+
     }
 
     /**
      * Creates the state associated with the resource pool, compute host and the VM to be created.
      */
-    private void initResourcePoolAndComputeHost() throws Throwable {
+    private void initResourcePoolAndComputeHost(String zoneId) throws Throwable {
         // Create a resource pool where the VM will be housed
         ResourcePoolService.ResourcePoolState resourcePool = createAWSResourcePool(this.host);
 
@@ -519,10 +569,7 @@ public class AWSComputeDiskDay2ServiceTest {
                         resourcePool.documentSelfLink);
 
         // create a compute host for the AWS EC2 VM
-        this.computeHost = createAWSComputeHost(this.host,
-                this.endpointState,
-                zoneId, regionId,
-                this.isAwsClientMock,
-                this.awsMockEndpointReference, null /*tags*/);
+        this.computeHost = createAWSComputeHost(this.host,this.endpointState, zoneId, regionId,
+                this.isAwsClientMock, this.awsMockEndpointReference, null /*tags*/);
     }
 }

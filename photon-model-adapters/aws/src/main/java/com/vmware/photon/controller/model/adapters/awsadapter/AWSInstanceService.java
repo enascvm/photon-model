@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -49,7 +50,10 @@ import java.util.stream.Stream;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.handlers.AsyncHandler;
+import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.AmazonEC2Exception;
+import com.amazonaws.services.ec2.model.AttachVolumeRequest;
+import com.amazonaws.services.ec2.model.AttachVolumeResult;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
 import com.amazonaws.services.ec2.model.DeleteSubnetResult;
@@ -83,9 +87,11 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
+import com.vmware.photon.controller.model.adapters.util.Pair;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -438,9 +444,9 @@ public class AWSInstanceService extends StatelessService {
                 customizeBootDiskProperties(bootDisk, rootDeviceType, rootDeviceMapping,
                         hasHardConstraint, aws);
 
+                List<DiskState> ebsDisks = new ArrayList<>();
+                List<DiskState> instanceStoreDisks = new ArrayList<>();
                 if (!aws.dataDisks.isEmpty()) {
-                    List<DiskState> instanceStoreDisks = new ArrayList<>();
-                    List<DiskState> ebsDisks = new ArrayList<>();
                     if (!rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
                         instanceStoreDisks = aws.dataDisks;
                         validateSupportForAdditionalInstanceStoreDisks(instanceStoreDisks,
@@ -453,9 +459,32 @@ public class AWSInstanceService extends StatelessService {
                                     blockDeviceMappings, aws.instanceTypeInfo, rootDeviceType);
                         }
                     }
-                    addDeviceMappings(ebsDisks, instanceStoreDisks, runInstancesRequest,
-                            blockDeviceMappings, aws.instanceTypeInfo);
                 }
+
+                //get the available attach paths for new disks and external disks
+                List<String> usedDeviceNames = new ArrayList<>();
+                if (!instanceStoreDisks.isEmpty() || !ebsDisks.isEmpty() ||
+                        !aws.externalDisks.isEmpty()) {
+                    usedDeviceNames = getUsedDeviceNames(blockDeviceMappings);
+                }
+
+                if (!instanceStoreDisks.isEmpty()) {
+                    List<String> usedVirtualNames = getUsedVirtualNames(blockDeviceMappings);
+                    blockDeviceMappings.addAll(createInstanceStoreMappings(instanceStoreDisks,
+                            usedDeviceNames, usedVirtualNames, aws.instanceTypeInfo.id,
+                            aws.instanceTypeInfo.dataDiskSizeInMB));
+                }
+
+                if (!ebsDisks.isEmpty() || !aws.externalDisks.isEmpty()) {
+                    aws.availableEbsDiskNames = getAvailableDeviceNames(usedDeviceNames,
+                            AWS_EBS_DEVICE_NAMES);
+                }
+
+                if (!ebsDisks.isEmpty()) {
+                    blockDeviceMappings.addAll(createEbsDeviceMappings(ebsDisks,
+                            aws.availableEbsDiskNames));
+                }
+
                 runInstancesRequest.withBlockDeviceMappings(blockDeviceMappings);
             } catch (Exception e) {
                 aws.error = e;
@@ -795,8 +824,7 @@ public class AWSInstanceService extends StatelessService {
                 patchOperations.add(patchState);
 
                 OperationJoin joinOp = OperationJoin.create(patchOperations);
-                joinOp.setCompletion((ox,
-                        exc) -> {
+                joinOp.setCompletion((ox, exc) -> {
                     if (exc != null) {
                         this.service.logSevere(() -> String.format("Error updating VM state. %s",
                                 Utils.toString(exc)));
@@ -804,7 +832,58 @@ public class AWSInstanceService extends StatelessService {
                                 new IllegalStateException("Error updating VM state"));
                         return;
                     }
-                    this.context.taskManager.finishTask();
+
+                    //attach external ebs volumes to the instance if any.
+                    if (!this.context.externalDisks.isEmpty()) {
+                        if (this.context.availableEbsDiskNames.size() < this.context.externalDisks
+                                .size()) {
+                            //fail if sufficient number of attach paths are not available.
+                            String error = "External disks cannot be attached. Insufficient device names.";
+                            logSevere(() -> "[AWSInstanceService] " + error);
+                            this.context.taskManager.patchTaskToFailure(
+                                    new IllegalArgumentException(error));
+                            return;
+                        }
+
+                        Operation computeOp = ox.values().stream().filter(resourceOp ->
+                                resourceOp.getUri().getPath().contains(ComputeService.FACTORY_LINK)
+                        ).findFirst().orElse(null);
+
+                        ComputeState provisionedComputeState = computeOp
+                                .getBody(ComputeState.class);
+                        DeferredResult<DiskState> attachDr = attachExternalDisks(
+                                provisionedComputeState.id, this.context.externalDisks,
+                                this.context.availableEbsDiskNames, this.context.amazonEC2Client);
+
+                        attachDr.whenComplete((diskState, throwable) -> {
+                            if (throwable != null) {
+                                String error = String .format("Error in attaching external disks. %s.",
+                                                throwable.getCause());
+                                logSevere(() -> "[AWSInstanceService] " + error);
+                                this.context.taskManager.patchTaskToFailure(
+                                        new IllegalArgumentException(error));
+                                return;
+                            }
+                            // patch all the externally attached disks.
+                            DeferredResult<List<Operation>> externalDisksDr =
+                                    updateComputeAndDiskStates(this.context.externalDisks,
+                                            provisionedComputeState, this.service);
+                            externalDisksDr.whenComplete((c, e) -> {
+                                if (e != null) {
+                                    String error = String.format("Error updating computeState and "
+                                                    + "diskStates of external disks. %s",
+                                            Utils.toString(e));
+                                    logSevere(() -> "[AWSInstanceService] " + error);
+                                    this.context.taskManager.patchTaskToFailure(
+                                            new IllegalArgumentException(error));
+                                    return;
+                                }
+                                this.context.taskManager.finishTask();
+                            });
+                        });
+                    } else {
+                        this.context.taskManager.finishTask();
+                    }
                 });
 
                 dr.whenComplete((computeState, throwable) -> {
@@ -823,6 +902,112 @@ public class AWSInstanceService extends StatelessService {
                     .getInstanceId();
 
             tagInstanceAndStartStatusChecker(instanceId, this.context.child.tagLinks, consumer);
+        }
+
+        private DeferredResult<DiskState> attachExternalDisks( String id,
+                List<DiskState> externalDisks, List<String> availableEbsDiskNames,
+                AmazonEC2AsyncClient client) {
+
+            List<DeferredResult<Pair<DiskState, Throwable>>> diskStateResults =
+                    externalDisks.stream().map(externalDisk -> {
+                        String deviceName = availableEbsDiskNames.get(0);
+                        availableEbsDiskNames.remove(0);
+                        externalDisk.customProperties.put(DEVICE_NAME, deviceName);
+
+                        AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
+                                .withInstanceId(id)
+                                .withVolumeId(externalDisk.id)
+                                .withDevice(deviceName);
+
+                        DeferredResult<DiskState> diskDr = new DeferredResult<>();
+
+                        AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult> attachDiskHandler =
+                                new AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult>() {
+                                    @Override protected void handleError(
+                                            Exception exception) {
+                                        diskDr.fail(exception);
+                                    }
+
+                                    @Override protected void handleSuccess(
+                                            AttachVolumeRequest request,
+                                            AttachVolumeResult result) {
+                                        diskDr.complete(externalDisk);
+                                    }
+                                };
+                        client.attachVolumeAsync(attachVolumeRequest, attachDiskHandler);
+                        return diskDr;
+                    }).map(diskDr -> diskDr
+                            .thenApply(
+                                    diskState -> Pair.of(diskState, (Throwable) null))
+                            .exceptionally(ex -> Pair.of(null, ex.getCause())))
+                            .collect(Collectors.toList());
+
+            return DeferredResult.allOf(diskStateResults)
+                    .thenCompose(pairs -> {
+                        // Collect error messages if any for all the external disks.
+                        StringJoiner stringJoiner = new StringJoiner(",");
+                        pairs.stream().filter(p -> p.left == null)
+                                .forEach(p -> stringJoiner.add(p.right.getMessage()));
+                        if (stringJoiner.length() > 0) {
+                            return DeferredResult.failed(new Throwable(stringJoiner
+                                    .toString()));
+                        } else {
+                            return DeferredResult.completed(new DiskState());
+                        }
+                    });
+        }
+
+        /**
+         * Update photon-model disk states and compute state to reflect the attached disks.
+         *
+         */
+        private DeferredResult<List<Operation>> updateComputeAndDiskStates(
+                List<DiskState> externalDisks, ComputeState computeState, StatelessService service) {
+            List<DeferredResult<Operation>> patchDRs = new ArrayList<>();
+
+            patchDRs.addAll(updateDiskStates(externalDisks, service));
+            patchDRs.add(updateComputeState(computeState, externalDisks, service));
+
+            return DeferredResult.allOf(patchDRs);
+        }
+
+        /**
+         * Add diskLinks to computeState
+         */
+        private DeferredResult<Operation> updateComputeState(ComputeState computeState,
+                List<DiskState> externalDisks, StatelessService service) {
+
+            if (computeState.diskLinks == null) {
+                computeState.diskLinks = new ArrayList<>();
+            }
+
+            for (DiskState diskState : externalDisks) {
+                computeState.diskLinks.add(diskState.documentSelfLink);
+            }
+
+            Operation computeStateOp = Operation.createPatch(service.getHost(),
+                    computeState.documentSelfLink)
+                    .setBody(computeState)
+                    .setReferer(service.getHost().getUri());
+
+            return service.sendWithDeferredResult(computeStateOp);
+        }
+
+        /**
+         * Update attach status of each disk
+         */
+        private List<DeferredResult<Operation>> updateDiskStates(List<DiskState> diskStates, StatelessService service) {
+            List<Operation> diskOps = new ArrayList<>();
+
+            for (DiskState diskState : diskStates) {
+                diskState.status = DiskService.DiskStatus.ATTACHED;
+                diskOps.add(Operation.createPatch(service.getHost(), diskState.documentSelfLink)
+                        .setBody(diskState)
+                        .setReferer(service.getHost().getUri()));
+            }
+
+            return diskOps.stream().map(diskOp -> service.sendWithDeferredResult(diskOp))
+                    .collect(Collectors.toList());
         }
 
         /**
@@ -1204,24 +1389,19 @@ public class AWSInstanceService extends StatelessService {
     /**
      * creates the device mapping for each of the data disk and adds it to the runInstancesRequest.
      */
-    private void addDeviceMappings(List<DiskState> ebsDiskStates,
-            List<DiskState> instanceStoreDiskStates,
-            RunInstancesRequest runInstancesRequest, List<BlockDeviceMapping> blockDeviceMappings,
+    private void addInstanceStoreDeviceMappings(List<DiskState> instanceStoreDiskStates,
+            List<BlockDeviceMapping> blockDeviceMappings, List<String> usedDeviceNames,
             InstanceType instanceType) {
 
-        List<BlockDeviceMapping> additionalDiskMappings = new ArrayList<>();
 
-        List<String> usedDeviceNames = getUsedDeviceNames(blockDeviceMappings);
+    }
 
-        if (!instanceStoreDiskStates.isEmpty()) {
-            List<String> usedVirtualNames = getUsedVirtualNames(blockDeviceMappings);
-            additionalDiskMappings
-                    .addAll(createInstanceStoreMappings(instanceStoreDiskStates, usedDeviceNames,
-                            usedVirtualNames, instanceType.id, instanceType.dataDiskSizeInMB));
-        }
+    /**
+     * creates the device mapping for each of the data disk and adds it to the runInstancesRequest.
+     */
+    private void addEbsDeviceMappings(List<DiskState> ebsDiskStates,
+            List<BlockDeviceMapping> blockDeviceMappings, List<String> usedDeviceNames) {
 
-        additionalDiskMappings.addAll(createEbsDeviceMappings(ebsDiskStates, usedDeviceNames));
-        blockDeviceMappings.addAll(additionalDiskMappings);
     }
 
     private void validateSupportForAdditionalInstanceStoreDisks(List<DiskState> disks,
@@ -1296,67 +1476,62 @@ public class AWSInstanceService extends StatelessService {
      * Creates the device mappings for the ebs disks.
      */
     private List<BlockDeviceMapping> createEbsDeviceMappings(List<DiskState> ebsDisks,
-            List<String> usedDeviceNames) {
+            List<String> availableDiskNames) {
         List<BlockDeviceMapping> additionalDiskMappings = new ArrayList<>();
-        if (!ebsDisks.isEmpty()) {
-            List<String> availableDiskNames = getAvailableDeviceNames(usedDeviceNames,
-                    AWS_EBS_DEVICE_NAMES);
-            if (availableDiskNames.size() >= ebsDisks.size()) {
-                for (DiskState diskState : ebsDisks) {
-                    if (diskState.capacityMBytes > 0) {
-                        BlockDeviceMapping blockDeviceMapping = new BlockDeviceMapping();
-                        EbsBlockDevice ebsBlockDevice = new EbsBlockDevice();
-                        int diskSize = (int) diskState.capacityMBytes / 1024;
-                        ebsBlockDevice.setVolumeSize(diskSize);
+        if (availableDiskNames.size() >= ebsDisks.size()) {
+            for (DiskState diskState : ebsDisks) {
+                if (diskState.capacityMBytes > 0) {
+                    BlockDeviceMapping blockDeviceMapping = new BlockDeviceMapping();
+                    EbsBlockDevice ebsBlockDevice = new EbsBlockDevice();
+                    int diskSize = (int) diskState.capacityMBytes / 1024;
+                    ebsBlockDevice.setVolumeSize(diskSize);
 
-                        if (diskState.customProperties != null) {
-                            String requestedVolumeType = diskState.customProperties.get(VOLUME_TYPE);
-                            if (requestedVolumeType != null) {
-                                validateSizeSupportedByVolumeType(diskSize, requestedVolumeType);
-                                ebsBlockDevice.setVolumeType(requestedVolumeType);
-                            }
-                            String diskIops = diskState.customProperties.get(DISK_IOPS);
-                            if (diskIops != null && !diskIops.isEmpty()) {
-                                int iops = Integer.parseInt(diskIops);
-                                if (iops > diskSize * MAX_IOPS_PER_GiB) {
-                                    String info = String.format("[AWSInstanceService] Requested "
-                                                    + "IOPS (%s) exceeds the maximum value supported"
-                                                    + " by %sGiB disk. Continues provisioning the "
-                                                    + "disk with %s iops", iops, diskSize,
-                                            diskSize * MAX_IOPS_PER_GiB);
-                                    this.logInfo(() -> info);
-                                    iops = diskSize * MAX_IOPS_PER_GiB;
-                                }
-                                ebsBlockDevice.setIops(iops);
-                            }
+                    if (diskState.customProperties != null) {
+                        String requestedVolumeType = diskState.customProperties.get(VOLUME_TYPE);
+                        if (requestedVolumeType != null) {
+                            validateSizeSupportedByVolumeType(diskSize, requestedVolumeType);
+                            ebsBlockDevice.setVolumeType(requestedVolumeType);
                         }
-
-                        diskState.encrypted =
-                                diskState.encrypted == null ? false : diskState.encrypted;
-                        ebsBlockDevice.setEncrypted(diskState.encrypted);
-
-                        String deviceName = availableDiskNames.get(0);
-                        availableDiskNames.remove(0);
-                        blockDeviceMapping.setDeviceName(deviceName);
-                        blockDeviceMapping.setEbs(ebsBlockDevice);
-                        usedDeviceNames.add(deviceName);
-                        additionalDiskMappings.add(blockDeviceMapping);
-                        if (diskState.customProperties == null) {
-                            diskState.customProperties = new HashMap<>();
+                        String diskIops = diskState.customProperties.get(DISK_IOPS);
+                        if (diskIops != null && !diskIops.isEmpty()) {
+                            int iops = Integer.parseInt(diskIops);
+                            if (iops > diskSize * MAX_IOPS_PER_GiB) {
+                                String info = String.format("[AWSInstanceService] Requested "
+                                                + "IOPS (%s) exceeds the maximum value supported"
+                                                + " by %sGiB disk. Continues provisioning the "
+                                                + "disk with %s iops", iops, diskSize,
+                                        diskSize * MAX_IOPS_PER_GiB);
+                                this.logInfo(() -> info);
+                                iops = diskSize * MAX_IOPS_PER_GiB;
+                            }
+                            ebsBlockDevice.setIops(iops);
                         }
-                        diskState.customProperties.put(DEVICE_NAME, deviceName);
-                    } else {
-                        String message = "Additional disk size cannot be zero";
-                        this.logWarning(() -> "[AWSInstanceService] " + message);
-                        throw new IllegalArgumentException(message);
                     }
+
+                    diskState.encrypted =
+                            diskState.encrypted == null ? false : diskState.encrypted;
+                    ebsBlockDevice.setEncrypted(diskState.encrypted);
+
+                    String deviceName = availableDiskNames.get(0);
+                    availableDiskNames.remove(0);
+                    blockDeviceMapping.setDeviceName(deviceName);
+                    blockDeviceMapping.setEbs(ebsBlockDevice);
+                    additionalDiskMappings.add(blockDeviceMapping);
+                    if (diskState.customProperties == null) {
+                        diskState.customProperties = new HashMap<>();
+                    }
+                    diskState.customProperties.put(DEVICE_NAME, deviceName);
+                } else {
+                    String message = "Additional disk size cannot be zero";
+                    this.logWarning(() -> "[AWSInstanceService] " + message);
+                    throw new IllegalArgumentException(message);
                 }
-            } else {
-                String message = "Additional ebs disks cannot be attached. Not sufficient "
-                        + "device names are available.";
-                this.logWarning(() -> "[AWSInstanceService] " + message);
-                throw new IllegalArgumentException(message);
             }
+        } else {
+            String message = "Additional ebs disks cannot be attached. Not sufficient "
+                    + "device names are available.";
+            this.logWarning(() -> "[AWSInstanceService] " + message);
+            throw new IllegalArgumentException(message);
         }
         return additionalDiskMappings;
     }
@@ -1385,6 +1560,7 @@ public class AWSInstanceService extends StatelessService {
                     String deviceName = availableDeviceNames.get(0);
                     blockDeviceMapping.setDeviceName(deviceName);
                     availableDeviceNames.remove(0);
+                    usedDeviceNames.add(deviceName);
 
                     String virtualName = availableVirtualNames.get(0);
                     blockDeviceMapping.setVirtualName(virtualName);

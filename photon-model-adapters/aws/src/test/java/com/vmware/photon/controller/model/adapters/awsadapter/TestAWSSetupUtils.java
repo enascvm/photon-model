@@ -460,6 +460,10 @@ public class TestAWSSetupUtils {
     }
 
     public static void setUpTestVpc(AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
+        setUpTestVpc(client, awsTestContext, isMock, null);
+    }
+
+    public static void setUpTestVpc(AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock, String zoneId) {
         awsTestContext.put(VPC_KEY, AWS_DEFAULT_VPC_ID);
         awsTestContext.put(NIC_SPECS_KEY, SINGLE_NIC_SPEC);
         awsTestContext.put(SUBNET_KEY, AWS_DEFAULT_SUBNET_ID);
@@ -469,7 +473,7 @@ public class TestAWSSetupUtils {
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
             String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
             awsTestContext.put(VPC_KEY, vpcId);
-            String subnetId = createOrGetSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId);
+            String subnetId = createOrGetSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId, zoneId);
             awsTestContext.put(SUBNET_KEY, subnetId);
 
             String internetGatewayId = createInternetGateway(client);
@@ -485,7 +489,7 @@ public class TestAWSSetupUtils {
             subnets.add(new NetSpec(subnetId,
                     AWS_DEFAULT_SUBNET_NAME,
                     AWS_DEFAULT_SUBNET_CIDR,
-                    zoneId + avalabilityZoneIdentifier));
+                    zoneId == null ? TestAWSSetupUtils.zoneId + avalabilityZoneIdentifier : zoneId));
 
             NicSpec nicSpec = NicSpec.create()
                     .withSubnetSpec(subnets.get(0))
@@ -590,18 +594,31 @@ public class TestAWSSetupUtils {
      * Creates a Subnet if not exist and return the Subnet id.
      */
     public static String createOrGetSubnet(AmazonEC2AsyncClient client, String subnetCidr,
-            String vpcId) {
+            String vpcId, String zoneId) {
+        List<Filter> filters = new ArrayList<>();
         Filter cidrBlockFilter = new Filter();
         cidrBlockFilter.withName("cidrBlock");
         cidrBlockFilter.withValues(subnetCidr);
+        filters.add(cidrBlockFilter);
+
+        if (zoneId != null) {
+            Filter azFilter = new Filter();
+            azFilter.withName("availabilityZone");
+            azFilter.withValues(zoneId);
+            filters.add(azFilter);
+        }
+
         DescribeSubnetsResult result = client.describeSubnets(new DescribeSubnetsRequest()
-                .withFilters(cidrBlockFilter));
+                .withFilters(filters));
         if (result.getSubnets() != null && !result.getSubnets().isEmpty()) {
             return result.getSubnets().get(0).getSubnetId();
         } else {
             CreateSubnetRequest req = new CreateSubnetRequest()
                     .withCidrBlock(subnetCidr)
                     .withVpcId(vpcId);
+            if (zoneId != null) {
+                req.withAvailabilityZone(zoneId);
+            }
             CreateSubnetResult res = client.createSubnet(req);
             return res.getSubnet().getSubnetId();
         }
@@ -802,7 +819,11 @@ public class TestAWSSetupUtils {
 
         ComputeDescription awsComputeHostDesc = new ComputeDescription();
 
-        awsComputeHostDesc.id = UUID.randomUUID().toString();
+        if (zoneId != null) {
+            awsComputeHostDesc.id = zoneId;
+        } else {
+            awsComputeHostDesc.id = UUID.randomUUID().toString();
+        }
         awsComputeHostDesc.documentSelfLink = awsComputeHostDesc.id;
         awsComputeHostDesc.name = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awsComputeHostDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
@@ -828,7 +849,7 @@ public class TestAWSSetupUtils {
 
         ComputeState awsComputeHost = new ComputeState();
 
-        awsComputeHost.id = UUID.randomUUID().toString();
+        awsComputeHost.id = awsComputeHostDesc.id;
         awsComputeHost.documentSelfLink = awsComputeHost.id;
         awsComputeHost.name = awsComputeHostDesc.name;
         awsComputeHost.type = ComputeType.VM_HOST;
@@ -1339,15 +1360,22 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Deletes the Disk that is present on an endpoint and represented by the passed in ID.
+     * Deletes the all the disks that are present on an endpoint and represented by the passed in link.
      */
-    public static void deleteDisks(String documentSelfLink, boolean isMock, VerificationHost host,
+    public static void deleteDisks(List<String> diskLinks, boolean isMock, VerificationHost host,
             List<String> tenantLinks) throws Throwable {
-        String taskLink = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils
-                .getProvisionDiskTask(documentSelfLink,
-                        ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.DELETING_DISK,
-                host, isMock, tenantLinks);
-        host.waitForFinishedTask(ProvisionDiskTaskService.ProvisionDiskTaskState.class, taskLink);
+        List<String> taskLinks = new ArrayList<>();
+        for (String diskLink : diskLinks) {
+            String taskLink = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils
+                    .getProvisionDiskTask(diskLink,
+                            ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.DELETING_DISK,
+                            host, isMock, tenantLinks);
+            taskLinks.add(taskLink);
+        }
+        for (String taskLink : taskLinks) {
+            host.waitForFinishedTask(ProvisionDiskTaskService.ProvisionDiskTaskState.class,
+                    taskLink);
+        }
     }
 
     /**

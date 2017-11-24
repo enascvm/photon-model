@@ -47,6 +47,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -99,11 +100,15 @@ public class AWSInstanceContext
 
     public List<DiskState> dataDisks = new ArrayList<>();
 
+    public List<DiskState> externalDisks = new ArrayList<>();
+
     public String bootDiskImageNativeId;
 
     public long taskExpirationMicros;
 
     public InstanceType instanceTypeInfo;
+
+    public List<String> availableEbsDiskNames = new ArrayList<>();
 
     public AWSInstanceContext(StatelessService service, ComputeInstanceRequest computeRequest) {
         super(service, computeRequest, AWSNicContext::new);
@@ -601,7 +606,10 @@ public class AWSInstanceContext
         return DeferredResult.allOf(getStatesDR)
                 .thenAccept(diskStates -> diskStates.forEach(
                         diskState -> {
-                            if (diskState.bootOrder != null) {
+                            if (diskState.status != null &&
+                                    diskState.status == DiskService.DiskStatus.AVAILABLE) {
+                                context.externalDisks.add(diskState);
+                            } else if (diskState.bootOrder != null) {
                                 if (diskState.bootOrder == 1) {
                                     context.bootDisk = diskState;
                                 } else {

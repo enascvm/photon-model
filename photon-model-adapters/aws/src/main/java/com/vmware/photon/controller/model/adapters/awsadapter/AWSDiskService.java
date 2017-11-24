@@ -248,8 +248,10 @@ public class AWSDiskService extends StatelessService {
             throw new IllegalArgumentException(message);
         }
 
-        if (diskState.customProperties != null && diskState.customProperties.get(DEVICE_TYPE)
-                .equals(AWSConstants.AWSStorageType.INSTANCE_STORE.getName())) {
+        if (diskState.customProperties != null &&
+                diskState.customProperties.get(DEVICE_TYPE) != null &&
+                diskState.customProperties.get(DEVICE_TYPE).equals(
+                AWSConstants.AWSStorageType.INSTANCE_STORE.getName())) {
             String message = "Independent Instance Store disk cannot be created.";
             this.logWarning(() -> "[AWSDiskService] " + message);
             throw new IllegalArgumentException(message);
