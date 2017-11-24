@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.injectOperationContext;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
@@ -752,9 +753,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Observable<Page<VirtualMachineInner>>. The following completion subscribes to the Observable
      * and Overrides call(<T>) to include logic to process pages of VMs when we receive them.
      */
-    private Action1<Page<VirtualMachineInner>> vmEnumerationCompletion(EnumerationContext ctx,
+    private Action1<Page<VirtualMachineInner>> vmEnumerationCompletion(
+            EnumerationContext ctx,
             ComputeEnumerationSubStages next) {
-        Action1<Page<VirtualMachineInner>> enumerationCompletion = new Action1<Page<VirtualMachineInner>>() {
+
+        Action1<Page<VirtualMachineInner>> vmEnumCompletion = new Action1<Page<VirtualMachineInner>>() {
+
             @Override
             public void call(Page<VirtualMachineInner> virtualMachineInnerPage) {
                 List<VirtualMachineInner> virtualMachineInners = virtualMachineInnerPage.items();
@@ -789,7 +793,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             }
         };
 
-        return enumerationCompletion;
+        return injectOperationContext(vmEnumCompletion);
     }
 
     /**
@@ -1480,7 +1484,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             azure.publicIPAddresses()
                     .getByIdAsync(nicIPConf.publicIPAddress().id())
-                    .subscribe(new Action1<PublicIPAddress>() {
+                    .subscribe(injectOperationContext(new Action1<PublicIPAddress>() {
                         @Override
                         public void call(PublicIPAddress publicIPAddress) {
                             nicMeta.publicIp = publicIPAddress.ipAddress();
@@ -1491,7 +1495,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             executeNicCreateUpdateRequest(nic, remoteNic, ctx, ops, nicMeta,
                                     isCreate);
                         }
-                    });
+                    }));
         }, failure);
 
     }

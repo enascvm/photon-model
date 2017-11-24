@@ -48,6 +48,9 @@ import com.microsoft.azure.storage.StorageCredentials;
 
 import org.apache.commons.lang3.StringUtils;
 
+import rx.functions.Action0;
+import rx.functions.Action1;
+
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -70,6 +73,7 @@ import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
@@ -182,6 +186,36 @@ public class AzureUtils {
             this.delayMillis *= 2;
             return next;
         }
+    }
+
+    public static <T> Action1<T> injectOperationContext(Action1<T> original) {
+
+        OperationContext operationContext = OperationContext.getOperationContext();
+
+        return new Action1<T>() {
+
+            @Override
+            public void call(T t) {
+                OperationContext.restoreOperationContext(operationContext);
+
+                original.call(t);
+            }
+        };
+    }
+
+    public static Action0 injectOperationContext(Action0 original) {
+
+        OperationContext operationContext = OperationContext.getOperationContext();
+
+        return new Action0() {
+
+            @Override
+            public void call() {
+                OperationContext.restoreOperationContext(operationContext);
+
+                original.call();
+            }
+        };
     }
 
     /**

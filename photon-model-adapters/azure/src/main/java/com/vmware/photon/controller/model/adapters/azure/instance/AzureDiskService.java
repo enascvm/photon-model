@@ -35,6 +35,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -263,14 +264,16 @@ public class AzureDiskService extends StatelessService {
         // TODO refer https://github.com/Azure/azure-sdk-for-java/issues/1905
 
         DeferredResult<AzureDiskContext> dr = new DeferredResult<>();
+
         Completable c = context.azureSdkClients.getComputeManager().disks()
                 .deleteByIdAsync(context.diskState.id);
-        c.subscribe(() -> {
+
+        c.subscribe(AzureUtils.injectOperationContext(() -> {
             // handle completion
             getHost().log(Level.INFO, "Deleted disk with name [" + context.diskState.name + "]");
             dr.complete(context);
 
-        }, dr::fail);
+        }), AzureUtils.injectOperationContext(dr::fail));
 
         return dr;
     }
