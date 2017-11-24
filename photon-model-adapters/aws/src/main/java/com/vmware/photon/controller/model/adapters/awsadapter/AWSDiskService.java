@@ -48,6 +48,7 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -402,15 +403,18 @@ public class AWSDiskService extends StatelessService {
             extends AWSAsyncHandler<CreateVolumeRequest, CreateVolumeResult> {
 
         private StatelessService service;
+        private final OperationContext opContext;
         private AWSDiskContext context;
 
         private AWSDiskCreationHandler(StatelessService service, AWSDiskContext context) {
+            this.opContext = OperationContext.getOperationContext();
             this.service = service;
             this.context = context;
         }
 
         @Override
         protected void handleError(Exception exception) {
+            OperationContext.restoreOperationContext(this.opContext);
             this.context.taskManager.patchTaskToFailure(exception);
         }
 
@@ -423,6 +427,7 @@ public class AWSDiskService extends StatelessService {
 
             //consumer to be invoked once a volume is available
             Consumer<Object> consumer = volume -> {
+                OperationContext.restoreOperationContext(this.opContext);
                 updateDiskState((Volume) volume, this.context, AwsDiskStage.FINISHED);
             };
 
@@ -452,15 +457,18 @@ public class AWSDiskService extends StatelessService {
             extends AWSAsyncHandler<DeleteVolumeRequest, DeleteVolumeResult> {
 
         private StatelessService service;
+        private final OperationContext opContext;
         private AWSDiskContext context;
 
         private AWSDiskDeletionHandler(StatelessService service, AWSDiskContext context) {
+            this.opContext = OperationContext.getOperationContext();
             this.service = service;
             this.context = context;
         }
 
         @Override
         protected void handleError(Exception exception) {
+            OperationContext.restoreOperationContext(this.opContext);
             handleStages(this.context, AwsDiskStage.FAILED);
         }
 
@@ -469,6 +477,7 @@ public class AWSDiskService extends StatelessService {
 
             //consumer to be invoked once a volume is deleted
             Consumer<Object> consumer1 = volume -> {
+                OperationContext.restoreOperationContext(this.opContext);
                 String message =
                         "[AWSDiskService] Successfully deleted the volume from aws for task reference:"
                                 + this.context.diskRequest.taskReference;
@@ -478,6 +487,7 @@ public class AWSDiskService extends StatelessService {
 
             //consumer to be invoked once a volume is in deleting stage.
             Consumer<Object> consumer = volume -> {
+                OperationContext.restoreOperationContext(this.opContext);
                 if (volume == null) {
                     consumer1.accept(null);
                     return;
