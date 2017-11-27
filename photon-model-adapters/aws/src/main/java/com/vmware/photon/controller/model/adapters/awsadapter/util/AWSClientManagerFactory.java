@@ -18,6 +18,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import java.util.HashMap;
 import java.util.Map;
 
+import com.vmware.photon.controller.model.UriPaths;
+
 /**
  * Holds instances of the client manager to be shared by all the AWS adapters to avoid the
  * creation of caches on a per adapter level. Holds two instances of the client manager
@@ -27,9 +29,13 @@ public class AWSClientManagerFactory {
 
     private static Map<AwsClientType, AwsClientManagerEntry> clientManagersByType = new HashMap<>();
 
+    private static final long MAX_TTL_MILLIS = Long.getLong(UriPaths.PROPERTY_PREFIX
+            + "AWSClientManagerFactory.ttlMillis", 30 * 60 * 1000);
+
     private static class AwsClientManagerEntry {
         private AWSClientManager clientManager;
         private int clientReferenceCount = 0;
+        private long createdTimeMillis;
     }
 
     /**
@@ -41,6 +47,7 @@ public class AWSClientManagerFactory {
         if (clientManagerEntry == null) {
             clientManagerEntry = new AwsClientManagerEntry();
             clientManagerEntry.clientManager = new AWSClientManager(awsClientType);
+            clientManagerEntry.createdTimeMillis = System.currentTimeMillis();
             clientManagersByType.put(awsClientType, clientManagerEntry);
         }
         clientManagerEntry.clientReferenceCount++;
@@ -60,8 +67,11 @@ public class AWSClientManagerFactory {
             }
             clientManagerHolder.clientReferenceCount--;
             if (clientManagerHolder.clientReferenceCount == 0) {
-                // cleanup code on the client manager once they are not referenced by any of the adapters.
-                clientManagerHolder.clientManager.cleanUp();
+                // cleanup only if expired
+                if (System.currentTimeMillis() - clientManagerHolder.createdTimeMillis > MAX_TTL_MILLIS) {
+                    // cleanup code on the client manager once they are not referenced by any of the adapters.
+                    clientManagerHolder.clientManager.cleanUp();
+                }
             }
         }
     }
