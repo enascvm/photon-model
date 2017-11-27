@@ -1020,6 +1020,7 @@ public class TestAWSSetupUtils {
         rootDisk.endpointLink = endpointState.documentSelfLink;
         rootDisk.endpointLinks = new HashSet<String>();
         rootDisk.endpointLinks.add(endpointState.documentSelfLink);
+        rootDisk.computeHostLink = endpointState.computeHostLink;
         rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk = TestUtils.doPost(host, rootDisk,
@@ -1099,6 +1100,7 @@ public class TestAWSSetupUtils {
             disk.endpointLinks = new HashSet<String>();
             disk.endpointLinks.add(endpointState.documentSelfLink);
             disk.tenantLinks = endpointState.tenantLinks;
+            disk.computeHostLink = endpointState.computeHostLink;
 
             disk.encrypted = (i == 0) ? true : null;
 
@@ -1155,6 +1157,7 @@ public class TestAWSSetupUtils {
             networkState.endpointLinks = new HashSet<String>();
             networkState.endpointLinks.add(endpointState.documentSelfLink);
             networkState.tenantLinks = endpointState.tenantLinks;
+            networkState.computeHostLink = endpointState.computeHostLink;
 
             networkState = TestUtils.doPost(host, networkState,
                     NetworkState.class,
@@ -1490,6 +1493,7 @@ public class TestAWSSetupUtils {
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
 
         provisionTask.computeLink = vmState.documentSelfLink;
+        provisionTask.endpointLink = vmState.endpointLink;
         provisionTask.isMockRequest = isMock;
         provisionTask.taskSubStage = ProvisionComputeTaskState.SubStage.CREATING_HOST;
         ProvisionComputeTaskService.ProvisionComputeTaskState outTask = TestUtils.doPost(host,
@@ -2735,8 +2739,9 @@ public class TestAWSSetupUtils {
      * Delete endpoint using EndpointRemovalTaskService.
      */
     public static EndpointRemovalTaskState deleteEndpointState(VerificationHost host,
-            EndpointState endpointState) throws Throwable {
-        EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpointState);
+            EndpointState endpointState, boolean disableGroomer) throws Throwable {
+        EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpointState,
+                disableGroomer);
         EndpointRemovalTaskState returnState = TestUtils
                 .doPost(host, removalTaskState, EndpointRemovalTaskState.class,
                         UriUtils.buildUri(host, EndpointRemovalTaskService.FACTORY_LINK));
@@ -2745,10 +2750,11 @@ public class TestAWSSetupUtils {
     }
 
     private static EndpointRemovalTaskState createEndpointRemovalTaskState(
-            EndpointState endpoint) {
+            EndpointState endpoint, boolean disableGroomer) {
         EndpointRemovalTaskState endpointRemovalTaskState = new EndpointRemovalTaskState();
         endpointRemovalTaskState.endpointLink = endpoint.documentSelfLink;
         endpointRemovalTaskState.tenantLinks = endpoint.tenantLinks;
+        endpointRemovalTaskState.disableGroomer = disableGroomer;
         return endpointRemovalTaskState;
     }
 

@@ -142,7 +142,8 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
         resourceRequest.resourcePoolLink = this.resourcePool.documentSelfLink;
         resourceRequest.resourceReference = UriUtils.buildUri(getHost(), "");
         resourceRequest.isMockRequest = this.isMock;
-        ComputeEnumerateAdapterRequest request = new ComputeEnumerateAdapterRequest(resourceRequest, this.authState, this.computeHost);
+        ComputeEnumerateAdapterRequest request = new ComputeEnumerateAdapterRequest(resourceRequest, this.authState,
+                this.computeHost);
 
         //patch synchronously to enumeration service
         patchServiceSynchronously(AzureStorageEnumerationAdapterService.SELF_LINK, request);
@@ -152,7 +153,7 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
     /**
      * Assert azure storage account properties in storage descriptions
      */
-    private static void verifyStorageDescription(StorageDescriptionService.StorageDescription storageDescription) {
+    private void verifyStorageDescription(StorageDescriptionService.StorageDescription storageDescription) {
 
         Assert.assertTrue("Azure Storage account name Cannot be empty ", !storageDescription.name
                 .isEmpty());
@@ -162,6 +163,10 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
                 .supportsEncryption != null);
         Assert.assertTrue("Azure Storage account type not set correctly in custom properties",
                 storageDescription.customProperties.get(AZURE_STORAGE_TYPE).equals(AZURE_STORAGE_ACCOUNTS));
+        Assert.assertTrue("Azure Storage account endpointLink cannot be null",storageDescription
+                .endpointLink != null && storageDescription.endpointLink == this.endpointState.documentSelfLink);
+        Assert.assertTrue("Azure Storage account endpointLinks cannot be null",storageDescription
+                .endpointLinks != null && storageDescription.endpointLinks.contains(this.endpointState.documentSelfLink));
 
     }
 

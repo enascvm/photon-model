@@ -18,6 +18,7 @@ import static java.util.stream.Collectors.groupingBy;
 
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.setEndpointLink;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.updateEndpointLinks;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
@@ -41,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
@@ -110,6 +112,12 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * @see #createUpdateLocalResourceState(LocalStateHolder)
      */
     private boolean applyInfraFields = true;
+
+    /**
+     * Flag controlling whether queries should be agnostic to endpointLink or not (as part of resource deduplication
+     * work). Once the dedup is completed, we should be able to remove this flag completely.
+     */
+    private boolean applyEndpointLink = true;
 
     /**
      * Represents a single page of remote resources.
@@ -242,6 +250,14 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         this.applyInfraFields = applyInfraFields;
     }
 
+    public boolean isApplyEndpointLink() {
+        return this.applyEndpointLink;
+    }
+
+    public void setApplyEndpointLink(boolean applyEndpointLink) {
+        this.applyEndpointLink = applyEndpointLink;
+    }
+
     /**
      * The main method that starts the enumeration process and returns a {@link DeferredResult} to
      * signal completion.
@@ -257,8 +273,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 .thenApply(log("getEndpointAuthState"))
                 .thenCompose(this::enumeratePageByPage)
                 .thenApply(log("enumeratePageByPage"))
-                .thenCompose(this::deleteLocalResourceStates)
-                .thenApply(log("deleteLocalResourceStates"));
+                .thenCompose(this::disassociateLocalResourceStates);
     }
 
     /**
@@ -318,7 +333,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      *
      * @see {@link #queryLocalStates(EndpointEnumerationProcess)} for details about the GET criteria
      *      being pre-set/used by this enumeration logic.
-     * @see {@link #deleteLocalResourceStates(EndpointEnumerationProcess)} for details about the
+     * @see {@link #disassociateLocalResourceStates(EndpointEnumerationProcess)} for details about the
      *      DELETE criteria being pre-set/used by this enumeration logic.
      */
     protected abstract void customizeLocalStatesQuery(Query.Builder qBuilder);
@@ -476,7 +491,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
-                isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
+                isApplyEndpointLink() ? context.endpointState.documentSelfLink : null);
         queryLocalStates.setMaxPageSize(remoteIds.size());
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
@@ -579,11 +594,16 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 localState.tenantLinks = this.endpointState.tenantLinks;
                 // By default populate ENDPOINT_ILNK
                 setEndpointLink(localState, this.endpointState.documentSelfLink);
+                updateEndpointLinks(localState, this.endpointState.documentSelfLink);
             }
             localState.computeHostLink = this.computeHostLink;
             localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         } else {
             // Update case
+            if (isApplyInfraFields()) {
+                // update the endpointLinks
+                updateEndpointLinks(localState, this.endpointState.documentSelfLink);
+            }
             localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         }
 
@@ -622,9 +642,10 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
     }
 
     /**
-     * Delete stale local resource states. The logic works by recording a timestamp when enumeration
-     * starts. This timestamp is used to lookup resources which have not been touched as part of
-     * current enumeration cycle.
+     * Disassociate stale local resource states. The logic works by recording a timestamp when
+     * enumeration starts. This timestamp is used to lookup resources which have not been touched
+     * as part of current enumeration cycle. Resources not associated with any endpointLink will
+     * be removed by the groomer task.
      * <p>
      * Here is the list of criteria used to locate the stale local resources states:
      * <ul>
@@ -638,7 +659,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * {@link #customizeLocalStatesQuery(com.vmware.xenon.services.common.QueryTask.Query.Builder)}</li>
      * </ul>
      */
-    protected DeferredResult<T> deleteLocalResourceStates(T context) {
+    protected DeferredResult<T> disassociateLocalResourceStates(T context) {
 
         final String msg = "Delete %ss that no longer exist in the endpoint: %s";
 
@@ -674,7 +695,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
-                isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
+                isApplyEndpointLink() ? context.endpointState.documentSelfLink : null);
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         List<DeferredResult<Operation>> ops = new ArrayList<>();
@@ -685,22 +706,50 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 return;
             }
 
-            Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink)
-                    .setBody(context.resourceDeletionState);
-
-            DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
-                    .whenComplete((o, e) -> {
-                        final String message = "Delete stale %s state";
-                        if (e != null) {
-                            context.service.logWarning(message + ": FAILED with %s",
-                                    ls.documentSelfLink, Utils.toString(e));
-                        } else {
-                            context.service.log(Level.FINEST, message + ": SUCCESS",
-                                    ls.documentSelfLink);
+            //Get the document because the endpointLink is not accessible in the parent
+            // ResourceState. Then update endpointLinks/endpointLink.
+            context.service.sendWithDeferredResult(
+                    Operation.createGet(context.service.getHost(),
+                    ls.documentSelfLink))
+                    .whenComplete((res, ex) -> {
+                        if (ex != null) {
+                            context.service.logWarning(() -> String.format("Failure retrieving local" +
+                                    " state: %s, " +
+                                    "reason: %s", ls.documentSelfLink, ex.toString()));
+                            return;
                         }
-                    });
+                        Object rawDocument = res.getBodyRaw();
+                        // Deleting the localResourceState is done by disassociating the
+                        // endpointLink from the localResourceState. If the localResourceState
+                        // isn't associated with any other endpointLink, it should be eventually
+                        // deleted by the groomer task
+                        Operation dOp = PhotonModelUtils.createRemoveEndpointLinksOperation(
+                                context.service,
+                                context.endpointState.documentSelfLink, rawDocument,
+                                ls.documentSelfLink, ls.endpointLinks);
 
-            ops.add(dr);
+                        if (dOp == null) {
+                            return;
+                        }
+
+                        Operation.CompletionHandler completion = dOp.getCompletion();
+                        dOp.setCompletion(null);
+
+                        DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
+                                .whenComplete((o, e) -> {
+                                    completion.handle(o, e);
+                                    final String message = "Disassociate stale %s state";
+                                    if (e != null) {
+                                        context.service.logWarning(message + ": FAILED with %s",
+                                                ls.documentSelfLink, Utils.toString(e));
+                                    } else {
+                                        context.service.log(Level.FINEST, message + ": SUCCESS",
+                                                ls.documentSelfLink);
+                                    }
+                                });
+
+                        ops.add(dr);
+                    });
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .thenApply(r -> context);

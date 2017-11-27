@@ -14,10 +14,12 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.util.EnumSet;
-import java.util.function.Function;
+
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
@@ -33,6 +35,7 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 public class ResourceGroupService extends StatefulService {
 
     public static final String FACTORY_LINK = UriPaths.RESOURCES + "/groups";
+    public static final String PROPERTY_NAME_IS_USER_CREATED = "isUserCreated";
 
     /**
      * This class represents the document state associated with a
@@ -42,6 +45,13 @@ public class ResourceGroupService extends StatefulService {
         @Documentation(description = "Query used to define resource group membership")
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Query query;
+
+        /**
+         * Link to the cloud account endpoint the resource group belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_47)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String endpointLink;
     }
 
     public ResourceGroupService() {
@@ -93,21 +103,8 @@ public class ResourceGroupService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ResourceGroupState currentState = getState(patch);
-        Function<Operation, Boolean> customPatchHandler = new Function<Operation, Boolean>() {
-            @Override
-            public Boolean apply(Operation t) {
-                ResourceGroupState patchBody = patch.getBody(ResourceGroupState.class);
-                boolean hasStateChanged = false;
-                if (patchBody.computeHostLink != null && currentState.computeHostLink == null) {
-                    currentState.computeHostLink = patchBody.computeHostLink;
-                    hasStateChanged = true;
-                }
-                return hasStateChanged;
-            }
-        };
-
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                ResourceGroupState.class, customPatchHandler);
+                ResourceGroupState.class, null);
     }
 
     @Override

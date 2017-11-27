@@ -28,6 +28,13 @@ public abstract class ResourceRequest {
     public URI resourceReference;
 
     /**
+     * The URI of endpoint instance in whose context this request is initiated.
+     * This is optional if the EndpointState is the actual resource being ref'd by the resourceReference,
+     * for example: EndpointConfigRequest and ImageEnumerateRequest
+     */
+    public URI endpointLinkReference;
+
+    /**
      * URI reference to calling task.
      */
     public URI taskReference;

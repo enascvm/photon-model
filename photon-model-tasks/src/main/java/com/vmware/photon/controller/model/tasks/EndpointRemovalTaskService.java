@@ -15,7 +15,9 @@ package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME;
 import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE;
+import static com.vmware.photon.controller.model.tasks.monitoring.StatsUtil.SEPARATOR;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
@@ -25,15 +27,14 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
-import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -47,12 +48,13 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
@@ -60,7 +62,6 @@ import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -68,7 +69,7 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -81,8 +82,9 @@ public class EndpointRemovalTaskService
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);
 
-    public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
+    public static final String FIELD_NAME_ENDPOINT_LINKS = "endpointLinks";
     public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
+    public static final String RESOURCE_GROOMER_TASK_POSTFIX = "document-deletion";
 
     public static final Collection<String> RESOURCE_TYPES_TO_DELETE = Arrays.asList(
             Utils.buildKind(AuthCredentialsServiceState.class),
@@ -120,7 +122,7 @@ public class EndpointRemovalTaskService
         /**
          * Delete resources from this endpoint. Only local resources are deleted.
          */
-        DELETE_RESOURCES,
+        DISASSOCIATE_RESOURCES,
 
         /**
          * Delete the endpoint documents
@@ -128,21 +130,26 @@ public class EndpointRemovalTaskService
         ISSUE_ENDPOINT_DELETE,
 
         /**
-         * Delete any additional resources which refer this endpoint through custom property
-         * {@link ComputeProperties#ENDPOINT_LINK_PROP_NAME}, except for resource pools (they cannot
-         * be deleted before resources which use them are deleted first)
+         * Delete any additional resources which refer this endpoint through endpointLinks,
+         * except for resource pools (they cannotbe deleted before resources which use them are
+         * deleted first)
          */
-        DELETE_RELATED_RESOURCES,
+        DISASSOCIATE_RELATED_RESOURCES,
 
         /**
          * Delete associated resource pools
          */
-        DELETE_RELATED_RESOURCE_POOLS,
+        DISASSOCIATE_RELATED_RESOURCE_POOLS,
 
         /**
          * Delete associated resource groups
          */
-        DELETE_RELATED_RESOURCE_GROUPS,
+        DISASSOCIATE_RELATED_RESOURCE_GROUPS,
+
+        /**
+         * Remove resources that are not associated with any endpoints
+         */
+        REMOVE_ASSOCIATED_STALE_DOCUMENTS,
 
         FINISHED,
         FAILED
@@ -179,6 +186,14 @@ public class EndpointRemovalTaskService
         @Documentation(description = "EndpointState to delete. Set by the run-time.")
         @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
         public EndpointState endpoint;
+
+        @Documentation(description = "Indicates a mock request")
+        @UsageOption(option = SERVICE_USE)
+        public boolean isMock = false;
+
+        @Documentation(description = "Enable/Disable groomer for tests.")
+        @UsageOption(option = SERVICE_USE)
+        public boolean disableGroomer = false;
     }
 
     public EndpointRemovalTaskService() {
@@ -247,25 +262,31 @@ public class EndpointRemovalTaskService
             getEndpoint(currentState, SubStage.STOP_ENUMERATION);
             break;
         case STOP_ENUMERATION:
-            stopEnumeration(currentState, SubStage.DELETE_RESOURCES);
+            stopEnumeration(currentState, SubStage.DISASSOCIATE_RESOURCES);
             break;
-        case DELETE_RESOURCES:
-            deleteResources(currentState, SubStage.ISSUE_ENDPOINT_DELETE);
+        case DISASSOCIATE_RESOURCES:
+            disassociateResources(currentState, SubStage.ISSUE_ENDPOINT_DELETE);
             break;
         case ISSUE_ENDPOINT_DELETE:
-            doInstanceDeletes(currentState, SubStage.DELETE_RELATED_RESOURCES);
+            doInstanceDelete(currentState, SubStage.DISASSOCIATE_RELATED_RESOURCES);
             break;
-        case DELETE_RELATED_RESOURCES:
-            deleteAssociatedDocuments(currentState, RESOURCE_TYPES_TO_DELETE, SubStage.DELETE_RELATED_RESOURCE_POOLS);
+        case DISASSOCIATE_RELATED_RESOURCES:
+            disassociateAssociatedDocuments(currentState, RESOURCE_TYPES_TO_DELETE,
+                    SubStage.DISASSOCIATE_RELATED_RESOURCE_POOLS);
             break;
-        case DELETE_RELATED_RESOURCE_POOLS:
-            deleteAssociatedDocuments(currentState, Arrays.asList(Utils.buildKind(ResourcePoolState.class)), SubStage.DELETE_RELATED_RESOURCE_GROUPS);
+        case DISASSOCIATE_RELATED_RESOURCE_POOLS:
+            disassociateAssociatedDocuments(currentState, Arrays.asList(Utils.buildKind(
+                    ResourcePoolState.class)), SubStage.DISASSOCIATE_RELATED_RESOURCE_GROUPS);
             break;
-        case DELETE_RELATED_RESOURCE_GROUPS:
-            /* this needs to happen last, as there may be dependencies between resource groups
-            and other document types (e.g., security groups, resource pools) */
-            deleteAssociatedDocuments(currentState,
-                    Arrays.asList(Utils.buildKind(ResourceGroupState.class)), SubStage.FINISHED);
+        case DISASSOCIATE_RELATED_RESOURCE_GROUPS:
+        /* this needs to happen last, as there may be dependencies between resource groups
+        and other document types (e.g., security groups, resource pools) */
+            disassociateAssociatedDocuments(currentState,
+                    Arrays.asList(Utils.buildKind(ResourceGroupState.class)), SubStage
+                            .REMOVE_ASSOCIATED_STALE_DOCUMENTS);
+            break;
+        case REMOVE_ASSOCIATED_STALE_DOCUMENTS:
+            removeAssociatedStaleDocuments(currentState, SubStage.FINISHED);
             break;
         case FAILED:
             break;
@@ -294,25 +315,21 @@ public class EndpointRemovalTaskService
     }
 
     /**
-     * Delete all top level objects, which are representing this endpoint, including endpoint
-     * itself.
+     * Delete endpoint
+     *
      */
-    private void doInstanceDeletes(EndpointRemovalTaskState currentState, SubStage next) {
+    private void doInstanceDelete(EndpointRemovalTaskState currentState, SubStage next) {
         EndpointState endpoint = currentState.endpoint;
 
-        Operation crdOp = Operation
-                .createDelete(createInventoryUri(this.getHost(), endpoint.authCredentialsLink));
-        Operation cdsOp = Operation
-                .createDelete(createInventoryUri(this.getHost(), endpoint.computeDescriptionLink));
-        Operation csOp = Operation
-                .createDelete(createInventoryUri(this.getHost(), endpoint.computeLink));
-        Operation epOp = Operation
-                .createDelete(createInventoryUri(this.getHost(), endpoint.documentSelfLink));
+        Operation crdOp = Operation.createDelete(createInventoryUri(this.getHost(),
+                endpoint.authCredentialsLink));
+        Operation epOp = Operation.createDelete(createInventoryUri(this.getHost(),
+                endpoint.documentSelfLink));
         // custom header identifier for endpoint service to validate before deleting endpoint
         epOp.addRequestHeader(ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME,
                 ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE);
 
-        OperationJoin.create(crdOp, cdsOp, csOp, epOp).setCompletion((ops, exc) -> {
+        OperationJoin.create(crdOp, epOp).setCompletion((ops, exc) -> {
             if (exc != null) {
                 // failing to delete the endpoint itself is considered a critical error
                 Throwable endpointRemovalException = exc.get(epOp.getId());
@@ -323,22 +340,24 @@ public class EndpointRemovalTaskService
 
                 // other removal exceptions are just warnings
                 logFine(() -> String.format("Failed delete some of the associated resources,"
-                                + " reason %s", Utils.toString(exc)));
+                        + " reason %s", Utils.toString(exc)));
             }
-            // all resources deleted; mark the operation as complete
+            // Endpoint and AuthCredentials are deleted; mark the operation as complete
             sendSelfPatch(TaskStage.STARTED, next);
         }).sendWith(this);
     }
 
+
     /**
-     * Delete associated resource, e.g. enumeration task if started.
+     * Disassociate associated resource, e.g. enumeration task if started.
      */
-    private void deleteAssociatedDocuments(EndpointRemovalTaskState state,
-            Collection<String> documentKinds, SubStage next) {
+    private void disassociateAssociatedDocuments(EndpointRemovalTaskState state,
+                                                 Collection<String> documentKinds, SubStage next) {
         Query resourceQuery = getAssociatedDocumentsQuery(state, documentKinds);
         QueryTask resourceQueryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(resourceQuery)
                 .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .build();
         resourceQueryTask.tenantLinks = state.tenantLinks;
 
@@ -346,7 +365,7 @@ public class EndpointRemovalTaskService
                 .whenComplete((queryTask, throwable) -> {
                     if (throwable != null) {
                         logWarning(throwable.getMessage());
-                        sendSelfPatch(TaskStage.STARTED, next);
+                        sendFailureSelfPatch(throwable);
                         return;
                     }
 
@@ -355,45 +374,56 @@ public class EndpointRemovalTaskService
                         return;
                     }
 
-                    deleteAssociatedDocumentsHelper(queryTask.results.nextPageLink, next);
+                    disassociateResourceHelper(queryTask.results.nextPageLink, next,
+                            state.endpointLink);
                 });
     }
 
-    private void deleteAssociatedDocumentsHelper (String nextPageLink, SubStage next) {
+
+    private void disassociateResourceHelper(String nextPageLink, SubStage next,
+                                            String endpointLink) {
         Operation.CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
                 logWarning(e.getMessage());
-                sendSelfPatch(TaskStage.STARTED, next);
+                sendFailureSelfPatch(e);
                 return;
             }
 
             QueryTask queryTask = o.getBody(QueryTask.class);
+            List<Operation> updateOperations = new ArrayList<>();
 
-            List<Operation> deleteOps = new ArrayList<>();
+            // for each resource link in the results, get the expanded document
+            // and issue an update request to its associated instance service.
             for (String selfLink : queryTask.results.documentLinks) {
-                deleteOps.add(Operation.createDelete(
-                        UriUtils.buildUri(getHost(), selfLink))
-                        .setReferer(getUri()));
+                Object document = queryTask.results.documents
+                        .get(selfLink);
+                ResourceState resourceState = Utils.fromJson(document, ResourceState.class);
+                Set<String> endpointLinks = resourceState.endpointLinks;
+                Operation operation = PhotonModelUtils.createRemoveEndpointLinksOperation(this,
+                        endpointLink, document, selfLink, endpointLinks);
+                if (operation != null) {
+                    updateOperations.add(operation);
+                }
             }
 
-            if (deleteOps.size() == 0) {
+            if (updateOperations.size() == 0) {
                 sendSelfPatch(TaskStage.STARTED, next);
                 return;
             }
 
-            OperationJoin joinOp = OperationJoin.create(deleteOps);
+            OperationJoin joinOp = OperationJoin.create(updateOperations);
             JoinedCompletionHandler joinHandler = (ops, exc) -> {
                 if (exc != null) {
                     logWarning(() -> String.format("Failed delete some of the associated resources,"
-                                    + " reason %s", Utils.toString(exc)));
+                            + " reason %s", Utils.toString(exc)));
                 }
 
                 if (queryTask.results.nextPageLink == null) {
-                    // all resources deleted;
+                    // all resources are updated
                     sendSelfPatch(TaskStage.STARTED, next);
                     return;
                 }
-                deleteAssociatedDocumentsHelper(queryTask.results.nextPageLink, next);
+                disassociateResourceHelper(queryTask.results.nextPageLink, next, endpointLink);
             };
             joinOp.setCompletion(joinHandler);
             joinOp.sendWith(getHost());
@@ -403,64 +433,83 @@ public class EndpointRemovalTaskService
     }
 
     private Query getAssociatedDocumentsQuery(EndpointRemovalTaskState state,
-            Collection<String> documentKinds) {
+                                              Collection<String> documentKinds) {
         Query resourceQuery = Query.Builder.create()
                 .addInClause(ServiceDocument.FIELD_NAME_KIND, documentKinds)
-                .addClause(Query.Builder.create()
-                        .addFieldClause(FIELD_NAME_ENDPOINT_LINK, state.endpoint.documentSelfLink,
-                                QueryTask.Query.Occurance.SHOULD_OCCUR)
-                        .addCompositeFieldClause(FIELD_NAME_CUSTOM_PROPERTIES,
-                                ComputeProperties.ENDPOINT_LINK_PROP_NAME,
-                                state.endpoint.documentSelfLink,
-                                QueryTask.Query.Occurance.SHOULD_OCCUR)
-                        .build())
+                .addInCollectionItemClause(FIELD_NAME_ENDPOINT_LINKS, Collections
+                .singleton(state.endpoint.documentSelfLink), Query.Occurance.MUST_OCCUR)
                 .build();
-
         return resourceQuery;
     }
 
+
     /**
-     * Delete computes discovered with this endpoint.
+     * Disassociate computes discovered with this endpoint.
      */
-    private void deleteResources(EndpointRemovalTaskState state, SubStage next) {
-        QuerySpecification qSpec = new QuerySpecification();
-        qSpec.query = Query.Builder.create()
+    private void disassociateResources(EndpointRemovalTaskState state, SubStage next) {
+        Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, state.endpoint.computeLink)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, state.endpoint.computeLink);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(qBuilder.build())
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
                 .build();
-        ResourceRemovalTaskState removalServiceState = new ResourceRemovalTaskState();
-        removalServiceState.documentSelfLink = UUID.randomUUID().toString();
-        removalServiceState.resourceQuerySpec = qSpec;
-        removalServiceState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
-        removalServiceState.isMockRequest = state.options.contains(TaskOption.IS_MOCK);
-        removalServiceState.tenantLinks = state.tenantLinks;
+        queryTask.documentExpirationTimeMicros = state.documentExpirationTimeMicros;
+        queryTask.documentSelfLink = UUID.randomUUID().toString();
+        queryTask.tenantLinks = state.tenantLinks;
 
-        StatefulService service = this;
+        QueryUtils.startInventoryQueryTask(this, queryTask)
+                .whenComplete((responseTask, throwable) -> {
+                    if (throwable != null) {
+                        logWarning(() -> String.format("Failure retrieving query results: "
+                                + "%s", throwable.toString()));
+                        sendFailureSelfPatch(throwable);
+                        return;
+                    }
 
-        Operation
-                .createPost(UriUtils.buildUri(getHost(),
-                        ResourceRemovalTaskService.FACTORY_LINK))
-                .setBody(removalServiceState)
-                .setCompletion((resourcePostOp, resourcePostEx) -> {
-                    Consumer<Operation> onSuccess = new Consumer<Operation>() {
-                        Set<String> finishedTaskLinks = new HashSet<>();
+                    if (responseTask.results.nextPageLink == null) {
+                        logFine("Query returned no resources to update");
+                        sendSelfPatch(TaskStage.STARTED, next);
+                        return;
+                    }
 
-                        @Override
-                        public void accept(Operation op) {
-                            ResourceRemovalTaskState deletionState = op
-                                    .getBody(ResourceRemovalTaskState.class);
+                    //process one page of resource links at a time
+                    disassociateResourceHelper(responseTask.results.nextPageLink, next,
+                            state.endpointLink);
+                });
+    }
 
-                            TaskUtils.handleSubscriptionNotifications(service, op,
-                                    deletionState.documentSelfLink, deletionState.taskInfo,
-                                    1, createPatchSubStageTask(TaskStage.STARTED, next, null),
-                                    finishedTaskLinks,
-                                    true);
-                        }
-                    };
+    /**
+     * Start stale endpoint document deletion task for the deleted endpoint to ensure all documents
+     * associated with the deleted endpoint are deleted.
+     */
+    private void removeAssociatedStaleDocuments(EndpointRemovalTaskState task, SubStage nextStage) {
+        ResourceGroomerTaskService.EndpointResourceDeletionRequest state = new
+                ResourceGroomerTaskService.EndpointResourceDeletionRequest();
+        state.tenantLinks = new HashSet<>(task.tenantLinks);
+        state.documentSelfLink = getResourceGroomerTaskUri(task.endpointLink);
 
-                    TaskUtils.subscribeToNotifications(this, onSuccess, resourcePostOp
-                            .getBody(ResourceRemovalTaskState.class).documentSelfLink);
-                }).sendWith(this);
+        if (task.isMock || task.disableGroomer) {
+            task.taskSubStage = nextStage;
+            sendSelfPatch(task);
+            return;
+        }
+
+        sendWithDeferredResult(Operation.createPost(this, ResourceGroomerTaskService.FACTORY_LINK)
+                .setBody(state))
+                .whenComplete((o, e) -> {
+                    if (e != null) {
+                        logWarning(() -> String.format("Failure removing stale documents :%s", e
+                                .toString()));
+                        sendFailureSelfPatch(e);
+                        return;
+                    }
+
+                    task.taskSubStage = nextStage;
+                    sendSelfPatch(task);
+                });
     }
 
     public void getEndpoint(EndpointRemovalTaskState currentState, SubStage next) {
@@ -470,7 +519,7 @@ public class EndpointRemovalTaskService
                         // the task might have expired, with no results every
                         // becoming available
                         logWarning(() -> String.format("Failure retrieving endpoint: %s, reason:"
-                                        + " %s", currentState.endpointLink, e.toString()));
+                                + " %s", currentState.endpointLink, e.toString()));
                         sendFailureSelfPatch(e);
                         return;
                     }
@@ -483,8 +532,8 @@ public class EndpointRemovalTaskService
                 }));
     }
 
-    private boolean validateTransitionAndUpdateState(Operation patch,
-            EndpointRemovalTaskState body, EndpointRemovalTaskState currentState) {
+    private boolean validateTransitionAndUpdateState(Operation patch, EndpointRemovalTaskState
+            body, EndpointRemovalTaskState currentState) {
 
         TaskState.TaskStage currentStage = currentState.taskInfo.stage;
         SubStage currentSubStage = currentState.taskSubStage;
@@ -537,8 +586,8 @@ public class EndpointRemovalTaskService
     }
 
     private EndpointRemovalTaskState createPatchSubStageTask(TaskState.TaskStage stage,
-            SubStage subStage,
-            Throwable e) {
+                                                             SubStage subStage,
+                                                             Throwable e) {
         EndpointRemovalTaskState body = new EndpointRemovalTaskState();
         body.taskInfo = new TaskState();
         body.taskInfo.stage = stage;
@@ -598,5 +647,18 @@ public class EndpointRemovalTaskService
             state.taskSubStage = completeSubStage;
             sendSelfPatch(state);
         }
+    }
+
+    /*
+     * Generates a selfLink for stale resource document deletion task based on
+     * given endpointLink.
+     *
+     * @param endpointLink SelfLink of endpoint being deleted.
+     * @return SelfLink of stale resource document deletion task for the given endpointLink.
+     */
+    public static String getResourceGroomerTaskUri(String endpointLink) {
+        return UriUtils.buildUriPath(ResourceGroomerTaskService.FACTORY_LINK,
+                UriUtils.getLastPathSegment(endpointLink) + SEPARATOR +
+                        RESOURCE_GROOMER_TASK_POSTFIX);
     }
 }

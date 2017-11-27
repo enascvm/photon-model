@@ -13,12 +13,17 @@
 
 package com.vmware.photon.controller.model.adapterapi;
 
+
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE;
+
 import java.util.List;
 import java.util.Map;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocument.Documentation;
 import com.vmware.xenon.common.ServiceDocument.PropertyOptions;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 
@@ -66,7 +71,8 @@ public class EndpointConfigRequest extends ResourceRequest {
      */
     public enum RequestType {
         VALIDATE,
-        ENHANCE
+        ENHANCE,
+        CHECK_IF_ACCOUNT_EXISTS
     }
 
     /**
@@ -91,4 +97,16 @@ public class EndpointConfigRequest extends ResourceRequest {
      */
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_45)
     public Boolean checkForEndpointUniqueness;
+
+    @Documentation(description = "A flag that tracks if the cloud provider account has "
+            + "already been configured for this endpoint.")
+    @PropertyOptions(usage = { SERVICE_USE })
+    public boolean accountAlreadyExists;
+
+    @Documentation(description = "The existing compute host state and description corresponding to the account. "
+            + "This will be updated to reflect the association "
+            + "with the new endpoint being configured in the system in case they map back to "
+            + "the same cloud provider account. ")
+    @PropertyOptions(usage = { SERVICE_USE })
+    public Map<String, ServiceDocument> existingDocuments;
 }

@@ -247,7 +247,7 @@ public class LoadBalancerServiceTest extends Suite {
 
             assertThat(returnState.descriptionLink, is(startState.descriptionLink)); // no change
             assertThat(returnState.name, is(patchState.name));
-            assertThat(returnState.endpointLink, is(startState.endpointLink)); // no change
+            assertThat(returnState.endpointLink, is(patchState.endpointLink)); // will change
             assertThat(returnState.computeLinks.size(), is(2));
             assertThat(returnState.subnetLinks.size(), is(2));
             assertThat(returnState.customProperties,

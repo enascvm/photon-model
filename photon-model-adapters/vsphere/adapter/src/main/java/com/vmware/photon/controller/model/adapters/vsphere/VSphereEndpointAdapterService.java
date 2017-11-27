@@ -29,6 +29,7 @@ import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
@@ -75,6 +76,11 @@ public class VSphereEndpointAdapterService extends StatelessService {
             return;
         }
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
+
+        if (body.requestType == RequestType.CHECK_IF_ACCOUNT_EXISTS) {
+            checkIfAccountExistsAndGetExistingDocuments(body, op);
+            return;
+        }
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
                 computeDesc(), compute(), endpoint(), validate(body));
@@ -288,5 +294,13 @@ public class VSphereEndpointAdapterService extends StatelessService {
             logWarning(
                     () -> String.format("Error closing connection to " + connection.getURI(), e));
         }
+    }
+
+    //TODO https://jira-hzn.eng.vmware.com/browse/VSYM-8583
+    private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req,
+            Operation op) {
+        req.accountAlreadyExists = false;
+        op.setBody(req);
+        op.complete();
     }
 }

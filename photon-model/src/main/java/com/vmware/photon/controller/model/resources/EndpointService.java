@@ -65,11 +65,11 @@ public class EndpointService extends StatefulService {
         public String authCredentialsLink;
 
         @Documentation(description = "The link to the compute that represents this endpoint.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK, AUTO_MERGE_IF_NOT_NULL })
         public String computeLink;
 
         @Documentation(description = "The link to the compute description that represents this endpoint.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK, AUTO_MERGE_IF_NOT_NULL })
         public String computeDescriptionLink;
 
         @Documentation(description = "The link to the resource pool that is default for an endpoint.")

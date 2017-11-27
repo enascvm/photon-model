@@ -58,6 +58,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
@@ -345,6 +346,7 @@ public class AzureUtils {
         storageDescription.resourcePoolLink = request.resourcePoolLink;
         storageDescription.documentSelfLink = UUID.randomUUID().toString();
         storageDescription.endpointLink = request.endpointLink;
+        AdapterUtils.addToEndpointLinks(storageDescription, request.endpointLink);
         storageDescription.computeHostLink = parentCompute.documentSelfLink;
         storageDescription.customProperties = new HashMap<>();
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
@@ -391,6 +393,7 @@ public class AzureUtils {
         storageDescription.resourcePoolLink = parent.resourcePoolLink;
         storageDescription.documentSelfLink = UUID.randomUUID().toString();
         storageDescription.endpointLink = parent.endpointLink;
+        AdapterUtils.addToEndpointLinks(storageDescription, parent.endpointLink);
         storageDescription.computeHostLink = parent.documentSelfLink;
         storageDescription.customProperties = new HashMap<>();
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
@@ -414,6 +417,8 @@ public class AzureUtils {
         cs.tenantLinks = tenantLinks;
         cs.endpointLink = endpointLink;
         cs.computeHostLink = parentLink;
+        AdapterUtils.addToEndpointLinks(cs, endpointLink);
+
         if (customProperties == null) {
             customProperties = new HashMap<>();
         }
@@ -435,6 +440,7 @@ public class AzureUtils {
         cd.tenantLinks = tenantLinks;
         cd.endpointLink = endpointLink;
         cd.computeHostLink = parentLink;
+        AdapterUtils.addToEndpointLinks(cd, endpointLink);
         cd.name = name != null ? name :
                 String.format(COMPUTES_NAME_FORMAT_WITH_ENTITY_ID, subscriptionId);
         cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;

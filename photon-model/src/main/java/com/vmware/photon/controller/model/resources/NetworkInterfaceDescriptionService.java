@@ -104,6 +104,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
          * Link to the endpoint the network interface belongs to.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String endpointLink;
 
         /**

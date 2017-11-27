@@ -63,6 +63,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
             super(service, request, op, ResourceGroupState.class,
                     ResourceGroupService.FACTORY_LINK);
+            setApplyEndpointLink(false);
         }
 
         @Override
@@ -71,7 +72,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             if (nextPageLink == null) {
                 // First request to fetch Resource Groups from Azure.
                 String uriStr = AdapterUriUtil.expandUriPathTemplate(LIST_RESOURCE_GROUPS_URI,
-                        this.request.parentAuth.userLink);
+                        this.request.endpointAuth.userLink);
                 uri = UriUtils.extendUriWithQuery(
                         UriUtils.buildUri(uriStr),
                         QUERY_PARAM_API_VERSION, RESOURCE_GROUP_REST_API_VERSION);
@@ -110,12 +111,8 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
         @Override
         protected void customizeLocalStatesQuery(Query.Builder qBuilder) {
-
-            qBuilder.addCompositeFieldClause(
-                    ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                    ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+            qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
                     this.request.parentCompute.documentSelfLink);
-
             qBuilder.addCompositeFieldClause(
                     ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.RESOURCE_TYPE_KEY,
@@ -187,7 +184,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
         case CLIENT:
             if (context.credentials == null) {
                 try {
-                    context.credentials = getAzureConfig(context.request.parentAuth);
+                    context.credentials = getAzureConfig(context.request.endpointAuth);
                 } catch (Throwable e) {
                     handleError(context, e);
                     return;

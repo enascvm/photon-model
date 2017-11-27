@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -34,9 +35,13 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_DISKS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_net_interface;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_subnet;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_CAPACITY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
+
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CPU_UTILIZATION_PERCENT;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.MEMORY_USED_PERCENT;
@@ -57,6 +62,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -615,6 +621,9 @@ public class AzureTestUtil {
                 AzureUriPaths.AZURE_STATS_ADAPTER);
         azureHostDescription.authCredentialsLink = endpointState.authCredentialsLink;
         azureHostDescription.endpointLink = endpointState.documentSelfLink;
+        azureHostDescription.endpointLinks = new HashSet<>();
+        azureHostDescription.endpointLinks.add(endpointState.documentSelfLink);
+        azureHostDescription.computeHostLink = endpointState.computeHostLink;
         azureHostDescription.tenantLinks = endpointState.tenantLinks;
 
         azureHostDescription = TestUtils.doPost(host, azureHostDescription,
@@ -630,6 +639,8 @@ public class AzureTestUtil {
         azureComputeHost.descriptionLink = azureHostDescription.documentSelfLink;
         azureComputeHost.resourcePoolLink = resourcePoolLink;
         azureComputeHost.endpointLink = endpointState.documentSelfLink;
+        azureComputeHost.endpointLinks = new HashSet<>();
+        azureComputeHost.endpointLinks.add(endpointState.documentSelfLink);
         azureComputeHost.tenantLinks = endpointState.tenantLinks;
 
         return TestUtils.doPost(host, azureComputeHost, ComputeState.class,
@@ -849,6 +860,9 @@ public class AzureTestUtil {
         azureVMDesc.authCredentialsLink = azureVMAuth.documentSelfLink;
         azureVMDesc.tenantLinks = spec.endpointState.tenantLinks;
         azureVMDesc.endpointLink = spec.endpointState.documentSelfLink;
+        azureVMDesc.endpointLinks = new HashSet<>();
+        azureVMDesc.endpointLinks.add(spec.endpointState.documentSelfLink);
+        azureVMDesc.computeHostLink = spec.endpointState.computeHostLink;
         azureVMDesc.instanceType = AZURE_VM_SIZE;
         azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureVMDesc.customProperties = new HashMap<>();
@@ -876,6 +890,9 @@ public class AzureTestUtil {
         rootDisk.bootOrder = 1;
 
         rootDisk.endpointLink = spec.endpointState.documentSelfLink;
+        rootDisk.endpointLinks = new HashSet<>();
+        rootDisk.endpointLinks.add(spec.endpointState.documentSelfLink);
+        rootDisk.computeHostLink = spec.endpointState.computeHostLink;
         rootDisk.tenantLinks = spec.endpointState.tenantLinks;
 
         rootDisk.customProperties = new HashMap<>();
@@ -945,7 +962,12 @@ public class AzureTestUtil {
         computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, defaultVmRGName);
         computeState.groupLinks = Collections.singleton(defaultVmRGLink);
         computeState.endpointLink = spec.endpointState.documentSelfLink;
+        computeState.endpointLinks = new HashSet<>();
+        computeState.endpointLinks.add(spec.endpointState.documentSelfLink);
+        computeState.computeHostLink = spec.endpointState.computeHostLink;
         computeState.tenantLinks = spec.endpointState.tenantLinks;
+        computeState.creationTimeMicros = TimeUnit.MILLISECONDS
+                .toMicros(System.currentTimeMillis());
 
         return TestUtils.doPost(spec.host, computeState, ComputeState.class,
                 UriUtils.buildUri(spec.host, ComputeService.FACTORY_LINK));
@@ -1000,6 +1022,9 @@ public class AzureTestUtil {
         azureVMDesc.authCredentialsLink = azureVMAuth.documentSelfLink;
         azureVMDesc.tenantLinks = endpointState.tenantLinks;
         azureVMDesc.endpointLink = endpointState.documentSelfLink;
+        azureVMDesc.endpointLinks = new HashSet<>();
+        azureVMDesc.endpointLinks.add(endpointState.documentSelfLink);
+        azureVMDesc.computeHostLink = endpointState.computeHostLink;
         azureVMDesc.instanceType = AZURE_VM_SIZE;
         azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureVMDesc.customProperties = new HashMap<>();
@@ -1031,6 +1056,9 @@ public class AzureTestUtil {
         rootDisk.bootOrder = 1;
 
         rootDisk.endpointLink = endpointState.documentSelfLink;
+        rootDisk.endpointLinks = new HashSet<>();
+        rootDisk.endpointLinks.add(endpointState.documentSelfLink);
+        rootDisk.computeHostLink = endpointState.computeHostLink;
         rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk.customProperties = new HashMap<>();
@@ -1074,7 +1102,15 @@ public class AzureTestUtil {
         computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, defaultVmRGName);
         computeState.groupLinks = Collections.singleton(defaultVmRGLink);
         computeState.endpointLink = endpointState.documentSelfLink;
+        computeState.endpointLinks = new HashSet<>();
+        computeState.endpointLinks.add(endpointState.documentSelfLink);
+        computeState.computeHostLink = endpointState.computeHostLink;
         computeState.tenantLinks = endpointState.tenantLinks;
+        computeState.tagLinks = Collections.singleton(TagsUtil.newTagState(TAG_KEY_TYPE,
+                AzureConstants.AzureResourceType.azure_vm.toString(), false,
+                endpointState.tenantLinks).documentSelfLink);
+        computeState.creationTimeMicros = TimeUnit.MILLISECONDS
+                .toMicros(System.currentTimeMillis());
 
         return TestUtils.doPost(host, computeState, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
@@ -1092,6 +1128,9 @@ public class AzureTestUtil {
             dataDisk.capacityMBytes = AZURE_CUSTOM_DATA_DISK_SIZE; // Custom Data Disk size of 20GB
             dataDisk.bootOrder = 2;
             dataDisk.endpointLink = endpointState.documentSelfLink;
+            dataDisk.endpointLinks = new HashSet<>();
+            dataDisk.endpointLinks.add(endpointState.documentSelfLink);
+            dataDisk.computeHostLink = endpointState.computeHostLink;
             dataDisk.tenantLinks = endpointState.tenantLinks;
             dataDisk.storageType = AZURE_STORAGE_DISKS;
             dataDisk.customProperties = new HashMap<>();
@@ -1152,7 +1191,8 @@ public class AzureTestUtil {
 
         storageDesc.tenantLinks = endpointState.tenantLinks;
         storageDesc.endpointLink = endpointState.documentSelfLink;
-
+        storageDesc.endpointLinks = new HashSet<>();
+        storageDesc.endpointLinks.add(endpointState.documentSelfLink);
         storageDesc.customProperties = new HashMap<>();
         storageDesc.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
 
@@ -1175,6 +1215,10 @@ public class AzureTestUtil {
         rGroupState.tenantLinks = endpointState.tenantLinks;
         rGroupState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
 
+        rGroupState.endpointLink = endpointState.documentSelfLink;
+        rGroupState.endpointLinks = new HashSet<>();
+        rGroupState.endpointLinks.add(endpointState.documentSelfLink);
+        rGroupState.computeHostLink = endpointState.computeHostLink;
         rGroupState.customProperties = new HashMap<>();
         rGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME, computeHost.documentSelfLink);
         rGroupState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK, endpointState.documentSelfLink);
@@ -1203,6 +1247,9 @@ public class AzureTestUtil {
         securityGroupState.instanceAdapterReference = UriUtils.buildUri(host,
                 AzureSecurityGroupService.SELF_LINK);
         securityGroupState.endpointLink = endpointState.documentSelfLink;
+        securityGroupState.endpointLinks = new HashSet<>();
+        securityGroupState.endpointLinks.add(endpointState.documentSelfLink);
+        securityGroupState.computeHostLink = endpointState.computeHostLink;
         securityGroupState.tenantLinks = endpointState.tenantLinks;
         securityGroupState.ingress = inboundRules;
         securityGroupState.egress = outboudRules;
@@ -1234,6 +1281,12 @@ public class AzureTestUtil {
 
         diskState.tenantLinks = endpointState.tenantLinks;
         diskState.endpointLink = endpointState.documentSelfLink;
+        diskState.endpointLinks = new HashSet<>();
+        diskState.endpointLinks.add(endpointState.documentSelfLink);
+
+        List<String> tenantLinks = Collections.singletonList( EndpointType.azure.name() + "-tenant");
+        diskState.tagLinks = Collections.singleton(TagsUtil.newTagState(TAG_KEY_TYPE,
+                AzureResourceType.azure_vhd.name(), false, tenantLinks).documentSelfLink);
 
         diskState.storageDescriptionLink = storageContainerLink;
         diskState.type = DEFAULT_DISK_TYPE;
@@ -1264,12 +1317,17 @@ public class AzureTestUtil {
             networkState.subnetCIDR = azureNicSpecs.network.cidr;
             networkState.authCredentialsLink = endpointSate.authCredentialsLink;
             networkState.endpointLink = endpointSate.documentSelfLink;
+            networkState.endpointLinks = new HashSet<>();
+            networkState.endpointLinks.add(endpointSate.documentSelfLink);
             networkState.tenantLinks = endpointSate.tenantLinks;
             networkState.resourcePoolLink = computeHost.resourcePoolLink;
             networkState.groupLinks = networkRGLinks;
             networkState.regionId = azureNicSpecs.network.zoneId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     DEFAULT_INSTANCE_ADAPTER_REFERENCE);
+            networkState.tagLinks = Collections.singleton(TagsUtil.newTagState(TAG_KEY_TYPE,
+                    azure_vnet.name(), false, endpointSate.tenantLinks).documentSelfLink);
+            networkState.computeHostLink = endpointSate.computeHostLink;
 
             networkState = TestUtils.doPost(host, networkState,
                     NetworkState.class,
@@ -1294,7 +1352,12 @@ public class AzureTestUtil {
                 subnetState.zoneId = azureNicSpecs.nicSpecs.get(i).subnetSpec.zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
                 subnetState.endpointLink = endpointSate.documentSelfLink;
+                subnetState.endpointLinks = new HashSet<>();
+                subnetState.endpointLinks.add(endpointSate.documentSelfLink);
+                subnetState.computeHostLink = endpointSate.computeHostLink;
                 subnetState.tenantLinks = endpointSate.tenantLinks;
+                subnetState.tagLinks = Collections.singleton(TagsUtil.newTagState(TAG_KEY_TYPE,
+                        azure_subnet.name(), false, endpointSate.tenantLinks).documentSelfLink);
 
                 subnetState = TestUtils.doPost(host, subnetState,
                         SubnetState.class,
@@ -1308,6 +1371,9 @@ public class AzureTestUtil {
                 securityGroupState.name = AZURE_SECURITY_GROUP_NAME;
                 securityGroupState.authCredentialsLink = endpointSate.authCredentialsLink;
                 securityGroupState.endpointLink = endpointSate.documentSelfLink;
+                securityGroupState.endpointLinks = new HashSet<>();
+                securityGroupState.endpointLinks.add(endpointSate.documentSelfLink);
+                securityGroupState.computeHostLink = endpointSate.computeHostLink;
                 securityGroupState.tenantLinks = endpointSate.tenantLinks;
                 securityGroupState.groupLinks = sgRGLinks;
                 securityGroupState.regionId = "regionId";
@@ -1351,9 +1417,13 @@ public class AzureTestUtil {
                 nicDescription.assignPublicIpAddress = azureNicSpecs.assignPublicIpAddress;
                 nicDescription.tenantLinks = endpointSate.tenantLinks;
                 nicDescription.endpointLink = endpointSate.documentSelfLink;
+                nicDescription.endpointLinks = new HashSet<>();
+                nicDescription.endpointLinks.add(endpointSate.documentSelfLink);
+                nicDescription.computeHostLink = endpointSate.computeHostLink;
                 nicDescription.assignment = nicSpec.getIpAssignment();
                 // if staticIp is null, it will be assigned automatically by DHCP.
                 nicDescription.address = nicSpec.ip();
+
 
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
@@ -1370,6 +1440,9 @@ public class AzureTestUtil {
             nicState.networkLink = subnetState.networkLink;
             nicState.tenantLinks = endpointSate.tenantLinks;
             nicState.endpointLink = endpointSate.documentSelfLink;
+            nicState.endpointLinks = new HashSet<>();
+            nicState.endpointLinks.add(endpointSate.documentSelfLink);
+            nicState.computeHostLink = endpointSate.computeHostLink;
             if (nicSpec.getIpAssignment() == IpAssignment.STATIC) {
                 // There is a rule in:
                 // \photon-model\photon-model\src\main\java\com\vmware\photon\controller\model\resources\NetworkInterfaceService.java::validateState()
@@ -1383,6 +1456,9 @@ public class AzureTestUtil {
                 nicState.securityGroupLinks = Collections.singletonList(
                         securityGroupState.documentSelfLink);
             }
+            nicState.tagLinks = Collections.singleton(TagsUtil.newTagState
+                    (TAG_KEY_TYPE, azure_net_interface.name(), false, endpointSate
+                            .tenantLinks).documentSelfLink);
 
             nicState = TestUtils.doPost(host, nicState,
                     NetworkInterfaceState.class,
@@ -1450,7 +1526,8 @@ public class AzureTestUtil {
         bootImage.osFamily = "Linux";
         bootImage.tenantLinks = endpointState.tenantLinks;
         bootImage.endpointLink = endpointState.documentSelfLink;
-
+        bootImage.endpointLinks = new HashSet<>();
+        bootImage.endpointLinks.add(endpointState.documentSelfLink);
         List<DiskConfiguration> imageDisks = new ArrayList<>();
         DiskConfiguration osDiskConfig = new DiskConfiguration();
 
@@ -1644,6 +1721,37 @@ public class AzureTestUtil {
         assertEquals("Expected: " + shouldExists + ", but was: " + exists, shouldExists, exists);
     }
 
+
+    /**
+     * Assert that a resource with the provided name exist in the document store.
+     *
+     * @param factoryLink
+     *            Factory link to the stateful service which states to check.
+     * @param name
+     *            name of the resource to assert if exists.
+     * @param isDisassociated
+     *            whether to assert if a resource exists or not.
+     */
+    public static void assertResourceDisassociated(VerificationHost host, String factoryLink,
+            String name, boolean isDisassociated) {
+
+        ServiceDocumentQueryResult result = host.getExpandedFactoryState(
+                UriUtils.buildUri(host, factoryLink));
+
+        boolean disassociated = false;
+        for (Object document : result.documents.values()) {
+            ResourceState state = Utils.fromJson(document, ResourceState.class);
+
+            if (name.equals(state.name) && state.endpointLinks.isEmpty()) {
+                disassociated = true;
+                break;
+            }
+        }
+
+        assertEquals("Expected: " + isDisassociated + ", but was: " + disassociated, isDisassociated,
+                disassociated);
+    }
+
     /**
      * Validate DiskStates are populated with the appropriate type tagLinks
      */
@@ -1659,7 +1767,7 @@ public class AzureTestUtil {
                 switch (state.storageType) {
                 case AZURE_STORAGE_DISKS:
                     assertTrue(state.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,
-                            AzureResourceType.azure_vhd.name(), false, tenantLinks).documentSelfLink));
+                                AzureResourceType.azure_vhd.name(), false, tenantLinks).documentSelfLink));
                     break;
                 case AZURE_STORAGE_BLOBS:
                     assertTrue(state.tagLinks.contains(TagsUtil.newTagState(TAG_KEY_TYPE,

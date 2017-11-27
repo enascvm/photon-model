@@ -21,6 +21,7 @@ import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -33,6 +34,8 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * <li>{@link ComputeStateWithDescription child}</li>
  * <li>{@link ComputeStateWithDescription parent}</li>
  * <li>{@link AuthCredentialsServiceState parentAuth}</li>
+ * <li>{@link EndpointService.EndpointState endpoint}</li>
+ * <li>{@link AuthCredentialsServiceState endpointAuth}</li>
  * </ul>
  */
 public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
@@ -49,18 +52,32 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     }
 
     public enum BaseAdapterStage {
-        VMDESC, PARENTDESC, PARENTAUTH, CUSTOMIZE
+        VMDESC, PARENTDESC, ENDPOINTSTATE, PARENTAUTH, CUSTOMIZE
     }
 
     public final StatelessService service;
     public final URI resourceReference;
 
     /**
+     * URI reference of endpoint. This value is not expected to be null but to support backward compatibility
+     * it will read endpoint from parent resource if this value is null.
+     */
+    public URI endpointReference;
+
+    /**
      * The compute state that is to be provisioned.
      */
     public ComputeStateWithDescription child;
     public ComputeStateWithDescription parent;
+
+    public EndpointService.EndpointState endpoint;
+
+    @Deprecated
     public AuthCredentialsServiceState parentAuth;
+
+    // This will be same as parentAuth. Since the auth details will be read from endpoint but not from computeHost,
+    // naming it as appropriate.
+    public AuthCredentialsServiceState endpointAuth;
 
     /**
      * The error that has occurred while transitioning to the error stage.
@@ -86,11 +103,14 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
      *            then this should point to <b>parent</b> resource.</li>
      *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTAUTH}
      *            then this should point to <b>parent auth</b> resource.</li>
+     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#ENDPOINTSTATE}
+     *            then this should point to <b>endpoint</b> resource.</li>
      *            </ul>
      */
     public BaseAdapterContext(StatelessService service, ResourceRequest resourceRequest) {
         this.service = service;
         this.resourceReference = resourceRequest.resourceReference;
+        this.endpointReference = resourceRequest.endpointLinkReference;
         this.taskManager = new TaskManager(this.service, resourceRequest.taskReference,
                 resourceRequest.resourceLink());
     }
@@ -107,6 +127,10 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         case PARENTDESC:
             return getParentDescription(self())
                     .thenApply(log("getParentDescription"))
+                    .thenCompose(c -> populateBaseContext(BaseAdapterStage.ENDPOINTSTATE));
+        case ENDPOINTSTATE:
+            return getEndPointState(self())
+                    .thenApply(log("getEndPointState"))
                     .thenCompose(c -> populateBaseContext(BaseAdapterStage.PARENTAUTH));
         case PARENTAUTH:
             return getParentAuth(self())
@@ -181,7 +205,28 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     }
 
     /**
-     * Populate context with parent {@code AuthCredentialsServiceState}.
+     * Populate context with {@code EndpointState}.
+     */
+    protected DeferredResult<T> getEndPointState(T context) {
+        // Fallback on compute endpointLink, if it is not set explicitly (to support backward compatibility)
+        if (context.endpointReference == null && context.parent != null) {
+            context.endpointReference = createInventoryUri(context.service.getHost(), context.parent.endpointLink);
+        }
+        if (context.endpointReference != null) {
+            Operation op = Operation.createGet(context.endpointReference);
+            return context.service
+                    .sendWithDeferredResult(op, EndpointService.EndpointState.class)
+                    .thenApply(state -> {
+                        context.endpoint = state;
+                        return context;
+                    });
+        } else {
+            return DeferredResult.completed(context);
+        }
+    }
+
+    /**
+     * Populate context with endpoint {@code AuthCredentialsServiceState}.
      *
      * @see #getParentAuthRef(BaseAdapterContext) for any customization.
      */
@@ -195,18 +240,19 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
                 .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
                 .thenApply(state -> {
                     context.parentAuth = state;
+                    context.endpointAuth = state;
                     return context;
                 });
     }
 
     /**
-     * Descendants might implement this hook to provide custom link to parent auth.
+     * Descendants might implement this hook to provide custom link to endpoint auth.
      */
     protected URI getParentAuthRef(T context) {
-        return context.parent != null
+        return context.endpoint != null
                 // 'parent' is already resolved so used it
                 ? createInventoryUri(context.service.getHost(),
-                        context.parent.description.authCredentialsLink)
+                        context.endpoint.authCredentialsLink)
                 // state machine starts from here so resRef should point to the parentAuth
                 : createInventoryUri(context.service.getHost(), context.resourceReference);
     }

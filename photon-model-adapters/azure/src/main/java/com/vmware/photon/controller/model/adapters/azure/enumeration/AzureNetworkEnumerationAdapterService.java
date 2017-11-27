@@ -30,12 +30,14 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
@@ -63,6 +65,7 @@ import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -71,12 +74,14 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -128,7 +133,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Used to store an error while transferring to the error stage.
         Throwable error;
 
-        AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
 
         // Virtual Networks page as fetched from Azure
         // key -> Virtual Network id; value -> Virtual Network.
@@ -194,7 +199,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         NetworkEnumContext(ComputeEnumerateAdapterRequest request, Operation op) {
             this.request = request.original;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
 
             this.stage = EnumerationStages.CLIENT;
@@ -247,15 +252,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
-    /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
-     */
     private static void addScopeCriteria(Query.Builder qBuilder,
             Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
+        // Add parent compute host criteria
+        qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK, ctx.parentCompute.documentSelfLink);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 
     @Override
@@ -288,7 +290,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         case CLIENT:
             if (context.credentials == null) {
                 try {
-                    context.credentials = getAzureConfig(context.parentAuth);
+                    context.credentials = getAzureConfig(context.endpointAuth);
                 } catch (Throwable e) {
                     logSevere(e);
                     context.error = e;
@@ -385,10 +387,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             createUpdateSubnetStates(context, NetworkEnumStages.DELETE_NETWORK_STATES);
             break;
         case DELETE_NETWORK_STATES:
-            deleteNetworkStates(context, NetworkEnumStages.DELETE_SUBNET_STATES);
+            disassociateNetworkStates(context, NetworkEnumStages.DELETE_SUBNET_STATES);
             break;
         case DELETE_SUBNET_STATES:
-            deleteSubnetStates(context, NetworkEnumStages.FINISHED);
+            disassociateSubnetStates(context, NetworkEnumStages.FINISHED);
             break;
         case FINISHED:
             context.stage = EnumerationStages.FINISHED;
@@ -451,7 +453,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         if (context.enumNextPageLink == null) {
             // First request to fetch Virtual Networks from Azure.
             String uriStr = AdapterUriUtil.expandUriPathTemplate(LIST_VIRTUAL_NETWORKS_URI,
-                    context.parentAuth.userLink);
+                    context.endpointAuth.userLink);
             uri = UriUtils.extendUriWithQuery(
                     UriUtils.buildUri(uriStr),
                     QUERY_PARAM_API_VERSION, NETWORK_REST_API_VERSION);
@@ -553,6 +555,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
+        AdapterUtils.addToEndpointLinks(subnetState, endpointLink);
+
         subnetState.supportPublicIpAddress = true;
         subnetState.computeHostLink = parentLink;
 
@@ -580,10 +584,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
                 .addInClause(ResourceState.FIELD_NAME_ID, resourceGroupIds)
-                .addCompositeFieldClause(
-                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
-                        context.parentCompute.documentSelfLink)
                 .addCompositeFieldClause(
                         ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                         ComputeProperties.RESOURCE_TYPE_KEY,
@@ -1014,6 +1014,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             }
             subnetState.endpointLink = context.request.endpointLink;
             subnetState.computeHostLink = context.parentCompute.documentSelfLink;
+            AdapterUtils.addToEndpointLinks(subnetState, context.request.endpointLink);
 
             return context.subnetStates.containsKey(subnetId) ?
             // Update case
@@ -1070,9 +1071,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             resultNetworkState.groupLinks = localNetworkState.groupLinks;
             resultNetworkState.resourcePoolLink = localNetworkState.resourcePoolLink;
             resultNetworkState.tagLinks = localNetworkState.tagLinks;
+            resultNetworkState.endpointLinks = localNetworkState.endpointLinks;
         } else {
             resultNetworkState.id = azureVirtualNetwork.id;
-            resultNetworkState.authCredentialsLink = context.parentAuth.documentSelfLink;
+            resultNetworkState.authCredentialsLink = context.endpointAuth.documentSelfLink;
             resultNetworkState.resourcePoolLink = context.request.resourcePoolLink;
         }
 
@@ -1080,6 +1082,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         resultNetworkState.regionId = azureVirtualNetwork.location;
         resultNetworkState.endpointLink = context.request.endpointLink;
         resultNetworkState.computeHostLink = context.parentCompute.documentSelfLink;
+        AdapterUtils.addToEndpointLinks(resultNetworkState, context.request.endpointLink);
 
         AddressSpace addressSpace = azureVirtualNetwork.properties.addressSpace;
         if (addressSpace != null
@@ -1128,8 +1131,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * The logic works by recording a timestamp when enumeration starts. This timestamp is used to
      * lookup resources which haven't been touched as part of current enumeration cycle.
      */
-    private void deleteNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine(() -> "Delete Network States that no longer exists in Azure.");
+    private void disassociateNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
+        logFine(() -> "Disassociate Network States that no longer exists in Azure.");
 
         Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
@@ -1145,10 +1148,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine(() -> "Querying Network States for deletion.");
+        logFine(() -> "Querying Network States for disassociation.");
 
         // Add deleted NetworkStates to the list.
-        sendDeleteQueryTask(q, context, next);
+        sendDisassociateQueryTask(q, context, next);
     }
 
     /**
@@ -1158,7 +1161,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * lookup resources which haven't been touched as part of current enumeration cycle and belong
      * to networks touched by this enumeration cycle (either created/updated/deleted).
      */
-    private void deleteSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
+    private void disassociateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         Builder builder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addFieldClause(SubnetState.FIELD_NAME_LIFECYCLE_STATE,
@@ -1176,12 +1179,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine(() -> "Querying Subnet States for deletion.");
-        sendDeleteQueryTask(q, context, next);
+        logFine(() -> "Querying Subnet States for disassociation.");
+        sendDisassociateQueryTask(q, context, next);
     }
 
-    private void sendDeleteQueryTask(QueryTask q, NetworkEnumContext context,
-            NetworkEnumStages next) {
+    private void sendDisassociateQueryTask(QueryTask q, NetworkEnumContext context,
+                                           NetworkEnumStages next) {
 
         QueryUtils.startInventoryQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -1192,23 +1195,23 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
                     context.deletionNextPageLink = queryTask.results.nextPageLink;
 
-                    handleDeleteQueryTaskResult(context, next);
+                    handleDisassociateQueryTaskResult(context, next);
                 });
     }
 
     /**
-     * Get next page of query results and delete then.
+     * Get next page of query results and disassociate then.
      */
-    private void handleDeleteQueryTaskResult(NetworkEnumContext context,
-            NetworkEnumStages next) {
+    private void handleDisassociateQueryTaskResult(NetworkEnumContext context, NetworkEnumStages
+            next) {
 
         if (context.deletionNextPageLink == null) {
-            logFine(() -> "Finished deletion stage.");
+            logFine(() -> "Finished disassociation stage.");
             handleSubStage(context, next);
             return;
         }
 
-        logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+        logFine(() -> String.format("Querying page [%s] for resources to be disassociated",
                 context.deletionNextPageLink));
         sendRequest(Operation.createGet(createInventoryUri(this.getHost(), context.deletionNextPageLink))
                 .setCompletion((completedOp, ex) -> {
@@ -1220,26 +1223,19 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     QueryTask queryTask = completedOp.getBody(QueryTask.class);
 
                     if (queryTask.results.documentCount > 0) {
-                        // Delete all matching states.
+                        // Disassociate all matching states.
                         List<Operation> operations = queryTask.results.documentLinks.stream()
                                 .filter(link -> shouldDelete(context, queryTask, link))
-                                .map(link -> Operation.createDelete(this, link)
-                                        .setBody(context.resourceDeletionState))
+                                .map(link -> PhotonModelUtils.createRemoveEndpointLinksOperation
+                                        (this, context.request.endpointLink,
+                                                queryTask.results.documents.get(link),
+                                        link, Utils.fromJson(queryTask.results.documents.get(link),
+                                                NetworkState.class).endpointLinks))
+                                .filter(Objects::nonNull)
                                 .collect(Collectors.toList());
 
                         if (!operations.isEmpty()) {
                             OperationJoin.create(operations)
-                                    .setCompletion((ops, failures) -> {
-                                        if (failures != null) {
-                                            // We don't want to fail the whole data collection if
-                                            // some of the
-                                            // operation fails.
-                                            failures.values()
-                                                    .forEach(e -> logWarning(
-                                                            () -> String.format("Error: %s",
-                                                                    e.getMessage())));
-                                        }
-                                    })
                                     .sendWith(this);
                         }
                     }
@@ -1248,8 +1244,41 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     context.deletionNextPageLink = queryTask.results.nextPageLink;
 
                     // Handle next page of results.
-                    handleDeleteQueryTaskResult(context, next);
+                    handleDisassociateQueryTaskResult(context, next);
                 }));
+    }
+
+
+    private Operation createEndpointLinksUpdateOperation(String endpointLink, String selfLink,
+                                                         Set<String> endpointLinks) {
+
+        if (endpointLinks == null || !endpointLinks.contains(endpointLink)) {
+            return null;
+        }
+
+        Set<String> endpointLinksToBeDisassociated = new HashSet<>();
+        endpointLinksToBeDisassociated.add(endpointLink);
+        Map<String, Collection<Object>> endpointsToRemove = Collections
+                .singletonMap(EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
+                        new HashSet<>(endpointLinksToBeDisassociated));
+        ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
+                ServiceStateCollectionUpdateRequest.create(null,
+                        endpointsToRemove);
+
+        Operation operation = Operation
+                .createPatch(this.getHost(), selfLink)
+                .setReferer(getHost().getUri())
+                .setBody(serviceStateCollectionUpdateRequest)
+                .setCompletion(
+                        (updateOp, exception) -> {
+                            if (exception != null) {
+                                logWarning(() -> String.format("PATCH to " +
+                                                "instance service %s, failed: %s",
+                                        updateOp.getUri(), exception.toString()));
+                                return;
+                            }
+                        });
+        return operation;
     }
 
     /**

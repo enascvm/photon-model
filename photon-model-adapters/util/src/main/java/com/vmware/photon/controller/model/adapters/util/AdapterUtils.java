@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -25,6 +26,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
@@ -230,4 +232,10 @@ public class AdapterUtils {
         return resourceState;
     }
 
+    public static void addToEndpointLinks(ResourceState resource, String endpointLink) {
+        if (resource.endpointLinks == null) {
+            resource.endpointLinks = new HashSet<>();
+        }
+        resource.endpointLinks.add(endpointLink);
+    }
 }

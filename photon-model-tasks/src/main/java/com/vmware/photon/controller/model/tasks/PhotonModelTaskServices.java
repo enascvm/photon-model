@@ -65,6 +65,8 @@ public class PhotonModelTaskServices {
                     () -> TaskFactoryService.create(EndpointAllocationTaskService.class)),
             factoryService(EndpointRemovalTaskService.class,
                     () -> TaskFactoryService.create(EndpointRemovalTaskService.class)),
+            factoryService(ResourceGroomerTaskService.class,
+                    ResourceGroomerTaskService::createFactory),
             factoryService(SingleResourceStatsAggregationTaskService.class,
                     SingleResourceStatsAggregationTaskService::createFactory),
             factoryService(StatsAggregationTaskService.class,

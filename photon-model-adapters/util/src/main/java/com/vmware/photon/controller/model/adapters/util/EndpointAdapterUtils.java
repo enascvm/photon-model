@@ -215,6 +215,10 @@ public class EndpointAdapterUtils {
                     endpointEnhancer);
             break;
 
+        case CHECK_IF_ACCOUNT_EXISTS:
+            op.complete();
+            break;
+
         default:
             op.fail(new IllegalArgumentException(
                     "Unexpected endpoint request: " + body.requestType.toString()));

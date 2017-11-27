@@ -220,7 +220,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         };
 
         ComputeEnumerateAdapterRequest azureEnumerationRequest = new ComputeEnumerateAdapterRequest(
-                context.request, context.parentAuth,
+                context.request, context.endpointAuth,
                 context.parent);
 
         Operation.createPatch(this, adapterSelfLink)

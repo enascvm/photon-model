@@ -46,6 +46,7 @@ import com.microsoft.azure.management.resources.implementation.SubscriptionClien
 import com.microsoft.azure.management.resources.implementation.SubscriptionInner;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.Permission;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.PermissionList;
@@ -57,6 +58,7 @@ import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -69,6 +71,7 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
@@ -87,6 +90,11 @@ public class AzureEndpointAdapterService extends StatelessService {
             return;
         }
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
+
+        if (body.requestType == RequestType.CHECK_IF_ACCOUNT_EXISTS) {
+            checkIfAccountExistsAndGetExistingDocuments(body, op);
+            return;
+        }
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
                 computeDesc(), compute(), endpoint(), validate(body));
@@ -339,5 +347,73 @@ public class AzureEndpointAdapterService extends StatelessService {
 
     private boolean canRead(Permission permission) {
         return permission.isOwner() || permission.isReader() || permission.isContributor();
+    }
+
+    private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req,
+            Operation op) {
+        String accountId = req.endpointProperties.get(USER_LINK_KEY);
+        if (accountId != null && !accountId.isEmpty() && req.tenantLinks != null &&
+                !req.tenantLinks.isEmpty()) {
+            QueryTask queryTask = QueryUtils
+                    .createAccountQuery(accountId, PhotonModelConstants.EndpointType.azure.name(),
+                            req.tenantLinks);
+
+            queryTask.tenantLinks = req.tenantLinks;
+            QueryUtils.startInventoryQueryTask(this, queryTask)
+                    .whenComplete((qrt, e) -> {
+                        if (e != null) {
+                            logSevere(
+                                    () -> String.format(
+                                            "Failure retrieving query results for azure compute host corresponding to"
+                                                    + "the account ID: %s", e.toString()));
+                            op.fail(e);
+                            return;
+                        }
+                        if (qrt.results.documentCount > 0) {
+                            req.existingDocuments = new HashMap<>();
+                            for (Object s : qrt.results.documents.values()) {
+                                req.accountAlreadyExists = true;
+                                ComputeState computeHost = Utils.fromJson(s,
+                                        ComputeState.class);
+                                req.existingDocuments.put(computeHost.documentSelfLink,
+                                        computeHost);
+                                getComputeDescription(req, computeHost.descriptionLink, op);
+                            }
+                        } else {
+                            req.accountAlreadyExists = false;
+                            op.setBody(req);
+                            op.complete();
+                            return;
+                        }
+                    });
+        } else {
+            req.accountAlreadyExists = false;
+            op.setBody(req);
+            op.complete();
+        }
+    }
+
+    /**
+     * Retrieves the compute description corresponding to the compute host for a given account id.
+     */
+    private void getComputeDescription(EndpointConfigRequest req, String descriptionLink,
+            Operation op) {
+        Operation.createGet(getHost(), descriptionLink)
+                .setCompletion((o, ex) -> {
+                    if (ex != null) {
+                        logSevere(
+                                () -> String.format(
+                                        "Failure retrieving the azure compute host description "
+                                                + "corresponding to the account ID: %s", ex.toString()));
+                        op.fail(ex);
+                        return;
+                    }
+                    ComputeDescription computeHostDescription = o.getBody(ComputeDescription.class);
+                    req.existingDocuments.put(computeHostDescription.documentSelfLink,
+                            computeHostDescription);
+                    op.setBody(req);
+                    op.complete();
+                    return;
+                }).sendWith(this);
     }
 }

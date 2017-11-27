@@ -87,7 +87,9 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -124,7 +126,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     public static class AWSNetworkEnumerationRequest {
         public ComputeEnumerateResourceRequest request;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public String regionId;
         public List<String> tenantLinks;
         public String parentComputeLink;
@@ -383,7 +385,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getAWSAsyncClient(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
-                context.request.parentAuth, context.request.regionId,
+                context.request.endpointAuth, context.request.regionId,
                 this, (t) -> context.operation.fail(t));
         if (context.amazonEC2Client != null) {
             handleNetworkStateChanges(context, next);
@@ -451,6 +453,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
                 context.vpcs.keySet(),
+                context.request.parentComputeLink,
                 context.request.request.endpointLink,
                 context.request.regionId,
                 context.request.tenantLinks);
@@ -507,6 +510,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
                 context.subnets.keySet(),
+                context.request.parentComputeLink,
                 context.request.request.endpointLink,
                 context.request.regionId,
                 context.request.tenantLinks);
@@ -890,28 +894,54 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             if (remoteResourcesKeys.contains(ls.id)) {
                 return;
             }
-
-            Operation dOp = Operation.createDelete(this, ls.documentSelfLink)
-                    .setBody(context.resourceDeletionState)
-                    .setReferer(this.getUri());
-
-            DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
-                    .whenComplete((o, e) -> {
-                        final String message = "Delete stale %s state";
-                        if (e != null) {
-                            logWarning(message + ": FAILED with %s",
-                                    ls.documentSelfLink, Utils.toString(e));
-                        } else {
-                            log(Level.FINEST, message + ": SUCCESS",
-                                    ls.documentSelfLink);
+            //Get the document because the endpointLink is not accessible in the parent
+            // ResourceState. Then update endpointLinks/endpointLink.
+            sendWithDeferredResult(
+                    Operation.createGet(getHost(), ls.documentSelfLink))
+                    .whenComplete((res, ex) -> {
+                        if (ex != null) {
+                            logWarning(() -> String.format("Failure retrieving local " +
+                                    "state: %s, " +
+                                    "reason: %s", ls.documentSelfLink, ex.toString()));
+                            return;
                         }
+                        Object rawDocument = res.getBodyRaw();
+                        // Deleting the localResourceState is done by disassociating the endpointLink from the
+                        // localResourceState. If the localResourceState isn't associated with any other
+                        // endpointLink, it should be deleted by the groomer task
+                        Operation dOp = PhotonModelUtils.createRemoveEndpointLinksOperation(
+                                this, context
+                                .request.request.endpointLink, rawDocument, ls.documentSelfLink, ls
+                                        .endpointLinks);
+
+                        if (dOp == null) {
+                            return;
+                        }
+
+                        Operation.CompletionHandler completion = dOp.getCompletion();
+                        dOp.setCompletion(null);
+                        DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
+                                .whenComplete((o, e) -> {
+                                    completion.handle(o, e);
+                                    final String message = "Disassociate stale %s state";
+                                    if (e != null) {
+                                        logWarning(message + ": FAILED with %s",
+                                                ls.documentSelfLink, Utils.toString(e));
+                                    } else {
+                                        log(Level.FINEST, message + ": SUCCESS",
+                                                ls.documentSelfLink);
+
+                                    }
+                                });
+
+                        ops.add(dr);
                     });
 
-            ops.add(dr);
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .thenApply(r -> context);
     }
+
 
     private void setResourceTags(ResourceState resourceState, List<Tag> tags) {
         if (tags != null && !tags.isEmpty()) {
@@ -962,7 +992,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         this.context.request.regionId,
                         this.context.request.request.resourcePoolLink,
                         this.context.request.request.endpointLink,
-                        this.context.request.parentAuth.documentSelfLink,
+                        this.context.request.endpointAuth.documentSelfLink,
                         this.context.request.parentComputeLink,
                         this.context.request.tenantLinks,
                         adapterUri);

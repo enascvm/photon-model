@@ -288,7 +288,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
         // delete 2nd endpoint
         EndpointRemovalTaskState completeState = TestAWSSetupUtils
-                .deleteEndpointState(this.host, this.endpointStateTwo);
+                .deleteEndpointState(this.host, this.endpointStateTwo, true);
         assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
 
         // validate compute descriptions's of 1st endpoint

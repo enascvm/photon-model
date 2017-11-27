@@ -138,25 +138,26 @@ public class AWSNetworkUtils {
      * Creates the query to retrieve existing network states filtered by the discovered VPCs.
      */
     public static QueryTask createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
-            Set<String> vpcIds, String endpointLink, String regionId, List<String> tenantLinks) {
+            Set<String> vpcIds, String computeHostLink, String endpointLink, String regionId, List<String> tenantLinks) {
 
         return createQueryToGetExistingStatesFilteredByDiscoveredIds(
-                NetworkService.NetworkState.class, vpcIds, endpointLink, regionId, tenantLinks);
+                NetworkService.NetworkState.class, vpcIds, computeHostLink, endpointLink, regionId, tenantLinks);
     }
 
     /**
      * Creates the query to retrieve existing subnet states filtered by the discovered Subnets.
      */
     public static QueryTask createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
-            Set<String> subnetIds, String endpointLink, String regionId, List<String> tenantLinks) {
+            Set<String> subnetIds, String computeHostLink, String endpointLink, String regionId, List<String> tenantLinks) {
 
         return createQueryToGetExistingStatesFilteredByDiscoveredIds(
-                SubnetService.SubnetState.class, subnetIds, endpointLink, regionId, tenantLinks);
+                SubnetService.SubnetState.class, subnetIds, computeHostLink, endpointLink, regionId, tenantLinks);
     }
 
     private static QueryTask createQueryToGetExistingStatesFilteredByDiscoveredIds(
             Class<? extends ResourceState> stateClass,
             Set<String> stateIds,
+            String computeHostLink,
             String endpointLink,
             String regionId,
             List<String> tenantLinks) {
@@ -164,10 +165,7 @@ public class AWSNetworkUtils {
         Query.Builder queryBuilder = Query.Builder.create()
                 .addKindFieldClause(stateClass)
                 .addInClause(ResourceState.FIELD_NAME_ID, stateIds);
-
-        if (endpointLink != null && !endpointLink.isEmpty()) {
-            queryBuilder.addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, endpointLink);
-        }
+        queryBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK, computeHostLink);
 
         if (regionId != null) {
             queryBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, regionId);

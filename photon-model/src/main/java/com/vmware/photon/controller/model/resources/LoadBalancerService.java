@@ -84,6 +84,7 @@ public class LoadBalancerService extends StatefulService {
          * Link to the cloud account endpoint the load balancer belongs to.
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String endpointLink;
 
         /**

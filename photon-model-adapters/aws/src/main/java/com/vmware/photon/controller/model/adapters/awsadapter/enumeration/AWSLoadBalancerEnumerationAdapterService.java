@@ -394,7 +394,7 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
     private void getAWSAsyncClient(LoadBalancerEnumContext context, EnumerationStages next) {
         if (context.amazonLoadBalancerClient == null) {
             context.amazonLoadBalancerClient = this.clientManager
-                    .getOrCreateLoadBalancingClient(context.request.parentAuth, context.regionId,
+                    .getOrCreateLoadBalancingClient(context.request.endpointAuth, context.regionId,
                             this, context.request.original.isMockRequest,
                             (t) -> handleError(context, t));
             if (context.amazonLoadBalancerClient == null) {

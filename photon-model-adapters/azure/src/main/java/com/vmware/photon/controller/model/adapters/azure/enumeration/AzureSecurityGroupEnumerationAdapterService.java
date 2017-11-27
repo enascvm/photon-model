@@ -82,6 +82,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
 
             super(service, request, op, SecurityGroupState.class,
                     SecurityGroupService.FACTORY_LINK);
+            setApplyEndpointLink(false);
         }
 
         @Override
@@ -94,7 +95,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 // First request to fetch Network Security Groups from Azure.
                 String uriStr = AdapterUriUtil
                         .expandUriPathTemplate(LIST_NETWORK_SECURITY_GROUP_URI,
-                                this.request.parentAuth.userLink);
+                                this.request.endpointAuth.userLink);
                 uri = UriUtils.extendUriWithQuery(
                         UriUtils.buildUri(uriStr),
                         QUERY_PARAM_API_VERSION, NETWORK_REST_API_VERSION);
@@ -144,10 +145,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
 
         @Override
         protected void customizeLocalStatesQuery(Query.Builder qBuilder) {
-
-            qBuilder.addCompositeFieldClause(
-                    ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                    ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+            qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
                     this.request.parentCompute.documentSelfLink);
         }
 
@@ -178,7 +176,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                         ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                         this.request.parentCompute.documentSelfLink);
 
-                holder.localState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
+                holder.localState.authCredentialsLink = this.request.endpointAuth.documentSelfLink;
                 holder.localState.resourcePoolLink = this.request.original.resourcePoolLink;
 
                 holder.localState.instanceAdapterReference = UriUtils
@@ -269,9 +267,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             Query.Builder qBuilder = Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addInClause(ResourceState.FIELD_NAME_ID, resourceGroupIds)
-                    .addCompositeFieldClause(
-                            ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+                    .addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
                             this.request.parentCompute.documentSelfLink)
                     .addCompositeFieldClause(
                             ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
@@ -283,7 +279,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     qBuilder.build(),
                     ResourceGroupState.class,
                     context.request.parentCompute.tenantLinks,
-                    context.request.original.endpointLink)
+                    null, // endpointLink
+                    this.request.parentCompute.documentSelfLink)
                             .setMaxPageSize(resourceGroupIds.size());
 
             queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
@@ -330,7 +327,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
         case CLIENT:
             if (context.credentials == null) {
                 try {
-                    context.credentials = getAzureConfig(context.request.parentAuth);
+                    context.credentials = getAzureConfig(context.request.endpointAuth);
                 } catch (Throwable e) {
                     handleError(context, e);
                     return;

@@ -186,4 +186,7 @@ public class PhotonModelConstants {
 
     // Link to a ContentState document that holds the base64 encoded content
     public static final String DISK_CONTENT_LINK = "diskContentBase64Link";
+
+    // Batch size for operation joins.
+    public static final int OPERATION_BATCH_SIZE = 100;
 }

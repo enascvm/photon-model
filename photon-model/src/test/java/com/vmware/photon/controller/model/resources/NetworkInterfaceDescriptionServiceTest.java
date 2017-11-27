@@ -170,7 +170,8 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
                     startState,
                     NetworkInterfaceDescription.class);
 
-            returnState.endpointLink = "/modified";
+            String modifiedEndpointLink = "/modified";
+            returnState.endpointLink = modifiedEndpointLink;
 
             patchServiceSynchronously(
                     returnState.documentSelfLink,
@@ -180,7 +181,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink, NetworkInterfaceDescription.class);
 
-            assertEquals(endpointLink, returnState.endpointLink);
+            assertEquals(modifiedEndpointLink, returnState.endpointLink);
         }
 
         @Test

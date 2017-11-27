@@ -47,7 +47,10 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -100,7 +103,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     public static class EnumerationDeletionContext {
         public AmazonEC2AsyncClient amazonEC2Client;
         public ComputeEnumerateAdapterRequest request;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsService.AuthCredentialsServiceState endpointAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSEnumerationDeletionStages stage;
         public AWSEnumerationDeletionSubStage subStage;
@@ -121,7 +124,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 Operation op) {
             this.request = request;
             this.operation = op;
-            this.parentAuth = request.parentAuth;
+            this.endpointAuth = request.endpointAuth;
             this.parentCompute = request.parentCompute;
             this.localInstanceIds = new ConcurrentSkipListMap<>();
             this.remoteInstanceIds = new HashSet<>();
@@ -205,7 +208,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(EnumerationDeletionContext aws,
             AWSEnumerationDeletionStages next) {
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
+        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.endpointAuth,
                 aws.request.regionId, this, (t) -> aws.error = t);
         if (aws.error != null) {
             aws.stage = AWSEnumerationDeletionStages.ERROR;
@@ -213,7 +216,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             return;
         }
         OperationContext opContext = OperationContext.getOperationContext();
-        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.parentAuth,
+        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
                 aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
@@ -266,7 +269,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 if (aws.request.original.preserveMissing) {
                     retireComputeStates(aws);
                 } else {
-                    deleteComputeStates(aws);
+                    disassociateComputeStates(aws);
                 }
             }
             break;
@@ -300,7 +303,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                                 LifecycleState.RETIRED.toString()),
                         Occurance.MUST_NOT_OCCUR);
 
-        addScopeCriteria(qBuilder, ComputeState.class, context);
+        addScopeCriteria(qBuilder, context);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
@@ -459,68 +462,75 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     /**
      * Creates operations for the deletion of all the compute states and networks from the local
      * system for which the AWS instance has been terminated from the remote instance. Kicks off the
-     * deletion of all the identified compute states, also the networks and disks for which the
+     * disassociation of all the identified compute states, also the networks and disks for which the
      * actual AWS instance has been terminated.
      */
-    private void deleteComputeStates(EnumerationDeletionContext context) {
+    private void disassociateComputeStates(EnumerationDeletionContext context) {
 
-        List<Operation> deleteOperations = new ArrayList<>();
+        // List<Operation> updateOperations = new ArrayList<>();
         // Create delete operations for the compute states that have to be deleted from the system.
         for (ComputeState computeStateToDelete : context.instancesToBeDeleted) {
-            Operation deleteComputeStateOperation = Operation
-                    .createDelete(this.getHost(), computeStateToDelete.documentSelfLink)
-                    .setBody(getDeletionState(context.request.original
-                            .deletedResourceExpirationMicros))
-                    .setReferer(getHost().getUri());
-            deleteOperations.add(deleteComputeStateOperation);
-            // Create delete operations for all the network links associated with each of the
+            Operation csUpdateOp = PhotonModelUtils.createRemoveEndpointLinksOperation(this,
+                    context.request.original.endpointLink, Utils.toJson(computeStateToDelete),
+                    computeStateToDelete
+                            .documentSelfLink,
+                    computeStateToDelete.endpointLinks);
+            if (csUpdateOp != null) {
+                csUpdateOp.sendWith(getHost());
+            }
+            // Create update operations for all the network links associated with each of the
             // compute states.
             if (computeStateToDelete.networkInterfaceLinks != null) {
                 for (String networkLinkToDelete : computeStateToDelete.networkInterfaceLinks) {
-                    Operation deleteNetworkOperation = Operation
-                            .createDelete(this.getHost(), networkLinkToDelete)
-                            .setBody(getDeletionState(context.request.original
-                                    .deletedResourceExpirationMicros))
-                            .setReferer(getHost().getUri());
-                    deleteOperations.add(deleteNetworkOperation);
+
+                    sendRequest(Operation.createGet(this.getHost(), networkLinkToDelete)
+                            .setCompletion((o, e) -> {
+                                if (e != null) {
+                                    logWarning(() -> String.format("Failure retrieving networkInterfaceState: %s, " +
+                                            "reason: %s", networkLinkToDelete, e.toString()));
+                                    return;
+                                }
+                                NetworkInterfaceState networkInterfaceState =
+                                        o.getBody(NetworkInterfaceState.class);
+                                Operation nsUpdateOp = PhotonModelUtils
+                                        .createRemoveEndpointLinksOperation(this, context
+                                                        .request.original.endpointLink,
+                                                o.getBodyRaw(),
+                                                networkLinkToDelete,
+                                                networkInterfaceState.endpointLinks);
+                                if (nsUpdateOp != null) {
+                                    nsUpdateOp.sendWith(getHost());
+                                }
+                            }));
                 }
             }
 
-            // Create delete operations for all the disk links associated with each of the
+            // Create update operations for all the disk links associated with each of the
             // compute states.
             if (computeStateToDelete.diskLinks != null) {
                 for (String diskLinkToDelete : computeStateToDelete.diskLinks) {
-                    Operation deleteDiskOperation = Operation
-                            .createDelete(this.getHost(), diskLinkToDelete)
-                            .setBody(getDeletionState(context.request.original
-                                    .deletedResourceExpirationMicros))
-                            .setReferer(getHost().getUri());
-                    deleteOperations.add(deleteDiskOperation);
+                    sendRequest(Operation.createGet(this.getHost(), diskLinkToDelete)
+                            .setCompletion((o, e) -> {
+                                if (e != null) {
+                                    logWarning(() -> String.format("Failure retrieving diskState: %s, " +
+                                            "reason: %s", diskLinkToDelete, e.toString()));
+                                    return;
+                                }
+                                DiskState diskState = o.getBody(DiskState.class);
+                                Operation dsUpdateOp = PhotonModelUtils
+                                        .createRemoveEndpointLinksOperation(this,
+                                                context.request.original.endpointLink,
+                                                o.getBodyRaw(), diskLinkToDelete,
+                                                diskState.endpointLinks);
+                                if (dsUpdateOp != null) {
+                                    dsUpdateOp.sendWith(getHost());
+                                }
+                            }));
                 }
             }
         }
-        // Kick off deletion operations with a join handler.
-        if (deleteOperations == null || deleteOperations.size() == 0) {
-            logFine(() -> "No compute states to be deleted.");
-            deleteResourcesInLocalSystem(context);
-            return;
-        }
-        OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
-                exc) -> {
-            if (exc != null) {
-                logSevere(() -> String.format("Failure deleting local compute states.",
-                        Utils.toString(exc)));
-                deleteResourcesInLocalSystem(context);
-                return;
 
-            }
-            logFine(() -> "Deleted local compute states and networks.");
-            deleteResourcesInLocalSystem(context);
-            return;
-        };
-        OperationJoin joinOp = OperationJoin.create(deleteOperations);
-        joinOp.setCompletion(joinCompletion);
-        joinOp.sendWith(getHost());
+        deleteResourcesInLocalSystem(context);
     }
 
     /**
@@ -616,19 +626,18 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Constrain every query with endpointLink/region and tenantLinks, if presented.
+     * Constrain every query with region and tenantLinks, if presented.
      */
     private static void addScopeCriteria(
             Query.Builder qBuilder,
-            Class<? extends ResourceState> stateClass,
             EnumerationDeletionContext ctx) {
 
         // Add REGION criteria
         qBuilder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.request.regionId);
+        // Add parentComputeHost criteria
+        qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK, ctx.request.parentCompute.documentSelfLink);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
 }

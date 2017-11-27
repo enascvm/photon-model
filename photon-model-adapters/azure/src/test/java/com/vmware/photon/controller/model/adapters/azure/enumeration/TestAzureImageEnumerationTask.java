@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDo
 
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -172,6 +173,10 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 image.endpointType);
         Assert.assertEquals("Private image must have endpointLink set.",
                 this.endpointState.documentSelfLink, image.endpointLink);
+        Assert.assertNotNull("Private image must have endpointLinks set.",
+                image.endpointLinks);
+        Assert.assertTrue("Private image must have endpointLinks set.",
+                image.endpointLinks.contains(this.endpointState.documentSelfLink));
         Assert.assertEquals("Private image must have tenantLinks set.",
                 this.endpointState.tenantLinks, image.tenantLinks);
 
@@ -240,6 +245,8 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                         imageAfterFirstEnum.endpointType);
                 Assert.assertNull("Public image must NOT have endpointLink set.",
                         imageAfterFirstEnum.endpointLink);
+                Assert.assertNull("Public image must NOT have endpointLinks set.",
+                        imageAfterFirstEnum.endpointLinks);
                 Assert.assertNull("Public image must NOT have tenantLinks set.",
                         imageAfterFirstEnum.tenantLinks);
 
@@ -345,16 +352,20 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
             kickOffImageEnumeration(this.endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
 
             // Validate 1 image state is CREATED and the 2 vSphere and 2 diff region are UNtouched
-            final int postEnumCount = 1 + 2 + 2;
+            final int postEnumCount = 1 + 2 + 2 + 1; // plus 1 because we are not deleting the
+            // resource, only disassociating it.
             ServiceDocumentQueryResult imagesAfterEnum = queryDocumentsAndAssertExpectedCount(
                     getHost(),
                     postEnumCount,
                     ImageService.FACTORY_LINK,
                     EXACT_COUNT);
 
-            // Validate 1 stale image state is DELETED
-            Assert.assertFalse("Dummy image should have been deleted.",
-                    imagesAfterEnum.documentLinks.contains(staleImageState.documentSelfLink));
+            // Validate 1 stale image state is DISASSOCIATED
+            ImageState staleImage = Utils.fromJson(
+                    imagesAfterEnum.documents.get(staleImageState.documentSelfLink),
+                    ImageState.class);
+            Assert.assertTrue("Dummy image should have been disassociated.",
+                    staleImage.endpointLinks.isEmpty());
 
             // Validate vSphere images are untouched
             Assert.assertTrue("Private images from other endpoints should not have been deleted.",
@@ -553,6 +564,8 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
             image.tenantLinks = endpoint.tenantLinks;
         }
 
+        image.endpointLinks = new HashSet<>();
+        image.endpointLinks.add(endpoint.documentSelfLink);
         image.id = "dummy-" + this.currentTestName.getMethodName();
 
         image.regionId = epRegion

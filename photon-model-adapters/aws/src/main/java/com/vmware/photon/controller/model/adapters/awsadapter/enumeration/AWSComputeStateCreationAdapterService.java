@@ -121,7 +121,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public String resourcePoolLink;
         public String endpointLink;
         public String parentComputeLink;
-        public AuthCredentialsServiceState parentAuth;
+        public AuthCredentialsServiceState endpointAuth;
         public String regionId;
         public URI parentTaskLink;
 
@@ -406,7 +406,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 representativeCDSet, context.request.tenantLinks, context.request.regionId,
-                context.request.endpointLink);
+                context.request.parentComputeLink, context.request.endpointLink);
         queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
 
         // create the query to find an existing compute description
@@ -462,11 +462,15 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 InstanceDescKey descKey = InstanceDescKey.build(regionId, zoneId,
                         instance.getInstanceType());
 
+                Set<String> endpointLinks = new HashSet<>();
+                endpointLinks.add(context.request.endpointLink);
+
                 ComputeState computeStateToBeCreated = mapInstanceToComputeState(
                         this.getHost(), instance,
                         context.request.parentComputeLink, zoneData.computeLink,
                         context.request.resourcePoolLink,
-                        context.request.endpointLink,
+                        null,
+                        endpointLinks,
                         context.computeDescriptionMap.get(descKey),
                         context.request.parentCDStatsAdapterReferences,
                         context.internalTagLinksMap.get(ec2_instance.toString()),
@@ -485,7 +489,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                                 .containsKey(awsNic.getSubnetId())) {
 
                             NetworkInterfaceState nicState = createNICStateAndDescription(
-                                    context, awsNic);
+                                    context, awsNic, null, endpointLinks);
 
                             computeStateToBeCreated.networkInterfaceLinks.add(UriUtils.buildUriPath(
                                     NetworkInterfaceService.FACTORY_LINK,
@@ -508,7 +512,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     // Utility method which creates a new NetworkInterface State and Descriptions
     // from provided AWS Nic, and adds them to the enumerationOperations list
     private NetworkInterfaceState createNICStateAndDescription(
-            AWSComputeStateCreationContext context, InstanceNetworkInterface awsNic) {
+            AWSComputeStateCreationContext context, InstanceNetworkInterface awsNic,
+            String existingEndpointLink, Set<String> endpointLinks) {
 
         final NetworkInterfaceState nicState;
         {
@@ -522,11 +527,16 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         .get(awsNic.getSubnetId());
             }
             nicState.tenantLinks = context.request.tenantLinks;
-            nicState.endpointLink = context.request.endpointLink;
+
+            // retain the existing link, if it is not null
+            nicState.endpointLink = existingEndpointLink;
+            if (nicState.endpointLink == null ) {
+                nicState.endpointLink = context.request.endpointLink;
+            }
             if (nicState.endpointLinks == null) {
                 nicState.endpointLinks = new HashSet<String>();
             }
-            nicState.endpointLinks.add(nicState.endpointLink);
+            nicState.endpointLinks.addAll(endpointLinks);
             nicState.regionId = context.request.regionId;
             nicState.computeHostLink = context.request.parentComputeLink;
             Set<String> internalTagLinks = context.internalTagLinksMap
@@ -618,6 +628,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 ComputeState existingComputeState = context.request.computeStatesToBeUpdated
                         .get(instanceId);
 
+                Set<String> endpointLinks = new HashSet<>();
+                if (existingComputeState.endpointLinks != null) {
+                    endpointLinks.addAll(existingComputeState.endpointLinks);
+                }
+                endpointLinks.add(context.request.endpointLink);
+
                 // Calculate NICs delta - collection of NIC States to add, to update and to delete
                 Map<String, List<Integer>> deviceIndexesDelta = new HashMap<>();
                 Map<String, Map<String, Collection<Object>>> linksToNICSToAddOrRemove = new HashMap<>();
@@ -633,7 +649,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             existingNicStates);
 
                     linksToNICSToAddOrRemove = addUpdateOrRemoveNICStates(context, instance,
-                            deviceIndexesDelta);
+                            deviceIndexesDelta, existingComputeState.endpointLink, endpointLinks);
                 }
 
                 // Create dedicated PATCH operation for updating NIC Links {{
@@ -661,7 +677,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         existingComputeState.resourcePoolLink != null
                                 ? existingComputeState.resourcePoolLink
                                 : context.request.resourcePoolLink,
-                        context.request.endpointLink,
+                        existingComputeState.endpointLink,
+                        endpointLinks,
                         existingComputeState.descriptionLink,
                         context.request.parentCDStatsAdapterReferences,
                         context.internalTagLinksMap.get(ec2_instance.toString()),
@@ -756,7 +773,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      */
     private Map<String, Map<String, Collection<Object>>> addUpdateOrRemoveNICStates(
             AWSComputeStateCreationContext context, Instance instance,
-            Map<String, List<Integer>> nicsDeviceIndexDeltaMap) {
+            Map<String, List<Integer>> nicsDeviceIndexDeltaMap, String existingEndpointLink, Set<String> endpointLinks) {
 
         List<NetworkInterfaceState> existingNicStates = context.request.nicStatesToBeUpdated
                 .get(instance.getInstanceId());
@@ -774,7 +791,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         .containsKey(awsNic.getSubnetId()))
 
                 // create new NIC State and Description operation
-                .map(awsNic -> createNICStateAndDescription(context, awsNic))
+                .map(awsNic -> createNICStateAndDescription(context, awsNic, existingEndpointLink, endpointLinks))
                 // and collect their documentSelfLinks
                 .map(addedNicState -> UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                         addedNicState.documentSelfLink))

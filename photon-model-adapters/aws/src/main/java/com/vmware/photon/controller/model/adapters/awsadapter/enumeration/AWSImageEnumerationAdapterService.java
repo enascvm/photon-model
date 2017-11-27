@@ -228,6 +228,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             if (request.requestType == ImageEnumerateRequestType.PUBLIC) {
                 // Public/Shared images should NOT consider tenantLinks and endpointLink
                 setApplyInfraFields(false);
+                setApplyEndpointLink(false);
             }
         }
 

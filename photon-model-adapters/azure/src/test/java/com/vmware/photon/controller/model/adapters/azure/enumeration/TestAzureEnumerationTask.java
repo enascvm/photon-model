@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceDisassociated;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
@@ -200,6 +201,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
     public static String azureVMNamePrefix = "enumtest-";
     public static String azureVMName;
+
     public boolean isMock = true;
     public boolean isAzureClientMock = false;
     public String azureMockEndpointReference = null;
@@ -273,6 +275,10 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 // create a compute host for the Azure
                 computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
                         endpointState);
+
+                endpointState.computeHostLink = computeHost.documentSelfLink;
+                this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
+                        .setBody(endpointState));
             }
 
             azureVMName = azureVMName == null
@@ -611,7 +617,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         runEnumeration();
 
-        assertResourceExists(this.host, ComputeService.FACTORY_LINK, azureVMName, false);
+        assertResourceDisassociated(this.host, ComputeService.FACTORY_LINK, azureVMName, true);
 
         // clean up
         this.vmState = null;
@@ -794,40 +800,40 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     private void assertStaleResources() {
         // Resource groups.
         for (int i = 0; i < STALE_RG_COUNT; i++) {
-            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
+            assertResourceDisassociated(this.host, ResourceGroupService.FACTORY_LINK,
                     STALE_RG_NAME_PREFIX + i,
-                    false);
+                    true);
         }
 
         // VMs
         for (int i = 0; i < STALE_VM_RESOURCES_COUNT; i++) {
-            assertResourceExists(this.host, ComputeService.FACTORY_LINK, STALE_VM_NAME_PREFIX + i,
-                    false);
+            assertResourceDisassociated(this.host, ComputeService.FACTORY_LINK, STALE_VM_NAME_PREFIX + i,
+                    true);
         }
 
         // Storage accounts
         for (int i = 0; i < STALE_STORAGE_ACCOUNTS_COUNT; i++) {
-            assertResourceExists(this.host, StorageDescriptionService.FACTORY_LINK,
+            assertResourceDisassociated(this.host, StorageDescriptionService.FACTORY_LINK,
                     STALE_SA_NAME_PREFIX
                             + i,
-                    false);
+                    true);
         }
 
         // Storage containers
         for (int i = 0; i < STALE_CONTAINERS_COUNT; i++) {
-            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
-                    STALE_CONTAINER_NAME_PREFIX + i, false);
+            assertResourceDisassociated(this.host, ResourceGroupService.FACTORY_LINK,
+                    STALE_CONTAINER_NAME_PREFIX + i, true);
         }
 
         // Disks
         for (int i = 0; i < STALE_DISKS_COUNT; i++) {
-            assertResourceExists(this.host, DiskService.FACTORY_LINK,
-                    STALE_DISKS_NAME_PREFIX + i, false);
+            assertResourceDisassociated(this.host, DiskService.FACTORY_LINK,
+                    STALE_DISKS_NAME_PREFIX + i, true);
         }
 
         // Security Groups
         for (int i = 0; i < STALE_SECURITY_GROUPS_COUNT; i++) {
-            assertResourceExists(this.host, SecurityGroupService.FACTORY_LINK,
+            assertResourceDisassociated(this.host, SecurityGroupService.FACTORY_LINK,
                     STALE_SG_NAME_PREFIX + i, false);
         }
     }

@@ -75,6 +75,8 @@ public class EndpointServiceTest extends Suite {
         endpointState.tenantLinks.add("tenant-linkA");
         endpointState.authCredentialsLink = "http://authCredentialsLink";
         endpointState.resourcePoolLink = "http://resourcePoolLink";
+        endpointState.computeLink = "aws-host-computeLink";
+        endpointState.computeDescriptionLink = "aws-host-computeDescriptionLink";
         return endpointState;
     }
 
@@ -185,6 +187,8 @@ public class EndpointServiceTest extends Suite {
             patchState.id = UUID.randomUUID().toString();
             patchState.name = "aws-test-endpoint-updatedName";
             patchState.desc = "aws-test-endpoint description updated";
+            patchState.computeLink = "aws-host-mod-computeLink";
+            patchState.computeDescriptionLink = "aws-host-mod-computeDescriptionLink";
             patchState.tenantLinks = new ArrayList<>();
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
@@ -194,6 +198,8 @@ public class EndpointServiceTest extends Suite {
 
             assertThat(updatedReturnState.name, is(patchState.name));
             assertThat(updatedReturnState.desc, is(patchState.desc));
+            assertThat(updatedReturnState.computeLink, is(patchState.computeLink));
+            assertThat(updatedReturnState.computeDescriptionLink, is(patchState.computeDescriptionLink));
         }
     }
 

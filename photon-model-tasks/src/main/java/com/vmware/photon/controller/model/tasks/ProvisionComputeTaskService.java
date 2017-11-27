@@ -78,6 +78,12 @@ public class ProvisionComputeTaskService
          */
         public String computeLink;
 
+
+        /**
+         * URI reference to endpoint instance.
+         */
+        public String endpointLink;
+
         /**
          * Optional, set by the task if not specified by the client, by querying
          * the compute host.
@@ -165,6 +171,7 @@ public class ProvisionComputeTaskService
         state.bootAdapterReference = hostState.description.bootAdapterReference;
         state.powerAdapterReference = hostState.description.powerAdapterReference;
         state.instanceAdapterReference = hostState.description.instanceAdapterReference;
+        state.endpointLink = hostState.endpointLink;
 
         // we can complete start operation now, it will index and cache the
         // update state
@@ -308,6 +315,7 @@ public class ProvisionComputeTaskService
 
             ComputeInstanceRequest cr = new ComputeInstanceRequest();
             cr.resourceReference = createInventoryUri(this.getHost(), updatedState.computeLink);
+            cr.endpointLinkReference = createInventoryUri(this.getHost(), updatedState.endpointLink);
             cr.requestType = InstanceRequestType.CREATE;
             // the first reboot needs to be from the network, and the bare metal
             // services

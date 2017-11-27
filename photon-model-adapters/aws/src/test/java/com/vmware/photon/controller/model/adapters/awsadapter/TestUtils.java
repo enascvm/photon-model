@@ -278,7 +278,8 @@ public class TestUtils {
                 queryForReferrers,
                 SubnetState.class,
                 networkState.tenantLinks,
-                networkState.endpointLink);
+                null,
+                networkState.computeHostLink);
 
         DeferredResult<List<SubnetState>> subnetDR =
                 querySubnetStatesReferrers.collectDocuments(Collectors.toList());

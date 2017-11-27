@@ -27,6 +27,8 @@ import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.AssertUtil;
@@ -42,6 +44,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
@@ -262,9 +265,12 @@ public class QueryUtils {
         }
 
         if (PhotonModelUtils.ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(stateClass)) {
-            return qBuilder.addFieldClause(
+            qBuilder.addFieldClause(
                     PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
-                    endpointLink);
+                    endpointLink, Query.Occurance.SHOULD_OCCUR);
+            return qBuilder.addCollectionItemClause(
+                    PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS,
+                    endpointLink, Query.Occurance.SHOULD_OCCUR);
         }
 
         if (PhotonModelUtils.ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {
@@ -358,10 +364,38 @@ public class QueryUtils {
          *            The scope of the query.
          */
         public QueryTemplate(ServiceHost host,
-                Query query,
-                Class<T> documentClass,
-                List<String> tenantLinks,
-                String endpointLink) {
+                             Query query,
+                             Class<T> documentClass,
+                             List<String> tenantLinks,
+                             String endpointLink) {
+            this(host, query, documentClass, tenantLinks, endpointLink, null /* computeHostLink */);
+        }
+
+         /**
+          * Default constructor.
+          * <p>
+          * Note: The client is off-loaded from setting the {@code tenantLinks} and
+          * {@code ednpointLink} to the query.
+          *
+          * @param host
+          *            The host initiating the query.
+          * @param query
+          *            The query criteria.
+          * @param documentClass
+          *            The class of documents to query for.
+          * @param tenantLinks
+          *            The scope of the query.
+          * @param endpointLink
+          *            The scope of the query.
+          * @param computeHostLink
+          *            The scope of the query, based on computeHost on each resource.
+          */
+        public QueryTemplate(ServiceHost host,
+                             Query query,
+                             Class<T> documentClass,
+                             List<String> tenantLinks,
+                             String endpointLink,
+                             String computeHostLink) {
 
             this.host = host;
             this.documentClass = documentClass;
@@ -372,6 +406,9 @@ public class QueryUtils {
             {
                 // Wrap original query...
                 Query.Builder qBuilder = Query.Builder.create().addClause(query);
+                if (computeHostLink != null) {
+                    qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK, computeHostLink);
+                }
                 // ...and extend with TENANT_LINKS
                 QueryUtils.addTenantLinks(qBuilder, this.tenantLinks);
                 // ...and extend with ENDPOINT_LINK
@@ -576,6 +613,15 @@ public class QueryUtils {
             super(host, query, documentClass, tenantLinks, endpointLink);
         }
 
+        public QueryTop(ServiceHost host,
+                        Query query,
+                        Class<T> documentClass,
+                        List<String> tenantLinks,
+                        String endpointLink,
+                        String computeHostLink) {
+            super(host, query, documentClass, tenantLinks, endpointLink, computeHostLink);
+        }
+
         /**
          * Configure the number of top results.
          * <p>
@@ -656,6 +702,16 @@ public class QueryUtils {
             super(host, query, documentClass, tenantLinks, endpointLink);
         }
 
+        public QueryByPages(ServiceHost host,
+                            Query query,
+                            Class<T> documentClass,
+                            List<String> tenantLinks,
+                            String endpointLink,
+                            String computeHostLink) {
+
+            super(host, query, documentClass, tenantLinks, endpointLink, computeHostLink);
+        }
+
         /**
          * Configure the number of max documents per page.
          * <p>
@@ -733,6 +789,30 @@ public class QueryUtils {
                 .addKindFieldClause(referrerClass)
                 .addFieldClause(referrerLinkFieldName, referredDocumentSelfLink)
                 .build();
+    }
+
+    /**
+     * Create a QueryTask to fetch an endpoint based on account ID for the given account type.
+     */
+    public static QueryTask createAccountQuery(String accountId, String accountType,
+            List<String> tenantLinks) {
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class, Occurance.SHOULD_OCCUR)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        "__endpointType", accountType)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId)
+                .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(qBuilder.build())
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(100)
+                .build();
+
+        return queryTask;
     }
 
 }
