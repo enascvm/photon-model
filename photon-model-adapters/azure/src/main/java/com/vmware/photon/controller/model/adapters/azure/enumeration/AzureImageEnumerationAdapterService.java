@@ -59,6 +59,7 @@ import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
@@ -280,12 +281,15 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
 
-            ExecutorService executorService =
-                    ((AzureImageEnumerationAdapterService) this.service).executorService;
+            ExecutorService executorService = ((AzureImageEnumerationAdapterService) this.service).executorService;
+
+            OperationContext opCtx = OperationContext.getOperationContext();
 
             return DeferredResult.completed(getAzureImagesLoader())
-                    // AzureImagesLoader is NOT async so execute load-images-page in Executor!
-                    .thenComposeAsync(this::getAzureImagesPage, executorService);
+                    // AzureImagesLoader is NOT async so execute getAzureImagesPage in Executor!
+                    .thenApplyAsync(this::getAzureImagesPage, executorService)
+                    // Restore OpCtx upon success/failure
+                    .whenComplete((page, exc) -> OperationContext.restoreOperationContext(opCtx));
         }
 
         /**
@@ -330,11 +334,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         }
 
         /**
-         * Read Azure images page-by-page as served by passed {@link AzureImagesLoader} and convert
-         * to {@link RemoteResourcesPage}.
+         * Read (in a blocking manner) Azure images page-by-page as served by passed
+         * {@link AzureImagesLoader} and convert to {@link RemoteResourcesPage}.
          */
-        private DeferredResult<RemoteResourcesPage> getAzureImagesPage(
-                AzureImagesLoader azureImagesLoader) {
+        private RemoteResourcesPage getAzureImagesPage(AzureImagesLoader azureImagesLoader) {
 
             final RemoteResourcesPage page = new RemoteResourcesPage();
 
@@ -353,7 +356,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                         + azureImagesLoader.pageNumber;
             }
 
-            return DeferredResult.completed(page);
+            return page;
         }
 
         @Override
