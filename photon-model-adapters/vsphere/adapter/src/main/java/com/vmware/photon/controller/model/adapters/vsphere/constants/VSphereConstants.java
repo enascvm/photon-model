@@ -28,7 +28,11 @@ public class VSphereConstants {
     public static final String VSPHERE_SNAPSHOT_REQUEST_TYPE = "requestType";
 
     public static enum VSphereResourceType {
-        vsphere_vm("vsphere_vm");
+        vsphere_vm("vsphere_vm"),
+        vsphere_server("vsphere_server"),
+        vsphere_cluster("vsphere_cluster"),
+        vsphere_disk("vsphere_disk"),
+        vsphere_datastore("vsphere_datastore");
 
         private final String value;
 
