@@ -448,6 +448,25 @@ public class IPAddressAllocationTaskServiceTest extends Suite {
         }
 
         @Test
+        public void testAllocationTaskServiceWithNoRanges() throws Throwable {
+            SubnetService.SubnetState subnetState = ModelUtils.createSubnet(this, this
+                    .networkState, this.endpointState);
+            IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
+                    subnetState.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+            IPAddressAllocationTaskState allocationTaskResult;
+
+            addFakeCallBack(allocationTask);
+
+
+            // task should not fail, but no IP addresses are allocated
+            allocationTaskResult = performTask(allocationTask);
+            assertNotNull(allocationTaskResult);
+            assertEquals(0, allocationTaskResult.rsrcToAllocatedIpsMap.size());
+            assertEquals(0, allocationTaskResult.subnetRangeLinks.size());
+        }
+
+        @Test
         public void testAllocationTaskServiceWithDeallocation() throws Throwable {
             IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
                     this.subnetState.documentSelfLink,

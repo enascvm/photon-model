@@ -154,11 +154,6 @@ public class IPAddressAllocationTaskService extends
 
             return query.collectDocuments(toList())
                     .thenApply(subnetRangeStatesRet -> {
-                        if (subnetRangeStatesRet == null || subnetRangeStatesRet.size() == 0) {
-                            String msg = String.format("No subnet ranges were found for subnet %s",
-                                    this.subnetState.documentSelfLink);
-                            throw new CompletionException(new Exception(msg));
-                        }
                         this.subnetRangeStates = subnetRangeStatesRet;
                         return this;
                     });
@@ -634,6 +629,17 @@ public class IPAddressAllocationTaskService extends
         ipAddressAllocationContext.populate(this, state)
                 .thenAccept(ctxt ->
                 {
+                    if (ctxt.subnetRangeStates == null || ctxt.subnetRangeStates.size() == 0) {
+                        // ignore this particular error for now and complete task, as certain
+                        // providers (e.g., AWS, Azure) do not have address ranges defined.
+                        // TODO: this task would eventually need to delegate IP address allocation to an
+                        // adapter, which will take the appropriate action based on the adapter type
+                        logWarning(() -> String.format("No IP addresses can be allocated for "
+                                + "subnet %s. There are no address ranges available for this "
+                                + "subnet.", ctxt.subnetState.documentSelfLink));
+                        proceedTo(IPAddressAllocationTaskState.SubStage.FINISHED, null);
+                        return;
+                    }
                     checkEnoughIPsAvailableOrFail(ctxt);
                     int requiredIpCount = ctxt.requestedIpCount;
 
