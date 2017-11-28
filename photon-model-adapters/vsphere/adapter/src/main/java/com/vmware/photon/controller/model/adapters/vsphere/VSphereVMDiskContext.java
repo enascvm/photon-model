@@ -18,14 +18,19 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResourceEnumerationService.PREFIX_DATASTORE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_CONTENT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
@@ -38,6 +43,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
@@ -54,6 +60,7 @@ public class VSphereVMDiskContext {
     protected ComputeStateWithDescription computePlacementHost;
     protected Set<String> computeGroupLinks;
     protected DiskService.DiskStateExpanded diskState;
+    protected List<DiskService.DiskStateExpanded> computeDiskStates;
     protected String contentLink;
     protected byte[] contentToUpload;
     protected ComputeStateWithDescription computeDesc;
@@ -178,6 +185,43 @@ public class VSphereVMDiskContext {
                     populateVMDiskContextThen(service, ctx, onSuccess);
                 }
             }, ctx.errorHandler);
+            return;
+        }
+
+        // If it is CD-ROM attach then collect all the disk links objects if insertCDRom is true
+        if (ctx.computeDiskStates == null) {
+            Boolean insertCdRom = CustomProperties.of(ctx.diskState).getBoolean(INSERT_CDROM, false);
+            if (ctx.diskState.type == DiskService.DiskType.CDROM && insertCdRom &&
+                    ctx.computeDesc.diskLinks != null && !ctx.computeDesc.diskLinks.isEmpty()) {
+                ctx.computeDiskStates = new ArrayList<>(ctx.computeDesc.diskLinks.size());
+
+                // collect disks in parallel
+                Stream<Operation> opsGetDisk = ctx.computeDesc.diskLinks.stream()
+                        .map(link -> {
+                            URI diskStateUri = createInventoryUri(service.getHost(), link);
+                            return Operation.createGet(createInventoryUri(service.getHost(),
+                                    DiskService.DiskStateExpanded.buildUri(diskStateUri)));
+                        });
+
+                OperationJoin join = OperationJoin.create(opsGetDisk)
+                        .setCompletion((os, errors) -> {
+                            if (errors != null && !errors.isEmpty()) {
+                                // fail on first error
+                                ctx.errorHandler
+                                        .accept(new IllegalStateException("Cannot get disk state",
+                                                errors.values().iterator().next()));
+                                return;
+                            }
+
+                            os.values().forEach(op -> ctx.computeDiskStates.add(op.getBody(DiskService.DiskStateExpanded.class)));
+                            populateVMDiskContextThen(service, ctx, onSuccess);
+                        });
+
+                join.sendWith(service);
+            } else {
+                ctx.computeDiskStates = Collections.emptyList();
+                populateVMDiskContextThen(service, ctx, onSuccess);
+            }
             return;
         }
 

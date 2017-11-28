@@ -146,6 +146,16 @@ public class CustomProperties {
      */
     public static final String NIC_MAC_ADDRESS = "mac_address";
 
+    /**
+     * CD-ROM / Floppy status
+     */
+    public static final String DEVICE_STATUS = "__deviceStatus";
+
+    /**
+     * CD-ROM / Floppy connected or not
+     */
+    public static final String DEVICE_CONNECTED = "__deviceConnected";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

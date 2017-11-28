@@ -14,16 +14,22 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.VM_PATH_FORMAT;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findMatchingDiskState;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDiskControllerUnitNumber;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDevice;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TEMPLATE_DISK_LINK;
 import static com.vmware.xenon.common.Operation.MEDIA_TYPE_APPLICATION_OCTET_STREAM;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import javax.net.ssl.TrustManager;
 
@@ -45,9 +51,12 @@ import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
+import com.vmware.vim25.VirtualCdrom;
+import com.vmware.vim25.VirtualDevice;
 import com.vmware.vim25.VirtualDeviceConfigSpec;
 import com.vmware.vim25.VirtualDeviceConfigSpecOperation;
 import com.vmware.vim25.VirtualDisk;
+import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualMachineConfigSpec;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -86,7 +95,7 @@ public class InstanceDiskClient extends BaseHelper {
         this.host = host;
     }
 
-    public void attachDiskToVM() throws Exception {
+    public DiskService.DiskState attachDiskToVM() throws Exception {
         ArrayOfVirtualDevice devices = this.get
                 .entityProp(this.vm, VimPath.vm_config_hardware_device);
         String diskDatastoreName = CustomProperties.of(this.diskState)
@@ -100,23 +109,48 @@ public class InstanceDiskClient extends BaseHelper {
         String diskFullPath = ClientUtils.attachDiskToVM(devices, this.vm, this.diskState,
                 diskDsMoref, this.connection, this.getVimPort());
 
+        devices = this.get.entityProp(this.vm, VimPath.vm_config_hardware_device);
+
         // Update the diskState
         if (this.diskState.type == DiskService.DiskType.HDD) {
             this.diskState.sourceImageReference = VimUtils.datastorePathToUri(diskFullPath);
-            devices = this.get.entityProp(this.vm, VimPath.vm_config_hardware_device);
-            VirtualDisk vd = findMatchingVirtualDisk(devices);
+            VirtualDisk vd = (VirtualDisk) findMatchingVirtualDevice(getListOfVirtualDisk(devices));
             if (vd != null) {
                 updateDiskStateFromVirtualDisk(vd, this.diskState);
             }
+        } else if (this.diskState.type == DiskService.DiskType.CDROM) {
+            Boolean insertCdRom = CustomProperties.of(this.diskState).getBoolean(INSERT_CDROM,
+                    false);
+            VirtualDevice virtualDevice = findMatchingVirtualDevice(getListOfVirtualCdRom(devices));
+            if (virtualDevice != null) {
+                if (insertCdRom) {
+                    DiskService.DiskStateExpanded matchedDs = findMatchingDiskState(virtualDevice,
+                            this.context.computeDiskStates);
+                    if (matchedDs.customProperties == null) {
+                        matchedDs.customProperties = new HashMap<>();
+                    }
+                    matchedDs.customProperties.putAll(this.diskState.customProperties);
+                    updateDiskStateFromVirtualDevice(virtualDevice, matchedDs, virtualDevice.getBacking());
+                    CustomProperties.of(matchedDs).put(TEMPLATE_DISK_LINK, this.diskState.documentSelfLink);
+                    return matchedDs;
+                } else {
+                    updateDiskStateFromVirtualDevice(virtualDevice, this.diskState, virtualDevice.getBacking());
+                }
+            }
         } else {
-            this.diskState.status = DiskService.DiskStatus.ATTACHED;
+            // This would be Floppy
+            VirtualDevice virtualDevice = findMatchingVirtualDevice(getListOfVirtualFloppy(devices));
+            if (virtualDevice != null) {
+                updateDiskStateFromVirtualDevice(virtualDevice, this.diskState, virtualDevice.getBacking());
+            }
         }
+        return this.diskState;
     }
 
     public void detachDiskFromVM() throws Exception {
         ArrayOfVirtualDevice devices = this.get
                 .entityProp(this.vm, VimPath.vm_config_hardware_device);
-        VirtualDisk vd = findMatchingVirtualDisk(devices);
+        VirtualDisk vd = (VirtualDisk) findMatchingVirtualDevice(getListOfVirtualDisk(devices));
         if (vd == null) {
             throw new IllegalStateException(
                     String.format(
@@ -238,12 +272,28 @@ public class InstanceDiskClient extends BaseHelper {
      * Find matching VirtualDisk for the given disk information using its controller unit number
      * filled in during creation of the disk.
      */
-    private VirtualDisk findMatchingVirtualDisk(ArrayOfVirtualDevice devices) {
-        return devices.getVirtualDevice().stream()
-                .filter(d -> d instanceof VirtualDisk)
-                .map(d -> (VirtualDisk) d)
+    private VirtualDevice findMatchingVirtualDevice(List<VirtualDevice> virtualDevices) {
+        return virtualDevices.stream()
                 .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(this.diskState))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private List<VirtualDevice> getListOfVirtualDisk(ArrayOfVirtualDevice devices) {
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .collect(Collectors.toList());
+    }
+
+    private List<VirtualDevice> getListOfVirtualCdRom(ArrayOfVirtualDevice devices) {
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualCdrom)
+                .collect(Collectors.toList());
+    }
+
+    private List<VirtualDevice> getListOfVirtualFloppy(ArrayOfVirtualDevice devices) {
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualFloppy)
+                .collect(Collectors.toList());
     }
 }

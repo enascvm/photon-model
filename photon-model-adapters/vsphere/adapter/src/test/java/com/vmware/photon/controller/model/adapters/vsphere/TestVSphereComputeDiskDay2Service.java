@@ -203,7 +203,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
             assertNotNull(this.vm.diskLinks);
-            assertEquals(5, this.vm.diskLinks.size());
+            assertEquals(6, this.vm.diskLinks.size());
 
             // Get the latest state of the attached disk
             diskState = this.host.getServiceState(null, DiskService.DiskState.class,
@@ -217,7 +217,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
             assertNotNull(this.vm.diskLinks);
-            assertEquals(4, this.vm.diskLinks.size());
+            assertEquals(5, this.vm.diskLinks.size());
 
             // Get the latest state of the detached disk
             diskState = this.host.getServiceState(null, DiskService.DiskState.class,
@@ -272,6 +272,20 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
                 return;
             }
 
+            this.vm = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, this.vm.documentSelfLink));
+
+            assertEquals(3, this.vm.diskLinks.size());
+
+            this.vm.diskLinks.stream().forEach(link -> {
+                DiskService.DiskState diskState = this.host
+                        .getServiceState(null, DiskService.DiskState.class,
+                                UriUtils.buildUri(this.host, link));
+                if (diskState.type == DiskService.DiskType.CDROM) {
+                    this.CDDiskState = diskState;
+                }
+            });
+
             // Step 1: Attach a CD-ROM disk
             // prepare a disk with CD-ROM type
             DiskService.DiskState cdDiskState = createCDromWithIso("cdrom-1", DiskService.DiskType.CDROM,
@@ -280,16 +294,11 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             ResourceOperationRequest request = createResourceOperationRequest(cdDiskState,
                     createComputeDiskTaskService(),
                     ResourceOperation.ATTACH_DISK);
-            sendRequest(request, DiskService.DiskType.CDROM, computeAttachWaitHandler());
+            sendRequest(request, DiskService.DiskType.CDROM, insertCDRomHandler());
 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
 
-            this.CDDiskState = this.host.getServiceState(null, DiskService.DiskState.class,
-                    UriUtils.buildUri(this.host, cdDiskState.documentSelfLink));
-
-            this.vm = this.host.getServiceState(null, ComputeState.class,
-                    UriUtils.buildUri(this.host, this.vm.documentSelfLink));
             assertNotNull(this.vm.diskLinks);
             assertEquals(3, this.vm.diskLinks.size());
         } finally {
@@ -337,6 +346,20 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
 
             // Check for the disk is attached to a vm or not.
             if (this.vm.diskLinks.size() + 1 == vm.diskLinks.size()) {
+                return true;
+            } else {
+                return false;
+            }
+        };
+    }
+
+    private VerificationHost.WaitHandler insertCDRomHandler() {
+        return () -> {
+            DiskService.DiskState diskState = this.host
+                    .getServiceState(null, DiskService.DiskState.class,
+                            UriUtils.buildUri(this.host, this.CDDiskState.documentSelfLink));
+
+            if (diskState.sourceImageReference != null) {
                 return true;
             } else {
                 return false;

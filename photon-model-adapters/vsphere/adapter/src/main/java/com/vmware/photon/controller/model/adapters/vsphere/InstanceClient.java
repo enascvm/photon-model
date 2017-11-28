@@ -1105,6 +1105,7 @@ public class InstanceClient extends BaseHelper {
             }
             if (ds.type == DiskType.CDROM) {
                 VirtualDeviceConfigSpec cdrom = createCdrom(ideController, ideUnit);
+                fillInControllerUnitNumber(ds, ideUnit);
                 ideUnit = nextUnitNumber(ideUnit);
                 if (diskPath != null) {
                     // mount iso image
@@ -1115,6 +1116,7 @@ public class InstanceClient extends BaseHelper {
             }
             if (ds.type == DiskType.FLOPPY) {
                 VirtualDeviceConfigSpec floppy = createFloppy(sioController, sioUnit);
+                fillInControllerUnitNumber(ds, sioUnit);
                 sioUnit = nextUnitNumber(sioUnit);
                 if (diskPath != null) {
                     // mount iso image

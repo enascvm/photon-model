@@ -35,8 +35,11 @@ import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayOfVirtualMachineSnapshotTree;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.VirtualCdrom;
+import com.vmware.vim25.VirtualDevice;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
+import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualMachinePowerState;
 import com.vmware.vim25.VirtualMachineSnapshotTree;
 
@@ -126,7 +129,7 @@ public class VmOverlay extends AbstractOverlay {
                 .collect(Collectors.toList());
     }
 
-    public List<VirtualDisk> getDisks() {
+    public List<VirtualDevice> getDisks() {
         ArrayOfVirtualDevice dev = (ArrayOfVirtualDevice) getOrDefault(
                 VimPath.vm_config_hardware_device, null);
         if (dev == null) {
@@ -134,8 +137,8 @@ public class VmOverlay extends AbstractOverlay {
         }
 
         return dev.getVirtualDevice().stream()
-                .filter(d -> d instanceof VirtualDisk)
-                .map(d -> (VirtualDisk) d)
+                .filter(d -> d instanceof VirtualDisk || d instanceof VirtualCdrom || d
+                        instanceof VirtualFloppy)
                 .collect(Collectors.toList());
     }
 

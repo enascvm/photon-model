@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DEVICE_CONNECTED;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DEVICE_STATUS;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_INDEPENDENT;
@@ -79,10 +81,12 @@ import com.vmware.vim25.VirtualCdrom;
 import com.vmware.vim25.VirtualCdromAtapiBackingInfo;
 import com.vmware.vim25.VirtualCdromIsoBackingInfo;
 import com.vmware.vim25.VirtualDevice;
+import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualDeviceConfigSpec;
 import com.vmware.vim25.VirtualDeviceConfigSpecFileOperation;
 import com.vmware.vim25.VirtualDeviceConfigSpecOperation;
 import com.vmware.vim25.VirtualDeviceConnectInfo;
+import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualDiskFlatVer2BackingInfo;
 import com.vmware.vim25.VirtualDiskMode;
@@ -374,7 +378,7 @@ public class ClientUtils {
      * Fill in the scsi controller unit number into the custom properties of disk state so that we
      * can update the details of the disk once the provisioning is complete.
      */
-    public static void fillInControllerUnitNumber(DiskService.DiskStateExpanded ds,
+    public static void fillInControllerUnitNumber(DiskService.DiskState ds,
             int unitNumber) {
         CustomProperties.of(ds).put(DISK_CONTROLLER_NUMBER, unitNumber);
     }
@@ -382,7 +386,7 @@ public class ClientUtils {
     /**
      * Get disk unit number
      */
-    public static Integer getDiskControllerUnitNumber(DiskService.DiskStateExpanded ds) {
+    public static int getDiskControllerUnitNumber(DiskService.DiskStateExpanded ds) {
         String unitNumber = CustomProperties.of(ds).getString(DISK_CONTROLLER_NUMBER, "0");
         return Integer.parseInt(unitNumber);
     }
@@ -521,6 +525,26 @@ public class ClientUtils {
                 .put(PROVIDER_DISK_UNIQUE_ID, vd.getDeviceInfo().getLabel());
     }
 
+
+    /**
+     * Capture virtual cdrom attributes in the disk state for reference.
+     */
+    public static void updateDiskStateFromVirtualDevice(VirtualDevice vd, DiskService.DiskState
+            disk, VirtualDeviceBackingInfo backing) {
+        fillInControllerUnitNumber(disk, vd.getUnitNumber());
+        if (backing != null && backing instanceof VirtualDeviceFileBackingInfo) {
+            disk.sourceImageReference = VimUtils
+                    .datastorePathToUri(((VirtualDeviceFileBackingInfo) backing).getFileName());
+        }
+        disk.status = DiskService.DiskStatus.ATTACHED;
+        CustomProperties.of(disk)
+                .put(PROVIDER_DISK_UNIQUE_ID, vd.getDeviceInfo().getLabel());
+        if (vd.getConnectable() != null) {
+            CustomProperties.of(disk)
+                    .put(DEVICE_CONNECTED, vd.getConnectable().isConnected())
+                    .put(DEVICE_STATUS, vd.getConnectable().getStatus());
+        }
+    }
 
     /**
      * Power off virtual machine
@@ -766,6 +790,42 @@ public class ClientUtils {
             powerOnVM(connection, vimPort, vm);
         }
         return diskFullPath;
+    }
+
+    public static DiskService.DiskStateExpanded findMatchingDiskState(VirtualDevice vd,
+            List<DiskService.DiskStateExpanded> disks) {
+        // Step 1: Match if there are matching bootOrder number with Unit number of disk
+        // Step 2: If not, then find a custom property to match the bootOrder with the unit number
+        // Step 3: If no match found then this is the new disk so return null
+        if (disks == null || disks.isEmpty()) {
+            return null;
+        }
+
+        return disks.stream()
+                .filter(ds -> {
+                    if (vd instanceof VirtualDisk && ds.type == DiskService.DiskType.HDD) {
+                        return true;
+                    } else if (vd instanceof VirtualCdrom && ds.type == DiskService.DiskType.CDROM) {
+                        return true;
+                    } else if (vd instanceof VirtualFloppy && ds.type == DiskService.DiskType.FLOPPY) {
+                        return true;
+                    }
+                    return false;
+                })
+                .filter(ds -> {
+                    boolean isFound = (ds.bootOrder != null && (ds.bootOrder - 1) == vd
+                            .getUnitNumber());
+                    if (!isFound) {
+                        // Now check custom properties for controller unit number
+                        if (ds.customProperties != null && ds.customProperties.get
+                                (DISK_CONTROLLER_NUMBER) != null) {
+                            int unitNumber = Integer.parseInt(ds.customProperties.get
+                                    (DISK_CONTROLLER_NUMBER));
+                            isFound = unitNumber == vd.getUnitNumber();
+                        }
+                    }
+                    return isFound;
+                }).findFirst().orElse(null);
     }
 
     private static void powerOffVm(Connection connection, VimPortType vimPort,

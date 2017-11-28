@@ -97,7 +97,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
      */
     private void handleAttachDisk(VSphereVMDiskContext ctx) {
         if (ctx.request.isMockRequest) {
-            updateComputeAndDiskStateForAttach(ctx);
+            updateComputeAndDiskStateForAttach(ctx, ctx.diskState);
             return;
         }
 
@@ -112,8 +112,8 @@ public class VSphereComputeDiskManagementService extends StatelessService {
                             getHost());
                     try {
                         if (ctx.contentToUpload == null || ctx.contentToUpload.length == 0) {
-                            diskClient.attachDiskToVM();
-                            updateComputeAndDiskStateForAttach(ctx);
+                            DiskService.DiskState diskState = diskClient.attachDiskToVM();
+                            updateComputeAndDiskStateForAttach(ctx, diskState);
                             return;
                         }
 
@@ -145,9 +145,9 @@ public class VSphereComputeDiskManagementService extends StatelessService {
                                                         ctx, getHost());
                                                 try {
                                                     ctx.diskState = ds;
-                                                    newClient.attachDiskToVM();
-                                                    updateComputeAndDiskStateForAttach(
-                                                            ctx);
+                                                    DiskService.DiskState diskState = newClient
+                                                            .attachDiskToVM();
+                                                    updateComputeAndDiskStateForAttach(ctx, diskState);
                                                 } catch (Exception ex) {
                                                     ctx.fail(ex);
                                                 }
@@ -188,23 +188,26 @@ public class VSphereComputeDiskManagementService extends StatelessService {
     /**
      * Update compute and disk state for attach operation.
      */
-    private void updateComputeAndDiskStateForAttach(VSphereVMDiskContext ctx) {
+    private void updateComputeAndDiskStateForAttach(VSphereVMDiskContext ctx,
+            DiskService.DiskState newDiskState) {
         // Call patch on the disk to update the details of the disk and then
         // finish the task
-        String diskLink = ctx.request.payload.get(DISK_LINK);
         if (ctx.computeDesc.diskLinks == null) {
             ctx.computeDesc.diskLinks = new ArrayList<>();
         }
-        ctx.computeDesc.diskLinks.add(diskLink);
+
+        if (!ctx.computeDesc.diskLinks.contains(newDiskState.documentSelfLink)) {
+            ctx.computeDesc.diskLinks.add(newDiskState.documentSelfLink);
+        }
 
         // update the disk state with mock values
         if (ctx.request.isMockRequest) {
             ctx.diskState.status = DiskService.DiskStatus.ATTACHED;
-            CustomProperties.of(ctx.diskState)
-                    .put(PROVIDER_DISK_UNIQUE_ID, ctx.diskState.id)
+            CustomProperties.of(newDiskState)
+                    .put(PROVIDER_DISK_UNIQUE_ID, newDiskState.id)
                     .put(DISK_CONTROLLER_NUMBER, 0);
         }
-        OperationSequence.create(createDiskPatch(ctx.diskState))
+        OperationSequence.create(createDiskPatch(newDiskState))
                 .next(createComputePatch(ctx))
                 .next(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED))
                 .setCompletion(ctx.failTaskOnError())
