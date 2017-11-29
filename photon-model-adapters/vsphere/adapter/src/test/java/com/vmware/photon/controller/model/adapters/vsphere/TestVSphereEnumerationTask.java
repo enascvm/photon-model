@@ -17,6 +17,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_TYPE_KEY;
+
 import java.io.IOException;
 import java.net.URI;
 import java.util.EnumSet;
@@ -46,7 +48,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
-import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagService;
@@ -224,7 +225,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                                     ResourceGroupService.ResourceGroupState.class);
                     assertNotNull(rg.name);
                     assertNotNull(rg.customProperties);
-                    assertNotNull(rg.customProperties.get(ComputeProperties.RESOURCE_TYPE_KEY));
+                    assertNotNull(rg.customProperties.get(RESOURCE_TYPE_KEY));
                     assertNotNull(rg.customProperties.get(ComputeProperties.ENDPOINT_LINK_PROP_NAME));
                 }
             });
@@ -312,7 +313,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
     private QueryTask queryForStoragePolicy() {
         Query.Builder builder = Query.Builder.create()
-                .addFieldClause(ResourceState.FIELD_NAME_REGION_ID, this.datacenterId)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        RESOURCE_TYPE_KEY, "STORAGE")
                 .addKindFieldClause(ResourceGroupService.ResourceGroupState.class);
         QueryUtils.addTenantLinks(builder, this.computeHost.tenantLinks);
 

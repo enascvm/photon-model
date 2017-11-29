@@ -1060,7 +1060,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Builder builder = Query.Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ID, id)
                 .addKindFieldClause(ResourceGroupState.class)
-                .addFieldClause(ResourceState.FIELD_NAME_REGION_ID, ctx.getRegionId())
                 .addCaseInsensitiveFieldClause(ResourceState.FIELD_NAME_NAME, name,
                         MatchType.TERM, Occurance.MUST_OCCUR);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
@@ -1073,8 +1072,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void createNewStoragePolicy(EnumerationProgress enumerationProgress,
             StoragePolicyOverlay sp) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-        String regionId = enumerationProgress.getRegionId();
-        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, regionId);
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp);
         rgState.tenantLinks = enumerationProgress.getTenantLinks();
         logFine(() -> String.format("Found new Storage Policy %s", sp.getName()));
 
@@ -1093,9 +1091,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void updateStoragePolicy(ResourceGroupState oldDocument,
             EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-        String regionId = enumerationProgress.getRegionId();
 
-        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, regionId);
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp);
         rgState.documentSelfLink = oldDocument.documentSelfLink;
 
         if (oldDocument.tenantLinks == null) {
@@ -1117,12 +1114,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private ResourceGroupState makeStoragePolicyFromResults(ComputeEnumerateResourceRequest request,
-            StoragePolicyOverlay sp, String regionId) {
+            StoragePolicyOverlay sp) {
         ResourceGroupState res = new ResourceGroupState();
         res.id = sp.getProfileId();
         res.name = sp.getName();
         res.desc = sp.getDescription();
-        res.regionId = regionId;
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
                 .put(ComputeProperties.RESOURCE_TYPE_KEY, sp.getType())
