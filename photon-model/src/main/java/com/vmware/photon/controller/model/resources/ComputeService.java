@@ -277,6 +277,13 @@ public class ComputeService extends StatefulService {
             chsWithDesc.environmentName = currentState.environmentName;
             chsWithDesc.resourcePoolLink = currentState.resourcePoolLink;
             chsWithDesc.adapterManagementReference = currentState.adapterManagementReference;
+            chsWithDesc.instanceAdapterReference = currentState.instanceAdapterReference;
+            chsWithDesc.enumerationAdapterReference = currentState.enumerationAdapterReference;
+            chsWithDesc.bootAdapterReference = currentState.bootAdapterReference;
+            chsWithDesc.powerAdapterReference = currentState.powerAdapterReference;
+            chsWithDesc.healthAdapterReference = currentState.healthAdapterReference;
+            chsWithDesc.statsAdapterReference = currentState.statsAdapterReference;
+            chsWithDesc.statsAdapterReferences = currentState.statsAdapterReferences;
             chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
             chsWithDesc.description = desc;
             chsWithDesc.descriptionLink = desc.documentSelfLink;
@@ -290,6 +297,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.totalMemoryBytes = currentState.totalMemoryBytes;
             chsWithDesc.endpointLink = currentState.endpointLink;
             chsWithDesc.computeHostLink = currentState.computeHostLink;
+            chsWithDesc.lifecycleState = currentState.lifecycleState;
 
             return chsWithDesc;
         }
