@@ -464,7 +464,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
-            this.dr.fail(exception);
+            failTask(this.context, exception);
         }
 
         @Override
