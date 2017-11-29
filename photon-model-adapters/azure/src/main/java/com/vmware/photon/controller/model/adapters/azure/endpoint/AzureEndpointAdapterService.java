@@ -113,12 +113,12 @@ public class AzureEndpointAdapterService extends StatelessService {
     private BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validate(
             EndpointConfigRequest body) {
         return (credentials, callback) -> {
-            try (AzureSdkClients azureSdkClients = new AzureSdkClients(credentials)) {
+            try {
                 Boolean shouldProvision = Boolean.parseBoolean(
                         body.endpointProperties.get(AZURE_PROVISIONING_PERMISSION));
 
                 validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
-                        .thenCompose(aVoid -> validateCredentials(credentials, azureSdkClients))
+                        .thenCompose(aVoid -> validateCredentials(credentials))
                         .thenCompose(subscription -> getPermissions(credentials))
                         .thenCompose(permList -> verifyPermissions(permList, shouldProvision))
                         .whenComplete((aVoid, e) -> {
@@ -158,8 +158,7 @@ public class AzureEndpointAdapterService extends StatelessService {
     }
 
     private DeferredResult<SubscriptionInner> validateCredentials(
-            AuthCredentialsServiceState credentials, AzureSdkClients azureSdkClients) {
-        SubscriptionClientImpl subscriptionClient = azureSdkClients.getSubscriptionClientImpl();
+            AuthCredentialsServiceState credentials) {
 
         String msg = "Getting Azure Subscription [" + credentials.userLink
                 + "] for endpoint validation";
@@ -185,10 +184,15 @@ public class AzureEndpointAdapterService extends StatelessService {
             }
         };
 
+        AzureSdkClients azureSdkClients = new AzureSdkClients(credentials);
+
+        SubscriptionClientImpl subscriptionClient = azureSdkClients.getSubscriptionClientImpl();
+
         subscriptionClient.subscriptions()
                 .getAsync(credentials.userLink, handler);
 
-        return handler.toDeferredResult();
+        return handler.toDeferredResult()
+                .whenComplete((res, exc) -> azureSdkClients.close());
     }
 
     /**
