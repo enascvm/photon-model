@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.model.Filter;
+
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -39,13 +40,14 @@ import org.junit.rules.Stopwatch;
 import org.junit.rules.TestName;
 import org.junit.runner.Description;
 
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService.PartitionedIterator;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService.PaginatingIterator;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
@@ -79,16 +81,40 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     private static final String AMAZON_PRIVATE_IMAGE_FILTER = null;
 
+    private static final String ENDPOINT_REGION = Regions.US_EAST_1.getName();
+
+    // As of now uniquely identify TWO AWS image: one paravirtual and one hvm.
+    private static final String AMAZON_PARAVIRTUAL_IMAGE_NAME = "Amazon-Linux_WordPress";
+    private static final String AMAZON_HVM_IMAGE_NAME = "Wordpress 4.4.2 for Amazon Linux";
+
     // As of now uniquely identify a SINGLE AWS image.
     private static final String AMAZON_PUBLIC_IMAGE_FILTER_SINGLE;
 
-    private static final String ENDPOINT_REGION = Regions.US_EAST_1.getName();
-
     static {
-        Filter nameFilter = new Filter("name").withValues("*" + "Amazon-Linux_WordPress" + "*");
+        Filter nameFilter = new Filter("name").withValues(AMAZON_PARAVIRTUAL_IMAGE_NAME + "*");
 
         // Serialize the list of filters to JSON string
         AMAZON_PUBLIC_IMAGE_FILTER_SINGLE = Utils.toJson(Arrays.asList(nameFilter));
+    }
+
+    private static final String AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING;
+
+    static {
+        Filter nameFilter = new Filter("name").withValues(
+                AMAZON_PARAVIRTUAL_IMAGE_NAME + "*",
+                AMAZON_HVM_IMAGE_NAME + "*");
+
+        // Serialize the list of filters to JSON string
+        AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING = Utils.toJson(Arrays.asList(nameFilter));
+    }
+
+    private static final String AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING_NO_MATCH;
+
+    static {
+        Filter nameFilter = new Filter("name").withValues("__no_match__");
+
+        // Serialize the list of filters to JSON string
+        AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING_NO_MATCH = Utils.toJson(Arrays.asList(nameFilter));
     }
 
     // As of now uniquely identify ~10K AWS images out of ~85K.
@@ -174,9 +200,10 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     /*
      * The image that must be returned:
      *
-     * https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=private-images;imageId=ami-caf25eb0;sort=name
+     * https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=private-images;
+     * imageId=ami-caf25eb0;sort=name
      *
-     * under  prelude_test @ https://537227425989.signin.aws.amazon.com/console
+     * under prelude_test @ https://537227425989.signin.aws.amazon.com/console
      */
     @Test
     @Ignore("https://jira-hzn.eng.vmware.com/browse/VCOM-832")
@@ -390,7 +417,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         Assume.assumeFalse(this.isMock);
         Assume.assumeTrue(this.enableLongRunning);
 
-        getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(20));
+        getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(10));
 
         // Important: MUST share same Endpoint between the two enum runs.
         final EndpointState endpointState = createEndpointState();
@@ -419,11 +446,63 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     }
 
     @Test
-    public void testPartitionedIterator() {
+    public void testPublicImageEnumeration_partitioning() throws Throwable {
+
+        Assume.assumeFalse(this.isMock);
+
+        // Important: MUST share same Endpoint between the two enum runs.
+        final EndpointState endpointState = createEndpointState();
+
+        // Validate NONE PARAVIRTUAL and HVM images are loaded
+        {
+            ImageEnumerationTaskState task = kickOffImageEnumeration(
+                    endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING_NO_MATCH);
+
+            QueryTop<ImageState> queryAll = new QueryTop<ImageState>(
+                    getHost(),
+                    Builder.create().addKindFieldClause(ImageState.class).build(),
+                    ImageState.class,
+                    task.tenantLinks);
+
+            long imagesCount = QueryByPages.waitToComplete(
+                    queryAll.collectDocuments(Collectors.counting()));
+
+            Assert.assertEquals("No images expected", 0, imagesCount);
+        }
+
+        // Validate one PARAVIRTUAL and one HVM image are load
+        {
+            ImageEnumerationTaskState task = kickOffImageEnumeration(
+                    endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING);
+
+            QueryTop<ImageState> queryAll = new QueryTop<ImageState>(
+                    getHost(),
+                    Builder.create().addKindFieldClause(ImageState.class).build(),
+                    ImageState.class,
+                    task.tenantLinks);
+
+            List<ImageState> images = QueryByPages.waitToComplete(
+                    queryAll.collectDocuments(Collectors.toList()));
+
+            Assert.assertEquals("Only TWO images expected", 2, images.size());
+
+            Assert.assertTrue(AMAZON_PARAVIRTUAL_IMAGE_NAME + " is missing", images.stream()
+                    .filter(image -> image.name.startsWith(AMAZON_PARAVIRTUAL_IMAGE_NAME))
+                    .findFirst()
+                    .isPresent());
+            Assert.assertTrue(AMAZON_HVM_IMAGE_NAME + " is missing", images.stream()
+                    .filter(image -> image.name.startsWith(AMAZON_HVM_IMAGE_NAME))
+                    .findFirst()
+                    .isPresent());
+        }
+    }
+
+    @Test
+    public void testPaginatingIterator() {
         {
             List<String> original = Arrays.asList("1", "2", "3", "4");
 
-            PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 3);
+            PaginatingIterator<String> pIter = new PaginatingIterator<>(original, 3);
 
             // Handle Page #0
 
@@ -459,7 +538,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         {
             List<String> original = Arrays.asList("1", "2", "3", "4");
 
-            PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 2);
+            PaginatingIterator<String> pIter = new PaginatingIterator<>(original, 2);
 
             Assert.assertTrue(pIter.hasNext());
 
@@ -481,7 +560,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         {
             List<String> original = Arrays.asList();
 
-            PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 3);
+            PaginatingIterator<String> pIter = new PaginatingIterator<>(original, 3);
 
             Assert.assertFalse(pIter.hasNext());
 

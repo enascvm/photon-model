@@ -13,12 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_IMAGE_VIRTUALIZATION_TYPE_FILTER;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_IMAGE_VIRTUALIZATION_TYPE_HVM;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_IMAGE_VIRTUALIZATION_TYPE_PARAVIRTUAL;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -115,6 +119,83 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             extends EndpointEnumerationProcess<AWSImageEnumerationContext, ImageState, Image> {
 
         /**
+         * As of now there are AWS regions with 90K+ images and their loading in a single call is
+         * memory and time consuming. To overcome the memory leap we split images loading using
+         * <i>virtualizationType</i> as partitioning criteria.
+         *
+         * <p>
+         * This class represents an iterator on top of images partitions.
+         *
+         * <p>
+         * The iterator is sync. Still its loading done by
+         * {@link AWSImageEnumerationContext#loadAwsImages()} is async.
+         */
+        private static class PartitioningIterator extends PaginatingIterator<Image> {
+
+            /**
+             * The AWS images criteria (as {@link Filter}) used to partition all images during
+             * enumeration. The sum of all partitions represents all AWS images and is evenly
+             * distributed.
+             *
+             * <p>
+             * As of now we are using partitioning by virtualizationType which results in two
+             * buckets: <i>paravirtual</i> = 40968 images, <i>hvm</i> = 54800 images.
+             */
+            final Iterator<Filter> partitioningCriteria = Arrays.asList(
+                    new Filter(AWS_IMAGE_VIRTUALIZATION_TYPE_FILTER)
+                            .withValues(AWS_IMAGE_VIRTUALIZATION_TYPE_PARAVIRTUAL),
+                    new Filter(AWS_IMAGE_VIRTUALIZATION_TYPE_FILTER)
+                            .withValues(AWS_IMAGE_VIRTUALIZATION_TYPE_HVM))
+                    .iterator();
+
+            /**
+             * Current partition. Internally it is being paginated.
+             */
+            PaginatingIterator<Image> partition = PaginatingIterator.empty();
+
+            PartitioningIterator withPartition(PaginatingIterator<Image> partition) {
+                this.partition = partition;
+                return this;
+            }
+
+            /**
+             * <ul>
+             * <li>current partition is fully iterated</li>
+             * <li>there are more partitions to iterate</li>
+             * </ul>
+             */
+            boolean shouldLoadNextPartition() {
+                return !this.partition.hasNext() && this.partitioningCriteria.hasNext();
+            }
+
+            /**
+             * From client perspective either current partition has more pages or there are more
+             * partitions to iterate.
+             */
+            @Override
+            public boolean hasNext() {
+                return this.partition.hasNext() || this.partitioningCriteria.hasNext();
+            }
+
+            /**
+             * Just delegate to current partition.
+             *
+             * <p>
+             * It is up to the {@link AWSImageEnumerationContext#loadAwsImages()} to load next
+             * partition through {@link #withPartition(PaginatingIterator)}.
+             */
+            @Override
+            public List<Image> next() {
+                List<Image> delegatedPage = this.partition.next();
+
+                this.pageNumber++;
+                this.totalNumber += delegatedPage.size();
+
+                return delegatedPage;
+            }
+        }
+
+        /**
          * The underlying image-enum request.
          */
         final ImageEnumerateRequest request;
@@ -126,7 +207,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         AmazonEC2AsyncClient awsClient;
 
-        PartitionedIterator<Image> awsImages;
+        PartitioningIterator awsImages = new PartitioningIterator();
 
         TaskManager taskManager;
 
@@ -222,13 +303,14 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             // AWS does not support pagination of images so we internally partition
             // all results thus simulating paging
-            return loadExternalResources().thenApply(imagesIterator -> {
+            return loadAwsImages().thenApply(imagesIterator -> {
 
                 RemoteResourcesPage page = new RemoteResourcesPage();
 
                 if (imagesIterator.hasNext()) {
-                    for (Image image : imagesIterator.next()) {
-                        page.resourcesPage.put(image.getImageId(), image);
+                    final List<Image> awsImagesPage = imagesIterator.next();
+                    for (Image awsImage : awsImagesPage) {
+                        page.resourcesPage.put(awsImage.getImageId(), awsImage);
                     }
                 }
 
@@ -236,19 +318,31 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 if (imagesIterator.hasNext()) {
                     page.nextPageLink = "awsImages_" + (imagesIterator.pageNumber() + 1);
                 } else {
-                    this.service.logFine(() -> "Enumerating AWS images: TOTAL number "
-                            + imagesIterator.totalNumber());
+                    this.service.logFine("Enumerating AWS images: TOTAL number %s",
+                            imagesIterator.totalNumber());
                 }
 
                 return page;
             });
         }
 
-        private DeferredResult<PartitionedIterator<Image>> loadExternalResources() {
+        static final class ListOfFilters extends TypeToken<List<Filter>> {
 
-            if (this.awsImages != null) {
+            static Type asType() {
+                return new ListOfFilters().getType();
+            }
+        }
+
+        /**
+         *
+         */
+        private DeferredResult<PaginatingIterator<Image>> loadAwsImages() {
+
+            if (!this.awsImages.shouldLoadNextPartition()) {
                 return DeferredResult.completed(this.awsImages);
             }
+
+            // Otherwise load next partition of AWS images
 
             boolean isPublic = this.request.requestType == ImageEnumerateRequestType.PUBLIC;
 
@@ -256,24 +350,23 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                     .withFilters(new Filter(AWSConstants.AWS_IMAGE_STATE_FILTER)
                             .withValues(AWSConstants.AWS_IMAGE_STATE_AVAILABLE))
                     .withFilters(new Filter(AWSConstants.AWS_IMAGE_IS_PUBLIC_FILTER)
-                            .withValues(Boolean.toString(isPublic)));
+                            .withValues(Boolean.toString(isPublic)))
+                    // The filter used as partitioning criteria
+                    .withFilters(this.awsImages.partitioningCriteria.next());
 
             // Apply additional filtering to AWS images (used by tests)
             if (this.imageEnumTaskState.filter != null
                     && !this.imageEnumTaskState.filter.isEmpty()) {
 
-                // List<Filter> type
-                final Type listOfFiltersType = new TypeToken<List<Filter>>() {}.getType();
-
                 // Deserialize the JSON string to a list of AWS Filters
                 List<Filter> filters = Utils.fromJson(
-                        this.imageEnumTaskState.filter, listOfFiltersType);
+                        this.imageEnumTaskState.filter, ListOfFilters.asType());
 
                 // NOTE: use withFilters(Filter...) to append NOT withFilter(List<>)
                 request.withFilters(filters.toArray(new Filter[0]));
             }
 
-            String msg = "Enumerating AWS images by " + request;
+            final String msg = "Enumerating AWS images by partition " + request;
 
             // ALL AWS images are returned with a single call, NO pagination!
             AWSDeferredResultAsyncHandler<DescribeImagesRequest, DescribeImagesResult> handler = new AWSDeferredResultAsyncHandler<>(
@@ -281,11 +374,24 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             this.awsClient.describeImagesAsync(request, handler);
 
-            return handler.toDeferredResult().thenApply(imagesResult -> {
+            return handler.toDeferredResult().thenCompose(awsImagesResult -> {
 
-                // "artificially" partition images once we load them all
-                return this.awsImages = new PartitionedIterator<>(
-                        imagesResult.getImages(), getImagesPageSize());
+                this.service.logFine("%s: TOTAL number %s",
+                        msg, awsImagesResult.getImages().size());
+
+                if (awsImagesResult.getImages().isEmpty()) {
+                    // Current partition is empty. Try recursively with next one.
+                    return loadAwsImages();
+                }
+
+                // "artificially" paginate images once we load them all
+                PaginatingIterator<Image> partition = new PaginatingIterator<>(
+                        awsImagesResult.getImages(), getImagesPageSize());
+
+                // Use loaded images as current partition
+                this.awsImages.withPartition(partition);
+
+                return DeferredResult.completed(this.awsImages);
             });
         }
 
@@ -465,6 +571,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
      */
     private ExecutorService allocateExecutor() {
 
+        final int corePoolSize = 1;
+
         // By default returns 1, so effectively we have single threaded executor;
         // otherwise the pool size varies
         final int imagesMaxConcurrentEnums = getImagesMaxConcurrentEnums();
@@ -479,30 +587,41 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 "/" + getUri() + "/" + Utils.getSystemNowMicrosUtc());
 
         return new ThreadPoolExecutor(
-                1, imagesMaxConcurrentEnums, keepAliveTime, unit, workQueue, tFactory);
+                corePoolSize, imagesMaxConcurrentEnums, keepAliveTime, unit, workQueue, tFactory);
     }
 
     /**
-     * An iterator of sublists of a list, each of the same size (the final list may be smaller).
+     * An iterator of pages of a list, each of the same size (the final page may be smaller).
      */
-    public static final class PartitionedIterator<T> implements Iterator<List<T>> {
+    public static class PaginatingIterator<T> implements Iterator<List<T>> {
+
+        public static <T> PaginatingIterator<T> empty() {
+            return new PaginatingIterator<>();
+        }
 
         private final List<T> originalList;
 
-        private final int partitionSize;
+        final int pageSize;
 
         private int lastIndex = 0;
 
-        private int pageNumber = 0;
+        int pageNumber = 0;
 
-        private int totalNumber = 0;
+        int totalNumber = 0;
 
         private List<T> page = null;
 
-        public PartitionedIterator(List<T> originalList, int partitionSize) {
+        /**
+         * For internal use only!
+         */
+        private PaginatingIterator() {
+            this(null, 0);
+        }
+
+        public PaginatingIterator(List<T> originalList, int pageSize) {
             // we are tolerant to null values
             this.originalList = originalList == null ? Collections.emptyList() : originalList;
-            this.partitionSize = partitionSize;
+            this.pageSize = pageSize;
         }
 
         @Override
@@ -517,7 +636,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         }
 
         /**
-         * Returns the next partition from original list.
+         * Returns the next page from original list.
          */
         @Override
         public List<T> next() {
@@ -530,7 +649,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             final int beginIndex = this.lastIndex;
 
             // Calculate current lastIndex
-            this.lastIndex = Math.min(beginIndex + this.partitionSize, this.originalList.size());
+            this.lastIndex = Math.min(beginIndex + this.pageSize, this.originalList.size());
 
             // Get a subList
             this.page = this.originalList.subList(beginIndex, this.lastIndex);

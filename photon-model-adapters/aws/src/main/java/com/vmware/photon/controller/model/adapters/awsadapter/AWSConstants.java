@@ -51,6 +51,10 @@ public class AWSConstants {
     public static final String AWS_IMAGE_STATE_AVAILABLE = "available";
     public static final String AWS_IMAGE_IS_PUBLIC_FILTER = "is-public";
 
+    public static final String AWS_IMAGE_VIRTUALIZATION_TYPE_FILTER = "virtualization-type";
+    public static final String AWS_IMAGE_VIRTUALIZATION_TYPE_PARAVIRTUAL = "paravirtual";
+    public static final String AWS_IMAGE_VIRTUALIZATION_TYPE_HVM = "hvm";
+
     public static final String INSTANCE_STATE = "instance-state-name";
     public static final String INSTANCE_STATE_RUNNING = "running";
     public static final String INSTANCE_STATE_PENDING = "pending";
@@ -319,6 +323,7 @@ public class AWSConstants {
             this.value = value;
         }
 
+        @Override
         public String toString() {
             return this.value;
         }
