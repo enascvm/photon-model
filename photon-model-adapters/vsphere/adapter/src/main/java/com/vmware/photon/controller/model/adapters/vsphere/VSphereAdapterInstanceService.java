@@ -271,7 +271,17 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                 .createPatch(PhotonModelUriUtils.createInventoryUri(getHost(),
                                         nic.documentSelfLink)).setBody(patchNic);
                         updateIpAddressOperations.add(updateAddressNetWorkInterface);
+                    } else {
+                        log(Level.WARNING, "Address is not going to be updated in network "
+                                + "interface state: [%], deviceKey: [%s] was not "
+                                + "found in "
+                                + "ipV4Addresses: "
+                                + "[%s]", nic.documentSelfLink, deviceKey, ipV4Addresses.keySet());
+
                     }
+                } else {
+                    log(Level.WARNING, "Address is not going to be updated in network interface "
+                            + "state: [%s] deviceKey is null", nic.documentSelfLink);
                 }
             }
         }

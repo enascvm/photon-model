@@ -221,9 +221,6 @@ public class VmOverlay extends AbstractOverlay {
      */
     public static String getDeviceKey(NetworkInterfaceStateWithDetails nic) {
         String deviceKey = null;
-        if (nic.customProperties != null) {
-            deviceKey = nic.customProperties.get(CustomProperties.NIC_EXTERNAL_ID);
-        }
         if (deviceKey == null) {
             deviceKey = nic.customProperties.get(CustomProperties.NIC_MAC_ADDRESS);
         }
