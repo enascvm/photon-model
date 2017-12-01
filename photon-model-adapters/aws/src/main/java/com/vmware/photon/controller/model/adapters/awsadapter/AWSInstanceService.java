@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_EBS_DEVICE_NAMES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_STORE_DEVICE_NAMES;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_INSTANCE_ID_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VIRTUAL_NAMES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
@@ -1180,6 +1181,29 @@ public class AWSInstanceService extends StatelessService {
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
 
+            if (exception instanceof AmazonServiceException
+                    && ((AmazonServiceException) exception).getErrorCode()
+                    .equalsIgnoreCase(AWS_INVALID_INSTANCE_ID_ERROR_CODE)) {
+                AWSInstanceService.this.logWarning(
+                        "Could not retrieve status for instance %s. Retrying... Exception on AWS"
+                                + " is: %s",
+                        this.instanceId, exception);
+                deleteConstructsReferredByInstance()
+                        .whenComplete((aVoid, exc) -> {
+                            if (exc != null) {
+                                this.context.taskManager.patchTaskToFailure(
+                                        new IllegalStateException("Error deleting AWS subnet",
+                                                exc));
+                            } else {
+                                AWSInstanceService.this.logInfo(() -> String.format("Deleting"
+                                                + " subnets 'created-by' [%s]: SUCCESS",
+                                        this.context.computeRequest.resourceLink()));
+
+                                this.context.taskManager.finishTask();
+                            }
+                        });
+                return;
+            }
             AWSInstanceService.this.logWarning(() -> String.format("Error deleting instances"
                     + " received from AWS: %s", exception.getMessage()));
 
