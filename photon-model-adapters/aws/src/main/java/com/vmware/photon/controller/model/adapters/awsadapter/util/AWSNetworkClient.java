@@ -209,7 +209,23 @@ public class AWSNetworkClient {
         String message = "Delete AWS Subnet with id [" + subnetId + "].";
 
         AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult> handler = new
-                AWSDeferredResultAsyncHandler<>(this.service, message);
+                AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult>(this.service, message) {
+
+                    @Override
+                    protected Exception consumeError(Exception exception) {
+                        if (exception instanceof AmazonEC2Exception) {
+                            AmazonEC2Exception amazonExc = (AmazonEC2Exception) exception;
+                            if (STATUS_CODE_SUBNET_NOT_FOUND.equals(amazonExc.getErrorCode())) {
+                                // AWS subnet doesn't exist.
+                                this.service.logWarning(() -> String.format("Unable to delete AWS "
+                                        + "subnet with id [%s], as it does not exist.", subnetId));
+                                return RECOVERED;
+                            }
+                        }
+                        return exception;
+                    }
+
+                };
 
         this.client.deleteSubnetAsync(req, handler);
 
