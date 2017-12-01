@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
+import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
+
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_ALLOWED_NETWORK;
@@ -42,8 +45,14 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.retry.RetryPolicy;
+import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 
+import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDateTime;
@@ -57,6 +66,7 @@ import org.supercsv.io.ICsvMapReader;
 import org.supercsv.io.ICsvMapWriter;
 import org.supercsv.prefs.CsvPreference;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.CustomRetryCondition;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -68,6 +78,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -519,5 +530,26 @@ public class TestUtils {
                 UriUtils.buildUri(host, ProvisionDiskTaskService.FACTORY_LINK));
         return provisionTask.documentSelfLink;
 
+    }
+
+
+    public static AmazonEC2 getEC2SynchronousClient(AuthCredentialsServiceState credentials,
+            String region) {
+        ClientConfiguration configuration = new ClientConfiguration();
+        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
+                DEFAULT_BACKOFF_STRATEGY,
+                DEFAULT_MAX_ERROR_RETRY,
+                true));
+
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+                new BasicAWSCredentials(credentials.privateKeyId,
+                        EncryptionUtils.decrypt(credentials.privateKey)));
+
+        AmazonEC2ClientBuilder ec2ClientBuilder = AmazonEC2ClientBuilder.standard()
+                .withCredentials(awsStaticCredentialsProvider)
+                .withRegion(region)
+                .withClientConfiguration(configuration);
+
+        return ec2ClientBuilder.build();
     }
 }
