@@ -359,7 +359,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                         "[AzureComputeDiskDay2Service] Successfully attached volume %s to instance %s",
                         context.diskState.id, context.computeState.id);
                 this.service.logInfo(() -> msg);
-                return toDeferredResult().completed(vm);
+                return DeferredResult.completed(vm);
             }
 
             @Override
@@ -368,7 +368,6 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                         "[AzureComputeDiskDay2Service] Failure in attaching volume %s to instance %s : %s",
                         context.diskState.id, context.computeState.id, exc);
                 this.service.logSevere(msg);
-                toDeferredResult().fail(exc);
                 return exc;
             }
         };
