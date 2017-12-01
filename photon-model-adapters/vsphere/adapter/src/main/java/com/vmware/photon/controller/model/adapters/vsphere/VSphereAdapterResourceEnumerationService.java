@@ -858,7 +858,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
-        Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), SubnetService.FACTORY_LINK))
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(),
+                SubnetService.FACTORY_LINK))
                 .setBody(subnet)
                 .sendWith(this);
     }
