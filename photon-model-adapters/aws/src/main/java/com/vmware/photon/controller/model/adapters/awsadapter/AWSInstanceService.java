@@ -1185,7 +1185,7 @@ public class AWSInstanceService extends StatelessService {
                     && ((AmazonServiceException) exception).getErrorCode()
                     .equalsIgnoreCase(AWS_INVALID_INSTANCE_ID_ERROR_CODE)) {
                 AWSInstanceService.this.logWarning(
-                        "Could not retrieve status for instance %s. Retrying... Exception on AWS"
+                        "Could not delete instance with id %s. Continuing... Exception on AWS"
                                 + " is: %s",
                         this.instanceId, exception);
                 deleteConstructsReferredByInstance()
