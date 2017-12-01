@@ -1,7 +1,9 @@
 # CHANGELOG
 
-## 0.6.45-SNAPSHOT
-
+## 0.6.45
+* Added groomer task for deleting stale TagState resources.
+* 'computeHostLink' is introduced for AWS and Azure resources.
+* Support added to enumerate AWS Images.
 
 ## 0.6.44
 
