@@ -72,6 +72,7 @@ public class AzureConstants {
     public static final String AZURE_STORAGE_BLOBS = STORAGE_NAMESPACE + "/blobs";
 
     // Azure error code
+    // https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-manager-common-deployment-errors
     public static final String MISSING_SUBSCRIPTION_CODE = "MissingSubscriptionRegistration";
     public static final String RESOURCE_NOT_FOUND = "ResourceNotFound";
     public static final String RESOURCE_GROUP_NOT_FOUND = "ResourceGroupNotFound";
@@ -240,6 +241,7 @@ public class AzureConstants {
             this.value = value;
         }
 
+        @Override
         public String toString() {
             return this.value;
         }

@@ -14,8 +14,14 @@
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NOT_FOUND;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_NOT_FOUND;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.BiFunction;
 
 import com.microsoft.azure.CloudError;
 import com.microsoft.azure.CloudException;
@@ -30,6 +36,10 @@ import com.vmware.xenon.common.Utils;
  */
 public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsyncCallback<RES> {
 
+    /**
+     * Default implementation which simple return the result by {@link #consumeSuccess(Object)} and
+     * uses {@link #consumeError(Throwable) default exception handling}.
+     */
     public static class Default<RES> extends AzureDeferredResultServiceCallback<RES> {
 
         public Default(StatelessService service, String message) {
@@ -59,6 +69,17 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     protected final String message;
 
     /**
+     * A map of {@link CloudError} handlers stored by {@link CloudError#code()}:
+     * <ul>
+     * <li>{@code AzureConstants.INVALID_PARAMETER}</li>
+     * <li>{@code AzureConstants.INVALID_RESOURCE_GROUP}</li>
+     * </ul>
+     *
+     * @see #consumeError(Throwable)
+     */
+    protected final Map<String, BiFunction<Throwable, CloudError, Throwable>> cloudErrorHandlers;
+
+    /**
      * Constructs {@link AzureDeferredResultServiceCallback}.
      *
      * @param service
@@ -69,6 +90,30 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     public AzureDeferredResultServiceCallback(StatelessService service, String message) {
         super(service);
         this.message = message;
+
+        {
+            this.cloudErrorHandlers = new HashMap<>();
+
+            addRecoverFromCloudError(NOT_FOUND);
+            addRecoverFromCloudError(RESOURCE_NOT_FOUND);
+            addRecoverFromCloudError(RESOURCE_GROUP_NOT_FOUND);
+
+            this.cloudErrorHandlers.put(INVALID_PARAMETER, (originalExc, cloudError) -> {
+                String invalidParameterMsg = String.format(
+                        "Invalid parameter. %s",
+                        cloudError.message());
+
+                return new IllegalStateException(invalidParameterMsg, originalExc);
+            });
+
+            this.cloudErrorHandlers.put(INVALID_RESOURCE_GROUP, (originalExc, cloudError) -> {
+                String invalidParameterMsg = String.format(
+                        "Invalid resource group parameter. %s",
+                        cloudError.message());
+
+                return new IllegalStateException(invalidParameterMsg, originalExc);
+            });
+        }
     }
 
     /**
@@ -84,36 +129,59 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     protected abstract DeferredResult<RES> consumeSuccess(RES result);
 
     /**
+     * The default set of CloudErrors to recover from.
+     * <ul>
+     * <li>{@code AzureConstants.NOT_FOUND}</li>
+     * <li>{@code AzureConstants.RESOURCE_NOT_FOUND}</li>
+     * <li>{@code AzureConstants.RESOURCE_GROUP_NOT_FOUND}</li>
+     * </ul>
+     *
+     * @see #consumeError(Throwable)
+     */
+    protected void addRecoverFromCloudError(String code) {
+        this.cloudErrorHandlers.put(code, (originalExc, cloudError) -> RECOVERED);
+    }
+
+    /**
      * Hook that might be implemented by descendants to handle failed Azure call.
+     *
+     * <p>
+     * Default implementation should be good enough for most of the cases. It provides a list of 1)
+     * exceptions to recover from and 2) customizable CloudError handlers.
+     *
+     * @see #cloudErrorHandlers
+     * @see #addRecoverFromCloudError(String)
      */
     protected Throwable consumeError(Throwable exc) {
-        if (exc instanceof CloudException) {
-            final CloudException azureExc = (CloudException) exc;
-            final CloudError body = azureExc.body();
-            if (body != null) {
-                String code = body.code();
-                if (RESOURCE_NOT_FOUND.equalsIgnoreCase(code)
-                        || NOT_FOUND.equalsIgnoreCase(code)) {
-                    return RECOVERED;
-                } else if (INVALID_PARAMETER.equals(code)) {
-                    String invalidParameterMsg = String.format(
-                            "Invalid parameter. %s",
-                            body.message());
 
-                    IllegalStateException e = new IllegalStateException(invalidParameterMsg, exc);
-                    return e;
-                }
-            }
+        if (!(exc instanceof CloudException)) {
+            return exc;
         }
+
+        final CloudError cloudError = ((CloudException) exc).body();
+
+        if (cloudError == null) {
+            return exc;
+        }
+
+        BiFunction<Throwable, CloudError, Throwable> cloudErrorHandler = this.cloudErrorHandlers
+                .getOrDefault(
+                        // Lookup handler by code
+                        cloudError.code(),
+                        // Fall back to the default 're-throw' exc handler
+                        (originalExc, cloudErr) -> originalExc);
+
+        exc = cloudErrorHandler.apply(exc, cloudError);
+
         return exc;
     }
 
     @Override
     protected final void onError(final Throwable exc) {
-        final Throwable consumedError;
 
         // First delegate to descendants to process exc
 
+        final Throwable consumedError;
         try {
             consumedError = consumeError(exc);
         } catch (Throwable t) {

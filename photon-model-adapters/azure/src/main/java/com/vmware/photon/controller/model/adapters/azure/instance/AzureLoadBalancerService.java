@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -25,8 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
-import com.microsoft.azure.CloudError;
-import com.microsoft.azure.CloudException;
 import com.microsoft.azure.SubResource;
 import com.microsoft.azure.management.network.IPAllocationMethod;
 import com.microsoft.azure.management.network.ProbeProtocol;
@@ -57,6 +53,7 @@ import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
@@ -984,31 +981,8 @@ public class AzureLoadBalancerService extends StatelessService {
      * @return DeferredResult
      */
     private AzureDeferredResultServiceCallback<Void> createDeleteHandler(String msg) {
-        return new AzureDeferredResultServiceCallback<Void>(this, msg) {
-            @Override
-            protected DeferredResult<Void> consumeSuccess(Void result) {
-                return DeferredResult.completed(null);
-            }
 
-            @Override
-            protected Throwable consumeError(Throwable exc) {
-                exc = super.consumeError(exc);
-                if (exc instanceof CloudException) {
-                    CloudException azureExc = (CloudException) exc;
-                    CloudError body = azureExc.body();
-                    String code = body.code();
-                    if (RESOURCE_GROUP_NOT_FOUND.equals(code)) {
-                        return RECOVERED;
-                    } else if (INVALID_RESOURCE_GROUP.equals(code)) {
-                        String invalidParameterMsg = String.format(
-                                "Invalid resource group parameter. %s",
-                                body.message());
-                        return new IllegalStateException(invalidParameterMsg, exc);
-                    }
-                }
-                return exc;
-            }
-        };
+        return new Default<>(this, msg);
     }
 
     /**

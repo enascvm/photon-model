@@ -29,7 +29,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getStorageAccountKeyName;
@@ -437,35 +436,7 @@ public class AzureInstanceService extends StatelessService {
 
         String msg = "Deleting resource group [" + rgName + "] for [" + ctx.vmName + "] VM";
 
-        AzureDeferredResultServiceCallback<Void> callback = new AzureDeferredResultServiceCallback<Void>(
-                this, msg) {
-            @Override
-            protected Throwable consumeError(Throwable exc) {
-                exc = super.consumeError(exc);
-                if (exc instanceof CloudException) {
-                    CloudException azureExc = (CloudException) exc;
-                    CloudError body = azureExc.body();
-
-                    String code = body.code();
-                    if (RESOURCE_GROUP_NOT_FOUND.equals(code)) {
-                        return RECOVERED;
-                    } else if (INVALID_RESOURCE_GROUP.equals(code)) {
-                        String invalidParameterMsg = String.format(
-                                "Invalid resource group parameter. %s",
-                                body.message());
-
-                        return new IllegalStateException(invalidParameterMsg, exc);
-                    }
-                }
-                return exc;
-            }
-
-            @Override
-            protected DeferredResult<Void> consumeSuccess(Void body) {
-                return DeferredResult.completed(body);
-            }
-
-        };
+        AzureDeferredResultServiceCallback<Void> callback = new Default<>(this, msg);
 
         azureClient.deleteAsync(rgName, callback);
 
@@ -583,7 +554,6 @@ public class AzureInstanceService extends StatelessService {
                 .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
     }
 
-
     /**
      * Init storage account name and resource group, using the following approach:
      * <table border=1>
@@ -643,40 +613,7 @@ public class AzureInstanceService extends StatelessService {
         String msg = "Create/Update SA Resource Group [" + ctx.storageAccountRGName + "] for ["
                 + ctx.vmName + "] VM";
 
-        AzureDeferredResultServiceCallback<ResourceGroupInner> handler = new AzureDeferredResultServiceCallback<ResourceGroupInner>(
-                this, msg) {
-            @Override
-            protected Throwable consumeError(Throwable exc) {
-                exc = super.consumeError(exc);
-
-                if (!(exc instanceof CloudException)) {
-                    return exc;
-                }
-
-                final CloudError body = ((CloudException) exc).body();
-                if (body == null) {
-                    return exc;
-                }
-
-                if (RESOURCE_GROUP_NOT_FOUND.equals(body.code())) {
-                    return RECOVERED;
-                }
-                if (INVALID_RESOURCE_GROUP.equals(body.code())) {
-                    String invalidParameterMsg = String.format(
-                            "Invalid resource group parameter. %s",
-                            body.message());
-
-                    return new IllegalStateException(invalidParameterMsg, exc);
-                }
-
-                return exc;
-            }
-
-            @Override
-            protected DeferredResult<ResourceGroupInner> consumeSuccess(ResourceGroupInner rg) {
-                return DeferredResult.completed(rg);
-            }
-        };
+        AzureDeferredResultServiceCallback<ResourceGroupInner> handler = new Default<>(this, msg);
 
         // Use shared RG. In case not provided in the bootDisk properties, use the default one
         final ResourceGroupInner sharedSARG = new ResourceGroupInner();
@@ -1228,7 +1165,6 @@ public class AzureInstanceService extends StatelessService {
                         COMPUTE_NAMESPACE, e);
             }
 
-
             // Cannot tell for sure, but these checks should be enough
             private boolean isIncorrectNameLength(Throwable e) {
                 if (e instanceof CloudException) {
@@ -1256,7 +1192,6 @@ public class AzureInstanceService extends StatelessService {
                 }
                 return computerName;
             }
-
 
             @Override
             public void onSuccess(VirtualMachineInner result) {
@@ -2063,9 +1998,6 @@ public class AzureInstanceService extends StatelessService {
         };
     }
 
-
-
-
     /**
      * Differentiate between Windows and Linux Images
      */
@@ -2246,19 +2178,8 @@ public class AzureInstanceService extends StatelessService {
             super(ctx.service, message);
 
             this.ctx = ctx;
-        }
 
-        @Override
-        protected Throwable consumeError(Throwable exc) {
-            exc = super.consumeError(exc);
-            if (exc instanceof CloudException) {
-                CloudException azureExc = (CloudException) exc;
-                if (STORAGE_ACCOUNT_ALREADY_EXIST
-                        .equalsIgnoreCase(azureExc.body().code())) {
-                    return RECOVERED;
-                }
-            }
-            return exc;
+            addRecoverFromCloudError(STORAGE_ACCOUNT_ALREADY_EXIST);
         }
 
         @Override
