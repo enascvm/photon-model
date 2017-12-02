@@ -89,9 +89,9 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     protected static class AzureSubscriptionsEnumerationContext
             extends BaseAdapterContext<AzureSubscriptionsEnumerationContext> {
         protected AzureCostComputeEnumerationStages stage;
-        protected Map<String, AzureSubscription> idToSubscription;
+        Map<String, AzureSubscription> idToSubscription;
 
-        public AzureSubscriptionsEnumerationContext(
+        AzureSubscriptionsEnumerationContext(
                 StatelessService service,
                 AzureSubscriptionsEnumerationRequest resourceRequest, Operation parentOp) {
             super(service, resourceRequest);
@@ -234,46 +234,40 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         Map<String, ComputeState> computeLinkToState = new ConcurrentHashMap<>();
         Collection<Operation> getComputeOps = subscriptionEndpoints
                 .stream()
-                .map(endpointState -> {
-                    Operation op = Operation.createGet(UriUtils.extendUri(
-                            getInventoryServiceUri(), endpointState.computeLink))
-                            .setCompletion((o, t) -> {
-                                if (t != null) {
-                                    logSevere(
-                                            () -> String.format("Failed getting compute state" +
-                                                            "for  %s due to %s",
-                                                    endpointState.computeLink, Utils.toString(t)));
-                                    return;
-                                }
-                                ComputeState cs = o.getBody(ComputeState.class);
-                                // Only add custom properties if it does not have it already
-                                if (!hasAzureEaCustomProperties(cs)) {
-                                    ComputeState comWithProps = new ComputeState();
-                                    String subscriptionId = endpointState.endpointProperties
-                                            .get(EndpointConfigRequest.USER_LINK_KEY);
-                                    comWithProps.customProperties =
-                                            getPropertiesMap(enumerationContext,
-                                                    enumerationContext.idToSubscription
-                                                            .get(subscriptionId), false);
-                                    computeLinkToState.put(cs.documentSelfLink, comWithProps);
-                                }
-                            });
-                    return op;
-                })
+                .map(endpointState -> Operation.createGet(UriUtils.extendUri(
+                        getInventoryServiceUri(), endpointState.computeLink))
+                        .setCompletion((o, t) -> {
+                            if (t != null) {
+                                logSevere(
+                                        () -> String.format("Failed getting compute state" +
+                                                        "for  %s due to %s",
+                                                endpointState.computeLink, Utils.toString(t)));
+                                return;
+                            }
+                            ComputeState cs = o.getBody(ComputeState.class);
+                            // Only add custom properties if it does not have it already
+                            if (!hasAzureEaCustomProperties(cs)) {
+                                ComputeState comWithProps = new ComputeState();
+                                String subscriptionId = endpointState.endpointProperties
+                                        .get(EndpointConfigRequest.USER_LINK_KEY);
+                                comWithProps.customProperties =
+                                        getPropertiesMap(enumerationContext,
+                                                enumerationContext.idToSubscription
+                                                        .get(subscriptionId), false);
+                                computeLinkToState.put(cs.documentSelfLink, comWithProps);
+                            }
+                        }))
                 .collect(Collectors.toList());
 
-        joinOperationAndSendRequest(getComputeOps, enumerationContext, (enumCtx) -> {
-            patchExitingSubscriptionComputes(enumCtx, nextStage, computeLinkToState);
-        });
+        joinOperationAndSendRequest(getComputeOps, enumerationContext,
+                (enumCtx) -> patchExitingSubscriptionComputes(enumCtx, nextStage,
+                        computeLinkToState));
     }
 
     private boolean hasAzureEaCustomProperties(ComputeState computeState) {
-        if (computeState.customProperties != null
+        return computeState.customProperties != null
                 && computeState.customProperties
-                .containsKey(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY)) {
-            return true;
-        }
-        return false;
+                .containsKey(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY);
     }
 
     private void patchExitingSubscriptionComputes(AzureSubscriptionsEnumerationContext
@@ -281,12 +275,9 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                     Map<String, ComputeState> computeLinkToPatchState) {
         Collection<Operation> patchComputesOp = computeLinkToPatchState.keySet()
                 .stream()
-                .map(computeLink -> {
-                    Operation patchOp = Operation.createPatch(UriUtils.extendUri(
-                            getInventoryServiceUri(), computeLink))
-                            .setBody(computeLinkToPatchState.get(computeLink));
-                    return  patchOp;
-                })
+                .map(computeLink -> Operation.createPatch(UriUtils.extendUri(
+                        getInventoryServiceUri(), computeLink))
+                        .setBody(computeLinkToPatchState.get(computeLink)))
                 .collect(Collectors.toList());
 
         joinOperationAndSendRequest(patchComputesOp, enumerationContext, (enumCtx) -> {
@@ -298,22 +289,21 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     private Query createQueryForAzureSubscriptionEndpoints(AzureSubscriptionsEnumerationContext
                                                                    enumerationContext) {
         // Query existing endpoint for Subscription with id subscriptionId
-        Query  azureSubscriptionEndpointQuery = Query.Builder.create()
+        return Query.Builder.create()
                 .addKindFieldClause(EndpointState.class)
                 .addFieldClause(EndpointState.FIELD_NAME_ENDPOINT_TYPE,
                         EndpointType.azure.name())
                 .addInClause(QueryTask.QuerySpecification.buildCompositeFieldName
-                                (new String[]{EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
-                                        EndpointConfigRequest.USER_LINK_KEY}),
+                                (EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
+                                        EndpointConfigRequest.USER_LINK_KEY),
                         enumerationContext.idToSubscription.keySet())
                 .build();
-        return azureSubscriptionEndpointQuery;
     }
 
     private Query createQueryForAzureSubscriptionComputes(
             AzureSubscriptionsEnumerationContext enumerationContext) {
         //Fetch ComputeStates having custom property endPointType as Azure, Type as VM_HOST
-        Query azureSubscriptionComputesQuery = Query.Builder.create()
+        return Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
@@ -325,7 +315,6 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK,
                         enumerationContext.parent.endpointLink)
                 .build();
-        return azureSubscriptionComputesQuery;
     }
 
     private void createResources(AzureSubscriptionsEnumerationContext enumerationContext,
@@ -337,54 +326,48 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         // Create ComputeDescription
         Collection<Operation> createComputeDescOps = enumerationContext.idToSubscription.values()
                 .stream()
-                .map(subscription -> {
-                    Operation op = Operation.createPost(UriUtils.extendUri(getInventoryServiceUri(),
-                            ComputeDescriptionService.FACTORY_LINK))
-                            .setBody(AzureUtils
-                                    .constructAzureSubscriptionComputeDescription(
-                                            enumerationContext.parent.endpointLink,
-                                            enumerationContext.parent.tenantLinks,
-                                            subscription.entityId, null, null,
-                                            enumerationContext.parent.documentSelfLink))
-                            .setCompletion((o, e) -> {
-                                if (e != null) {
-                                    logSevere(
-                                            () -> String.format("Compute description creation "
-                                                            + " failed for azure subscription %s",
-                                                    subscription.entityId));
-                                    return;
-                                }
-                                ComputeDescription cd = o.getBody(ComputeDescription.class);
-                                String csName = AzureUtils.constructSubscriptionName(subscription);
-                                computesToCreate.add(AzureUtils
-                                        .constructAzureSubscriptionComputeState(
-                                        enumerationContext.parent.endpointLink, cd.documentSelfLink,
-                                        enumerationContext.parent.tenantLinks, csName,
-                                        enumerationContext.parent.resourcePoolLink,
-                                        getPropertiesMap(enumerationContext, subscription,
-                                                true), null, enumerationContext.parent.documentSelfLink));
-                            });
-                    return op;
-                })
+                .map(subscription -> Operation
+                        .createPost(UriUtils.extendUri(getInventoryServiceUri(),
+                        ComputeDescriptionService.FACTORY_LINK))
+                        .setBody(AzureUtils
+                                .constructAzureSubscriptionComputeDescription(
+                                        enumerationContext.parent.endpointLink,
+                                        enumerationContext.parent.tenantLinks,
+                                        subscription.entityId, null, null,
+                                        enumerationContext.parent.documentSelfLink))
+                        .setCompletion((o, e) -> {
+                            if (e != null) {
+                                logSevere(
+                                        () -> String.format("Compute description creation "
+                                                        + " failed for azure subscription %s",
+                                                subscription.entityId));
+                                return;
+                            }
+                            ComputeDescription cd = o.getBody(ComputeDescription.class);
+                            String csName = AzureUtils.constructSubscriptionName(subscription);
+                            computesToCreate.add(AzureUtils
+                                    .constructAzureSubscriptionComputeState(
+                                    enumerationContext.parent.endpointLink, cd.documentSelfLink,
+                                    enumerationContext.parent.tenantLinks, csName,
+                                    enumerationContext.parent.resourcePoolLink,
+                                    getPropertiesMap(enumerationContext, subscription,
+                                            true), null, enumerationContext.parent.documentSelfLink));
+                        }))
                 .collect(Collectors.toList());
 
         joinOperationAndSendRequest(createComputeDescOps, enumerationContext, (subsEnumCtx) -> {
             // Now create the ComputeState
             Collection<Operation> createComputeOps = computesToCreate.stream()
-                    .map(computeState -> {
-                        Operation op = Operation.createPost(UriUtils
-                                .extendUri(getInventoryServiceUri(), ComputeService.FACTORY_LINK))
-                                .setBody(computeState)
-                                .setCompletion((o, e) -> {
-                                    if (e != null) {
-                                        logSevere(() -> String
-                                                .format("Compute state creation failed for azure" +
-                                                        " subscription %s", computeState.name ));
-                                        return;
-                                    }
-                                });
-                        return op;
-                    })
+                    .map(computeState -> Operation.createPost(UriUtils
+                            .extendUri(getInventoryServiceUri(), ComputeService.FACTORY_LINK))
+                            .setBody(computeState)
+                            .setCompletion((o, e) -> {
+                                if (e != null) {
+                                    logSevere(() -> String
+                                            .format("Compute state creation failed for azure" +
+                                                    " subscription %s", computeState.name ));
+                                }
+                            }))
                     .collect(Collectors.toList());
             joinOperationAndSendRequest(createComputeOps, subsEnumCtx, (enumCtx) -> {
                 enumCtx.stage = nextStage;

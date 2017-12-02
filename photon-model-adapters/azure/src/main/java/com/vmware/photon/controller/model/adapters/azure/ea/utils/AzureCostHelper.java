@@ -76,19 +76,19 @@ import static com.vmware.photon.controller.model.adapters.azure.ea.utils
 import static com.vmware.photon.controller.model.adapters.azure.ea.utils
         .AzureDetailedBillHandler.BillHeaders.YEAR;
 
-import java.io.FileWriter;
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -102,12 +102,17 @@ import org.joda.time.LocalDate;
 import org.joda.time.LocalDateTime;
 import org.joda.time.format.DateTimeFormat;
 
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
+import com.vmware.photon.controller.model.adapters.azure.ea.stats.AzureCostStatsService.EaAccountCost;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaDetailedBillElement;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.OldApi;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.OldEaSummarizedBillElement;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
@@ -121,23 +126,6 @@ public interface AzureCostHelper {
     Logger logger = Logger.getLogger(AzureCostHelper.class.getName());
 
     String TEMP_DIR_LOCATION = "java.io.tmpdir";
-    String AZURE_BILLS = "azure-bills";
-
-    static Operation getSummarizedBillOp(String enrollmentNumber, String accessToken,
-            LocalDate billMonthToDownload) {
-        String baseUri = AdapterUriUtil
-                .expandUriPathTemplate(AzureCostConstants.SUMMARIZED_BILL, enrollmentNumber,
-                        dateInNewApiExpectedFormat(billMonthToDownload));
-
-        logger.info(String.format("Request: %s", baseUri));
-
-        Operation operation = Operation.createGet(UriUtils.buildUri(baseUri));
-        addDefaultRequestHeaders(operation, accessToken);
-        // Retry thrice on failure.
-        operation = operation.setRetryCount(3);
-        operation = setExpirationForExternalRequests(operation);
-        return operation;
-    }
 
     @OldApi
     static Request getOldDetailedBillRequest(String enrollmentNumber, String accessToken,
@@ -158,7 +146,7 @@ public interface AzureCostHelper {
                 .Builder()
                 .url(uri.toString())
                 .addHeader(Operation.AUTHORIZATION_HEADER,
-                AzureConstants.AUTH_HEADER_BEARER_PREFIX + accessToken)
+                        AzureConstants.AUTH_HEADER_BEARER_PREFIX + accessToken)
                 .addHeader(AzureCostConstants.API_VERSION_HEADER,
                         AzureCostConstants.API_VERSION_HEADER_VALUE).build();
     }
@@ -169,7 +157,8 @@ public interface AzureCostHelper {
         String baseUri = AdapterUriUtil
                 .expandUriPathTemplate(AzureCostConstants.OLD_EA_USAGE_REPORT, enrollmentNumber);
         // Get the summarized bill in JSON format and detailed bill in CSV format.
-        String billFormat = billType.equals(AzureCostConstants.QUERY_PARAM_BILL_TYPE_VALUE_DETAILED) ?
+        String billFormat = billType
+                .equals(AzureCostConstants.QUERY_PARAM_BILL_TYPE_VALUE_DETAILED) ?
                 AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_CSV :
                 AzureCostConstants.QUERY_PARAM_RESPONSE_FORMAT_VALUE_JSON;
         String dateInBillingApiExpectedFormat = getDateInBillingApiFormat(
@@ -192,7 +181,8 @@ public interface AzureCostHelper {
     @OldApi
     static Operation getOldBillAvailableMonths(String enrollmentNumber, String accessToken) {
         String baseUri = AdapterUriUtil
-                .expandUriPathTemplate(AzureCostConstants.OLD_EA_BILL_AVAILABLE_MONTHS, enrollmentNumber);
+                .expandUriPathTemplate(AzureCostConstants.OLD_EA_BILL_AVAILABLE_MONTHS,
+                        enrollmentNumber);
         // Get the summarized bill in JSON format and detailed bill in CSV format.
         URI uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(baseUri));
 
@@ -206,18 +196,6 @@ public interface AzureCostHelper {
         return operation;
     }
 
-    static String writeBillToFile(String enrollmentNumber, LocalDate date, String content)
-            throws IOException {
-        final Path tempDirectory = Paths.get(System.getProperty(TEMP_DIR_LOCATION), AZURE_BILLS);
-        Path workingDirectory = Files.createDirectories(tempDirectory);
-        String billFileName = getCsvBillFileName(enrollmentNumber, date);
-        billFileName = Paths.get(workingDirectory.toString(), billFileName).toString();
-        FileWriter fileWriter = new FileWriter(billFileName);
-        fileWriter.write(content);
-        fileWriter.close();
-        return billFileName;
-    }
-
     static String getCsvBillFileName(String enrollmentNumber, LocalDate date) {
         StringBuilder monthStrBuffer = new StringBuilder();
         int month = date.getMonthOfYear();
@@ -226,7 +204,8 @@ public interface AzureCostHelper {
             monthStrBuffer.append('0');
         }
         monthStrBuffer.append(month);
-        return enrollmentNumber + AzureCostConstants.DETAILED_CSV_BILL_NAME_MID + "-" + year + "-" + monthStrBuffer
+        return enrollmentNumber + AzureCostConstants.DETAILED_CSV_BILL_NAME_MID + "-" + year + "-"
+                + monthStrBuffer
                 + AzureCostConstants.BILL_FORMAT;
     }
 
@@ -281,16 +260,6 @@ public interface AzureCostHelper {
         return year + "-" + monthStr;
     }
 
-    static String dateInNewApiExpectedFormat(LocalDate date) {
-        int year = date.getYear();
-        int month = date.getMonthOfYear();
-        String monthStr = Integer.toString(month);
-        if (month < 10) {
-            monthStr = "0" + monthStr;
-        }
-        return year + monthStr;
-    }
-
     static LocalDate getFirstDayOfCurrentMonth() {
         return getDateToday().withDayOfMonth(1);
     }
@@ -306,12 +275,6 @@ public interface AzureCostHelper {
     static LocalDate getLocalDateFromYearHyphenMonthString(String yearMonth) {
         return LocalDateTime.parse(yearMonth, DateTimeFormat
                 .forPattern(AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_HYPHEN_MM))
-                .toLocalDate();
-    }
-
-    static LocalDate getLocalDateFromYearMonthString(String yearMonth) {
-        return LocalDateTime.parse(yearMonth, DateTimeFormat
-                .forPattern(AzureCostConstants.TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_MM))
                 .toLocalDate();
     }
 
@@ -438,16 +401,6 @@ public interface AzureCostHelper {
 
     }
 
-    static Double getDoubleOrNull(Object billElement, String value) {
-        try {
-            return Double.valueOf(value);
-        } catch (NumberFormatException numberFormatEx) {
-            logger.warning(String.format("Could not convert cost obtained from summarized bill " +
-                    "to a double value: %s", billElement.toString()));
-            return null;
-        }
-    }
-
     static void convertToUsd(EaDetailedBillElement detailedBillElement, String currency) {
         if (detailedBillElement.extendedCost != 0 && !StringUtils.isBlank(currency) && !currency
                 .equalsIgnoreCase(AzureCostConstants.DEFAULT_CURRENCY_VALUE)) {
@@ -503,16 +456,9 @@ public interface AzureCostHelper {
         int monthParamEndIndex = requestUri.indexOf(AzureCostConstants.QUERY_PARAM_BILL_MONTH + "=")
                 + AzureCostConstants.QUERY_PARAM_BILL_MONTH.length() + 1;
         int ampersand = requestUri.indexOf("&");
-        return getLocalDateFromYearHyphenMonthString(requestUri.substring(monthParamEndIndex, ampersand))
+        return getLocalDateFromYearHyphenMonthString(
+                requestUri.substring(monthParamEndIndex, ampersand))
                 .withDayOfMonth(1);
-    }
-
-    static LocalDate getMonthFromRequestUri(String requestUri) {
-        int monthParamEndIndex =
-                requestUri.indexOf(AzureCostConstants.PATH_PARAM_BILLING_PERIODS + "/")
-                        + AzureCostConstants.PATH_PARAM_BILLING_PERIODS.length() + 1;
-        return getLocalDateFromYearMonthString(
-                requestUri.substring(monthParamEndIndex, monthParamEndIndex + 6)).withDayOfMonth(1);
     }
 
     /**
@@ -637,6 +583,166 @@ public interface AzureCostHelper {
             }
         }
         return false;
+    }
+
+    static ComputeStats createApiKeyExpiresTimeStat(ComputeStateWithDescription computeHostDesc,
+            long keyExpiryTime) {
+        ComputeStats accountStats = new ComputeStats();
+        accountStats.computeLink = computeHostDesc.documentSelfLink;
+        accountStats.statValues = new ConcurrentSkipListMap<>();
+
+        ServiceStat keyExpiryTimeMillis = AzureCostHelper.createServiceStat(
+                AzureCostConstants.EA_ACCOUNT_USAGE_KEY_EXPIRY_TIME_MILLIS,
+                keyExpiryTime,
+                PhotonModelConstants.UNIT_MILLISECONDS,
+                AzureCostHelper.getMillisNow());
+        accountStats.statValues.put(keyExpiryTimeMillis.name,
+                Collections.singletonList(keyExpiryTimeMillis));
+        return accountStats;
+    }
+
+    static ComputeStats createOldestBillDownloadedStat(
+            ComputeStateWithDescription computeHostDesc, long billParsedMillis,
+            long currentMonthBillParsedMillis) {
+        ComputeStats stats = new ComputeStats();
+        stats.computeLink = computeHostDesc.documentSelfLink;
+        stats.statValues = new ConcurrentSkipListMap<>();
+        stats.addCustomProperty(PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT,
+                Boolean.TRUE.toString());
+
+        ServiceStat oldestBillDownloadedStat = AzureCostHelper
+                .createServiceStat(AzureCostConstants.OLDEST_BILL_PROCESSED_MILLIS,
+                        billParsedMillis, PhotonModelConstants.UNIT_MILLISECONDS,
+                        currentMonthBillParsedMillis);
+        stats.statValues.put(oldestBillDownloadedStat.name,
+                Collections.singletonList(oldestBillDownloadedStat));
+        return stats;
+    }
+
+    static ComputeStats createBillProcessedTimeStat(ComputeStateWithDescription computeHostDesc,
+            long billProcessedTimeMillis) {
+        // Create bill processed time stat: will be linked with the EA account's compute state
+        // since the bill is obtained and processed at the EA account level.
+        ComputeStats accountStats = new ComputeStats();
+        accountStats.computeLink = computeHostDesc.documentSelfLink;
+        accountStats.statValues = new ConcurrentSkipListMap<>();
+        accountStats.addCustomProperty(PhotonModelConstants.CONTAINS_BILL_PROCESSED_TIME_STAT,
+                Boolean.TRUE.toString());
+
+        ServiceStat billProcessedTimeStat = AzureCostHelper.createServiceStat(
+                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, billProcessedTimeMillis,
+                PhotonModelConstants.UNIT_MILLISECONDS, billProcessedTimeMillis);
+        accountStats.statValues.put(billProcessedTimeStat.name,
+                Collections.singletonList(billProcessedTimeStat));
+        return accountStats;
+    }
+
+    static List<ComputeStats> createMonthlyEaAccountCostStats(
+            Map<LocalDate, EaAccountCost> monthlyEaAccountCosts,
+            Map<LocalDate, Double> monthlyTotalCosts,
+            ComputeStateWithDescription computeHostDesc) {
+
+        List<ComputeStats> accountStats = new ArrayList<>();
+        String usageCostStatName = AzureCostConstants.USAGE_COST;
+        String marketplaceCostStatName = AzureCostConstants.MARKETPLACE_COST;
+        String separatelyBilledCostStatName = AzureCostConstants.SEPARATELY_BILLED_COST;
+        String costUnit = AzureStatsNormalizer
+                .getNormalizedUnitValue(AzureCostConstants.DEFAULT_CURRENCY_VALUE);
+
+        for (Entry<LocalDate, Double> monthlyTotalCost : monthlyTotalCosts.entrySet()) {
+            ComputeStats accountStat = new ComputeStats();
+            accountStat.computeLink = computeHostDesc.documentSelfLink;
+            accountStat.statValues = new ConcurrentSkipListMap<>();
+
+            LocalDate month = monthlyTotalCost.getKey();
+            long timeStamp = adaptMonthToCostTimeStamp(month);
+            EaAccountCost eaAccountCost = monthlyEaAccountCosts.get(month);
+            ServiceStat usageCostServiceStat = AzureCostHelper
+                    .createServiceStat(usageCostStatName, eaAccountCost.monthlyEaAccountUsageCost,
+                            costUnit, timeStamp);
+            ServiceStat marketplaceCostServiceStat = AzureCostHelper
+                    .createServiceStat(marketplaceCostStatName,
+                            eaAccountCost.monthlyEaAccountMarketplaceCost,
+                            costUnit, timeStamp);
+            ServiceStat separatelyBilledCostServiceStat = AzureCostHelper
+                    .createServiceStat(separatelyBilledCostStatName,
+                            eaAccountCost.monthlyEaAccountSeparatelyBilledCost,
+                            costUnit, timeStamp);
+
+            accountStat.statValues
+                    .put(usageCostStatName, Collections.singletonList(usageCostServiceStat));
+            accountStat.statValues.put(marketplaceCostStatName,
+                    Collections.singletonList(marketplaceCostServiceStat));
+            accountStat.statValues.put(separatelyBilledCostStatName,
+                    Collections.singletonList(separatelyBilledCostServiceStat));
+            accountStats.add(accountStat);
+        }
+        return accountStats;
+    }
+
+    static long adaptMonthToCostTimeStamp(LocalDate month) {
+        if (AzureCostHelper.isCurrentMonth(month)) {
+            return AzureCostHelper.getMillisForDate(LocalDate.now(DateTimeZone.UTC));
+        } else {
+            return AzureCostHelper.getMillisForDate(month.dayOfMonth().withMaximumValue());
+        }
+    }
+
+    /**
+     * EA account cost stats are created on a month-level. The usage cost, marketplace cost,
+     * separately billed cost and total cost are stored on a month-level.
+     * @param monthlyEaAccountCost map of monthly EA usage, marketplace and separately billed cost.
+     * @param computeHostDesc compute host of EA account
+     * @param billParsedMillis time when the bill was processed in the current run.
+     * @param oldestBillParsedMillis time when the oldest bill was parsed
+     *@param privateKey the usage API key.  @return list of created stats.
+     */
+    static List<ComputeStats> createEaAccountStats(
+            Map<LocalDate, EaAccountCost> monthlyEaAccountCost,
+            ComputeStateWithDescription computeHostDesc,
+            long currentMonthBillParsedMillis,
+            long billParsedMillis,
+            long oldestBillParsedMillis, String privateKey) {
+        List<ComputeStats> eaAccountStats = new ArrayList<>();
+
+        Map<LocalDate, Double> monthlyEaAccountTotalCost = getEaAccountTotalCost(
+                monthlyEaAccountCost);
+
+        // Create and add EA account usage, marketplace, separately billed and total cost
+        // stats to all stats list.
+        eaAccountStats.addAll(AzureCostHelper.createMonthlyEaAccountCostStats(monthlyEaAccountCost,
+                monthlyEaAccountTotalCost, computeHostDesc));
+
+        eaAccountStats.add(AzureCostHelper
+                .createBillProcessedTimeStat(computeHostDesc, currentMonthBillParsedMillis));
+
+        oldestBillParsedMillis = oldestBillParsedMillis > 0 ?
+                Math.min(oldestBillParsedMillis, billParsedMillis) : billParsedMillis;
+
+        eaAccountStats.add(AzureCostHelper
+                .createOldestBillDownloadedStat(computeHostDesc, oldestBillParsedMillis,
+                        currentMonthBillParsedMillis));
+
+        eaAccountStats.add(AzureCostHelper.createApiKeyExpiresTimeStat(computeHostDesc,
+                AzureCostHelper.getUsageKeyExpiryTime(privateKey)));
+        return eaAccountStats;
+    }
+
+    /**
+     * Computes the total account cost incurred for a month for an EA account.
+     * Total cost = usage cost + marketplace cost + separately billed cost
+     * @param monthlyEaAccountCost map of monthly EA usage, marketplace and separately billed cost.
+     * @return the map of monthly total cost for an EA account.
+     */
+    static Map<LocalDate, Double> getEaAccountTotalCost(
+            Map<LocalDate, EaAccountCost> monthlyEaAccountCost) {
+        Map<LocalDate, Double> monthlyTotalCost = new HashMap<>();
+        for (Entry<LocalDate, EaAccountCost> accountCostEntry : monthlyEaAccountCost.entrySet()) {
+            LocalDate month = accountCostEntry.getKey();
+            EaAccountCost accountCost = accountCostEntry.getValue();
+            monthlyTotalCost.put(month, accountCost.getTotalCost());
+        }
+        return monthlyTotalCost;
     }
 
 }

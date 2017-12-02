@@ -43,7 +43,7 @@ public class AzureCostConstants {
             .toMillis(NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL);
 
     // By default we will collect the following number of months bills from Azure.
-    public static final int DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS = 11;
+    private static final int DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS = 11;
 
     public static final String BILLS_BACK_IN_TIME_MONTHS_KEY =
             UriPaths.PROPERTY_PREFIX + PROPERTY_PREFIX_AZURE_COST_COLLECTION + "backInTime.months";
@@ -104,37 +104,7 @@ public class AzureCostConstants {
     public static final String API_VERSION_HEADER = "api-version";
     public static final String API_VERSION_HEADER_VALUE = "1.0";
 
-    // New API
-    // Base URI
-    private static final String EA_BASE_URI_FOR_REST = "https://consumption.azure.com/v1/enrollments/{enrollmentNumber}";
-    // Billing periods path param
-    public static final String PATH_PARAM_BILLING_PERIODS = "/billingperiods";
-    // Available bills
-    private static final String ALL_BILLING_PERIODS =
-            EA_BASE_URI_FOR_REST + PATH_PARAM_BILLING_PERIODS;
-    // Get bill for specified billing period
-    public static final String PATH_PARAM_BILL_BY_BILLING_PERIOD_AND_TYPE = "/billingperiods/{billingPeriod}/{billType}";
-    // Billing summary
-    public static final String SUMMARIZED_BILL =
-            ALL_BILLING_PERIODS + "/{billPeriod}" + "/balancesummary";
-    // Detailed usage bill
-    public static final String PATH_PARAM_USAGE_DETAILS_FOR_CURRENT_MONTH = "/usagedetails";
-    // Usage details by specified start and end date
-    public static final String PATH_PARAM_USAGE_DETAILS_FOR_BY_DATE = "/usagedetailsbycustomdate";
-    // Detailed marketplace bill
-    public static final String PATH_PARAM_MARKETPLACE_DETAILS_FOR_CURRENT_MONTH = "/marketplacecharges";
-    // Marketplace details by specified start and end date
-    public static final String PATH_PARAM_MARKETPLACE_DETAILS_BY_DATE = "/marketplacechargesbycustomdate";
-    // Get details starting from date (misleading term: the query param refers to time, but it
-    // expects the date in format YYYY-dd-MM
-    public static final String QUERY_PARAM_START_TIME = "startTime";
-    // Get details ending on date in format YYYY-dd-MM
-    public static final String QUERY_PARAM_END_TIME = "endTime";
-
     // EA summarized bill fields
-    public static final String SERVICE_COMMITMENT_REPORT_GENERATION_DATE = "Report Generation Date";
-    public static final String SERVICE_COMMITMENT_REPORT_GENERATION_DATE_FORMAT = "MM/dd/yyyy";
-    public static final String SERVICE_COMMITMENT_BEGINNING_BALANCE = "Beginning Balance";
     // This amount is paid by the customer but does not appear in the detailed bill. It is charged
     // separately.
     public static final String SERVICE_COMMITMENT_CHARGES_BILLED_SEPARATELY =
@@ -149,7 +119,6 @@ public class AzureCostConstants {
 
     // EA detailed bill
     public static final String DETAILED_CSV_BILL_NAME_MID = "-detailed-bill";
-    public static final String SUMMARIZED_CSV_BILL_NAME_MID = "-summarized-bill";
 
     // CSV file constants
     public static final char DEFAULT_COLUMN_SEPARATOR = ',';
@@ -160,15 +129,9 @@ public class AzureCostConstants {
     public static final String UNKNOWN_SERVICE_NAME = "UnknownService";
     public static final String UNKNOWN_SUBSCRIPTION = "UnknownSubscription";
 
-    // Ignored bill values
-    // "Null" as values are ignored tags
-    public static final String BILL_ELEMENT_FIELD_VALUE_NULL = "null";
-
     // Number of operations to send in a batch when using OperationJoin
     public static final int OPERATION_BATCH_SIZE = 50;
     public static final String EA_ACCOUNT_USAGE_KEY_EXPIRY_TIME_MILLIS = "UsageKeyExpiryTimeMillis";
-    // Custom property key to store the GUID of the subscription
-    public static final String SUBSCRIPTION_GUID = "subscriptionId";
     // Custom property key to store and get the subscriptions that belong to a particular EA
     // account. The key is "linkedAccountIds" since this key was initially created by AWS and
     // is being reused in Azure for code-reuse in analysis.
@@ -176,11 +139,9 @@ public class AzureCostConstants {
 
     public static final String OLDEST_BILL_PROCESSED_MILLIS = "OldestBillProcessedMillis";
 
-    public static final String AZURE_BILL_FIELD_DATE_DEFAULT_DELIMITER = "/";
     public static final String TIMESTAMP_FORMAT_WITH_DATE_FORMAT_MM_DD_YYYY_WITH_OBLIQUE_DELIMITER =
             "MM/dd/yyyy";
     public static final String TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_HYPHEN_MM = "yyyy-MM";
-    public static final String TIMESTAMP_FORMAT_WITH_DATE_FORMAT_YYYY_MM = "yyyyMM";
 
     public static final String ERROR_RESPONSE_MESSAGE_SERVICE_UNAVAILABLE = "error 503 for GET";
 
