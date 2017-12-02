@@ -84,7 +84,6 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -106,6 +105,7 @@ import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.ServiceDocumentDescription.TypeName;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -113,7 +113,9 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
@@ -488,22 +490,26 @@ public class AzureCostStatsService extends StatelessService {
         builder.addKindFieldClause(ResourceMetrics.class);
         builder.addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                 ResourceMetrics.PROPERTY_RESOURCE_LINK, context.computeHostDesc.documentSelfLink);
-        builder.addRangeClause(QueryTask.QuerySpecification
-                        .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,
-                                AzureCostConstants.USAGE_COST),
-                QueryTask.NumericRange
-                        .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.SORT)
-                .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
+        builder.addRangeClause(QuerySpecification
+                .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,
+                        AzureCostConstants.USAGE_COST), QueryTask.NumericRange
+                .createDoubleRange(0d, Double.MAX_VALUE, true, true));
+        Builder queryTaskBuilder = Builder.createDirectTask()
+                .addOption(QueryOption.SORT)
+                .addOption(QueryOption.TOP_RESULTS)
                 // No-op in photon-model. Required for special handling of immutable documents.
                 // This will prevent Lucene from holding the full result set in memory.
-                .addOption(QueryTask.QuerySpecification.QueryOption.INCLUDE_ALL_VERSIONS)
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .orderDescending(ResourceMetricsService.ResourceMetrics.FIELD_NAME_TIMESTAMP,
-                        ServiceDocumentDescription.TypeName.LONG)
+                .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .orderDescending(ResourceMetrics.FIELD_NAME_TIMESTAMP, TypeName.LONG)
                 .setResultLimit(1)
-                .setQuery(builder.build()).build();
+                .setQuery(builder.build());
+
+        if (!AzureCostConstants.SHOULD_REFRESH_INDEX) {
+            queryTaskBuilder.addOption(QueryOption.DO_NOT_REFRESH);
+        }
+
+        QueryTask queryTask = queryTaskBuilder.build();
         QueryUtils.startQueryTask(this, queryTask, ServiceTypeCluster.METRIC_SERVICE)
                 .whenComplete((response, exception) -> {
                     if (exception != null) {
