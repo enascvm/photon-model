@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
+import java.util.Map;
+
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool.ConnectionCallback;
@@ -21,6 +23,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.DVPortgroupConfigSpec;
 import com.vmware.vim25.DistributedVirtualPortgroupPortgroupType;
@@ -114,18 +117,31 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
             }
 
             ManagedObjectReference pg = (ManagedObjectReference) taskInfo.getResult();
+            AssertUtil.assertNotNull(pg, "MoRef of dvPortGroup");
 
             String pgKey = null;
+            String dvsUuid = null;
             try {
-                pgKey = new GetMoRef(connection).entityProp(pg, VimPath.pg_config_key);
+                GetMoRef get = new GetMoRef(connection);
+                Map<String, Object> propValues = get.entityProps(pg,
+                        VimPath.pg_config_key,
+                        VimPath.pg_config_distributedVirtualSwitch);
+
+                pgKey = (String) propValues.get(VimPath.pg_config_key);
+                ManagedObjectReference parentDvSwitch = (ManagedObjectReference) propValues.get(VimPath.pg_config_distributedVirtualSwitch);
+                if (parentDvSwitch != null) {
+                    dvsUuid = get.entityProp(parentDvSwitch, VimPath.dvs_uuid);
+                }
             } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg ignore) {
-                getService().logWarning("Cannot retrieve porgroup key of %s", VimUtils.convertMoRefToString(pg));
+                getService().logWarning("Cannot retrieve dvPortGroup properties of [%s]: %s",
+                        VimUtils.convertMoRefToString(pg), ignore.getLocalizedMessage());
             }
 
             // store the moref as custom property
             CustomProperties.of(this.subnetState)
                     .put(CustomProperties.MOREF, pg)
-                    .put(DvsProperties.PORT_GROUP_KEY, pgKey);
+                    .put(DvsProperties.PORT_GROUP_KEY, pgKey)
+                    .put(DvsProperties.DVS_UUID, dvsUuid);
 
             OperationContext.setFrom(getOperationContext());
             Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getService().getHost(),
