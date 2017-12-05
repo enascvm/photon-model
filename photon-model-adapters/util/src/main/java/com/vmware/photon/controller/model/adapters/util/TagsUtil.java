@@ -277,6 +277,7 @@ public class TagsUtil {
         tagState.key = key == null ? "" : key;
         tagState.value = value == null ? "" : value;
         tagState.external = isExternal;
+        tagState.deleted = Boolean.FALSE;
 
         tagState.tenantLinks = tenantLinks;
 

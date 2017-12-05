@@ -46,6 +46,7 @@ public class TagService extends StatefulService {
         public static final String FIELD_NAME_KEY = "key";
         public static final String FIELD_NAME_VALUE = "value";
         public static final String FIELD_NAME_EXTERNAL = "external";
+        public static final String FIELD_NAME_DELETED = "deleted";
 
         @Documentation(description = "Tag key")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
@@ -89,6 +90,19 @@ public class TagService extends StatefulService {
         @PropertyOptions(indexing = PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_6)
         public Boolean external;
+
+        /**
+         * Tag states are either being referenced in one or more resources or they are idle.
+         * <p>The deleted field will be used accordingly to represent this. When idle they field will
+         * be set to true, otherwise it will be set to false.
+         *
+         * <p>This flag does not affect the generated unique documentSelfLink for the tag.
+         */
+        @Documentation(description = "Whether this tag is marked as deleted")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @PropertyOptions(indexing = PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_45)
+        public Boolean deleted;
     }
 
     public TagService() {
@@ -116,7 +130,36 @@ public class TagService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patch) {
-        patch.fail(new UnsupportedOperationException("Tags may not be modified"));
+        // Only allow the external field and the deleted field to be changed
+        TagState patchState = patch.getBody(TagState.class);
+        TagState currentState = getState(patch);
+
+        if (!ServiceDocument.equals(getStateDescription(), currentState, patchState)) {
+            patch.fail(new UnsupportedOperationException("Tags may not be modified"));
+            return;
+        }
+
+        boolean modified = false;
+        if (patchState.external != null) {
+            if (currentState.external == null || (Boolean.TRUE.equals(currentState.external)
+                    && Boolean.FALSE.equals(patchState.external))) {
+                currentState.external = patchState.external;
+                modified = true;
+            }
+        }
+
+        // update the deleted property accordingly
+        if (patchState.deleted != null) {
+            currentState.deleted = patchState.deleted;
+            modified = true;
+        }
+
+        if (!modified) {
+            patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+        }
+
+        patch.setBody(currentState);
+        patch.complete();
     }
 
     @Override
@@ -139,6 +182,13 @@ public class TagService extends StatefulService {
                     modified = true;
                 }
             }
+
+            // update the deleted property accordingly
+            if (newTagState.deleted != null) {
+                currentState.deleted = newTagState.deleted;
+                modified = true;
+            }
+
             if (!modified) {
                 put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
             }

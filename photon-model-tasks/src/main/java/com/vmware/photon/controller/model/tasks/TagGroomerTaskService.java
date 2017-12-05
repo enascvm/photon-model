@@ -16,8 +16,10 @@ package com.vmware.photon.controller.model.tasks;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -30,6 +32,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
@@ -38,7 +41,7 @@ import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
- * Groomer task for deleting stale tag states.
+ * Groomer task for marking stale tag states as deleted.
  */
 
 public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.TagDeletionRequest> {
@@ -89,12 +92,12 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
         GET_DOCUMENTS_NEXT_PAGE,
 
         /**
-         * Delete stale tag states.
+         * Soft delete stale tag states. Tag states are marked as deleted and not deleted from index.
          */
-        DELETE_TAG_STATES,
+        SOFT_DELETE_TAG_STATES,
 
         /**
-         * Complete deletion.
+         * Complete patching tags as deleted.
          */
         FINISHED,
 
@@ -113,11 +116,11 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
                 @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL) })
         public SubStage subStage;
 
-        // List of tag states page.
+        // Map of tag states page.
         @UsageOptions({
                 @UsageOption(option = PropertyUsageOption.SERVICE_USE),
                 @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL) })
-        public Set<String> tagLinks;
+        public Map<String, TagState> tagsMap;
 
         @UsageOptions({
                 @UsageOption(option = PropertyUsageOption.SERVICE_USE),
@@ -131,7 +134,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
 
         public TagDeletionRequest() {
             this.subStage = SubStage.QUERY_FOR_ALL_TAG_STATES;
-            this.tagLinks = new HashSet<>();
+            this.tagsMap = new HashMap<>();
         }
     }
 
@@ -171,7 +174,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
      */
     @Override
     protected void updateState(TagDeletionRequest currentTask, TagDeletionRequest patchBody) {
-        currentTask.tagLinks = patchBody.tagLinks;
+        currentTask.tagsMap = patchBody.tagsMap;
         currentTask.tagsNextPageLink = patchBody.tagsNextPageLink;
         currentTask.docsNextPageLink = patchBody.docsNextPageLink;
         // auto-merge fields based on annotations
@@ -193,10 +196,10 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
             queryDocumentsTaggedWithTag(task, SubStage.GET_DOCUMENTS_NEXT_PAGE);
             break;
         case GET_DOCUMENTS_NEXT_PAGE:
-            getNextPageOfTaggedDocuments(task, SubStage.DELETE_TAG_STATES);
+            getNextPageOfTaggedDocuments(task, SubStage.SOFT_DELETE_TAG_STATES);
             break;
-        case DELETE_TAG_STATES:
-            deleteStaleTagStates(task, SubStage.GET_TAGS_NEXT_PAGE);
+        case SOFT_DELETE_TAG_STATES:
+            markStaleTagsDeleted(task, SubStage.GET_TAGS_NEXT_PAGE);
             break;
         case FINISHED:
             sendSelfFinishedPatch(task);
@@ -213,7 +216,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
     }
 
     /**
-     * Collect all external tag states and start deletion of stale ones by page.
+     * Collect all external tag states and start soft deletion of stale ones by page.
      */
     private void getAllTagStates(TagDeletionRequest task, SubStage next) {
         Query query = Query.Builder.create()
@@ -223,6 +226,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setResultLimit(QUERY_RESULT_LIMIT)
                 .build();
 
@@ -255,7 +259,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
             return;
         }
         // reset all the results from the last page that was processed.
-        task.tagLinks.clear();
+        task.tagsMap.clear();
 
         Operation.createGet(createInventoryUri(this.getHost(), task.tagsNextPageLink))
                 .setReferer(this.getUri())
@@ -271,7 +275,10 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
 
                     QueryTask qrt = o.getBody(QueryTask.class);
                     if (qrt.results != null && qrt.results.documentLinks != null) {
-                        task.tagLinks.addAll(qrt.results.documentLinks);
+                        qrt.results.documents.values().forEach(tagState -> {
+                            TagState ts = Utils.fromJson(tagState, TagState.class);
+                            task.tagsMap.put(ts.documentSelfLink, ts);
+                        });
                         task.tagsNextPageLink = qrt.results.nextPageLink;
                     }
 
@@ -285,14 +292,17 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
      * Issue query for documents that contain the specific tagLink.
      */
     private void queryDocumentsTaggedWithTag(TagDeletionRequest task, SubStage next) {
-        if (task.tagLinks.isEmpty()) {
+        if (task.tagsMap.isEmpty()) {
             task.subStage = SubStage.FINISHED;
             sendSelfPatch(task);
             return;
         }
 
+        Set<String> tagLinks = new HashSet<>();
+        task.tagsMap.forEach((k,v) -> tagLinks.add(k));
+
         Query query = Query.Builder.create()
-                .addInCollectionItemClause(ResourceState.FIELD_NAME_TAG_LINKS, task.tagLinks)
+                .addInCollectionItemClause(ResourceState.FIELD_NAME_TAG_LINKS, tagLinks)
                 .build();
 
         // get all documents that contain the links.
@@ -325,11 +335,11 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
 
     /**
      * Retrieve nextPage of tagged documents and find which tags are not being used. Go over all
-     * pages and identify all unused tags before proceeding with tag deletion.
+     * pages and identify all unused tags before proceeding with marking tag as deleted.
      */
     private void getNextPageOfTaggedDocuments(TagDeletionRequest task, SubStage next) {
         if (task.docsNextPageLink == null) {
-            if (!task.tagLinks.isEmpty()) {
+            if (!task.tagsMap.isEmpty()) {
                 task.subStage = next;
             } else {
                 task.subStage = SubStage.GET_TAGS_NEXT_PAGE;
@@ -351,7 +361,11 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
 
                     QueryTask qrt = o.getBody(QueryTask.class);
                     if (qrt.results != null && qrt.results.selectedLinks != null) {
-                        task.tagLinks.removeAll(qrt.results.selectedLinks);
+                        qrt.results.selectedLinks.forEach(tagLink -> {
+                            if (qrt.results.selectedLinks.contains(tagLink)) {
+                                task.tagsMap.remove(tagLink);
+                            }
+                        });
                         task.docsNextPageLink = qrt.results.nextPageLink;
                     } else {
                         // if results are null, don't fail but proceed to next page of tags
@@ -364,10 +378,10 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
     }
 
     /**
-     * Delete stale tagLinks. On completion, process the next batch of tagLinks or complete task.
+     * Mark stale tags as deleted. On completion, process the next batch of tagLinks or complete task.
      */
-    private void deleteStaleTagStates(TagDeletionRequest task, SubStage next) {
-        if (task.tagLinks.isEmpty()) {
+    private void markStaleTagsDeleted(TagDeletionRequest task, SubStage next) {
+        if (task.tagsMap.isEmpty()) {
             if (task.tagsNextPageLink == null) {
                 task.subStage = SubStage.FINISHED;
             } else {
@@ -377,10 +391,14 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
             return;
         }
 
-        // Create a delete operation for each stale tagState
+        // Create an update operation for each stale tagState
         List<Operation> operations = new ArrayList<>();
-        for (String tagToDelete : task.tagLinks) {
-            operations.add(Operation.createDelete(createInventoryUri(this.getHost(), tagToDelete))
+        for (Map.Entry<String, TagState> entry : task.tagsMap.entrySet()) {
+            TagState tagToDelete = entry.getValue();
+            tagToDelete.deleted = Boolean.TRUE;
+            operations.add(Operation.createPatch(createInventoryUri(this.getHost(),
+                    tagToDelete.documentSelfLink))
+                    .setBody(tagToDelete)
                     .setReferer(this.getUri()));
         }
 

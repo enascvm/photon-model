@@ -38,8 +38,10 @@ import com.vmware.photon.controller.model.tasks.TagGroomerTaskService.TagDeletio
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
@@ -76,7 +78,7 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     /**
      * 1. Create multiple tagStates both internal and external
      * 2. create different resources some with above tagLinks and some without
-     * 3. validate groomer task only deletes the external tagStates not linked to resources
+     * 3. validate groomer task only marks the external tagStates as deleted
      */
     @Test
     public void testTagStateGroomerOnePageOfResults() throws Throwable {
@@ -91,12 +93,20 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
         createDisksWithTags(30, usedTags);
         executeTagsGroomerTask();
 
-        List<String> tagsAfterGrooming = getAllTags();
-        // the only tags that should be deleted are the 10 unused external tags
+        QueryTask tagsQT = createTagsQueryTask(false);
+        List<TagState> tagsAfterGrooming = getTags(tagsQT);
+        // the only tags returned should the ones not marked as deleted
         assertEquals(totalTagsCreated - unusedTagsExt.size(), tagsAfterGrooming.size());
+        // assert used tags are marked as deleted
+        assertUsedTags(tagsAfterGrooming);
 
-        // assert unused tags are not present anymore
-        assertUnusedTags(unusedTagsExt, unusedTagsInt, tagsAfterGrooming);
+        tagsQT = createTagsQueryTask(true);
+        tagsAfterGrooming = getTags(tagsQT);
+        // the only tags returned should be the 10 external tags that are marked as deleted
+        assertEquals(unusedTagsExt.size(), tagsAfterGrooming.size());
+
+        // assert unused tags are marked as deleted
+        assertUnusedTags(tagsAfterGrooming);
     }
 
     @Test
@@ -112,12 +122,20 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
         createDisksWithTags(400, usedTags);
         executeTagsGroomerTask();
 
-        List<String> tagsAfterGrooming = getAllTags();
-        // the only tags that should be deleted are the 10 unused external tags
+        QueryTask tagsQT = createTagsQueryTask(false);
+        List<TagState> tagsAfterGrooming = getTags(tagsQT);
+        // the only tags returned should the ones not marked as deleted
         assertEquals(totalTagsCreated - unusedTagsExt.size(), tagsAfterGrooming.size());
+        // assert used tags are marked as deleted
+        assertUsedTags(tagsAfterGrooming);
 
-        // assert unused tags are not present anymore
-        assertUnusedTags(unusedTagsExt, unusedTagsInt, tagsAfterGrooming);
+        tagsQT = createTagsQueryTask(true);
+        tagsAfterGrooming = getTags(tagsQT);
+        // the only tags returned should be the 10 external tags that are marked as deleted
+        assertEquals(unusedTagsExt.size(), tagsAfterGrooming.size());
+
+        // assert unused tags are marked as deleted
+        assertUnusedTags(tagsAfterGrooming);
     }
 
     /**
@@ -186,16 +204,9 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     }
 
     /**
-     * Query for all tagLinks in the index.
+     * Query for tagLinks
      */
-    public List<String> getAllTags() {
-        Query.Builder query = Query.Builder.create()
-                .addKindFieldClause(TagState.class);
-
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(query.build())
-                .build();
-
+    public List<TagState> getTags(QueryTask queryTask) {
         Operation postQuery = Operation
                 .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(queryTask);
@@ -207,7 +218,28 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
         }
 
         QueryTask response = queryResponse.getBody(QueryTask.class);
-        return response.results.documentLinks;
+        List<TagState> tagList = new ArrayList<>();
+        response.results.documents.values().forEach(tagState -> {
+            TagState ts = Utils.fromJson(tagState, TagState.class);
+            tagList.add(ts);
+        });
+        return tagList;
+    }
+
+    public QueryTask createTagsQueryTask(boolean deletedTags) {
+        Query.Builder query = Query.Builder.create()
+                .addKindFieldClause(TagState.class);
+
+        if (deletedTags) {
+            query.addFieldClause(TagState.FIELD_NAME_DELETED, Boolean.TRUE);
+        } else {
+            query.addFieldClause(TagState.FIELD_NAME_DELETED, Boolean.FALSE);
+        }
+
+        return QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .setQuery(query.build())
+                .build();
     }
 
     /**
@@ -219,6 +251,7 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
         tag.key = prefix + Integer.toString(k);
         tag.value = prefix + Integer.toString(v);
         tag.external = external;
+        tag.deleted = Boolean.FALSE;
         return tag;
     }
 
@@ -237,15 +270,18 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
         this.host.waitForFinishedTask(TagDeletionRequest.class, state.documentSelfLink);
     }
 
-    private void assertUnusedTags(List<String> unusedTagsExt, List<String> unusedTagsInt,
-            List<String> allTags) {
-        // none of the unused external tags should be found
-        for (String unusedTag : unusedTagsExt) {
-            assertFalse(allTags.contains(unusedTag));
+    // unused tags should be external and marked as deleted
+    private void assertUnusedTags(List<TagState> tags) {
+        for (TagState unusedTag : tags) {
+            assertTrue(unusedTag.external);
+            assertTrue(unusedTag.deleted);
         }
-        // all of the unused external tags should be present
-        for (String unusedTag : unusedTagsInt) {
-            assertTrue(allTags.contains(unusedTag));
+    }
+
+    // used tags shouldn't be marked as deleted
+    private void assertUsedTags(List<TagState> tags) {
+        for (TagState unusedTag : tags) {
+            assertFalse(unusedTag.deleted);
         }
     }
 }
