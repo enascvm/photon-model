@@ -221,7 +221,7 @@ public class AWSCostStatsService extends StatelessService {
         try {
             switch (statsData.stage) {
             case ACCOUNT_DETAILS:
-                getAccountDescription(statsData, AWSCostStatsCreationStages.RESERVED_INSTANCES_PLANS_COLLECTION);
+                getAccountDescription(statsData, AWSCostStatsCreationStages.CHECK_BILL_BUCKET_CONFIG);
                 break;
             case RESERVED_INSTANCES_PLANS_COLLECTION:
                 startReservedInstancesPlansCollection(statsData, AWSCostStatsCreationStages.CHECK_BILL_BUCKET_CONFIG);
