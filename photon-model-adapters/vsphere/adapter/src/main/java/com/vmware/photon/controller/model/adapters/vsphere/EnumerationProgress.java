@@ -38,6 +38,7 @@ public class EnumerationProgress {
     private ResourceTracker computeResourceTracker;
     private ResourceTracker resourcePoolTracker;
     private ResourceTracker storagePolicyTracker;
+    private ResourceTracker deleteDiskTracker;
 
     private final MoRefKeyedMap<AbstractOverlay> overlays;
 
@@ -55,6 +56,7 @@ public class EnumerationProgress {
         this.snapshotTracker = new Phaser(1);
         this.overlays = new MoRefKeyedMap<>();
         this.regionId = regionId;
+        this.deleteDiskTracker = new ResourceTracker(1);
     }
 
     public VapiConnection getEndpoint() {
@@ -153,5 +155,9 @@ public class EnumerationProgress {
         if (selfLink != null) {
             this.resourceLinks.remove(selfLink);
         }
+    }
+
+    public ResourceTracker getDeleteDiskTracker() {
+        return this.deleteDiskTracker;
     }
 }

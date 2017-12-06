@@ -69,6 +69,7 @@ public class DiskService extends StatefulService {
         public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
         public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
         public static final String FIELD_NAME_STORAGE_TYPE = "storageType";
+        public static final String FIELD_NAME_STATUS = "status";
 
         /**
          * Identifier of the zone associated with this disk service instance.

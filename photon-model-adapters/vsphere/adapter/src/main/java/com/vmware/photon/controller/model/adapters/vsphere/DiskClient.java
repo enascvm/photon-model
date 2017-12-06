@@ -132,8 +132,12 @@ public class DiskClient extends BaseHelper {
         if (dirName != null) {
             ManagedObjectReference fileManager = this.connection.getServiceContent()
                     .getFileManager();
-            getVimPort().deleteDatastoreFileTask(fileManager, dirName, this.diskContext
+            ManagedObjectReference deleteFile = getVimPort().deleteDatastoreFileTask(fileManager, dirName, this.diskContext
                     .datacenterMoRef);
+            info = waitTaskEnd(deleteFile);
+            if (info.getState() == TaskInfoState.ERROR) {
+                VimUtils.rethrow(info.getError());
+            }
         } else {
             Utils.logWarning("Disk parent directory is null, hence couldn't cleanup disk directory in the datastore");
         }

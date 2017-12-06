@@ -19,7 +19,12 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.vmware.pbm.InvalidArgumentFaultMsg;
 import com.vmware.pbm.PbmFaultFaultMsg;
@@ -32,9 +37,18 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.vim25.ArrayOfHostDatastoreBrowserSearchResults;
 import com.vmware.vim25.ArrayOfHostFileSystemMountInfo;
+import com.vmware.vim25.FileFaultFaultMsg;
+import com.vmware.vim25.FileQueryFlags;
+import com.vmware.vim25.HostDatastoreBrowserSearchSpec;
 import com.vmware.vim25.HostVmfsVolume;
+import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
+import com.vmware.vim25.InvalidDatastoreFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
@@ -45,26 +59,33 @@ import com.vmware.vim25.RetrieveOptions;
 import com.vmware.vim25.RetrieveResult;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.SelectionSpec;
+import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TraversalSpec;
 import com.vmware.vim25.UpdateSet;
+import com.vmware.vim25.VmDiskFileQuery;
+import com.vmware.vim25.VmDiskFileQueryFilter;
 import com.vmware.vim25.WaitOptions;
+import com.vmware.xenon.common.Utils;
+
 
 /**
  * A client is bound to a datacenter.
  */
 public class EnumerationClient extends BaseHelper {
+    private static final Logger logger = LoggerFactory.getLogger(EnumerationClient.class);
     public static final int DEFAULT_FETCH_PAGE_SIZE = 100;
     private static final String HOST_DS_MOUNT_INFO = "config.fileSystemVolume.mountInfo";
 
     private final ManagedObjectReference datacenter;
     private final GetMoRef getMoRef;
+    private final Finder finder;
 
     public EnumerationClient(Connection connection, ComputeStateWithDescription parent) {
         this(connection, parent, null);
     }
 
     public EnumerationClient(Connection connection, ComputeStateWithDescription parent,
-            ManagedObjectReference datacenter) {
+                             ManagedObjectReference datacenter) {
         super(connection);
 
         if (datacenter == null) {
@@ -79,6 +100,7 @@ public class EnumerationClient extends BaseHelper {
                     + " and is not explicitly provided");
         }
         this.getMoRef = new GetMoRef(connection);
+        this.finder = new Finder(connection, datacenter);
     }
 
     public ManagedObjectReference getDatacenter() {
@@ -532,5 +554,77 @@ public class EnumerationClient extends BaseHelper {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    /**
+     *  Utility method that crosschecks the availability of independent disks in vSphere.
+     */
+    public List<String> queryDisksAvailabilityinVSphere(Map<String, Object> diskInfoInLocalIndex) {
+
+        final List<String> unAvailableDisks = new ArrayList<>();
+
+        diskInfoInLocalIndex.entrySet().stream().forEach(entry -> {
+            DiskService.DiskState diskState = Utils.fromJson(entry.getValue(), DiskService.DiskState.class);
+
+            String diskDirectoryPath = diskState.customProperties.get(CustomProperties.DISK_PARENT_DIRECTORY);
+            String datastoreName = diskState.customProperties.get(CustomProperties.DISK_DATASTORE_NAME);
+
+
+            HostDatastoreBrowserSearchSpec searchSpec = createHostDatastoreBrowserSearchSpecForDisk(diskState.id);
+
+            try {
+                this.getMoRef.entityProps(this.finder.datastore(datastoreName).object, "browser").entrySet().stream().forEach(item -> {
+                    try {
+                        ManagedObjectReference hostBrowser = (ManagedObjectReference) item.getValue();
+
+                        ManagedObjectReference task = connection.getVimPort().searchDatastoreSubFoldersTask
+                                (hostBrowser, diskDirectoryPath, searchSpec);
+
+                        TaskInfo info = VimUtils.waitTaskEnd(connection, task);
+                        ArrayOfHostDatastoreBrowserSearchResults searchResult =
+                                (ArrayOfHostDatastoreBrowserSearchResults) info.getResult();
+
+                        if (searchResult == null) {
+                            // Folder is deleted.
+                            unAvailableDisks.add(entry.getKey());
+                        } else {
+                            searchResult.getHostDatastoreBrowserSearchResults().stream().forEach(result-> {
+                                // Folder is present but the vmdk file is deleted.
+                                if (CollectionUtils.isEmpty(result.getFile())) {
+                                    unAvailableDisks.add(entry.getKey());
+                                }
+                            });
+                        }
+                    } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg | InvalidCollectorVersionFaultMsg | FileFaultFaultMsg | InvalidDatastoreFaultMsg ex) {
+                        logger.info("Unable to get the availability status for " + entry.getKey());
+                    }
+                });
+            } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg | FinderException ex) {
+                logger.info("Unable to find the datastore : " + datastoreName);
+            }
+        });
+        return unAvailableDisks;
+    }
+
+    /**
+     *  Create search specification that searches for exact disk name.
+     */
+    private HostDatastoreBrowserSearchSpec createHostDatastoreBrowserSearchSpecForDisk(String diskName) {
+        VmDiskFileQueryFilter vdiskFilter = new VmDiskFileQueryFilter();
+        VmDiskFileQuery fQuery = new VmDiskFileQuery();
+        fQuery.setFilter(vdiskFilter);
+
+
+        HostDatastoreBrowserSearchSpec searchSpec = new HostDatastoreBrowserSearchSpec();
+        searchSpec.getQuery().add(fQuery);
+        FileQueryFlags flag = new FileQueryFlags();
+        flag.setFileOwner(true);
+        flag.setFileSize(true);
+        flag.setFileType(true);
+        flag.setModification(true);
+        searchSpec.setDetails(flag);
+        searchSpec.getMatchPattern().add(diskName + ".vmdk");
+
+        return searchSpec;
     }
 }

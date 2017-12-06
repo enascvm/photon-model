@@ -80,6 +80,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -129,6 +130,7 @@ import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
+
 
 /**
  * Handles enumeration for vsphere endpoints. It supports up to
@@ -429,7 +431,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
                         parent, vapiConnection, VimUtils.convertMoRefToString(datacenter));
 
-
                 try {
                     refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
                 } catch (Exception e) {
@@ -652,6 +653,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             mgr.patchTaskToFailure(msg, e);
             return;
         }
+
+        // Sync disks deleted in vSphere
+        deleteIndependentDisksUnavailableInVSphere(ctx, client);
+        try {
+            ctx.getDeleteDiskTracker().await();
+        } catch (InterruptedException e) {
+            threadInterrupted(mgr, e);
+            return;
+        }
+
     }
 
     /**
@@ -2396,11 +2407,25 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param handler
      */
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
+        withTaskResults(task, handler, 1);
+    }
+
+    /**
+     * Executes a direct query and invokes the provided handler with the results.
+     *
+     * @param task
+     * @param handler
+     * @param resultLimit
+     */
+    private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler, int resultLimit) {
         task.querySpec.options = EnumSet.of(
                 QueryOption.EXPAND_CONTENT,
                 QueryOption.INDEXED_METADATA,
                 QueryOption.TOP_RESULTS);
-        task.querySpec.resultLimit = 1;
+        if (resultLimit > 0) {
+            task.querySpec.resultLimit = resultLimit;
+        }
+
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
 
         QueryUtils.startInventoryQueryTask(this, task)
@@ -2414,7 +2439,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     handler.accept(o.results);
                 });
     }
-
     /**
      * Builds a query for finding a ComputeState by instanceUuid from vsphere and parent compute
      * link.
@@ -2472,5 +2496,55 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (request.enumerationAction == null) {
             request.enumerationAction = EnumerationAction.REFRESH;
         }
+    }
+
+    /**
+     * Checks the existence of the independent disks in vSphere and updates the local DiskService states.
+     */
+    private void deleteIndependentDisksUnavailableInVSphere(EnumerationProgress ctx, EnumerationClient client) {
+        QueryTask task = queryAvailableDisks(ctx);
+        withTaskResults(task, result -> {
+            if (result.documentLinks.isEmpty()) {
+                // no independent disks
+                ctx.getDeleteDiskTracker().track();
+                return;
+            }
+            List<String> unAvailableDisks = client.queryDisksAvailabilityinVSphere(result.documents);
+            if (unAvailableDisks.isEmpty()) {
+                // no unavailable disks to delete
+                ctx.getDeleteDiskTracker().track();
+                return;
+            }
+            deleteDisks(ctx, unAvailableDisks);
+        }, 0);
+    }
+
+    private QueryTask queryAvailableDisks(EnumerationProgress ctx) {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(DiskService.DiskState.class)
+                .addFieldClause(DiskService.DiskState.FIELD_NAME_STATUS, DiskService.DiskStatus.AVAILABLE)
+                .addFieldClause(DiskService.DiskState.FIELD_NAME_REGION_ID, ctx.getRegionId());
+        QueryUtils.addEndpointLink(builder, DiskService.DiskState.class, ctx.getRequest().endpointLink);
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .build();
+    }
+
+    private void deleteDisks(EnumerationProgress ctx, List<String> unavailableDisks) {
+        List<DeferredResult<Operation>> ops = unavailableDisks
+                .stream()
+                .map(uri -> this.sendWithDeferredResult(
+                        Operation.createDelete(PhotonModelUriUtils.createInventoryUri(getHost(), uri))))
+                .collect(Collectors.toList());
+        DeferredResult.allOf(ops).whenComplete((o, e) -> {
+            if (e != null) {
+                logWarning(() -> String.format("Failed syncing disks deleted in vSphere %s", e.getMessage()));
+            } else {
+                logFine("Success syncing disks deleted in vSphere");
+            }
+            ctx.getDeleteDiskTracker().track();
+        });
     }
 }

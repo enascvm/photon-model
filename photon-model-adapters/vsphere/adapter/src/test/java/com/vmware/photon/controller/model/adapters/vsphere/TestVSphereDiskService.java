@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -50,6 +51,8 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.TaskInfo;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
@@ -96,6 +99,59 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
         DiskState diskState = createDisk("AdditionalDisk1",
                 DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
         testDiskCreateAndDelete(diskState);
+    }
+
+    @Test
+    public void testDiskAvailabilityInVSphereAndDeleteIfAbsent() throws Throwable {
+        if (isMock()) {
+            return;
+        }
+
+        prepareEnvironment();
+
+        // Create a sample disk
+        DiskState diskState = createDiskWithDatastore("AdditionalDisk1",
+                DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
+        String documentSelfLink = performDiskRequest(diskState, SubStage.CREATING_DISK);
+
+        this.host.waitForFinishedTask(ProvisionDiskTaskService.ProvisionDiskTaskState.class,
+                documentSelfLink);
+
+        ServiceDocumentQueryResult result = ProvisioningUtils.queryDiskInstances(this.host, 1);
+        diskState = Utils.fromJson(result.documents.get(diskState.documentSelfLink),
+                DiskState.class);
+
+        // refresh enumeration before delete disk
+        this.enumerateComputes(this.computeHost, this.endpointState);
+
+        // delete disk in vSphere
+        deleteDiskFromVSphere(diskState);
+
+        // refresh enumeration after delete disk, this refresh will sync the deleted disk
+        this.enumerateComputes(this.computeHost, this.endpointState);
+
+        // disk state should be 0
+        ProvisioningUtils.queryDiskInstances(this.host, 0);
+    }
+
+    private void deleteDiskFromVSphere(DiskState diskState) throws Throwable {
+        Connection connection = createConnection();
+
+        String diskFullPath = CustomProperties.of(diskState).getString(DISK_FULL_PATH, null);
+        ManagedObjectReference diskManager = connection.getServiceContent()
+                .getVirtualDiskManager();
+        ManagedObjectReference datacenterMoRef = VimUtils.convertStringToMoRef(diskState.regionId);
+        ManagedObjectReference deleteTask = connection.getVimPort().deleteVirtualDiskTask(diskManager,
+                diskFullPath, datacenterMoRef);
+        TaskInfo info = VimUtils.waitTaskEnd(connection, deleteTask);
+
+        String dirName = CustomProperties.of(diskState).getString(DISK_PARENT_DIRECTORY, null);
+        ManagedObjectReference fileManager = connection.getServiceContent()
+                .getFileManager();
+        deleteTask = connection.getVimPort().deleteDatastoreFileTask(fileManager, dirName,
+                datacenterMoRef);
+        info = VimUtils.waitTaskEnd(connection, deleteTask);
+
     }
 
     private void prepareEnvironment() throws Throwable {
@@ -210,7 +266,7 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
     }
 
     private DiskState createDiskWithDatastore(String alias, DiskService.DiskType type,
-            long capacityMBytes, HashMap<String, String> customProperties) throws Throwable {
+                                              long capacityMBytes, HashMap<String, String> customProperties) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, 0, null,
                 capacityMBytes, customProperties);
         diskState.storageDescriptionLink = createStorageDescriptionState().documentSelfLink;
@@ -218,7 +274,7 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
     }
 
     private DiskState createDiskWithCustomPropsDataStore(String alias, DiskService.DiskType type,
-            long capacityMBytes, HashMap<String, String> customProperties) throws Throwable {
+                                                         long capacityMBytes, HashMap<String, String> customProperties) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, 0, null,
                 capacityMBytes, customProperties);
         // Store the datastore name inside properties
@@ -228,8 +284,8 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
     }
 
     private DiskState createDiskWithStoragePolicy(String alias, DiskService.DiskType type,
-            long capacityMBytes, HashMap<String, String>
-            customProperties) throws Throwable {
+                                                  long capacityMBytes, HashMap<String, String>
+                                                          customProperties) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, 0, null, capacityMBytes,
                 customProperties);
         diskState.groupLinks = new HashSet<>();
@@ -242,7 +298,7 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
     }
 
     private DiskState createDisk(String alias, DiskService.DiskType type, long capacityMBytes,
-            HashMap<String, String> customProperties) throws Throwable {
+                                 HashMap<String, String> customProperties) throws Throwable {
         DiskState diskState = constructDiskState(alias, type, 0, null,
                 capacityMBytes, customProperties);
         return postDiskStateWithDetails(diskState);
