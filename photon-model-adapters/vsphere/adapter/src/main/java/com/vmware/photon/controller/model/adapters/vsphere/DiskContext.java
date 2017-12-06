@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -26,13 +27,15 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * DiskContext holds all the details that are needed to perform disk related operations.
@@ -43,15 +46,24 @@ public class DiskContext {
     public String datastoreName;
     public ManagedObjectReference datacenterMoRef;
     public VSphereIOThreadPool pool;
-    public AuthCredentialsService.AuthCredentialsServiceState vSphereCredentials;
+    public AuthCredentialsServiceState vSphereCredentials;
     public URI adapterManagementReference;
     public final TaskManager mgr;
     public final DiskInstanceRequest diskInstanceRequest;
 
     private final URI diskReference;
 
+    /**
+     * Used to store the calling operation.
+     */
+    public Operation operation;
     private Consumer<Throwable> errorHandler;
     private String endpointComputeLink;
+
+    public DiskContext(TaskManager taskManager, DiskInstanceRequest req, Operation op) {
+        this(taskManager, req);
+        this.operation = op;
+    }
 
     public DiskContext(TaskManager taskManager, DiskInstanceRequest req) {
         this.mgr = taskManager;
@@ -132,18 +144,37 @@ public class DiskContext {
 
         // Step 3: Get Credentials
         if (ctx.vSphereCredentials == null) {
-            if (ctx.diskState.authCredentialsLink == null || ctx.diskState.authCredentialsLink
-                    .isEmpty()) {
-                ctx.fail(new IllegalArgumentException("Auth credentials cannot be empty"));
-                return;
-            }
+            if (IAAS_API_ENABLED) {
+                if (ctx.operation == null) {
+                    ctx.fail(new IllegalArgumentException("Caller operation cannot be empty"));
+                    return;
+                }
+                SessionUtil.retrieveExternalToken(service, ctx.operation
+                        .getAuthorizationContext()).whenComplete((authCredentialsServiceState,
+                        throwable) -> {
+                            if (throwable != null) {
+                                ctx.errorHandler.accept(throwable);
+                                return;
+                            }
+                            ctx.vSphereCredentials = authCredentialsServiceState;
+                            populateContextThen(service, ctx, onSuccess);
+                        });
+            } else {
+                if (ctx.diskState.authCredentialsLink == null || ctx.diskState.authCredentialsLink
+                        .isEmpty()) {
+                    ctx.fail(new IllegalArgumentException("Auth credentials cannot be empty"));
+                    return;
+                }
 
-            URI credUri = createInventoryUri(service.getHost(), ctx.diskState.authCredentialsLink);
-            AdapterUtils.getServiceState(service, credUri, op -> {
-                ctx.vSphereCredentials = op
-                        .getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
-                populateContextThen(service, ctx, onSuccess);
-            }, ctx.errorHandler);
+                URI credUri = createInventoryUri(service.getHost(), ctx.diskState
+                        .authCredentialsLink);
+
+                AdapterUtils.getServiceState(service, credUri, op -> {
+                    ctx.vSphereCredentials = op
+                            .getBody(AuthCredentialsServiceState.class);
+                    populateContextThen(service, ctx, onSuccess);
+                }, ctx.errorHandler);
+            }
             return;
         }
 

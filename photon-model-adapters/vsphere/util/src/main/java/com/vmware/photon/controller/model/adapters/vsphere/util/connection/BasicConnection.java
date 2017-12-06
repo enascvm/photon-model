@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.util.connection;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -20,12 +21,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
 import javax.net.ssl.TrustManager;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.ws.BindingProvider;
+import javax.xml.ws.handler.HandlerResolver;
 import javax.xml.ws.handler.MessageContext;
 
 import io.netty.handler.codec.http.HttpHeaderNames;
+import org.xml.sax.SAXException;
 
 import com.vmware.pbm.PbmPortType;
 import com.vmware.pbm.PbmService;
@@ -72,6 +75,7 @@ public class BasicConnection implements Connection {
     private URI uri;
     private String username;
     private String password = ""; // default password is empty since on rare occasion passwords are not set
+    private String token;
     private Map<String, List<String>> headers;
     private long requestTimeoutMillis = -1;
     private TrustManager trustManager;
@@ -96,6 +100,10 @@ public class BasicConnection implements Connection {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
     }
 
     @Override
@@ -215,20 +223,41 @@ public class BasicConnection implements Connection {
     private void _connect()
             throws RuntimeFaultFaultMsg, InvalidLocaleFaultMsg, InvalidLoginFaultMsg,
             com.vmware.pbm.RuntimeFaultFaultMsg {
-        this.vimPort = getVimService().getVimPort();
-        BindingProvider bindingProvider = getBindingsProvider();
-        updateBindingProvider(bindingProvider, this.uri.toString());
 
+        this.vimPort = getVimService().getVimPort();
+        updateBindingProvider(getBindingsProvider(), this.uri.toString());
         this.serviceContent = this.vimPort
                 .retrieveServiceContent(this.getServiceInstanceReference());
+        if (this.token != null) {
+            HandlerResolver defaultResolver = getVimService().getHandlerResolver();
+            HeaderHandlerResolver handlerResolver = new HeaderHandlerResolver();
+            handlerResolver.addHandler(new TimeStampHandler());
+            handlerResolver.addHandler(new SamlTokenExtractionHandler());
 
-        this.userSession = this.vimPort.login(
-                this.serviceContent.getSessionManager(),
-                this.username,
-                this.password,
-                null);
+            try {
+                handlerResolver.addHandler(new SamlTokenHandler(SamlUtils.createSamlDocument
+                        (this.token).getDocumentElement()));
+            } catch (ParserConfigurationException | SAXException | IOException e) {
+                throw new RuntimeFaultFaultMsg("Unable to authenticate", e);
+            }
 
-        this.headers = (Map<String, List<String>>) bindingProvider
+            try {
+                getVimService().setHandlerResolver(handlerResolver);
+                this.userSession = this.vimPort
+                        .loginByToken(this.serviceContent.getSessionManager(),
+                                null);
+            } finally {
+                getVimService().setHandlerResolver(defaultResolver);
+            }
+        } else {
+            this.userSession = this.vimPort.login(
+                    this.serviceContent.getSessionManager(),
+                    this.username,
+                    this.password,
+                    null);
+        }
+
+        this.headers = (Map<String, List<String>>) getBindingsProvider()
                 .getResponseContext().get(MessageContext.HTTP_RESPONSE_HEADERS);
 
         // Need to extract only the cookie value

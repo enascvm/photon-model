@@ -13,9 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
+import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties
+        .DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
-import static com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResourceEnumerationService.PREFIX_DATASTORE;
+import static com.vmware.photon.controller.model.adapters.vsphere
+        .VSphereAdapterResourceEnumerationService.PREFIX_DATASTORE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_CONTENT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
@@ -40,6 +43,7 @@ import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
@@ -48,7 +52,7 @@ import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * VSphereVMDiskContext prepares the context to perform disk day 2 operation on the compute
@@ -57,7 +61,10 @@ public class VSphereVMDiskContext {
 
     // Used for uploading contents into datastore for iso (cd-rom)
     public String datastoreName;
-
+    /**
+     * Used to store the calling operation.
+     */
+    public Operation operation;
     protected ComputeStateWithDescription computePlacementHost;
     protected Set<String> computeGroupLinks;
     protected DiskService.DiskStateExpanded diskState;
@@ -67,13 +74,19 @@ public class VSphereVMDiskContext {
     protected ComputeStateWithDescription computeDesc;
     protected ComputeStateWithDescription parentComputeDesc;
     protected VSphereIOThreadPool pool;
-    protected AuthCredentialsService.AuthCredentialsServiceState vSphereCredentials;
+    protected AuthCredentialsServiceState vSphereCredentials;
     protected ManagedObjectReference datacenterMoRef;
 
     protected final TaskManager mgr;
     protected final ResourceOperationRequest request;
 
     private Consumer<Throwable> errorHandler;
+
+    public VSphereVMDiskContext(TaskManager taskManager, ResourceOperationRequest request,
+            Operation op) {
+        this(taskManager, request);
+        this.operation = op;
+    }
 
     public VSphereVMDiskContext(TaskManager taskManager, ResourceOperationRequest request) {
         this.mgr = taskManager;
@@ -175,8 +188,8 @@ public class VSphereVMDiskContext {
                                 UriUtils.buildUri(service.getHost(), contentUriStr));
                         AdapterUtils.getServiceState(service, contentUri,
                                 MEDIA_TYPE_APPLICATION_OCTET_STREAM,
-                                operation -> {
-                                    ctx.contentToUpload = operation.getBody(byte[].class);
+                                op2 -> {
+                                    ctx.contentToUpload = op2.getBody(byte[].class);
                                     populateVMDiskContextThen(service, ctx, onSuccess);
                                 }, ctx.errorHandler);
                     } else {
@@ -242,20 +255,37 @@ public class VSphereVMDiskContext {
         }
 
         if (ctx.vSphereCredentials == null) {
-            if (ctx.parentComputeDesc.description.authCredentialsLink == null) {
-                ctx.fail(new IllegalStateException(
-                        String.format("authCredentialsLink is not defined in resource %s",
-                                ctx.parentComputeDesc.description.documentSelfLink)));
-                return;
-            }
+            if (IAAS_API_ENABLED) {
+                if (ctx.operation == null) {
+                    ctx.fail(new IllegalArgumentException("Caller operation cannot be empty"));
+                    return;
+                }
+                SessionUtil.retrieveExternalToken(service, ctx.operation
+                        .getAuthorizationContext()).whenComplete((authCredentialsServiceState,
+                        throwable) -> {
+                            if (throwable != null) {
+                                ctx.errorHandler.accept(throwable);
+                                return;
+                            }
+                            ctx.vSphereCredentials = authCredentialsServiceState;
+                            populateVMDiskContextThen(service, ctx, onSuccess);
+                        });
+            } else {
+                if (ctx.parentComputeDesc.description.authCredentialsLink == null) {
+                    ctx.fail(new IllegalStateException(
+                            String.format("authCredentialsLink is not defined in resource %s",
+                                    ctx.parentComputeDesc.description.documentSelfLink)));
+                    return;
+                }
 
-            URI credUri = createInventoryUri(service.getHost(),
-                    ctx.parentComputeDesc.description.authCredentialsLink);
-            AdapterUtils.getServiceState(service, credUri, op -> {
-                ctx.vSphereCredentials = op
-                        .getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
-                populateVMDiskContextThen(service, ctx, onSuccess);
-            }, ctx.errorHandler);
+                URI credUri = createInventoryUri(service.getHost(),
+                        ctx.parentComputeDesc.description.authCredentialsLink);
+                AdapterUtils.getServiceState(service, credUri, op -> {
+                    ctx.vSphereCredentials = op
+                            .getBody(AuthCredentialsServiceState.class);
+                    populateVMDiskContextThen(service, ctx, onSuccess);
+                }, ctx.errorHandler);
+            }
             return;
         }
 
@@ -348,7 +378,6 @@ public class VSphereVMDiskContext {
         // context populated, invoke handler
         onSuccess.accept(ctx);
     }
-
 
     /**
      * Fails the disk operation by invoking the errorHandler.

@@ -40,13 +40,13 @@ public class DvsNetworkService extends StatelessService {
 
         if (req.requestType == InstanceRequestType.CREATE) {
             op.complete();
-            new CreatePortgroupFlow(this, req).provisionAsync();
+            new CreatePortgroupFlow(this, op, req).provisionAsync();
             return;
         }
 
         if (req.requestType == InstanceRequestType.DELETE) {
             op.complete();
-            new DeletePortgroupFlow(this, req).provisionAsync();
+            new DeletePortgroupFlow(this, op, req).provisionAsync();
             return;
         }
 

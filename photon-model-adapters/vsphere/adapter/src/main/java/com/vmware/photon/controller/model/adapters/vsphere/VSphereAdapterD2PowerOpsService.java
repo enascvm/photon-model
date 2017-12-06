@@ -70,7 +70,7 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
         op.complete();
 
         logInfo("Handle operation %s for compute %s.", request.operation, request.resourceLink());
-        VSphereVMContext vmContext = new VSphereVMContext(this, request);
+        VSphereVMContext vmContext = new VSphereVMContext(this, request, op);
         vmContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
 
         VSphereVMContext.populateVMContextThen(this, vmContext, ctx -> {

@@ -99,7 +99,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
             return;
         }
 
-        ProvisionContext.populateContextThen(this, createInitialContext(request), ctx -> {
+        ProvisionContext.populateContextThen(this, createInitialContext(request, op), ctx -> {
             switch (request.requestType) {
             case CREATE:
                 handleCreateInstance(ctx);
@@ -115,8 +115,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
         });
     }
 
-    private ProvisionContext createInitialContext(ComputeInstanceRequest request) {
-        ProvisionContext initialContext = new ProvisionContext(this, request);
+    private ProvisionContext createInitialContext(ComputeInstanceRequest request, Operation op) {
+        ProvisionContext initialContext = new ProvisionContext(this, request, op);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;

@@ -63,7 +63,8 @@ public class VSphereDiskService extends StatelessService {
         TaskManager taskManager = new TaskManager(this, request.taskReference,
                 request.resourceLink());
 
-        DiskContext.populateContextThen(this, createInitialContext(taskManager, request), ctx -> {
+        DiskContext.populateContextThen(this, createInitialContext(taskManager, request, op), ctx
+                -> {
             switch (request.requestType) {
             case CREATE:
                 handleCreateDisk(ctx);
@@ -208,8 +209,9 @@ public class VSphereDiskService extends StatelessService {
     /**
      * Creates initial disk context and gets a thread from the pool to execute the remote request.
      */
-    private DiskContext createInitialContext(TaskManager taskManager, DiskInstanceRequest request) {
-        DiskContext initialContext = new DiskContext(taskManager, request);
+    private DiskContext createInitialContext(TaskManager taskManager, DiskInstanceRequest
+            request, Operation op) {
+        DiskContext initialContext = new DiskContext(taskManager, request, op);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;

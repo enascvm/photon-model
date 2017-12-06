@@ -13,11 +13,18 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static com.vmware.photon.controller.model.resources.SessionService.FACTORY_LINK;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
+import java.net.URI;
+
 import com.vmware.photon.controller.model.resources.SessionService.SessionState;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.AuthorizationContext;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -25,6 +32,11 @@ import com.vmware.xenon.common.Utils;
  * new {@link SessionState} documents.
  */
 public class SessionFactoryService extends FactoryService {
+
+    public static URI buildSessionURI(Service service, AuthorizationContext ctx) {
+        return createInventoryUri(service.getHost(), UriUtils.buildUriPath(FACTORY_LINK,
+                Utils.computeHash(ctx.getToken())));
+    }
 
     public SessionFactoryService() {
         super(SessionState.class);

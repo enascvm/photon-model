@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -32,9 +33,11 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService
+        .NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.ManagedObjectReference;
@@ -78,11 +81,20 @@ public class ProvisionContext {
     public ServiceDocument task;
     private final URI provisioningTaskReference;
     private final InstanceRequestType instanceRequestType;
+    /**
+     * Used to store the calling operation.
+     */
+    public Operation operation;
 
     public static class NetworkInterfaceStateWithDetails extends NetworkInterfaceState {
         public NetworkState network;
         public SubnetState subnet;
         public NetworkInterfaceDescription description;
+    }
+
+    public ProvisionContext(Service service, ResourceRequest req, Operation op) {
+        this(service, req);
+        this.operation = op;
     }
 
     public ProvisionContext(Service service, ResourceRequest req) {
@@ -212,19 +224,36 @@ public class ProvisionContext {
         }
 
         if (ctx.vSphereCredentials == null) {
-            if (ctx.parent.description.authCredentialsLink == null) {
-                ctx.fail(new IllegalStateException(
-                        "authCredentialsLink is not defined in resource "
-                                + ctx.parent.description.documentSelfLink));
-                return;
-            }
+            if (IAAS_API_ENABLED) {
+                if (ctx.operation == null) {
+                    ctx.fail(new IllegalArgumentException("Caller operation cannot be empty"));
+                    return;
+                }
+                SessionUtil.retrieveExternalToken(service, ctx.operation
+                        .getAuthorizationContext()).whenComplete((authCredentialsServiceState,
+                        throwable) -> {
+                            if (throwable != null) {
+                                ctx.errorHandler.accept(throwable);
+                                return;
+                            }
+                            ctx.vSphereCredentials = authCredentialsServiceState;
+                            populateContextThen(service, ctx, onSuccess);
+                        });
+            } else {
+                if (ctx.parent.description.authCredentialsLink == null) {
+                    ctx.fail(new IllegalStateException(
+                            "authCredentialsLink is not defined in resource "
+                                    + ctx.parent.description.documentSelfLink));
+                    return;
+                }
 
-            URI credUri = createInventoryUri(service.getHost(),
-                    ctx.parent.description.authCredentialsLink);
-            AdapterUtils.getServiceState(service, credUri, op -> {
-                ctx.vSphereCredentials = op.getBody(AuthCredentialsServiceState.class);
-                populateContextThen(service, ctx, onSuccess);
-            }, ctx.errorHandler);
+                URI credUri = createInventoryUri(service.getHost(),
+                        ctx.parent.description.authCredentialsLink);
+                AdapterUtils.getServiceState(service, credUri, op -> {
+                    ctx.vSphereCredentials = op.getBody(AuthCredentialsServiceState.class);
+                    populateContextThen(service, ctx, onSuccess);
+                }, ctx.errorHandler);
+            }
             return;
         }
 

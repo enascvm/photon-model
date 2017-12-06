@@ -77,7 +77,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
         logInfo("Handle operation %s for compute %s.", request.operation, request.resourceLink());
 
         VSphereVMDiskContext
-                .populateVMDiskContextThen(this, createInitialContext(taskManager, request),
+                .populateVMDiskContextThen(this, createInitialContext(taskManager, request, op),
                         ctx -> {
                             if (request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
                                 handleAttachDisk(ctx);
@@ -258,8 +258,8 @@ public class VSphereComputeDiskManagementService extends StatelessService {
      * Creates initial disk context and gets a thread from the pool to execute the remote request.
      */
     private VSphereVMDiskContext createInitialContext(TaskManager taskManager,
-            ResourceOperationRequest request) {
-        VSphereVMDiskContext initialContext = new VSphereVMDiskContext(taskManager, request);
+            ResourceOperationRequest request, Operation op) {
+        VSphereVMDiskContext initialContext = new VSphereVMDiskContext(taskManager, request, op);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;

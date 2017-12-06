@@ -49,7 +49,7 @@ public class VSphereAdapterStatsService extends StatelessService {
 
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
 
-        ProvisionContext.populateContextThen(this, createInitialContext(statsRequest), ctx -> {
+        ProvisionContext.populateContextThen(this, createInitialContext(statsRequest, op), ctx -> {
             if (statsRequest.isMockRequest) {
                 // patch status to parent task
                 persistStats(mockStats(), statsRequest);
@@ -162,8 +162,8 @@ public class VSphereAdapterStatsService extends StatelessService {
         return metrics;
     }
 
-    private ProvisionContext createInitialContext(ComputeStatsRequest statsRequest) {
-        ProvisionContext initialContext = new ProvisionContext(this, statsRequest);
+    private ProvisionContext createInitialContext(ComputeStatsRequest statsRequest, Operation op) {
+        ProvisionContext initialContext = new ProvisionContext(this, statsRequest, op);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;

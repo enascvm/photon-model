@@ -43,7 +43,7 @@ public class VSphereAdapterPowerService extends StatelessService {
         op.setStatusCode(Operation.STATUS_CODE_CREATED);
         op.complete();
 
-        ProvisionContext.populateContextThen(this, createInitialContext(request), ctx -> {
+        ProvisionContext.populateContextThen(this, createInitialContext(request, op), ctx -> {
             if (request.isMockRequest) {
                 patchComputeAndCompleteRequest(request, ctx);
                 return;
@@ -145,8 +145,8 @@ public class VSphereAdapterPowerService extends StatelessService {
                 .sendWith(this);
     }
 
-    private ProvisionContext createInitialContext(ComputePowerRequest request) {
-        ProvisionContext initialContext = new ProvisionContext(this,request);
+    private ProvisionContext createInitialContext(ComputePowerRequest request, Operation op) {
+        ProvisionContext initialContext = new ProvisionContext(this,request, op);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;

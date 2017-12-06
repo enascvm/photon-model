@@ -102,7 +102,7 @@ public class VSphereAdapterResizeComputeService extends StatelessService {
                 return;
             }
 
-            VSphereVMContext vmContext = new VSphereVMContext(this, request);
+            VSphereVMContext vmContext = new VSphereVMContext(this, request, op);
             vmContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
 
             VSphereVMContext.populateVMContextThen(this, vmContext, ctx -> {

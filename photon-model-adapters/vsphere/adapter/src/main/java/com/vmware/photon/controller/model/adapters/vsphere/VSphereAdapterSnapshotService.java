@@ -13,12 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import org.apache.commons.collections.MapUtils;
@@ -29,7 +33,8 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils
+        .TargetCriteria;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants;
@@ -37,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotRequestType;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
@@ -53,6 +59,7 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 
 /**
@@ -75,6 +82,13 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         ComputeStateWithDescription parentComputeDescription;
         SnapshotState existingSnapshotState;
         Collection<Operation> snapshotOperations = new ArrayList<>();
+        Operation operation;
+
+        SnapshotContext(SnapshotState snapshotState, TaskManager mgr,
+                SnapshotService.SnapshotRequestType requestType, Operation op) {
+            this(snapshotState, mgr, requestType);
+            this.operation = op;
+        }
 
         SnapshotContext(SnapshotState snapshotState, TaskManager mgr,
                         SnapshotService.SnapshotRequestType requestType) {
@@ -139,7 +153,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
         switch (requestType) {
         case CREATE:
-            SnapshotContext createSnapshotContext = new SnapshotContext(populateAndGetSnapshotState(request), mgr, requestType);
+            SnapshotContext createSnapshotContext = new SnapshotContext(populateAndGetSnapshotState(request), mgr, requestType, op);
             createSnapshotContext.snapshotMemory = Boolean.valueOf(request.payload.get(VSphereConstants.VSPHERE_SNAPSHOT_MEMORY));
             DeferredResult.completed(createSnapshotContext)
                     .thenCompose(this::thenSetComputeDescription)
@@ -155,19 +169,18 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     });
             break;
         case DELETE:
-            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),snapshotLink))
-                    .setCompletion((o,e) -> {
+            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(), snapshotLink))
+                    .setCompletion((o, e) -> {
                         if (e != null) {
                             mgr.patchTaskToFailure(e);
                             return;
                         }
                         SnapshotContext deleteSnapshotContext = new SnapshotContext(o.getBody(SnapshotState.class), mgr,
-                                requestType);
+                                requestType, op);
                         if (!computeLink.equals(deleteSnapshotContext.snapshotState.computeLink)) {
                             mgr.patchTaskToFailure(new IllegalArgumentException("Snapshot does not belong to the specified compute."));
                             return;
                         }
-
                         DeferredResult.completed(deleteSnapshotContext)
                                 .thenCompose(this::thenSetComputeDescription)
                                 .thenCompose(this::thenSetParentComputeDescription)
@@ -182,14 +195,14 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     }).sendWith(this);
             break;
         case REVERT:
-            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),snapshotLink))
-                    .setCompletion((o,e) -> {
+            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(), snapshotLink))
+                    .setCompletion((o, e) -> {
                         if (e != null) {
                             mgr.patchTaskToFailure(e);
                             return;
                         }
                         SnapshotContext revertSnapshotContext = new SnapshotContext(o.getBody(SnapshotState.class), mgr,
-                                requestType);
+                                requestType, op);
                         if (!computeLink.equals(revertSnapshotContext.snapshotState.computeLink)) {
                             mgr.patchTaskToFailure(new IllegalArgumentException("Snapshot does not belong to the specified compute."));
                             return;
@@ -290,39 +303,74 @@ public class VSphereAdapterSnapshotService extends StatelessService {
     private DeferredResult<SnapshotContext> performSnapshotOperation(SnapshotContext context) {
         DeferredResult<SnapshotContext> result = new DeferredResult<>();
         VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
+        DeferredResult<AuthCredentialsService.AuthCredentialsServiceState> credentials;
+        if (IAAS_API_ENABLED) {
+            credentials = SessionUtil.retrieveExternalToken(this, context.operation
+                    .getAuthorizationContext());
+        } else {
+            URI authUri = createInventoryUri(this.getHost(), context.parentComputeDescription
+                    .description.authCredentialsLink);
+            Operation op = Operation.createGet(authUri);
+            credentials = this.sendWithDeferredResult(op, AuthCredentialsService
+                    .AuthCredentialsServiceState.class);
+        }
         switch (context.requestType) {
         case CREATE:
-            pool.submit(this, context.parentComputeDescription.adapterManagementReference,
-                    context.parentComputeDescription.description.authCredentialsLink,
-                    (connection, e) -> {
-                        if (e != null) {
-                            result.fail(e);
-                        } else {
-                            createSnapshot(connection, context, result);
+            BiConsumer<AuthCredentialsService.AuthCredentialsServiceState, Throwable> create =
+                    (authCredentialsServiceState, throwable) -> {
+                        if (throwable != null) {
+                            result.fail(throwable);
+                            return;
                         }
-                    });
+                        pool.submit(context.parentComputeDescription.adapterManagementReference,
+                                authCredentialsServiceState,
+                                (connection, e) -> {
+                                    if (e != null) {
+                                        result.fail(e);
+                                    } else {
+                                        createSnapshot(connection, context, result);
+                                    }
+                                });
+                    };
+            credentials.whenComplete(create);
             break;
         case DELETE:
-            pool.submit(this, context.parentComputeDescription.adapterManagementReference,
-                    context.parentComputeDescription.description.authCredentialsLink,
-                    (connection, e) -> {
-                        if (e != null) {
-                            result.fail(e);
-                        } else {
-                            deleteSnapshot(context, connection, result);
+            BiConsumer<AuthCredentialsService.AuthCredentialsServiceState, Throwable> delete =
+                    (authCredentialsServiceState, throwable) -> {
+                        if (throwable != null) {
+                            result.fail(throwable);
+                            return;
                         }
-                    });
+                        pool.submit(context.parentComputeDescription.adapterManagementReference,
+                                authCredentialsServiceState,
+                                (connection, e) -> {
+                                    if (e != null) {
+                                        result.fail(e);
+                                    } else {
+                                        deleteSnapshot(context, connection, result);
+                                    }
+                                });
+                    };
+            credentials.whenComplete(delete);
             break;
         case REVERT:
-            pool.submit(this, context.parentComputeDescription.adapterManagementReference,
-                    context.parentComputeDescription.description.authCredentialsLink,
-                    (connection, e) -> {
-                        if (e != null) {
-                            result.fail(e);
-                        } else {
-                            revertSnapshot(context, connection, result);
+            BiConsumer<AuthCredentialsService.AuthCredentialsServiceState, Throwable> revert =
+                    (authCredentialsServiceState, throwable) -> {
+                        if (throwable != null) {
+                            result.fail(throwable);
+                            return;
                         }
-                    });
+                        pool.submit(context.parentComputeDescription.adapterManagementReference,
+                                authCredentialsServiceState,
+                                (connection, e) -> {
+                                    if (e != null) {
+                                        result.fail(e);
+                                    } else {
+                                        revertSnapshot(context, connection, result);
+                                    }
+                                });
+                    };
+            credentials.whenComplete(revert);
             break;
         default:
             result.fail(new IllegalStateException("Unsupported requestType " + context.requestType));
@@ -428,7 +476,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         // Once the actual snapshot delete is successful, process the update of the children
         // snapshot states and the next current snapshot
         final List<SnapshotState> childSnapshots = new ArrayList<>();
-        DeferredResult<List<SnapshotState>> dr = getChildSnapshots(snapshot.documentSelfLink) ;
+        DeferredResult<List<SnapshotState>> dr = getChildSnapshots(snapshot.documentSelfLink);
         List<SnapshotState> updatedChildSnapshots = new ArrayList<>();
         dr.whenComplete((o, e) -> {
             if (e != null) {
@@ -535,13 +583,13 @@ public class VSphereAdapterSnapshotService extends StatelessService {
             SnapshotState parentSnapshot = new SnapshotState();
             parentSnapshot.isCurrent = Boolean.TRUE;
             context.snapshotOperations.add(Operation.createPatch(
-                    PhotonModelUriUtils.createInventoryUri(this.getHost(),snapshot.parentLink))
+                    PhotonModelUriUtils.createInventoryUri(this.getHost(), snapshot.parentLink))
                     .setBody(parentSnapshot).setReferer(getUri()));
         }
 
         // Check if the deleted snapshot is the last available snapshot
         DeferredResult<Boolean> result = isLastSnapshotForCompute(context);
-        Operation[]  patchComputeOp = new Operation[1];
+        Operation[] patchComputeOp = new Operation[1];
         result.whenComplete((b, e) -> {
             if (e != null) {
                 logSevere(e);

@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -22,6 +23,8 @@ import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.SessionUtil;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.StatelessService;
@@ -35,6 +38,12 @@ public class VSphereVMContext extends BaseAdapterContext<VSphereVMContext> {
 
     public VSphereIOThreadPool pool;
     public Consumer<Throwable> errorHandler;
+
+    public VSphereVMContext(StatelessService service, ResourceRequest resourceRequest, Operation
+            operation) {
+        this(service, resourceRequest);
+        this.operation = operation;
+    }
 
     public VSphereVMContext(StatelessService service, ResourceRequest resourceRequest) {
         super(service, resourceRequest);
@@ -80,19 +89,36 @@ public class VSphereVMContext extends BaseAdapterContext<VSphereVMContext> {
         }
 
         if (ctx.parentAuth == null) {
-            if (ctx.parent.description.authCredentialsLink == null) {
-                ctx.fail(new IllegalStateException(
-                        "authCredentialsLink is not defined in resource "
-                                + ctx.parent.description.documentSelfLink));
-                return;
-            }
+            if (IAAS_API_ENABLED) {
+                if (ctx.operation == null) {
+                    ctx.fail(new IllegalArgumentException("Caller operation cannot be empty"));
+                    return;
+                }
+                SessionUtil.retrieveExternalToken(service, ctx.operation
+                        .getAuthorizationContext()).whenComplete((authCredentialsServiceState,
+                        throwable) -> {
+                            if (throwable != null) {
+                                ctx.errorHandler.accept(throwable);
+                                return;
+                            }
+                            ctx.parentAuth = authCredentialsServiceState;
+                            populateVMContextThen(service, ctx, onSuccess);
+                        });
+            } else {
+                if (ctx.parent.description.authCredentialsLink == null) {
+                    ctx.fail(new IllegalStateException(
+                            "authCredentialsLink is not defined in resource "
+                                    + ctx.parent.description.documentSelfLink));
+                    return;
+                }
 
-            URI credUri = createInventoryUri(service.getHost(),
-                    ctx.parent.description.authCredentialsLink);
-            AdapterUtils.getServiceState(service, credUri, op -> {
-                ctx.parentAuth = op.getBody(AuthCredentialsServiceState.class);
-                populateVMContextThen(service, ctx, onSuccess);
-            }, ctx.errorHandler);
+                URI credUri = createInventoryUri(service.getHost(),
+                        ctx.parent.description.authCredentialsLink);
+                AdapterUtils.getServiceState(service, credUri, op -> {
+                    ctx.parentAuth = op.getBody(AuthCredentialsServiceState.class);
+                    populateVMContextThen(service, ctx, onSuccess);
+                }, ctx.errorHandler);
+            }
             return;
         }
 

@@ -13,11 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
+import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
+
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool.ConnectionCallback;
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
@@ -33,6 +36,13 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
     private SubnetState subnetState;
 
     private NetworkState networkState;
+
+    private Operation operation;
+
+    public DeletePortgroupFlow(StatelessService service, Operation op, SubnetInstanceRequest req) {
+        this(service, req);
+        this.operation = op;
+    }
 
     public DeletePortgroupFlow(StatelessService service, SubnetInstanceRequest req) {
         super(service, req);
@@ -73,10 +83,26 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
             return res;
         }
 
-        getVsphereIoPool().submit(getService(),
-                this.networkState.adapterManagementReference,
-                this.networkState.authCredentialsLink,
-                deletePortgroupInVsphere(res));
+        if (IAAS_API_ENABLED) {
+            if (this.operation != null) {
+                return DeferredResult.failed(new IllegalArgumentException("Unable to authenticate"));
+            }
+            SessionUtil.retrieveExternalToken(getService(), this.operation
+                    .getAuthorizationContext()).whenComplete((authCredentialsServiceState,
+                    throwable) -> {
+                        if (throwable != null) {
+                            res.fail(throwable);
+                            return;
+                        }
+                        getVsphereIoPool().submit(this.networkState.adapterManagementReference,
+                                authCredentialsServiceState, deletePortgroupInVsphere(res));
+                    });
+        } else {
+            getVsphereIoPool().submit(getService(),
+                    this.networkState.adapterManagementReference,
+                    this.networkState.authCredentialsLink,
+                    deletePortgroupInVsphere(res));
+        }
 
         return res;
     }
@@ -121,14 +147,14 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
     private DeferredResult<Operation> fetchSubnet(Void start) {
         Operation op = Operation.createGet(
                 PhotonModelUriUtils.createInventoryUri(getService().getHost(),getRequest()
-                .resourceReference));
+                        .resourceReference));
         return getService().sendWithDeferredResult(op);
     }
 
     private DeferredResult<Void> deleteSubnet(Void start) {
         Operation op = Operation.createDelete(
                 PhotonModelUriUtils.createInventoryUri(getService().getHost(),getRequest()
-                        .resourceReference));
+                .resourceReference));
         return getService().sendWithDeferredResult(op).thenAccept(__ -> { });
     }
 }

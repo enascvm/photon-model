@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
+import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
+
 import java.util.Map;
 
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
@@ -22,6 +24,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
@@ -43,6 +46,13 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
     private SubnetState subnetState;
 
     private NetworkState networkState;
+
+    private Operation operation;
+
+    public CreatePortgroupFlow(StatelessService service, Operation op, SubnetInstanceRequest req) {
+        this(service, req);
+        this.operation = op;
+    }
 
     public CreatePortgroupFlow(StatelessService service, SubnetInstanceRequest req) {
         super(service, req);
@@ -73,10 +83,26 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
         DeferredResult<Void> res = new DeferredResult<>();
 
-        getVsphereIoPool().submit(getService(),
-                this.networkState.adapterManagementReference,
-                this.networkState.authCredentialsLink,
-                createPortgroupInVsphere(res));
+        if (IAAS_API_ENABLED) {
+            if (this.operation == null) {
+                return DeferredResult.failed(new IllegalArgumentException("Unable to authenticate"));
+            }
+            SessionUtil.retrieveExternalToken(getService(), this.operation
+                    .getAuthorizationContext()).whenComplete((authCredentialsServiceState,
+                    throwable) -> {
+                        if (throwable != null) {
+                            res.fail(throwable);
+                            return;
+                        }
+                        getVsphereIoPool().submit(this.networkState.adapterManagementReference,
+                                authCredentialsServiceState, createPortgroupInVsphere(res));
+                    });
+        } else {
+            getVsphereIoPool().submit(getService(),
+                    this.networkState.adapterManagementReference,
+                    this.networkState.authCredentialsLink,
+                    createPortgroupInVsphere(res));
+        }
 
         return res;
     }
