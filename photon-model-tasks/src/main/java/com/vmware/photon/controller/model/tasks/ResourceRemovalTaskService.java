@@ -34,6 +34,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.tasks.ResourceIPDeallocationTaskService.ResourceIPDeallocationTaskState;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -59,6 +60,8 @@ public class ResourceRemovalTaskService
 
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);
+
+    public static final boolean IS_INVENTORY_LOCAL_QUERY = !ClusterUtil.isClusterDefined(ServiceTypeCluster.INVENTORY_SERVICE);
 
     /**
      * SubStage.
@@ -162,7 +165,7 @@ public class ResourceRemovalTaskService
             q.tenantLinks = state.tenantLinks;
 
             // create the query to find resources
-            QueryUtils.startInventoryQueryTask(this, q)
+            QueryUtils.startInventoryQueryTask(this, q, IS_INVENTORY_LOCAL_QUERY)
                     .whenComplete((o, e) -> {
                         if (e != null) {
                             // the task might have expired, with no results
@@ -182,7 +185,8 @@ public class ResourceRemovalTaskService
                 // for that in our state
                 // machine
                 s.resourceQueryLink = UriUtils.buildUriPath(
-                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS, q.documentSelfLink);
+                        IS_INVENTORY_LOCAL_QUERY ? ServiceUriPaths.CORE_LOCAL_QUERY_TASKS : ServiceUriPaths.CORE_QUERY_TASKS,
+                        q.documentSelfLink);
             });
         } catch (Throwable e) {
             start.fail(e);

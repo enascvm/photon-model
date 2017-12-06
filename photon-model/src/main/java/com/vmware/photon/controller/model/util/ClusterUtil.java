@@ -99,4 +99,21 @@ public class ClusterUtil {
             throw new IllegalStateException(e.getLocalizedMessage(), e);
         }
     }
+
+    /**
+     * Returns true if the cluster is defined. false otherwise
+     * @param cluster The Cluster to check for.
+     * @return true if cluster is defined. false otherwise.
+     */
+    public static boolean isClusterDefined(ServiceEndpointLocator cluster) {
+        if (cluster == null) {
+            return false;
+        }
+
+        try {
+            return cluster.getServiceUri() != null;
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
 }

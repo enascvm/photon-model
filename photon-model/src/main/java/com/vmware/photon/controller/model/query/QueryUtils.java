@@ -78,8 +78,28 @@ public class QueryUtils {
             Service service,
             QueryTask queryTask,
             ServiceTypeCluster cluster) {
+        return startQueryTask(service, queryTask, cluster, true);
+    }
 
-        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster);
+    /**
+     * Executes the given query task on a Cluster.
+     *
+     * @param service
+     *            The service executing the query task.
+     * @param queryTask
+     *            The query task.
+     * @param cluster
+     *            The cluster, the query runs against.
+     * @param isLocal
+     *            If true, use local query task. If false, use query task.
+     */
+    public static DeferredResult<QueryTask> startQueryTask(
+            Service service,
+            QueryTask queryTask,
+            ServiceTypeCluster cluster,
+            boolean isLocal) {
+
+        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster, isLocal);
 
         return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
     }
@@ -95,12 +115,28 @@ public class QueryUtils {
     public static DeferredResult<QueryTask> startInventoryQueryTask(
             Service service,
             QueryTask queryTask) {
+        return startInventoryQueryTask(service, queryTask, true);
+    }
+
+    /**
+     * Utility method to execute the given query task on inventory cluster.
+     *
+     * @param service
+     *            The service executing the query task.
+     * @param queryTask
+     *            The query task.
+     * @param isLocal
+     *            If true, use local query task. If false, use query task.
+     */
+    public static DeferredResult<QueryTask> startInventoryQueryTask(
+            Service service,
+            QueryTask queryTask, boolean isLocal) {
 
         if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
             queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
         }
 
-        return startQueryTask(service, queryTask, ServiceTypeCluster.INVENTORY_SERVICE);
+        return startQueryTask(service, queryTask, ServiceTypeCluster.INVENTORY_SERVICE, isLocal);
     }
 
     /**
@@ -131,7 +167,21 @@ public class QueryUtils {
     public static Operation createQueryTaskOperation(
             Service service, QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator) {
 
-        return createQueryTaskOperation(service.getHost(), queryTask, serviceEndpointLocator);
+        return createQueryTaskOperation(service, queryTask, serviceEndpointLocator, true);
+    }
+
+    /**
+     * Create a query queryTask operation with a URI
+     *
+     * @param service The service executing the query queryTask.
+     * @param queryTask The query queryTask.
+     * @param serviceEndpointLocator The Service Endpoint Locator.
+     * @param isLocal If true, use local query task. If false, use query task.
+     */
+    public static Operation createQueryTaskOperation(
+            Service service, QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator, boolean isLocal) {
+
+        return createQueryTaskOperation(service.getHost(), queryTask, serviceEndpointLocator, isLocal);
     }
 
     /**
@@ -145,6 +195,22 @@ public class QueryUtils {
             ServiceHost serviceHost,
             QueryTask queryTask,
             ServiceEndpointLocator serviceEndpointLocator) {
+        return createQueryTaskOperation(serviceHost, queryTask, serviceEndpointLocator, true);
+    }
+
+    /**
+     * Create a query queryTask operation with a URI
+     *
+     * @param serviceHost The service host executing the query queryTask.
+     * @param queryTask The query queryTask.
+     * @param serviceEndpointLocator The Service Endpoint Locator.
+     * @param isLocal If true, use local query task. If false, use query task.
+     */
+    public static Operation createQueryTaskOperation(
+            ServiceHost serviceHost,
+            QueryTask queryTask,
+            ServiceEndpointLocator serviceEndpointLocator,
+            boolean isLocal) {
 
         boolean isCountQuery = queryTask.querySpec.options.contains(QueryOption.COUNT);
 
@@ -174,7 +240,7 @@ public class QueryUtils {
 
         URI createQueryTaskUri = UriUtils.buildUri(
                 ClusterUtil.getClusterUri(serviceHost, serviceEndpointLocator),
-                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+                isLocal ? ServiceUriPaths.CORE_LOCAL_QUERY_TASKS : ServiceUriPaths.CORE_QUERY_TASKS);
 
         return Operation
                 .createPost(createQueryTaskUri)
