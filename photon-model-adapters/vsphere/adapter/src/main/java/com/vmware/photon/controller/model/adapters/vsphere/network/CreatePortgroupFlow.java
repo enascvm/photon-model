@@ -17,6 +17,7 @@ import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool.ConnectionCallback;
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -116,7 +117,7 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
             String pgKey = null;
             try {
-                pgKey = new GetMoRef(connection).entityProp(pg, DvsProperties.PORT_GROUP_KEY);
+                pgKey = new GetMoRef(connection).entityProp(pg, VimPath.pg_config_key);
             } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg ignore) {
                 getService().logWarning("Cannot retrieve porgroup key of %s", VimUtils.convertMoRefToString(pg));
             }
