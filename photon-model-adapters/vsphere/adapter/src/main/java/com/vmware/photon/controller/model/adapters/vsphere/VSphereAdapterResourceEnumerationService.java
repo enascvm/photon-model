@@ -843,7 +843,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
 
-        if (!VimNames.TYPE_NETWORK.equals(net.getId().getType())) {
+        if (!VimNames.TYPE_NETWORK.equals(net.getId().getType()) &&
+                !VimNames.TYPE_OPAQUE_NETWORK.equals(net.getId().getType())) {
             return;
         }
 
@@ -884,7 +885,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         logFine(() -> String.format("Found new Network %s", net.getName()));
 
-        if (!VimNames.TYPE_NETWORK.equals(net.getId().getType())) {
+        if (!VimNames.TYPE_NETWORK.equals(net.getId().getType()) &&
+                !VimNames.TYPE_OPAQUE_NETWORK.equals(net.getId().getType())) {
             return;
         }
 
