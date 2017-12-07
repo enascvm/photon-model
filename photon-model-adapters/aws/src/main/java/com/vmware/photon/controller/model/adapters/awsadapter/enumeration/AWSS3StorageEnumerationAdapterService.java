@@ -194,7 +194,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         case ENUMERATE:
             switch (aws.request.original.enumerationAction) {
             case START:
-                logInfo(() -> String.format("Started S3 enumeration for %s",
+                logInfo(() -> String.format("Starting S3 enumeration over all valid regions for %s",
                         aws.request.original.resourceReference));
                 aws.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 aws.request.original.enumerationAction = EnumerationAction.REFRESH;
