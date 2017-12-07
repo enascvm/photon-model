@@ -486,16 +486,16 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        final String msg = ctx.request.requestType + " images enumeration";
+        final String msg = ctx.request.requestType + " images enum";
 
-        logFine(() -> msg + ": STARTED");
+        logInfo(() -> msg + ": STARTED");
 
         // Start image enumeration process...
         ctx.enumerate()
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
-                        logFine(() -> msg + ": COMPLETED");
+                        logInfo(() -> msg + ": SUCCESS");
                         completeWithSuccess(ctx);
                     } else {
                         logSevere(() -> msg + ": FAILED with " + Utils.toString(e));
@@ -646,7 +646,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         @Override
         public String toString() {
-            return "Enumerating " + ctx.request.requestType + " default images";
+            return "Loading " + ctx.request.requestType + " Default images";
         }
 
         /**
@@ -780,7 +780,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         @Override
         public String toString() {
-            return "Enumerating " + this.ctx.request.requestType + " standard images by [" +
+            return "Loading " + this.ctx.request.requestType + " Standard images by [" +
                     Arrays.asList(this.ctx.imageFilter).stream()
                             .map(VirtualMachineImageResourceInner::name)
                             .collect(Collectors.joining(":"))
@@ -1085,7 +1085,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         @Override
         public String toString() {
-            return "Enumerating " + this.ctx.request.requestType + " images";
+            return "Loading " + this.ctx.request.requestType + " images";
         }
 
         @Override
@@ -1241,11 +1241,11 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             if (!hasNext()) {
                 throw new NoSuchElementException(
-                        getClass().getSimpleName() + " has already been consumed.");
+                        getClass().getSimpleName() + " has already been consumed");
             }
 
             if (this.pageNumber == 0) {
-                this.ctx.service.logFine(() -> toString() + ": STARTING");
+                this.ctx.service.logInfo(() -> toString() + ": STARTING");
             }
 
             List<AzureImageData> page = nextPage();
@@ -1254,7 +1254,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             this.totalNumber += page.size();
 
             if (!hasNext()) {
-                this.ctx.service.logFine(
+                this.ctx.service.logInfo(
                         () -> toString() + ": TOTAL number = " + this.totalNumber);
             }
 
@@ -1294,7 +1294,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         @Override
         public String toString() {
-            return "Enumerating " + this.ctx.request.requestType + " images with "
+            return "Loading " + this.ctx.request.requestType + " images with "
                     + getClass().getSimpleName();
         }
 

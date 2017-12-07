@@ -319,7 +319,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 if (imagesIterator.hasNext()) {
                     page.nextPageLink = "awsImages_" + (imagesIterator.pageNumber() + 1);
                 } else {
-                    this.service.logFine("Enumerating AWS images: TOTAL number %s",
+                    this.service.logInfo("Enumerating AWS images: TOTAL number %s",
                             imagesIterator.totalNumber());
                 }
 
@@ -377,7 +377,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             return handler.toDeferredResult().thenCompose(awsImagesResult -> {
 
-                this.service.logFine("%s: TOTAL number %s",
+                this.service.logInfo("%s: TOTAL number %s",
                         msg, awsImagesResult.getImages().size());
 
                 if (awsImagesResult.getImages().isEmpty()) {
@@ -522,16 +522,16 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         // Encapsulate core images enum code as Supplier, so we can manipulate and pass it.
         final Supplier<DeferredResult<AWSImageEnumerationContext>> imagesEnum = () -> {
 
-            final String msg = ctx.request.requestType + " images enumeration";
+            final String msg = ctx.request.requestType + " images enum";
 
-            logFine(() -> msg + ": STARTED");
+            logInfo(() -> msg + ": STARTED");
 
             // Start image enumeration process...
             DeferredResult<AWSImageEnumerationContext> imagesEnumDR = ctx.enumerate()
                     .whenComplete((o, e) -> {
                         // Once done patch the calling task with correct stage.
                         if (e == null) {
-                            logFine(() -> msg + ": COMPLETED");
+                            logInfo(() -> msg + ": COMPLETED");
                             completeWithSuccess(ctx);
                         } else {
                             logSevere(() -> msg + ": FAILED with " + Utils.toString(e));
