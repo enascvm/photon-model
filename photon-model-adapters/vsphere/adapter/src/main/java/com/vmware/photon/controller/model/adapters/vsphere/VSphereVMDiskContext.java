@@ -55,6 +55,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
  */
 public class VSphereVMDiskContext {
 
+    // Used for uploading contents into datastore for iso (cd-rom)
     public String datastoreName;
 
     protected ComputeStateWithDescription computePlacementHost;
@@ -279,8 +280,8 @@ public class VSphereVMDiskContext {
 
         if (ctx.computePlacementHost == null) {
             String placementLink = CustomProperties.of(ctx.computeDesc).getString(ComputeProperties
-                    .PLACEMENT_LINK);
-            // Placement link will be not null here.
+                    .COMPUTE_HOST_LINK);
+            // compute host link will be not null here.
             URI expandedPlacementUri = UriUtils.extendUriWithQuery(
                     PhotonModelUriUtils.createInventoryUri(service.getHost(), placementLink),
                     UriUtils.URI_PARAM_ODATA_EXPAND,

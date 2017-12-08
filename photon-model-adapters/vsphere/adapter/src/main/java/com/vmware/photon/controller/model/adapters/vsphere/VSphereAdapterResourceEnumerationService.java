@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -400,12 +399,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     /**
      * This method executes in a thread managed by {@link VSphereIOThreadPoolAllocator}
-     *
-     * @param resourceLinks
-     * @param request
-     * @param connection
-     * @param parent
-     * @param mgr
      */
     private void refreshResourcesOnce(
             Set<String> resourceLinks, ComputeEnumerateResourceRequest request,
@@ -563,23 +556,26 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             }
         }
 
-        // exclude hosts part of a cluster
+        ctx.expectComputeResourceCount(clusters.size());
         for (ComputeResourceOverlay cluster : clusters) {
-            for (ManagedObjectReference hostRef : cluster.getHosts()) {
-                hosts.removeIf(ho -> Objects.equals(ho.getId().getValue(), hostRef.getValue()));
-            }
+            ctx.track(cluster);
+            cluster.markHostAsClustered(hosts);
+            processFoundComputeResource(ctx, cluster);
         }
 
+        // checkpoint compute
+        try {
+            ctx.getComputeResourceTracker().await();
+        } catch (InterruptedException e) {
+            threadInterrupted(mgr, e);
+            return;
+        }
+
+        // process clustered as well as non-clustered hosts
         ctx.expectHostSystemCount(hosts.size());
         for (HostSystemOverlay hs : hosts) {
             ctx.track(hs);
             processFoundHostSystem(ctx, hs);
-        }
-
-        ctx.expectComputeResourceCount(clusters.size());
-        for (ComputeResourceOverlay cr : clusters) {
-            ctx.track(cr);
-            processFoundComputeResource(ctx, cr);
         }
 
         // exclude all root resource pools
@@ -601,7 +597,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         // checkpoint compute
         try {
             ctx.getHostSystemTracker().await();
-            ctx.getComputeResourceTracker().await();
             ctx.getResourcePoolTracker().await();
         } catch (InterruptedException e) {
             threadInterrupted(mgr, e);
@@ -623,8 +618,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         continue;
                     }
                     if (vm.getInstanceUuid() == null) {
-                        logWarning(() -> String.format("Cannot process a VM without"
-                                        + " instanceUuid: %s",
+                        logWarning(() -> String.format("Cannot process a VM %s without"
+                                        + " instanceUuid: %s", vm.getName(),
                                 VimUtils.convertMoRefToString(vm.getId())));
                     } else {
                         ctx.getVmTracker().register();
@@ -634,7 +629,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 }
                 ctx.getVmTracker().arriveAndAwaitAdvance();
 
-                enumerateSnapshots(ctx, vmOverlayList);
+                // Commenting to figure out whether this is the cause for build failures.
+                //enumerateSnapshots(ctx, vmOverlayList);
             }
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
@@ -961,9 +957,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return (o, e) -> {
             enumerationProgress.touchResource(getSelfLinkFromOperation(o));
             if (e == null) {
-                enumerationProgress.getHostSystemTracker().track(hs.getId(), getSelfLinkFromOperation(o));
+                enumerationProgress.getHostSystemTracker()
+                        .track(hs.getId(), getSelfLinkFromOperation(o));
             } else {
-                enumerationProgress.getHostSystemTracker().track(hs.getParent(), ResourceTracker.ERROR);
+                enumerationProgress.getHostSystemTracker()
+                        .track(hs.getParent(), ResourceTracker.ERROR);
             }
         };
     }
@@ -1631,8 +1629,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     /**
-     * @param enumerationProgress
-     * @param hs
+     * Process all the host system retrieved from the endpoint.
      */
     private void processFoundHostSystem(EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
@@ -1750,7 +1747,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private ComputeState makeHostSystemFromResults(EnumerationProgress enumerationProgress,
             HostSystemOverlay hs) {
         ComputeState state = new ComputeState();
-        state.type = ComputeType.VM_HOST;
+        state.type = hs.isClusterHost() ? ComputeType.CLUSTER_HOST : ComputeType.VM_HOST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
         state.regionId = enumerationProgress.getRegionId();
@@ -1767,6 +1764,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
                 .put(CustomProperties.TYPE, hs.getId().getType());
+        if (hs.isClusterHost()) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.CLUSTER_LINK, enumerationProgress
+                            .getComputeResourceTracker().getSelfLink(hs.getParentMoref()));
+        }
         return state;
     }
 

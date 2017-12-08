@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
@@ -63,6 +64,21 @@ public class ComputeResourceOverlay extends AbstractOverlay {
         } else {
             return false;
         }
+    }
+
+    /**
+     * Marks the HostSytemOverlay as cluster host if they belong this cluster
+     */
+    public void markHostAsClustered(List<HostSystemOverlay> hosts) {
+        getHosts().stream().forEach(hostRef -> {
+            HostSystemOverlay hostSystem = hosts.stream()
+                    .filter(ho -> Objects.equals(ho.getId().getValue(), hostRef.getValue()))
+                    .findFirst().orElse(null);
+            if (hostSystem != null) {
+                hostSystem.setClusterHost(true);
+                hostSystem.setParentMoref(getId());
+            }
+        });
     }
 
     public ManagedObjectReference getRootResourcePool() {

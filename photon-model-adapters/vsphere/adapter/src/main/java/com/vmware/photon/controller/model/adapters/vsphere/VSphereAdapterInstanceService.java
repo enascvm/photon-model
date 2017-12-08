@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.fillInControllerUnitNumber;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findMatchingDiskState;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDevice;
@@ -43,6 +44,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -52,7 +54,9 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpande
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.CustomizationSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -71,13 +75,14 @@ import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
 import com.vmware.vim25.VirtualFloppy;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
 
 public class VSphereAdapterInstanceService extends StatelessService {
 
@@ -167,7 +172,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         // populate state, MAC address being very important
                         VmOverlay vmOverlay = client.enrichStateFromVm(state);
 
-                        Operation finishTask = null;
+                        Operation[] finishTask = new Operation[1];
 
                         for (NetworkInterfaceStateWithDetails nic : ctx.nics) {
                             // request guest customization while vm of powered off
@@ -212,31 +217,61 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                         IP_CHECK_INTERVAL_SECONDS,
                                         TimeUnit.SECONDS);
                             } else {
-                                finishTask = op;
+                                finishTask[0] = op;
                             }
                         } else {
                             // only finish the task without waiting for IP
-                            finishTask = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
+                            finishTask[0] = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
                         }
 
                         updateNicsAfterProvisionSuccess(vmOverlay.getNics(), ctx);
                         updateDiskLinksAfterProvisionSuccess(state, vmOverlay.getDisks(), ctx);
 
                         state.lifecycleState = LifecycleState.READY;
-                        Operation patchResource = createComputeResourcePatch(state,
-                                ctx.computeReference);
 
-                        OperationSequence seq = OperationSequence.create(patchResource);
-                        if (finishTask != null) {
-                            seq = seq.next(finishTask);
-                        }
-
-                        seq.setCompletion(ctx.failTaskOnError())
-                                .sendWith(this);
+                        // Find the host link where the computed is provisioned and patch the
+                        // compute state.
+                        queryHostLinkAndUpdateCompute(state, vmOverlay.getHost())
+                                .thenCompose(links -> {
+                                    CustomProperties.of(state)
+                                            .put(COMPUTE_HOST_LINK, links.iterator().next());
+                                    return createComputeResourcePatch(state, ctx.computeReference);
+                                }).whenComplete((o, e) -> {
+                                    if (e != null) {
+                                        ctx.fail(e);
+                                        return;
+                                    }
+                                    if (finishTask.length > 0) {
+                                        finishTask[0].sendWith(this);
+                                    }
+                                });
                     } catch (Exception e) {
                         ctx.fail(e);
                     }
                 });
+    }
+
+    /**
+     * Query with the MangedObjectReference of the compute host where the VM is provisioned to
+     * get the self link of host ComputeState and update the VM ComputeState with the link.
+     */
+    private DeferredResult<List<String>> queryHostLinkAndUpdateCompute(ComputeState computeState,
+            ManagedObjectReference hostMoref) {
+        String moref = VimUtils.convertMoRefToString(hostMoref);
+
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.MOREF, moref);
+        QueryUtils.addEndpointLink(builder, ComputeState.class, computeState.endpointLink);
+
+        QueryUtils.QueryTop<ComputeState> computeHostQuery = new QueryUtils.QueryTop<>(
+                this.getHost(), builder.build(), ComputeState.class, computeState.tenantLinks);
+
+        computeHostQuery.setMaxResultsLimit(1);
+        computeHostQuery.setClusterType(ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE);
+
+        return computeHostQuery.collectLinks(Collectors.toList());
     }
 
     private List<Operation> createUpdateIPOperationsForComputeAndNics(String computeLink,
@@ -557,10 +592,12 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 .sendWith(this);
     }
 
-    private Operation createComputeResourcePatch(ComputeState state, URI computeReference) {
-        return Operation.createPatch(
-                PhotonModelUriUtils.createInventoryUri(getHost(), computeReference))
+    private DeferredResult<Operation> createComputeResourcePatch(ComputeState state, URI
+            computeReference) {
+        Operation patchOp = Operation
+                .createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), computeReference))
                 .setBody(state);
+        return this.sendWithDeferredResult(patchOp);
     }
 
     private void handleDeleteInstance(ProvisionContext ctx) {

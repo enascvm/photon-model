@@ -57,6 +57,11 @@ public class CustomProperties {
     public static final String LIBRARY_ITEM_LINK = "__libraryItemLink";
 
     /**
+     * Self link referencing to the cluster host of the compute.
+     */
+    public static final String CLUSTER_LINK = "__clusterLink";
+
+    /**
      * Stores the VIM type of the vSphere entity.
      */
     public static final String TYPE = "__computeType";

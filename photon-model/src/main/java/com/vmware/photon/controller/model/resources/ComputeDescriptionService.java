@@ -233,6 +233,7 @@ public class ComputeDescriptionService extends StatefulService {
         public enum ComputeType {
             VM_HOST,
             VM_GUEST,
+            CLUSTER_HOST,
             DOCKER_CONTAINER,
             PHYSICAL,
             OS_ON_PHYSICAL,

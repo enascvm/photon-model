@@ -23,6 +23,9 @@ import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 
 public class HostSystemOverlay extends AbstractOverlay {
+    private boolean clusterHost;
+    private ManagedObjectReference parentMoref;
+
     protected HostSystemOverlay(ObjectContent cont) {
         super(cont);
         ensureType(VimNames.TYPE_HOST);
@@ -64,5 +67,23 @@ public class HostSystemOverlay extends AbstractOverlay {
         } else {
             return res.getManagedObjectReference();
         }
+    }
+
+    // If the host is part of a DRS cluster
+    public boolean isClusterHost() {
+        return this.clusterHost;
+    }
+
+    public void setClusterHost(boolean clusterHost) {
+        this.clusterHost = clusterHost;
+    }
+
+    // Get the parent moref for the host. Used for referencing the cluster for a clustered host.
+    public ManagedObjectReference getParentMoref() {
+        return this.parentMoref;
+    }
+
+    public void setParentMoref(ManagedObjectReference parentMoref) {
+        this.parentMoref = parentMoref;
     }
 }
