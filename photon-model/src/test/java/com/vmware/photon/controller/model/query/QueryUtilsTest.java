@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.query;
 
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toSet;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
@@ -26,13 +29,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletionException;
-import java.util.stream.Collectors;
 
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ModelUtils;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -46,7 +49,12 @@ public class QueryUtilsTest extends BaseModelTest {
 
     static {
         // Set the size of returned pages
-        System.setProperty(QueryByPages.PROPERTY_NAME_MAX_PAGE_SIZE, Integer.toString(2));
+        System.setProperty(QueryByPages.PROPERTY_NAME_MAX_PAGE_SIZE,
+                Integer.toString(2));
+
+        // Minimize retry interval
+        System.setProperty(QueryUtils.QUERY_TASK_RETRY_INTERVAL_MILLIS_PROPERTY,
+                Integer.toString(20));
     }
 
     @Test
@@ -86,40 +94,46 @@ public class QueryUtilsTest extends BaseModelTest {
                 ComputeState.FIELD_NAME_DESCRIPTION_LINK);
 
         // The classes under testing: QueryByPages and QueryTop
-        List<QueryStrategy<ComputeState>> queryStrategies = Arrays.asList(
+        List<QueryTemplate<?, ComputeState>> queryStrategies = Arrays.asList(
                 new QueryByPages<>(
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
-                        tenantLinks,
-                        null /* endpointLink */),
+                        tenantLinks),
                 new QueryTop<>(
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
-                        tenantLinks,
-                        null /* endpointLink */));
+                        tenantLinks));
 
         // Test collectDocuments/queryDocuments/collectLinks/queryLinks per strategy
-        for (QueryStrategy<ComputeState> queryStrategy : queryStrategies) {
-            {
-                // Test collectDocuments, which internally also tests queryDocuments
-                DeferredResult<Set<String>> documentLinksDR = queryStrategy.collectDocuments(
-                        Collectors.mapping(cs -> cs.documentSelfLink, Collectors.toSet()));
+        for (QueryTemplate<?, ComputeState> queryStrategy : queryStrategies) {
 
-                Set<String> actual = waitToComplete(documentLinksDR);
+            for (boolean isDirect : Arrays.asList(true, false)) {
 
-                assertThat(actual, equalTo(expected));
-            }
+                final String msg = queryStrategy.getClass().getSimpleName() + ":" + isDirect;
 
-            {
-                // Test collectLinks, which internally also tests queryLinks
-                DeferredResult<Set<String>> documentLinksDR = queryStrategy
-                        .collectLinks(Collectors.toSet());
+                {
+                    // Test collectDocuments, which internally also tests queryDocuments
+                    DeferredResult<Set<String>> documentLinksDR = queryStrategy
+                            .setDirect(isDirect)
+                            .collectDocuments(mapping(cs -> cs.documentSelfLink, toSet()));
 
-                Set<String> actual = waitToComplete(documentLinksDR);
+                    Set<String> actual = waitToComplete(documentLinksDR);
 
-                assertThat(actual, equalTo(expected));
+                    assertThat(msg, actual, equalTo(expected));
+                }
+
+                {
+                    // Test collectLinks, which internally also tests queryLinks
+                    DeferredResult<Set<String>> documentLinksDR = queryStrategy
+                            .setDirect(isDirect)
+                            .collectLinks(toSet());
+
+                    Set<String> actual = waitToComplete(documentLinksDR);
+
+                    assertThat(msg, actual, equalTo(expected));
+                }
             }
         }
     }

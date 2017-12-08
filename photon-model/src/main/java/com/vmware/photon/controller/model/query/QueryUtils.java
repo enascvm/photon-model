@@ -19,6 +19,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -40,6 +41,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -63,6 +65,11 @@ public class QueryUtils {
             + "query.defaultResultLimit";
     public static final int DEFAULT_RESULT_LIMIT = Integer
             .getInteger(DEFAULT_RESULT_LIMIT_PROPERTY, 100);
+
+    public static final String QUERY_TASK_RETRY_INTERVAL_MILLIS_PROPERTY = UriPaths.PROPERTY_PREFIX
+            + "query.retryIntervalMillis";
+    public static final long QUERY_TASK_RETRY_INTERVAL_MILLIS = Long
+            .getLong(QUERY_TASK_RETRY_INTERVAL_MILLIS_PROPERTY, 300);
 
     public static final long MINUTE_IN_MICROS = TimeUnit.MINUTES.toMicros(1);
     public static final long TEN_MINUTES_IN_MICROS = TimeUnit.MINUTES.toMicros(10);
@@ -102,7 +109,8 @@ public class QueryUtils {
             ServiceTypeCluster cluster,
             boolean isLocal) {
 
-        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster, isLocal);
+        Operation createQueryTaskOp = createQueryTaskOperation(service, queryTask, cluster,
+                isLocal);
 
         return service.sendWithDeferredResult(createQueryTaskOp, QueryTask.class);
     }
@@ -159,13 +167,15 @@ public class QueryUtils {
         return startQueryTask(service, queryTask, null);
     }
 
-
     /**
      * Create a query queryTask operation with a URI
      *
-     * @param service The service executing the query queryTask.
-     * @param queryTask The query queryTask.
-     * @param serviceEndpointLocator The Service Endpoint Locator.
+     * @param service
+     *            The service executing the query queryTask.
+     * @param queryTask
+     *            The query queryTask.
+     * @param serviceEndpointLocator
+     *            The Service Endpoint Locator.
      */
     public static Operation createQueryTaskOperation(
             Service service, QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator) {
@@ -176,23 +186,32 @@ public class QueryUtils {
     /**
      * Create a query queryTask operation with a URI
      *
-     * @param service The service executing the query queryTask.
-     * @param queryTask The query queryTask.
-     * @param serviceEndpointLocator The Service Endpoint Locator.
-     * @param isLocal If true, use local query task. If false, use query task.
+     * @param service
+     *            The service executing the query queryTask.
+     * @param queryTask
+     *            The query queryTask.
+     * @param serviceEndpointLocator
+     *            The Service Endpoint Locator.
+     * @param isLocal
+     *            If true, use local query task. If false, use query task.
      */
     public static Operation createQueryTaskOperation(
-            Service service, QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator, boolean isLocal) {
+            Service service, QueryTask queryTask, ServiceEndpointLocator serviceEndpointLocator,
+            boolean isLocal) {
 
-        return createQueryTaskOperation(service.getHost(), queryTask, serviceEndpointLocator, isLocal);
+        return createQueryTaskOperation(service.getHost(), queryTask, serviceEndpointLocator,
+                isLocal);
     }
 
     /**
      * Create a query queryTask operation with a URI
      *
-     * @param serviceHost The service host executing the query queryTask.
-     * @param queryTask The query queryTask.
-     * @param serviceEndpointLocator The Service Endpoint Locator.
+     * @param serviceHost
+     *            The service host executing the query queryTask.
+     * @param queryTask
+     *            The query queryTask.
+     * @param serviceEndpointLocator
+     *            The Service Endpoint Locator.
      */
     public static Operation createQueryTaskOperation(
             ServiceHost serviceHost,
@@ -204,10 +223,14 @@ public class QueryUtils {
     /**
      * Create a query queryTask operation with a URI
      *
-     * @param serviceHost The service host executing the query queryTask.
-     * @param queryTask The query queryTask.
-     * @param serviceEndpointLocator The Service Endpoint Locator.
-     * @param isLocal If true, use local query task. If false, use query task.
+     * @param serviceHost
+     *            The service host executing the query queryTask.
+     * @param queryTask
+     *            The query queryTask.
+     * @param serviceEndpointLocator
+     *            The Service Endpoint Locator.
+     * @param isLocal
+     *            If true, use local query task. If false, use query task.
      */
     public static Operation createQueryTaskOperation(
             ServiceHost serviceHost,
@@ -243,14 +266,14 @@ public class QueryUtils {
 
         URI createQueryTaskUri = UriUtils.buildUri(
                 ClusterUtil.getClusterUri(serviceHost, serviceEndpointLocator),
-                isLocal ? ServiceUriPaths.CORE_LOCAL_QUERY_TASKS : ServiceUriPaths.CORE_QUERY_TASKS);
+                isLocal ? ServiceUriPaths.CORE_LOCAL_QUERY_TASKS
+                        : ServiceUriPaths.CORE_QUERY_TASKS);
 
         return Operation
                 .createPost(createQueryTaskUri)
                 .setBody(queryTask)
                 .setConnectionSharing(true);
     }
-
 
     /**
      * Add {@code endpointLink} constraint to passed query builder depending on document class.
@@ -298,10 +321,15 @@ public class QueryUtils {
     /**
      * Query strategy template.
      *
+     * @param <DESC>
+     *            the type of descendant class
+     * @param <T>
+     *            the type of ServiceDocuments returned by this instance
+     *
      * @see QueryTop
      * @see QueryByPages
      */
-    public abstract static class QueryTemplate<T extends ServiceDocument>
+    public abstract static class QueryTemplate<DESC extends QueryTemplate<DESC, T>, T extends ServiceDocument>
             implements QueryStrategy<T> {
 
         /**
@@ -318,6 +346,7 @@ public class QueryUtils {
         protected final Class<T> documentClass;
         protected final List<String> tenantLinks;
 
+        protected boolean isDirectQuery = true;
         protected URI referer;
         protected ServiceEndpointLocator serviceLocator;
 
@@ -421,6 +450,14 @@ public class QueryUtils {
         }
 
         /**
+         * Isolate all cases when this instance should be cast to DESC. For internal use only.
+         */
+        @SuppressWarnings("unchecked")
+        private DESC self() {
+            return (DESC) this;
+        }
+
+        /**
          * Get the maximum number of results to return. The value is set to
          * {@code QueryTask.Builder.setResultLimit(int)} by {@link #newQueryTaskBuilder()} while
          * creating the {@link QueryTask}.
@@ -433,9 +470,11 @@ public class QueryUtils {
          * Default value, if not set, is {@code host.getUri()}. Callers are recommended to set more
          * pertinent value for better traceability, e.g {@link Service#getUri()}.
          */
-        public void setReferer(URI referer) {
+        public DESC setReferer(URI referer) {
             AssertUtil.assertNotNull(referer, "'referer' must be set.");
             this.referer = referer;
+
+            return self();
         }
 
         /**
@@ -445,8 +484,23 @@ public class QueryUtils {
          *
          * @see ClusterUtil#getClusterUri(ServiceHost, ServiceEndpointLocator)
          */
-        public void setClusterType(ServiceEndpointLocator serviceLocator) {
+        public DESC setClusterType(ServiceEndpointLocator serviceLocator) {
             this.serviceLocator = serviceLocator;
+
+            return self();
+        }
+
+        /**
+         * Set whether to create synchronous or asynchronous query task.
+         * <p>
+         * Default value, if not set, is {@code true}.
+         *
+         * @see TaskState#isDirect
+         */
+        public DESC setDirect(boolean isDirect) {
+            this.isDirectQuery = isDirect;
+
+            return self();
         }
 
         /**
@@ -536,9 +590,12 @@ public class QueryUtils {
          * Descendants might override this method to customize the default query task build logic.
          * For example add option such as {@link QueryOption#TOP_RESULTS}.
          */
-
         protected QueryTask.Builder newQueryTaskBuilder() {
-            return QueryTask.Builder.createDirectTask()
+            QueryTask.Builder qtBuilder = this.isDirectQuery
+                    ? QueryTask.Builder.createDirectTask()
+                    : QueryTask.Builder.create();
+
+            return qtBuilder
                     .setQuery(this.query)
                     .setResultLimit(getResultLimit());
         }
@@ -563,12 +620,83 @@ public class QueryUtils {
 
             // Initiate the query
             return this.host.sendWithDeferredResult(createQueryTaskOp)
+                    // Wait for QT to complete, if not direct
+                    .thenCompose(this::waitForQueryTaskToComplete)
                     // Delegate to descendant to actually do QT processing
                     .thenCompose(qtOp -> handleQueryTask(qtOp, resultConsumer));
         }
 
+        /**
+         * Waits for query task to complete. It polls periodically for query task status.
+         */
+        private DeferredResult<Operation> waitForQueryTaskToComplete(Operation qtOp) {
+
+            DeferredResult<Operation> completionDR = new DeferredResult<>();
+
+            waitForQueryTaskToCompleteRecursively(qtOp, completionDR, new AtomicInteger(0));
+
+            return completionDR;
+        }
+
+        /**
+         * @param qtCompletionDR
+         *            The DR returned to signal completion. It's internally completed upon query
+         *            task completion.
+         */
+        private void waitForQueryTaskToCompleteRecursively(
+                Operation qtOp,
+                DeferredResult<Operation> qtCompletionDR,
+                AtomicInteger retries) {
+
+            final QueryTask qt = qtOp.getBody(QueryTask.class);
+
+            if (TaskState.isFailed(qt.taskInfo)) {
+                qtCompletionDR.fail(new IllegalStateException(qt.taskInfo.failure.message));
+                return;
+            }
+
+            // If QT is 'direct' OR 'completed' then continue with QT results processing
+            if (qt.taskInfo.isDirect || TaskState.isFinished(qt.taskInfo)) {
+                qtCompletionDR.complete(qtOp);
+                return;
+            }
+
+            // For any subsequent get-queryTask call we use the Host of previous Op!
+            final Operation getQueryTaskOp = Operation
+                    .createGet(UriUtils.buildUri(qtOp.getUri(), qt.documentSelfLink))
+                    .setReferer(this.referer);
+
+            this.host.sendWithDeferredResult(getQueryTaskOp).thenAccept(getQtOp -> {
+
+                final QueryTask getQt = getQtOp.getBody(QueryTask.class);
+
+                if (TaskState.isFinished(getQt.taskInfo)) {
+                    // finally the task is done
+                    qtCompletionDR.complete(getQtOp);
+                } else {
+                    this.host.log(this.level, "Query task [%s] not completed yet. Retry: %s",
+                            getQt.documentSelfLink,
+                            retries.incrementAndGet());
+
+                    // check status again in a while
+                    this.host.schedule(
+                            () -> waitForQueryTaskToCompleteRecursively(
+                                    getQtOp, qtCompletionDR, retries),
+                            QUERY_TASK_RETRY_INTERVAL_MILLIS,
+                            TimeUnit.MILLISECONDS);
+                }
+            });
+        }
+
+        /**
+         * Helper method to be used by descendants to consume the QT results (in case of pagination
+         * it's just current page).
+         *
+         * <p>
+         * NOTE: the results are passed to the resultConsumer sequentially.
+         */
         @SuppressWarnings({ "rawtypes", "unchecked" })
-        protected void consumeQueryTask(QueryTask qt, Consumer resultConsumer) {
+        protected void consumeQueryTaskResults(QueryTask qt, Consumer resultConsumer) {
 
             this.host.log(this.level, "%s: PROCESS %s docs",
                     this.msg, qt.results.documentCount);
@@ -577,15 +705,22 @@ public class QueryUtils {
                 return;
             }
 
-            final Stream resultsStream;
-            if (qt.results.documents != null && !qt.results.documents.isEmpty()) {
-                // Get document states as Stream<T>, if QueryOption.EXPAND_CONTENT
-                resultsStream = qt.results.documents.values().stream()
-                        .map(json -> Utils.fromJson(json, this.documentClass));
+            Stream resultsStream = Stream.empty();
+
+            if (qt.querySpec.options.contains(QueryOption.EXPAND_CONTENT)) {
+                // Get document STATEs as Stream<T>
+                if (qt.results.documents != null && !qt.results.documents.isEmpty()) {
+                    resultsStream = qt.results.documents
+                            .values()
+                            .stream()
+                            .map(json -> Utils.fromJson(json, this.documentClass));
+                }
             } else {
-                // Get document links as Stream<String>
+                // Get document LINKs as Stream<String>
+                // NOTE: documentLinks is non-NULL, so it's safe to use without check.
                 resultsStream = qt.results.documentLinks.stream();
             }
+
             // Delegate to passed callback one-by-one
             resultsStream.forEach(resultConsumer);
         }
@@ -594,7 +729,7 @@ public class QueryUtils {
     /**
      * Query TOP documents/links which satisfy passed criteria.
      */
-    public static class QueryTop<T extends ServiceDocument> extends QueryTemplate<T> {
+    public static class QueryTop<T extends ServiceDocument> extends QueryTemplate<QueryTop<T>, T> {
 
         private int maxResultsLimit = MAX_RESULT_LIMIT;
 
@@ -656,7 +791,7 @@ public class QueryUtils {
 
             return DeferredResult.completed(queryTaskOp.getBody(QueryTask.class))
                     // Handle TOP results
-                    .thenAccept(qt -> consumeQueryTask(qt, resultConsumer));
+                    .thenAccept(qt -> consumeQueryTaskResults(qt, resultConsumer));
         }
     }
 
@@ -664,7 +799,8 @@ public class QueryUtils {
      * Query all documents/links which satisfy passed query criteria. The results are processed
      * page-by-page.
      */
-    public static class QueryByPages<T extends ServiceDocument> extends QueryTemplate<T> {
+    public static class QueryByPages<T extends ServiceDocument>
+            extends QueryTemplate<QueryByPages<T>, T> {
 
         /**
          * Value is {@code photon-model.QueryByPages.maxPageSize}.
@@ -761,7 +897,7 @@ public class QueryUtils {
                     // Handle current page of results
                     .thenApply(qtOp -> {
                         final QueryTask qt = qtOp.getBody(QueryTask.class);
-                        consumeQueryTask(qt, resultConsumer);
+                        consumeQueryTaskResults(qt, resultConsumer);
 
                         return qtOp;
                     })
