@@ -63,6 +63,7 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_NETWORK_INTERFACE_LINKS = "networkInterfaceLinks";
         public static final String FIELD_NAME_DISK_LINKS = "diskLinks";
         public static final String FIELD_NAME_TYPE = "type";
+        public static final String FIELD_NAME_INSTANCE_TYPE = "instanceType";
 
         /**
          * URI reference to corresponding ComputeDescription.
@@ -161,6 +162,7 @@ public class ComputeService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE })
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
         public String instanceType;
 
