@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.47-SNAPSHOT
+
+
 ## 0.6.46
 * Delete stale TagState resources.
 * Important bug fixes.
