@@ -1,7 +1,8 @@
 # CHANGELOG
 
-## 0.6.46-SNAPSHOT
-
+## 0.6.46
+* Delete stale TagState resources.
+* Important bug fixes.
 
 ## 0.6.45
 * Added groomer task for deleting stale TagState resources.
