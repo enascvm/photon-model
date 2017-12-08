@@ -47,17 +47,33 @@ public class TagService extends StatefulService {
         public static final String FIELD_NAME_VALUE = "value";
         public static final String FIELD_NAME_EXTERNAL = "external";
         public static final String FIELD_NAME_DELETED = "deleted";
+        public static final String FIELD_NAME_ORIGIN = "origins";
+
+        /**
+         * Values allowed in TagState.origins field
+         * <ul>
+         * <li>SYSTEM: tags are internal to the platform and were created under the hood by photon-model</li>
+         * <li>USER_DEFINED: tags are internal to the platform were created from the user</li>
+         * <li>DISCOVERED: tags collected from the cloud and were discovered during enumeration</li>
+         * </ul>
+         */
+
+        public static enum TagOrigin {
+            SYSTEM, USER_DEFINED, DISCOVERED
+        }
 
         @Documentation(description = "Tag key")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
+        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE,
+                PropertyIndexingOption.SORT })
         public String key;
 
         @Documentation(description = "Tag value, empty string used for none (null not accepted)")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
+        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE,
+                PropertyIndexingOption.SORT })
         public String value;
 
         @Documentation(description = "A list of tenant links that can access this tag")
@@ -67,6 +83,9 @@ public class TagService extends StatefulService {
         public List<String> tenantLinks;
 
         /**
+         * NOTE: this property is deprecated and will be removed soon. Please use the origin
+         * field instead.
+         *
          * Each tag is categorized as local or external.
          *
          * <ul>
@@ -89,7 +108,44 @@ public class TagService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @PropertyOptions(indexing = PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_6)
+        @Deprecated
         public Boolean external;
+
+
+        /**
+         * <p>The origins field is used to maintain the source of each tag.
+         *
+         * <p>Each tag can originate one or more source. The three possible sources are:
+         * <ul>
+         *     <li>SYSTEM: under the hood photon model creates tags for internal use
+         *     <li>USER_DEFINED: the user creates tags and associates them with resources
+         *     <li>DISCOVERED: these are external tags that were discovered during enumeration
+         * </ul>
+         *
+         * <p>Both SYSTEM and USER_DEFINED tags are local to the system. That means that if the
+         * tag is assigned to a local resource, changes on the remote state will never affect this
+         * assignment.
+         *
+         * <p> The DISCOVERED tags on the other hand are managed by an external system (e.g. cloud
+         * provider). In this case, if the tag assignment is removed on the remote state, the local
+         * state is updated accordingly.
+         *
+         * <p>The origins property does not affect the generated unique documentSelfLink for the tag.
+         * The same key-value pair (for the same tenantLinks) can have one or more of the above
+         * values.
+         *
+         * <p>A previously DISCOVERED tag can later be added from the user as well. That will result
+         * in the origins field to get updated and contain both the DISCOVERED and the USER_DEFINED
+         * values.
+         * If {@code null} is passed, the current value is not changed.
+         */
+        @Documentation(description = "Maintain the different sources of the tag - i.e., user" +
+                " defined, discovered, system generated")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @PropertyOptions(indexing = {PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE,
+                PropertyIndexingOption.EXPAND})
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_48)
+        public EnumSet<TagOrigin> origins = EnumSet.noneOf(TagOrigin.class);
 
         /**
          * Tag states are either being referenced in one or more resources or they are idle.
@@ -148,6 +204,19 @@ public class TagService extends StatefulService {
             }
         }
 
+        // Add new origin sources to the set - removal of values is not allowed to this point
+        if (patchState.origins != null && !patchState.origins.isEmpty()) {
+            if (currentState.origins == null || currentState.origins.isEmpty()) {
+                currentState.origins = patchState.origins;
+                modified = true;
+            } else {
+                if (!currentState.origins.equals(patchState.origins)) {
+                    currentState.origins.addAll(patchState.origins);
+                    modified = true;
+                }
+            }
+        }
+
         // update the deleted property accordingly
         if (patchState.deleted != null) {
             currentState.deleted = patchState.deleted;
@@ -173,13 +242,26 @@ public class TagService extends StatefulService {
                 return;
             }
 
-            // check if the tag has to be turned from external to local
             boolean modified = false;
+            // check if the tag has to be turned from external to local
             if (newTagState.external != null) {
                 if (currentState.external == null || (Boolean.TRUE.equals(currentState.external)
                         && Boolean.FALSE.equals(newTagState.external))) {
                     currentState.external = newTagState.external;
                     modified = true;
+                }
+            }
+
+            // Add new origin sources to the set - removal of values is not allowed at this point
+            if (newTagState.origins != null && !newTagState.origins.isEmpty()) {
+                if (currentState.origins == null || currentState.origins.isEmpty()) {
+                    currentState.origins = newTagState.origins;
+                    modified = true;
+                } else {
+                    if (!currentState.origins.equals(newTagState.origins)) {
+                        currentState.origins.addAll(newTagState.origins);
+                        modified = true;
+                    }
                 }
             }
 

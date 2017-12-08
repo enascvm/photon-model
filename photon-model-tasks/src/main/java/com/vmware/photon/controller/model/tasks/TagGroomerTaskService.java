@@ -13,6 +13,10 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.createOriginTagQuery;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
@@ -187,7 +191,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
     private void handleSubStage(TagDeletionRequest task) {
         switch (task.subStage) {
         case QUERY_FOR_ALL_TAG_STATES:
-            getAllTagStates(task, SubStage.GET_TAGS_NEXT_PAGE);
+            getAllDiscoveredTagStates(task, SubStage.GET_TAGS_NEXT_PAGE);
             break;
         case GET_TAGS_NEXT_PAGE:
             getNextPageOfTagStates(task, SubStage.QUERY_FOR_DOCUMENTS_TAGGED_WITH_TAG_STATE);
@@ -216,13 +220,21 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
     }
 
     /**
-     * Collect all external tag states and start soft deletion of stale ones by page.
+     * Collect all tag states with origins ["DISCOVERED"] and start soft deletion of stale ones by page.
+     *
+     * If the tag has multiple origins, do not delete the tag.
      */
-    private void getAllTagStates(TagDeletionRequest task, SubStage next) {
+    private void getAllDiscoveredTagStates(TagDeletionRequest task, SubStage next) {
         Query query = Query.Builder.create()
-                .addKindFieldClause(TagState.class)
-                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString())
-                .build();
+                .addKindFieldClause(TagState.class).build();
+
+        Map<String, Query.Occurance> origin = new HashMap<>();
+        origin.put(DISCOVERED.toString(), Query.Occurance.MUST_OCCUR);
+        origin.put(SYSTEM.toString(), Query.Occurance.MUST_NOT_OCCUR);
+        origin.put(USER_DEFINED.toString(), Query.Occurance.MUST_NOT_OCCUR);
+
+        Query externalQuery = createOriginTagQuery(Boolean.TRUE, origin);
+        query.addBooleanClause(externalQuery);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)

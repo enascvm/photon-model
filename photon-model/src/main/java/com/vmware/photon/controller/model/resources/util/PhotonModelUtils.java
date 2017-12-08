@@ -52,6 +52,7 @@ import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -64,6 +65,9 @@ import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 
 public class PhotonModelUtils {
 
@@ -410,5 +414,34 @@ public class PhotonModelUtils {
         stat.name = name;
         stat.unit = unit;
         service.setStat(stat, value);
+    }
+
+    /**
+     * @param external
+     * @param origin
+     * @return Returns a query with the needed terms for external and origin field
+     */
+    public static Query createOriginTagQuery(Boolean external, Map<String, Occurance> origin) {
+        QueryTask.Query externalQuery = new Query()
+                .setTermPropertyName(TagService.TagState.FIELD_NAME_EXTERNAL)
+                .setTermMatchValue(external.toString());
+        externalQuery.occurance = Occurance.SHOULD_OCCUR;
+
+        QueryTask.Query.Builder originClauseBuilder = QueryTask.Query.Builder.create();
+        for (Map.Entry<String, Occurance> entry : origin.entrySet()) {
+            Occurance occurance = entry.getValue() == null ? Occurance.MUST_OCCUR : entry.getValue();
+            if (entry.getKey() != null) {
+                originClauseBuilder.addCollectionItemClause(TagService.TagState.FIELD_NAME_ORIGIN,
+                        entry.getKey(), occurance);
+            }
+        }
+        Query originQuery = originClauseBuilder.build()
+                .setOccurance(Occurance.SHOULD_OCCUR);
+
+        Query originOrExternalQuery = new Query().addBooleanClause(externalQuery)
+                .addBooleanClause(originQuery)
+                .setOccurance(Occurance.MUST_OCCUR);
+
+        return originOrExternalQuery;
     }
 }

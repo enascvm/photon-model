@@ -49,6 +49,10 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.createOriginTagQuery;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 
 import java.net.URI;
@@ -902,15 +906,19 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                     .map(String::toLowerCase)
                     .collect(Collectors.toList());
 
-            Query.Builder qBuilder = Query.Builder.create()
+            Query query = Query.Builder.create()
                     .addKindFieldClause(TagState.class)
-                    .addInClause(TagState.FIELD_NAME_KEY, keysToLowerCase)
-                    .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
+                    .addInClause(TagState.FIELD_NAME_KEY, keysToLowerCase).build();
 
-            QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
-                    this.host,
-                    qBuilder.build(),
-                    TagState.class,
+            Map<String, Query.Occurance> origin = new HashMap<>();
+            origin.put(DISCOVERED.toString(), Query.Occurance.MUST_OCCUR);
+            origin.put(SYSTEM.toString(), Query.Occurance.MUST_NOT_OCCUR);
+            origin.put(USER_DEFINED.toString(), Query.Occurance.MUST_NOT_OCCUR);
+
+            Query externalQuery = createOriginTagQuery(Boolean.TRUE, origin);
+            query.addBooleanClause(externalQuery);
+
+            QueryStrategy<TagState> queryLocalTags = new QueryTop<>(this.host, query, TagState.class,
                     null)
                     .setMaxResultsLimit(expectedTags.size() + 1);
 
@@ -1093,13 +1101,20 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     }
 
     private List<TagState> getInternalTypeTagsList() {
-        Query.Builder qBuilder = Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(TagState.class)
-                .addFieldClause(TagState.FIELD_NAME_KEY, PhotonModelConstants.TAG_KEY_TYPE)
-                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.FALSE.toString());
+                .addFieldClause(TagState.FIELD_NAME_KEY, PhotonModelConstants.TAG_KEY_TYPE).build();
+
+        Map<String, Query.Occurance> origin = new HashMap<>();
+        origin.put(DISCOVERED.toString(), Query.Occurance.SHOULD_OCCUR);
+        origin.put(SYSTEM.toString(), Query.Occurance.SHOULD_OCCUR);
+        origin.put(USER_DEFINED.toString(), Query.Occurance.MUST_NOT_OCCUR);
+
+        Query internalQuery = createOriginTagQuery(Boolean.FALSE, origin);
+        query.addBooleanClause(internalQuery);
 
         QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
-                getHost(), qBuilder.build(), TagState.class, null)
+                getHost(), query, TagState.class, null)
                 .setMaxResultsLimit(Integer.MAX_VALUE);
 
         List<TagState> tagStates = waitToComplete(

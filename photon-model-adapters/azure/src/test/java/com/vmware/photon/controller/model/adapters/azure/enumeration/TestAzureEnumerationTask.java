@@ -53,6 +53,10 @@ import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagSt
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.createOriginTagQuery;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -733,13 +737,20 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .map(String::toLowerCase)
                 .collect(Collectors.toList());
 
-        Query.Builder qBuilder = Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(TagState.class)
-                .addInClause(TagState.FIELD_NAME_KEY, keysToLowerCase)
-                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
+                .addInClause(TagState.FIELD_NAME_KEY, keysToLowerCase).build();
+
+        Map<String, Query.Occurance> origin = new HashMap<>();
+        origin.put(DISCOVERED.toString(), Query.Occurance.MUST_OCCUR);
+        origin.put(SYSTEM.toString(), Query.Occurance.MUST_NOT_OCCUR);
+        origin.put(USER_DEFINED.toString(), Query.Occurance.MUST_NOT_OCCUR);
+
+        Query externalQuery = createOriginTagQuery(Boolean.TRUE, origin);
+        query.addBooleanClause(externalQuery);
 
         QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
-                getHost(), qBuilder.build(), TagState.class, null)
+                getHost(), query, TagState.class, null)
                 .setMaxResultsLimit(expectedTags.size() + 1);
 
         List<TagState> tagStates = waitToComplete(
@@ -764,13 +775,34 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         expectedTagValues.add(SUBNET_TAG_TYPE_VALUE);
         expectedTagValues.add(NETWORK_INTERFACE_TAG_TYPE_VALUE);
 
-        Query.Builder qBuilder = Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(TagState.class)
-                .addFieldClause(TagState.FIELD_NAME_KEY, PhotonModelConstants.TAG_KEY_TYPE)
-                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.FALSE.toString());
+                .addFieldClause(TagState.FIELD_NAME_KEY, PhotonModelConstants.TAG_KEY_TYPE).build();
+
+        Query externalQuery = new Query()
+                .setTermPropertyName(TagState.FIELD_NAME_EXTERNAL)
+                .setTermMatchValue(Boolean.FALSE.toString());
+        externalQuery.occurance = Query.Occurance.SHOULD_OCCUR;
+
+        Query originQuery = new Query().addBooleanClause(
+                Query.Builder.create()
+                        .addCollectionItemClause(TagState.FIELD_NAME_ORIGIN, DISCOVERED.toString(),
+                                Query.Occurance.SHOULD_OCCUR)
+                        .addCollectionItemClause(TagState.FIELD_NAME_ORIGIN, SYSTEM.toString(),
+                                Query.Occurance.SHOULD_OCCUR)
+                        .addCollectionItemClause(TagState.FIELD_NAME_ORIGIN, USER_DEFINED.toString(),
+                                Query.Occurance.MUST_NOT_OCCUR)
+                        .build())
+                .setOccurance(Query.Occurance.SHOULD_OCCUR);
+
+        Query originOrExternalQuery = new Query().addBooleanClause(externalQuery)
+                .addBooleanClause(originQuery)
+                .setOccurance(Query.Occurance.MUST_OCCUR);
+
+        query.addBooleanClause(originOrExternalQuery);
 
         QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
-                getHost(), qBuilder.build(), TagState.class, null)
+                getHost(), query, TagState.class, null)
                 .setMaxResultsLimit(20);
 
         List<TagState> tagStates = waitToComplete(

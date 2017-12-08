@@ -13,8 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.util;
 
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.createOriginTagQuery;
+
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,6 +34,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -220,16 +227,24 @@ public class TagsUtil {
                     removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
                 } else {
                     // identify which of the local tag states to remove are external
-                    Query.Builder qBuilder = Query.Builder.create()
+                    Query query = Query.Builder.create()
                             // Add documents' class
                             .addKindFieldClause(TagState.class)
                             // Add local tag links to remove
                             .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, tagLinksToRemove)
-                            .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
+                            .build();
+
+                    Map<String, Query.Occurance> origin = new HashMap<>();
+                    origin.put(DISCOVERED.toString(), Query.Occurance.MUST_OCCUR);
+                    origin.put(SYSTEM.toString(), Query.Occurance.MUST_NOT_OCCUR);
+                    origin.put(USER_DEFINED.toString(), Query.Occurance.MUST_NOT_OCCUR);
+
+                    Query externalQuery = createOriginTagQuery(Boolean.TRUE, origin);
+                    query.addBooleanClause(externalQuery);
 
                     QueryTop<TagState> queryLocalStates = new QueryTop<>(
                             service.getHost(),
-                            qBuilder.build(),
+                            query,
                             TagState.class,
                             localState.tenantLinks)
                             .setMaxResultsLimit(tagLinksToRemove.size());
@@ -277,23 +292,39 @@ public class TagsUtil {
     }
 
     /**
+     * TODO Method should get removed - leaving in place to help transition.
+     *
      * Generate a new external TagState from provided key and value. TagStates, marked as "external"
      * identify tags which exist on the remote cloud. They will be removed from the local resource's
      * state, in case the corresponding tags is removed from the remote resource. Tags, identified
      * as "local" are not maintained in sync with the tags on the cloud. They are used by the local
      * user to mark local resource states.
      */
-    public static TagState newTagState(String key, String value, Boolean isExternal, List<String> tenantLinks) {
-
+    public static TagState newTagState(String key, String value, Boolean isExternal,
+            List<String> tenantLinks) {
         final TagState tagState = new TagState();
 
         tagState.key = key == null ? "" : key;
         tagState.value = value == null ? "" : value;
         tagState.external = isExternal;
+        tagState.origins = EnumSet.of(isExternal ? DISCOVERED : SYSTEM);
         tagState.deleted = Boolean.FALSE;
-
         tagState.tenantLinks = tenantLinks;
+        tagState.documentSelfLink = TagFactoryService.generateSelfLink(tagState);
 
+        return tagState;
+    }
+
+    public static TagState newTagState(String key, String value, EnumSet<TagOrigin> origin,
+            List<String> tenantLinks) {
+
+        final TagState tagState = new TagState();
+
+        tagState.key = key == null ? "" : key;
+        tagState.value = value == null ? "" : value;
+        tagState.origins = origin;
+        tagState.deleted = Boolean.FALSE;
+        tagState.tenantLinks = tenantLinks;
         tagState.documentSelfLink = TagFactoryService.generateSelfLink(tagState);
 
         return tagState;
@@ -337,5 +368,4 @@ public class TagsUtil {
 
         return service.sendWithDeferredResult(updatePatch).thenApply(ignore -> (Void) null);
     }
-
 }

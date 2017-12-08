@@ -17,6 +17,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
 
 import java.util.EnumSet;
 import java.util.UUID;
@@ -152,6 +156,7 @@ public class TagServiceTest extends Suite {
         public void testExternalTagPost() throws Throwable {
             TagService.TagState startState = buildRandomStartState();
             startState.external = Boolean.TRUE;
+            startState.origins = EnumSet.of(DISCOVERED);
             TagService.TagState returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
@@ -159,18 +164,26 @@ public class TagServiceTest extends Suite {
             assertThat(returnState.key, is(startState.key));
             assertThat(returnState.value, is(startState.value));
             assertThat(returnState.external, is(startState.external));
+            assertTrue(returnState.origins.contains(DISCOVERED));
 
             startState.external = null;
+            startState.origins = null;
             returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
             assertThat(returnState.documentVersion, is(0L));
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(Boolean.TRUE));
+            assertTrue(returnState.origins.contains(DISCOVERED));
         }
 
         @Test
         public void testSwitchExternalToLocalTagPost() throws Throwable {
             TagService.TagState startState = buildRandomStartState();
             startState.external = Boolean.TRUE;
+            startState.origins = EnumSet.of(DISCOVERED);
             TagService.TagState returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
@@ -178,8 +191,10 @@ public class TagServiceTest extends Suite {
             assertThat(returnState.key, is(startState.key));
             assertThat(returnState.value, is(startState.value));
             assertThat(returnState.external, is(startState.external));
+            assertThat(returnState.origins, is(startState.origins));
 
             startState.external = Boolean.FALSE;
+            startState.origins.add(SYSTEM);
             returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
@@ -187,12 +202,15 @@ public class TagServiceTest extends Suite {
             assertThat(returnState.key, is(startState.key));
             assertThat(returnState.value, is(startState.value));
             assertThat(returnState.external, is(startState.external));
+            assertTrue(returnState.origins.contains(SYSTEM));
+            assertTrue(returnState.origins.contains(DISCOVERED));
         }
 
         @Test
         public void testSwitchLocalToExternalTagPost() throws Throwable {
             TagService.TagState startState = buildRandomStartState();
             startState.external = Boolean.FALSE;
+            startState.origins = EnumSet.of(SYSTEM);
             TagService.TagState returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
@@ -200,12 +218,20 @@ public class TagServiceTest extends Suite {
             assertThat(returnState.key, is(startState.key));
             assertThat(returnState.value, is(startState.value));
             assertThat(returnState.external, is(startState.external));
+            assertTrue(returnState.origins.contains(SYSTEM));
 
             startState.external = Boolean.TRUE;
+            startState.origins.add(DISCOVERED);
             returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
-            assertThat(returnState.documentVersion, is(0L));
+            assertNotNull(returnState);
+            assertThat(returnState.documentVersion, is(1L));
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(Boolean.FALSE));
+            assertTrue(returnState.origins.contains(SYSTEM));
+            assertTrue(returnState.origins.contains(DISCOVERED));
         }
 
         @Test
@@ -222,6 +248,7 @@ public class TagServiceTest extends Suite {
 
             assertThat(returnState.documentVersion, is(0L));
             startState.external = Boolean.TRUE;
+            startState.origins = EnumSet.of(DISCOVERED);
             TagService.TagState updatedReturnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);

@@ -28,6 +28,9 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCount;
 
@@ -2664,9 +2667,30 @@ public class TestAWSSetupUtils {
                 .addKindFieldClause(TagService.TagState.class)
                 .addFieldClause(TagService.TagState.FIELD_NAME_KEY,
                         PhotonModelConstants.TAG_KEY_TYPE)
-                .addFieldClause(TagService.TagState.FIELD_NAME_EXTERNAL, false)
                 .addFieldClause(TagService.TagState.FIELD_NAME_VALUE, type)
                 .build();
+
+        Query externalQuery = new Query()
+                .setTermPropertyName(TagService.TagState.FIELD_NAME_EXTERNAL)
+                .setTermMatchValue(Boolean.FALSE.toString());
+        externalQuery.occurance = Query.Occurance.SHOULD_OCCUR;
+
+        Query originQuery = new Query().addBooleanClause(
+                Query.Builder.create()
+                        .addCollectionItemClause(TagService.TagState.FIELD_NAME_ORIGIN, DISCOVERED.toString(),
+                                Occurance.MUST_NOT_OCCUR)
+                        .addCollectionItemClause(TagService.TagState.FIELD_NAME_ORIGIN, SYSTEM.toString(),
+                                Query.Occurance.SHOULD_OCCUR)
+                        .addCollectionItemClause(TagService.TagState.FIELD_NAME_ORIGIN, USER_DEFINED.toString(),
+                                Query.Occurance.SHOULD_OCCUR)
+                        .build())
+                .setOccurance(Query.Occurance.SHOULD_OCCUR);
+
+        Query originOrExternalQuery = new Query().addBooleanClause(externalQuery)
+                .addBooleanClause(originQuery)
+                .setOccurance(Query.Occurance.MUST_OCCUR);
+
+        query.addBooleanClause(originOrExternalQuery);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)

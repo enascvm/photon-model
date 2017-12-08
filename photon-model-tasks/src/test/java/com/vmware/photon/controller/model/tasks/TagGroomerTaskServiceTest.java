@@ -17,7 +17,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
+import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
+
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +37,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin;
 import com.vmware.photon.controller.model.tasks.TagGroomerTaskService.TagDeletionRequest;
 
 import com.vmware.xenon.common.BasicTestCase;
@@ -82,11 +87,15 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
      */
     @Test
     public void testTagStateGroomerOnePageOfResults() throws Throwable {
-        List<String> usedTags = createTagStates("usedExt-", TAG_COUNT_15, true);
-        usedTags.addAll(createTagStates("usedInt-", TAG_COUNT_15, false));
+        List<String> usedTags = createTagStates("usedExt-", TAG_COUNT_15, true,
+                EnumSet.of(DISCOVERED));
+        usedTags.addAll(createTagStates("usedInt-", TAG_COUNT_15, false,
+                EnumSet.of(SYSTEM)));
 
-        List<String> unusedTagsExt = createTagStates("unusedExt-",10, true);
-        List<String> unusedTagsInt = createTagStates("unusedInt-",7, false);
+        List<String> unusedTagsExt = createTagStates("unusedExt-",10, true,
+                EnumSet.of(DISCOVERED));
+        List<String> unusedTagsInt = createTagStates("unusedInt-",7, false,
+                EnumSet.of(SYSTEM));
         int totalTagsCreated = usedTags.size() + unusedTagsExt.size() + unusedTagsInt.size();
 
         createComputesWithTags(30, usedTags);
@@ -111,11 +120,15 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
 
     @Test
     public void testTagStateGroomerMultiplePagesOfResults() throws Throwable {
-        List<String> usedTags = createTagStates("usedExt-", TAG_COUNT_200, true);
-        usedTags.addAll(createTagStates("usedInt-", TAG_COUNT_200, false));
+        List<String> usedTags = createTagStates("usedExt-", TAG_COUNT_200, true,
+                EnumSet.of(DISCOVERED));
+        usedTags.addAll(createTagStates("usedInt-", TAG_COUNT_200, false,
+                EnumSet.of(SYSTEM)));
 
-        List<String> unusedTagsExt = createTagStates("unusedExt-",10, true);
-        List<String> unusedTagsInt = createTagStates("unusedInt-",8, false);
+        List<String> unusedTagsExt = createTagStates("unusedExt-",10, true,
+                EnumSet.of(DISCOVERED));
+        List<String> unusedTagsInt = createTagStates("unusedInt-",8, false,
+                EnumSet.of(SYSTEM));
         int totalTagsCreated = usedTags.size() + unusedTagsExt.size() + unusedTagsInt.size();
 
         createComputesWithTags(400, usedTags);
@@ -141,12 +154,12 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     /**
      * Create n tagLinks
      */
-    private List<String> createTagStates(String prefix, int count, boolean external)
-            throws Throwable {
+    private List<String> createTagStates(String prefix, int count, boolean external,
+            EnumSet<TagOrigin> origin) throws Throwable {
         List<String> tags = new ArrayList<>();
 
         for (int i = 0; i < count; i++) {
-            TagState tag = buildTagState(prefix, i, i, external);
+            TagState tag = buildTagState(prefix, i, i, external, origin);
             Operation op = Operation
                     .createPost(UriUtils.buildUri(this.host, TagService.FACTORY_LINK))
                     .setBody(tag);
@@ -245,12 +258,13 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     /**
      * Create tagState object
      */
-    private static TagState buildTagState(String prefix, int k, int v, boolean external)
-            throws Throwable {
+    private static TagState buildTagState(String prefix, int k, int v, boolean external,
+            EnumSet<TagOrigin> origin) throws Throwable {
         TagService.TagState tag = new TagService.TagState();
         tag.key = prefix + Integer.toString(k);
         tag.value = prefix + Integer.toString(v);
         tag.external = external;
+        tag.origins.addAll(origin);
         tag.deleted = Boolean.FALSE;
         return tag;
     }
@@ -274,6 +288,7 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     private void assertUnusedTags(List<TagState> tags) {
         for (TagState unusedTag : tags) {
             assertTrue(unusedTag.external);
+            assertFalse(unusedTag.origins.contains(DISCOVERED.toString()));
             assertTrue(unusedTag.deleted);
         }
     }
