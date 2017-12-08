@@ -114,7 +114,7 @@ public class AzureEndpointAdapterService extends StatelessService {
             // Azure end-point does support public images enumeration
             e.endpointProperties.put(SUPPORT_PUBLIC_IMAGES, Boolean.TRUE.toString());
             // Azure end-point does have the notion of datastores (storage accounts).
-            e.endpointProperties.put(SUPPORT_DATASTORES, Boolean.TRUE.toString());
+            e.endpointProperties.put(SUPPORT_DATASTORES, Boolean.FALSE.toString());
         };
     }
 
