@@ -1,7 +1,8 @@
 # CHANGELOG
 
-## 0.6.47-SNAPSHOT
-
+## 0.6.47
+* DeDup feature: Resources enumerated only once for 
+  same endpoints, IAM accounts added multiple times.
 
 ## 0.6.46
 * Delete stale TagState resources.
