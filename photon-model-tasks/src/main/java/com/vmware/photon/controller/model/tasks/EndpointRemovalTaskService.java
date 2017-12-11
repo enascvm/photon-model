@@ -488,7 +488,7 @@ public class EndpointRemovalTaskService
     private void removeAssociatedStaleDocuments(EndpointRemovalTaskState task, SubStage nextStage) {
         ResourceGroomerTaskService.EndpointResourceDeletionRequest state = new
                 ResourceGroomerTaskService.EndpointResourceDeletionRequest();
-        state.tenantLinks = new HashSet<>(task.tenantLinks);
+        state.tenantLinks = task.tenantLinks != null ? new HashSet<>(task.tenantLinks) : null;
         state.documentSelfLink = getResourceGroomerTaskUri(task.endpointLink);
 
         if (task.isMock || task.disableGroomer) {
