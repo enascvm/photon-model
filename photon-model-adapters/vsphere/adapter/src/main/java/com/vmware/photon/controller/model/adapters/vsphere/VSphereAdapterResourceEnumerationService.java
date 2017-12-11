@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_PROP_STORAGE_SHARED;
 import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_PORTGROUP;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_AVAILABLE_BYTES;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
@@ -455,6 +456,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             TaskManager mgr) {
         MoRefKeyedMap<NetworkOverlay> networks = new MoRefKeyedMap<>();
         List<HostSystemOverlay> hosts = new ArrayList<>();
+        Set<String> sharedDatastores = new HashSet<>();
         List<DatastoreOverlay> datastores = new ArrayList<>();
         List<ComputeResourceOverlay> clusters = new ArrayList<>();
         List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
@@ -502,6 +504,17 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
+        // Process HostSystem list to get the datastore access level whether local / shared
+        try {
+            for (HostSystemOverlay hs : hosts) {
+                sharedDatastores.addAll(client.getDatastoresHostMountInfo(hs));
+            }
+        } catch (Exception e) {
+            // We can continue as we will not know whether the datastore is local or shared which
+            // is ok to proceed.
+            logWarning(() -> "Error processing datastore host mount information" + ": " + e.toString());
+        }
+
         try {
             List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
             if (!pbmProfiles.isEmpty()) {
@@ -527,6 +540,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ctx.expectDatastoreCount(datastores.size());
         for (DatastoreOverlay ds : datastores) {
+            ds.setMultipleHostAccess(sharedDatastores.contains(ds.getName()));
             processFoundDatastore(ctx, ds);
         }
 
@@ -1346,7 +1360,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         CustomProperties.of(res)
                 .put(CustomProperties.MOREF, ds.getId())
                 .put(STORAGE_USED_BYTES, ds.getCapacityBytes() - ds.getFreeSpaceBytes())
-                .put(STORAGE_AVAILABLE_BYTES, ds.getFreeSpaceBytes());
+                .put(STORAGE_AVAILABLE_BYTES, ds.getFreeSpaceBytes())
+                .put(CUSTOM_PROP_STORAGE_SHARED, ds.isMultipleHostAccess());
 
         return res;
     }

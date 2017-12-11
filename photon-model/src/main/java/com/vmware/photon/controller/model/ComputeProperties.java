@@ -97,6 +97,11 @@ public class ComputeProperties {
      */
     public static final String CUSTOM_PROP_COMPUTE_AWAIT_IP = "awaitIp";
 
+    /**
+     * Marks whether storage resource is local to the host or shared storage.
+     */
+    public static final String CUSTOM_PROP_STORAGE_SHARED = "__isShared";
+
     public enum OSType {
         WINDOWS, LINUX;
     }

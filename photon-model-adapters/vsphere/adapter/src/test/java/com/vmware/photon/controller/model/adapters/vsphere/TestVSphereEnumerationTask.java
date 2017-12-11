@@ -17,6 +17,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_PROP_STORAGE_SHARED;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_TYPE_KEY;
 
 import java.io.IOException;
@@ -212,6 +213,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                             .fromJson(result.documents.get(result.documentLinks.get(0)),
                                     StorageDescriptionService.StorageDescription.class);
                     assertNotNull(sd.tagLinks);
+                    assertNotNull(sd.customProperties.get(CUSTOM_PROP_STORAGE_SHARED));
                 }
             });
 

@@ -18,6 +18,8 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ObjectContent;
 
 public class DatastoreOverlay extends AbstractOverlay {
+    private boolean multipleHostAccess;
+
     protected DatastoreOverlay(ObjectContent cont) {
         super(cont);
     }
@@ -36,5 +38,13 @@ public class DatastoreOverlay extends AbstractOverlay {
 
     public long getFreeSpaceBytes() {
         return (long) getOrDefault(VimPath.ds_summary_freeSpace, 0L);
+    }
+
+    public boolean isMultipleHostAccess() {
+        return this.multipleHostAccess;
+    }
+
+    public void setMultipleHostAccess(boolean multipleHostAccess) {
+        this.multipleHostAccess = multipleHostAccess;
     }
 }

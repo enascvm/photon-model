@@ -16,8 +16,10 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import com.vmware.pbm.InvalidArgumentFaultMsg;
 import com.vmware.pbm.PbmFaultFaultMsg;
@@ -29,7 +31,10 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.vim25.ArrayOfHostFileSystemMountInfo;
+import com.vmware.vim25.HostVmfsVolume;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
@@ -49,8 +54,10 @@ import com.vmware.vim25.WaitOptions;
  */
 public class EnumerationClient extends BaseHelper {
     public static final int DEFAULT_FETCH_PAGE_SIZE = 100;
+    private static final String HOST_DS_MOUNT_INFO = "config.fileSystemVolume.mountInfo";
 
     private final ManagedObjectReference datacenter;
+    private final GetMoRef getMoRef;
 
     public EnumerationClient(Connection connection, ComputeStateWithDescription parent) {
         this(connection, parent, null);
@@ -71,10 +78,31 @@ public class EnumerationClient extends BaseHelper {
             throw new IllegalStateException("Datacenter cannot be extracted from compute resources"
                     + " and is not explicitly provided");
         }
+        this.getMoRef = new GetMoRef(connection);
     }
 
     public ManagedObjectReference getDatacenter() {
         return this.datacenter;
+    }
+
+    /**
+     * Get the mount info of all the datastores that are connected to a given host.
+     */
+    public Set<String> getDatastoresHostMountInfo(HostSystemOverlay hs)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        Set<String> sharedDs = new HashSet<>();
+        ArrayOfHostFileSystemMountInfo mountInfo = this.getMoRef.entityProp(hs.getId(), HOST_DS_MOUNT_INFO);
+        if (mountInfo != null) {
+            mountInfo.getHostFileSystemMountInfo().stream()
+                    .filter(fsMountInfo -> fsMountInfo.getVolume() instanceof HostVmfsVolume)
+                    .forEach(fsMountInfo -> {
+                        HostVmfsVolume vmfsVol = (HostVmfsVolume) fsMountInfo.getVolume();
+                        if (!vmfsVol.isLocal()) {
+                            sharedDs.add(vmfsVol.getName());
+                        }
+                    });
+        }
+        return sharedDs;
     }
 
     private ManagedObjectReference createPropertyCollector() throws RuntimeFaultFaultMsg {
