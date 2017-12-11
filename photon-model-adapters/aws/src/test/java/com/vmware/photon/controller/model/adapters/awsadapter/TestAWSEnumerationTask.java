@@ -92,9 +92,14 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.AttachVolumeRequest;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
+import com.amazonaws.services.ec2.model.CreateVolumeRequest;
+import com.amazonaws.services.ec2.model.CreateVolumeResult;
+import com.amazonaws.services.ec2.model.DetachVolumeRequest;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.ec2.model.VolumeType;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.BucketTaggingConfiguration;
@@ -157,6 +162,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Test to enumerate instances on AWS and tear it down. The test creates VM using the Provisioning
@@ -248,6 +254,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private EbsBlockDevice ebsBlockDevice;
     private String snapshotId;
     private String diskId;
+    private int initialEbsDiskLinkCount;
+    private String testEbsId;
     private boolean isTestBucketPatched = false;
 
     @Rule
@@ -307,6 +315,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         if (this.bucketToBeDeleted != null) {
             this.s3Client.deleteBucket(this.bucketToBeDeleted);
         }
+        if (this.testEbsId != null) {
+            DetachVolumeRequest detachVolumeRequest = new DetachVolumeRequest().withVolumeId(this.testEbsId);
+            this.client.detachVolume(detachVolumeRequest);
+        }
         tearDownAwsVMs();
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
@@ -321,7 +333,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     // Runs the enumeration task on the AWS endpoint to list all the instances on the endpoint.
     @Test
     public void testEnumeration() throws Throwable {
-
         this.host.log("Running test: " + this.currentTestName.getMethodName());
 
         ComputeState vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
@@ -374,6 +385,18 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_INITIAL);
+
+        // Get a count of how many EBS disks are attached to a VM initially.
+        ComputeState csForDiskLinkValidation = getComputeStateFromId(this.instancesToCleanUp.get(0));
+        this.initialEbsDiskLinkCount = csForDiskLinkValidation.diskLinks.size();
+
+        // Create a volume to be attached to the VM later.
+        CreateVolumeRequest createVolumeRequest = new CreateVolumeRequest()
+                .withAvailabilityZone(csForDiskLinkValidation.zoneId)
+                .withVolumeType(VolumeType.Gp2)
+                .withSize(10);
+        CreateVolumeResult createVolumeResult = this.client.createVolume(createVolumeRequest);
+        this.testEbsId = createVolumeResult.getVolume().getVolumeId();
 
         // Validate if the S3 bucket is enumerated.
         validateS3Enumeration(count1, count3);
@@ -439,6 +462,17 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_STOP_VM);
 
+        // Validate that test VM still has same number of diskLinks.
+        csForDiskLinkValidation = getComputeStateFromId(this.instancesToCleanUp.get(0));
+        assertEquals(csForDiskLinkValidation.diskLinks.size(), this.initialEbsDiskLinkCount);
+
+        // Attach volume to test VM.
+        AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
+                .withVolumeId(createVolumeResult.getVolume().getVolumeId())
+                .withInstanceId(csForDiskLinkValidation.id)
+                .withDevice("/dev/sdh");
+        this.client.attachVolume(attachVolumeRequest);
+
         // Validate stale resources have been deleted
         validateStaleResourceStateDeletion(staleSubnetDocumentSelfLink, staleNetworkDocumentSelfLink);
 
@@ -453,6 +487,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_ADDITIONAL_VM);
+
+        // Check that newly attached volume got enumerated and the instance now has 1 more diskLink than before.
+        csForDiskLinkValidation = getComputeStateFromId(this.instancesToCleanUp.get(0));
+        assertEquals(csForDiskLinkValidation.diskLinks.size(), this.initialEbsDiskLinkCount + 1);
 
         // Validate that diskState of S3 bucket with null region got deleted
         validateBucketStateDeletionForNullRegion();
@@ -475,6 +513,16 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 ZERO);
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_ADDITIONAL_VM);
+
+        // Validate that we do not add duplicate diskLinks after multiple enumerations.
+        csForDiskLinkValidation = getComputeStateFromId(this.instancesToCleanUp.get(0));
+        assertEquals(csForDiskLinkValidation.diskLinks.size(), this.initialEbsDiskLinkCount + 1);
+
+        // Detach and delete test EBS volume.
+        DetachVolumeRequest detachVolumeRequest = new DetachVolumeRequest().withVolumeId(this.testEbsId);
+        this.client.detachVolume(detachVolumeRequest);
+        this.testEbsId = null;
+
         // One additional compute state and no additional compute description should be
         // created. 1) compute host CD 2) t2.nano-system generated 3) t2.micro-system generated
         // 4) t2.micro-created from test code.
@@ -514,6 +562,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         queryDocumentsAndAssertExpectedCount(this.host,
                 count3, DiskService.FACTORY_LINK, false);
 
+        // Validate that detached test EBS is removed from diskLinks of test instance.
+        csForDiskLinkValidation = getComputeStateFromId(this.instancesToCleanUp.get(0));
+        assertEquals(csForDiskLinkValidation.diskLinks.size(), this.initialEbsDiskLinkCount);
+
         // validate the internal tag tor type=ec2_instance is set
         // query for the existing internal tag state for type=ec2_instance.
         // There should be only one internal tag.
@@ -535,6 +587,31 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         validateTagInEntity(computesResult3, ComputeState.class, ec2_instance.toString());
         // Validate that the document for the deleted S3 bucket is deleted after enumeration.
         validateS3Enumeration(ZERO, ZERO);
+    }
+
+    private ComputeState getComputeStateFromId(String instanceId) {
+        Query query = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_ID, instanceId)
+                .build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
+
+        Operation queryCompute = Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+                .setReferer(this.host.getUri())
+                .setBody(queryTask);
+
+        Operation compute = this.host.waitForResponse(queryCompute);
+
+        QueryTask response = compute.getBody(QueryTask.class);
+
+        ComputeState computeState = Utils.fromJson(response.results.documents.entrySet()
+                .iterator().next().getValue(), ComputeState.class);
+
+        return computeState;
     }
 
     /**
