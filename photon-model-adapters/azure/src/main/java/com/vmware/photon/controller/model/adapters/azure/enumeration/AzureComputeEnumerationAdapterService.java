@@ -22,7 +22,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.injectOperationContext;
-import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
@@ -180,7 +179,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // Azure clients
         AzureSdkClients azureSdkClients;
 
-        ResourceState resourceDeletionState;
         Map<String, RegionInfo> regions = new ConcurrentHashMap<>();
         Set<String> regionIds = new HashSet<>();
 
@@ -191,8 +189,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             this.stage = EnumerationStages.CLIENT;
             this.operation = op;
-            this.resourceDeletionState = getDeletionState(request.original
-                    .deletedResourceExpirationMicros);
         }
 
         @Override
@@ -648,8 +644,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             List<Operation> operations = new ArrayList<>();
             for (Object s : queryTask.results.documents.values()) {
-                ComputeState computeState = Utils
-                        .fromJson(s, ComputeState.class);
+                ComputeState computeState = Utils.fromJson(s, ComputeState.class);
                 String vmId = computeState.id;
 
                 // Since we only update disks during update, some compute states might be
@@ -671,8 +666,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     // localResourceState. If the localResourceState isn't associated with any other
                     // endpointLink, we issue a delete then
                     Operation dOp = PhotonModelUtils
-                            .createRemoveEndpointLinksOperation(this, ctx.request.endpointLink, s,
-                                    computeState.documentSelfLink, computeState.endpointLinks);
+                            .createRemoveEndpointLinksOperation(
+                                    this, ctx.request.endpointLink, computeState);
 
                     if (dOp != null) {
                         dOp.sendWith(getHost());
@@ -690,10 +685,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                         } else {
                                             DiskState diskState = op.getBody(DiskState.class);
                                             Operation diskOp = PhotonModelUtils
-                                                    .createRemoveEndpointLinksOperation(this,
+                                                    .createRemoveEndpointLinksOperation(
+                                                            this,
                                                             ctx.request.endpointLink,
-                                                            op.getBodyRaw(), dl,
-                                                            diskState.endpointLinks);
+                                                            diskState);
 
                                             if (diskOp != null) {
                                                 diskOp.sendWith(getHost());
@@ -719,10 +714,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                             NetworkInterfaceState networkInterfaceState = op
                                                     .getBody(NetworkInterfaceState.class);
                                             Operation nicOp = PhotonModelUtils
-                                                    .createRemoveEndpointLinksOperation(this,
+                                                    .createRemoveEndpointLinksOperation(
+                                                            this,
                                                             ctx.request.endpointLink,
-                                                            op.getBodyRaw(), nil,
-                                                            networkInterfaceState.endpointLinks);
+                                                            networkInterfaceState);
                                             if (nicOp != null) {
                                                 nicOp.sendWith(getHost());
                                                 logFine(() -> String
@@ -1521,9 +1516,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .filter(localNic -> !remoteNicIds.contains(localNic.id))
                 .forEach(localNic -> {
                     Operation upOp = PhotonModelUtils.createRemoveEndpointLinksOperation
-                            (this, ctx.request.endpointLink, Utils.toJson(localNic),
-                                    localNic.documentSelfLink,
-                                    localNic.endpointLinks);
+                            (this, ctx.request.endpointLink, localNic);
                     if (upOp != null) {
                         CompletionHandler completionHandler = upOp.getCompletion();
                         upOp.setCompletion(null);

@@ -48,6 +48,8 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
 
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.ENDPOINT_LINK_EXPLICIT_SUPPORT;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
@@ -59,6 +61,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -149,6 +152,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
@@ -1732,26 +1736,41 @@ public class AzureTestUtil {
      * @param isDisassociated
      *            whether to assert if a resource exists or not.
      */
-    public static void assertResourceDisassociated(VerificationHost host, String factoryLink,
-            String name, boolean isDisassociated) {
+    public static void assertResourceDisassociated(
+            VerificationHost host, String factoryLink, String name, boolean isDisassociated) {
 
         ServiceDocumentQueryResult result = host.getExpandedFactoryState(
                 UriUtils.buildUri(host, factoryLink));
 
         boolean disassociated = false;
-        for (Object document : result.documents.values()) {
-            ResourceState state = Utils.fromJson(document, ResourceState.class);
 
-            if (name.equals(state.name) && state.endpointLinks.isEmpty()) {
-                disassociated = true;
-                break;
+        for (Object document : result.documents.values()) {
+            // Read doc as ServiceDocument to access its 'documentKind'
+            ServiceDocument serviceDoc = Utils.fromJson(document, ServiceDocument.class);
+
+            Class<? extends ResourceState> resourceClass = ENDPOINT_LINK_EXPLICIT_SUPPORT
+                    .stream()
+                    .filter(clazz -> serviceDoc.documentKind.equals(Utils.buildKind(clazz)))
+                    .findFirst()
+                    .orElse(null);
+
+            if (resourceClass != null) {
+                // Read doc as ResourceState to access its 'endpointLinks'
+                ResourceState resource = Utils.fromJson(document, resourceClass);
+
+                if (Objects.equals(name, resource.name) && resource.endpointLinks.isEmpty()) {
+                    String endpointLink = PhotonModelUtils.getEndpointLink(resource);
+
+                    if (endpointLink == null || endpointLink.isEmpty()) {
+                        disassociated = true;
+                        break;
+                    }
+                }
             }
         }
 
-        assertEquals("Expected: " + isDisassociated + ", but was: " + disassociated, isDisassociated,
-                disassociated);
+        assertEquals("isDisassociated", isDisassociated, disassociated);
     }
-
     /**
      * Validate DiskStates are populated with the appropriate type tagLinks
      */

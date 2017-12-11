@@ -362,7 +362,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
                             Collections.singletonList(this.context.request.original.endpointLink));
             Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
-                    (ResourceState.FIELD_NAME_ENDPOINT_LINKS, Collections.EMPTY_LIST);
+                    (ResourceState.FIELD_NAME_ENDPOINT_LINKS, Collections.emptyList());
 
             ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
                     .create(collectionsToAddMap, collectionsToRemoveMap);

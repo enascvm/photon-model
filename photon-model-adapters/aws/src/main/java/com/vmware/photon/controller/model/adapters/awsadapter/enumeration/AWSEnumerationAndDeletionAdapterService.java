@@ -488,11 +488,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         // List<Operation> updateOperations = new ArrayList<>();
         // Create delete operations for the compute states that have to be deleted from the system.
         for (ComputeState computeStateToDelete : context.instancesToBeDeleted) {
-            Operation csUpdateOp = PhotonModelUtils.createRemoveEndpointLinksOperation(this,
-                    context.request.original.endpointLink, Utils.toJson(computeStateToDelete),
-                    computeStateToDelete
-                            .documentSelfLink,
-                    computeStateToDelete.endpointLinks);
+            Operation csUpdateOp = PhotonModelUtils.createRemoveEndpointLinksOperation(
+                    this, context.request.original.endpointLink, computeStateToDelete);
             if (csUpdateOp != null) {
                 csUpdateOp.sendWith(getHost());
             }
@@ -511,11 +508,10 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                                 NetworkInterfaceState networkInterfaceState =
                                         o.getBody(NetworkInterfaceState.class);
                                 Operation nsUpdateOp = PhotonModelUtils
-                                        .createRemoveEndpointLinksOperation(this, context
-                                                        .request.original.endpointLink,
-                                                o.getBodyRaw(),
-                                                networkLinkToDelete,
-                                                networkInterfaceState.endpointLinks);
+                                        .createRemoveEndpointLinksOperation(
+                                                this,
+                                                context.request.original.endpointLink,
+                                                networkInterfaceState);
                                 if (nsUpdateOp != null) {
                                     nsUpdateOp.sendWith(getHost());
                                 }
@@ -536,10 +532,10 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                                 }
                                 DiskState diskState = o.getBody(DiskState.class);
                                 Operation dsUpdateOp = PhotonModelUtils
-                                        .createRemoveEndpointLinksOperation(this,
+                                        .createRemoveEndpointLinksOperation(
+                                                this,
                                                 context.request.original.endpointLink,
-                                                o.getBodyRaw(), diskLinkToDelete,
-                                                diskState.endpointLinks);
+                                                diskState);
                                 if (dsUpdateOp != null) {
                                     dsUpdateOp.sendWith(getHost());
                                 }

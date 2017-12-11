@@ -17,7 +17,6 @@ import static com.vmware.photon.controller.model.resources.EndpointService.ENDPO
 import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE;
 import static com.vmware.photon.controller.model.tasks.monitoring.StatsUtil.SEPARATOR;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
-
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
@@ -31,7 +30,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -395,12 +393,10 @@ public class EndpointRemovalTaskService
             // for each resource link in the results, get the expanded document
             // and issue an update request to its associated instance service.
             for (String selfLink : queryTask.results.documentLinks) {
-                Object document = queryTask.results.documents
-                        .get(selfLink);
+                Object document = queryTask.results.documents.get(selfLink);
                 ResourceState resourceState = Utils.fromJson(document, ResourceState.class);
-                Set<String> endpointLinks = resourceState.endpointLinks;
-                Operation operation = PhotonModelUtils.createRemoveEndpointLinksOperation(this,
-                        endpointLink, document, selfLink, endpointLinks);
+                Operation operation = PhotonModelUtils.createRemoveEndpointLinksOperation(
+                        this, endpointLink, resourceState);
                 if (operation != null) {
                     updateOperations.add(operation);
                 }

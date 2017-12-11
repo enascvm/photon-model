@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -38,35 +39,37 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
-import com.vmware.photon.controller.model.resources.LoadBalancerService;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
+import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.resources.RouterService;
+import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ReflectionUtils;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyDescription;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 public class PhotonModelUtils {
 
     /**
-     * The set of ResourceStates which support {@code endpointLink} property through
-     * <b>explicit</b>field.
+     * The set of ResourceStates which support {@code endpointLink} property through <b>explicit</b>
+     * field.
      */
     public static final Set<Class<? extends ResourceState>> ENDPOINT_LINK_EXPLICIT_SUPPORT;
 
@@ -77,14 +80,17 @@ public class PhotonModelUtils {
         set.add(ComputeStateWithDescription.class);
         set.add(DiskState.class);
         set.add(ImageState.class);
+        set.add(LoadBalancerDescription.class);
+        set.add(LoadBalancerState.class);
         set.add(NetworkInterfaceDescription.class);
         set.add(NetworkInterfaceState.class);
         set.add(NetworkInterfaceStateWithDescription.class);
         set.add(NetworkState.class);
+        set.add(ResourceGroupState.class);
+        set.add(RouterState.class);
         set.add(SecurityGroupState.class);
         set.add(StorageDescription.class);
         set.add(SubnetState.class);
-        set.add(ResourceGroupState.class);
 
         ENDPOINT_LINK_EXPLICIT_SUPPORT = Collections.unmodifiableSet(set);
     }
@@ -102,6 +108,41 @@ public class PhotonModelUtils {
         ENDPOINT_LINK_CUSTOM_PROP_SUPPORT = Collections.unmodifiableSet(set);
     }
 
+    /**
+     * Return {@code endpointLink} property of passed state, if presented.
+     *
+     * @see #ENDPOINT_LINK_EXPLICIT_SUPPORT
+     */
+    public static <T extends ServiceDocument> String getEndpointLink(T state) {
+
+        if (state == null) {
+            return null;
+        }
+
+        if (ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(state.getClass())) {
+
+            ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
+                    .buildDescription(state.getClass());
+
+            return (String) ReflectionUtils.getPropertyValue(
+                    sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK),
+                    state);
+        }
+
+        return null;
+    }
+
+    /**
+     * Set passed end-point link to:
+     * <ul>
+     * <li>explicit {@code endpointLink} property of passed state, if presented</li>
+     * <li>{@code __endpointLink} custom property of passed state, if supported</li>
+     * <li>explicit {@code endpointLinks} property of passed state, if presented</li>
+     * </ul>
+     *
+     * @see #ENDPOINT_LINK_EXPLICIT_SUPPORT
+     * @see #ENDPOINT_LINK_CUSTOM_PROP_SUPPORT
+     */
     public static <T extends ServiceDocument> T setEndpointLink(T state, String endpointLink) {
 
         if (state == null) {
@@ -110,6 +151,7 @@ public class PhotonModelUtils {
 
         ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
                 .buildDescription(state.getClass());
+
         if (ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(state.getClass())) {
 
             ReflectionUtils.setPropertyValue(
@@ -127,179 +169,91 @@ public class PhotonModelUtils {
             }
         }
 
-        //This method will assign the value of the endpointLinks if it does not exist for the given
-        //resource OR it will merge it with the existing collection if already set.
-        Set<String> endpointLinks = new HashSet<>();
-        endpointLinks.add(endpointLink);
-        ReflectionUtils.setOrUpdatePropertyValue(
-                sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS),
-                state,
-                endpointLinks);
+        final PropertyDescription endpointLinksDesc = sdDesc.propertyDescriptions.get(
+                PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS);
+
+        if (endpointLinksDesc != null && endpointLink != null && !endpointLink.isEmpty()) {
+            // This method will assign the value of the endpointLinks if it does not exist for the
+            // given resource OR it will merge it with the existing collection if already set.
+            Set<String> endpointLinks = new HashSet<>();
+            endpointLinks.add(endpointLink);
+
+            ReflectionUtils.setOrUpdatePropertyValue(endpointLinksDesc, state, endpointLinks);
+        }
 
         return state;
     }
 
     /**
-     * Utility method to create an operation to remove an endpointLink from the endpointLinks set
-     * of the resourceState and also update the endpointLink property of the specific resourceState
+     * Wait\Block for {@link DeferredResult} to complete.
+     * <p>
+     * <b>Note</b>: Use with care, for example within tests.
      */
-    public static Operation createRemoveEndpointLinksOperation(Service service, String
-            endpointLink, Object document, String selfLink, Set<String> endpointLinks) {
-        /* endpointLink is also updated to provide backward compatibility to Tango team's Day 2 operation.
-        The verbose code to update endpointLink can be cleaned up once the endpointLink is completely
-        deprecated within photon-model. */
+    public static <T> T waitToComplete(DeferredResult<T> dr) {
+        return ((CompletableFuture<T>) dr.toCompletionStage()).join();
+    }
 
-        if (endpointLinks == null || !endpointLinks.contains(endpointLink)) {
+    /**
+     * Utility method to create an operation to remove an endpointLink from the endpointLinks set of
+     * the resourceState and also update the endpointLink property of the specific resourceState
+     */
+    public static Operation createRemoveEndpointLinksOperation(
+            Service service, String endpointLink, ResourceState resource) {
+
+        /*
+         * endpointLink is also updated to provide backward compatibility to Tango team's Day 2
+         * operation. The verbose code to update endpointLink can be cleaned up once the
+         * endpointLink is completely deprecated within photon-model.
+         */
+
+        if (resource.endpointLinks == null || !resource.endpointLinks.contains(endpointLink)) {
             return null;
         }
 
         Map<String, Collection<Object>> endpointsToRemoveMap = Collections.singletonMap(
                 EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
                 Collections.singleton(endpointLink));
-        ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest =
-                ServiceStateCollectionUpdateRequest.create(null, endpointsToRemoveMap);
+        ServiceStateCollectionUpdateRequest serviceStateCollectionUpdateRequest = ServiceStateCollectionUpdateRequest
+                .create(null, endpointsToRemoveMap);
 
         return Operation
-                .createPatch(UriUtils.buildUri(service.getHost(), selfLink))
+                .createPatch(UriUtils.buildUri(service.getHost(), resource.documentSelfLink))
                 .setReferer(service.getUri())
                 .setBody(serviceStateCollectionUpdateRequest)
-                .setCompletion(
-                        (updateOp, exception) -> {
-                            if (exception != null) {
-                                service.getHost().log(Level.WARNING, () -> String.format("PATCH " +
-                                                "to instance service %s, failed: %s",
-                                        updateOp.getUri(), exception.toString()));
-                                return;
-                            }
+                .setCompletion((updateOp, exception) -> {
+                    if (exception != null) {
+                        service.getHost().log(Level.WARNING, () -> String.format("PATCH " +
+                                "to instance service %s, failed: %s",
+                                updateOp.getUri(), exception.toString()));
+                        return;
+                    }
 
-                            service.getHost().log(Level.INFO, () -> String.format("PATCH to " +
-                                            "update endpointLink in endpointLinks " +
-                                            "to instance service %s finished successfully",
-                                    updateOp.getUri()));
+                    service.getHost().log(Level.INFO, () -> String.format("PATCH to " +
+                            "update endpointLink in endpointLinks " +
+                            "to instance service %s finished successfully",
+                            updateOp.getUri()));
 
-                            String resourceEndpointLink;
-                            ServiceDocument serviceDocument = Utils.fromJson(document,
-                                    ServiceDocument.class);
-                            String documentKind = serviceDocument.documentKind;
-                            if (documentKind.equals(Utils.buildKind(ComputeState.class))) {
-                                ComputeState computeState = Utils.fromJson(document,
-                                        ComputeState.class);
-                                resourceEndpointLink = computeState.endpointLink;
-                                //if the endpoint being deleted is the endpointLink of the
-                                //resourceState, then assign a new endpointLink
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals((Utils.buildKind(ComputeDescription
-                                    .class)))) {
-                                ComputeDescription computeDescriptionState = Utils.fromJson(
-                                        document, ComputeDescription.class);
-                                resourceEndpointLink = computeDescriptionState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals((Utils.buildKind(
-                                    ComputeStateWithDescription.class)))) {
-                                ComputeStateWithDescription computeStateWithDescriptionState =
-                                        Utils.fromJson(document,
-                                                ComputeStateWithDescription.class);
-                                resourceEndpointLink = computeStateWithDescriptionState
-                                        .endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals((Utils.buildKind(DiskState.class)))) {
-                                DiskState diskState = Utils.fromJson(document,
-                                        DiskState.class);
-                                resourceEndpointLink = diskState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(Utils.buildKind(NetworkState.class))) {
-                                NetworkState networkState = Utils.fromJson(document,
-                                        NetworkState.class);
-                                resourceEndpointLink = networkState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals((Utils
-                                    .buildKind(NetworkInterfaceState.class)))) {
-                                NetworkInterfaceState networkInterfaceState = Utils
-                                        .fromJson(document,
-                                                NetworkInterfaceState.class);
-                                resourceEndpointLink = networkInterfaceState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals((Utils
-                                    .buildKind(NetworkInterfaceDescription.class)))) {
-                                NetworkInterfaceDescription networkInterfaceDescription =
-                                        Utils.fromJson(document,
-                                                NetworkInterfaceDescription.class);
-                                resourceEndpointLink = networkInterfaceDescription.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(Utils.buildKind(SubnetState.class))) {
-                                SubnetState subnetState = Utils.fromJson(document,
-                                        SubnetState.class);
-                                resourceEndpointLink = subnetState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(Utils
-                                    .buildKind(SecurityGroupState.class))) {
-                                SecurityGroupState securityGroupState = Utils
-                                        .fromJson(document,
-                                                SecurityGroupState.class);
-                                resourceEndpointLink = securityGroupState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(Utils
-                                    .buildKind(StorageDescription.class))) {
-                                StorageDescription storageDescriptionState = Utils
-                                        .fromJson(document, StorageDescription.class);
-                                resourceEndpointLink = storageDescriptionState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(Utils.buildKind(ImageState.class))) {
-                                ImageState imageState = Utils.fromJson(document,
-                                        ImageState.class);
-                                resourceEndpointLink = imageState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(
-                                    Utils.buildKind(RouterService.RouterState.class))) {
-                                RouterService.RouterState routerState = Utils
-                                        .fromJson(document, RouterService.RouterState
-                                                .class);
-                                resourceEndpointLink = routerState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(Utils
-                                    .buildKind(LoadBalancerService.LoadBalancerState.class))) {
-                                LoadBalancerService.LoadBalancerState loadBalancerState =
-                                        Utils.fromJson
-                                                (document, LoadBalancerService.LoadBalancerState
-                                                        .class);
-                                resourceEndpointLink = loadBalancerState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                        resourceEndpointLink, endpointLinks);
-                            } else if (documentKind.equals(Utils.buildKind(ResourceGroupState
-                                    .class))) {
-                                ResourceGroupState resourceGroupState = Utils
-                                        .fromJson(document,
-                                                ResourceGroupState.class);
-                                resourceEndpointLink = resourceGroupState.endpointLink;
-                                updateEndpointLink(service, endpointLink, selfLink,
-                                            resourceEndpointLink, endpointLinks);
+                    String resourceEndpointLink = getEndpointLink(resource);
 
-                            }
-                        });
+                    if (resourceEndpointLink != null) {
+                        // if the endpoint being deleted is the endpointLink of the
+                        // resourceState, then assign a new endpointLink
+                        updateEndpointLink(service, endpointLink,
+                                resource.documentSelfLink,
+                                resourceEndpointLink,
+                                resource.endpointLinks);
+                    }
+                });
     }
 
     private static void updateEndpointLink(Service service, String endpointLink, String selfLink,
-                                           String resourceEndpointLink, Set<String>
-                                                   resourceEndpointLinks) {
+            String resourceEndpointLink, Set<String> resourceEndpointLinks) {
         if (!endpointLink.equals(resourceEndpointLink)) {
             return;
         }
 
         EndpointLinkPatchReq req = new EndpointLinkPatchReq();
-        req.endpointLink =  getUpdatedEndpointLink
-                (resourceEndpointLink, resourceEndpointLinks);
+        req.endpointLink = getUpdatedEndpointLink(resourceEndpointLink, resourceEndpointLinks);
         handleResourceStateEndpointLinkUpdate(service, selfLink, req);
     }
 
@@ -307,8 +261,8 @@ public class PhotonModelUtils {
         String endpointLink;
     }
 
-    private static String getUpdatedEndpointLink(String resourceEndpointLink, Set<String>
-            endpointLinks) {
+    private static String getUpdatedEndpointLink(String resourceEndpointLink,
+            Set<String> endpointLinks) {
 
         String endpointLinkVal = "";
         if (endpointLinks.size() == 1 && endpointLinks.contains(resourceEndpointLink)) {
@@ -327,7 +281,7 @@ public class PhotonModelUtils {
     }
 
     private static void handleResourceStateEndpointLinkUpdate(Service service, String selfLink,
-                                                              Object endpointLinkPatchReq) {
+            Object endpointLinkPatchReq) {
         Operation.createPatch(UriUtils.buildUri(service.getHost(), selfLink))
                 .setReferer(service.getUri())
                 .setBody(endpointLinkPatchReq)
@@ -338,10 +292,11 @@ public class PhotonModelUtils {
                                         () -> String.format("PATCH to " +
                                                 "updated endpointLink in instance" +
                                                 " service %s, failed: %s", o.getUri(), e
-                                                .toString()));
+                                                        .toString()));
                                 return;
                             }
-                        }).sendWith(service);
+                        })
+                .sendWith(service);
     }
 
     public static <T extends ServiceDocument> T updateEndpointLinks(T state, String endpointLink) {
@@ -353,8 +308,8 @@ public class PhotonModelUtils {
         ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
                 .buildDescription(state.getClass());
 
-        //This method will assign the value of the endpointLinks if it does not exist for the given
-        //resource OR it will merge it with the existing collection if already set.
+        // This method will assign the value of the endpointLinks if it does not exist for the given
+        // resource OR it will merge it with the existing collection if already set.
         Set<String> endpointLinks = new HashSet<>();
         endpointLinks.add(endpointLink);
         ReflectionUtils.setOrUpdatePropertyValue(
@@ -364,7 +319,6 @@ public class PhotonModelUtils {
 
         return state;
     }
-
 
     public static void handleIdempotentPut(StatefulService s, Operation put) {
 
@@ -390,10 +344,13 @@ public class PhotonModelUtils {
     /**
      * Merges two lists of strings, filtering duplicate elements from the second one (the patch).
      * Also keeping track if change of source list has been modified.
-     * @param source The source list (can be null).
-     * @param patch The patch list. If null, the @source will be the result.
+     *
+     * @param source
+     *            The source list (can be null).
+     * @param patch
+     *            The patch list. If null, the @source will be the result.
      * @return Returns a pair. The left part is the merged list and the right one is the boolean
-     * value, indicating if the changes to @source is modified.
+     *         value, indicating if the changes to @source is modified.
      */
     public static <C extends Collection<String>> Pair<C, Boolean> mergeLists(
             C source, C patch) {
@@ -418,9 +375,13 @@ public class PhotonModelUtils {
 
     /**
      * Executes given code in the specified executor.
-     * @param executor Executor in which code is to be executed.
-     * @param runnable Code to be executed in the executor.
-     * @param failure failure consumer.
+     *
+     * @param executor
+     *            Executor in which code is to be executed.
+     * @param runnable
+     *            Code to be executed in the executor.
+     * @param failure
+     *            failure consumer.
      */
     public static void runInExecutor(ExecutorService executor, Runnable runnable,
             Consumer<Throwable> failure) {
@@ -444,7 +405,8 @@ public class PhotonModelUtils {
      * Sets a metric with unit and value in the ServiceStat associated with the service
      */
     public static void setStat(Service service, String name, String unit, double value) {
-        service.getHost().log(Level.INFO, "Setting stat [service=%s] [name=%s] [unit=%s] [value=%f]",
+        service.getHost().log(Level.INFO,
+                "Setting stat [service=%s] [name=%s] [unit=%s] [value=%f]",
                 service.getClass(), name, unit, value);
         ServiceStats.ServiceStat stat = new ServiceStats.ServiceStat();
         stat.name = name;

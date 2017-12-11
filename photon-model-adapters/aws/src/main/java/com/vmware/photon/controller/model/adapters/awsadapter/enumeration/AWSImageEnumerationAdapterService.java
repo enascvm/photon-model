@@ -18,7 +18,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_IMAGE_VIRTUALIZATION_TYPE_PARAVIRTUAL;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
-import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.waitToComplete;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;

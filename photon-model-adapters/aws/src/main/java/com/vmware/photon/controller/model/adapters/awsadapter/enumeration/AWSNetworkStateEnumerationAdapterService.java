@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_subnet;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType.ec2_vpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ATTACHMENT_VPC_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
@@ -69,6 +67,7 @@ import com.amazonaws.services.ec2.model.Vpc;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSResourceType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkStateCreationContext.SubnetStateWithParentVpcId;
@@ -89,9 +88,9 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
@@ -114,8 +113,10 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE = Integer
             .getInteger(UriPaths.PROPERTY_PREFIX
                     + "enum.max.resources.query.on.delete", 950);
-    public static final List<String> internalTagList = Arrays.asList(ec2_vpc.toString(),
-            ec2_subnet.toString());
+
+    public static final List<String> internalTagList = Arrays.asList(
+            AWSResourceType.ec2_vpc.toString(),
+            AWSResourceType.ec2_subnet.toString());
 
     private AWSClientManager clientManager;
 
@@ -424,7 +425,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                     for (String internalTagValue : internalTagList) {
                         TagState tagState = newTagState(TAG_KEY_TYPE, internalTagValue, false,
                                 context.request.tenantLinks);
-                        if (internalTagValue.equalsIgnoreCase(ec2_vpc.toString())) {
+                        if (internalTagValue.equalsIgnoreCase(AWSResourceType.ec2_vpc.toString())) {
                             context.networkInternalTagsMap
                                     .put(PhotonModelConstants.TAG_KEY_TYPE, tagState.value);
                             context.networkInternalTagLinksSet.add(tagState.documentSelfLink);
@@ -887,59 +888,50 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        List<DeferredResult<Operation>> ops = new ArrayList<>();
+        List<DeferredResult<Operation>> disassociateDRs = new ArrayList<>();
 
         // Delete stale resources.
-        return queryLocalStates.queryDocuments(ls -> {
-            if (remoteResourcesKeys.contains(ls.id)) {
+        return queryLocalStates.queryDocuments(localState -> {
+            if (remoteResourcesKeys.contains(localState.id)) {
                 return;
             }
-            //Get the document because the endpointLink is not accessible in the parent
-            // ResourceState. Then update endpointLinks/endpointLink.
-            sendWithDeferredResult(
-                    Operation.createGet(getHost(), ls.documentSelfLink))
-                    .whenComplete((res, ex) -> {
-                        if (ex != null) {
-                            logWarning(() -> String.format("Failure retrieving local " +
-                                    "state: %s, " +
-                                    "reason: %s", ls.documentSelfLink, ex.toString()));
-                            return;
+            // Deleting the localResourceState is done by disassociating the
+            // endpointLink from the localResourceState. If the localResourceState
+            // isn't associated with any other endpointLink, it should be eventually
+            // deleted by the groomer task
+            Operation disassociateOp = PhotonModelUtils.createRemoveEndpointLinksOperation(
+                    this,
+                    context.request.request.endpointLink,
+                    localState);
+
+            if (disassociateOp == null) {
+                return;
+            }
+
+            // NOTE: The original Op is set with completion that must be executed.
+            // Since sendWithDeferredResult is used we must manually call it, otherwise it's
+            // just ignored.
+            CompletionHandler disassociateOpCompletion = disassociateOp.getCompletion();
+
+            DeferredResult<Operation> disassociateDR = sendWithDeferredResult(disassociateOp)
+                    // First complete ORIGINAL disassociate callback
+                    .whenComplete(disassociateOpCompletion::handle)
+                    // Then do the logging
+                    .whenComplete((o, e) -> {
+                        final String message = "Disassociate stale %s state";
+                        if (e != null) {
+                            logWarning(message + ": FAILED with %s",
+                                    localState.documentSelfLink, Utils.toString(e));
+                        } else {
+                            log(Level.FINEST, message + ": SUCCESS",
+                                    localState.documentSelfLink);
                         }
-                        Object rawDocument = res.getBodyRaw();
-                        // Deleting the localResourceState is done by disassociating the endpointLink from the
-                        // localResourceState. If the localResourceState isn't associated with any other
-                        // endpointLink, it should be deleted by the groomer task
-                        Operation dOp = PhotonModelUtils.createRemoveEndpointLinksOperation(
-                                this, context
-                                .request.request.endpointLink, rawDocument, ls.documentSelfLink, ls
-                                        .endpointLinks);
-
-                        if (dOp == null) {
-                            return;
-                        }
-
-                        Operation.CompletionHandler completion = dOp.getCompletion();
-                        dOp.setCompletion(null);
-                        DeferredResult<Operation> dr = sendWithDeferredResult(dOp)
-                                .whenComplete((o, e) -> {
-                                    completion.handle(o, e);
-                                    final String message = "Disassociate stale %s state";
-                                    if (e != null) {
-                                        logWarning(message + ": FAILED with %s",
-                                                ls.documentSelfLink, Utils.toString(e));
-                                    } else {
-                                        log(Level.FINEST, message + ": SUCCESS",
-                                                ls.documentSelfLink);
-
-                                    }
-                                });
-
-                        ops.add(dr);
                     });
 
+            disassociateDRs.add(disassociateDR);
         })
-                .thenCompose(r -> DeferredResult.allOf(ops))
-                .thenApply(r -> context);
+        .thenCompose(ignore -> DeferredResult.allOf(disassociateDRs))
+        .thenApply(ignore -> context);
     }
 
 

@@ -496,6 +496,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
             S3StorageEnumerationSubStage next) {
         OperationContext operationContext = OperationContext.getOperationContext();
         this.executorService.submit(new Runnable() {
+            @Override
             public void run() {
                 OperationContext.restoreOperationContext(operationContext);
                 AmazonS3Client s3Client;
@@ -648,7 +649,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                 (DiskState.FIELD_NAME_TAG_LINKS,
                                         Collections.singletonList(aws.internalTypeTagSelfLink));
                         Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
-                                (DiskState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+                                (DiskState.FIELD_NAME_TAG_LINKS, Collections.emptyList());
 
                         ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
                                 .create(collectionsToAddMap, collectionsToRemoveMap);
@@ -669,7 +670,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                             (DiskState.FIELD_NAME_ENDPOINT_LINKS,
                                     Collections.singletonList(aws.request.original.endpointLink));
                     Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
-                            (DiskState.FIELD_NAME_ENDPOINT_LINKS, Collections.EMPTY_LIST);
+                            (DiskState.FIELD_NAME_ENDPOINT_LINKS, Collections.emptyList());
 
                     ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
                             .create(collectionsToAddMap, collectionsToRemoveMap);
@@ -819,10 +820,10 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                                 if (aws.remoteBucketsByBucketName
                                         .get(diskState.id) == null) {
                                     Operation updateOp = PhotonModelUtils
-                                            .createRemoveEndpointLinksOperation(this, aws
-                                                    .request.original.endpointLink, s, diskState
-                                                    .documentSelfLink, diskState
-                                                    .endpointLinks);
+                                            .createRemoveEndpointLinksOperation(
+                                                    this,
+                                                    aws.request.original.endpointLink,
+                                                    diskState);
 
                                     if (updateOp != null) {
                                         updateOp.sendWith(getHost());
@@ -831,7 +832,6 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
                             }
                             processDeletionRequest(aws, next);
                         }));
-
     }
 
     /**

@@ -336,7 +336,10 @@ public class QueryUtils {
          * Wait\Block for query logic to complete.
          * <p>
          * <b>Note</b>: Use with care, for example within tests.
+         *
+         * @deprecated Use com.vmware.photon.controller.model.resources.util.PhotonModelUtils.waitToComplete(DeferredResult<T>)
          */
+        @Deprecated
         public static <S> S waitToComplete(DeferredResult<S> dr) {
             return ((CompletableFuture<S>) dr.toCompletionStage()).join();
         }

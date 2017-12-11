@@ -602,7 +602,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                     (DiskState.FIELD_NAME_TAG_LINKS,
                                             Collections.singletonList(this.context.internalTypeTagSelfLink));
                             Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap
-                                    (DiskState.FIELD_NAME_TAG_LINKS, Collections.EMPTY_LIST);
+                                    (DiskState.FIELD_NAME_TAG_LINKS, Collections.emptyList());
 
                             ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
                                     .create(collectionsToAddMap, collectionsToRemoveMap);
@@ -924,11 +924,10 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                                                 // endpointLink, it should be deleted by the
                                                 // groomer task
                                                 Operation dsOperation = PhotonModelUtils
-                                                        .createRemoveEndpointLinksOperation
-                                                        (this.service, this.context
-                                                                .request.original.endpointLink, s,
-                                                                diskState.documentSelfLink, diskState
-                                                                        .endpointLinks);
+                                                        .createRemoveEndpointLinksOperation(
+                                                                this.service,
+                                                                this.context.request.original.endpointLink,
+                                                                diskState);
                                                 if (dsOperation != null) {
                                                     dsOperation.sendWith(this.service);
                                                 }
