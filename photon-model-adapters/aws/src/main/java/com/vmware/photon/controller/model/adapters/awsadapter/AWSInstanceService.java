@@ -1444,13 +1444,13 @@ public class AWSInstanceService extends StatelessService {
             String rootDeviceType) {
         AssertUtil.assertTrue(
                 EnumUtils.isValidEnum(AWSConstants.AWSInstanceStoreTypes.class, type.storageType),
-                String.format("%s does not support instance-store volumes", type));
+                String.format("%s does not support instance-store volumes", type.id));
         if (!rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
             AssertUtil.assertFalse(
                     type.storageType.equals(AWSConstants.AWSInstanceStoreTypes.NVMe_SSD.name()),
                     String.format(
                             "%s supports only NVMe_SSD instance-store disks and NVMe disks cannot be "
-                                    + "attached to %s AMI", type, rootDeviceType));
+                                    + "attached to %s AMI", type.id, rootDeviceType));
         }
     }
 
