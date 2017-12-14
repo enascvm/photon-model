@@ -172,24 +172,26 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     }
 
     private void fetchExistingResources(AzureSubscriptionsEnumerationContext enumerationContext,
-                                        AzureCostComputeEnumerationStages nextStage) {
-        Query azureComputesQuery =
-                createQueryForAzureSubscriptionComputes(enumerationContext);
+            AzureCostComputeEnumerationStages nextStage) {
+        Query azureComputesQuery = createQueryForAzureSubscriptionComputes(enumerationContext);
 
         QueryByPages<ComputeState> querySubscriptionsComputes = new QueryByPages<>(
                 getHost(), azureComputesQuery, ComputeState.class,
                 enumerationContext.parent.tenantLinks);
         querySubscriptionsComputes.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-        querySubscriptionsComputes.queryDocuments(computeState -> {
+        // Use max page size cause we collect ComputeStates
+        querySubscriptionsComputes.setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT);
+
+        querySubscriptionsComputes
+                .queryDocuments(computeState -> {
                     if (computeState.customProperties != null
                             && computeState.customProperties
-                            .containsKey(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
+                                    .containsKey(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
                         String subscriptionUuid = computeState.customProperties
                                 .get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY);
                         enumerationContext.idToSubscription.remove(subscriptionUuid);
                     }
-                }
-                ).whenComplete((aVoid, t) -> {
+                }).whenComplete((aVoid, t) -> {
                     if (t != null) {
                         getFailureConsumer(enumerationContext).accept(t);
                         return;
@@ -205,24 +207,26 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         Query azureSubscriptionEndpointQuery = createQueryForAzureSubscriptionEndpoints(
                 enumerationContext);
 
+        // Use max page size since we are collectDocuments EndpointStates
         QueryByPages<EndpointState> querySubscriptionEndpoints = new QueryByPages<>(getHost(),
                 azureSubscriptionEndpointQuery, EndpointState.class,
-                enumerationContext.parent.tenantLinks);
-        querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-        querySubscriptionEndpoints.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
+                enumerationContext.parent.tenantLinks)
+                .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+
         querySubscriptionEndpoints.collectDocuments(Collectors.toList())
                 .whenComplete((subscriptionEndpoints, t) -> {
                     if (t != null) {
                         getFailureConsumer(enumerationContext).accept(t);
                         return;
                     }
-                    if (subscriptionEndpoints.size() == 0) {
+                    if (subscriptionEndpoints.isEmpty()) {
                         enumerationContext.stage = nextStage;
                         handleAzureSubscriptionsEnumerationRequest(enumerationContext);
                         return;
                     }
-                    queryExistingComputeStatesOfEndpoints(enumerationContext, nextStage,
-                            subscriptionEndpoints);
+                    queryExistingComputeStatesOfEndpoints(
+                            enumerationContext, nextStage, subscriptionEndpoints);
                 });
     }
 
@@ -310,7 +314,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                         EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
-                        enumerationContext.parentAuth.privateKeyId)
+                        enumerationContext.endpointAuth.privateKeyId)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK,
                         enumerationContext.parent.endpointLink)
@@ -405,7 +409,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         properties.put(PhotonModelConstants.CLOUD_ACCOUNT_ID, subscription.entityId);
         properties.put(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY, subscription.entityId);
         properties.put(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
-                enumerationContext.parentAuth.privateKeyId);
+                enumerationContext.endpointAuth.privateKeyId);
         properties.put(AzureConstants.AZURE_ACCOUNT_OWNER_EMAIL_ID, subscription.parentEntityId);
         if (StringUtils.isNotBlank(subscription.parentEntityName)) {
             properties.put(AzureConstants.AZURE_ACCOUNT_OWNER_NAME, subscription.parentEntityName);

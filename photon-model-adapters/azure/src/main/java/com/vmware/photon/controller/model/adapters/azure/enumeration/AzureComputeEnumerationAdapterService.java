@@ -88,6 +88,7 @@ import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -528,7 +529,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     /**
      * {@code handleSubStage} version suitable for chaining to {@code DeferredResult.whenComplete}.
      */
-    private <T> BiConsumer<T, Throwable> thenHandleSubStage(EnumerationContext context,
+    private <T> BiConsumer<T, Throwable> thenHandleSubStage(
+            EnumerationContext context,
             ComputeEnumerationSubStages next) {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
@@ -876,15 +878,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 qBuilder.build(),
                 ComputeState.class,
                 ctx.parentCompute.tenantLinks,
-                null,  // endpointLink
+                null, // endpointLink
                 ctx.parentCompute.documentSelfLink)
-                .setMaxPageSize(getQueryResultLimit());
+                // Use max page size cause we collect ComputeStates
+                .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-
-        queryLocalStates.queryDocuments(c -> {
-            ctx.computeStates.put(c.id, c);
-        }).whenComplete(thenHandleSubStage(ctx, next));
+        queryLocalStates
+                .queryDocuments(c -> ctx.computeStates.put(c.id, c))
+                .whenComplete(thenHandleSubStage(ctx, next));
     }
 
     /**
@@ -1017,8 +1019,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(DiskState.class);
 
-        addScopeCriteria(qBuilder, DiskState.class, ctx);
-
         Query.Builder diskUriFilterParentQuery = Query.Builder.create();
 
         List<Query> diskUriFilters = new ArrayList<>();
@@ -1046,38 +1046,22 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .forEach(diskUriFilter -> diskUriFilterParentQuery.addClause(diskUriFilter));
         qBuilder.addClause(diskUriFilterParentQuery.build());
 
-        QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(getQueryResultLimit())
-                .setQuery(qBuilder.build())
-                .build();
-        q.tenantLinks = ctx.parentCompute.tenantLinks;
+        QueryTop<DiskState> queryDiskStates = new QueryTop<>(
+                getHost(),
+                qBuilder.build(),
+                DiskState.class,
+                ctx.parentCompute.tenantLinks,
+                null, // endpointLink
+                ctx.parentCompute.documentSelfLink)
+                // Use max 10K Top, cause we collect DiskStates
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        QueryUtils.startInventoryQueryTask(this, q)
-                .whenComplete((queryTask, e) -> {
-                    if (e != null) {
-                        logWarning(() -> String.format("Failed to get disk: %s", e.getMessage()));
-                        return;
-                    }
-                    logFine(() -> String.format("Found %d matching disk states for Azure blobs",
-                            queryTask.results.documentCount));
-
-                    if (queryTask.results.documentCount == 0) {
-                        ctx.subStage = next;
-                        handleSubStage(ctx);
-                        return;
-                    }
-
-                    for (Object d : queryTask.results.documents.values()) {
-                        DiskState diskState = Utils.fromJson(d, DiskState.class);
-                        String diskUri = diskState.id;
-                        ctx.diskStates.put(diskUri, diskState);
-                    }
-
-                    ctx.subStage = next;
-                    handleSubStage(ctx);
-                });
+        queryDiskStates
+                .queryDocuments(diskState -> ctx.diskStates.put(diskState.id, diskState))
+                .thenRun(() -> logFine(() -> String.format(
+                        "Found %d matching disk states for Azure blobs",
+                        ctx.diskStates.size())))
+                .whenComplete(thenHandleSubStage(ctx, next));
     }
 
     /**
@@ -1113,49 +1097,29 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
 
         Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(StorageDescription.class);
+                .addKindFieldClause(StorageDescription.class)
+                .addInClause(storageAccountProperty, diagnosticStorageAccountUris);
 
-        qBuilder.addInClause(storageAccountProperty, diagnosticStorageAccountUris);
+        QueryTop<StorageDescription> queryDiskStates = new QueryTop<>(
+                getHost(),
+                qBuilder.build(),
+                StorageDescription.class,
+                ctx.parentCompute.tenantLinks,
+                null, // endpointLink
+                ctx.parentCompute.documentSelfLink)
+                // Use max 10K Top, cause we collect DiskStates
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        addScopeCriteria(qBuilder, StorageDescription.class, ctx);
-
-        QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(getQueryResultLimit())
-                .setQuery(qBuilder.build())
-                .build();
-        q.tenantLinks = ctx.parentCompute.tenantLinks;
-
-        QueryUtils.startInventoryQueryTask(this, q)
-                .whenComplete((queryTask, e) -> {
-                    if (e != null) {
-                        logWarning(() -> String.format("Failed to get storage accounts: %s",
-                                e.getMessage()));
-                        return;
-                    }
-
-                    logFine(() -> String.format("Found %d matching diagnostics storage accounts",
-                            queryTask.results.documentCount));
-
-                    if (queryTask.results == null || queryTask.results.documents == null
-                            || queryTask.results.documents.isEmpty()) {
-                        ctx.subStage = next;
-                        handleSubStage(ctx);
-                        return;
-                    }
-
-                    for (Object d : queryTask.results.documents.values()) {
-                        StorageDescription storageDesc = Utils
-                                .fromJson(d, StorageDescription.class);
-                        String storageDescUri = storageDesc.customProperties
-                                .get(AZURE_STORAGE_ACCOUNT_URI);
-                        ctx.storageDescriptions.put(storageDescUri, storageDesc);
-                    }
-
-                    ctx.subStage = next;
-                    handleSubStage(ctx);
-                });
+        queryDiskStates
+                .queryDocuments(storageDesc -> {
+                    ctx.storageDescriptions.put(
+                            storageDesc.customProperties.get(AZURE_STORAGE_ACCOUNT_URI),
+                            storageDesc);
+                })
+                .thenRun(() -> logFine(() -> String.format(
+                        "Found %d matching diagnostics storage accounts",
+                        ctx.storageDescriptions.size())))
+                .whenComplete(thenHandleSubStage(ctx, next));
     }
 
     /**
@@ -1441,16 +1405,19 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .addInClause(NetworkInterfaceState.FIELD_NAME_ID, remoteStates.keySet());
 
         QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
-                null,  // endpointLink
+                qBuilder.build(),
+                NetworkInterfaceState.class,
+                ctx.parentCompute.tenantLinks,
+                null, // endpointLink
                 ctx.parentCompute.documentSelfLink)
-                .setMaxPageSize(getQueryResultLimit());
+                // Use max page size cause we collect NetworkInterfaceState
+                .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-
-        return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
-                localNics -> requestCreateUpdateNic(localNics, remoteStates, ctx, subnetPerNicId,
-                        remoteNics));
+        return queryLocalStates
+                .collectDocuments(Collectors.toList())
+                .thenCompose(localNics -> requestCreateUpdateNic(
+                        localNics, remoteStates, ctx, subnetPerNicId, remoteNics));
     }
 
     /**
@@ -1495,13 +1462,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .addKindFieldClause(NetworkInterfaceState.class);
 
         QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(), NetworkInterfaceState.class, ctx.parentCompute.tenantLinks,
-                ctx.request.endpointLink).setMaxPageSize(getQueryResultLimit());
+                qBuilder.build(),
+                NetworkInterfaceState.class,
+                ctx.parentCompute.tenantLinks,
+                ctx.request.endpointLink)
+                // Use max page size cause we collect NetworkInterfaceState
+                .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-
-        return queryLocalStates.collectDocuments(Collectors.toList()).thenCompose(
-                allLocalNics -> disassociateNics(ctx, remoteNicIds, allLocalNics));
+        return queryLocalStates
+                .collectDocuments(Collectors.toList())
+                .thenCompose(allLocalNics -> disassociateNics(ctx, remoteNicIds, allLocalNics));
     }
 
     /**
@@ -1716,13 +1687,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         nicsPerSubnet.keySet().stream().collect(Collectors.toList()));
 
         QueryByPages<SubnetState> queryLocalStates = new QueryByPages<>(getHost(),
-                qBuilder.build(), SubnetState.class, ctx.parentCompute.tenantLinks,
-                null,   // endpointLink
+                qBuilder.build(),
+                SubnetState.class,
+                ctx.parentCompute.tenantLinks,
+                null, // endpointLink
                 ctx.parentCompute.documentSelfLink)
-                .setMaxPageSize(getQueryResultLimit());
-        Map<String, String> subnetLinkPerNicId = new HashMap<>();
+                // Use max page size cause we collect SubnetState
+                .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+        Map<String, String> subnetLinkPerNicId = new HashMap<>();
 
         return queryLocalStates.queryDocuments(subnet ->
                 nicsPerSubnet.get(subnet.id).forEach(p -> subnetLinkPerNicId

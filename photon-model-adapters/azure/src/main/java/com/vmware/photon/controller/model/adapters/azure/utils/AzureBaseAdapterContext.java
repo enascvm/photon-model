@@ -41,8 +41,8 @@ public abstract class AzureBaseAdapterContext<T extends AzureBaseAdapterContext<
     @Override
     protected DeferredResult<T> customizeBaseContext(T context) {
 
-        if (context.azureSdkClients == null && context.parentAuth != null) {
-            context.azureSdkClients = new AzureSdkClients(context.parentAuth);
+        if (context.azureSdkClients == null && context.endpointAuth != null) {
+            context.azureSdkClients = new AzureSdkClients(context.endpointAuth);
         }
 
         return DeferredResult.completed(context);

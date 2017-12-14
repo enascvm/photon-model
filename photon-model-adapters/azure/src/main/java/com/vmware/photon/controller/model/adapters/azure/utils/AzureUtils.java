@@ -604,8 +604,8 @@ public class AzureUtils {
                 tenantLinks,
                 endpointLink)
                 // only one group is required
-                .setMaxResultsLimit(1);
-        queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+                .setMaxResultsLimit(1)
+                .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         return queryByPages
                 .collectDocuments(Collectors.toList())

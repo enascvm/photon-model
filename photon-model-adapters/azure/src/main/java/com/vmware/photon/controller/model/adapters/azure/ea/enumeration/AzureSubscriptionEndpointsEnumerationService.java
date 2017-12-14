@@ -27,7 +27,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
@@ -165,23 +165,24 @@ public class AzureSubscriptionEndpointsEnumerationService extends StatelessServi
     private void fetchExistingSubscriptionEndpoints(
             AzureSubscriptionEndpointsEnumerationContext enumerationContext,
             AzureSubscriptionEndpointComputeEnumerationStages nextStage) {
-        Query azureEndpointsQuery =
-                createQueryForAzureSubscriptionEndpoints(enumerationContext);
-        QueryByPages<EndpointState> querySubscriptionEndpoints = new QueryByPages<>(
+
+        Query azureEndpointsQuery = createQueryForAzureSubscriptionEndpoints(enumerationContext);
+
+        // Use Top query with 10K max EndpointStates
+        QueryTop<EndpointState> querySubscriptionEndpoints = new QueryTop<>(
                 getHost(), azureEndpointsQuery, EndpointState.class,
                 enumerationContext.parent.tenantLinks);
         querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        querySubscriptionEndpoints.queryDocuments(endpointState -> {
-                    if (endpointState.endpointProperties != null
-                            && endpointState.endpointProperties
+        querySubscriptionEndpoints
+                .queryDocuments(epState -> {
+                    if (epState.endpointProperties != null && epState.endpointProperties
                             .containsKey(EndpointConfigRequest.USER_LINK_KEY)) {
-                        String subscriptionUuid = endpointState.endpointProperties
+                        String subscriptionUuid = epState.endpointProperties
                                 .get(EndpointConfigRequest.USER_LINK_KEY);
                         enumerationContext.idToSubscription.remove(subscriptionUuid);
                     }
-                }
-                ).whenComplete((aVoid, t) -> {
+                }).whenComplete((aVoid, t) -> {
                     if (t != null) {
                         getFailureConsumer(enumerationContext).accept(t);
                         return;

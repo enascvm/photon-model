@@ -182,7 +182,7 @@ public class AzureSecurityGroupService extends StatelessService {
                 .build();
 
         QueryTop<NetworkState> queryNetworkStates = new QueryTop<>(
-                this.getHost(),
+                getHost(),
                 query,
                 NetworkState.class,
                 /*

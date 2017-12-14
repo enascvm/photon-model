@@ -53,6 +53,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okio.BufferedSink;
 import okio.Okio;
+
 import org.apache.commons.io.FileUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
@@ -84,6 +85,7 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants.Endpoin
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService
         .ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -163,7 +165,6 @@ public class AzureCostStatsService extends StatelessService {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
-    @SuppressWarnings("WeakerAccess")
     public static class Context {
         // Please try to maintain an alphabetic order in member variables; helps while debugging
         // Map of all subscriptions, along with their cost; mainly needed to accumulate
@@ -339,11 +340,13 @@ public class AzureCostStatsService extends StatelessService {
             handleRequest(context);
             return;
         }
-        QueryByPages<EndpointState> querySubscriptionEndpoints = new QueryByPages<>(getHost(),
+
+        // Use max 10k results
+        QueryTop<EndpointState> querySubscriptionEndpoints = new QueryTop<>(getHost(),
                 createQueryForSubscriptionEndpoints(context, subscriptionsToQueryResources),
                 EndpointState.class, context.computeHostDesc.tenantLinks);
         querySubscriptionEndpoints.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-        querySubscriptionEndpoints.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
+
         querySubscriptionEndpoints.collectDocuments(Collectors.toList())
                 .whenComplete((subscriptionEndpoints, t) -> {
                     if (t != null) {
@@ -359,7 +362,7 @@ public class AzureCostStatsService extends StatelessService {
                     subscriptionsToQueryResources.forEach(
                             subscriptionGuid -> context.subscriptionGuidToResources
                                     .put(subscriptionGuid, new ConcurrentHashMap<>()));
-                    if (subscriptionEndpoints.size() == 0) {
+                    if (subscriptionEndpoints.isEmpty()) {
                         logInfo(() -> String.format("No existing subscription endpoints found for" +
                                 " endpoint %s", context.computeHostDesc.endpointLink));
                         context.stage = next;
@@ -375,6 +378,7 @@ public class AzureCostStatsService extends StatelessService {
      */
     private void queryAzureVmsUnderEndpoints(Context context, Stages next,
             List<EndpointState> endpoints) {
+
         Map<String, String> endpointLinkToSubscription = new HashMap<>();
         endpoints.forEach(endpointState -> {
             if (endpointState.endpointProperties != null) {
@@ -385,30 +389,32 @@ public class AzureCostStatsService extends StatelessService {
                 }
             }
         });
+
         QueryByPages<ComputeState> queryVms = new QueryByPages<>(getHost(),
                 createQueryForVmsWithEndpoints(endpointLinkToSubscription.keySet()),
                 ComputeState.class, context.computeHostDesc.tenantLinks);
         queryVms.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-        queryVms.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
-        queryVms.queryDocuments(computeState -> {
-            if (computeState.endpointLink != null) {
-                String subscriptionGuid = endpointLinkToSubscription
-                        .get(computeState.endpointLink);
-                Map<String, List<String>> instanceIdToCompLinks =
-                        context.subscriptionGuidToResources
+        // Use max page size cause we collect ComputeStates
+        queryVms.setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT);
+
+        queryVms
+                .queryDocuments(computeState -> {
+                    if (computeState.endpointLink != null) {
+                        String subscriptionGuid = endpointLinkToSubscription
+                                .get(computeState.endpointLink);
+                        Map<String, List<String>> instanceIdToCompLinks = context.subscriptionGuidToResources
                                 .computeIfAbsent(subscriptionGuid,
                                         k -> new ConcurrentHashMap<>());
-                List<String> computeLinks =
-                        instanceIdToCompLinks.computeIfAbsent(computeState.id.toLowerCase(),
+                        List<String> computeLinks = instanceIdToCompLinks.computeIfAbsent(
+                                computeState.id.toLowerCase(),
                                 k -> new ArrayList<>());
-                computeLinks.add(computeState.documentSelfLink);
-            }
-        })
-                .whenComplete((aVoid, t) -> {
+                        computeLinks.add(computeState.documentSelfLink);
+                    }
+                }).whenComplete((aVoid, t) -> {
                     if (t != null) {
                         logSevere(() -> String.format("Failed to query vms under existing " +
-                                        "azure subscriptions for endpoint %s, won't add cost to " +
-                                        "vms under subscriptions",
+                                "azure subscriptions for endpoint %s, won't add cost to " +
+                                "vms under subscriptions",
                                 context.computeHostDesc.endpointLink));
                         handleError(context, next, t, true);
                         return;
@@ -592,7 +598,6 @@ public class AzureCostStatsService extends StatelessService {
                     context.stage = next;
                     handleRequest(context);
                 });
-
     }
 
     /**
@@ -815,18 +820,22 @@ public class AzureCostStatsService extends StatelessService {
         Request request = chain.request();
         // try the request
         Response response = chain.proceed(request);
-        int tryCount = 0;
-        while (!response.isSuccessful()
-                && tryCount < AzureCostConstants.MAX_RETRIES_ON_REQUEST_FAILURE) {
-            Response finalResponse = response;
-            logWarning(() -> String
-                    .format("Unexpected response obtained from Azure: %s",
-                            finalResponse));
 
-            tryCount++;
+        for (int tryCount = 0; !response.isSuccessful()
+                && tryCount < AzureCostConstants.MAX_RETRIES_ON_REQUEST_FAILURE; tryCount++) {
+            {
+                final Response finalResponse = response;
+                logWarning(() -> String.format("Unexpected response obtained from Azure: %s",
+                                finalResponse));
+            }
+
+            // Close current unSuccessful response
+            response.close();
+
             // retry the request
             response = chain.proceed(request);
         }
+
         // otherwise just pass the original response on
         return response;
     }

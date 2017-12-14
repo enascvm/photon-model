@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.query;
 
+import static java.util.stream.Collector.Characteristics.IDENTITY_FINISH;
+
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collector;
 
@@ -46,7 +49,18 @@ public interface QueryStrategy<T extends ServiceDocument> {
      *
      * @see #queryDocuments(Consumer)
      */
-    <R, A> DeferredResult<R> collectDocuments(Collector<T, A, R> collector);
+    @SuppressWarnings("unchecked")
+    default <R, A> DeferredResult<R> collectDocuments(Collector<T, A, R> collector) {
+
+        A container = collector.supplier().get();
+        BiConsumer<A, T> accumulator = collector.accumulator();
+
+        return queryDocuments(referrerDoc -> {
+            accumulator.accept(container, referrerDoc);
+        }).thenApply(ignore -> collector.characteristics().contains(IDENTITY_FINISH)
+                ? (R) container
+                : collector.finisher().apply(container));
+    }
 
     /**
      * Performs a mutable reduction operation on the elements of this query using a
@@ -54,6 +68,16 @@ public interface QueryStrategy<T extends ServiceDocument> {
      *
      * @see #queryLinks(Consumer)
      */
-    <R, A> DeferredResult<R> collectLinks(Collector<String, A, R> collector);
+    @SuppressWarnings("unchecked")
+    default <R, A> DeferredResult<R> collectLinks(Collector<String, A, R> collector) {
 
+        A container = collector.supplier().get();
+        BiConsumer<A, String> accumulator = collector.accumulator();
+
+        return queryLinks(referrerLink -> {
+            accumulator.accept(container, referrerLink);
+        }).thenApply(ignore -> collector.characteristics().contains(IDENTITY_FINISH)
+                ? (R) container
+                : collector.finisher().apply(container));
+    }
 }

@@ -13,17 +13,13 @@
 
 package com.vmware.photon.controller.model.query;
 
-import static java.util.stream.Collector.Characteristics.IDENTITY_FINISH;
-
 import java.net.URI;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
-import java.util.stream.Collector;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -291,13 +287,14 @@ public class QueryUtils {
             qBuilder.addFieldClause(
                     PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
                     endpointLink, Query.Occurance.SHOULD_OCCUR);
-            return qBuilder.addCollectionItemClause(
+
+            qBuilder.addCollectionItemClause(
                     PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS,
                     endpointLink, Query.Occurance.SHOULD_OCCUR);
-        }
 
-        if (PhotonModelUtils.ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {
-            return qBuilder.addCompositeFieldClause(
+        } else if (PhotonModelUtils.ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {
+
+            qBuilder.addCompositeFieldClause(
                     ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                     PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK,
                     endpointLink);
@@ -344,9 +341,10 @@ public class QueryUtils {
             return ((CompletableFuture<S>) dr.toCompletionStage()).join();
         }
 
+        public final Class<T> documentClass;
+
         protected final ServiceHost host;
         protected final Query query;
-        protected final Class<T> documentClass;
         protected final List<String> tenantLinks;
 
         protected boolean isDirectQuery = true;
@@ -396,38 +394,38 @@ public class QueryUtils {
          *            The scope of the query.
          */
         public QueryTemplate(ServiceHost host,
-                             Query query,
-                             Class<T> documentClass,
-                             List<String> tenantLinks,
-                             String endpointLink) {
+                Query query,
+                Class<T> documentClass,
+                List<String> tenantLinks,
+                String endpointLink) {
             this(host, query, documentClass, tenantLinks, endpointLink, null /* computeHostLink */);
         }
 
-         /**
-          * Default constructor.
-          * <p>
-          * Note: The client is off-loaded from setting the {@code tenantLinks} and
-          * {@code ednpointLink} to the query.
-          *
-          * @param host
-          *            The host initiating the query.
-          * @param query
-          *            The query criteria.
-          * @param documentClass
-          *            The class of documents to query for.
-          * @param tenantLinks
-          *            The scope of the query.
-          * @param endpointLink
-          *            The scope of the query.
-          * @param computeHostLink
-          *            The scope of the query, based on computeHost on each resource.
-          */
+        /**
+         * Default constructor.
+         * <p>
+         * Note: The client is off-loaded from setting the {@code tenantLinks} and
+         * {@code ednpointLink} to the query.
+         *
+         * @param host
+         *            The host initiating the query.
+         * @param query
+         *            The query criteria.
+         * @param documentClass
+         *            The class of documents to query for.
+         * @param tenantLinks
+         *            The scope of the query.
+         * @param endpointLink
+         *            The scope of the query.
+         * @param computeHostLink
+         *            The scope of the query, based on computeHost on each resource.
+         */
         public QueryTemplate(ServiceHost host,
-                             Query query,
-                             Class<T> documentClass,
-                             List<String> tenantLinks,
-                             String endpointLink,
-                             String computeHostLink) {
+                Query query,
+                Class<T> documentClass,
+                List<String> tenantLinks,
+                String endpointLink,
+                String computeHostLink) {
 
             this.host = host;
             this.documentClass = documentClass;
@@ -439,7 +437,8 @@ public class QueryUtils {
                 // Wrap original query...
                 Query.Builder qBuilder = Query.Builder.create().addClause(query);
                 if (computeHostLink != null) {
-                    qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK, computeHostLink);
+                    qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
+                            computeHostLink);
                 }
                 // ...and extend with TENANT_LINKS
                 QueryUtils.addTenantLinks(qBuilder, this.tenantLinks);
@@ -545,48 +544,6 @@ public class QueryUtils {
             QueryTask.Builder queryTaskBuilder = newQueryTaskBuilder();
 
             return queryImpl(queryTaskBuilder, linkConsumer);
-        }
-
-        /*
-         * (non-Javadoc)
-         *
-         * @see
-         * com.vmware.photon.controller.model.tasks.QueryStrategy#collectDocuments(java.util.stream.
-         * Collector)
-         */
-        @Override
-        @SuppressWarnings("unchecked")
-        public <R, A> DeferredResult<R> collectDocuments(Collector<T, A, R> collector) {
-
-            A container = collector.supplier().get();
-            BiConsumer<A, T> accumulator = collector.accumulator();
-
-            return queryDocuments(referrerDoc -> {
-                accumulator.accept(container, referrerDoc);
-            }).thenApply(ignore -> collector.characteristics().contains(IDENTITY_FINISH)
-                    ? (R) container
-                    : collector.finisher().apply(container));
-        }
-
-        /*
-         * (non-Javadoc)
-         *
-         * @see
-         * com.vmware.photon.controller.model.tasks.QueryStrategy#collectLinks(java.util.stream.
-         * Collector)
-         */
-        @Override
-        @SuppressWarnings("unchecked")
-        public <R, A> DeferredResult<R> collectLinks(Collector<String, A, R> collector) {
-
-            A container = collector.supplier().get();
-            BiConsumer<A, String> accumulator = collector.accumulator();
-
-            return queryLinks(referrerLink -> {
-                accumulator.accept(container, referrerLink);
-            }).thenApply(ignore -> collector.characteristics().contains(IDENTITY_FINISH)
-                    ? (R) container
-                    : collector.finisher().apply(container));
         }
 
         /**
@@ -699,7 +656,7 @@ public class QueryUtils {
          * NOTE: the results are passed to the resultConsumer sequentially.
          */
         @SuppressWarnings({ "rawtypes", "unchecked" })
-        protected void consumeQueryTaskResults(QueryTask qt, Consumer resultConsumer) {
+        protected void handleQueryTaskResults(QueryTask qt, Consumer resultConsumer) {
 
             this.host.log(this.level, "%s: PROCESS %s docs",
                     this.msg, qt.results.documentCount);
@@ -724,9 +681,19 @@ public class QueryUtils {
                 resultsStream = qt.results.documentLinks.stream();
             }
 
+            consumeQueryTaskResults(resultsStream, resultConsumer);
+        }
+
+        /**
+         * Encapsulate actual consume of QueryTask results stream. Might be overridden by
+         * descendants for example to consume results in parallel or apply some before/after
+         * behaviour. By default, results are passed sequentially to the consumer.
+         */
+        protected <M> void consumeQueryTaskResults(Stream<M> resultsStream, Consumer<M> resultConsumer) {
             // Delegate to passed callback one-by-one
             resultsStream.forEach(resultConsumer);
         }
+
     }
 
     /**
@@ -752,11 +719,11 @@ public class QueryUtils {
         }
 
         public QueryTop(ServiceHost host,
-                        Query query,
-                        Class<T> documentClass,
-                        List<String> tenantLinks,
-                        String endpointLink,
-                        String computeHostLink) {
+                Query query,
+                Class<T> documentClass,
+                List<String> tenantLinks,
+                String endpointLink,
+                String computeHostLink) {
             super(host, query, documentClass, tenantLinks, endpointLink, computeHostLink);
         }
 
@@ -794,7 +761,7 @@ public class QueryUtils {
 
             return DeferredResult.completed(queryTaskOp.getBody(QueryTask.class))
                     // Handle TOP results
-                    .thenAccept(qt -> consumeQueryTaskResults(qt, resultConsumer));
+                    .thenAccept(qt -> handleQueryTaskResults(qt, resultConsumer));
         }
     }
 
@@ -842,11 +809,11 @@ public class QueryUtils {
         }
 
         public QueryByPages(ServiceHost host,
-                            Query query,
-                            Class<T> documentClass,
-                            List<String> tenantLinks,
-                            String endpointLink,
-                            String computeHostLink) {
+                Query query,
+                Class<T> documentClass,
+                List<String> tenantLinks,
+                String endpointLink,
+                String computeHostLink) {
 
             super(host, query, documentClass, tenantLinks, endpointLink, computeHostLink);
         }
@@ -897,14 +864,15 @@ public class QueryUtils {
                     .setReferer(this.referer);
 
             return this.host.sendWithDeferredResult(getQueryTaskOp)
-                    // Handle current page of results
+                    // Handle CURRENT page of results
                     .thenApply(qtOp -> {
                         final QueryTask qt = qtOp.getBody(QueryTask.class);
-                        consumeQueryTaskResults(qt, resultConsumer);
+
+                        handleQueryTaskResults(qt, resultConsumer);
 
                         return qtOp;
                     })
-                    // Handle next page of results
+                    // Handle NEXT page of results
                     .thenCompose(qtOp -> handleQueryTask(qtOp, resultConsumer));
         }
     }

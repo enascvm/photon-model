@@ -205,8 +205,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * @param localStateServiceFactoryLink
      *            The factory link of the service handling the local resource states.
      */
-    public EndpointEnumerationProcess(
-            StatelessService service,
+    public EndpointEnumerationProcess(StatelessService service,
             URI endpointReference,
             String computeHostLink,
             Class<LOCAL_STATE> localStateClass,
@@ -612,6 +611,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 updateEndpointLinks(localState, this.endpointState.documentSelfLink);
             }
             localState.computeHostLink = this.computeHostLink;
+
             localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         } else {
             // Update case
@@ -619,6 +619,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 // update the endpointLinks
                 updateEndpointLinks(localState, this.endpointState.documentSelfLink);
             }
+
             localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         }
 

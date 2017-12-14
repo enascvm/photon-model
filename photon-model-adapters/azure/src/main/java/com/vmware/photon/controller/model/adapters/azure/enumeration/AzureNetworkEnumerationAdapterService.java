@@ -18,13 +18,11 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VIRTUAL_NETWORKS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
-import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -34,7 +32,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
@@ -62,6 +59,7 @@ import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterR
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -73,21 +71,19 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.support.LifecycleState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
-import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 
 /**
@@ -178,8 +174,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Stores the next page when retrieving Virtual Networks from Azure.
         String enumNextPageLink;
 
-        String deletionNextPageLink;
-
         // Azure credentials.
         ApplicationTokenCredentials credentials;
 
@@ -250,15 +244,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
-    private static void addScopeCriteria(Query.Builder qBuilder,
-            Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
-        // Add parent compute host criteria
-        qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
-                ctx.parentCompute.documentSelfLink);
-        // Add TENANT_LINKS criteria
-        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-    }
-
     @Override
     public void handlePatch(Operation op) {
         if (!op.hasBody()) {
@@ -291,10 +276,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 try {
                     context.credentials = getAzureConfig(context.endpointAuth);
                 } catch (Throwable e) {
-                    logSevere(e);
-                    context.error = e;
-                    context.stage = EnumerationStages.ERROR;
-                    handleEnumeration(context);
+                    handleError(context, e);
                     return;
                 }
             }
@@ -405,13 +387,13 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     /**
      * {@code handleSubStage} version suitable for chaining to {@code DeferredResult.whenComplete}.
      */
-    private BiConsumer<NetworkEnumContext, Throwable> thenHandleSubStage(NetworkEnumContext context,
+    private <T> BiConsumer<T, Throwable> thenHandleSubStage(
+            NetworkEnumContext context,
             NetworkEnumStages next) {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
             if (exc != null) {
-                context.stage = EnumerationStages.ERROR;
-                handleEnumeration(context);
+                handleError(context, exc);
                 return;
             }
             handleSubStage(context, next);
@@ -472,7 +454,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     AUTH_HEADER_BEARER_PREFIX
                             + context.credentials.getToken(AzureUtils.getAzureBaseUri()));
         } catch (Exception ex) {
-            this.handleError(context, ex);
+            handleError(context, ex);
             return;
         }
 
@@ -585,67 +567,26 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
-                .addInClause(ResourceState.FIELD_NAME_ID, resourceGroupIds)
+                .addInClause(ResourceGroupState.FIELD_NAME_ID, resourceGroupIds)
                 .addCompositeFieldClause(
-                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                         ComputeProperties.RESOURCE_TYPE_KEY,
                         ResourceGroupStateType.AzureResourceGroup.name());
 
-        addScopeCriteria(qBuilder, ResourceGroupState.class, context);
+        QueryByPages<ResourceGroupState> queryLocalStates = new QueryByPages<>(
+                getHost(),
+                qBuilder.build(),
+                ResourceGroupState.class,
+                context.parentCompute.tenantLinks,
+                null /* endpoint */,
+                context.parentCompute.documentSelfLink)
+                        // Use max page size cause we collect ResourceGroupStates
+                        .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                        .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        QueryTask qt = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setResultLimit(getQueryResultLimit())
-                .setQuery(qBuilder.build())
-                .build();
-        qt.tenantLinks = context.parentCompute.tenantLinks;
-
-        QueryUtils.startInventoryQueryTask(this, qt)
-                .whenComplete((queryTask, e) -> {
-                    if (e != null) {
-                        handleError(context, e);
-                        return;
-                    }
-
-                    // If no match found, continue to query network states
-                    if (queryTask.results.nextPageLink == null) {
-                        logFine(() -> "No matching resource group state found");
-                        handleSubStage(context, next);
-                        return;
-                    }
-                    context.enumNextPageLink = queryTask.results.nextPageLink;
-                    getResourceGroupStatesHelper(context, next);
-                });
-    }
-
-    private void getResourceGroupStatesHelper(NetworkEnumContext context, NetworkEnumStages next) {
-        Operation.CompletionHandler completionHandler = (o, e) -> {
-            if (e != null) {
-                handleError(context, e);
-                return;
-            }
-            QueryTask queryTask = o.getBody(QueryTask.class);
-
-            context.enumNextPageLink = queryTask.results.nextPageLink;
-
-            queryTask.results.documents.values().forEach(document -> {
-                ResourceGroupState rgState = Utils.fromJson(document, ResourceGroupState.class);
-                context.resourceGroupStates.put(rgState.id, rgState.documentSelfLink);
-            });
-
-            if (context.enumNextPageLink != null) {
-                getResourceGroupStatesHelper(context, next);
-            } else {
-                logFine(() -> "Finished getting resource group states");
-                handleSubStage(context, next);
-                return;
-            }
-        };
-        logFine(() -> String.format("Querying page [%s] for getting local disk states",
-                context.enumNextPageLink));
-        sendRequest(
-                Operation.createGet(createInventoryUri(this.getHost(), context.enumNextPageLink))
-                        .setCompletion(completionHandler));
+        queryLocalStates
+                .queryDocuments(rg -> context.resourceGroupStates.put(rg.id, rg.documentSelfLink))
+                .whenComplete(thenHandleSubStage(context, next));
     }
 
     /**
@@ -659,61 +600,20 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .addKindFieldClause(NetworkState.class)
                 .addInClause(NetworkState.FIELD_NAME_ID, context.virtualNetworks.keySet());
 
-        addScopeCriteria(qBuilder, NetworkState.class, context);
+        QueryByPages<NetworkState> queryLocalStates = new QueryByPages<>(
+                getHost(),
+                qBuilder.build(),
+                NetworkState.class,
+                context.parentCompute.tenantLinks,
+                null /* endpoint */,
+                context.parentCompute.documentSelfLink)
+                        // Use max page size cause we collect NetworkStates
+                        .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                        .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        QueryTask qt = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setResultLimit(getQueryResultLimit())
-                .setQuery(qBuilder.build())
-                .build();
-        qt.tenantLinks = context.parentCompute.tenantLinks;
-
-        QueryUtils.startInventoryQueryTask(this, qt)
-                .whenComplete((queryTask, e) -> {
-                    if (e != null) {
-                        handleError(context, e);
-                        return;
-                    }
-
-                    // If there are no matches, there is nothing to update.
-                    if (queryTask.results.nextPageLink == null) {
-                        logFine(() -> "No matching network states for Azure virtual networks");
-                        handleSubStage(context, next);
-                        return;
-                    }
-                    context.enumNextPageLink = queryTask.results.nextPageLink;
-                    getNetworkStatesHelper(context, next);
-                });
-    }
-
-    private void getNetworkStatesHelper(NetworkEnumContext context, NetworkEnumStages next) {
-        Operation.CompletionHandler completionHandler = (o, e) -> {
-            if (e != null) {
-                handleError(context, e);
-                return;
-            }
-            QueryTask queryTask = o.getBody(QueryTask.class);
-
-            context.enumNextPageLink = queryTask.results.nextPageLink;
-
-            queryTask.results.documents.values().forEach(network -> {
-                NetworkState networkState = Utils.fromJson(network, NetworkState.class);
-                context.networkStates.put(networkState.id, networkState);
-            });
-
-            if (context.enumNextPageLink != null) {
-                getNetworkStatesHelper(context, next);
-            } else {
-                logFine(() -> "Finished getting network states for azure virtual networks");
-                handleSubStage(context, next);
-                return;
-            }
-        };
-        logFine(() -> String.format("Querying page [%s] for getting network states",
-                context.enumNextPageLink));
-        sendRequest(
-                Operation.createGet(createInventoryUri(this.getHost(), context.enumNextPageLink))
-                        .setCompletion(completionHandler));
+        queryLocalStates
+                .queryDocuments(network -> context.networkStates.put(network.id, network))
+                .whenComplete(thenHandleSubStage(context, next));
     }
 
     /**
@@ -726,65 +626,26 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
 
         logFine(() -> "Query Subnet States from local document store.");
+
         Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addInClause(SubnetState.FIELD_NAME_ID, context.subnets.keySet());
 
-        addScopeCriteria(qBuilder, SubnetState.class, context);
+        QueryByPages<SubnetState> queryLocalStates = new QueryByPages<>(
+                getHost(),
+                qBuilder.build(),
+                SubnetState.class,
+                context.parentCompute.tenantLinks,
+                null /* endpoint */,
+                context.parentCompute.documentSelfLink)
+                        // Use max page size cause we collect NetworkStates
+                        .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                        .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setResultLimit(getQueryResultLimit())
-                .setQuery(qBuilder.build())
-                .build();
-        q.tenantLinks = context.parentCompute.tenantLinks;
-
-        QueryUtils.startInventoryQueryTask(this, q)
-                .whenComplete((queryTask, e) -> {
-                    if (e != null) {
-                        handleError(context, e);
-                        return;
-                    }
-                    // If there are no matches, there is nothing to update.
-                    if (queryTask.results.nextPageLink == null) {
-                        logFine(() -> "No matching subnet states found for Azure subnets");
-                        handleSubStage(context, next);
-                        return;
-                    }
-                    context.enumNextPageLink = queryTask.results.nextPageLink;
-                    getSubnetStatesHelper(context, next);
-                });
-    }
-
-    private void getSubnetStatesHelper(NetworkEnumContext context, NetworkEnumStages next) {
-        Operation.CompletionHandler completionHandler = (o, e) -> {
-            if (e != null) {
-                handleError(context, e);
-                return;
-            }
-            QueryTask queryTask = o.getBody(QueryTask.class);
-
-            context.enumNextPageLink = queryTask.results.nextPageLink;
-
-            queryTask.results.documents.values().forEach(result -> {
-
-                SubnetState subnetState = Utils.fromJson(result, SubnetState.class);
-                context.subnetStates.put(subnetState.id, subnetState.documentSelfLink);
-            });
-
-            if (context.enumNextPageLink != null) {
-                getSubnetStatesHelper(context, next);
-            } else {
-                logFine(() -> "Finished getting subnet states for Azure subnets");
-                handleSubStage(context, next);
-                return;
-            }
-        };
-        logFine(() -> String.format("Querying page [%s] for getting subnet states",
-                context.enumNextPageLink));
-        sendRequest(
-                Operation.createGet(createInventoryUri(this.getHost(), context.enumNextPageLink))
-                        .setCompletion(completionHandler));
+        queryLocalStates
+                .queryDocuments(subnet -> context.subnetStates.put(
+                        subnet.id, subnet.documentSelfLink))
+                .whenComplete(thenHandleSubStage(context, next));
     }
 
     /**
@@ -1141,26 +1002,24 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * lookup resources which haven't been touched as part of current enumeration cycle.
      */
     private void disassociateNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine(() -> "Disassociate Network States that no longer exists in Azure.");
 
         Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
                 .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS,
                         NumericRange.createLessThanRange(context.enumerationStartTimeInMicros));
 
-        addScopeCriteria(qBuilder, NetworkState.class, context);
+        QueryByPages<NetworkState> queryLocalStates = new QueryByPages<>(
+                getHost(),
+                qBuilder.build(),
+                NetworkState.class,
+                context.parentCompute.tenantLinks,
+                null /* endpoint */,
+                context.parentCompute.documentSelfLink)
+                        // Use max page size cause we iterate NetworkStates
+                        .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                        .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(qBuilder.build())
-                .setResultLimit(getQueryResultLimit())
-                .build();
-        q.tenantLinks = context.parentCompute.tenantLinks;
-
-        logFine(() -> "Querying Network States for disassociation.");
-
-        // Add deleted NetworkStates to the list.
-        sendDisassociateQueryTask(q, context, next);
+        disassociateResourceStates(queryLocalStates, context, next);
     }
 
     /**
@@ -1171,7 +1030,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * to networks touched by this enumeration cycle (either created/updated/deleted).
      */
     private void disassociateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
-        Builder builder = Query.Builder.create()
+
+        Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addFieldClause(SubnetState.FIELD_NAME_LIFECYCLE_STATE,
                         LifecycleState.PROVISIONING.name(), MatchType.TERM,
@@ -1179,102 +1039,63 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .addRangeClause(SubnetState.FIELD_NAME_UPDATE_TIME_MICROS,
                         NumericRange.createLessThanRange(context.enumerationStartTimeInMicros));
 
-        addScopeCriteria(builder, SubnetState.class, context);
+        QueryByPages<SubnetState> queryLocalStates = new QueryByPages<>(
+                getHost(),
+                qBuilder.build(),
+                SubnetState.class,
+                context.parentCompute.tenantLinks,
+                null /* endpoint */,
+                context.parentCompute.documentSelfLink)
+                        // Use max page size cause we iterate SubnetStates
+                        .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
+                        .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(builder.build())
-                .setResultLimit(getQueryResultLimit())
-                .build();
-        q.tenantLinks = context.parentCompute.tenantLinks;
-
-        logFine(() -> "Querying Subnet States for disassociation.");
-        sendDisassociateQueryTask(q, context, next);
-    }
-
-    private void sendDisassociateQueryTask(QueryTask q, NetworkEnumContext context,
-            NetworkEnumStages next) {
-
-        QueryUtils.startInventoryQueryTask(this, q)
-                .whenComplete((queryTask, e) -> {
-                    if (e != null) {
-                        handleError(context, e);
-                        return;
-                    }
-
-                    context.deletionNextPageLink = queryTask.results.nextPageLink;
-
-                    handleDisassociateQueryTaskResult(context, next);
-                });
+        disassociateResourceStates(queryLocalStates, context, next);
     }
 
     /**
-     * Get next page of query results and disassociate then.
+     * Generic disassociate resource helper.
      */
-    private void handleDisassociateQueryTaskResult(NetworkEnumContext context,
+    private void disassociateResourceStates(
+            QueryByPages<? extends ResourceState> resourcesQuery,
+            NetworkEnumContext context,
             NetworkEnumStages next) {
 
-        if (context.deletionNextPageLink == null) {
-            logFine(() -> "Finished disassociation stage.");
-            handleSubStage(context, next);
-            return;
-        }
+        final String msg = resourcesQuery.documentClass.getSimpleName() + " disassociation";
 
-        logFine(() -> String.format("Querying page [%s] for resources to be disassociated",
-                context.deletionNextPageLink));
-        sendRequest(Operation
-                .createGet(createInventoryUri(this.getHost(), context.deletionNextPageLink))
-                .setCompletion((completedOp, ex) -> {
-                    if (ex != null) {
-                        handleError(context, ex);
-                        return;
-                    }
+        logFine(() -> msg + ": STARTED");
 
-                    QueryTask queryTask = completedOp.getBody(QueryTask.class);
+        resourcesQuery
+                .queryDocuments(resourceState -> {
+                    if (shouldDelete(context, resourceState)) {
+                        Operation disassociateOp = PhotonModelUtils
+                                .createRemoveEndpointLinksOperation(
+                                        this,
+                                        context.request.endpointLink,
+                                        resourceState);
 
-                    if (queryTask.results.documentCount > 0) {
-                        // Disassociate all matching states.
-                        List<Operation> operations = queryTask.results.documentLinks.stream()
-                                .filter(link -> shouldDelete(context, queryTask, link))
-                                .map(link -> {
-                                    NetworkState networkState = Utils.fromJson(
-                                            queryTask.results.documents.get(link),
-                                            NetworkState.class);
-
-                                    return PhotonModelUtils.createRemoveEndpointLinksOperation(
-                                            this,
-                                            context.request.endpointLink,
-                                            networkState);
-                                })
-                                .filter(Objects::nonNull)
-                                .collect(Collectors.toList());
-
-                        if (!operations.isEmpty()) {
-                            OperationJoin.create(operations).sendWith(this);
+                        if (disassociateOp != null) {
+                            sendRequest(disassociateOp);
                         }
                     }
-
-                    // Store the next page in the context
-                    context.deletionNextPageLink = queryTask.results.nextPageLink;
-
-                    // Handle next page of results.
-                    handleDisassociateQueryTaskResult(context, next);
-                }));
+                })
+                .thenRun(() -> logFine(() -> msg + ": SUCCESS"))
+                .whenComplete(thenHandleSubStage(context, next));
     }
 
     /**
-     * Checks whether an entity should be delete.
+     * Checks whether an NetworkState or SubnetState should be delete.
      */
-    private boolean shouldDelete(NetworkEnumContext context, QueryTask queryTask, String link) {
-        if (link.startsWith(NetworkService.FACTORY_LINK)) {
-            NetworkState networkState = Utils
-                    .fromJson(queryTask.results.documents.get(link), NetworkState.class);
+    private boolean shouldDelete(NetworkEnumContext context, ResourceState resStateToDelete) {
+        if (resStateToDelete instanceof NetworkState) {
+            NetworkState networkState = (NetworkState) resStateToDelete;
+
             if (context.virtualNetworkIds.contains(networkState.id)) {
                 return false;
             }
-        } else if (link.startsWith(SubnetService.FACTORY_LINK)) {
-            SubnetState subnetState = Utils
-                    .fromJson(queryTask.results.documents.get(link), SubnetState.class);
+        } else if (resStateToDelete instanceof SubnetState) {
+            SubnetState subnetState = (SubnetState) resStateToDelete;
+
             if (context.subnetIds.contains(subnetState.id)) {
                 return false;
             }

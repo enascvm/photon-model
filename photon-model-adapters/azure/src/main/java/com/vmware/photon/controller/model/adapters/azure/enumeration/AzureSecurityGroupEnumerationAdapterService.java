@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.network.SecurityRuleDirection;
+
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -44,7 +45,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
@@ -254,40 +255,36 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
          * resource group id.
          */
         private DeferredResult<SecurityGroupEnumContext> getSecurityGroupRGStates(
-                SecurityGroupEnumContext context) {
+                SecurityGroupEnumContext ctx) {
 
-            if (context.remoteResources.keySet().isEmpty()) {
-                return DeferredResult.completed(context);
+            if (ctx.remoteResources.keySet().isEmpty()) {
+                return DeferredResult.completed(ctx);
             }
 
-            List<String> resourceGroupIds = context.remoteResources.keySet().stream()
+            List<String> resourceGroupIds = ctx.remoteResources.keySet().stream()
                     .map(AzureUtils::getResourceGroupId)
                     .collect(Collectors.toList());
 
             Query.Builder qBuilder = Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addInClause(ResourceState.FIELD_NAME_ID, resourceGroupIds)
-                    .addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
-                            this.request.parentCompute.documentSelfLink)
                     .addCompositeFieldClause(
                             ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.RESOURCE_TYPE_KEY,
                             ResourceGroupStateType.AzureResourceGroup.name());
 
-            QueryByPages<ResourceGroupState> queryByPages = new QueryByPages<>(
+            QueryTop<ResourceGroupState> queryByPages = new QueryTop<>(
                     this.service.getHost(),
                     qBuilder.build(),
                     ResourceGroupState.class,
-                    context.request.parentCompute.tenantLinks,
-                    null, // endpointLink
+                    ctx.request.parentCompute.tenantLinks,
+                    null /* endpointLink */,
                     this.request.parentCompute.documentSelfLink)
-                            .setMaxPageSize(resourceGroupIds.size());
+                    .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-            queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-
-            return queryByPages.queryDocuments(
-                    rgState -> this.securityGroupRGStates.put(rgState.id, rgState.documentSelfLink))
-                    .thenApply(ignore -> context);
+            return queryByPages
+                    .queryDocuments(rg -> ctx.securityGroupRGStates.put(rg.id, rg.documentSelfLink))
+                    .thenApply(ignore -> ctx);
         }
     }
 
