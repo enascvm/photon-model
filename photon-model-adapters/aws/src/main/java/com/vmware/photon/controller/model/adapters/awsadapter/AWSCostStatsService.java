@@ -87,6 +87,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
@@ -169,6 +170,7 @@ public class AWSCostStatsService extends StatelessService {
         protected boolean isSecondPass = false;
         protected final Map<String, ResourceMetrics> accountsMarkersMap = new ConcurrentHashMap<>();
         private String endpointLink = null; // TODO : Use this for all endpointLink usages in this class
+        private EndpointState endpointState = null;
 
         protected AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -313,7 +315,7 @@ public class AWSCostStatsService extends StatelessService {
                 return false;
             }
             return computes.stream()
-                    .filter(c -> context.computeDesc.endpointLink.equals(c.endpointLink)
+                    .filter(c -> c.endpointLinks.contains(context.computeDesc.endpointLink)
                             && Boolean.valueOf(c.customProperties.get(ACCOUNT_IS_AUTO_DISCOVERED)))
                     .count() != 0;
         };
@@ -364,7 +366,8 @@ public class AWSCostStatsService extends StatelessService {
             inferEndpointLink(statsData);
             String accountId = AWSUtils.isAwsS3Proxy() ? "mock" : compute.customProperties.get(AWS_ACCOUNT_ID_KEY);
             if (compute.type != ComputeType.VM_HOST || compute.parentLink != null
-                    || compute.endpointLink == null || accountId == null) {
+                    || compute.endpointLink == null || accountId == null ||
+                    CollectionUtils.isEmpty(compute.endpointLinks)) {
 
                 logWithContext(statsData, Level.SEVERE, () -> "Malformed Root Compute.");
                 postAccumulatedCostStats(statsData, true);
@@ -372,7 +375,7 @@ public class AWSCostStatsService extends StatelessService {
             }
             statsData.accountId = accountId;
             statsData.awsAccountIdToComputeStates.put(accountId, Collections.singletonList(compute));
-            getParentAuth(statsData, next);
+            getEndpointState(statsData, next);
         };
         URI computeUri = UriUtils.extendUriWithQuery(statsData.statsRequest.resourceReference,
                 UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
@@ -381,10 +384,19 @@ public class AWSCostStatsService extends StatelessService {
 
     protected void inferEndpointLink(AWSCostStatsCreationContext ctx) {
         ctx.endpointLink = ctx.computeDesc.endpointLink;
-        if ((ctx.endpointLink == null)
-                && !CollectionUtils.isEmpty(ctx.computeDesc.endpointLinks)) {
-            ctx.endpointLink = ctx.computeDesc.endpointLinks.iterator().next();
-        }
+    }
+
+    protected void getEndpointState(AWSCostStatsCreationContext statsData,
+            AWSCostStatsCreationStages next) {
+        Consumer<Operation> onEndpointSuccess = (op) -> {
+            statsData.endpointState = op.getBody(EndpointState.class);
+            this.getHost().log(Level.INFO, "AWS cost stats endpoint state link: %s",
+                    statsData.endpointState.documentSelfLink);
+            getParentAuth(statsData, next);
+        };
+        URI endpointUri = UriUtils.extendUriWithQuery(UriUtils.buildUri(this.getHost(), statsData.endpointLink),
+                UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
+        AdapterUtils.getServiceState(this, endpointUri, onEndpointSuccess, getFailureConsumer(statsData));
     }
 
     protected void getParentAuth(AWSCostStatsCreationContext statsData,
@@ -394,8 +406,9 @@ public class AWSCostStatsService extends StatelessService {
             statsData.stage = next;
             handleCostStatsCreationRequest(statsData);
         };
+
         URI authUri = createInventoryUri(this.getHost(),
-                statsData.computeDesc.description.authCredentialsLink);
+                statsData.endpointState.authCredentialsLink);
         AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(statsData));
     }
 
@@ -479,7 +492,8 @@ public class AWSCostStatsService extends StatelessService {
                     List<ComputeState> accountComputeStates = responseTask.results.documents
                             .values().stream()
                             .map(s -> Utils.fromJson(s, ComputeState.class))
-                            .filter(cs -> cs.parentLink == null && cs.endpointLink != null)
+                            .filter(cs -> cs.parentLink == null && cs.endpointLink != null &&
+                                    !CollectionUtils.isEmpty(cs.endpointLinks))
                             .collect(Collectors.toList());
                     queryResultConsumer.accept(accountComputeStates);
                 });
@@ -564,14 +578,14 @@ public class AWSCostStatsService extends StatelessService {
 
         Set<String> endpointLinks = statsData.awsAccountIdToComputeStates.values()
                 .stream().flatMap(List::stream) // flatten collection of lists to single list
-                .map(e -> e.endpointLink)
+                .flatMap(e -> e.endpointLinks.stream())
                 .collect(Collectors.toSet()); // extract endpointLinks of all accounts
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE,
                         ComputeDescriptionService.ComputeDescription.ComputeType.VM_GUEST)
-                .addInClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, endpointLinks, Occurance.MUST_OCCUR)
+                .addInCollectionItemClause(ComputeState.FIELD_NAME_ENDPOINT_LINKS, endpointLinks, Occurance.MUST_OCCUR)
                 .build();
 
         populateAwsResources(query, statsData, nextStage, nextSubStage);
@@ -582,12 +596,13 @@ public class AWSCostStatsService extends StatelessService {
 
         Set<String> endpointLinks = statsData.awsAccountIdToComputeStates.values()
                 .stream().flatMap(List::stream) // flatten collection of lists to single list
-                .map(e -> e.endpointLink).collect(Collectors.toSet()); // extract endpointLinks of all accounts
+                .flatMap(e -> e.endpointLinks.stream())
+                .collect(Collectors.toSet()); // extract endpointLinks of all accounts
 
         List<String> supportedStorageTypes = Arrays.asList(STORAGE_TYPE_EBS, STORAGE_TYPE_S3);
         Query query = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
-                .addInClause(DiskState.FIELD_NAME_ENDPOINT_LINK, endpointLinks, Occurance.MUST_OCCUR)
+                .addInCollectionItemClause(DiskState.FIELD_NAME_ENDPOINT_LINKS, endpointLinks, Occurance.MUST_OCCUR)
                 .addInClause(DiskState.FIELD_NAME_STORAGE_TYPE, supportedStorageTypes)
                 .build();
 
