@@ -803,6 +803,9 @@ public class QueryUtils {
                         "__endpointType", accountType)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString(),
+                        Occurance.MUST_NOT_OCCUR)
                 .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()

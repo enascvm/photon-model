@@ -62,6 +62,7 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -76,6 +77,8 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Stateless service for the creation of compute states. It accepts a list of AWS instances that
@@ -153,6 +156,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         List<Tag> createdExternalTags;
         // maintains internal tagLinks Example, link for tagState for type=ec2_instances
         public ResourceState resourceDeletionState;
+        public Map<Instance, List<String>> diskLinksByInstances;
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
@@ -160,6 +164,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             this.enumerationOperations = new ArrayList<>();
             this.createdExternalTags = new ArrayList<>();
             this.computeDescriptionMap = new HashMap<>();
+            this.diskLinksByInstances = new HashMap<>();
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
             this.operation = op;
             this.resourceDeletionState = getDeletionState(request.deletedResourceExpirationMicros);
@@ -192,7 +197,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         CREATE_COMPUTESTATES,
         SIGNAL_COMPLETION,
         CREATE_EXTERNAL_TAGS,
-        UPDATE_EXTERNAL_TAGS
+        UPDATE_EXTERNAL_TAGS,
+        /**
+         * Collect respective EBS selfLinks for every instance.
+         */
+        COLLECT_EBS_DISK_LINKS
     }
 
     public AWSComputeStateCreationAdapterService() {
@@ -242,7 +251,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             createInternalTypeTags(context, AWSComputeStateCreationStage.CREATE_EXTERNAL_TAGS);
             break;
         case CREATE_EXTERNAL_TAGS:
-            createTags(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES_OPERATIONS);
+            createTags(context, AWSComputeStateCreationStage.COLLECT_EBS_DISK_LINKS);
+            break;
+        case COLLECT_EBS_DISK_LINKS:
+            collectEbsDiskLinks(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES_OPERATIONS);
             break;
         case CREATE_COMPUTESTATES_OPERATIONS:
             populateCreateOperations(context,
@@ -386,6 +398,89 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
+     * Collect EBS selfLinks by querying for all EBS disk IDs. Map these selfLinks to
+     * their respective instances. These will be used for reconciliation with local state while
+     * creating/updating compute state's diskLinks.
+     */
+    private void collectEbsDiskLinks(AWSComputeStateCreationContext context,
+            AWSComputeStateCreationStage next) {
+
+        List<String> diskIds = new ArrayList<>();
+        Map<String, Instance> instancesByDiskIds = new HashMap<>();
+        context.request.instancesToBeCreated.stream()
+                .forEach(instance -> {
+                    instance.getBlockDeviceMappings().stream()
+                            .forEach(instanceBlockDeviceMapping -> {
+                                String id = instanceBlockDeviceMapping.getEbs().getVolumeId();
+                                instancesByDiskIds.put(id, instance);
+                                diskIds.add(id);
+                            });
+                });
+        context.request.instancesToBeUpdated.values().stream()
+                .forEach(instance -> {
+                    instance.getBlockDeviceMappings().stream()
+                            .forEach(instanceBlockDeviceMapping -> {
+                                String id = instanceBlockDeviceMapping.getEbs().getVolumeId();
+                                instancesByDiskIds.put(id, instance);
+                                diskIds.add(id);
+                            });
+                });
+
+        // No disks found for current page of instances.
+        if (diskIds.isEmpty()) {
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
+            return;
+        }
+
+        Query ebsQuery = Query.Builder.create()
+                .addKindFieldClause(DiskState.class)
+                .addCollectionItemClause(ResourceState.FIELD_NAME_ENDPOINT_LINKS,
+                        context.request.endpointLink)
+                .addInClause(DiskState.FIELD_NAME_ID, diskIds)
+                .build();
+        QueryTask ebsQueryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(ebsQuery)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
+        ebsQueryTask.tenantLinks = context.request.tenantLinks;
+
+        QueryUtils.startInventoryQueryTask(this, ebsQueryTask)
+                .whenComplete((qrt, e) -> {
+                    if (e != null) {
+                        logWarning("Error querying diskLinks for endpoint %s",
+                                context.request.endpointLink);
+                        context.creationStage = next;
+                        handleComputeStateCreateOrUpdate(context);
+                        return;
+                    }
+
+                    if (qrt.results != null && qrt.results.documentCount > 0) {
+                        qrt.results.documents.entrySet()
+                                .forEach(entry -> {
+                                    DiskState state = Utils
+                                            .fromJson(entry.getValue(), DiskState.class);
+                                    Instance instance = instancesByDiskIds.get(state.id);
+
+                                    if (instance != null) {
+                                        if (context.diskLinksByInstances
+                                                .containsKey(instance)) {
+                                            context.diskLinksByInstances.get(instance)
+                                                    .add(entry.getKey());
+                                        } else {
+                                            context.diskLinksByInstances
+                                                    .put(instance, new ArrayList<>(Arrays
+                                                            .asList(entry.getKey())));
+                                        }
+                                    }
+                                });
+                    }
+                    context.creationStage = next;
+                    handleComputeStateCreateOrUpdate(context);
+                });
+    }
+
+    /**
      * Looks up the compute descriptions associated with the compute states to be created in the
      * system.
      */
@@ -476,7 +571,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.internalTagLinksMap.get(ec2_instance.toString()),
                         regionId, zoneId,
                         context.request.tenantLinks,
-                        context.createdExternalTags, true);
+                        context.createdExternalTags, true,
+                        context.diskLinksByInstances.get(instance));
                 computeStateToBeCreated.networkInterfaceLinks = new ArrayList<>();
 
                 if (!AWSEnumerationUtils.instanceIsInStoppedState(instance)) {
@@ -685,32 +781,65 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         zoneData.regionId, zoneId,
                         context.request.tenantLinks,
                         null,
-                        false);
+                        false, null);
                 computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;
 
                 Operation patchComputeState = createPatchOperation(this, computeStateToBeUpdated,
                         existingComputeState.documentSelfLink);
                 context.enumerationOperations.add(patchComputeState);
 
+                // Reconcile remote diskLinks with current diskLinks of existing computeState and
+                // update them with collection update request if needed.
+                List<String> remoteDiskLinks = context.diskLinksByInstances.get(instance);
+                List<String> currentDiskLinks = existingComputeState.diskLinks;
+
+                Collection<Object> linksToAdd = new ArrayList<>();
+                Collection<Object> linksToRemove = new ArrayList<>();
+
+                if (remoteDiskLinks == null && currentDiskLinks != null) {
+                    linksToRemove.addAll(currentDiskLinks);
+                } else if (remoteDiskLinks != null && currentDiskLinks == null) {
+                    linksToAdd.addAll(remoteDiskLinks);
+                } else if (remoteDiskLinks != null && currentDiskLinks != null) {
+                    currentDiskLinks.stream()
+                            .forEach(link -> {
+                                if (!remoteDiskLinks.contains(link)) {
+                                    linksToRemove.add(link);
+                                }
+                            });
+
+                    remoteDiskLinks.removeAll(currentDiskLinks);
+                    linksToAdd.addAll(remoteDiskLinks);
+                }
+
                 // If existing computeState does not have an internal tag then create dedicated
                 // patch to update the internal tag link.
                 String ec2ComputeInternalTagLink = context.internalTagLinksMap
                         .get(ec2_instance.toString()).iterator().next();
-                if (existingComputeState.tagLinks == null || (existingComputeState.tagLinks != null
-                        && !existingComputeState.tagLinks.contains(ec2ComputeInternalTagLink))) {
-                    Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap(
-                            ComputeState.FIELD_NAME_TAG_LINKS,
-                            Collections.singletonList(ec2ComputeInternalTagLink));
-                    Map<String, Collection<Object>> collectionsToRemoveMap = Collections
-                            .singletonMap(ComputeState.FIELD_NAME_TAG_LINKS,
-                                    Collections.emptyList());
 
-                    ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
-                            .create(collectionsToAddMap, collectionsToRemoveMap);
+                // We use ServiceStateCollectionUpdateRequest to PATCH both tagLinks and diskLinks
+                // in one PATCH (only if an update is needed).
+                // Check if internal tagLink is to be added and if diskLinks are to be added/removed
+                // and send a combined collection update request for both of these.
+                if (existingComputeState.tagLinks == null || (existingComputeState.tagLinks != null
+                        && !existingComputeState.tagLinks.contains(ec2ComputeInternalTagLink)) ||
+                        !linksToAdd.isEmpty() || !linksToRemove.isEmpty()) {
+                    Map<String, Collection<Object>> itemsToAdd = new HashMap<>();
+                    Map<String, Collection<Object>> itemsToRemove = new HashMap<>();
+
+                    itemsToAdd.put(ComputeState.FIELD_NAME_DISK_LINKS, linksToAdd);
+                    itemsToRemove.put(ComputeState.FIELD_NAME_DISK_LINKS, linksToRemove);
+
+                    itemsToAdd.put(ComputeState.FIELD_NAME_TAG_LINKS,
+                            Collections.singletonList(ec2ComputeInternalTagLink));
+
+                    ServiceStateCollectionUpdateRequest updateTagLinksAndDiskLinks =
+                            ServiceStateCollectionUpdateRequest.create(itemsToAdd, itemsToRemove);
+
                     context.enumerationOperations.add(Operation.createPatch(this.getHost(),
                             existingComputeState.documentSelfLink)
-                            .setReferer(this.getUri())
-                            .setBody(updateTagLinksRequest));
+                            .setBody(updateTagLinksAndDiskLinks)
+                            .setReferer(this.getUri()));
                 }
             }
 

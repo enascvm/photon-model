@@ -53,7 +53,9 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okio.BufferedSink;
 import okio.Okio;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
@@ -141,7 +143,7 @@ public class AzureCostStatsService extends StatelessService {
 
     protected enum Stages {
         GET_COMPUTE_HOST,
-        GET_AUTH,
+        GET_ENDPOINT_AUTH,
         GET_BILL_MONTH_TO_FETCH_STATS_FOR,
         QUERY_EXISTING_LINKED_SUBSCRIPTIONS,
         FILTER_SUBSCRIPTIONS_ADDED_AFTER_LAST_RUN,
@@ -198,6 +200,9 @@ public class AzureCostStatsService extends StatelessService {
         private TaskManager taskManager;
         // billParsedMillis is populated once the entire bill is parsed
         private long billParsedMillis = 0;
+
+        private String endpointLink = null;
+        private EndpointState endpointState = null;
 
         Context(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -265,10 +270,10 @@ public class AzureCostStatsService extends StatelessService {
                     context.stage, context.computeHostDesc.endpointLink));
             switch (context.stage) {
             case GET_COMPUTE_HOST:
-                getComputeHost(context, Stages.GET_AUTH);
+                getComputeHost(context, Stages.GET_ENDPOINT_AUTH);
                 break;
-            case GET_AUTH:
-                getAuth(context, Stages.GET_BILL_MONTH_TO_FETCH_STATS_FOR);
+            case GET_ENDPOINT_AUTH:
+                getEndpointState(context, Stages.GET_BILL_MONTH_TO_FETCH_STATS_FOR);
                 break;
             case GET_BILL_MONTH_TO_FETCH_STATS_FOR:
                 getServiceMetadata(context, Stages.QUERY_EXISTING_LINKED_SUBSCRIPTIONS);
@@ -391,7 +396,8 @@ public class AzureCostStatsService extends StatelessService {
         queryVms.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
         queryVms.setMaxPageSize(QueryUtils.DEFAULT_RESULT_LIMIT);
         queryVms.queryDocuments(computeState -> {
-            if (computeState.endpointLink != null) {
+            if (!StringUtils.isEmpty(computeState.endpointLink) &&
+                    !CollectionUtils.isEmpty(computeState.endpointLinks)) {
                 String subscriptionGuid = endpointLinkToSubscription
                         .get(computeState.endpointLink);
                 Map<String, List<String>> instanceIdToCompLinks =
@@ -422,7 +428,7 @@ public class AzureCostStatsService extends StatelessService {
         return Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_GUEST)
-                .addInClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, endpointLinks)
+                .addInCollectionItemClause(ComputeState.FIELD_NAME_ENDPOINT_LINKS, endpointLinks)
                 .build();
     }
 
@@ -450,6 +456,7 @@ public class AzureCostStatsService extends StatelessService {
         Consumer<Operation> onSuccess = (op) -> {
             context.computeHostDesc = op.getBody(ComputeStateWithDescription.class);
             context.stage = next;
+            context.endpointLink = context.computeHostDesc.endpointLink;
             handleRequest(context);
         };
 
@@ -458,6 +465,18 @@ public class AzureCostStatsService extends StatelessService {
                 UriUtils.URI_PARAM_ODATA_EXPAND,
                 Boolean.TRUE.toString());
         AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(context));
+    }
+
+    protected void getEndpointState(Context context, Stages next) {
+        Consumer<Operation> onEndpointSuccess = (op) -> {
+            context.endpointState = op.getBody(EndpointState.class);
+            logInfo(() -> String.format("Azure ea cost stats endpoint state link: %s",
+                    context.endpointState.documentSelfLink));
+            getAuth(context, next);
+        };
+        URI endpointUri = UriUtils.extendUriWithQuery(UriUtils.buildUri(this.getHost(), context.endpointLink),
+                UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
+        AdapterUtils.getServiceState(this, endpointUri, onEndpointSuccess, getFailureConsumer(context));
     }
 
     /**
@@ -469,7 +488,7 @@ public class AzureCostStatsService extends StatelessService {
                 context.computeHostDesc.endpointLink));
 
         URI authUri = UriUtils.extendUri(getInventoryServiceUri(),
-                context.computeHostDesc.description.authCredentialsLink);
+                context.endpointState.authCredentialsLink);
         Consumer<Operation> onSuccess = (op) -> {
             context.auth = op.getBody(AuthCredentialsServiceState.class);
             context.stage = next;
@@ -953,7 +972,8 @@ public class AzureCostStatsService extends StatelessService {
                     List<ComputeState> subscriptionComputeState = responseTask.results.documents
                             .values().stream()
                             .map(s -> Utils.fromJson(s, ComputeState.class))
-                            .filter(cs -> cs.endpointLink != null)
+                            .filter(cs -> !StringUtils.isEmpty(cs.endpointLink) &&
+                                    !CollectionUtils.isEmpty(cs.endpointLinks))
                             .collect(Collectors.toList());
                     if (subscriptionComputeState == null || subscriptionComputeState.size() == 0) {
                         return;

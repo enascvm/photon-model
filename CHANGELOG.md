@@ -1,8 +1,12 @@
 # CHANGELOG
 
+## 0.6.47_1
+* Set correlation of AWS Disks with Instances.
+* Important bug fixes.
+
 ## 0.6.47
-* DeDup feature: Resources enumerated only once for 
-  same endpoints, IAM accounts added multiple times.
+* DeDup feature: Resources enumerated only once for
+ same endpoints, IAM accounts added multiple times.
 
 ## 0.6.46
 * Delete stale TagState resources.

@@ -556,7 +556,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
         AdapterUtils.addToEndpointLinks(subnetState, endpointLink);
-
         subnetState.supportPublicIpAddress = true;
         subnetState.computeHostLink = parentLink;
 

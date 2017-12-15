@@ -62,6 +62,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AWSClientManager {
 
+    private static String SEPARATOR = "-";
     // Flag for determining the type of AWS client managed by this client manager.
     private AwsClientType awsClientType;
     private LRUCache<String, AmazonEC2AsyncClient> ec2ClientCache;
@@ -401,7 +402,8 @@ public class AWSClientManager {
      */
     public static String createCredentialRegionCacheKey(AuthCredentialsServiceState credentials,
             String regionId) {
-        return credentials.documentSelfLink + TILDA + regionId;
+        return Utils.computeHash(credentials.privateKeyId + SEPARATOR + credentials.privateKey) + TILDA +
+                regionId;
     }
 
     /**

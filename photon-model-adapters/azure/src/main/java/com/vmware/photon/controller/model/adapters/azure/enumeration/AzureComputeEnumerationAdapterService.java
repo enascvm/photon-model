@@ -1220,7 +1220,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.authCredentialsLink = authLink;
             computeDescription.endpointLink = ctx.request.endpointLink;
             AdapterUtils.addToEndpointLinks(computeDescription, ctx.request.endpointLink);
-
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
             if (virtualMachine.hardwareProfile() != null

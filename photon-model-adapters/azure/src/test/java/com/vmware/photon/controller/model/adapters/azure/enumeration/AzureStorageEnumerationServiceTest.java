@@ -167,7 +167,6 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
                 .endpointLink != null && storageDescription.endpointLink == this.endpointState.documentSelfLink);
         Assert.assertTrue("Azure Storage account endpointLinks cannot be null",storageDescription
                 .endpointLinks != null && storageDescription.endpointLinks.contains(this.endpointState.documentSelfLink));
-
     }
 
 }

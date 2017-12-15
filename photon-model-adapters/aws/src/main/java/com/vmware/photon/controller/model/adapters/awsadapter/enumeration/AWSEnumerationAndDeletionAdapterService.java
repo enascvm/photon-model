@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_INSTANCE_ID_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
@@ -29,6 +30,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Filter;
@@ -397,6 +399,22 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
+            if (exception instanceof AmazonEC2Exception) {
+                // This is to handle enumeration after a credential update. AWS will return 400
+                // InvalidInstanceID.NotFound if credentials for an endpoint get updated to a
+                // different IAM user or account. According to AWS some other account's instance IDs
+                // are not valid for another account, which is why they throw this error.
+                if (((AmazonEC2Exception) exception).getErrorCode()
+                        .equals(AWS_INVALID_INSTANCE_ID_ERROR_CODE)) {
+                    this.service.logInfo("IAM user or account changed for endpoint: %s. "
+                                    + "Removing all invalid computes for this endpoint.",
+                            this.aws.request.original.endpointLink);
+                    this.aws.subStage = this.next;
+                    ((AWSEnumerationAndDeletionAdapterService) this.service)
+                            .deleteResourcesInLocalSystem(this.aws);
+                    return;
+                }
+            }
             this.service.logSevere(exception);
             this.aws.operation.fail(exception);
         }

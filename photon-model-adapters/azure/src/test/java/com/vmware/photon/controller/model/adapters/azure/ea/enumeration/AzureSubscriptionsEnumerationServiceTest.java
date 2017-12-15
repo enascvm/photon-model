@@ -277,7 +277,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
 
-        assertQueryTaskResponse(queryTaskResponse, 6);
+        assertQueryTaskResponse(queryTaskResponse, 7);
     }
 
     private void testAddSameAzureSubscriptions() throws  Throwable {
