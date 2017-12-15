@@ -244,8 +244,8 @@ public class AWSSubnetService extends StatelessService {
         switch (context.request.requestType) {
         case CREATE:
             if (context.request.isMockRequest) {
-                // no need to go the end-point; just generate AWS Subnet Id.
-                context.awsSubnetId = UUID.randomUUID().toString();
+                // no need to go to the end-point; just generate random subnet id and zoneId
+                context.subnetState.zoneId = context.awsSubnetId = UUID.randomUUID().toString();
                 execution = execution.thenCompose(this::updateSubnetState);
             } else {
                 execution = execution
