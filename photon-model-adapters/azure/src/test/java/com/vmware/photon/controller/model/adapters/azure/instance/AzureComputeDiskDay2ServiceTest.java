@@ -59,6 +59,8 @@ import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService.ProvisionDiskTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -132,8 +134,12 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         super.startRequiredServices();
         getHost().setTimeoutSeconds(1200);
 
-        factoryService(AttachDiskTaskTestService.class,
-                () -> TaskFactoryService.create(AttachDiskTaskTestService.class)).start(this.host);
+        ServiceMetadata[] serviceMetadata = {
+                factoryService(AttachDiskTaskTestService.class,
+                        () -> TaskFactoryService.create(AttachDiskTaskTestService.class))
+        };
+
+        StartServicesHelper.startServices(this.host, serviceMetadata);
     }
 
     @Test

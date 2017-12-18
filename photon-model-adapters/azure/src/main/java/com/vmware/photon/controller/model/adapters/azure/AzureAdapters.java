@@ -79,8 +79,16 @@ public class AzureAdapters {
             EndpointType.azure.name());
 
     public static void startServices(ServiceHost host) throws Throwable {
+        startServices(host, false);
+    }
+
+    public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
         try {
-            StartServicesHelper.startServices(host, SERVICES_METADATA);
+            if (isSynchronousStart) {
+                StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
+            } else {
+                StartServicesHelper.startServices(host, SERVICES_METADATA);
+            }
 
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.azure, LINKS, AzureUriPaths.AZURE_ADAPTER_LINK_TYPES);

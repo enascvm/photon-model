@@ -89,7 +89,14 @@ public class PhotonModelTaskServices {
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     public static void startServices(ServiceHost host) throws Throwable {
+        startServices(host, false);
+    }
 
-        StartServicesHelper.startServices(host, SERVICES_METADATA);
+    public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
+        if (isSynchronousStart) {
+            StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
+        } else {
+            StartServicesHelper.startServices(host, SERVICES_METADATA);
+        }
     }
 }

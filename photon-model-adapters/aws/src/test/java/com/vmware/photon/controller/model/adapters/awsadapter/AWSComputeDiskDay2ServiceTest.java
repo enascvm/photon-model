@@ -80,6 +80,8 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -189,8 +191,11 @@ public class AWSComputeDiskDay2ServiceTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
 
-            factoryService(DiskTaskService.class,
-                    () -> TaskFactoryService.create(DiskTaskService.class)).start(this.host);
+            ServiceMetadata[] serviceMetadata = {
+                factoryService(DiskTaskService.class, () -> TaskFactoryService.create(DiskTaskService.class))
+            };
+
+            StartServicesHelper.startServices(this.host, serviceMetadata);
 
             AWSAdapters.startServices(this.host);
 

@@ -43,8 +43,16 @@ public class PhotonModelAdaptersRegistryAdapters {
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     public static void startServices(ServiceHost host) {
+        startServices(host, false);
+    }
+
+    public static void startServices(ServiceHost host, boolean isSynchronousStart) {
         try {
-            StartServicesHelper.startServices(host, SERVICES_METADATA);
+            if (isSynchronousStart) {
+                StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
+            } else {
+                StartServicesHelper.startServices(host, SERVICES_METADATA);
+            }
         } catch (Exception e) {
             host.log(Level.WARNING, "Error on start adapter registry related services. %s",
                     Utils.toString(e));

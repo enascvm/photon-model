@@ -55,6 +55,8 @@ import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.TaskState;
@@ -115,8 +117,12 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
 
     @Override
     protected void doSetup() {
-        factoryService(ComputeDiskOperationTaskService.class,
-                () -> TaskFactoryService.create(ComputeDiskOperationTaskService.class)).start(this.host);
+        ServiceMetadata[] serviceMetadata = {
+                factoryService(ComputeDiskOperationTaskService.class,
+                        () -> TaskFactoryService.create(ComputeDiskOperationTaskService.class))
+        };
+
+        StartServicesHelper.startServices(this.host, serviceMetadata);
     }
 
     @Test
