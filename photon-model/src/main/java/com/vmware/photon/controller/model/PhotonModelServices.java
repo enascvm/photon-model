@@ -34,6 +34,8 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.RouterService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SessionFactoryService;
+import com.vmware.photon.controller.model.resources.SessionService;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetRangeService;
@@ -42,7 +44,6 @@ import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
-
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -74,7 +75,8 @@ public class PhotonModelServices {
             factoryService(LoadBalancerDescriptionService.class),
             factoryService(LoadBalancerService.class),
             factoryService(RouterService.class),
-            factoryService(ContentService.class)
+            factoryService(ContentService.class),
+            factoryService(SessionService.class, SessionFactoryService::new)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
@@ -83,7 +85,8 @@ public class PhotonModelServices {
         startServices(host, false);
     }
 
-    public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
+    public static void startServices(ServiceHost host, boolean isSynchronousStart)
+            throws Throwable {
 
         if (isSynchronousStart) {
             StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);

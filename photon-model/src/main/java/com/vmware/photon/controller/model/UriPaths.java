@@ -22,6 +22,8 @@ public class UriPaths {
 
     public static final String PROPERTY_PREFIX = "photon-model.";
 
+    public static final String IAAS_API_ENABLED_PROPERTY_NAME = "iaas.api.enabled";
+
     public static final String DEFAULT_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
             + "default.uri.prefix";
 
@@ -39,6 +41,10 @@ public class UriPaths {
             + "schedules.uri.prefix";
     public static final String MONITORING_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
             + "monitoring.uri.prefix";
+    public static final String SESSION_SERVICE_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "session-service.uri.prefix";
+
+    public static final Boolean IAAS_API_ENABLED = Boolean.getBoolean(IAAS_API_ENABLED_PROPERTY_NAME);
 
     private static final String DEFAULT_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
             DEFAULT_BASE_URI_PREFIX_PROPERTY_NAME, ""));
@@ -56,6 +62,8 @@ public class UriPaths {
             SCHEDULES_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
     public static final String MONITORING_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System.getProperty(
             MONITORING_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
+    public static final String SESSION_SERVICE_BASE_URI_PREFIX = UriUtils.normalizeUriPath(System
+            .getProperty(SESSION_SERVICE_BASE_URI_PREFIX_PROPERTY_NAME, DEFAULT_URI_PREFIX));
 
     public static final String RESOURCES = RESOURCES_BASE_URI_PREFIX + "/resources";
 
@@ -65,7 +73,7 @@ public class UriPaths {
     public static final String TASKS = TASKS_BASE_URI_PREFIX + "/tasks";
     public static final String SCHEDULES = SCHEDULES_BASE_URI_PREFIX + "/schedules";
     public static final String MONITORING = MONITORING_BASE_URI_PREFIX + "/monitoring";
-
+    public static final String SESSION_SERVICE = SESSION_SERVICE_BASE_URI_PREFIX + "/sessions";
 
     public static final String RESOURCES_NETWORKS = RESOURCES + "/networks";
     public static final String RESOURCES_NETWORK_INTERFACES = RESOURCES + "/network-interfaces";
