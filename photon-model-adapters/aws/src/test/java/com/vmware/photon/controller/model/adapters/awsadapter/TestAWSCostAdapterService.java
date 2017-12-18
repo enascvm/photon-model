@@ -153,11 +153,11 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         System.setProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY, "1");
 
         triggerStatsCollection(resourcePool);
-        //verifyPersistedStats(completeState, AWSConstants.COST, 2);
+        verifyPersistedStats(completeState, AWSConstants.COST, 2);
 
         //Check if second iteration of adapter succeeds.
-        //triggerStatsCollection(resourcePool);
-        //verifyPersistedStats(completeState, AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, 3);
+        triggerStatsCollection(resourcePool);
+        verifyPersistedStats(completeState, AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, 2);
 
         System.clearProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
     }
