@@ -632,8 +632,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         continue;
                     }
                     if (vm.getInstanceUuid() == null) {
-                        logWarning(() -> String.format("Cannot process a VM %s without"
-                                        + " instanceUuid: %s", vm.getName(),
+                        logWarning(() -> String.format("Cannot process a VM without"
+                                        + " instanceUuid: %s",
                                 VimUtils.convertMoRefToString(vm.getId())));
                     } else {
                         ctx.getVmTracker().register();
