@@ -42,6 +42,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
@@ -900,7 +901,10 @@ public class QueryUtils {
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         "__endpointType", accountType)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId);
+                        PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString(),
+                        Occurance.MUST_NOT_OCCUR);
 
         if (tenantLinks != null) {
             qBuilder.addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
