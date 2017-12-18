@@ -172,6 +172,10 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 image.endpointType);
         Assert.assertEquals("Private image must have endpointLink set.",
                 this.endpointState.documentSelfLink, image.endpointLink);
+        Assert.assertNotNull("Private image must have endpointLink set.",
+                image.endpointLinks);
+        Assert.assertTrue("Private image must have endpointLink set.",
+                image.endpointLinks.contains(this.endpointState.documentSelfLink));
         Assert.assertEquals("Private image must have tenantLinks set.",
                 this.endpointState.tenantLinks, image.tenantLinks);
 
@@ -240,6 +244,8 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                         imageAfterFirstEnum.endpointType);
                 Assert.assertNull("Public image must NOT have endpointLink set.",
                         imageAfterFirstEnum.endpointLink);
+                Assert.assertNull("Public image must NOT have endpointLink set.",
+                        imageAfterFirstEnum.endpointLinks);
                 Assert.assertNull("Public image must NOT have tenantLinks set.",
                         imageAfterFirstEnum.tenantLinks);
 

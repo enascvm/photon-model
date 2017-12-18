@@ -553,6 +553,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
+        subnetState.endpointLinks = new HashSet<>();
+        subnetState.endpointLinks.add(endpointLink);
         subnetState.supportPublicIpAddress = true;
         subnetState.computeHostLink = parentLink;
 
@@ -1013,6 +1015,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         subnetState.name));
             }
             subnetState.endpointLink = context.request.endpointLink;
+            if (subnetState.endpointLinks == null) {
+                subnetState.endpointLinks = new HashSet<>();
+            }
+            subnetState.endpointLinks.add(context.request.endpointLink);
             subnetState.computeHostLink = context.parentCompute.documentSelfLink;
 
             return context.subnetStates.containsKey(subnetId) ?
@@ -1079,6 +1085,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         resultNetworkState.name = azureVirtualNetwork.name;
         resultNetworkState.regionId = azureVirtualNetwork.location;
         resultNetworkState.endpointLink = context.request.endpointLink;
+        resultNetworkState.endpointLinks = new HashSet<>();
+        resultNetworkState.endpointLinks.add(context.request.endpointLink);
         resultNetworkState.computeHostLink = context.parentCompute.documentSelfLink;
 
         AddressSpace addressSpace = azureVirtualNetwork.properties.addressSpace;

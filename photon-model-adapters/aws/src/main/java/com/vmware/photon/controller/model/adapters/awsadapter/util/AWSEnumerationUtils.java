@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.xenon.common.UriUtils.URI_PATH_CHAR;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -175,7 +176,7 @@ public class AWSEnumerationUtils {
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
             String endpointLink,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
             Set<String> internalTagLinks, String regionId, String zoneId, List<String> tenantLinks,
-            List<Tag> createdExternalTags, Boolean isNewState) {
+            List<Tag> createdExternalTags, Boolean isNewState, List<String> diskLinks) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
@@ -254,6 +255,11 @@ public class AWSEnumerationUtils {
         if (instance.getLaunchTime() != null) {
             computeState.creationTimeMicros = TimeUnit.MILLISECONDS
                     .toMicros(instance.getLaunchTime().getTime());
+        }
+
+        if (diskLinks != null && !diskLinks.isEmpty()) {
+            computeState.diskLinks = new ArrayList<>();
+            computeState.diskLinks.addAll(diskLinks);
         }
 
         computeState.tenantLinks = tenantLinks;

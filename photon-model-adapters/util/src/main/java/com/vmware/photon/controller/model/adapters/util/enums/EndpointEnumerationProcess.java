@@ -579,10 +579,20 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 localState.tenantLinks = this.endpointState.tenantLinks;
                 // By default populate ENDPOINT_ILNK
                 setEndpointLink(localState, this.endpointState.documentSelfLink);
+                if (localState.endpointLinks == null) {
+                    localState.endpointLinks = new HashSet<>();
+                }
+                localState.endpointLinks.add(this.endpointState.documentSelfLink);
             }
             localState.computeHostLink = this.computeHostLink;
             localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         } else {
+            if (isApplyInfraFields()) {
+                if (localState.endpointLinks == null) {
+                    localState.endpointLinks = new HashSet<>();
+                }
+                localState.endpointLinks.add(this.endpointState.documentSelfLink);
+            }
             // Update case
             localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         }

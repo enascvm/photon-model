@@ -1151,6 +1151,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.regionId = virtualMachine.location();
             computeDescription.authCredentialsLink = authLink;
             computeDescription.endpointLink = ctx.request.endpointLink;
+            computeDescription.endpointLinks = new HashSet<>();
+            computeDescription.endpointLinks.add(ctx.request.endpointLink);
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
             if (virtualMachine.hardwareProfile() != null
@@ -1254,6 +1256,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         virtualMachine.storageProfile().osDisk().caching().name());
             }
             diskToUpdate.computeHostLink = ctx.parentCompute.documentSelfLink;
+            if (diskToUpdate.endpointLinks == null) {
+                diskToUpdate.endpointLinks = new HashSet<>();
+            }
+            diskToUpdate.endpointLinks.add(ctx.request.endpointLink);
             Operation diskOp = Operation
                     .createPatch(ctx.request.buildUri(diskToUpdate.documentSelfLink))
                     .setBody(diskToUpdate);
@@ -1452,9 +1458,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         if (isCreate) {
             nic.id = remoteNic.id();
             nic.endpointLink = ctx.request.endpointLink;
+            if (nic.endpointLinks == null) {
+                nic.endpointLinks = new HashSet<>();
+            }
+            nic.endpointLinks.add(ctx.request.endpointLink);
             nic.tenantLinks = ctx.parentCompute.tenantLinks;
             nic.regionId = remoteNic.location();
             nic.computeHostLink = ctx.parentCompute.documentSelfLink;
+        } else {
+            if (nic.endpointLinks == null) {
+                nic.endpointLinks = new HashSet<>();
+            }
+            nic.endpointLinks.add(ctx.request.endpointLink);
         }
 
         List<NetworkInterfaceIPConfigurationInner> ipConfigurations = remoteNic.ipConfigurations();
@@ -1685,6 +1700,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK,
                         ctx.computeDescriptionIds.get(virtualMachine.name()));
         computeState.endpointLink = ctx.request.endpointLink;
+        computeState.endpointLinks = new HashSet<>();
+        computeState.endpointLinks.add(ctx.request.endpointLink);
         computeState.resourcePoolLink = ctx.request.resourcePoolLink;
         computeState.computeHostLink = ctx.parentCompute.documentSelfLink;
         computeState.diskLinks = vmDisks;
@@ -1817,6 +1834,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 computeState.customProperties = new HashMap<>();
             }
             computeState.customProperties.put(RESOURCE_GROUP_NAME, resourceGroupName);
+            computeState.endpointLinks.add(ctx.request.endpointLink);
 
             computeState.type = ComputeType.VM_GUEST;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;

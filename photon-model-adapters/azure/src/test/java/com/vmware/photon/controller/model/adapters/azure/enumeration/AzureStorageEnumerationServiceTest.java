@@ -152,7 +152,7 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
     /**
      * Assert azure storage account properties in storage descriptions
      */
-    private static void verifyStorageDescription(StorageDescriptionService.StorageDescription storageDescription) {
+    private void verifyStorageDescription(StorageDescriptionService.StorageDescription storageDescription) {
 
         Assert.assertTrue("Azure Storage account name Cannot be empty ", !storageDescription.name
                 .isEmpty());
@@ -162,7 +162,10 @@ public class AzureStorageEnumerationServiceTest extends AzureBaseTest {
                 .supportsEncryption != null);
         Assert.assertTrue("Azure Storage account type not set correctly in custom properties",
                 storageDescription.customProperties.get(AZURE_STORAGE_TYPE).equals(AZURE_STORAGE_ACCOUNTS));
-
+        Assert.assertTrue("Azure Storage account endpointLink cannot be null",storageDescription
+                .endpointLink != null && storageDescription.endpointLink == this.endpointState.documentSelfLink);
+        Assert.assertTrue("Azure Storage account endpointLink cannot be null",storageDescription
+                .endpointLinks != null && storageDescription.endpointLinks.contains(this.endpointState.documentSelfLink));
     }
 
 }

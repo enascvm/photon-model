@@ -149,7 +149,7 @@ public class TagService extends StatefulService {
         }
 
         // update the deleted property accordingly
-        if (patchState.deleted != null) {
+        if (patchState.deleted != null && currentState.deleted != patchState.deleted) {
             currentState.deleted = patchState.deleted;
             modified = true;
         }
@@ -184,7 +184,7 @@ public class TagService extends StatefulService {
             }
 
             // update the deleted property accordingly
-            if (newTagState.deleted != null) {
+            if (newTagState.deleted != null && currentState.deleted != newTagState.deleted) {
                 currentState.deleted = newTagState.deleted;
                 modified = true;
             }

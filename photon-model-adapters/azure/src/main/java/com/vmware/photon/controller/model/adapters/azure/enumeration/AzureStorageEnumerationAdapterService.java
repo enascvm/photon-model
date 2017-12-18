@@ -477,7 +477,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageAccounts.size()));
 
             for (StorageAccount storageAccount : storageAccounts) {
-                String id = storageAccount.id;
+                String id = canonizeId(storageAccount.id);
+                storageAccount.id = id;
                 context.storageAccountsToUpdateCreate.put(id, storageAccount);
                 context.storageAccountIds.add(id);
                 context.storageAccountMap.put(id, storageAccount);
@@ -520,7 +521,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             Query instanceIdFilter = Query.Builder
                     .create(Occurance.SHOULD_OCCUR)
                     .addFieldClause(StorageDescription.FIELD_NAME_ID,
-                            account.getValue().id)
+                            canonizeId(account.getValue().id))
                     .build();
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
         }
@@ -590,6 +591,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     storageDescriptionToUpdate.documentSelfLink = sd.documentSelfLink;
                     storageDescriptionToUpdate.endpointLink = sd.endpointLink;
+                    storageDescriptionToUpdate.endpointLinks = new HashSet<>();
+                    storageDescriptionToUpdate.endpointLinks.add(sd.endpointLink);
                     storageDescriptionToUpdate.computeHostLink = sd.computeHostLink;
                     storageDescriptionToUpdate.tenantLinks = sd.tenantLinks;
                     storageDescriptionToUpdate.regionId = storageAccount.location;
@@ -900,10 +903,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                             nextContainerResults = contSegment.getContinuationToken();
                             for (CloudBlobContainer container : contSegment.getResults()) {
-                                String uri = container.getUri().toString();
+                                String uri = canonizeId(container.getUri().toString());
                                 context.containerIds.add(uri);
-                                context.storageContainers.put(canonizeId(uri),
-                                        container);
+                                context.storageContainers.put(uri, container);
                                 ResultContinuation nextBlobResults = null;
                                 do {
                                     ResultSegment<ListBlobItem> blobsSegment = container
@@ -916,8 +918,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                                     nextBlobResults = blobsSegment.getContinuationToken();
                                     for (ListBlobItem blobItem : blobsSegment.getResults()) {
-                                        String blobId = AzureUtils.canonizeId(
-                                                blobItem.getUri().toString());
+                                        String blobId = canonizeId(blobItem.getUri().toString());
                                         context.storageBlobs.put(blobId, blobItem);
                                         // populate mapping of blob uri and storage account for all storage
                                         // accounts as new disks can be added to already existing blobs
@@ -1084,7 +1085,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             CloudBlobContainer container, String storageLink,
             ResourceGroupState oldResourceGroupState) {
         ResourceGroupState resourceGroupState = new ResourceGroupState();
-        resourceGroupState.id = AzureUtils.canonizeId(container.getUri().toString());
+        resourceGroupState.id = canonizeId(container.getUri().toString());
         resourceGroupState.name = container.getName();
         resourceGroupState.computeHostLink = context.parentCompute.documentSelfLink;
         if (storageLink != null) {
@@ -1095,6 +1096,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         if (context.request.endpointLink != null) {
             resourceGroupState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
                     context.request.endpointLink);
+            resourceGroupState.endpointLinks =  new HashSet<>();
+            resourceGroupState.endpointLinks.add(context.request.endpointLink);
         }
         resourceGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
         resourceGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
@@ -1210,7 +1213,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         queryLocalStates.queryDocuments(rg -> {
             // if the resource group is present in Azure and has older timestamp in local
             // repository it means nothing has changed about it.
-            if (context.containerIds.contains(rg.id)) {
+            if (context.containerIds.contains(canonizeId(rg.id))) {
                 return;
             }
 
@@ -1313,8 +1316,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             qBuilder.addInClause(
                     ResourceState.FIELD_NAME_ID,
                     context.storageBlobs.values().stream()
-                            .map(sb -> AzureUtils.canonizeId(QuerySpecification
-                                    .toMatchValue(sb.getUri())))
+                            .map(sb -> canonizeId(QuerySpecification.toMatchValue(sb.getUri())))
                             .collect(Collectors.toSet()));
         }
 
@@ -1516,6 +1518,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         diskState.resourcePoolLink = context.request.resourcePoolLink;
         diskState.computeHostLink = context.parentCompute.documentSelfLink;
         diskState.endpointLink = context.request.endpointLink;
+        diskState.endpointLinks = new HashSet<>();
+        diskState.endpointLinks.add(context.request.endpointLink);
         diskState.tenantLinks = context.parentCompute.tenantLinks;
         long bLength = 0;
         if (blob instanceof CloudBlob) {
@@ -1560,7 +1564,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         } else {
             StorageAccount storageAccount = context.storageAccountBlobUriMap
                     .get(blob.getUri().toString());
-            diskState.id = AzureUtils.canonizeId(blob.getUri().toString());
+            diskState.id = canonizeId(blob.getUri().toString());
             diskState.documentSelfLink = UUID.randomUUID().toString();
             if (storageAccount != null) {
                 diskState.regionId = storageAccount.location;

@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.6.46_1
+* Set correlation of AWS Disks with Instances.
+* Important bug fixes.
+
 ## 0.6.46
 * Delete stale TagState resources.
 * Important bug fixes.

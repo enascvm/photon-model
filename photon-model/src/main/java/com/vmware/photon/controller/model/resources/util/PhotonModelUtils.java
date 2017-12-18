@@ -124,6 +124,15 @@ public class PhotonModelUtils {
                         sdDesc.propertyDescriptions.get(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES),
                         state,
                         singletonMap(PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK, endpointLink));
+                Set<String> endpointLinks = new HashSet<>();
+                endpointLinks.add(endpointLink);
+
+                //This method will assign the value of the endpointLinks  created above if it does not exist for the given
+                //resource OR it will merge it with the existing collection if already set.
+                ReflectionUtils.setOrUpdatePropertyValue(
+                        sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS),
+                        state,
+                        endpointLinks);
             }
         }
 

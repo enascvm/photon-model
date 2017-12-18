@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 
 import java.net.URI;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -345,6 +346,8 @@ public class AzureUtils {
         storageDescription.resourcePoolLink = request.resourcePoolLink;
         storageDescription.documentSelfLink = UUID.randomUUID().toString();
         storageDescription.endpointLink = request.endpointLink;
+        storageDescription.endpointLinks = new HashSet<>();
+        storageDescription.endpointLinks.add(request.endpointLink);
         storageDescription.computeHostLink = parentCompute.documentSelfLink;
         storageDescription.customProperties = new HashMap<>();
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
@@ -413,6 +416,8 @@ public class AzureUtils {
         cs.name = name != null ? name : entityName;
         cs.tenantLinks = tenantLinks;
         cs.endpointLink = endpointLink;
+        cs.endpointLinks = new HashSet<>();
+        cs.endpointLinks.add(endpointLink);
         cs.computeHostLink = parentLink;
         if (customProperties == null) {
             customProperties = new HashMap<>();
@@ -434,6 +439,8 @@ public class AzureUtils {
         ComputeDescription cd = new ComputeDescription();
         cd.tenantLinks = tenantLinks;
         cd.endpointLink = endpointLink;
+        cd.endpointLinks = new HashSet<>();
+        cd.endpointLinks.add(endpointLink);
         cd.computeHostLink = parentLink;
         cd.name = name != null ? name :
                 String.format(COMPUTES_NAME_FORMAT_WITH_ENTITY_ID, subscriptionId);
