@@ -19,16 +19,21 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState;
+import com.vmware.xenon.services.common.QueryTask;
 
 /**
  * Handles disk related operations for vsphere endpoint.
@@ -93,7 +98,12 @@ public class VSphereDiskService extends StatelessService {
                     DiskClient diskClient = new DiskClient(connection, ctx);
                     try {
                         diskClient.createVirtualDisk();
-                        finishDiskCreateOperation(ctx);
+                        if (ctx.diskState.storageDescriptionLink == null) {
+                            // if the storage desc link is null, then find the link where the disk is provisioned.
+                            queryDiskSDAndFinishCreateOperation(ctx);
+                        } else {
+                            finishDiskCreateOperation(ctx);
+                        }
                     } catch (Exception e) {
                         ctx.fail(e);
                     }
@@ -132,6 +142,32 @@ public class VSphereDiskService extends StatelessService {
                         ctx.fail(e);
                     }
                 });
+    }
+
+    /**
+     * Query for storage description where the disk is provisioned and then finish the create
+     * operation.
+     */
+    private void queryDiskSDAndFinishCreateOperation(DiskContext ctx) {
+        String datastoreName = CustomProperties.of(ctx.diskState).getString(DISK_DATASTORE_NAME);
+
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(StorageDescription.class)
+                .addCaseInsensitiveFieldClause(StorageDescription.FIELD_NAME_NAME, datastoreName,
+                        QueryTask.QueryTerm.MatchType.TERM, QueryTask.Query.Occurance.MUST_OCCUR);
+
+        QueryUtils.QueryTop<StorageDescription> sdQuery = new QueryUtils.QueryTop<>(
+                this.getHost(), builder.build(), StorageDescription.class, ctx.diskState.tenantLinks);
+
+        sdQuery.setMaxResultsLimit(1);
+        sdQuery.setClusterType(ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE);
+
+        sdQuery.collectLinks(Collectors.toList()).whenComplete((links, t) -> {
+            if (t == null) {
+                ctx.diskState.storageDescriptionLink = links.iterator().next();
+            }
+            finishDiskCreateOperation(ctx);
+        });
     }
 
     /**

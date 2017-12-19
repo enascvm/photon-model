@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK;
+import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.fillInControllerUnitNumber;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findMatchingDiskState;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.updateDiskStateFromVirtualDevice;
@@ -234,7 +234,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         queryHostLinkAndUpdateCompute(state, vmOverlay.getHost())
                                 .thenCompose(links -> {
                                     CustomProperties.of(state)
-                                            .put(COMPUTE_HOST_LINK, links.iterator().next());
+                                            .put(COMPUTE_HOST_LINK_PROP_NAME, links.iterator().next());
                                     return createComputeResourcePatch(state, ctx.computeReference);
                                 }).whenComplete((o, e) -> {
                                     if (e != null) {

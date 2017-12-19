@@ -17,7 +17,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK;
+import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
@@ -276,7 +276,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             this.vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vm.documentSelfLink));
 
-            assertNotNull(CustomProperties.of(this.vm).getString(COMPUTE_HOST_LINK, null));
+            assertNotNull(CustomProperties.of(this.vm).getString(COMPUTE_HOST_LINK_PROP_NAME, null));
             assertEquals(3, this.vm.diskLinks.size());
 
             this.vm.diskLinks.stream().forEach(link -> {

@@ -280,7 +280,7 @@ public class VSphereVMDiskContext {
 
         if (ctx.computePlacementHost == null) {
             String placementLink = CustomProperties.of(ctx.computeDesc).getString(ComputeProperties
-                    .COMPUTE_HOST_LINK);
+                    .COMPUTE_HOST_LINK_PROP_NAME);
             // compute host link will be not null here.
             URI expandedPlacementUri = UriUtils.extendUriWithQuery(
                     PhotonModelUriUtils.createInventoryUri(service.getHost(), placementLink),

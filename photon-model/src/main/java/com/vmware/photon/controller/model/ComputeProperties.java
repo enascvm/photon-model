@@ -47,11 +47,6 @@ public class ComputeProperties {
     public static final String PLACEMENT_LINK = "__placementLink";
 
     /**
-     * A link to the compute host where the machine is deployed.
-     */
-    public static final String COMPUTE_HOST_LINK = "__computeHostLink";
-
-    /**
      * A key for the custom properties property which value stores the specific type of the
      * resource state.
      * <p>

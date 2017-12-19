@@ -26,7 +26,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
-import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
@@ -105,9 +105,12 @@ public class DiskContext {
                         (result) -> {
                             if (result.documents != null && result.documents.size() > 0) {
                                 // pick the first datastore and proceed.
-                                ctx.datastoreName = Utils
+                                StorageDescription dsStorageDesc = Utils
                                         .fromJson(result.documents.values().iterator().next(),
-                                                StorageDescriptionService.StorageDescription.class).id;
+                                                StorageDescription.class);
+                                ctx.datastoreName = dsStorageDesc.id;
+                                ctx.diskState.storageDescriptionLink = dsStorageDesc
+                                        .documentSelfLink;
                             } else {
                                 // Since no result found default to the available datastore.
                                 ctx.datastoreName = "";

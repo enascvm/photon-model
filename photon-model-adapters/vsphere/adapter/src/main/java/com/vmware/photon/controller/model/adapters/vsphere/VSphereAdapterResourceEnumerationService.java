@@ -1610,7 +1610,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ComputeResourceOverlay cr) {
         ComputeState state = new ComputeState();
         state.id = cr.getId().getValue();
-        state.type = ComputeType.VM_HOST;
+        state.type = cr.isDrsEnabled() ? ComputeType.ZONE : ComputeType.VM_HOST;
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
         state.regionId = enumerationProgress.getRegionId();
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
