@@ -848,17 +848,58 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing Network %s", net.getName()));
-        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), oldDocument.documentSelfLink))
+        Operation.createPatch(
+                PhotonModelUriUtils.createInventoryUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(networkState)
                 .setCompletion(trackNetwork(enumerationProgress, net))
                 .sendWith(this);
 
+        // represent a Network also as a subnet
+        SubnetState subnet = createSubnetStateForNetwork(networkState, enumerationProgress, net);
+
+        if (subnet != null) {
+            Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(),
+                    SubnetService.FACTORY_LINK))
+                    .setBody(subnet)
+                    .sendWith(this);
+        }
+    }
+
+    private void createNewNetwork(EnumerationProgress enumerationProgress, NetworkOverlay net) {
+        NetworkState networkState = makeNetworkStateFromResults(enumerationProgress, net);
+        networkState.tenantLinks = enumerationProgress.getTenantLinks();
+        Operation.createPost(
+                PhotonModelUriUtils.createInventoryUri(getHost(), NetworkService.FACTORY_LINK))
+                .setBody(networkState)
+                .setCompletion((o, e) -> {
+                    trackNetwork(enumerationProgress, net).handle(o, e);
+                    Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(),
+                            ResourceGroupService.FACTORY_LINK))
+                            .setBody(makeNetworkGroup(net, enumerationProgress))
+                            .sendWith(this);
+                })
+                .sendWith(this);
+
+        logFine(() -> String.format("Found new Network %s", net.getName()));
+
+        SubnetState subnet = createSubnetStateForNetwork(networkState, enumerationProgress, net);
+
+        if (subnet != null) {
+            Operation.createPost(
+                    PhotonModelUriUtils.createInventoryUri(getHost(), SubnetService.FACTORY_LINK))
+                    .setBody(subnet)
+                    .sendWith(this);
+        }
+    }
+
+    private SubnetState createSubnetStateForNetwork(NetworkState networkState,
+            EnumerationProgress enumerationProgress, NetworkOverlay net) {
+
         if (!VimNames.TYPE_NETWORK.equals(net.getId().getType()) &&
                 !VimNames.TYPE_OPAQUE_NETWORK.equals(net.getId().getType())) {
-            return;
+            return null;
         }
 
-        // represent a Network also as a subnet
         SubnetState subnet = new SubnetState();
         subnet.documentSelfLink = UriUtils.buildUriPath(SubnetService.FACTORY_LINK,
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
@@ -873,49 +914,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
-        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(),
-                SubnetService.FACTORY_LINK))
-                .setBody(subnet)
-                .sendWith(this);
-    }
-
-    private void createNewNetwork(EnumerationProgress enumerationProgress, NetworkOverlay net) {
-        NetworkState networkState = makeNetworkStateFromResults(enumerationProgress, net);
-        networkState.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), NetworkService.FACTORY_LINK))
-                .setBody(networkState)
-                .setCompletion((o, e) -> {
-                    trackNetwork(enumerationProgress, net).handle(o, e);
-                    Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(),
-                            ResourceGroupService.FACTORY_LINK))
-                            .setBody(makeNetworkGroup(net, enumerationProgress))
-                            .sendWith(this);
-                })
-                .sendWith(this);
-
-        logFine(() -> String.format("Found new Network %s", net.getName()));
-
-        if (!VimNames.TYPE_NETWORK.equals(net.getId().getType()) &&
-                !VimNames.TYPE_OPAQUE_NETWORK.equals(net.getId().getType())) {
-            return;
+        // Add NSX-T related properties to the subnet
+        if (VimNames.TYPE_OPAQUE_NETWORK.equals(net.getId().getType())) {
+            OpaqueNetworkSummary opaqueNetworkSummary = (OpaqueNetworkSummary) net.getSummary();
+            CustomProperties.of(subnet)
+                    .put(NsxProperties.OPAQUE_NET_ID, opaqueNetworkSummary.getOpaqueNetworkId())
+                    .put(NsxProperties.OPAQUE_NET_TYPE,
+                            opaqueNetworkSummary.getOpaqueNetworkType());
         }
-
-        SubnetState subnet = new SubnetState();
-        subnet.documentSelfLink = UriUtils.buildUriPath(SubnetService.FACTORY_LINK,
-                UriUtils.getLastPathSegment(networkState.documentSelfLink));
-        subnet.id = subnet.name = net.getName();
-        subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
-        subnet.networkLink = networkState.documentSelfLink;
-        subnet.tenantLinks = enumerationProgress.getTenantLinks();
-        subnet.regionId = networkState.regionId;
-
-        CustomProperties.of(subnet)
-                .put(CustomProperties.MOREF, net.getId())
-                .put(CustomProperties.TYPE, net.getId().getType());
-
-        Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), SubnetService.FACTORY_LINK))
-                .setBody(subnet)
-                .sendWith(this);
+        return subnet;
     }
 
     private String getSelfLinkFromOperation(Operation o) {
