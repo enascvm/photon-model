@@ -210,7 +210,14 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     protected DeferredResult<T> getEndPointState(T context) {
         // Fallback on compute endpointLink, if it is not set explicitly (to support backward compatibility)
         if (context.endpointReference == null && context.parent != null) {
-            context.endpointReference = createInventoryUri(context.service.getHost(), context.parent.endpointLink);
+            // first try with endpointLinks as endpointLink may be invalid in the case of de-dup
+            if (context.parent.endpointLinks != null && !context.parent.endpointLinks.isEmpty()) {
+                context.endpointReference = createInventoryUri(context.service.getHost(), context
+                        .parent.endpointLinks.iterator().next());
+            } else {
+                context.endpointReference = createInventoryUri(context.service.getHost(),
+                        context.parent.endpointLink);
+            }
         }
         if (context.endpointReference != null) {
             Operation op = Operation.createGet(context.endpointReference);
