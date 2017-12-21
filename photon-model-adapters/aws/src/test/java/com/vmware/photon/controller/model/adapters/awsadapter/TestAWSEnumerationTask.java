@@ -96,6 +96,7 @@ import com.amazonaws.services.ec2.model.AttachVolumeRequest;
 import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
+import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
 import com.amazonaws.services.ec2.model.DetachVolumeRequest;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Tag;
@@ -309,15 +310,15 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     @After
     public void tearDown() throws Throwable {
+        if (this.testEbsId != null) {
+            DetachVolumeRequest detachVolumeRequest = new DetachVolumeRequest().withVolumeId(this.testEbsId);
+            this.client.detachVolume(detachVolumeRequest);
+        }
         if (this.host == null) {
             return;
         }
         if (this.bucketToBeDeleted != null) {
             this.s3Client.deleteBucket(this.bucketToBeDeleted);
-        }
-        if (this.testEbsId != null) {
-            DetachVolumeRequest detachVolumeRequest = new DetachVolumeRequest().withVolumeId(this.testEbsId);
-            this.client.detachVolume(detachVolumeRequest);
         }
         tearDownAwsVMs();
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
@@ -328,6 +329,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             this.lbClient.shutdown();
         }
         setAwsClientMockInfo(false, null);
+        if (this.testEbsId != null) {
+            DeleteVolumeRequest deleteVolumeRequest = new DeleteVolumeRequest().withVolumeId(this.testEbsId);
+            this.client.deleteVolume(deleteVolumeRequest);
+        }
     }
 
     // Runs the enumeration task on the AWS endpoint to list all the instances on the endpoint.
@@ -521,7 +526,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Detach and delete test EBS volume.
         DetachVolumeRequest detachVolumeRequest = new DetachVolumeRequest().withVolumeId(this.testEbsId);
         this.client.detachVolume(detachVolumeRequest);
-        this.testEbsId = null;
 
         // One additional compute state and no additional compute description should be
         // created. 1) compute host CD 2) t2.nano-system generated 3) t2.micro-system generated
@@ -587,6 +591,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         validateTagInEntity(computesResult3, ComputeState.class, ec2_instance.toString());
         // Validate that the document for the deleted S3 bucket is deleted after enumeration.
         validateS3Enumeration(ZERO, ZERO);
+
+        // Delete test EBS volume.
+        DeleteVolumeRequest deleteVolumeRequest = new DeleteVolumeRequest().withVolumeId(this.testEbsId);
+        this.client.deleteVolume(deleteVolumeRequest);
+        this.testEbsId = null;
     }
 
     private ComputeState getComputeStateFromId(String instanceId) {
