@@ -284,14 +284,14 @@ public class QueryUtils {
         }
 
         if (PhotonModelUtils.ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(stateClass)) {
-            qBuilder.addFieldClause(
-                    PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
-                    endpointLink, Query.Occurance.SHOULD_OCCUR);
-
-            qBuilder.addCollectionItemClause(
-                    PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS,
-                    endpointLink, Query.Occurance.SHOULD_OCCUR);
-
+            qBuilder.addClause(Query.Builder.create()
+                    .addFieldClause(
+                            PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
+                            endpointLink, Query.Occurance.SHOULD_OCCUR)
+                    .addCollectionItemClause(
+                            PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS,
+                            endpointLink, Query.Occurance.SHOULD_OCCUR)
+                    .build());
         } else if (PhotonModelUtils.ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {
 
             qBuilder.addCompositeFieldClause(
