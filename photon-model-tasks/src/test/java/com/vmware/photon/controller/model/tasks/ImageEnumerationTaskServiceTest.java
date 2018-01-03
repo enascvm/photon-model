@@ -166,7 +166,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                             EndpointType.vsphere.name() },
                     { MockFailOperationImageEnumerationAdapter.class,
                             TaskStage.FAILED,
-                            EndpointType.gpc.name() },
+                            EndpointType.gcp.name() },
 
                     { NO_ADAPTER /* no adapter at all */,
                             TaskStage.FAILED,

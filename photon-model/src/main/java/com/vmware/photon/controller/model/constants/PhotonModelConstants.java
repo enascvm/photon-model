@@ -127,7 +127,7 @@ public class PhotonModelConstants {
     public enum EndpointType {
         aws("AWS"),
         azure("Azure"),
-        gpc("GCP"),
+        gcp("GCP"),
         vsphere("vSphere"),
         azure_ea("Azure-EA");
 
