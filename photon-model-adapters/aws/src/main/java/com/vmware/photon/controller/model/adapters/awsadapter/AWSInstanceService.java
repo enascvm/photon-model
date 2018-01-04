@@ -776,7 +776,7 @@ public class AWSInstanceService extends StatelessService {
                 patchOperations.addAll(createPatchNICStatesOperations(this.context.nics,
                         ((Instance) instance)));
 
-                updateDiskIdAndStatus(this.context.bootDisk, this.context.imageDisks,
+                updateAndTagDisks(this.context.bootDisk, this.context.imageDisks,
                         this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings());
 
                 DeferredResult<ComputeState> dr = new DeferredResult<>();
@@ -1013,9 +1013,9 @@ public class AWSInstanceService extends StatelessService {
         }
 
         /**
-         * update diskstate with the corresponding volume Id.
+         * updates status, Id and name of the disk. Also tags the corresponding AWS volume with its name.
          */
-        private void updateDiskIdAndStatus(DiskState bootDisk, List<DiskState> imageDisks,
+        private void updateAndTagDisks(DiskState bootDisk, List<DiskState> imageDisks,
                 List<DiskState> additionalDisks,
                 List<InstanceBlockDeviceMapping> blockDeviceMappings) {
             List<DiskState> diskStateList = new ArrayList<>();
@@ -1033,6 +1033,8 @@ public class AWSInstanceService extends StatelessService {
                             diskState.id = blockDeviceMapping.getEbs().getVolumeId();
                             if (diskState.name == null) {
                                 diskState.name = diskState.id;
+                            } else {
+                                tagDisk(diskState.id, diskState.name);
                             }
                             break;
                         }
@@ -1090,6 +1092,12 @@ public class AWSInstanceService extends StatelessService {
             }
 
             return patchOperations;
+        }
+
+        private void tagDisk(String diskId, String tagValue) {
+            List<Tag> tagsToCreate = new ArrayList<>();
+            tagsToCreate.add(new Tag().withKey(AWS_TAG_NAME).withValue(tagValue));
+            AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, diskId);
         }
 
         private void tagInstanceAndStartStatusChecker(String instanceId, Set<String> tagLinks,
