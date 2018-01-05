@@ -717,13 +717,13 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
      */
     private DeferredResult<S3StorageEnumerationContext>
             createTagStatesAndUpdateTagLinks(S3StorageEnumerationContext aws) {
-
         aws.diskStatesEnumerated.addAll(aws.diskStatesToBeUpdatedByBucketName.values());
 
         List<DeferredResult<Set<String>>> updateCSTagLinksOps = new ArrayList<>();
 
         aws.diskStatesEnumerated.stream()
-                .filter(diskState -> aws.tagsByBucketName.get(diskState.id) != null)
+                .filter(diskState -> diskState.id != null && aws.tagsByBucketName.containsKey
+                        (diskState.id))
                 .forEach(diskState ->
                         updateCSTagLinksOps.add(TagsUtil.updateLocalTagStates(aws.service, diskState,
                                 aws.tagsByBucketName.get(diskState.id), null)));

@@ -1687,6 +1687,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .build();
 
+        queryTask.tenantLinks = diskState.tenantLinks;
+
         if (queryTask.documentExpirationTimeMicros == 0) {
             queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                     + QueryUtils.TEN_MINUTES_IN_MICROS;

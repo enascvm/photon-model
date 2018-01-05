@@ -86,6 +86,14 @@ public class ResourceIPDeallocationTaskService
                 PropertyUsageOption.SINGLE_ASSIGNMENT }, indexing = PropertyIndexingOption.STORE_ONLY)
         public ServiceTaskCallback serviceTaskCallback;
 
+        /**
+         * A list of tenant links which can access this task.
+         */
+        @ServiceDocument.Documentation(description = "A list of tenant links which can access this task.")
+        @ServiceDocument.PropertyOptions(usage = { PropertyUsageOption.SINGLE_ASSIGNMENT,
+                PropertyUsageOption.OPTIONAL }, indexing = PropertyIndexingOption.STORE_ONLY)
+        public List<String> tenantLinks;
+
         public String toString() {
             String sb = "Deallocation for resource: " + this.resourceLink;
             return sb;

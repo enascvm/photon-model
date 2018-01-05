@@ -1681,6 +1681,8 @@ public class AzureInstanceService extends StatelessService {
                                     getStorageAccountKeyName(storageAuth.customProperties),
                                     key.value());
                         }
+                        storageAuth.tenantLinks = ctx.parent.tenantLinks;
+
                         Operation patchStorageDescriptionWithKeys = Operation
                                 .createPost(createInventoryUri(getHost(),
                                         AuthCredentialsService.FACTORY_LINK))

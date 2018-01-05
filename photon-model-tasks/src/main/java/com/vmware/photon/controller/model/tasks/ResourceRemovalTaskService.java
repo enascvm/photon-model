@@ -574,6 +574,7 @@ public class ResourceRemovalTaskService
         for (String resourceLink : queryTask.results.documentLinks) {
             ResourceIPDeallocationTaskState deallocateTask = new ResourceIPDeallocationTaskState();
             deallocateTask.resourceLink = resourceLink;
+            deallocateTask.tenantLinks = currentState.tenantLinks;
             deallocateTask.serviceTaskCallback = ServiceTaskCallback
                     .create(UriUtils.buildPublicUri(getHost(), subTaskLink));
             deallocateTask.serviceTaskCallback.onSuccessFinishTask();
