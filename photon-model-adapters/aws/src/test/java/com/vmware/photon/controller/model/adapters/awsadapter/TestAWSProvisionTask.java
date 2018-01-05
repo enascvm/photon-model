@@ -13,12 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
@@ -77,6 +79,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -689,10 +692,21 @@ public class TestAWSProvisionTask {
 
     protected void assertDataDiskConfiguration(AmazonEC2AsyncClient client,
             Instance awsInstance, List<String> diskLinks) {
+        List<String> existingNames = new ArrayList<>();
         for (String diskLink : diskLinks) {
             DiskState diskState = getDiskState(diskLink);
             assertEbsDiskConfiguration(client, awsInstance, diskState);
+            assertDeviceName(awsInstance, diskState, existingNames);
+            existingNames.add(diskState.customProperties.get(DEVICE_NAME));
         }
+    }
+
+    protected void assertDeviceName(Instance awsInstance, DiskState diskState, List<String> existingNames) {
+        AWSConstants.AWSSupportedOS os = AWSConstants.AWSSupportedOS.get(awsInstance.getPlatform());
+        AWSConstants.AWSSupportedVirtualizationTypes virtualizationType = AWSConstants.AWSSupportedVirtualizationTypes.get(awsInstance.getVirtualizationType());
+        AWSConstants.AWSStorageType storageType = AWSConstants.AWSStorageType.get(diskState.customProperties.get(DEVICE_TYPE));
+        List<String> expectedNames = AWSBlockDeviceNameMapper.getAvailableNames(os, virtualizationType, storageType, awsInstance.getInstanceType(), existingNames);
+        assertEquals(expectedNames.get(0), diskState.customProperties.get(DEVICE_NAME));
     }
 
     protected void assertEbsDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,

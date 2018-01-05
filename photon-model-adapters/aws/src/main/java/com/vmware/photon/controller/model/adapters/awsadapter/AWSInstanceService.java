@@ -14,10 +14,10 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedOS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedVirtualizationTypes;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DEPENDENCY_VIOLATION_ERROR_CODE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_EBS_DEVICE_NAMES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_STORE_DEVICE_NAMES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_INSTANCE_ID_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VIRTUAL_NAMES;
@@ -83,6 +83,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
@@ -463,7 +464,7 @@ public class AWSInstanceService extends StatelessService {
                 }
 
                 //get the available attach paths for new disks and external disks
-                List<String> usedDeviceNames = new ArrayList<>();
+                List<String> usedDeviceNames = null;
                 if (!instanceStoreDisks.isEmpty() || !ebsDisks.isEmpty() ||
                         !aws.externalDisks.isEmpty()) {
                     usedDeviceNames = getUsedDeviceNames(blockDeviceMappings);
@@ -473,12 +474,16 @@ public class AWSInstanceService extends StatelessService {
                     List<String> usedVirtualNames = getUsedVirtualNames(blockDeviceMappings);
                     blockDeviceMappings.addAll(createInstanceStoreMappings(instanceStoreDisks,
                             usedDeviceNames, usedVirtualNames, aws.instanceTypeInfo.id,
-                            aws.instanceTypeInfo.dataDiskSizeInMB));
+                            aws.instanceTypeInfo.dataDiskSizeInMB,
+                            image.getPlatform(),
+                            image.getVirtualizationType()));
                 }
 
                 if (!ebsDisks.isEmpty() || !aws.externalDisks.isEmpty()) {
-                    aws.availableEbsDiskNames = getAvailableDeviceNames(usedDeviceNames,
-                            AWS_EBS_DEVICE_NAMES);
+                    aws.availableEbsDiskNames = AWSBlockDeviceNameMapper.getAvailableNames(
+                            AWSSupportedOS.get(image.getPlatform()),
+                            AWSSupportedVirtualizationTypes.get(image.getVirtualizationType()),
+                            AWSStorageType.EBS, instanceType, usedDeviceNames);
                 }
 
                 if (!ebsDisks.isEmpty()) {
@@ -1573,16 +1578,21 @@ public class AWSInstanceService extends StatelessService {
      * Creates device mappings for the instance-store disks.
      */
     private List<BlockDeviceMapping> createInstanceStoreMappings(List<DiskState> instanceStoreDisks,
-            List<String> usedDeviceNames, List<String> usedVirtualNames, String instanceType,
-            Integer capacityMBytes) {
+                                                                 List<String> usedDeviceNames,
+                                                                 List<String> usedVirtualNames,
+                                                                 String instanceType,
+                                                                 Integer capacityMBytes,
+                                                                 String platform,
+                                                                 String virtualizationType) {
         List<BlockDeviceMapping> deviceMappings = new ArrayList<>();
         if (!instanceStoreDisks.isEmpty()) {
             this.logInfo(
                     () -> String.format("[AWSInstanceService] Ignores the size and type of the "
                             + "additional disk. Instance-store type of additional disks are "
                             + "provisioned with the capacity supported by %s", instanceType));
-            List<String> availableDeviceNames = getAvailableDeviceNames(usedDeviceNames,
-                    AWS_INSTANCE_STORE_DEVICE_NAMES);
+            List<String> availableDeviceNames = AWSBlockDeviceNameMapper.getAvailableNames(AWSSupportedOS.get(platform),
+                    AWSSupportedVirtualizationTypes.get(virtualizationType), AWSStorageType.INSTANCE_STORE, instanceType, usedDeviceNames);
+
             List<String> availableVirtualNames = getAvailableVirtualNames(usedVirtualNames);
             if (availableDeviceNames.size() >= instanceStoreDisks.size()
                     && availableVirtualNames.size() >= instanceStoreDisks.size()) {
@@ -1619,27 +1629,6 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Returns the list of device names that can be used for provisioning additional disks
-     */
-    private List<String> getAvailableDeviceNames(List<String> usedDeviceNames,
-            List<String> supportedDeviceNames) {
-        List<String> availableDeviceNames = new ArrayList<>();
-        for (String availableDeviceName : supportedDeviceNames) {
-            for (String usedDeviceName : usedDeviceNames) {
-                if (usedDeviceName.contains(availableDeviceName) ||
-                        availableDeviceName.contains(usedDeviceName)) {
-                    availableDeviceName = null;
-                    break;
-                }
-            }
-            if (availableDeviceName != null) {
-                availableDeviceNames.add(availableDeviceName);
-            }
-        }
-        return availableDeviceNames;
-    }
-
-    /**
      * Returns the list of virtual names that can be used for additional instance-store disks.
      * @param usedVirtualNames
      *         virtual names used by the existing disks.
@@ -1660,5 +1649,4 @@ public class AWSInstanceService extends StatelessService {
         }
         return availableVirtualNames;
     }
-
 }

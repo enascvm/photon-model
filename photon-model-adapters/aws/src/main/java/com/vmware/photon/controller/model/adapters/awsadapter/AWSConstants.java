@@ -54,6 +54,7 @@ public class AWSConstants {
     public static final String AWS_IMAGE_VIRTUALIZATION_TYPE_FILTER = "virtualization-type";
     public static final String AWS_IMAGE_VIRTUALIZATION_TYPE_PARAVIRTUAL = "paravirtual";
     public static final String AWS_IMAGE_VIRTUALIZATION_TYPE_HVM = "hvm";
+    public static final String AWS_IMAGE_VIRTUALIZATION_TYPE_DEFAULT = "default";
 
     public static final String INSTANCE_STATE = "instance-state-name";
     public static final String INSTANCE_STATE_RUNNING = "running";
@@ -68,8 +69,8 @@ public class AWSConstants {
     public static final String DISK_IOPS = "iops";
     public static final String DISK_ENCRYPTED_FLAG = "encrypted";
     public static final String VOLUME_TYPE = "volumeType";
-    public static final int  AWS_DISK_REQUEST_TIMEOUT_MINUTES = 5;
-    public static final int  AWS_DISK_OPERATION_TIMEOUT_MINUTES = 5;
+    public static final int AWS_DISK_REQUEST_TIMEOUT_MINUTES = 5;
+    public static final int AWS_DISK_OPERATION_TIMEOUT_MINUTES = 5;
 
     public static final String AWS_ATTACHMENT_VPC_FILTER = "attachment.vpc-id";
     public static final String AWS_BILLS_S3_BUCKET_NAME_KEY = "billsBucketName";
@@ -213,7 +214,7 @@ public class AWSConstants {
     public static final String UNIT_HOURS = "Hours";
 
     public static final String WINDOWS_PLATFORM = "windows";
-
+    public static final String LINUX_PLATFORM = "linux";
     /**
      * Number of operations to send in a batch when using OperationJoin
      */
@@ -241,10 +242,58 @@ public class AWSConstants {
         public String getName() {
             return this.name;
         }
+
+        public static AWSStorageType get(String name) {
+            return Arrays.stream(AWSStorageType.values())
+                    .filter(e -> e.name.equalsIgnoreCase(name))
+                    .findFirst().orElse(null);
+        }
     }
 
     public static enum AWSInstanceStoreTypes {
         SSD, HDD, NVMe_SSD
+    }
+
+    public static enum AWSSupportedOS {
+        WINDOWS(WINDOWS_PLATFORM),
+        LINUX(LINUX_PLATFORM);
+
+        private String name;
+
+        AWSSupportedOS(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public static AWSSupportedOS get(String name) {
+            return Arrays.stream(AWSSupportedOS.values())
+                    .filter(e -> e.name.equalsIgnoreCase(name))
+                    .findFirst().orElse(null);
+        }
+    }
+
+    public static enum AWSSupportedVirtualizationTypes {
+        HVM(AWS_IMAGE_VIRTUALIZATION_TYPE_HVM),
+        PARAVIRTUAL(AWS_IMAGE_VIRTUALIZATION_TYPE_PARAVIRTUAL),
+        DEFAULT(AWS_IMAGE_VIRTUALIZATION_TYPE_DEFAULT);
+        private String name;
+
+        AWSSupportedVirtualizationTypes(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public static AWSSupportedVirtualizationTypes get(String name) {
+            return Arrays.stream(AWSSupportedVirtualizationTypes.values())
+                    .filter(e -> e.name.equalsIgnoreCase(name))
+                    .findFirst().orElse(null);
+        }
     }
 
     // AWS Error codes {{

@@ -13,19 +13,26 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+
 import static org.junit.Assert.assertEquals;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Instance;
 
+
 import org.junit.Ignore;
 import org.junit.Test;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
+
 import com.vmware.photon.controller.model.resources.DiskService;
+
+
 
 /**
  *  This class is used for testing the addition of instance-store disks to the instane-store AMI.
@@ -67,11 +74,13 @@ public class TestProvisionAWSStorage extends TestAWSProvisionTask {
     @Override
     protected void assertDataDiskConfiguration(AmazonEC2AsyncClient client,
             Instance awsInstance, List<String> diskLinks) {
+        List<String> existingNames = new ArrayList<>();
         for (String diskLink : diskLinks) {
             DiskService.DiskState diskState = getDiskState(diskLink);
             if (diskState.customProperties.get(DEVICE_TYPE)
                     .equals(AWSConstants.AWSStorageType.EBS.getName())) {
                 assertEbsDiskConfiguration(client, awsInstance, diskState);
+
             } else {
                 assertEquals(String.format(
                         "Data disk size is not matching to the size supported by %s",
@@ -82,7 +91,11 @@ public class TestProvisionAWSStorage extends TestAWSProvisionTask {
 
                 assertEquals("Data disk attach status is not matching",
                         DiskService.DiskStatus.ATTACHED, diskState.status);
+
+
             }
+            super.assertDeviceName(awsInstance, diskState, existingNames);
+            existingNames.add(diskState.customProperties.get(DEVICE_NAME));
         }
     }
 
