@@ -14,11 +14,11 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static junit.framework.TestCase.assertNull;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
-
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.IMAGE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createImageSource;
@@ -58,9 +58,9 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionDiskTaskService.ProvisionDiskTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -95,7 +95,9 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
 
         public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/attach-disk-tasks";
 
-
+        public static FactoryService createFactory() {
+            return TaskFactoryService.create(AttachDiskTaskTestService.class);
+        }
 
         public AttachDiskTaskTestService() {
             super(DiskTaskTestState.class);
@@ -135,8 +137,7 @@ public class AzureComputeDiskDay2ServiceTest extends AzureBaseTest {
         getHost().setTimeoutSeconds(1200);
 
         ServiceMetadata[] serviceMetadata = {
-                factoryService(AttachDiskTaskTestService.class,
-                        () -> TaskFactoryService.create(AttachDiskTaskTestService.class))
+                factoryService(AttachDiskTaskTestService.class, AttachDiskTaskTestService::createFactory)
         };
 
         StartServicesHelper.startServices(this.host, serviceMetadata);

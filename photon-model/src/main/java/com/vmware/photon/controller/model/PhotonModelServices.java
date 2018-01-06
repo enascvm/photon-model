@@ -50,7 +50,7 @@ import com.vmware.xenon.common.ServiceHost;
  */
 public class PhotonModelServices {
 
-    private static final ServiceMetadata[] SERVICES_METADATA = {
+    public static final ServiceMetadata[] SERVICES_METADATA = {
             factoryService(ComputeDescriptionService.class),
             factoryService(ComputeService.class),
             factoryService(DeploymentService.class),

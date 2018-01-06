@@ -83,6 +83,7 @@ import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.CommandLineArgumentParser;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
@@ -131,6 +132,10 @@ public class AWSComputeDiskDay2ServiceTest {
             extends TaskService<DiskTaskService.DiskTaskState> {
 
         public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/disk-op-tasks";
+
+        public static FactoryService createFactory() {
+            return TaskFactoryService.create(DiskTaskService.class);
+        }
 
         public DiskTaskService() {
             super(DiskTaskState.class);
@@ -192,7 +197,7 @@ public class AWSComputeDiskDay2ServiceTest {
             PhotonModelTaskServices.startServices(this.host);
 
             ServiceMetadata[] serviceMetadata = {
-                factoryService(DiskTaskService.class, () -> TaskFactoryService.create(DiskTaskService.class))
+                factoryService(DiskTaskService.class, DiskTaskService::createFactory)
             };
 
             StartServicesHelper.startServices(this.host, serviceMetadata);

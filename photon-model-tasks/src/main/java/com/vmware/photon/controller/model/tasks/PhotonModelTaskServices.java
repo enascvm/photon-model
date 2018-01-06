@@ -30,7 +30,7 @@ import com.vmware.xenon.services.common.TaskFactoryService;
  */
 public class PhotonModelTaskServices {
 
-    private static final ServiceMetadata[] SERVICES_METADATA = {
+    public static final ServiceMetadata[] SERVICES_METADATA = {
             factoryService(SshCommandTaskService.class,
                     SshCommandTaskService::createFactory),
             factoryService(ResourceAllocationTaskService.class,

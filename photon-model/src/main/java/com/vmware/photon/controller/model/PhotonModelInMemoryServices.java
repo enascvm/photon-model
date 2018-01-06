@@ -26,7 +26,7 @@ import com.vmware.xenon.common.ServiceHost;
  */
 public class PhotonModelInMemoryServices {
 
-    private static final ServiceMetadata[] SERVICES_METADATA = {
+    public static final ServiceMetadata[] SERVICES_METADATA = {
             factoryService(InMemoryResourceMetricService.class, InMemoryResourceMetricService::createFactory)
     };
 

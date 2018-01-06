@@ -29,7 +29,7 @@ import com.vmware.xenon.common.UriUtils;
  */
 public class PhotonModelMetricServices {
 
-    private static final ServiceMetadata[] SERVICES_METADATA = {
+    public static final ServiceMetadata[] SERVICES_METADATA = {
             factoryService(ResourceMetricsService.class, ResourceMetricsService::createFactory)
     };
 

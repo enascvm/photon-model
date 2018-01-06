@@ -35,7 +35,7 @@ import com.vmware.xenon.common.Utils;
  */
 public class AWSAdapters {
 
-    private static final ServiceMetadata[] SERVICES_METADATA = {
+    public static final ServiceMetadata[] SERVICES_METADATA = {
             service(AWSInstanceService.class),
             service(AWSNetworkService.class),
             service(AWSDiskService.class),

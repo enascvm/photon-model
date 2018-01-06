@@ -48,7 +48,7 @@ import com.vmware.xenon.common.Utils;
  */
 public class AzureAdapters {
 
-    private static final ServiceMetadata[] SERVICES_METADATA = {
+    public static final ServiceMetadata[] SERVICES_METADATA = {
             service(AzureEnumerationAdapterService.class),
             service(AzureImageEnumerationAdapterService.class),
             service(AzureInstanceTypeService.class),

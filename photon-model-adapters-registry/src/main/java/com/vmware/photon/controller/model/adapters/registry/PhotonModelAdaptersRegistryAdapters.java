@@ -31,7 +31,7 @@ import com.vmware.xenon.common.Utils;
  */
 public class PhotonModelAdaptersRegistryAdapters {
 
-    private static final ServiceMetadata[] SERVICES_METADATA = {
+    public static final ServiceMetadata[] SERVICES_METADATA = {
             factoryService(PhotonModelAdaptersRegistryService.class,
                     PhotonModelAdaptersRegistryFactoryService::new),
             factoryService(ResourceOperationSpecService.class,
