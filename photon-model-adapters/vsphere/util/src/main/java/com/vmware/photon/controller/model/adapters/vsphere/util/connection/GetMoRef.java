@@ -330,7 +330,6 @@ public class GetMoRef extends BaseHelper {
 
         init();
 
-        ManagedObjectReference retVal = null;
         ManagedObjectReference rootFolder = this.serviceContent.getRootFolder();
         TraversalSpec tSpec = getVMTraversalSpec();
         // Create Property Spec
@@ -354,31 +353,40 @@ public class GetMoRef extends BaseHelper {
         List<PropertyFilterSpec> listpfs =
                 new ArrayList<PropertyFilterSpec>(1);
         listpfs.add(propertyFilterSpec);
-
         RetrieveOptions options = new RetrieveOptions();
+        // Query returns a fixed number of results
+        // if token is returned we can get more results
         RetrieveResult retrieveResult =
                 this.vimPort.retrievePropertiesEx(propCollectorRef, listpfs, options);
-        List<ObjectContent> listobcont =
-                (retrieveResult != null) ?
-                        retrieveResult.getObjects() : null;
+        String token = null;
 
-        if (listobcont != null) {
-            for (ObjectContent oc : listobcont) {
-                ManagedObjectReference mr = oc.getObj();
-                String vmnm = null;
-                List<DynamicProperty> dps = oc.getPropSet();
-                if (dps != null) {
-                    for (DynamicProperty dp : dps) {
-                        vmnm = (String) dp.getVal();
+        do {
+            token = (retrieveResult != null) ? retrieveResult.getToken() : null;
+            List<ObjectContent> listobcont =
+                    (retrieveResult != null) ?
+                            retrieveResult.getObjects() : null;
+
+            if (listobcont != null) {
+                for (ObjectContent oc : listobcont) {
+                    ManagedObjectReference mr = oc.getObj();
+                    String vmnm = null;
+                    List<DynamicProperty> dps = oc.getPropSet();
+                    if (dps != null) {
+                        for (DynamicProperty dp : dps) {
+                            vmnm = (String) dp.getVal();
+                            if (vmName.equals(vmnm)) {
+                                return mr;
+                            }
+                        }
                     }
                 }
-                if (vmnm != null && vmnm.equals(vmName)) {
-                    retVal = mr;
-                    break;
-                }
             }
-        }
-        return retVal;
+            if (token != null) {
+                retrieveResult = this.vimPort.continueRetrievePropertiesEx(propCollectorRef, token);
+            }
+        } while (token != null);
+
+        return null;
     }
 
     /**
