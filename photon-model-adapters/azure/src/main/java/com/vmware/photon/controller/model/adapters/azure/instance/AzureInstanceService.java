@@ -2039,6 +2039,21 @@ public class AzureInstanceService extends StatelessService {
 
     private DeferredResult<AzureInstanceContext> handlePrivateImage(AzureInstanceContext ctx) {
 
+        // In-case type of disk is not specified for the boot disk then we set it to managed one
+        // because custom/private images only work with managed disk. This is specially
+        // needed for cadenza use case where storage profile is unavailable.
+        if (!AzureUtils.isTypeOfDiskSpecified(ctx.bootDiskState)) {
+            ctx.bootDiskState.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE,
+                    StorageAccountTypes.STANDARD_LRS.toString());
+            //patch boot disk states with the new custom property that makes it managed disk/
+            URI uri = ctx.computeRequest.buildUri(ctx.bootDiskState.documentSelfLink);
+
+            Operation patchBootDiskOp = Operation
+                    .createPatch(uri)
+                    .setBody(ctx.bootDiskState);
+            return this.sendWithDeferredResult(patchBootDiskOp)
+                    .thenCompose(op -> DeferredResult.completed(ctx));
+        }
         return DeferredResult.completed(ctx);
     }
 

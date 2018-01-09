@@ -66,6 +66,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
@@ -642,6 +643,18 @@ public class AzureUtils {
             return id;
         }
         return id.substring(index + 3);
+    }
+
+    /**
+     * Method to check if the given disk has any custom property to indicate if its a managed
+     * disk or unmanaged one
+     */
+    public static boolean isTypeOfDiskSpecified(DiskService.DiskStateExpanded disk) {
+        if (disk.customProperties.containsKey(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME) || disk
+                .customProperties.containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
+            return true;
+        }
+        return false;
     }
 
 }
