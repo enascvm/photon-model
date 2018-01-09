@@ -886,6 +886,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         queryLocalStates
                 .queryDocuments(c -> ctx.computeStates.put(c.id, c))
+                .thenApply(__ -> {
+                    // ZONEs are not correctly de-duplicated yet so filter out found resources if
+                    // they don't belong to our endpoint (VSYM-10572)
+                    ctx.computeStates = ctx.computeStates.entrySet().stream()
+                            .filter(ce -> !(ComputeType.ZONE.equals(ce.getValue().type) &&
+                                    !ctx.request.endpointLink.equals(ce.getValue().endpointLink)))
+                            .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                    return ctx;
+                })
                 .whenComplete(thenHandleSubStage(ctx, next));
     }
 
