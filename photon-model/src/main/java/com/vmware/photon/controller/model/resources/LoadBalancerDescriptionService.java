@@ -227,6 +227,13 @@ public class LoadBalancerDescriptionService extends StatefulService {
         public List<RouteConfiguration> routes;
 
         /**
+         * Optional address of this load balancer instance.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_48)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String address;
+
+        /**
          * The adapter to use to create the load balancer instance.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)

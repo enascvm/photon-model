@@ -241,6 +241,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             patchState.groupLinks.add("group1");
             patchState.regionId = "new-region";
             patchState.routes = Arrays.asList(startState.routes.get(1));
+            patchState.address = "1.2.3.4";
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             returnState = getServiceSynchronously(
@@ -261,6 +262,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             assertEquals(returnState.regionId, startState.regionId);
             assertEquals(1, returnState.routes.size());
             assertEquals(2, startState.routes.size());
+            assertEquals("1.2.3.4", returnState.address);
         }
 
         @Test
