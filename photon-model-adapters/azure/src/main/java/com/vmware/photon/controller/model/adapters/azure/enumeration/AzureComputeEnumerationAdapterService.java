@@ -218,6 +218,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         CREATE_COMPUTE_EXTERNAL_TAG_STATES,
         CREATE_COMPUTE_INTERNAL_TYPE_TAG,
         UPDATE_COMPUTE_STATES,
+        UPDATE_REGIONS,
         UPDATE_COMPUTE_DESCRIPTIONS,
         GET_DISK_STATES,
         GET_STORAGE_DESCRIPTIONS,
@@ -396,7 +397,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             break;
         case UPDATE_COMPUTE_STATES:
             logFine("IN UPDATE_COMPUTE_STATES [endpointLink:%s]", ctx.request.endpointLink);
-            updateComputeStates(ctx, ComputeEnumerationSubStages.UPDATE_COMPUTE_DESCRIPTIONS);
+            updateComputeStates(ctx, ComputeEnumerationSubStages.UPDATE_REGIONS);
+            break;
+        case UPDATE_REGIONS:
+            logFine("IN UPDATE_REGIONS [endpointLink:%s]", ctx.request.endpointLink);
+            updateRegions(ctx, ComputeEnumerationSubStages.UPDATE_COMPUTE_DESCRIPTIONS);
             break;
         case UPDATE_COMPUTE_DESCRIPTIONS:
             logFine("IN UPDATE_COMPUTE_DESCRIPTIONS [endpointLink:%s]", ctx.request.endpointLink);
@@ -886,15 +891,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         queryLocalStates
                 .queryDocuments(c -> ctx.computeStates.put(c.id, c))
-                .thenApply(__ -> {
-                    // ZONEs are not correctly de-duplicated yet so filter out found resources if
-                    // they don't belong to our endpoint (VSYM-10572)
-                    ctx.computeStates = ctx.computeStates.entrySet().stream()
-                            .filter(ce -> !(ComputeType.ZONE.equals(ce.getValue().type) &&
-                                    !ctx.request.endpointLink.equals(ce.getValue().endpointLink)))
-                            .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-                    return ctx;
-                })
                 .whenComplete(thenHandleSubStage(ctx, next));
     }
 
@@ -950,12 +946,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        Set<String> existingRegionIds = ctx.computeStates.keySet().stream()
-                .filter(k -> ctx.regions.containsKey(k)).collect(Collectors.toSet());
-
-        ctx.regions.keySet().removeAll(existingRegionIds);
-        ctx.computeStates.keySet().removeAll(existingRegionIds);
-
         DeferredResult.allOf(ctx.computeStates.values().stream().map(c -> {
             VirtualMachineInner virtualMachine = ctx.virtualMachines.remove(c.id);
             return Pair.of(c, virtualMachine);
@@ -979,6 +969,39 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     return result;
                 })
                 .collect(Collectors.toList())).whenComplete(thenHandleSubStage(ctx, next));
+    }
+
+    private void updateRegions(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+        if (ctx.regionIds.isEmpty()) {
+            logFine(() -> "No compute regions needs to updated.");
+            ctx.subStage = next;
+            handleSubStage(ctx);
+            return;
+        }
+
+        Map<String, ComputeState> existingRegionIds =
+                ctx.computeStates.entrySet().stream()
+                    .filter(entry -> ctx.regions.containsKey(entry.getKey()))
+                    .collect(Collectors.toMap(p -> p.getKey(), p -> p.getValue()));
+
+        ctx.regions.keySet().removeAll(existingRegionIds.keySet());
+        ctx.computeStates.keySet().removeAll(existingRegionIds.keySet());
+
+        DeferredResult.allOf(
+                existingRegionIds.values().stream().map(
+                        compute -> {
+                            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                                    (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
+                                            Collections.singletonList(ctx.request.endpointLink));
+
+                            ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                                    .create(collectionsToAddMap, null);
+
+                            return this.sendWithDeferredResult(Operation.createPatch(this.getHost(), compute.documentSelfLink)
+                                    .setReferer(this.getHost().getUri())
+                                    .setBody(updateEndpointLinksRequest));
+                        }).collect(Collectors.toList()))
+                .whenComplete(thenHandleSubStage(ctx, next));
     }
 
     private void updateComputeDescriptions(EnumerationContext ctx, ComputeEnumerationSubStages next) {

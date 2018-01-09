@@ -185,9 +185,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             ComputeService.ComputeState doc = response.getBody(ComputeService.ComputeState.class);
 
-            // TODO Remove ZONE after adding dedup support for AZURE (recent addition)
-            if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type) &&
-                    !ComputeDescriptionService.ComputeDescription.ComputeType.ZONE.equals(doc.type) ) {
+            if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type)) {
 
                 Assert.assertEquals(computeHostLink, doc.computeHostLink);
                 assertNotNull(doc.endpointLink);
