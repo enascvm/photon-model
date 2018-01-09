@@ -30,6 +30,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
 
 import java.net.URI;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -51,7 +53,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -65,12 +66,12 @@ public class AWSClientManager {
     private static String SEPARATOR = "-";
     // Flag for determining the type of AWS client managed by this client manager.
     private AwsClientType awsClientType;
-    private LRUCache<String, AmazonEC2AsyncClient> ec2ClientCache;
-    private LRUCache<String, AmazonCloudWatchAsyncClient> cloudWatchClientCache;
-    private LRUCache<String, AmazonS3Client> s3clientCache;
-    private LRUCache<String, TransferManager> s3TransferManagerCache;
-    private LRUCache<String, AmazonElasticLoadBalancingAsyncClient> loadBalancingClientCache;
-    private LRUCache<URI, ExecutorService> executorCache;
+    private Map<String, AmazonEC2AsyncClient> ec2ClientCache;
+    private Map<String, AmazonCloudWatchAsyncClient> cloudWatchClientCache;
+    private Map<String, AmazonS3Client> s3clientCache;
+    private Map<String, TransferManager> s3TransferManagerCache;
+    private Map<String, AmazonElasticLoadBalancingAsyncClient> loadBalancingClientCache;
+    private Map<URI, ExecutorService> executorCache;
 
     private LRUCache<String, Long> invalidEc2Clients;
     private LRUCache<String, Long> invalidCloudWatchClients;
@@ -89,32 +90,41 @@ public class AWSClientManager {
 
     public AWSClientManager(AwsClientType awsClientType) {
         this.awsClientType = awsClientType;
+        this.executorCache = Collections
+                .synchronizedMap(new LRUCache<>(THREAD_POOL_CACHE_INITIAL_SIZE,
+                        THREAD_POOL_CACHE_MAX_SIZE));
+
         switch (awsClientType) {
         case EC2:
-            this.ec2ClientCache = new LRUCache<>(EC2_CLIENT_CACHE_INITIAL_SIZE,
-                    EC2_CLIENT_CACHE_MAX_SIZE);
+            this.ec2ClientCache = Collections
+                    .synchronizedMap(new LRUCache<>(EC2_CLIENT_CACHE_INITIAL_SIZE,
+                            EC2_CLIENT_CACHE_MAX_SIZE));
             this.invalidEc2Clients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
                     INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
         case CLOUD_WATCH:
-            this.cloudWatchClientCache = new LRUCache<>(CW_CLIENT_CACHE_INITIAL_SIZE,
-                    CW_CLIENT_CACHE_MAX_SIZE);
+            this.cloudWatchClientCache = Collections
+                    .synchronizedMap(new LRUCache<>(CW_CLIENT_CACHE_INITIAL_SIZE,
+                            CW_CLIENT_CACHE_MAX_SIZE));
             this.invalidCloudWatchClients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
                     INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
         case S3:
-            this.s3clientCache = new LRUCache<>(S3_CLIENT_CACHE_INITIAL_SIZE,
-                    S3_CLIENT_CACHE_MAX_SIZE);
+            this.s3clientCache = Collections
+                    .synchronizedMap(new LRUCache<>(S3_CLIENT_CACHE_INITIAL_SIZE,
+                            S3_CLIENT_CACHE_MAX_SIZE));
             this.invalidS3Clients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
                     INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
         case S3_TRANSFER_MANAGER:
-            this.s3TransferManagerCache = new LRUCache<>(S3_TM_CLIENT_CACHE_INITIAL_SIZE,
-                    S3_TM_CLIENT_CACHE_MAX_SIZE);
+            this.s3TransferManagerCache = Collections
+                    .synchronizedMap(new LRUCache<>(S3_TM_CLIENT_CACHE_INITIAL_SIZE,
+                            S3_TM_CLIENT_CACHE_MAX_SIZE));
             return;
         case LOAD_BALANCING:
-            this.loadBalancingClientCache = new LRUCache<>(LB_CLIENT_CACHE_INITIAL_SIZE,
-                    LB_CLIENT_CACHE_MAX_SIZE);
+            this.loadBalancingClientCache = Collections
+                    .synchronizedMap(new LRUCache<>(LB_CLIENT_CACHE_INITIAL_SIZE,
+                            LB_CLIENT_CACHE_MAX_SIZE));
             this.invalidLoadBalancingClients = new LRUCache<>(INVALID_CLIENT_CACHE_INITIAL_SIZE,
                     INVALID_CLIENT_CACHE_MAX_SIZE);
             return;
@@ -128,13 +138,15 @@ public class AWSClientManager {
     /**
      * Accesses the client cache to get the EC2 client for the given auth credentials and regionId. If a client
      * is not found to exist, creates a new one and adds an entry in the cache for it.
-     *
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
-     * @param service The stateless service making the request and for which the executor pool needs to be allocated.
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
+     * @param service
+     *         The stateless service making the request and for which the executor pool needs to be allocated.
      * @return The AWSClient
      */
-    public synchronized AmazonEC2AsyncClient getOrCreateEC2Client(
+    public AmazonEC2AsyncClient getOrCreateEC2Client(
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.EC2) {
@@ -143,13 +155,9 @@ public class AWSClientManager {
         }
         AmazonEC2AsyncClient amazonEC2Client = null;
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        if (this.ec2ClientCache.containsKey(cacheKey)) {
-            return this.ec2ClientCache.get(cacheKey);
-        }
         try {
-            amazonEC2Client = AWSUtils
-                    .getAsyncClient(credentials, regionId, getExecutor(service.getHost()));
-            this.ec2ClientCache.put(cacheKey, amazonEC2Client);
+            amazonEC2Client = this.ec2ClientCache.computeIfAbsent(cacheKey, key -> AWSUtils
+                    .getAsyncClient(credentials, regionId, getExecutor(service.getHost())));
         } catch (Throwable e) {
             service.logSevere(e);
             failConsumer.accept(e);
@@ -159,41 +167,52 @@ public class AWSClientManager {
 
     /**
      * Checks if an EC2 client has been marked as invalid.
-     *
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
      * @return true if the EC2 client is marked as invalid, false otherwise.
      */
-    public synchronized boolean isEc2ClientInvalid(AuthCredentialsServiceState credentials,
+    public boolean isEc2ClientInvalid(AuthCredentialsServiceState credentials,
             String regionId) {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        return isInvalidClient(this.invalidEc2Clients, cacheKey);
+        synchronized (this.ec2ClientCache) {
+            return isInvalidClient(this.invalidEc2Clients, cacheKey);
+        }
     }
 
     /**
      * Marks an EC2 client as invalid.
-     *
-     * @param service The stateless service for which the operation is being performed.
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
+     * @param service
+     *         The stateless service for which the operation is being performed.
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
      */
-    public synchronized void markEc2ClientInvalid(StatelessService service,
+    public void markEc2ClientInvalid(StatelessService service,
             AuthCredentialsServiceState credentials, String regionId) {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         service.logWarning("Marking EC2 client cache entry invalid for key: " + cacheKey);
-        this.invalidEc2Clients.put(cacheKey, Utils.getNowMicrosUtc());
-        this.ec2ClientCache.remove(cacheKey);
+        synchronized (this.ec2ClientCache) {
+            this.invalidEc2Clients.put(cacheKey, Utils.getNowMicrosUtc());
+            this.ec2ClientCache.remove(cacheKey);
+        }
     }
 
     /**
      * Get or create a CloudWatch Client instance that will be used to get stats from AWS.
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
-     * @param service The stateless service for which the operation is being performed.
-     * @param isMock Indicates if this a mock request
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
+     * @param service
+     *         The stateless service for which the operation is being performed.
+     * @param isMock
+     *         Indicates if this a mock request
      * @return
      */
-    public synchronized AmazonCloudWatchAsyncClient getOrCreateCloudWatchClient(
+    public AmazonCloudWatchAsyncClient getOrCreateCloudWatchClient(
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, boolean isMock,
             Consumer<Throwable> failConsumer) {
@@ -202,32 +221,31 @@ public class AWSClientManager {
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        if (isInvalidClient(this.invalidCloudWatchClients, cacheKey)) {
+        if (isCloudWatchClientInvalid(cacheKey)) {
             failConsumer.accept(
                     new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
             return null;
         }
         AmazonCloudWatchAsyncClient amazonCloudWatchClient = null;
-        if (this.cloudWatchClientCache.containsKey(cacheKey)) {
-            return this.cloudWatchClientCache.get(cacheKey);
-        }
         try {
-            amazonCloudWatchClient = AWSUtils.getStatsAsyncClient(credentials,
-                    regionId, getExecutor(service.getHost()), isMock);
-            amazonCloudWatchClient.describeAlarmsAsync(
-                    new AsyncHandler<DescribeAlarmsRequest, DescribeAlarmsResult>() {
-                        @Override
-                        public void onError(Exception exception) {
-                            markCloudWatchClientInvalid(service, cacheKey);
-                        }
+            amazonCloudWatchClient = this.cloudWatchClientCache.computeIfAbsent(cacheKey, key -> {
+                AmazonCloudWatchAsyncClient client = AWSUtils.getStatsAsyncClient
+                        (credentials, regionId, getExecutor(service.getHost()), isMock);
+                client.describeAlarmsAsync(
+                        new AsyncHandler<DescribeAlarmsRequest, DescribeAlarmsResult>() {
+                            @Override
+                            public void onError(Exception exception) {
+                                markCloudWatchClientInvalid(service, cacheKey);
+                            }
 
-                        @Override
-                        public void onSuccess(DescribeAlarmsRequest request,
-                                DescribeAlarmsResult result) {
-                            //noop
-                        }
-                    });
-            this.cloudWatchClientCache.put(cacheKey, amazonCloudWatchClient);
+                            @Override
+                            public void onSuccess(DescribeAlarmsRequest request,
+                                    DescribeAlarmsResult result) {
+                                //noop
+                            }
+                        });
+                return client;
+            });
         } catch (Throwable e) {
             service.logSevere(e);
             failConsumer.accept(e);
@@ -235,14 +253,22 @@ public class AWSClientManager {
         return amazonCloudWatchClient;
     }
 
-    public synchronized void markCloudWatchClientInvalid(StatelessService service,
-            String cacheKey) {
-        service.logWarning("Marking cloudwatch client cache entry invalid for key: " + cacheKey);
-        this.invalidCloudWatchClients.put(cacheKey, Utils.getNowMicrosUtc());
-        this.cloudWatchClientCache.remove(cacheKey);
+    private boolean isCloudWatchClientInvalid(String cacheKey) {
+        synchronized (this.cloudWatchClientCache) {
+            return isInvalidClient(this.invalidCloudWatchClients, cacheKey);
+        }
     }
 
-    public synchronized TransferManager getOrCreateS3TransferManager(
+    public void markCloudWatchClientInvalid(StatelessService service,
+            String cacheKey) {
+        service.logWarning("Marking cloudwatch client cache entry invalid for key: " + cacheKey);
+        synchronized (this.cloudWatchClientCache) {
+            this.invalidCloudWatchClients.put(cacheKey, Utils.getNowMicrosUtc());
+            this.cloudWatchClientCache.remove(cacheKey);
+        }
+    }
+
+    public TransferManager getOrCreateS3TransferManager(
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.S3_TRANSFER_MANAGER) {
@@ -250,14 +276,10 @@ public class AWSClientManager {
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        if (this.s3TransferManagerCache.containsKey(cacheKey)) {
-            return this.s3TransferManagerCache.get(cacheKey);
-        }
         try {
-            TransferManager s3AsyncClient = AWSUtils
-                    .getS3TransferManager(credentials, regionId, getExecutor(service.getHost()));
-            this.s3TransferManagerCache.put(cacheKey, s3AsyncClient);
-            return s3AsyncClient;
+            return this.s3TransferManagerCache.computeIfAbsent(cacheKey, key -> AWSUtils
+                    .getS3TransferManager(credentials, regionId, getExecutor(service.getHost())));
+
         } catch (Throwable t) {
             service.logSevere(t);
             failConsumer.accept(t);
@@ -268,12 +290,15 @@ public class AWSClientManager {
     /**
      * Get or create a ElasticLoadBalancing Client instance that will be used to create/delete
      * load balancers from AWS.
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
-     * @param service The stateless service for which the operation is being performed.
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
+     * @param service
+     *         The stateless service for which the operation is being performed.
      * @return
      */
-    public synchronized AmazonElasticLoadBalancingAsyncClient getOrCreateLoadBalancingClient(
+    public AmazonElasticLoadBalancingAsyncClient getOrCreateLoadBalancingClient(
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, boolean isMock,
             Consumer<Throwable> failConsumer) {
@@ -282,40 +307,46 @@ public class AWSClientManager {
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        if (isInvalidClient(this.invalidLoadBalancingClients, cacheKey)) {
+        if (isLoadBalancingClientInvalid(cacheKey)) {
             failConsumer.accept(new IllegalStateException(
                     "Invalid load balancing client for key: " + cacheKey));
             return null;
         }
-        AmazonElasticLoadBalancingAsyncClient amazonLoadBalancingClient = null;
-        if (this.loadBalancingClientCache.containsKey(cacheKey)) {
-            return this.loadBalancingClientCache.get(cacheKey);
-        }
         try {
-            amazonLoadBalancingClient = AWSUtils.getLoadBalancingAsyncClient(credentials,
-                    regionId, getExecutor(service.getHost()));
-            this.loadBalancingClientCache.put(cacheKey, amazonLoadBalancingClient);
+            return this.loadBalancingClientCache.computeIfAbsent(cacheKey, key -> AWSUtils
+                    .getLoadBalancingAsyncClient(credentials,
+                            regionId, getExecutor(service.getHost())));
         } catch (Throwable e) {
             service.logSevere(e);
             failConsumer.accept(e);
         }
-        return amazonLoadBalancingClient;
+        return null;
+    }
+
+    private boolean isLoadBalancingClientInvalid(String cacheKey) {
+        synchronized (this.loadBalancingClientCache) {
+            return isInvalidClient(this.invalidLoadBalancingClients, cacheKey);
+        }
     }
 
     /**
      * Marks an ElasticLoadBalancing client as invalid.
-     *
-     * @param service The stateless service for which the operation is being performed.
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
+     * @param service
+     *         The stateless service for which the operation is being performed.
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
      */
-    public synchronized void markLoadBalancingClientInvalid(StatelessService service,
+    public void markLoadBalancingClientInvalid(StatelessService service,
             AuthCredentialsServiceState credentials, String regionId) {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         service.logWarning(
                 "Marking load balancing client cache entry invalid for key: " + cacheKey);
-        this.invalidLoadBalancingClients.put(cacheKey, Utils.getNowMicrosUtc());
-        this.loadBalancingClientCache.remove(cacheKey);
+        synchronized (this.loadBalancingClientCache) {
+            this.invalidLoadBalancingClients.put(cacheKey, Utils.getNowMicrosUtc());
+            this.loadBalancingClientCache.remove(cacheKey);
+        }
     }
 
     public AmazonS3Client getOrCreateS3Client(AuthCredentialsServiceState credentials,
@@ -326,48 +357,50 @@ public class AWSClientManager {
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
 
-        AmazonS3Client amazonS3Client = null;
-
-        if (this.s3clientCache.containsKey(cacheKey)) {
-            return this.s3clientCache.get(cacheKey);
-        }
         try {
-            amazonS3Client = AWSUtils.getS3Client(credentials, regionId);
-            this.s3clientCache.put(cacheKey, amazonS3Client);
+            return this.s3clientCache.computeIfAbsent(cacheKey, key -> AWSUtils.getS3Client
+                    (credentials, regionId));
         } catch (Exception e) {
             markS3ClientInvalid(service, credentials, regionId);
             service.logSevere(e);
             failConsumer.accept(e);
         }
-        return amazonS3Client;
+        return null;
     }
 
     /**
      * Marks an S3 client as invalid.
-     *
-     * @param service The stateless service for which the operation is being performed.
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
+     * @param service
+     *         The stateless service for which the operation is being performed.
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
      */
-    public synchronized void markS3ClientInvalid(StatelessService service,
+    public void markS3ClientInvalid(StatelessService service,
             AuthCredentialsServiceState credentials, String regionId) {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         service.logWarning("Marking S3 client cache entry invalid for key: " + cacheKey);
-        this.invalidS3Clients.put(cacheKey, Utils.getNowMicrosUtc());
-        this.s3clientCache.remove(cacheKey);
+        synchronized (this.s3clientCache) {
+            this.invalidS3Clients.put(cacheKey, Utils.getNowMicrosUtc());
+            this.s3clientCache.remove(cacheKey);
+        }
     }
 
     /**
      * Checks if an S3 client has been marked as invalid.
-     *
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
      * @return true if the S3 client is marked as invalid, false otherwise.
      */
-    public synchronized boolean isS3ClientInvalid(AuthCredentialsServiceState credentials,
+    public boolean isS3ClientInvalid(AuthCredentialsServiceState credentials,
             String regionId) {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        return isInvalidClient(this.invalidS3Clients, cacheKey);
+        synchronized (this.s3clientCache) {
+            return isInvalidClient(this.invalidS3Clients, cacheKey);
+        }
     }
 
     /**
@@ -375,12 +408,13 @@ public class AWSClientManager {
      * {@link #RETRY_AFTER_INTERVAL_MINUTES} minutes. If a client has been marked before, but
      * {@link #RETRY_AFTER_INTERVAL_MINUTES} minutes has passed, the client is removed from the
      * cache and it is no longer considered invalid.
-     *
-     * @param cache The cache to check.
-     * @param cacheKey The commonly used key to identify a client in the cache.
+     * @param cache
+     *         The cache to check.
+     * @param cacheKey
+     *         The commonly used key to identify a client in the cache.
      * @return true if the client is marked as invalid, false otherwise.
      */
-    private synchronized boolean isInvalidClient(LRUCache<String, Long> cache, String cacheKey) {
+    private boolean isInvalidClient(LRUCache<String, Long> cache, String cacheKey) {
         Long entryTimestamp = cache.get(cacheKey);
         if (entryTimestamp != null) {
             if ((entryTimestamp + TimeUnit.MINUTES.toMicros(RETRY_AFTER_INTERVAL_MINUTES)) < Utils
@@ -395,14 +429,16 @@ public class AWSClientManager {
 
     /**
      * Generates a common cache key formed via credentials and specific region ID.
-     *
-     * @param credentials The auth credentials to be used for the client creation
-     * @param regionId The region of the AWS client
+     * @param credentials
+     *         The auth credentials to be used for the client creation
+     * @param regionId
+     *         The region of the AWS client
      * @return A common, consistent cache key for use in the AWS Client Manager.
      */
     public static String createCredentialRegionCacheKey(AuthCredentialsServiceState credentials,
             String regionId) {
-        return Utils.computeHash(credentials.privateKeyId + SEPARATOR + credentials.privateKey) + TILDA +
+        return Utils.computeHash(credentials.privateKeyId + SEPARATOR + credentials.privateKey)
+                + TILDA +
                 regionId;
     }
 
@@ -412,28 +448,27 @@ public class AWSClientManager {
     public synchronized void cleanUp() {
         switch (this.awsClientType) {
         case CLOUD_WATCH:
-            this.cloudWatchClientCache.values().forEach(c -> c.shutdown());
-            this.cloudWatchClientCache.clear();
+            cleanupCache(this.cloudWatchClientCache, c -> c.shutdown());
             break;
 
         case EC2:
             this.ec2ClientCache.values().forEach(c -> c.shutdown());
             this.ec2ClientCache.clear();
+            cleanupCache(this.ec2ClientCache, c -> c.shutdown());
             break;
 
         case S3:
             this.s3clientCache.values().forEach(c -> c.shutdown());
             this.s3clientCache.clear();
+            cleanupCache(this.s3clientCache, c -> c.shutdown());
             break;
 
         case S3_TRANSFER_MANAGER:
-            this.s3TransferManagerCache.values().forEach(c -> c.shutdownNow());
-            this.s3TransferManagerCache.clear();
+            cleanupCache(this.s3TransferManagerCache, c -> c.shutdownNow());
             break;
 
         case LOAD_BALANCING:
-            this.loadBalancingClientCache.values().forEach(c -> c.shutdown());
-            this.loadBalancingClientCache.clear();
+            cleanupCache(this.loadBalancingClientCache, c -> c.shutdown());
             break;
 
         default:
@@ -443,21 +478,27 @@ public class AWSClientManager {
         cleanupExecutorCache();
     }
 
+    private <T> void cleanupCache(Map<?, T> cache, Consumer<T> consumer) {
+        synchronized (cache) {
+            cache.values().forEach(c -> consumer.accept(c));
+            cache.clear();
+        }
+    }
+
     /**
      * Returns the executor pool associated with the service host. In case one does not exist already,
      * creates a new one and saves that in a cache.
      */
-    public synchronized ExecutorService getExecutor(ServiceHost host) {
+    public ExecutorService getExecutor(ServiceHost host) {
         ExecutorService executorService;
         URI hostURI = host.getPublicUri();
-        if (this.executorCache == null) {
-            this.executorCache = new LRUCache<>(
-                    THREAD_POOL_CACHE_INITIAL_SIZE, THREAD_POOL_CACHE_MAX_SIZE);
-        }
-        executorService = this.executorCache.get(hostURI);
-        if (executorService == null) {
-            executorService = allocateExecutor(host.getPublicUri(), Utils.DEFAULT_THREAD_COUNT);
-            this.executorCache.put(hostURI, executorService);
+
+        synchronized (this.executorCache) {
+            executorService = this.executorCache.get(hostURI);
+            if (executorService == null) {
+                executorService = allocateExecutor(host.getPublicUri(), Utils.DEFAULT_THREAD_COUNT);
+                this.executorCache.put(hostURI, executorService);
+            }
         }
         return executorService;
     }
@@ -478,15 +519,15 @@ public class AWSClientManager {
      * Method to clear out the cache that saves the references to the executuors per host.
      */
     private void cleanupExecutorCache() {
-        if (this.executorCache == null) {
-            return;
-        }
-        for (ExecutorService executorService : this.executorCache.values()) {
-            // Adding this check as the Amazon client shutdown also shuts down the associated
-            // executor pool.
-            if (!executorService.isShutdown()) {
-                executorService.shutdown();
-                AdapterUtils.awaitTermination(executorService);
+        synchronized (this.executorCache) {
+            for (ExecutorService executorService : this.executorCache.values()) {
+                // Adding this check as the Amazon client shutdown also shuts down the associated
+                // executor pool.
+                if (!executorService.isShutdown()) {
+                    executorService.shutdown();
+                    AdapterUtils.awaitTermination(executorService);
+                }
+
             }
             this.executorCache.clear();
         }
@@ -497,34 +538,25 @@ public class AWSClientManager {
      * Returns the count of the clients that are cached in the client cache for the specified client type.
      */
     public int getCacheCount() {
+        int size = 0;
         switch (this.awsClientType) {
         case EC2:
-            if (this.ec2ClientCache != null) {
-                return this.ec2ClientCache.size();
-            }
+            size = this.ec2ClientCache.size();
             break;
         case CLOUD_WATCH:
-            if (this.cloudWatchClientCache != null) {
-                return this.cloudWatchClientCache.size();
-            }
+            size = this.cloudWatchClientCache.size();
             break;
         case S3:
-            if (this.s3clientCache != null) {
-                return this.s3clientCache.size();
-            }
+            size = this.s3clientCache.size();
             break;
         case S3_TRANSFER_MANAGER:
-            if (this.s3TransferManagerCache != null) {
-                return this.s3TransferManagerCache.size();
-            }
+            size = this.s3TransferManagerCache.size();
             break;
         case LOAD_BALANCING:
-            if (this.loadBalancingClientCache != null) {
-                return this.loadBalancingClientCache.size();
-            }
+            size = this.loadBalancingClientCache.size();
             break;
         default:
         }
-        return 0;
+        return size;
     }
 }

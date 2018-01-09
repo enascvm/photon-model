@@ -15,8 +15,9 @@ package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.vmware.photon.controller.model.UriPaths;
 
@@ -27,30 +28,31 @@ import com.vmware.photon.controller.model.UriPaths;
  */
 public class AWSClientManagerFactory {
 
-    private static Map<AwsClientType, AwsClientManagerEntry> clientManagersByType = new HashMap<>();
+    private static Map<AwsClientType, AwsClientManagerEntry> clientManagersByType = new
+            ConcurrentHashMap<>();
 
     private static final long MAX_TTL_MILLIS = Long.getLong(UriPaths.PROPERTY_PREFIX
             + "AWSClientManagerFactory.ttlMillis", 30 * 60 * 1000);
 
     private static class AwsClientManagerEntry {
         private AWSClientManager clientManager;
-        private int clientReferenceCount = 0;
+        private AtomicInteger clientReferenceCount = new AtomicInteger(0);
         private long createdTimeMillis;
+
+        AwsClientManagerEntry(AwsClientType awsClientType) {
+            this.clientManager = new AWSClientManager(awsClientType);
+            this.createdTimeMillis = System.currentTimeMillis();
+        }
     }
 
     /**
      * Returns a reference to the client manager instance managing the specified type of client if it exists. Creates a new one
      * if it does not exist.
      */
-    public static synchronized AWSClientManager getClientManager(AwsClientType awsClientType) {
-        AwsClientManagerEntry clientManagerEntry = clientManagersByType.get(awsClientType);
-        if (clientManagerEntry == null) {
-            clientManagerEntry = new AwsClientManagerEntry();
-            clientManagerEntry.clientManager = new AWSClientManager(awsClientType);
-            clientManagerEntry.createdTimeMillis = System.currentTimeMillis();
-            clientManagersByType.put(awsClientType, clientManagerEntry);
-        }
-        clientManagerEntry.clientReferenceCount++;
+    public static AWSClientManager getClientManager(AwsClientType awsClientType) {
+        AwsClientManagerEntry clientManagerEntry = clientManagersByType
+                .computeIfAbsent(awsClientType, AwsClientManagerEntry::new);
+        clientManagerEntry.clientReferenceCount.incrementAndGet();
         return clientManagerEntry.clientManager;
     }
 
@@ -58,17 +60,19 @@ public class AWSClientManagerFactory {
      * Decrements the reference count for the EC2 client manager. If the reference count goes down to zero, then
      * the shared cache is cleared out.
      */
-    public static synchronized void returnClientManager(AWSClientManager clientManager,
+    public static void returnClientManager(AWSClientManager clientManager,
             AwsClientType awsClientType) {
         AwsClientManagerEntry clientManagerHolder = clientManagersByType.get(awsClientType);
         if (clientManagerHolder != null) {
             if (clientManager != clientManagerHolder.clientManager) {
-                throw new IllegalArgumentException("Incorrect client manager reference passed to the method.");
+                throw new IllegalArgumentException(
+                        "Incorrect client manager reference passed to the method.");
             }
-            clientManagerHolder.clientReferenceCount--;
-            if (clientManagerHolder.clientReferenceCount == 0) {
+
+            if (clientManagerHolder.clientReferenceCount.decrementAndGet() == 0) {
                 // cleanup only if expired
-                if (System.currentTimeMillis() - clientManagerHolder.createdTimeMillis > MAX_TTL_MILLIS) {
+                if (System.currentTimeMillis() - clientManagerHolder.createdTimeMillis
+                        > MAX_TTL_MILLIS) {
                     // cleanup code on the client manager once they are not referenced by any of the adapters.
                     clientManagerHolder.clientManager.cleanUp();
                 }
@@ -78,14 +82,13 @@ public class AWSClientManagerFactory {
 
     public static int getClientReferenceCount(AwsClientType awsClientType) {
         AwsClientManagerEntry clientManagerEntry = clientManagersByType.get(awsClientType);
-        return clientManagerEntry == null ? 0 : clientManagerEntry.clientReferenceCount;
+        return clientManagerEntry == null ? 0 : clientManagerEntry.clientReferenceCount.get();
     }
 
     public static void cleanUp(AwsClientType awsClientType) {
-        AwsClientManagerEntry clientManagerEntry = clientManagersByType.get(awsClientType);
+        AwsClientManagerEntry clientManagerEntry = clientManagersByType.remove(awsClientType);
         if (clientManagerEntry != null) {
             clientManagerEntry.clientManager.cleanUp();
-            clientManagerEntry.clientReferenceCount = 0;
         }
     }
 }

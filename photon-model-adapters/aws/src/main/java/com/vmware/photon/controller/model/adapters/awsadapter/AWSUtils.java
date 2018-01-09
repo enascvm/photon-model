@@ -237,6 +237,7 @@ public class AWSUtils {
             ExecutorService executorService) {
 
         ClientConfiguration configuration = new ClientConfiguration();
+        configuration.setMaxConnections(100);
         configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
                 DEFAULT_BACKOFF_STRATEGY,
                 DEFAULT_MAX_ERROR_RETRY,
