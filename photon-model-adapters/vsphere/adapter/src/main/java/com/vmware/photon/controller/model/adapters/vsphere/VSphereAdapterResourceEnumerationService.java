@@ -1907,12 +1907,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @return The network interface state
      */
     private NetworkInterfaceState createNewInterfaceState(String id, String networkLink, String
-            subnetworkLink) {
+            subnetworkLink, String ipAddress) {
         NetworkInterfaceState iface = new NetworkInterfaceState();
         iface.name = id;
         iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK, getHost().nextUUID());
         iface.networkLink = networkLink;
         iface.subnetLink = subnetworkLink;
+        iface.address = ipAddress;
         Operation.createPost(PhotonModelUriUtils.createInventoryUri
                 (getHost(),
                 NetworkInterfaceService.FACTORY_LINK))
@@ -1929,10 +1930,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param mode Either using distributed virtual port or opaque network
      * @param docType The document class type
      * @param type The type
+     * @param ipAddress The primary ip address of this interface
      */
     private <T> Operation addNewInterfaceState(EnumerationProgress enumerationProgress,
             ComputeState state, String id, InterfaceStateMode mode,
-            Class<? extends ServiceDocument> docType, Class<T> type) {
+            Class<? extends ServiceDocument> docType, Class<T> type, String ipAddress) {
 
         String fieldKey;
         String fieldValue;
@@ -1967,10 +1969,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         NetworkInterfaceState iface = null;
                         if (netState instanceof SubnetState) {
                             SubnetState subnetState = (SubnetState) netState;
-                            iface = createNewInterfaceState(id, subnetState.networkLink, subnetState.documentSelfLink);
+                            iface = createNewInterfaceState(id, subnetState.networkLink,
+                                    subnetState.documentSelfLink, ipAddress);
                         } else if (netState instanceof NetworkState) {
                             NetworkState networkState = (NetworkState) netState;
-                            iface = createNewInterfaceState(id, null, networkState.documentSelfLink);
+                            iface = createNewInterfaceState(id, null, networkState
+                                    .documentSelfLink, ipAddress);
                         }
                         if (iface != null ) {
                             state.networkInterfaceLinks.add(iface.documentSelfLink);
@@ -1999,6 +2003,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         submitWorkToVSpherePool(() -> {
             populateTags(enumerationProgress, vm, state);
             state.networkInterfaceLinks = new ArrayList<>();
+            Map<String, List<String>> nicToIPv4Addresses = vm.getMapNic2IpV4Addresses();
             for (VirtualEthernetCard nic : vm.getNics()) {
                 VirtualDeviceBackingInfo backing = nic.getBacking();
                 if (backing instanceof VirtualEthernetCardNetworkBackingInfo) {
@@ -2009,6 +2014,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     iface.name = nic.getDeviceInfo().getLabel();
                     iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                             getHost().nextUUID());
+                    iface.address = getPrimaryIPv4Address(nic, nicToIPv4Addresses);
                     Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(),
                             NetworkInterfaceService.FACTORY_LINK))
                             .setBody(iface)
@@ -2020,7 +2026,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     String portgroupKey = veth.getPort().getPortgroupKey();
                     Operation op = addNewInterfaceState(enumerationProgress, state, portgroupKey,
                             InterfaceStateMode.INTERFACE_STATE_WITH_DISTRIBUTED_VIRTUAL_PORT,
-                            SubnetState.class, SubnetState.class);
+                            SubnetState.class, SubnetState.class, getPrimaryIPv4Address(nic,
+                                    nicToIPv4Addresses));
                     if (op != null) {
                         operations.add(op);
                     }
@@ -2030,7 +2037,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     String opaqueNetworkId = veth.getOpaqueNetworkId();
                     Operation op = addNewInterfaceState(enumerationProgress, state, opaqueNetworkId,
                             InterfaceStateMode.INTERFACE_STATE_WITH_OPAQUE_NETWORK,
-                            NetworkState.class, NetworkState.class);
+                            NetworkState.class, NetworkState.class, getPrimaryIPv4Address(nic,
+                                    nicToIPv4Addresses));
                     if (op != null) {
                         operations.add(op);
                     }
@@ -2546,5 +2554,20 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             }
             ctx.getDeleteDiskTracker().track();
         });
+    }
+
+    private String getPrimaryIPv4Address(VirtualEthernetCard nic, Map<String, List<String>>
+            nicMACToIPv4Addresses) {
+        if (nicMACToIPv4Addresses == null) {
+            return null;
+        }
+
+        String macAddress = nic.getMacAddress();
+        List<String> ipv4Addresses = nicMACToIPv4Addresses.get(macAddress);
+        if (ipv4Addresses != null && ipv4Addresses.size() > 0) {
+            return ipv4Addresses.get(0);
+        }
+
+        return null;
     }
 }
