@@ -26,6 +26,7 @@ public class VSphereConstants {
     public static final String VSPHERE_SNAPSHOT_DESCRIPTION = "description";
     public static final String VSPHERE_SNAPSHOT_MEMORY = "snapshotMemory";
     public static final String VSPHERE_SNAPSHOT_REQUEST_TYPE = "requestType";
+    public static final String VSPHERE_SNAPSHOT_DOCUMENT_LINK = "snapshotLink";
 
     public static enum VSphereResourceType {
         vsphere_vm("vsphere_vm"),

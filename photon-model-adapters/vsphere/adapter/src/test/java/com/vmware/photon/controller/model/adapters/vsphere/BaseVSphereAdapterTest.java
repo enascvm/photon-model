@@ -750,7 +750,7 @@ public class BaseVSphereAdapterTest {
         String taskLink = UUID.randomUUID().toString();
 
         ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(
-                ResourceOperation.DELETE_SNAPSHOT.operation, "DELETE", snapshotState.documentSelfLink, taskLink);
+                ResourceOperation.DELETE_SNAPSHOT.operation, "DELETE", computeState.documentSelfLink, snapshotState.documentSelfLink, taskLink);
 
         Operation deleteSnapshotOp = Operation
                 .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
@@ -789,7 +789,7 @@ public class BaseVSphereAdapterTest {
         String taskLink = UUID.randomUUID().toString();
 
         ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(
-                ResourceOperation.REVERT_SNAPSHOT.operation, "REVERT", snapshotStateToRevertTo.documentSelfLink,
+                ResourceOperation.REVERT_SNAPSHOT.operation, "REVERT", computeState.documentSelfLink , snapshotStateToRevertTo.documentSelfLink,
                 taskLink);
 
         Operation revertSnapshotOp = Operation
@@ -1293,14 +1293,14 @@ public class BaseVSphereAdapterTest {
     }
 
     private ResourceOperationRequest getDeleteOrRevertSnapshotRequest(String operationId, String operationType,
-            String documentSelfLink,
-            String taskLink) {
+            String computeSelfLink, String snapshotSelfLink, String taskLink) {
         Map<String, String> payload = new HashMap<>();
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, operationType);
+        payload.put(VSphereConstants.VSPHERE_SNAPSHOT_DOCUMENT_LINK, snapshotSelfLink);
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
         resourceOperationRequest.operation = operationId;
         resourceOperationRequest.isMockRequest = isMock();
-        resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, documentSelfLink);
+        resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, computeSelfLink);
         resourceOperationRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
         resourceOperationRequest.payload = payload;
         return resourceOperationRequest;

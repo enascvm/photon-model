@@ -21,6 +21,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
+
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
@@ -35,6 +38,7 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.SnapshotService;
+import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotRequestType;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
@@ -114,7 +118,24 @@ public class VSphereAdapterSnapshotService extends StatelessService {
             return;
         }
 
-        SnapshotService.SnapshotRequestType requestType = SnapshotService.SnapshotRequestType.fromString(request.payload.get(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE));
+        if (MapUtils.isEmpty(request.payload)) {
+            mgr.patchTaskToFailure(new IllegalArgumentException("Payload is missing for snapshot operation"));
+            return;
+        }
+
+        SnapshotRequestType requestType = SnapshotRequestType.fromString(request.payload.get(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE));
+        if (requestType == null) {
+            mgr.patchTaskToFailure(new IllegalArgumentException("No Request Type is specified in the payload for snapshot operation"));
+            return;
+        }
+
+        String computeLink = request.resourceLink();
+        String snapshotLink = request.payload.get(VSphereConstants.VSPHERE_SNAPSHOT_DOCUMENT_LINK);
+        if ((SnapshotRequestType.DELETE.equals(requestType) || SnapshotRequestType.REVERT.equals(requestType))
+                && (StringUtils.isBlank(snapshotLink))) {
+            mgr.patchTaskToFailure(new IllegalArgumentException("No Snapshot Link is specified in the payload for snapshot operation"));
+            return;
+        }
 
         switch (requestType) {
         case CREATE:
@@ -134,7 +155,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     });
             break;
         case DELETE:
-            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),request.resourceLink()))
+            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),snapshotLink))
                     .setCompletion((o,e) -> {
                         if (e != null) {
                             mgr.patchTaskToFailure(e);
@@ -142,6 +163,11 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                         }
                         SnapshotContext deleteSnapshotContext = new SnapshotContext(o.getBody(SnapshotState.class), mgr,
                                 requestType);
+                        if (!computeLink.equals(deleteSnapshotContext.snapshotState.computeLink)) {
+                            mgr.patchTaskToFailure(new IllegalArgumentException("Snapshot does not belong to the specified compute."));
+                            return;
+                        }
+
                         DeferredResult.completed(deleteSnapshotContext)
                                 .thenCompose(this::thenSetComputeDescription)
                                 .thenCompose(this::thenSetParentComputeDescription)
@@ -156,7 +182,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     }).sendWith(this);
             break;
         case REVERT:
-            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),request.resourceLink()))
+            Operation.createGet(PhotonModelUriUtils.createInventoryUri(this.getHost(),snapshotLink))
                     .setCompletion((o,e) -> {
                         if (e != null) {
                             mgr.patchTaskToFailure(e);
@@ -164,6 +190,10 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                         }
                         SnapshotContext revertSnapshotContext = new SnapshotContext(o.getBody(SnapshotState.class), mgr,
                                 requestType);
+                        if (!computeLink.equals(revertSnapshotContext.snapshotState.computeLink)) {
+                            mgr.patchTaskToFailure(new IllegalArgumentException("Snapshot does not belong to the specified compute."));
+                            return;
+                        }
                         DeferredResult.completed(revertSnapshotContext)
                                 .thenCompose(this::thenSetComputeDescription)
                                 .thenCompose(this::thenSetParentComputeDescription)
