@@ -42,7 +42,6 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
@@ -904,13 +903,16 @@ public class QueryUtils {
     public static QueryTask createAccountQuery(String accountId, String accountType,
             List<String> tenantLinks) {
         Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(ComputeState.class, Occurance.SHOULD_OCCUR)
+                .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         "__endpointType", accountType)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId)
-                .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
+                        PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId);
+
+        if (tenantLinks != null) {
+            qBuilder.addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
+        }
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
