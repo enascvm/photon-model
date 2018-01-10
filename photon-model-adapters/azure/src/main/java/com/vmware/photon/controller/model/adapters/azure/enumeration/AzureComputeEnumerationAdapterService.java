@@ -445,7 +445,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private void collectRegions(EnumerationContext ctx, ComputeEnumerationSubStages next) {
-        Operation getEndpoint = Operation.createGet(this, ctx.parentCompute.endpointLink);
+        Operation getEndpoint = Operation.createGet(this, ctx.request.endpointLink);
 
         DeferredResult<EndpointState> getEndpointDR = sendWithDeferredResult(getEndpoint,
                 EndpointState.class);
