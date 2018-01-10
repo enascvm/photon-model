@@ -269,7 +269,7 @@ public class ResourceOperationUtils {
                 };
                 OperationJoin.create(operations).setCompletion(jh).sendWith(service);
             }
-        }, ResourceOperationSpecService.FACTORY_LINK);
+        },  true, ResourceOperationSpecService.FACTORY_LINK);
     }
 
     /**

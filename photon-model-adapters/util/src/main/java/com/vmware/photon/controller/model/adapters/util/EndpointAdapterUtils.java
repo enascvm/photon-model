@@ -123,7 +123,7 @@ public class EndpointAdapterUtils {
                         host, endpointType, endpointConfigEnhancer);
             }
 
-        }, startedAdapterLinks);
+        }, /* this services are not replicated */ false, startedAdapterLinks);
 
     }
 
@@ -189,7 +189,7 @@ public class EndpointAdapterUtils {
                 }
             });
 
-        }, PhotonModelAdaptersRegistryService.FACTORY_LINK);
+        }, true, PhotonModelAdaptersRegistryService.FACTORY_LINK);
     }
 
     public static void handleEndpointRequest(StatelessService service, Operation op,
