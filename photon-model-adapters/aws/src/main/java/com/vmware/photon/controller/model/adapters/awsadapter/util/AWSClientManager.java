@@ -25,16 +25,11 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_CLIENT_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_TM_CLIENT_CACHE_INITIAL_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_TM_CLIENT_CACHE_MAX_SIZE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_INITIAL_SIZE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
 
-import java.net.URI;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -50,10 +45,7 @@ import com.amazonaws.services.s3.transfer.TransferManager;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -71,7 +63,7 @@ public class AWSClientManager {
     private Map<String, AmazonS3Client> s3clientCache;
     private Map<String, TransferManager> s3TransferManagerCache;
     private Map<String, AmazonElasticLoadBalancingAsyncClient> loadBalancingClientCache;
-    private Map<URI, ExecutorService> executorCache;
+    private ExecutorService executorService;
 
     private LRUCache<String, Long> invalidEc2Clients;
     private LRUCache<String, Long> invalidCloudWatchClients;
@@ -84,15 +76,8 @@ public class AWSClientManager {
     private static final int RETRY_AFTER_INTERVAL_MINUTES = Integer
             .getInteger(AWS_RETRY_AFTER_INTERVAL_MINUTES, DEFAULT_RETRY_AFTER_INTERVAL_MINUTES);
 
-    public AWSClientManager() {
-        this(AwsClientType.EC2);
-    }
-
-    public AWSClientManager(AwsClientType awsClientType) {
+    AWSClientManager(AwsClientType awsClientType) {
         this.awsClientType = awsClientType;
-        this.executorCache = Collections
-                .synchronizedMap(new LRUCache<>(THREAD_POOL_CACHE_INITIAL_SIZE,
-                        THREAD_POOL_CACHE_MAX_SIZE));
 
         switch (awsClientType) {
         case EC2:
@@ -135,6 +120,11 @@ public class AWSClientManager {
         }
     }
 
+    public AWSClientManager(AwsClientType awsClientType, ExecutorService executorService) {
+        this(awsClientType);
+        this.executorService = executorService;
+    }
+
     /**
      * Accesses the client cache to get the EC2 client for the given auth credentials and regionId. If a client
      * is not found to exist, creates a new one and adds an entry in the cache for it.
@@ -157,7 +147,7 @@ public class AWSClientManager {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         try {
             amazonEC2Client = this.ec2ClientCache.computeIfAbsent(cacheKey, key -> AWSUtils
-                    .getAsyncClient(credentials, regionId, getExecutor(service.getHost())));
+                    .getAsyncClient(credentials, regionId, getExecutor()));
         } catch (Throwable e) {
             service.logSevere(e);
             failConsumer.accept(e);
@@ -230,7 +220,7 @@ public class AWSClientManager {
         try {
             amazonCloudWatchClient = this.cloudWatchClientCache.computeIfAbsent(cacheKey, key -> {
                 AmazonCloudWatchAsyncClient client = AWSUtils.getStatsAsyncClient
-                        (credentials, regionId, getExecutor(service.getHost()), isMock);
+                        (credentials, regionId, getExecutor(), isMock);
                 client.describeAlarmsAsync(
                         new AsyncHandler<DescribeAlarmsRequest, DescribeAlarmsResult>() {
                             @Override
@@ -278,7 +268,7 @@ public class AWSClientManager {
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         try {
             return this.s3TransferManagerCache.computeIfAbsent(cacheKey, key -> AWSUtils
-                    .getS3TransferManager(credentials, regionId, getExecutor(service.getHost())));
+                    .getS3TransferManager(credentials, regionId, getExecutor()));
 
         } catch (Throwable t) {
             service.logSevere(t);
@@ -314,8 +304,7 @@ public class AWSClientManager {
         }
         try {
             return this.loadBalancingClientCache.computeIfAbsent(cacheKey, key -> AWSUtils
-                    .getLoadBalancingAsyncClient(credentials,
-                            regionId, getExecutor(service.getHost())));
+                    .getLoadBalancingAsyncClient(credentials, regionId, getExecutor()));
         } catch (Throwable e) {
             service.logSevere(e);
             failConsumer.accept(e);
@@ -445,7 +434,7 @@ public class AWSClientManager {
     /**
      * Clears out the client cache and all the resources associated with each of the AWS clients.
      */
-    public synchronized void cleanUp() {
+    public void cleanUp() {
         switch (this.awsClientType) {
         case CLOUD_WATCH:
             cleanupCache(this.cloudWatchClientCache, c -> c.shutdown());
@@ -475,7 +464,6 @@ public class AWSClientManager {
             throw new UnsupportedOperationException(
                     "AWS client type not supported by this client manager");
         }
-        cleanupExecutorCache();
     }
 
     private <T> void cleanupCache(Map<?, T> cache, Consumer<T> consumer) {
@@ -489,49 +477,8 @@ public class AWSClientManager {
      * Returns the executor pool associated with the service host. In case one does not exist already,
      * creates a new one and saves that in a cache.
      */
-    public ExecutorService getExecutor(ServiceHost host) {
-        ExecutorService executorService;
-        URI hostURI = host.getPublicUri();
-
-        synchronized (this.executorCache) {
-            executorService = this.executorCache.get(hostURI);
-            if (executorService == null) {
-                executorService = allocateExecutor(host.getPublicUri(), Utils.DEFAULT_THREAD_COUNT);
-                this.executorCache.put(hostURI, executorService);
-            }
-        }
-        return executorService;
-    }
-
-    /**
-     * Allocates a fixed size thread pool for the given service host.
-     */
-    private ExecutorService allocateExecutor(URI uri, int threadCount) {
-        return Executors.newFixedThreadPool(threadCount, new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-                return new Thread(r, uri + EndpointType.aws.name() + "/" + Utils.getNowMicrosUtc());
-            }
-        });
-    }
-
-    /**
-     * Method to clear out the cache that saves the references to the executuors per host.
-     */
-    private void cleanupExecutorCache() {
-        synchronized (this.executorCache) {
-            for (ExecutorService executorService : this.executorCache.values()) {
-                // Adding this check as the Amazon client shutdown also shuts down the associated
-                // executor pool.
-                if (!executorService.isShutdown()) {
-                    executorService.shutdown();
-                    AdapterUtils.awaitTermination(executorService);
-                }
-
-            }
-            this.executorCache.clear();
-        }
-
+    public ExecutorService getExecutor() {
+        return this.executorService;
     }
 
     /**

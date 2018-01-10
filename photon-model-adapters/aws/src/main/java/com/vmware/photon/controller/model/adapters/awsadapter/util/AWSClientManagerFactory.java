@@ -17,9 +17,15 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Holds instances of the client manager to be shared by all the AWS adapters to avoid the
@@ -31,6 +37,8 @@ public class AWSClientManagerFactory {
     private static Map<AwsClientType, AwsClientManagerEntry> clientManagersByType = new
             ConcurrentHashMap<>();
 
+    private static Map<AwsClientType, ExecutorService> executorCache = new ConcurrentHashMap<>();
+
     private static final long MAX_TTL_MILLIS = Long.getLong(UriPaths.PROPERTY_PREFIX
             + "AWSClientManagerFactory.ttlMillis", 30 * 60 * 1000);
 
@@ -40,7 +48,8 @@ public class AWSClientManagerFactory {
         private long createdTimeMillis;
 
         AwsClientManagerEntry(AwsClientType awsClientType) {
-            this.clientManager = new AWSClientManager(awsClientType);
+            this.clientManager = new AWSClientManager(awsClientType,
+                    allocateExecutor(awsClientType));
             this.createdTimeMillis = System.currentTimeMillis();
         }
     }
@@ -75,6 +84,7 @@ public class AWSClientManagerFactory {
                         > MAX_TTL_MILLIS) {
                     // cleanup code on the client manager once they are not referenced by any of the adapters.
                     clientManagerHolder.clientManager.cleanUp();
+                    deallocateExecutor(awsClientType);
                 }
             }
         }
@@ -89,6 +99,39 @@ public class AWSClientManagerFactory {
         AwsClientManagerEntry clientManagerEntry = clientManagersByType.remove(awsClientType);
         if (clientManagerEntry != null) {
             clientManagerEntry.clientManager.cleanUp();
+            deallocateExecutor(awsClientType);
         }
     }
+
+    /**
+     * Allocates a fixed size thread pool for the given service host.
+     */
+    public static ExecutorService allocateExecutor(AwsClientType awsClientType) {
+        return executorCache.computeIfAbsent(awsClientType, type -> {
+            return Executors.newFixedThreadPool(Utils.DEFAULT_THREAD_COUNT, new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    return new Thread(r,
+                            EndpointType.aws.name() + "/" + awsClientType.name() + "/" +
+                                    Utils.getNowMicrosUtc());
+                }
+            });
+        });
+    }
+
+    /**
+     * Method to clear out the cache that saves the references to the executuors per host.
+     */
+    private static void deallocateExecutor(AwsClientType awsClientType) {
+        ExecutorService es = executorCache.remove(awsClientType);
+        if (es != null) {
+            // Adding this check as the Amazon client shutdown also shuts down the associated
+            // executor pool.
+            if (!es.isShutdown()) {
+                es.shutdown();
+                AdapterUtils.awaitTermination(es);
+            }
+        }
+    }
+
 }

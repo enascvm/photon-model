@@ -137,7 +137,7 @@ public class AWSEndpointAdapterService extends StatelessService {
     private DeferredResult<Void> validateCredentials(
             AuthCredentialsServiceState credentials, String regionId) {
         AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(credentials, regionId,
-                this.clientManager.getExecutor(getHost()));
+                this.clientManager.getExecutor());
 
         AWSDeferredResultAsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult> asyncHandler = new AWSDeferredResultAsyncHandler<>(
                 this, "Validate Credentials");
