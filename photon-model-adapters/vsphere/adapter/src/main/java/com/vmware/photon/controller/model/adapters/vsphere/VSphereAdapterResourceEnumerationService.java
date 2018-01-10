@@ -642,7 +642,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     }
                     if (vm.getInstanceUuid() == null) {
                         logWarning(() -> String.format("Cannot process a VM without"
-                                        + " instanceUuid: %s",
+                                    + " instanceUuid: %s",
                                 VimUtils.convertMoRefToString(vm.getId())));
                     } else {
                         ctx.getVmTracker().register();
@@ -652,8 +652,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 }
                 ctx.getVmTracker().arriveAndAwaitAdvance();
 
-                // Commenting to figure out whether this is the cause for build failures.
-                //enumerateSnapshots(ctx, vmOverlayList);
+                enumerateSnapshots(ctx, vmOverlayList);
             }
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
@@ -2178,7 +2177,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 });
             }
         });
-        enumerationProgress.getSnapshotTracker().arriveAndAwaitAdvance();
+        enumerationProgress.getSnapshotTracker().arriveAndDeregister();
     }
 
     private void processSnapshots(EnumerationProgress enumerationProgress, VmOverlay vm,
@@ -2186,7 +2185,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (vmSelfLink != null) {
             List<VirtualMachineSnapshotTree> rootSnapshotList = vm.getRootSnapshotList();
             if (rootSnapshotList != null) {
-                enumerationProgress.getSnapshotTracker().register();
                 for (VirtualMachineSnapshotTree snapshotTree : rootSnapshotList) {
                     processSnapshot(snapshotTree, null, enumerationProgress, vm,
                             vmSelfLink);
@@ -2198,6 +2196,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void processSnapshot(VirtualMachineSnapshotTree current, String parentLink,
             EnumerationProgress enumerationProgress,
             VmOverlay vm, String vmSelfLink) {
+        enumerationProgress.getSnapshotTracker().register();
         QueryTask task = queryForSnapshot(enumerationProgress, current.getId().toString(),
                 vmSelfLink);
         withTaskResults(task, (ServiceDocumentQueryResult result) -> {
@@ -2207,31 +2206,44 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 createSnapshot(snapshotState)
                         .thenCompose(createdSnapshotState ->
                             trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink,
-                                  createdSnapshotState));
+                                  createdSnapshotState))
+                        .whenComplete((ss, e) -> {
+                            if (e != null) {
+                                log(Level.SEVERE, "Creation of snapshot with name {%s} failed.", snapshotState.name);
+                            }
+                            enumerationProgress.getSnapshotTracker().arrive();
+                        });
             } else {
                 SnapshotState oldState = convertOnlyResultToDocument(result, SnapshotState.class);
-                updateSnapshot(enumerationProgress, vm, oldState, snapshotState, current.getId().toString())
+                updateSnapshot(enumerationProgress, vm, oldState, snapshotState,
+                        current.getId().toString())
                         .thenCompose(updatedSnapshotState ->
-                            trackAndProcessChildSnapshots(current, enumerationProgress, vm, vmSelfLink,
-                                  updatedSnapshotState));
+                            trackAndProcessChildSnapshots(current, enumerationProgress, vm,
+                                  vmSelfLink,
+                                  updatedSnapshotState))
+                        .whenComplete((ss, e) -> {
+                            if (e != null) {
+                                log(Level.SEVERE, "Updation of snapshot with name {%s}, selflink {%s} failed.",
+                                        snapshotState.name, oldState.documentSelfLink);
+                            }
+                            enumerationProgress.getSnapshotTracker().arrive();
+                        });
             }
-            enumerationProgress.getSnapshotTracker().arrive();
         });
     }
 
     private DeferredResult<Object> trackAndProcessChildSnapshots(VirtualMachineSnapshotTree current,
             EnumerationProgress enumerationProgress,
             VmOverlay vm, String vmSelfLink, SnapshotState updatedSnapshotState) {
-        trackSnapshot(enumerationProgress, vm);
         List<VirtualMachineSnapshotTree> childSnapshotList = current.getChildSnapshotList();
         if (!CollectionUtils.isEmpty(childSnapshotList)) {
             for (VirtualMachineSnapshotTree childSnapshot : childSnapshotList) {
-                enumerationProgress.getSnapshotTracker().register();
                 processSnapshot(childSnapshot, updatedSnapshotState.documentSelfLink,
                         enumerationProgress, vm, vmSelfLink);
             }
         }
-        return DeferredResult.completed(null);
+        //return when all the child snapshots of this 'updatedSnapshotState' is processed
+        return DeferredResult.completed(updatedSnapshotState);
     }
 
     private QueryTask queryForSnapshot(EnumerationProgress ctx, String id, String vmSelfLink) {
@@ -2281,6 +2293,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         logFine(() -> String.format("Creating new snapshot %s", snapshot.name));
         Operation opCreateSnapshot = Operation.createPost(this, SnapshotService.FACTORY_LINK)
                 .setBody(snapshot);
+
         return this.sendWithDeferredResult(opCreateSnapshot, SnapshotState.class);
     }
 
@@ -2310,13 +2323,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         });
 
         return res;
-    }
-
-    private CompletionHandler trackSnapshot(EnumerationProgress enumerationProgress,
-            VmOverlay vm) {
-        return (o, e) -> {
-            enumerationProgress.touchResource(getSelfLinkFromOperation(o));
-        };
     }
 
     private ComputeDescription makeDescriptionForVm(EnumerationProgress enumerationProgress,
