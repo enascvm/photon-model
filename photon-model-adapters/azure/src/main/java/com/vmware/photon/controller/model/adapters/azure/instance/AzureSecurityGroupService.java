@@ -13,16 +13,17 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
-import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
+import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
 
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -30,19 +31,12 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterC
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
-import com.vmware.photon.controller.model.util.AssertUtil;
-import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * Adapter to create/delete a security group on Azure.
@@ -60,10 +54,9 @@ public class AzureSecurityGroupService extends StatelessService {
         final SecurityGroupInstanceRequest securityGroupRequest;
 
         SecurityGroupState securityGroupState;
-        ResourceGroupState securityGroupRGState;
 
-        NetworkState networkState;
-        ResourceGroupState networkRGState;
+        // The RG the SG lands
+        public ResourceGroupInner resourceGroup;
 
         NetworkSecurityGroupInner securityGroup;
 
@@ -114,12 +107,6 @@ public class AzureSecurityGroupService extends StatelessService {
         return DeferredResult.completed(context)
                 // get security group from request.resourceReference
                 .thenCompose(this::getSecurityGroupState)
-                // get the Azure resource group from security group (if any)
-                .thenCompose(this::getSecurityGroupRGState)
-                // get the network state for which the security group is created
-                .thenCompose(this::getNetworkState)
-                // get the Azure resource group for the network
-                .thenCompose(this::getNetworkRGState)
                 // create the Azure clients
                 .thenCompose(this::getAzureClient);
     }
@@ -131,105 +118,6 @@ public class AzureSecurityGroupService extends StatelessService {
                 SecurityGroupState.class)
                 .thenApply(securityGroupState -> {
                     context.securityGroupState = securityGroupState;
-                    return context;
-                });
-    }
-
-    private DeferredResult<AzureSecurityGroupContext> getSecurityGroupRGState(
-            AzureSecurityGroupContext context) {
-        AssertUtil.assertNotNull(context.securityGroupState.groupLinks,
-                "context.securityGroupState.groupLinks is null.");
-
-        return AzureUtils.filterRGsByType(getHost(),
-                context.securityGroupState.groupLinks, context.securityGroupState.endpointLink,
-                /*
-                 * ignore tenantLinks for this query; group link and endpoint link (which is
-                 * implicitly tenanted) should be sufficient to uniquely identify the resource group
-                 */
-                null)
-                .thenApply(resourceGroupState -> {
-                    context.securityGroupRGState = resourceGroupState;
-                    return context;
-                });
-    }
-
-    private DeferredResult<AzureSecurityGroupContext> getNetworkState(
-            AzureSecurityGroupContext context) {
-        if (context.securityGroupRGState != null) {
-            // no need to get network state; the resource group was already identified
-            return DeferredResult.completed(context);
-        }
-
-        // on Azure, we place the isolation security group on the same resource group as the
-        // network being isolated; we find that by extracting the network state id which is passed
-        // as a custom property of the request, and then find the appropriate resource group that
-        // is linked to that network.
-
-        AssertUtil.assertNotNull(context.securityGroupRequest.customProperties,
-                "context.request.customProperties is null.");
-        String networkStateId = context.securityGroupRequest.customProperties
-                .get(NETWORK_STATE_ID_PROP_NAME);
-        AssertUtil.assertNotNull(networkStateId,
-                "context.request.customProperties doesn't contain the network state id.");
-        AssertUtil.assertNotNull(context.securityGroupState.endpointLink,
-                "context.securityGroupState.endpointLink is null.");
-
-        // use the network state id to find the resource groups associated to the network being
-        // isolated by this security group
-        Query query = Query.Builder.create()
-                .addKindFieldClause(NetworkState.class)
-                .addFieldClause(NetworkState.FIELD_NAME_ID, networkStateId)
-                .build();
-
-        QueryTop<NetworkState> queryNetworkStates = new QueryTop<>(
-                getHost(),
-                query,
-                NetworkState.class,
-                /*
-                 * ignore tenantLinks for this query; network id and endpoint link (which is
-                 * implicitly tenanted) should be sufficient to uniquely identify the network
-                 */
-                null,
-                context.securityGroupState.endpointLink);
-        queryNetworkStates.setMaxResultsLimit(1);
-        queryNetworkStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
-
-        return queryNetworkStates.collectDocuments(Collectors.toList())
-                .thenApply(networkStates -> {
-                    AssertUtil.assertNotNull(networkStates, "Network state with id [" +
-                            networkStateId + "] was not found.");
-                    context.networkState = networkStates.get(0);
-                    return context;
-                });
-    }
-
-    private DeferredResult<AzureSecurityGroupContext> getNetworkRGState(
-            AzureSecurityGroupContext context) {
-        if (context.securityGroupRGState != null) {
-            // no need to get network RG state; the resource group was already identified
-            return DeferredResult.completed(context);
-        }
-
-        AssertUtil.assertNotNull(context.networkState.groupLinks,
-                "context.networkState.groupLinks is null.");
-
-        return AzureUtils.filterRGsByType(getHost(),
-                context.networkState.groupLinks, context.networkState.endpointLink,
-                context.networkState.tenantLinks)
-                .thenApply(resourceGroupState -> {
-                    AssertUtil.assertNotNull(resourceGroupState, "Unable to identify a "
-                            + "suitable resource group for security group [" +
-                            context.securityGroupState.name + "]");
-                    context.networkRGState = resourceGroupState;
-                    // add link to this resource group to the security group (if it doesn't exist)
-                    // this is necessary in order for this security group to be placed in the right
-                    // resource group in Azure
-                    if (context.securityGroupState.groupLinks == null) {
-                        context.securityGroupState.groupLinks = new HashSet<>();
-                    }
-                    context.securityGroupState.groupLinks.add(
-                            context.networkRGState.documentSelfLink);
-
                     return context;
                 });
     }
@@ -253,6 +141,7 @@ public class AzureSecurityGroupService extends StatelessService {
                         .thenCompose(this::updateSecurityGroupState);
             } else {
                 return execution
+                        .thenCompose(this::createResourceGroup)
                         .thenCompose(this::createSecurityGroup)
                         .thenCompose(this::updateSecurityGroupState)
                         .thenCompose(this::updateRules);
@@ -276,8 +165,7 @@ public class AzureSecurityGroupService extends StatelessService {
     private DeferredResult<AzureSecurityGroupContext> createSecurityGroup(
             AzureSecurityGroupContext context) {
 
-        String rgName = context.securityGroupRGState != null ? context.securityGroupRGState.name
-                : context.networkRGState.name;
+        String rgName = context.resourceGroup.name();
 
         final String msg = "Creating Azure Security Group [" + context.securityGroupState.name
                 + "] in resource group [" + rgName + "].";
@@ -300,8 +188,7 @@ public class AzureSecurityGroupService extends StatelessService {
     private DeferredResult<AzureSecurityGroupContext> updateRules(
             AzureSecurityGroupContext context) {
 
-        String rgName = context.securityGroupRGState != null ? context.securityGroupRGState.name
-                : context.networkRGState.name;
+        String rgName = context.resourceGroup.name();
 
         final String msg = "Adding Azure Security Rules to Group ["
                 + context.securityGroupState.name + "] in resource group [" + rgName + "].";
@@ -318,22 +205,25 @@ public class AzureSecurityGroupService extends StatelessService {
 
     private DeferredResult<AzureSecurityGroupContext> deleteSecurityGroup(
             AzureSecurityGroupContext context) {
+        String rgName = null;
 
-        String rgName = context.securityGroupRGState != null ? context.securityGroupRGState.name
-                : context.networkRGState.name;
-        String securityGroupName = context.securityGroupState.name;
+        if (context.securityGroupState.customProperties != null) {
+            rgName = context.securityGroupState.customProperties.get(RESOURCE_GROUP_NAME);
+        }
 
-        final String msg = "Deleting Azure Security Group [" + securityGroupName
-                + "] in resource group [" + rgName + "].";
+        rgName = rgName != null ? rgName : String.format("%s-rg", context.securityGroupState.name);
 
-        NetworkSecurityGroupsInner azureSecurityGroupClient = context.azureSdkClients
-                .getNetworkManagementClientImpl().networkSecurityGroups();
+        ResourceGroupsInner azureClient = context.azureSdkClients
+                .getResourceManagementClientImpl().resourceGroups();
 
-        AzureDeferredResultServiceCallback<Void> handler = new Default<>(this, msg);
+        String msg = "Deleting resource group [" + rgName + "] for [" +
+                context.securityGroupState.name + "] network security group";
 
-        azureSecurityGroupClient.deleteAsync(rgName, securityGroupName, handler);
+        AzureDeferredResultServiceCallback<Void> callback = new Default<>(this, msg);
 
-        return handler.toDeferredResult().thenApply(ignore -> context);
+        azureClient.deleteAsync(rgName, callback);
+
+        return callback.toDeferredResult().thenApply(__ -> context);
     }
 
     private DeferredResult<AzureSecurityGroupContext> deleteSecurityGroupState(
@@ -349,5 +239,25 @@ public class AzureSecurityGroupService extends StatelessService {
         return this.sendWithDeferredResult(Operation.createPatch(this,
                 context.securityGroupState.documentSelfLink).setBody(context.securityGroupState))
                 .thenApply(o -> context);
+    }
+
+    private DeferredResult<AzureSecurityGroupContext> createResourceGroup(
+            AzureSecurityGroupContext context) {
+        ResourceGroupInner resourceGroup = new ResourceGroupInner();
+        resourceGroup.withLocation(context.securityGroupState.regionId);
+
+        return AzureSecurityGroupUtils.createResourceGroupForSecurityGroup(this,
+                context.azureSdkClients.getResourceManagementClientImpl().resourceGroups(),
+                context.securityGroupState.name, resourceGroup)
+                .thenApply(rg -> {
+                    context.resourceGroup = rg;
+                    // add the resource group name to the SG custom properties
+                    if (context.securityGroupState.customProperties == null) {
+                        context.securityGroupState.customProperties = new HashMap<>(1);
+                    }
+                    context.securityGroupState.customProperties.put(RESOURCE_GROUP_NAME, context
+                            .resourceGroup.name());
+                    return context;
+                });
     }
 }

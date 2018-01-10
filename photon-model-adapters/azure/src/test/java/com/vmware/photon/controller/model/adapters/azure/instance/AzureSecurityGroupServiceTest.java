@@ -20,15 +20,12 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getSecurityGroupState;
-import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -41,7 +38,6 @@ import com.microsoft.azure.management.network.SecurityRuleProtocol;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
-import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -53,10 +49,8 @@ import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
@@ -75,11 +69,8 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
     public String regionId = AZURE_RESOURCE_GROUP_LOCATION;
 
     private String azurePrefix = generateName("securitygrouptest-");
-    private String rgName = this.azurePrefix + "-rg";
     private String securityGroupName = this.azurePrefix + "-sg";
-
-    private ResourceGroupState rgState;
-    private NetworkState networkState;
+    private String rgName = this.securityGroupName + "-rg";
 
     private ResourceGroupsInner rgOpsClient;
     private NetworkSecurityGroupsInner securityGroupsClient;
@@ -102,19 +93,7 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
                     .getResourceManagementClientImpl().resourceGroups();
             this.securityGroupsClient = getAzureSdkClients()
                     .getNetworkManagementClientImpl().networkSecurityGroups();
-
-            ResourceGroupInner rg = new ResourceGroupInner();
-            rg.withName(this.rgName);
-            rg.withLocation(this.regionId);
-            this.rgOpsClient.createOrUpdate(this.rgName, rg);
         }
-
-        this.rgState = createDefaultResourceGroupState(
-                this.host,
-                this.rgName,
-                computeHost, endpointState,
-                ResourceGroupStateType.AzureResourceGroup);
-        this.networkState = createNetworkState(this.rgState.documentSelfLink);
     }
 
     @After
@@ -305,6 +284,22 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
         }
     }
 
+    @Test
+    public void testDeleteMissingSecurityGroup() throws Throwable {
+        SecurityGroupState securityGroupState = createSecurityGroupState(this.securityGroupName,
+                new ArrayList<>(), new ArrayList<>());
+
+        // attempt to delete the missing SG
+        startSecurityGroupProvisioning(InstanceRequestType.DELETE, securityGroupState, TaskStage.FINISHED);
+
+        // verify security group state was deleted
+        try {
+            getSecurityGroupState(this.host, securityGroupState.documentSelfLink);
+        } catch (Exception e) {
+            assertTrue(e instanceof ServiceNotFoundException);
+        }
+    }
+
     private SecurityGroupState provisionSecurityGroup(List<Rule> inboundRules,
             List<Rule> outboundRules, TaskStage taskStage) throws Throwable {
         SecurityGroupState securityGroupState = createSecurityGroupState(this.securityGroupName,
@@ -327,8 +322,6 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
         securityGroupState.tenantLinks = endpointState.tenantLinks;
         securityGroupState.ingress = inboundRules;
         securityGroupState.egress = outboudRules;
-        securityGroupState.groupLinks = Stream.of(this.rgState.documentSelfLink)
-                .collect(Collectors.toSet());
         securityGroupState.authCredentialsLink = endpointState.authCredentialsLink;
         securityGroupState.resourcePoolLink = "test-resource-pool-link";
         securityGroupState.regionId = this.regionId;
@@ -346,9 +339,6 @@ public class AzureSecurityGroupServiceTest extends AzureBaseTest {
         taskState.securityGroupDescriptionLinks = Stream.of(securityGroupState.documentSelfLink)
                 .collect(Collectors.toSet());
         taskState.isMockRequest = this.isMock;
-        taskState.customProperties = new HashMap<>();
-        taskState.customProperties.put(NETWORK_STATE_ID_PROP_NAME,
-                this.networkState.id);
 
         // Start/Post subnet provisioning task
         taskState = postServiceSynchronously(

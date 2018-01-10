@@ -23,6 +23,8 @@ import com.microsoft.azure.management.network.SecurityRuleProtocol;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
 import com.microsoft.rest.ServiceCallback;
 
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
@@ -216,5 +218,31 @@ public class AzureSecurityGroupUtils {
             }
         }
         return false;
+    }
+
+    public static DeferredResult<ResourceGroupInner> createResourceGroupForSecurityGroup(
+            StatelessService service, ResourceGroupsInner azureClient,
+            String sgName, ResourceGroupInner resourceGroupInner) {
+
+        String resourceGroupName = String.format("%s-rg", sgName);
+
+        String msg = "Creating Azure Resource Group [" + resourceGroupName + "] for [" +
+                sgName + "] Network Security Group";
+
+        service.logInfo(() -> msg);
+
+        AzureDeferredResultServiceCallback<ResourceGroupInner> handler =
+                new AzureDeferredResultServiceCallback<ResourceGroupInner>(service, msg) {
+                    @Override
+                    protected DeferredResult<ResourceGroupInner> consumeSuccess(
+                            ResourceGroupInner resourceGroup) {
+
+                        return DeferredResult.completed(resourceGroup);
+                    }
+                };
+
+        azureClient.createOrUpdateAsync(resourceGroupName, resourceGroupInner, handler);
+
+        return handler.toDeferredResult();
     }
 }
