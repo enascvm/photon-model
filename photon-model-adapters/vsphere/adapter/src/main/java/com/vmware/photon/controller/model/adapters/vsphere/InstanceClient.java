@@ -966,7 +966,9 @@ public class InstanceClient extends BaseHelper {
         cloneSpec.setLocation(relocSpec);
         cloneSpec.setPowerOn(false);
         cloneSpec.setTemplate(false);
-        cloneSpec.setSnapshot(snapshot.getCurrentSnapshot());
+        if (snapshot != null) {
+            cloneSpec.setSnapshot(snapshot.getCurrentSnapshot());
+        }
         cloneSpec.setConfig(spec);
 
         if (bootDiskLocator != null) {
