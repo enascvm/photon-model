@@ -906,9 +906,9 @@ public class QueryUtils {
                         PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString(),
                         Occurance.MUST_NOT_OCCUR);
 
-        if (tenantLinks != null) {
-            qBuilder.addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
-        }
+        // it must match all tenantLinks in order to determine whether a compute host already
+        // exists.
+        addTenantLinks(qBuilder, tenantLinks);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
