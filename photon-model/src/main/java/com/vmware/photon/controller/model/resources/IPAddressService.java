@@ -48,6 +48,7 @@ public class IPAddressService extends StatefulService {
 
         public static final String FIELD_NAME_SUBNET_RANGE_LINK = "subnetRangeLink";
         public static final String FIELD_NAME_IP_ADDRESS_STATUS = "ipAddressStatus";
+        public static final String FIELD_NAME_IP_ADDRESS = "ipAddress";
         public static final String FIELD_NAME_CONNECTED_RESOURCE_LINK = "connectedResourceLink";
 
         // Default values for non-required fields

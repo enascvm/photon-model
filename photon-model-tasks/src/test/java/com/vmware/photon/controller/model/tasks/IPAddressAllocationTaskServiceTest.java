@@ -48,6 +48,7 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.IPAddressService;
+import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -56,6 +57,7 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.tasks.IPAddressAllocationTaskService.IPAddressAllocationTaskResult;
 import com.vmware.photon.controller.model.tasks.IPAddressAllocationTaskService.IPAddressAllocationTaskState;
+import com.vmware.photon.controller.model.tasks.IPAddressAllocationTaskService.IPAddressAllocationTaskState.RequestType;
 import com.vmware.photon.controller.model.util.IpHelper;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -210,11 +212,12 @@ public class IPAddressAllocationTaskServiceTest extends Suite {
         private NetworkInterfaceService.NetworkInterfaceState networkInterfaceState2;
         private NetworkInterfaceService.NetworkInterfaceState networkInterfaceState3;
 
-        private static String startIpInRange1 = "12.12.12.2";
-        private static String endIpInRange1 = "12.12.12.4";
-        private static String startIpInRange2 = "12.12.12.10";
-        private static String endIpInRange2 = "12.12.12.12";
-        private static String gatewayIp = "12.12.12.1";
+        private static final String startIpInRange1 = "12.12.12.2";
+        private static final String endIpInRange1 = "12.12.12.4";
+        private static final String startIpInRange2 = "12.12.12.10";
+        private static final String endIpInRange2 = "12.12.12.12";
+        private static final String gatewayIp = "12.12.12.1";
+        private static final String SPECIFIC_IP = "12.12.12.11";
 
         @Before
         public void setUp() throws Throwable {
@@ -377,9 +380,6 @@ public class IPAddressAllocationTaskServiceTest extends Suite {
 
             assertNotEquals(completedAllocationTask1.ipAddresses.get(0),
                     completedAllocationTask2.ipAddresses.get(0));
-
-
-
         }
 
         @Test
@@ -835,7 +835,6 @@ public class IPAddressAllocationTaskServiceTest extends Suite {
             }
 
             assertTrue(expectedIPs.size() == 0);
-
         }
 
         @Test
@@ -881,10 +880,179 @@ public class IPAddressAllocationTaskServiceTest extends Suite {
             }
 
             assertTrue(expectedIPs.size() == 2);
-
         }
 
+        // This test case should not fail
+        @Test
+        public void testAllocateSpecificIPWithNoRanges() throws Throwable {
+            SubnetService.SubnetState subnetState = ModelUtils.createSubnet(this, this
+                    .networkState, this.endpointState);
 
+            IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
+                    subnetState.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+            allocationTask.requestType = RequestType.ALLOCATE_SPECIFIC_IP;
+            allocationTask.ipAddresses.add(SPECIFIC_IP);
+            IPAddressAllocationTaskState allocationTaskResult;
+
+            addFakeCallBack(allocationTask);
+
+            // task should not fail, but no IP addresses are allocated
+            allocationTaskResult = performTask(allocationTask);
+            assertNotNull(allocationTaskResult);
+            assertEquals(0, allocationTaskResult.rsrcToAllocatedIpsMap.size());
+            assertEquals(0, allocationTaskResult.subnetRangeLinks.size());
+            assertEquals(0, allocationTaskResult.ipAddresses.size());
+            assertEquals(0, allocationTaskResult.ipAddressLinks.size());
+        }
+
+        // If there are ranges but none of them match the given IP address,
+        // the allocation should fail
+        @Test
+        public void testAllocateSpecificIPWithNoMatchingRange() throws Throwable {
+
+            IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
+                    this.subnetState.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+            allocationTask.requestType = RequestType.ALLOCATE_SPECIFIC_IP;
+            allocationTask.ipAddresses.add("12.12.12.120"); // Set IP address out of ranges
+            IPAddressAllocationTaskState allocationTaskResult;
+
+            addFakeCallBack(allocationTask);
+
+            // task should fail
+            performTaskExpectFailure(allocationTask,
+                    "Expecting failure since IP doesn't match IP ranges");
+        }
+
+        @Test
+        public void testAllocateSpecificIP() throws Throwable {
+            //This service is used by other tests. Hence stop it first if it's already started.
+            try {
+                deleteServiceSynchronously(TestStatelessService.SELF_LINK);
+            } catch (ServiceNotFoundException exception) {
+                //do nothing
+            }
+
+            this.host.startService(new TestStatelessService(new DeferredResult<>()));
+            this.host.waitForServiceAvailable(TestStatelessService.SELF_LINK);
+
+            IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
+                    this.subnetState.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+            allocationTask.requestType = RequestType.ALLOCATE_SPECIFIC_IP;
+            allocationTask.ipAddresses.add(SPECIFIC_IP);
+            addFakeCallBack(allocationTask);
+
+            IPAddressAllocationTaskState allocationTaskResult = performTask(allocationTask);
+
+            assertNotNull(allocationTaskResult);
+            assertEquals(SPECIFIC_IP, allocationTaskResult.ipAddresses.get(0));
+            assertEquals(1, allocationTaskResult.rsrcToAllocatedIpsMap.values().size());
+            String ipAddressLink = allocationTaskResult.rsrcToAllocatedIpsMap.values().iterator().next().get(0);
+            IPAddressState ipAddressState = getIpAddressState(ipAddressLink);
+
+            assertTrue(IPAddressStatus.ALLOCATED.equals(ipAddressState.ipAddressStatus));
+            assertEquals(SPECIFIC_IP, ipAddressState.ipAddress);
+        }
+
+        @Test
+        public void testAllocateSpecificIPFromAvailable() throws Throwable {
+            //This service is used by other tests. Hence stop it first if it's already started.
+            try {
+                deleteServiceSynchronously(TestStatelessService.SELF_LINK);
+            } catch (ServiceNotFoundException exception) {
+                //do nothing
+            }
+
+            this.host.startService(new TestStatelessService(new DeferredResult<>()));
+            this.host.waitForServiceAvailable(TestStatelessService.SELF_LINK);
+
+            // Create IP address state in available mode
+            createNewIpAddressResourceAsAvailable(SPECIFIC_IP, this.subnetRangeState2.documentSelfLink);
+
+            IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
+                    this.subnetState.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+            allocationTask.requestType = RequestType.ALLOCATE_SPECIFIC_IP;
+            allocationTask.ipAddresses.add(SPECIFIC_IP);
+            addFakeCallBack(allocationTask);
+
+            IPAddressAllocationTaskState allocationTaskResult = performTask(allocationTask);
+
+            assertNotNull(allocationTaskResult);
+            assertEquals(SPECIFIC_IP, allocationTaskResult.ipAddresses.get(0));
+            assertEquals(1, allocationTaskResult.rsrcToAllocatedIpsMap.values().size());
+            String ipAddressLink = allocationTaskResult.rsrcToAllocatedIpsMap.values().iterator().next().get(0);
+            IPAddressState ipAddressState = getIpAddressState(ipAddressLink);
+
+            assertTrue(IPAddressStatus.ALLOCATED.equals(ipAddressState.ipAddressStatus));
+            assertEquals(SPECIFIC_IP, ipAddressState.ipAddress);
+        }
+
+        @Test
+        public void testAllocateSpecificIPWhenAlreadyAllocatedToSameResource() throws Throwable {
+            //This service is used by other tests. Hence stop it first if it's already started.
+            try {
+                deleteServiceSynchronously(TestStatelessService.SELF_LINK);
+            } catch (ServiceNotFoundException exception) {
+                //do nothing
+            }
+
+            this.host.startService(new TestStatelessService(new DeferredResult<>()));
+            this.host.waitForServiceAvailable(TestStatelessService.SELF_LINK);
+
+            // Create IP address state in allocated mode, with the same resource
+            createNewIpAddressResourceAsAllocated(SPECIFIC_IP, this.subnetRangeState2.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+
+            IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
+                    this.subnetState.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+            allocationTask.requestType = RequestType.ALLOCATE_SPECIFIC_IP;
+            allocationTask.ipAddresses.add(SPECIFIC_IP);
+            addFakeCallBack(allocationTask);
+
+            IPAddressAllocationTaskState allocationTaskResult = performTask(allocationTask);
+
+            // No failure expected, since IP already allocated to the request resource
+            assertNotNull(allocationTaskResult);
+            assertEquals(SPECIFIC_IP, allocationTaskResult.ipAddresses.get(0));
+            assertEquals(1, allocationTaskResult.rsrcToAllocatedIpsMap.values().size());
+            String ipAddressLink = allocationTaskResult.rsrcToAllocatedIpsMap.values().iterator().next().get(0);
+            IPAddressState ipAddressState = getIpAddressState(ipAddressLink);
+
+            assertTrue(IPAddressStatus.ALLOCATED.equals(ipAddressState.ipAddressStatus));
+            assertEquals(SPECIFIC_IP, ipAddressState.ipAddress);
+        }
+
+        @Test
+        public void testAllocateSpecificIPWhenAlreadyAllocated() throws Throwable {
+            //This service is used by other tests. Hence stop it first if it's already started.
+            try {
+                deleteServiceSynchronously(TestStatelessService.SELF_LINK);
+            } catch (ServiceNotFoundException exception) {
+                //do nothing
+            }
+
+            this.host.startService(new TestStatelessService(new DeferredResult<>()));
+            this.host.waitForServiceAvailable(TestStatelessService.SELF_LINK);
+
+            // Create IP address state in allocated mode to resource machine-1
+            createNewIpAddressResourceAsAllocated(SPECIFIC_IP, this.subnetRangeState2.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-1");
+
+            // Request same IP to be allocated to machine-2
+            IPAddressAllocationTaskState allocationTask = createIpAddressAllocationTask(
+                    this.subnetState.documentSelfLink,
+                    ComputeService.FACTORY_LINK + "/machine-2");
+            allocationTask.requestType = RequestType.ALLOCATE_SPECIFIC_IP;
+            allocationTask.ipAddresses.add(SPECIFIC_IP);
+            addFakeCallBack(allocationTask);
+
+            performTaskExpectFailure(allocationTask,
+                    "Expecting failure since IP already allocated to a different resource");
+        }
 
         private IPAddressAllocationTaskState performTask(
                 IPAddressAllocationTaskState allocationTask) {

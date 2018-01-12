@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,6 +43,7 @@ import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.IpHelper;
+import com.vmware.photon.controller.model.util.SubnetValidator;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -76,6 +78,9 @@ public class IPAddressAllocationTaskService extends
         /* Enumeration of subnet range states*/
         public List<SubnetRangeState> subnetRangeStates;
 
+        /* Selected subnet range for the specified IP, used for request type ALLOCATE_SPECIFIC_IP_ADDRESS */
+        public SubnetRangeState subnetRangeState;
+
         /*Resource requesting IP address*/
         @Deprecated
         public String connectedResourceLink;
@@ -98,6 +103,12 @@ public class IPAddressAllocationTaskService extends
 
         /*The total possible IP addresses in all the subnet ranges*/
         public int maxPossibleIpsCount;
+
+        public IPAddressAllocationContext() {
+            this.subnetRangeStates = new ArrayList<>();
+            this.ipAddressStates = new ArrayList<>();
+            this.unavailableIpAddresses = new HashSet<>();
+        }
 
         public DeferredResult<IPAddressAllocationContext> populate(
                 IPAddressAllocationTaskService ipAddressAllocationTaskService,
@@ -170,8 +181,6 @@ public class IPAddressAllocationTaskService extends
         private DeferredResult<IPAddressAllocationContext> populateContextWithExistingIpAddresses(
                 IPAddressAllocationTaskService ipAddressAllocationTaskService) {
 
-            this.ipAddressStates = new ArrayList<>();
-
             List<DeferredResult<List<IPAddressState>>> results = new ArrayList<>();
 
             for (SubnetRangeState subnetRangeState : this.subnetRangeStates) {
@@ -188,7 +197,6 @@ public class IPAddressAllocationTaskService extends
 
         private DeferredResult<IPAddressAllocationContext> setUnAvailableIps() {
 
-            this.unavailableIpAddresses = new HashSet<>();
             DeferredResult<IPAddressAllocationContext> deferredContext =
                     new DeferredResult<>();
 
@@ -275,11 +283,12 @@ public class IPAddressAllocationTaskService extends
          * SubStage.
          */
         public enum SubStage {
-            CREATED, ALLOCATE_IP_ADDRESS, DEALLOCATE_IP_ADDRESS, FINISHED, FAILED
+            CREATED, ALLOCATE_IP_ADDRESS, ALLOCATE_SPECIFIC_IP_ADDRESS, DEALLOCATE_IP_ADDRESS, FINISHED, FAILED
         }
 
         public enum RequestType {
             ALLOCATE,
+            ALLOCATE_SPECIFIC_IP,
             DEALLOCATE
         }
 
@@ -287,7 +296,7 @@ public class IPAddressAllocationTaskService extends
          * (Internal) Describes task sub-stage.
          */
         @ServiceDocument.Documentation(description = "Describes task sub-stage.")
-        @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
+        @ServiceDocument.PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
         public SubStage taskSubStage;
 
         /**
@@ -344,13 +353,12 @@ public class IPAddressAllocationTaskService extends
         public Map<String, Integer> connectedResourceToRequiredIpCountMap;
 
         /**
-         * For allocation, set by the task with the IP addresses being allocated.
+         * For allocation request of type ALLOCATE_SPECIFIC_IP, it is set by the caller.
          * Not used for de-allocation.
          */
         @ServiceDocument.Documentation(description = "The IP address being allocated.")
         @ServiceDocument.PropertyOptions(usage = {
                 ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL })
-        @Deprecated
         public List<String> ipAddresses;
 
         /**
@@ -472,6 +480,11 @@ public class IPAddressAllocationTaskService extends
             if (state.requestType == IPAddressAllocationTaskState.RequestType.ALLOCATE) {
                 proceedTo(IPAddressAllocationTaskState.SubStage.ALLOCATE_IP_ADDRESS,
                         s -> s.subnetLink = state.subnetLink);
+            } else if (state.requestType == IPAddressAllocationTaskState.RequestType.ALLOCATE_SPECIFIC_IP) {
+                proceedTo(IPAddressAllocationTaskState.SubStage.ALLOCATE_SPECIFIC_IP_ADDRESS,
+                        s -> { s.subnetLink = state.subnetLink;
+                                s.ipAddresses = state.ipAddresses;
+                        });
             } else {
                 proceedTo(IPAddressAllocationTaskState.SubStage.DEALLOCATE_IP_ADDRESS,
                         s -> s.ipAddressLinks = state.ipAddressLinks);
@@ -481,7 +494,9 @@ public class IPAddressAllocationTaskService extends
         case ALLOCATE_IP_ADDRESS:
             allocateIpAddress(state);
             break;
-
+        case ALLOCATE_SPECIFIC_IP_ADDRESS:
+            allocateSpecificIpAddress(state);
+            break;
         case DEALLOCATE_IP_ADDRESS:
             deallocateIpAddress(state);
             break;
@@ -540,7 +555,8 @@ public class IPAddressAllocationTaskService extends
                 throw new IllegalArgumentException("state.requestType is required");
             }
 
-            if (state.requestType == IPAddressAllocationTaskState.RequestType.ALLOCATE) {
+            if (IPAddressAllocationTaskState.RequestType.ALLOCATE.equals(state.requestType) ||
+                    IPAddressAllocationTaskState.RequestType.ALLOCATE_SPECIFIC_IP.equals(state.requestType)) {
 
                 if (state.subnetLink == null) {
                     throw new IllegalArgumentException("state.subnetLink is required");
@@ -552,8 +568,18 @@ public class IPAddressAllocationTaskService extends
                     throw new IllegalArgumentException(
                             "state.connectedResourceToReqIpCountMap is required");
                 }
-            } else if (state.ipAddressLinks == null || state.ipAddressLinks.isEmpty()) {
-                throw new IllegalArgumentException("state.ipAddressLinks is required");
+            }
+            if (IPAddressAllocationTaskState.RequestType.ALLOCATE_SPECIFIC_IP.equals(state.requestType)) {
+                if (state.ipAddresses == null || state.ipAddresses.size() != 1) {
+                    throw new IllegalArgumentException(
+                            "state.ipAddresses - a single IP address is expected");
+                }
+            }
+
+            if (IPAddressAllocationTaskState.RequestType.DEALLOCATE.equals(state.requestType)) {
+                if (state.ipAddressLinks == null || state.ipAddressLinks.isEmpty()) {
+                    throw new IllegalArgumentException("state.ipAddressLinks is required");
+                }
             }
 
             return state;
@@ -1285,8 +1311,6 @@ public class IPAddressAllocationTaskService extends
     private void addResultToState(IPAddressAllocationContext context, IPAddressAllocationTaskState
             state) {
 
-        state.requestType = IPAddressAllocationTaskState.RequestType.ALLOCATE;
-
         state.subnetLink = context.subnetState.documentSelfLink;
 
         List<String> ctxtSubnetRangeLinks = context.subnetRangeStates.stream().map(s -> s
@@ -1317,5 +1341,169 @@ public class IPAddressAllocationTaskService extends
 
     }
 
+    /**
+     * Allocates IP Address for the subnet.
+     * Fails if:
+     * 1. There are IP ranges for the subnet, but none match the given IP address.
+     * 2. IP is already allocated within the range but to  a different resource.
+     *
+     * Completes without failure if:
+     * 1. Subnet has no ranges
+     * 2. IP is already allocated to this resource
+     *
+     * @param state IP Address allocation task state.
+     */
+    private void allocateSpecificIpAddress(IPAddressAllocationTaskState state) {
+
+        IPAddressAllocationContext ipAddressAllocationContext = new IPAddressAllocationContext();
+        ipAddressAllocationContext.serviceState = state;
+        ipAddressAllocationContext.populateContextWithSubnet(this, state.subnetLink)
+                .thenCompose(ctxt -> ctxt.populateContextWithExistingSubnetRanges(this))
+                .thenCompose(ctxt ->
+                {
+                    // If there are no subnet ranges, complete task.
+                    // In this case the IP will be used without IPAM
+                    if (ctxt.subnetRangeStates == null || ctxt.subnetRangeStates.isEmpty()) {
+                        logWarning(() -> String.format("No IP addresses can be recorded for "
+                                + "subnet %s. There are no address ranges available for this "
+                                + "subnet.", ctxt.subnetState.documentSelfLink));
+                        proceedTo(IPAddressAllocationTaskState.SubStage.FINISHED,null);
+                        return null;
+                    }
+
+                    // Validate there is a matching subnet range, if not fail the task
+                    String ipAddress = ctxt.serviceState.ipAddresses.get(0);
+                    ctxt.subnetRangeState = findSubnetRangeForIp(ctxt, ipAddress);
+                    if (ctxt.subnetRangeState == null) {
+                        String errMsg = String.format("Subnet '%s' has no range that match the specified IP address "
+                                        + "%s", ctxt.subnetState.documentSelfLink, ipAddress);
+                        logSevere(errMsg);
+                        failTask(new IllegalArgumentException(errMsg), errMsg);
+                        return null;
+                    }
+
+                    String connectedResourceLink = ctxt.serviceState.connectedResourceToRequiredIpCountMap.keySet().iterator().next();
+                    findIpAddressStateIfExists(ctxt, ipAddress)
+                            .thenApply(ipAddressState -> {
+                                // If IP resource exists, try to allocate it to the connected resource
+                                if (ipAddressState != null) {
+                                    allocateIpInRange(ipAddressState, connectedResourceLink, ctxt)
+                                            .whenComplete((ctxt1, e) -> {
+                                                if (e != null) {
+                                                    failTask(e,
+                                                            "Failed to allocate IP addresses due to failure %s",
+                                                            e.getMessage());
+                                                } else {
+                                                    proceedTo(
+                                                            IPAddressAllocationTaskState.SubStage.FINISHED,
+                                                            s -> addResultToState(ctxt1, s));
+                                                }
+                                            });
+                                } else {
+                                    // Create new IP resource
+                                    createNewIpAddressResource(ipAddress, ctxt.subnetRangeState.documentSelfLink,
+                                            connectedResourceLink, ctxt)
+                                            .whenComplete((ipAddressState1, e) -> {
+                                                if (e != null) {
+                                                    failTask(e,
+                                                            "Failed to allocate IP addresses due to failure %s",
+                                                            e.getMessage());
+                                                } else {
+                                                    addIpToContext(ctxt, connectedResourceLink, ipAddressState1);
+                                                    proceedTo(
+                                                            IPAddressAllocationTaskState.SubStage.FINISHED,
+                                                            s -> addResultToState(ctxt, s));
+                                                }
+                                            });
+                                }
+                                return null;
+                            });
+                    return DeferredResult.completed(ctxt);
+                });
+    }
+
+    private DeferredResult<IPAddressAllocationContext> allocateIpInRange(
+            IPAddressState ipAddressState,
+            String connectedResourceLink,
+            IPAddressAllocationContext context) {
+
+        // Found a record for the specified IP
+        if (IPAddressStatus.AVAILABLE.equals(ipAddressState.ipAddressStatus)) {
+            IPAddressState patchedState = new IPAddressState();
+            patchedState.ipAddressStatus = IPAddressStatus.ALLOCATED;
+            patchedState.connectedResourceLink = connectedResourceLink;
+            return sendWithDeferredResult(Operation.createPatch(this, ipAddressState.documentSelfLink)
+                    .setBody(patchedState))
+                    .thenAccept(oper -> {
+                        logInfo("Allocated IP address %s within range %s to resource %s",
+                                ipAddressState.ipAddress, context.subnetRangeState.name, connectedResourceLink);
+                        addIpToContext(context, connectedResourceLink, ipAddressState);
+                    })
+                    .thenApply(oper -> context);
+        } else {
+            if (connectedResourceLink.equals(ipAddressState.connectedResourceLink)) {
+                logInfo("IP address '%s' is already allocated to the same resource [%s]",
+                        ipAddressState.ipAddress, connectedResourceLink);
+                addIpToContext(context, connectedResourceLink, ipAddressState);
+                return DeferredResult.completed(context);
+            } else {
+                String errMsg = String.format("IP address '%s' is already allocated to a different resource [%s]",
+                        ipAddressState.ipAddress, ipAddressState.connectedResourceLink);
+                logSevere(errMsg);
+                return DeferredResult.failed(new IllegalArgumentException(errMsg));
+            }
+        }
+    }
+
+    /**
+     * Find a matching SubnetRange for the specified IP.
+     * Return null if cannot be found.
+     *
+     * @param context
+     * @param ipAddress
+     * @return SubnetRangeState or null
+     */
+    private SubnetRangeState findSubnetRangeForIp(IPAddressAllocationContext context, String ipAddress) {
+        Optional<SubnetRangeState> result = context.subnetRangeStates.stream()
+                .filter(subnetRange -> SubnetValidator.isIpInBetween(subnetRange.startIPAddress,
+                        subnetRange.endIPAddress, IPVersion.IPv4, ipAddress))
+                .findFirst();
+        if (result.isPresent()) {
+            return result.get();
+        }
+        return null;
+    }
+
+    /**
+     * Query for a record of specified IP
+     *
+     * @param context
+     * @param ipAddress
+     * @return IpAddressState or null
+     */
+    private DeferredResult<IPAddressState> findIpAddressStateIfExists(IPAddressAllocationContext context, String ipAddress) {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(IPAddressState.class)
+                .addFieldClause(IPAddressState.FIELD_NAME_SUBNET_RANGE_LINK,
+                        context.subnetRangeState.documentSelfLink)
+                .addFieldClause(IPAddressState.FIELD_NAME_IP_ADDRESS,
+                        ipAddress);
+        QueryUtils.QueryTop<IPAddressState> query = new QueryUtils.QueryTop<>(this.getHost(),
+                builder.build(),
+                IPAddressState.class,
+                null)
+                .setMaxResultsLimit(1);
+        //todo: add tenantLinks
+
+        query.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
+
+        return query.collectDocuments(Collectors.toList())
+                .thenApply(ipAddressStates -> {
+                    if (ipAddressStates != null && !ipAddressStates.isEmpty()) {
+                        return ipAddressStates.get(0);
+                    }
+                    return null;
+                });
+    }
 }
 
