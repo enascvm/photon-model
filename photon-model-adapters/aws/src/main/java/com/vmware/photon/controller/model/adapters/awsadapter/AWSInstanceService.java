@@ -765,17 +765,24 @@ public class AWSInstanceService extends StatelessService {
                 cs.type = ComputeType.VM_GUEST;
                 cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
                 cs.address = ((Instance) instance).getPublicIpAddress();
-                cs.regionId = getRequestRegionId(this.context);
+
+                String regionId = getRequestRegionId(this.context);
+                cs.regionId = regionId;
+
                 cs.zoneId = ((Instance) instance).getPlacement().getAvailabilityZone();
                 cs.powerState = AWSUtils.mapToPowerState(((Instance) instance).getState());
-                cs.computeHostLink = this.context.endpoint.computeHostLink;
+
+                String computeHostLink = this.context.endpoint.computeHostLink;
+                cs.computeHostLink = computeHostLink;
+
                 if (this.context.child.customProperties == null) {
                     cs.customProperties = new HashMap<>();
                 } else {
                     cs.customProperties = this.context.child.customProperties;
                 }
-                cs.customProperties.put(SOURCE_TASK_LINK,
-                        ProvisionComputeTaskService.FACTORY_LINK);
+
+                String sourceTaskLink = ProvisionComputeTaskService.FACTORY_LINK;
+                cs.customProperties.put(SOURCE_TASK_LINK, sourceTaskLink);
                 cs.customProperties.put(AWSConstants.AWS_VPC_ID,
                         ((Instance) instance).getVpcId());
                 cs.lifecycleState = LifecycleState.READY;
@@ -785,7 +792,8 @@ public class AWSInstanceService extends StatelessService {
                         ((Instance) instance)));
 
                 updateAndTagDisks(this.context.bootDisk, this.context.imageDisks,
-                        this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings());
+                        this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings(),
+                        regionId, computeHostLink, sourceTaskLink, this.context.parent.tenantLinks);
 
                 DeferredResult<ComputeState> dr = new DeferredResult<>();
                 if (this.context.imageDisks != null && !this.context.imageDisks.isEmpty()) {
@@ -1025,7 +1033,8 @@ public class AWSInstanceService extends StatelessService {
          */
         private void updateAndTagDisks(DiskState bootDisk, List<DiskState> imageDisks,
                 List<DiskState> additionalDisks,
-                List<InstanceBlockDeviceMapping> blockDeviceMappings) {
+                List<InstanceBlockDeviceMapping> blockDeviceMappings, String regionId,
+                String computeHostLink, String sourceTaskLink, List<String> tenantLinks) {
             List<DiskState> diskStateList = new ArrayList<>();
             diskStateList.add(bootDisk);
             diskStateList.addAll(imageDisks);
@@ -1033,6 +1042,11 @@ public class AWSInstanceService extends StatelessService {
 
             for (DiskState diskState : diskStateList) {
                 diskState.status = DiskService.DiskStatus.ATTACHED;
+                diskState.regionId = regionId;
+                diskState.computeHostLink = computeHostLink;
+                diskState.customProperties.put(SOURCE_TASK_LINK, sourceTaskLink);
+                diskState.tenantLinks = tenantLinks;
+
                 String deviceType = diskState.customProperties.get(DEVICE_TYPE);
                 if (deviceType.equals(AWSStorageType.EBS.getName())) {
                     String deviceName = diskState.customProperties.get(DEVICE_NAME);

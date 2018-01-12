@@ -437,16 +437,27 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
         private void getLocalResources(EBSVolumesEnumerationSubStage next) {
             // query all disk state resources for the cluster filtered by the received set of
             // instance Ids. The filtering is performed on the selected resource pool.
+
+            QueryTask.Query storageTypeFilterQuery =
+                    QueryTask.Query.Builder.create(QueryTask.Query.Occurance.MUST_OCCUR)
+                            .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE, STORAGE_TYPE_EBS,
+                                    Query.Occurance.SHOULD_OCCUR)
+                            .addCompositeFieldClause(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                    AWSConstants.DEVICE_TYPE, STORAGE_TYPE_EBS.toLowerCase(),
+                                    Query.Occurance.SHOULD_OCCUR)
+                            .build();
+
             Query.Builder qBuilder = Query.Builder.create()
                     .addKindFieldClause(DiskState.class)
-                    .addFieldClause(DiskState.FIELD_NAME_STORAGE_TYPE, STORAGE_TYPE_EBS)
                     .addInClause(ComputeState.FIELD_NAME_ID,
                             this.context.remoteAWSVolumes.keySet());
 
             addScopeCriteria(qBuilder, this.context);
 
+            QueryTask.Query storageQuery = qBuilder.build().addBooleanClause(storageTypeFilterQuery);
+
             QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                    .setQuery(qBuilder.build())
+                    .setQuery(storageQuery)
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.TOP_RESULTS)
                     .setResultLimit(getQueryResultLimit())
