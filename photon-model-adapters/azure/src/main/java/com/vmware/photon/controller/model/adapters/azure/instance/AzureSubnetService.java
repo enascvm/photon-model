@@ -22,16 +22,18 @@ import com.microsoft.azure.management.network.implementation.SubnetInner;
 import com.microsoft.azure.management.network.implementation.SubnetsInner;
 import com.microsoft.rest.ServiceCallback;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.photon.controller.model.util.AssertUtil;
@@ -134,11 +136,22 @@ public class AzureSubnetService extends StatelessService {
                 "context.parentNetwork.groupLinks is null.");
         AssertUtil.assertTrue(context.parentNetwork.groupLinks.size() == 1,
                 "context.parentNetwork.groupLinks doesn't contain exactly one element.");
-        return AzureUtils.filterRGsByType(this.getHost(), context.parentNetwork.groupLinks,
-                context.parentNetwork.endpointLink, context.parentNetwork.tenantLinks)
-                .thenApply(rgState -> {
-                    context.parentNetworkResourceGroupName = rgState.name;
-                    return context;
+        return this.sendWithDeferredResult(
+                Operation.createGet(context.request.buildUri(context.parentNetwork.groupLinks
+                        .iterator().next())),
+                ResourceGroupState.class)
+                .thenCompose(rgState -> {
+                    if (rgState.customProperties != null &&
+                            ResourceGroupStateType.AzureResourceGroup.name().equals(
+                                    rgState.customProperties.get(
+                                            ComputeProperties.RESOURCE_TYPE_KEY))) {
+                        context.parentNetworkResourceGroupName = rgState.name;
+                        return DeferredResult.completed(context);
+                    } else {
+                        return DeferredResult.failed(new IllegalStateException(
+                                String.format("Resource group with id [%s] has an invalid type.",
+                                        rgState.id)));
+                    }
                 });
     }
 

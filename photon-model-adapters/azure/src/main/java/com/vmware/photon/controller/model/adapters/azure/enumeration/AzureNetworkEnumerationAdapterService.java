@@ -577,7 +577,11 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 getHost(),
                 qBuilder.build(),
                 ResourceGroupState.class,
-                context.parentCompute.tenantLinks,
+                // do not use tenantLinks, as the parent compute's (i.e., host) tenantLinks may
+                // not match the resource groups's when the host is shared among multiple endpoints;
+                // the parentCompute.documentSelfLink that is used below should be sufficient to
+                // find the correct resource groups that belong to this host.
+                null,
                 null /* endpoint */,
                 context.parentCompute.documentSelfLink)
                         // Use max page size cause we collect ResourceGroupStates
