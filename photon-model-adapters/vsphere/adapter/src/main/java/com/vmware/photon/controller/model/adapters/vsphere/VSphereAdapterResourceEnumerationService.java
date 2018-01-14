@@ -841,6 +841,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
+                .setResultLimit(1)
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                 .build();
 
@@ -1070,6 +1071,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         return QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
+                .setResultLimit(1)
                 .build();
     }
 

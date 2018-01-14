@@ -83,8 +83,7 @@ public class AWSClientManagerFactory {
                 if (System.currentTimeMillis() - clientManagerHolder.createdTimeMillis
                         > MAX_TTL_MILLIS) {
                     // cleanup code on the client manager once they are not referenced by any of the adapters.
-                    clientManagerHolder.clientManager.cleanUp();
-                    deallocateExecutor(awsClientType);
+                    cleanUp(awsClientType);
                 }
             }
         }
