@@ -333,31 +333,6 @@ public class AWSConstants {
         return THREAD_POOL_CACHE_INITIAL_SIZE;
     }
 
-    public static List<String> AWS_EBS_DEVICE_NAMES = Arrays.asList(
-            "xvdb",
-            "xvdc",
-            "xvdd",
-            "xvde",
-            "xvdf",
-            "xvdg",
-            "xvdh",
-            "xvdi",
-            "xvdj",
-            "xvdk",
-            "xvdl",
-            "/dev/sdb",
-            "/dev/sdc",
-            "/dev/sdd",
-            "/dev/sde",
-            "/dev/sdf",
-            "/dev/sdg",
-            "/dev/sdh",
-            "/dev/sdi",
-            "/dev/sdj",
-            "/dev/sdk",
-            "/dev/sdl"
-    );
-
     public static enum AWSResourceType {
         ec2_instance("ec2_instance"),
         ebs_block("ebs_block"),
@@ -378,33 +353,6 @@ public class AWSConstants {
             return this.value;
         }
     }
-
-    public static List<String> AWS_INSTANCE_STORE_DEVICE_NAMES = Arrays.asList(
-            "/dev/sdb",
-            "/dev/sdc",
-            "/dev/sdd",
-            "/dev/sde",
-            "/dev/sdf",
-            "/dev/sdg",
-            "/dev/sdh",
-            "/dev/sdi",
-            "/dev/sdj",
-            "/dev/sdk",
-            "/dev/sdl",
-            "/dev/sdm",
-            "/dev/sdn",
-            "/dev/sdo",
-            "/dev/sdp",
-            "/dev/sdq",
-            "/dev/sdr",
-            "/dev/sds",
-            "/dev/sdt",
-            "/dev/sdu",
-            "/dev/sdv",
-            "/dev/sdw",
-            "/dev/sdx",
-            "/dev/sdy"
-    );
 
     public static List<String> AWS_VIRTUAL_NAMES = Arrays.asList(
             "ephemeral0",

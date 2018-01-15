@@ -13,8 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedOS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedVirtualizationTypes;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_OPERATION_TIMEOUT_MINUTES;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_EBS_DEVICE_NAMES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
@@ -43,6 +45,7 @@ import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.Volume;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
@@ -561,10 +564,16 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 .describeInstances(describeInstancesRequest);
 
         List<InstanceBlockDeviceMapping> blockDeviceMappings = null;
+        AWSSupportedOS platform = null;
+        AWSSupportedVirtualizationTypes virtualizationTypes = null;
+        String instanceType = null;
         for (Reservation reservation : instancesResult.getReservations()) {
             for (Instance instance : reservation.getInstances()) {
                 if (instance.getInstanceId().equals(instanceId)) {
                     blockDeviceMappings = instance.getBlockDeviceMappings();
+                    platform = AWSSupportedOS.get(instance.getPlatform());
+                    virtualizationTypes = AWSSupportedVirtualizationTypes.get(instance.getVirtualizationType());
+                    instanceType = instance.getInstanceType();
                     break;
                 }
             }
@@ -573,8 +582,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         String deviceName = null;
         if (blockDeviceMappings != null) {
             List<String> usedDeviceNames = getUsedDeviceNames(blockDeviceMappings);
-            List<String> availableDiskNames = getAvailableDeviceNames(usedDeviceNames,
-                    AWS_EBS_DEVICE_NAMES);
+            List<String> availableDiskNames = AWSBlockDeviceNameMapper.getAvailableNames(
+                    platform, virtualizationTypes, AWSStorageType.EBS, instanceType, usedDeviceNames);
             deviceName = availableDiskNames.get(0);
         }
         return deviceName;
@@ -586,28 +595,6 @@ public class AWSComputeDiskDay2Service extends StatelessService {
             usedDeviceNames.add(blockDeviceMapping.getDeviceName());
         }
         return usedDeviceNames;
-    }
-
-    /**
-     *
-     * Returns the list of device names that can be used for provisioning additional disks
-     */
-    private List<String> getAvailableDeviceNames(List<String> usedDeviceNames,
-            List<String> supportedDeviceNames) {
-        List<String> availableDeviceNames = new ArrayList<>();
-        for (String availableDeviceName : supportedDeviceNames) {
-            for (String usedDeviceName : usedDeviceNames) {
-                if (usedDeviceName.contains(availableDeviceName) ||
-                        availableDeviceName.contains(usedDeviceName)) {
-                    availableDeviceName = null;
-                    break;
-                }
-            }
-            if (availableDeviceName != null) {
-                availableDeviceNames.add(availableDeviceName);
-            }
-        }
-        return availableDeviceNames;
     }
 
     private ResourceOperationSpecService.ResourceOperationSpec[] createResourceOperationSpecs() {

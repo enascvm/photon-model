@@ -13,10 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedOS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedVirtualizationTypes;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.avalabilityZoneIdentifier;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
@@ -63,6 +69,7 @@ import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
@@ -303,12 +310,12 @@ public class AWSComputeDiskDay2ServiceTest {
         ComputeState vmStateAfterAttach1 = gson.fromJson(
                 computeQueryResult.documents.get(this.vmState.documentSelfLink).toString(),
                 ComputeState.class);
-
+        Instance instance = null;
         if (!this.isMock) {
 
             List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
                     Collections.singletonList(vmStateAfterAttach1.id));
-            Instance instance = instances.get(0);
+            instance = instances.get(0);
             //            instanceZoneId = instance.getPlacement().getAvailabilityZone();
 
             ComputeState vm = this.host.getServiceState(null, ComputeState.class,
@@ -334,6 +341,13 @@ public class AWSComputeDiskDay2ServiceTest {
         ServiceDocumentQueryResult diskQueryResult = ProvisioningUtils
                 .queryDiskInstances(this.host, vmStateAfterAttach1.diskLinks.size() + 1);
 
+        List<String> existingNames = new ArrayList<>();
+        for (String diskLink : diskQueryResult.documentLinks) {
+            DiskState diskState = Utils.fromJson(diskQueryResult.documents.get(diskLink),
+                    DiskState.class);
+            existingNames.add(diskState.customProperties.get(AWSConstants.DEVICE_NAME));
+        }
+
         DiskState provisionedDisk2 = gson.fromJson(
                 diskQueryResult.documents.get(diskSpec2.documentSelfLink).toString(),
                 DiskState.class);
@@ -357,10 +371,23 @@ public class AWSComputeDiskDay2ServiceTest {
         assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
                 attachedDisk2.status);
 
+        //assert the device name
+        assertDeviceName(instance, attachedDisk2, existingNames);
+
         //detach disk from the vm and verify the details
         ComputeState vmStateAfterDetach1 = detachDiskAndVerify(vmStateAfterAttach2, attachedDisk2);
 
         this.vmState = vmStateAfterDetach1;
+    }
+
+    protected void assertDeviceName(Instance awsInstance, DiskState diskState, List<String> existingNames) {
+        if (!this.isMock) {
+            AWSSupportedOS os = AWSSupportedOS.get(awsInstance.getPlatform());
+            AWSSupportedVirtualizationTypes virtualizationType = AWSSupportedVirtualizationTypes.get(awsInstance.getVirtualizationType());
+            AWSStorageType storageType = AWSStorageType.get(diskState.customProperties.get(DEVICE_TYPE));
+            List<String> expectedNames = AWSBlockDeviceNameMapper.getAvailableNames(os, virtualizationType, storageType, awsInstance.getInstanceType(), existingNames);
+            assertEquals(expectedNames.get(0), diskState.customProperties.get(DEVICE_NAME));
+        }
     }
 
     private ComputeState detachDiskAndVerify(ComputeState vmStateAfterAttach,
