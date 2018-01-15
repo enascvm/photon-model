@@ -1567,8 +1567,10 @@ public class AzureTestUtil {
             vNet.withLocation(azureNicSpecs.network.zoneId);
 
             AddressSpace addressSpace = new AddressSpace();
-            addressSpace.withAddressPrefixes(
-                    Collections.singletonList(azureNicSpecs.network.cidr));
+
+            List<String> cidrs = new ArrayList<>();
+            cidrs.add(azureNicSpecs.network.cidr);
+            addressSpace.withAddressPrefixes(cidrs);
             vNet.withAddressSpace(addressSpace);
 
             List<SubnetInner> subnetList = new ArrayList<>();
@@ -1617,7 +1619,9 @@ public class AzureTestUtil {
         sr.withName(AzureConstants.AZURE_LINUX_SECURITY_GROUP_NAME);
         sr.withProtocol(SecurityRuleProtocol.TCP);
 
-        sharedNSG.withSecurityRules(Collections.singletonList(sr));
+        ArrayList<SecurityRuleInner> objects = new ArrayList<>();
+        objects.add(sr);
+        sharedNSG.withSecurityRules(objects);
 
         networkManagementClient.networkSecurityGroups()
                 .createOrUpdate(resourceGroupName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME,
