@@ -46,6 +46,7 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
@@ -806,7 +807,11 @@ public class QueryUtils {
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString(),
                         Occurance.MUST_NOT_OCCUR)
-                .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
+                .addFieldClause("endpointLinks.item", "*", MatchType.WILDCARD, Occurance.MUST_OCCUR);
+
+        if (tenantLinks != null) {
+            qBuilder.addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS, tenantLinks);
+        }
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())

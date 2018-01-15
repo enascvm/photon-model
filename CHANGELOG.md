@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.6.47_2
+* Certificate validity extended for 10 years.
+* Bug fix for DeDup.
+
 ## 0.6.47_1
 * Set correlation of AWS Disks with Instances.
 * Important bug fixes.

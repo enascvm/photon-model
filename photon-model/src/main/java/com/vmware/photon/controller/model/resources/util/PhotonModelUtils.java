@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -110,32 +111,31 @@ public class PhotonModelUtils {
 
         ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
                 .buildDescription(state.getClass());
-        if (ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(state.getClass())) {
 
-            ReflectionUtils.setPropertyValue(
-                    sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK),
-                    state,
-                    endpointLink);
+        if (ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(state.getClass())) {
+            String epLink = (String) ReflectionUtils.getPropertyValue(sdDesc.propertyDescriptions
+                            .get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK), state);
+
+            if (StringUtils.isEmpty(epLink) && endpointLink != null && !endpointLink.isEmpty()) {
+                ReflectionUtils.setPropertyValue(
+                        sdDesc.propertyDescriptions
+                                .get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK), state,
+                        endpointLink);
+            }
 
         } else if (ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(state.getClass())) {
+            String epLink = (String) ReflectionUtils.getPropertyValue(
+                    sdDesc.propertyDescriptions.get(
+                            ResourceState.FIELD_NAME_CUSTOM_PROPERTIES + "."
+                                    + PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK), state);
 
-            if (endpointLink != null && !endpointLink.isEmpty()) {
+            if (StringUtils.isEmpty(epLink) && endpointLink != null && !endpointLink.isEmpty()) {
                 ReflectionUtils.setOrUpdatePropertyValue(
                         sdDesc.propertyDescriptions.get(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES),
                         state,
                         singletonMap(CUSTOM_PROP_ENDPOINT_LINK, endpointLink));
             }
         }
-
-        //This method will assign the value of the endpointLinks if it does not exist for the given
-        //resource OR it will merge it with the existing collection if already set.
-        Set<String> endpointLinks = new HashSet<>();
-        endpointLinks.add(endpointLink);
-        ReflectionUtils.setOrUpdatePropertyValue(
-                sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINKS),
-                state,
-                endpointLinks);
-
         return state;
     }
 

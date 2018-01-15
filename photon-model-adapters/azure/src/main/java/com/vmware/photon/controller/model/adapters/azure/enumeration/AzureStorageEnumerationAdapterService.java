@@ -74,6 +74,7 @@ import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 
 import org.apache.commons.lang3.EnumUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.UriPaths;
@@ -591,7 +592,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.authCredentialsLink = sd.authCredentialsLink;
                     storageDescriptionToUpdate.regionId = storageAccount.location;
                     storageDescriptionToUpdate.documentSelfLink = sd.documentSelfLink;
-                    storageDescriptionToUpdate.endpointLink = sd.endpointLink;
+                    if (StringUtils.isEmpty(storageDescriptionToUpdate.endpointLink)) {
+                        storageDescriptionToUpdate.endpointLink = sd.endpointLink;
+                    }
                     storageDescriptionToUpdate.computeHostLink = sd.computeHostLink;
                     // first copy
                     storageDescriptionToUpdate.endpointLinks = sd.endpointLinks;

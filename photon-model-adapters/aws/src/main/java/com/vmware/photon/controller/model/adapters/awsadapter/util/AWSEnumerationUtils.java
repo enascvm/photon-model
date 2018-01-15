@@ -198,7 +198,7 @@ public class AWSEnumerationUtils {
 
         computeState.resourcePoolLink = resourcePoolLink;
         if (computeState.endpointLinks == null) {
-            computeState.endpointLinks = new HashSet<String>();
+            computeState.endpointLinks = new HashSet<>();
         }
         computeState.endpointLinks.addAll(endpointLinks);
         // assign existing one, if exists

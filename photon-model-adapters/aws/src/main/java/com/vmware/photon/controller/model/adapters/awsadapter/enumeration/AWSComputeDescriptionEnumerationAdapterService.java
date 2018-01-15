@@ -31,6 +31,8 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.Instance;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSCostStatsService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
@@ -93,7 +95,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
      */
     public static class AWSComputeDescriptionCreationServiceContext {
         public List<Operation> enumerationOperations;
-        public Map<InstanceDescKey, String> localComputeDescriptionMap;
+        public Map<InstanceDescKey, ComputeDescription> localComputeDescriptionMap;
         public Set<InstanceDescKey> representativeComputeDescriptionSet;
         public List<InstanceDescKey> computeDescriptionsToBeCreatedList;
         public List<InstanceDescKey> computeDescriptionsToBeUpdatedList;
@@ -235,7 +237,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                                     ComputeDescription.class);
                             context.localComputeDescriptionMap.put(
                                     getKeyForComputeDescriptionFromCD(localComputeDescription),
-                                    localComputeDescription.documentSelfLink);
+                                    localComputeDescription);
                         }
                         logFine(() -> String.format("%d compute descriptions found",
                                 context.localComputeDescriptionMap.size()));
@@ -320,6 +322,17 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         }
         logFine(() -> String.format("Need to update %d local compute descriptions",
                 context.computeDescriptionsToBeUpdatedList.size()));
+
+        context.computeDescriptionsToBeUpdatedList.stream().forEach(entry -> {
+            ComputeDescription cd = context.localComputeDescriptionMap.get(entry);
+            if (StringUtils.isEmpty(cd.endpointLink)) {
+                cd.endpointLink = context.cdState.endpointLink;
+                sendRequest(Operation.createPatch(this.getHost(), cd.documentSelfLink)
+                        .setReferer(this.getHost().getUri())
+                        .setBody(cd));
+            }
+        });
+
         context.computeDescriptionsToBeUpdatedList.stream()
                 .map(dk -> updateComputeDescriptionOperation(dk, context))
                 .forEach(o -> context.enumerationOperations.add(o));
@@ -338,7 +351,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
                 .create(collectionsToAddMap, null);
 
-        return Operation.createPatch(this.getHost(), context.localComputeDescriptionMap.get(cd))
+        return Operation.createPatch(this.getHost(), context.localComputeDescriptionMap.get(cd).documentSelfLink)
                 .setReferer(this.getHost().getUri())
                 .setBody(updateEndpointLinksRequest);
     }

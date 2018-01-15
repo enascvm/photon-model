@@ -343,7 +343,7 @@ public class AWSLoadBalancerService extends StatelessService {
         state.authCredentialsLink = context.credentials.documentSelfLink;
         state.endpointLink = context.loadBalancerStateExpanded.endpointLink;
         if (state.endpointLinks == null) {
-            state.endpointLinks = new HashSet<String>();
+            state.endpointLinks = new HashSet<>();
         }
         state.endpointLinks.add(context.loadBalancerStateExpanded.endpointLink);
         state.instanceAdapterReference = UriUtils.buildUri(getHost(), AWSSecurityGroupService

@@ -5,7 +5,7 @@
     <parent>
         <artifactId>photon-model-parent</artifactId>
         <groupId>com.vmware.photon.controller</groupId>
-        <version>0.6.47_1</version>
+        <version>0.6.47_2</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 

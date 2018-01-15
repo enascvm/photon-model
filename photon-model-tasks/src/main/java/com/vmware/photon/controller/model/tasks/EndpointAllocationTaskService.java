@@ -943,7 +943,7 @@ public class EndpointAllocationTaskService
                 }
             }
             if (cd.endpointLinks == null) {
-                cd.endpointLinks = new HashSet<String>();
+                cd.endpointLinks = new HashSet<>();
             }
             cd.endpointLinks.add(state.documentSelfLink);
             return cd;

@@ -41,6 +41,8 @@ import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
@@ -216,6 +218,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .filter(z -> cm.containsKey(z.getZoneName()))
                     .forEach(z -> {
                         ComputeState c = cm.get(z.getZoneName());
+                        if (StringUtils.isEmpty(c.endpointLink)) {
+                            c.endpointLink = this.context.request.original.endpointLink;
+                        }
                         this.context.zones.put(c.id,
                                 ZoneData.build(this.context.request.regionId,
                                         c.id, c.documentSelfLink));
@@ -335,7 +340,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.endpointLink = this.context.request.original.endpointLink;
             computeState.endpointLinks = this.context.parentCompute.endpointLinks;
             if (computeState.endpointLinks == null) {
-                computeState.endpointLinks = new HashSet<String>();
+                computeState.endpointLinks = new HashSet<>();
             }
             computeState.endpointLinks.add(this.context.request.original.endpointLink);
             computeState.descriptionLink = cd.documentSelfLink;
