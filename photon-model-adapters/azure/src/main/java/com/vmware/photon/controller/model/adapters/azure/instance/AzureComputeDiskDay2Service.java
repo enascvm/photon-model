@@ -238,7 +238,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                         + "detached volume %s from instance %s",
                         context.diskState.name, context.computeState.name);
                 this.service.logInfo(() -> msg);
-                return toDeferredResult().completed(vm);
+                return DeferredResult.completed(vm);
             }
 
             @Override
@@ -247,7 +247,6 @@ public class AzureComputeDiskDay2Service extends StatelessService {
                         "[AzureComputeDiskDay2Service] Failure in detaching volume %s from instance %s : %s",
                         context.diskState.name, context.computeState.name, exc);
                 this.service.logSevere(msg);
-                toDeferredResult().fail(exc);
                 return exc;
             }
         };

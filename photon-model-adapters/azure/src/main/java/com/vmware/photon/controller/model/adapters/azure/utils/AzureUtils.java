@@ -40,6 +40,8 @@ import java.util.stream.Collectors;
 
 import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
+import com.microsoft.azure.management.compute.OSDisk;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.storage.StorageAccountKey;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
@@ -655,6 +657,14 @@ public class AzureUtils {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Check if the disk of VM is managed disk type
+     */
+    public static boolean isDiskManaged(VirtualMachineInner vm) {
+        OSDisk osDisk = vm.storageProfile().osDisk();
+        return osDisk.vhd() == null || osDisk.vhd().uri() == null;
     }
 
 }
