@@ -226,8 +226,8 @@ public class InstanceDiskClient extends BaseHelper {
                     String.format(VM_PATH_FORMAT, dataStoreName, folderName));
 
             // 5) form the upload url and acquire generic service ticket for it
-            String isoUrl = String.format(ISO_UPLOAD_URL, hostName, folderName, filename,
-                    dataStoreName);
+            String isoUrl = String.format(ISO_UPLOAD_URL, hostName, VimUtils.encode(folderName),
+                    VimUtils.encode(filename), VimUtils.encode(dataStoreName));
 
             String ticket = this.connection.getGenericServiceTicket(isoUrl);
 

@@ -153,7 +153,7 @@ public final class VimUtils {
         return URI.create(SCHEME_VSPHERE + "://datastore/" + encode(dsName) + "/" + encode(stripLeadingSlashes(pathOnly)));
     }
 
-    private static String encode(String s) {
+    public static String encode(String s) {
         try {
             return URLEncoder.encode(s, Utils.CHARSET).replace("%2F", "/");
         } catch (UnsupportedEncodingException e) {
