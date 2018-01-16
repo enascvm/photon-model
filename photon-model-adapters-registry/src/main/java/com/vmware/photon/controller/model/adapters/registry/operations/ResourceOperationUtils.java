@@ -328,6 +328,7 @@ public class ResourceOperationUtils {
                 "Going to register Resource Operation name=%s, operation='%s'",
                 spec.name, spec.operation);
         return Operation.createPost(service, ResourceOperationSpecService.FACTORY_LINK)
+                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
                 .setBody(spec);
     }
 
