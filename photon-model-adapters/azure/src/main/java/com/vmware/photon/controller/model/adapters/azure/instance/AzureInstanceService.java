@@ -773,8 +773,10 @@ public class AzureInstanceService extends StatelessService {
         VirtualNetworkInner vNet = new VirtualNetworkInner();
         vNet.withLocation(ctx.resourceGroup.location());
 
+        // Azure's custom serializers don't handle Collections.SingletonList well, so use ArrayList
         List<String> prefix = new ArrayList<>();
         prefix.add(nicCtx.networkState.subnetCIDR);
+
         AddressSpace addressSpace = new AddressSpace()
                 .withAddressPrefixes(prefix);
         vNet.withAddressSpace(addressSpace);

@@ -80,9 +80,6 @@ public class AzureDiskServiceTest extends AzureBaseTest {
             assertEquals("Disk capacity not matching", this.diskState.capacityMBytes, provisionedAzureDisk
                     .sizeInGB() * 1024);
             assertEquals("Disk Region not matching", this.diskState.regionId, provisionedAzureDisk.regionName());
-            // assertEquals("Disk Type not matching", this.diskState.customProperties.get
-            //                 (AzureConstants.AZURE_MANAGED_DISK_TYPE), provisionedAzureDisk.inner
-            //         ().managedBy().accountType().toString());
         }
     }
 

@@ -165,8 +165,11 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
             this.rgOpsClient.createOrUpdate(this.rgName, rg);
 
             VirtualNetworkInner vNet = new VirtualNetworkInner();
+
+            // Azure's custom serializers don't handle Collections.SingletonList well, so use ArrayList
             AddressSpace addressSpace = new AddressSpace();
             List<String> cidrs = new ArrayList<>();
+
             cidrs.add(AZURE_DEFAULT_VPC_CIDR);
 
             addressSpace.withAddressPrefixes(cidrs);
