@@ -40,6 +40,8 @@ import java.util.stream.Stream;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -882,7 +884,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         + " name [%s] was not found. Network Link is left empty.",
                         subnetState.name));
             }
-            subnetState.endpointLink = context.request.endpointLink;
+            if (StringUtils.isEmpty(subnetState.endpointLink)) {
+                subnetState.endpointLink = context.request.endpointLink;
+            }
             subnetState.computeHostLink = context.parentCompute.documentSelfLink;
             AdapterUtils.addToEndpointLinks(subnetState, context.request.endpointLink);
 
@@ -950,7 +954,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         resultNetworkState.name = azureVirtualNetwork.name;
         resultNetworkState.regionId = azureVirtualNetwork.location;
-        resultNetworkState.endpointLink = context.request.endpointLink;
+        if (StringUtils.isEmpty(resultNetworkState.endpointLink)) {
+            resultNetworkState.endpointLink = context.request.endpointLink;
+        }
         resultNetworkState.computeHostLink = context.parentCompute.documentSelfLink;
         AdapterUtils.addToEndpointLinks(resultNetworkState, context.request.endpointLink);
 

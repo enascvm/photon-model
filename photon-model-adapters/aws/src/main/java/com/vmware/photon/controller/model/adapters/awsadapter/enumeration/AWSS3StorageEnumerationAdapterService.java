@@ -847,7 +847,7 @@ public class AWSS3StorageEnumerationAdapterService extends StatelessService {
         diskState.resourcePoolLink = aws.request.original.resourcePoolLink;
         diskState.endpointLink = aws.request.original.endpointLink;
         if (diskState.endpointLinks == null) {
-            diskState.endpointLinks = new HashSet<String>();
+            diskState.endpointLinks = new HashSet<>();
         }
         diskState.endpointLinks.add(aws.request.original.endpointLink);
         diskState.tenantLinks = aws.parentCompute.tenantLinks;

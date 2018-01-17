@@ -44,6 +44,7 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
@@ -904,7 +905,8 @@ public class QueryUtils {
                         PhotonModelConstants.CLOUD_ACCOUNT_ID, accountId)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         PhotonModelConstants.AUTO_DISCOVERED_ENTITY, Boolean.TRUE.toString(),
-                        Occurance.MUST_NOT_OCCUR);
+                        Occurance.MUST_NOT_OCCUR)
+                .addFieldClause("endpointLinks.item", "*", MatchType.WILDCARD, Occurance.MUST_OCCUR);
 
         // it must match all tenantLinks in order to determine whether a compute host already
         // exists.

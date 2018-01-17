@@ -49,6 +49,8 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.Tag;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse;
@@ -724,6 +726,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 ComputeState existingComputeState = context.request.computeStatesToBeUpdated
                         .get(instanceId);
 
+                if (StringUtils.isEmpty(existingComputeState.endpointLink)) {
+                    existingComputeState.endpointLink = context.request.endpointLink;
+                }
+
                 Set<String> endpointLinks = new HashSet<>();
                 if (existingComputeState.endpointLinks != null) {
                     endpointLinks.addAll(existingComputeState.endpointLinks);
@@ -1015,11 +1021,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         // create a new NetworkInterfaceState for updating the address
         NetworkInterfaceState updateNicState = new NetworkInterfaceState();
+        if (StringUtils.isEmpty(updateNicState.endpointLink)) {
+            updateNicState.endpointLink = context.request.endpointLink;
+        }
 
         // Use the endpointLinks from the existing state if present else initialize the collection and add the
         // endpoint link.
         if (existingNicState.endpointLinks == null) {
-            updateNicState.endpointLinks = new HashSet<String>();
+            updateNicState.endpointLinks = new HashSet<>();
         } else {
             updateNicState.endpointLinks = existingNicState.endpointLinks;
         }

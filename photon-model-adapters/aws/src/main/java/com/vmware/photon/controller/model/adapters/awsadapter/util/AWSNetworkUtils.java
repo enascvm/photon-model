@@ -116,7 +116,7 @@ public class AWSNetworkUtils {
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
         if (subnetState.endpointLinks == null) {
-            subnetState.endpointLinks = new HashSet<String>();
+            subnetState.endpointLinks = new HashSet<>();
         }
         subnetState.endpointLinks.add(endpointLink);
         subnetState.computeHostLink = parentComputeLink;

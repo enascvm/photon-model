@@ -606,7 +606,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
             if (isApplyInfraFields()) {
                 // By default populate TENANT_LINKS
                 localState.tenantLinks = this.endpointState.tenantLinks;
-                // By default populate ENDPOINT_ILNK
+                // By default populate ENDPOINT_LINK
                 setEndpointLink(localState, this.endpointState.documentSelfLink);
                 updateEndpointLinks(localState, this.endpointState.documentSelfLink);
             }
@@ -616,6 +616,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         } else {
             // Update case
             if (isApplyInfraFields()) {
+                setEndpointLink(localState, this.endpointState.documentSelfLink);
                 // update the endpointLinks
                 updateEndpointLinks(localState, this.endpointState.documentSelfLink);
             }

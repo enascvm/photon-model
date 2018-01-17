@@ -158,7 +158,7 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
         cd.name = primaryAccountCompute.name + "_" + linkedAccountId;
         cd.endpointLink = primaryAccountCompute.endpointLink;
         if (cd.endpointLinks == null) {
-            cd.endpointLinks = new HashSet<String>();
+            cd.endpointLinks = new HashSet<>();
         }
         cd.endpointLinks.add(primaryAccountCompute.endpointLink);
         cd.computeHostLink = primaryAccountCompute.computeHostLink;
@@ -191,7 +191,7 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
                 .buildUriPath(ComputeService.FACTORY_LINK, computeState.id);
         computeState.endpointLink = primaryAccountCompute.endpointLink;
         if (computeState.endpointLinks == null) {
-            computeState.endpointLinks = new HashSet<String>();
+            computeState.endpointLinks = new HashSet<>();
         }
         computeState.endpointLinks.add(primaryAccountCompute.endpointLink);
         return computeState;

@@ -71,6 +71,7 @@ import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPC
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 
 import rx.functions.Action1;
@@ -1390,7 +1391,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     vm.storageProfile().osDisk().caching().name());
         }
         diskToUpdate.computeHostLink = ctx.parentCompute.documentSelfLink;
-        diskToUpdate.endpointLink = ctx.request.endpointLink;
+        if (StringUtils.isEmpty(diskToUpdate.endpointLink)) {
+            diskToUpdate.endpointLink = ctx.request.endpointLink;
+        }
         AdapterUtils.addToEndpointLinks(diskToUpdate, ctx.request.endpointLink);
     }
 
@@ -1689,6 +1692,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             nic.regionId = remoteNic.location();
             nic.computeHostLink = ctx.parentCompute.documentSelfLink;
         } else {
+            if (StringUtils.isEmpty(nic.endpointLink)) {
+                nic.endpointLink = ctx.request.endpointLink;
+            }
             nic.endpointLinks.add(ctx.request.endpointLink);
         }
 

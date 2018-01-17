@@ -138,13 +138,15 @@ public class TestResourceDeduplication extends BasicTestCase {
 
         AuthCredentialsService.AuthCredentialsServiceState auth = createAWSAuthentication(this.host,
                 this.accessKey, this.secretKey);
+        AuthCredentialsService.AuthCredentialsServiceState auth2 = createAWSAuthentication(this.host,
+                this.accessKey, this.secretKey);
 
         this.endpointState = TestAWSSetupUtils
                 .createAWSEndpointState(this.host, auth.documentSelfLink,
                         resourcePool.documentSelfLink);
 
         this.endpointState2 = TestAWSSetupUtils
-                .createAWSEndpointState(this.host, auth.documentSelfLink,
+                .createAWSEndpointState(this.host, auth2.documentSelfLink,
                         resourcePool.documentSelfLink);
 
         // create a compute host for the AWS
@@ -153,6 +155,10 @@ public class TestResourceDeduplication extends BasicTestCase {
                 null /*zoneId*/, this.useAllRegions ? null : regionId,
                 this.isAwsClientMock,
                 this.awsMockEndpointReference, null /*tags*/);
+
+        this.computeHost.endpointLinks.add(this.endpointState2.documentSelfLink);
+        this.host.waitForResponse(Operation.createPatch(this.host, this.computeHost.documentSelfLink)
+                .setBody(this.computeHost));
 
         this.endpointState.computeLink = this.computeHost.documentSelfLink;
         this.endpointState2.computeLink = this.computeHost.documentSelfLink;
@@ -211,6 +217,14 @@ public class TestResourceDeduplication extends BasicTestCase {
         assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
 
         validateEndpointLinks(0, new ArrayList<>(), "", this.computeHost.documentSelfLink);
+
+        // Add end point again and verify the endpoints.
+        enumerateResources(this.host, this.computeHost, this.endpointState2, this.isMock,
+                TEST_CASE_RUN);
+        expectedEndpoints.clear();
+        expectedEndpoints.add(this.endpointState2.documentSelfLink);
+        validateEndpointLinks(1, expectedEndpoints, this.endpointState2.documentSelfLink, this.computeHost.documentSelfLink);
+
     }
 
     @Test
@@ -258,7 +272,8 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             ComputeService.ComputeState doc = response.getBody(ComputeService.ComputeState.class);
 
-            if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type)) {
+            if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type)
+                    && !ComputeDescriptionService.ComputeDescription.ComputeType.ZONE.equals(doc.type)) {
                 assertNotNull(doc.endpointLink);
                 if (StringUtils.isEmpty(expectedEndpoint)) {
                     Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -273,7 +288,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             }
         }
 
-        List<String> computeDescDocLinks = getDocumentLinks(ComputeDescriptionService.ComputeDescription.class);
+        /*List<String> computeDescDocLinks = getDocumentLinks(ComputeDescriptionService.ComputeDescription.class);
         for (String docLink : computeDescDocLinks) {
             Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
                     .setReferer(this.host.getUri());
@@ -293,7 +308,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                     assertTrue(doc.endpointLinks.contains(endpointLink));
                 }
             }
-        }
+        }*/
 
         List<String> diskDocLinks = getDocumentLinks(DiskService.DiskState.class);
         for (String docLink : diskDocLinks) {
