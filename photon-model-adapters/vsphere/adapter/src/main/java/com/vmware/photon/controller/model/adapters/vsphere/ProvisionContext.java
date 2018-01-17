@@ -375,7 +375,7 @@ public class ProvisionContext {
             // collect disks in parallel
             Stream<Operation> opsGetDisk = ctx.child.diskLinks.stream()
                     .map(link -> {
-                        URI diskStateUri = createInventoryUri(service.getHost(), link);
+                        URI diskStateUri = UriUtils.buildUri(service.getHost(), link);
                         return Operation.createGet(createInventoryUri(service.getHost(),
                                 DiskStateExpanded.buildUri(diskStateUri)));
                     });

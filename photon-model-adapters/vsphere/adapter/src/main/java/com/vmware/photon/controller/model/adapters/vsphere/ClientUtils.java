@@ -61,6 +61,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderEx
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.FileFaultFaultMsg;
 import com.vmware.vim25.FileNotFoundFaultMsg;
@@ -99,10 +100,12 @@ import com.vmware.vim25.VirtualMachineConfigSpec;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSIOController;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceClient;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.http.netty.NettyHttpServiceClient;
 import com.vmware.xenon.services.common.QueryTask;
@@ -826,6 +829,101 @@ public class ClientUtils {
                     }
                     return isFound;
                 }).findFirst().orElse(null);
+    }
+
+    /**
+     * Process VirtualDisk and update the details in the diskLinks of the provisioned compute
+     */
+    public static Operation handleVirtualDiskUpdate(DiskService.DiskStateExpanded matchedDs, VirtualDisk
+            disk, List<String> diskLinks, String regionId, Service service) {
+
+        if (disk.getBacking() == null || !(disk.getBacking() instanceof
+                VirtualDeviceFileBackingInfo)) {
+            return null;
+        }
+
+        VirtualDeviceFileBackingInfo backing = (VirtualDeviceFileBackingInfo) disk.getBacking();
+        Operation operation;
+        if (matchedDs == null) {
+            // This is the new disk, hence add it to the list
+            DiskService.DiskState ds = new DiskService.DiskState();
+            ds.documentSelfLink = UriUtils.buildUriPath(
+                    DiskService.FACTORY_LINK, service.getHost().nextUUID());
+
+            ds.name = disk.getDeviceInfo().getLabel();
+            ds.creationTimeMicros = Utils.getNowMicrosUtc();
+            ds.type = DiskService.DiskType.HDD;
+            ds.regionId = regionId;
+            ds.capacityMBytes = disk.getCapacityInKB() / 1024;
+            ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            updateDiskStateFromVirtualDisk(disk, ds);
+            if (disk.getStorageIOAllocation() != null) {
+                StorageIOAllocationInfo storageInfo = disk.getStorageIOAllocation();
+                CustomProperties.of(ds)
+                        .put(SHARES, storageInfo.getShares().getShares())
+                        .put(LIMIT_IOPS, storageInfo.getLimit())
+                        .put(SHARES_LEVEL, storageInfo.getShares().getLevel().value());
+            }
+            fillInControllerUnitNumber(ds, disk.getUnitNumber());
+            operation = createDisk(ds, service);
+            diskLinks.add(ds.documentSelfLink);
+        } else {
+            // This is known disk, hence update with the provisioned attributes.
+            matchedDs.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            updateDiskStateFromVirtualDisk(disk, matchedDs);
+            operation = createDiskPatch(matchedDs, service);
+        }
+        return operation;
+    }
+
+    /**
+     * Process VirtualCdRom and update the details in the diskLinks of the provisioned compute
+     */
+    public static Operation handleVirtualDeviceUpdate(DiskService.DiskStateExpanded matchedDs,
+            DiskService.DiskType type, VirtualDevice disk, List<String> diskLinks, String
+            regionId, Service service, boolean isBacking) {
+        Operation operation;
+        if (matchedDs == null) {
+            DiskService.DiskState ds = createNewDiskState(type, disk, regionId, service);
+            if (isBacking) {
+                updateDiskStateFromVirtualDevice(disk, ds, disk.getBacking());
+            } else {
+                updateDiskStateFromVirtualDevice(disk, ds, null);
+            }
+            operation = createDisk(ds, service);
+            diskLinks.add(ds.documentSelfLink);
+        } else {
+            updateDiskStateFromVirtualDevice(disk, matchedDs, null);
+            operation = createDiskPatch(matchedDs, service);
+        }
+        return operation;
+    }
+
+    private static DiskService.DiskState createNewDiskState(DiskService.DiskType type,
+            VirtualDevice device, String regionId, Service service) {
+        DiskService.DiskState ds = new DiskService.DiskState();
+        ds.documentSelfLink = UriUtils
+                .buildUriPath(DiskService.FACTORY_LINK, service.getHost().nextUUID());
+
+        ds.name = device.getDeviceInfo().getLabel();
+        ds.creationTimeMicros = Utils.getNowMicrosUtc();
+        ds.type = type;
+        ds.regionId = regionId;
+        ds.capacityMBytes = 0;
+
+        return ds;
+    }
+
+    private static Operation createDisk(DiskService.DiskState ds, Service service) {
+        return Operation.createPost(
+                PhotonModelUriUtils.createInventoryUri(service.getHost(), DiskService.FACTORY_LINK))
+                .setBody(ds);
+    }
+
+    private static Operation createDiskPatch(DiskService.DiskState ds, Service service) {
+        return Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), ds
+                        .documentSelfLink))
+                .setBody(ds);
     }
 
     private static void powerOffVm(Connection connection, VimPortType vimPort,

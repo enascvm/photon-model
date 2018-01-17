@@ -14,9 +14,13 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_PROP_STORAGE_SHARED;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findMatchingDiskState;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.handleVirtualDeviceUpdate;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.handleVirtualDiskUpdate;
 import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_PORTGROUP;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_AVAILABLE_BYTES;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.io.IOException;
@@ -106,11 +110,15 @@ import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.OpaqueNetworkSummary;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.UpdateSet;
+import com.vmware.vim25.VirtualCdrom;
+import com.vmware.vim25.VirtualDevice;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
+import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
+import com.vmware.vim25.VirtualFloppy;
 import com.vmware.vim25.VirtualMachineSnapshotTree;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -1869,13 +1877,58 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
-        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(getHost(), oldDocument.documentSelfLink))
-                .setBody(state)
+        if (CollectionUtils.isNotEmpty(state.diskLinks)) {
+            // Now check how many disks are added / deleted / needs to be updated.
+            List<Operation> ops = state.diskLinks.stream()
+                    .map(link -> {
+                        URI diskStateUri = UriUtils.buildUri(this.getHost(), link);
+                        return Operation.createGet(createInventoryUri(this.getHost(),
+                                DiskService.DiskStateExpanded.buildUri(diskStateUri)));
+                    })
+                    .collect(Collectors.toList());
+
+            OperationJoin.create(ops).setCompletion((operations, failures) -> {
+                if (failures != null) {
+                    logFine(() -> String.format("Error in sync disks of VM %s", state
+                            .documentSelfLink));
+                    patchOnComputeState(state, oldDocument, enumerationProgress, vm);
+                } else {
+                    List<DiskService.DiskStateExpanded> currentDisks = operations.values().stream()
+                            .map(op -> op.getBody(DiskService.DiskStateExpanded.class))
+                            .collect(Collectors.toList());
+                    List<Operation> diskUpdateOps = new ArrayList<>(currentDisks.size());
+                    // Process the update of disks and then patch the compute
+                    for (VirtualDevice device : vm.getDisks()) {
+                        DiskService.DiskStateExpanded matchedDs = findMatchingDiskState(device,
+                                currentDisks);
+
+                        Operation vdOp = processVirtualDevice(matchedDs, device,
+                                enumerationProgress, state.diskLinks);
+                        if (vdOp != null) {
+                            diskUpdateOps.add(vdOp);
+                        }
+                    }
+                    OperationJoin.create(diskUpdateOps).setCompletion((operationMap, exception) -> {
+                        patchOnComputeState(state, oldDocument, enumerationProgress, vm);
+                    }).sendWith(this);
+                }
+            });
+        } else {
+            patchOnComputeState(state, oldDocument, enumerationProgress, vm);
+        }
+    }
+
+    private void patchOnComputeState(ComputeState newDocument, ComputeState oldDocument,
+            EnumerationProgress enumerationProgress, VmOverlay vm) {
+        Operation.createPatch(
+                PhotonModelUriUtils.createInventoryUri(getHost(), oldDocument.documentSelfLink))
+                .setBody(newDocument)
                 .setCompletion((o, e) -> {
                     trackVm(enumerationProgress).handle(o, e);
                     if (e == null) {
                         submitWorkToVSpherePool(()
-                                -> updateLocalTags(enumerationProgress, vm, o.getBody(ResourceState.class)));
+                                -> updateLocalTags(enumerationProgress, vm,
+                                o.getBody(ResourceState.class)));
                     }
                 })
                 .sendWith(this);
@@ -2051,6 +2104,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 }
             }
 
+            // Process all the disks attached to the VM
+            List<VirtualDevice> disks = vm.getDisks();
+            if (CollectionUtils.isNotEmpty(disks)) {
+                state.diskLinks = new ArrayList<>(disks.size());
+                for (VirtualDevice device : disks) {
+                    Operation vdOp = processVirtualDevice(null, device, enumerationProgress, state
+                            .diskLinks);
+                    if (vdOp != null) {
+                        operations.add(vdOp);
+                    }
+                }
+            }
+
             logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
             if (operations.isEmpty()) {
                 Operation.createPost(PhotonModelUriUtils.createInventoryUri(getHost(), ComputeService.FACTORY_LINK))
@@ -2067,6 +2133,21 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 }).sendWith(this);
             }
         });
+    }
+
+    private Operation processVirtualDevice(DiskService.DiskStateExpanded matchedDs, VirtualDevice device,
+            EnumerationProgress enumerationProgress, List<String> diskLinks) {
+        if (device instanceof VirtualDisk) {
+            return handleVirtualDiskUpdate(matchedDs, (VirtualDisk) device, diskLinks,
+                    enumerationProgress.getRegionId(), this);
+        } else if (device instanceof VirtualCdrom) {
+            return handleVirtualDeviceUpdate(matchedDs, DiskService.DiskType.CDROM, device,
+                    diskLinks, enumerationProgress.getRegionId(), this, false);
+        } else if (device instanceof VirtualFloppy) {
+            return handleVirtualDeviceUpdate(matchedDs, DiskService.DiskType.FLOPPY, device,
+                    diskLinks, enumerationProgress.getRegionId(), this, false);
+        }
+        return null;
     }
 
     private void enumerateSnapshots(EnumerationProgress enumerationProgress, List<VmOverlay> vms) {
