@@ -119,9 +119,11 @@ public class SubnetService extends StatefulService {
 
         /**
          * Link to the cloud account endpoint the sub-network belongs to.
+         * @deprecated Use {@link #endpointLinks} instead.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String endpointLink;
 
         /**

@@ -102,9 +102,11 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
 
         /**
          * Link to the endpoint the network interface belongs to.
+         * @deprecated Use {@link #endpointLinks} instead.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String endpointLink;
 
         /**

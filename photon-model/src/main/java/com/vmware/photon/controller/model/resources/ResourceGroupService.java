@@ -48,9 +48,11 @@ public class ResourceGroupService extends StatefulService {
 
         /**
          * Link to the cloud account endpoint the resource group belongs to.
+         * @deprecated Use {@link #endpointLinks} instead.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_47)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String endpointLink;
     }
 
