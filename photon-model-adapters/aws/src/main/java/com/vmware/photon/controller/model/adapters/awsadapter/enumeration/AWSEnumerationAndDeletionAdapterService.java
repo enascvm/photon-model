@@ -93,8 +93,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
     public AWSEnumerationAndDeletionAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
@@ -136,6 +134,18 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             this.resourceDeletionState = getDeletionState(request.original
                     .deletedResourceExpirationMicros);
         }
+    }
+
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
+    @Override
+    public void handleStart(Operation op) {
+
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
     }
 
     @Override

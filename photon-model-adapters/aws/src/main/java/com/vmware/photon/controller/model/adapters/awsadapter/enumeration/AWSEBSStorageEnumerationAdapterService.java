@@ -108,8 +108,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
 
     public AWSEBSStorageEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
@@ -177,6 +175,9 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
         super.handleStart(startPost);
     }
 

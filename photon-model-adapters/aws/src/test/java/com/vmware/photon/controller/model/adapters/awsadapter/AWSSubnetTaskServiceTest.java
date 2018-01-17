@@ -99,6 +99,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
     private EndpointState endpointState;
     private NetworkState networkState;
 
+    @Override
     @Before
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);

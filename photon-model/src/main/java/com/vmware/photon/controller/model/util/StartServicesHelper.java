@@ -19,7 +19,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -33,6 +34,7 @@ import com.vmware.xenon.common.ReflectionUtils;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 
 /**
  * The goal of this helper class is to ease the start of family of services (such as
@@ -72,7 +74,8 @@ public class StartServicesHelper {
     /**
      * Use this method to start the set of services synchronously.
      */
-    public static void startServicesSynchronously(ServiceHost host, ServiceMetadata[] servicesMetadata) {
+    public static void startServicesSynchronously(ServiceHost host,
+            ServiceMetadata[] servicesMetadata) {
         try {
             for (ServiceMetadata serviceMetadata : servicesMetadata) {
                 serviceMetadata.startSynchronously(host);
@@ -92,61 +95,106 @@ public class StartServicesHelper {
      */
     public static class ServiceMetadata {
 
+        private static final Map<Class<? extends Service>, ServiceMetadata> servicesCache = new ConcurrentHashMap<>();
+
+        private static final Map<Class<? extends Service>, ServiceMetadata> factoryServicesCache = new ConcurrentHashMap<>();
+
         /**
-         * Create meta-data for a {@link Service}.
+         * Creates meta-data for a {@link Service}.
+         *
+         * @return cached ServiceMetadata
          */
         public static ServiceMetadata service(Class<? extends Service> serviceClass) {
 
-            final ServiceMetadata serviceDesc = new ServiceMetadata();
-
-            serviceDesc.isServiceOrFactory = true;
-            serviceDesc.serviceClass = serviceClass;
-
-            return serviceDesc;
+            return servicesCache.computeIfAbsent(
+                    serviceClass,
+                    key -> new ServiceMetadata(false /* isFactory */, serviceClass, null));
         }
 
         /**
-         * Create meta-data for a {@link FactoryService}.
+         * Creates meta-data for a {@link FactoryService}.
+         *
+         * @return cached ServiceMetadata
+         */
+        public static ServiceMetadata factoryService(Class<? extends Service> serviceClass) {
+
+            return factoryService(serviceClass, null /* factoryCreator */);
+        }
+
+        /**
+         * Creates meta-data for a {@link FactoryService}.
+         *
+         * @return cached ServiceMetadata
          */
         public static ServiceMetadata factoryService(
                 Class<? extends Service> serviceClass,
                 Supplier<FactoryService> factoryCreator) {
 
-            final ServiceMetadata serviceDesc = new ServiceMetadata();
-
-            serviceDesc.isServiceOrFactory = false;
-            serviceDesc.serviceClass = serviceClass;
-            serviceDesc.factoryCreator = factoryCreator;
-
-            return serviceDesc;
+            return factoryServicesCache.computeIfAbsent(
+                    serviceClass,
+                    key -> new ServiceMetadata(true /* isFactory */, serviceClass, factoryCreator));
         }
 
         /**
-         * Create meta-data for a {@link FactoryService}.
+         * Indicates whether this meta-data represents specialized {@link FactoryService}.
          */
-        public static ServiceMetadata factoryService(Class<? extends Service> serviceClass) {
+        public final boolean isFactory;
 
-            return factoryService(serviceClass, null);
+        public final Class<? extends Service> serviceClass;
+
+        /**
+         * Optional FactoryService creator applicable for factory service ({@link #isFactory} ==
+         * true).
+         */
+        public final Supplier<FactoryService> factoryCreator;
+
+        private String link;
+
+        private Service serviceInstance;
+
+        private ServiceMetadata(
+                boolean isFactory,
+                Class<? extends Service> serviceClass,
+                Supplier<FactoryService> factoryCreator) {
+
+            this.isFactory = isFactory;
+            this.serviceClass = serviceClass;
+            this.factoryCreator = factoryCreator;
         }
-
-        // true = service; false = factory service
-        private boolean isServiceOrFactory;
-
-        private Class<? extends Service> serviceClass;
-
-        private Supplier<FactoryService> factoryCreator;
-
-        private ConcurrentSkipListSet<String> servicesToStartSynchronously =
-                new ConcurrentSkipListSet<>();
 
         /**
          * Get (through reflection by analogy with UriUtils.buildFactoryUri) the SELF_LINK of a
          * service or the FACTORY_LINK of a factory service.
          */
         public String getLink() {
-            String selfLinkOrFactoryLinkName = this.isServiceOrFactory
-                    ? UriUtils.FIELD_NAME_SELF_LINK
-                    : UriUtils.FIELD_NAME_FACTORY_LINK;
+            return initLink();
+//            if (this.link == null) {
+//                this.link = initLink();
+//            }
+//            return this.link;
+        }
+
+        /**
+         * There's no guarantee that's the actual Xenon service being run. That's just a Java
+         * instance of this service class most commonly used to call {@link Service#getStateType()}.
+         */
+        public Service serviceInstance() {
+            return initServiceInstance();
+//            if (this.serviceInstance == null) {
+//                this.serviceInstance = initServiceInstance();
+//            }
+//            return this.serviceInstance;
+        }
+
+        /**
+         * Get (through reflection by analogy with UriUtils.buildFactoryUri) the SELF_LINK of a
+         * service or the FACTORY_LINK of a factory service.
+         */
+        private String initLink() throws IllegalAccessError {
+
+            String selfLinkOrFactoryLinkName = this.isFactory
+                    ? UriUtils.FIELD_NAME_FACTORY_LINK
+                    : UriUtils.FIELD_NAME_SELF_LINK;
 
             try {
                 Field selfLinkOrFactoryLink = this.serviceClass
@@ -166,18 +214,40 @@ public class StartServicesHelper {
                     selfLinkOrFactoryLinkName));
         }
 
+        private Service initServiceInstance() throws InstantiationError {
+            try {
+                if (!this.isFactory) {
+                    return this.serviceClass.newInstance();
+                }
+
+                if (this.factoryCreator == null) {
+                    return this.serviceClass.newInstance();
+                }
+
+                FactoryService factoryService = this.factoryCreator.get();
+
+                return factoryService.createServiceInstance();
+
+            } catch (Throwable thr) {
+                throw new InstantiationError("Failed to create an instance of "
+                        + this.serviceClass
+                        + ". Details: "
+                        + Utils.toString(thr));
+            }
+        }
+
         /**
          * Start the service asynchronously considering its type.
          */
         private void start(ServiceHost serviceHost) {
-            if (this.isServiceOrFactory) {
+            if (!this.isFactory) {
 
-                serviceHost.startService(newServiceInstance());
+                serviceHost.startService(serviceInstance());
 
             } else {
                 if (this.factoryCreator == null) {
 
-                    serviceHost.startFactory(newServiceInstance());
+                    serviceHost.startFactory(serviceInstance());
 
                 } else {
 
@@ -191,33 +261,26 @@ public class StartServicesHelper {
          */
         private void startSynchronously(ServiceHost serviceHost) throws Throwable {
 
-            if (this.isServiceOrFactory) {
-                startServicesSynchronously(serviceHost, newServiceInstance());
+            Service newServiceInstance = serviceInstance();
+
+            if (!this.isFactory) {
+                startServicesSynchronously(serviceHost, newServiceInstance);
             } else {
-                FactoryService factoryService;
+                final FactoryService factoryService;
                 if (this.factoryCreator == null) {
-                    final Class<? extends Service> serviceClass = newServiceInstance().getClass();
-                    factoryService = FactoryService.create(serviceClass,
-                            newServiceInstance().getStateType());
+                    factoryService = FactoryService.create(
+                            newServiceInstance.getClass(),
+                            newServiceInstance.getStateType());
                 } else {
                     factoryService = this.factoryCreator.get();
                 }
 
-                startServicesSynchronously(serviceHost, factoryService,
-                        this.serviceClass);
+                startServicesSynchronously(serviceHost, factoryService, this.serviceClass);
             }
         }
 
-        private Service newServiceInstance() {
-            try {
-                return this.serviceClass.newInstance();
-            } catch (InstantiationException | IllegalAccessException e) {
-                throw new IllegalAccessError(
-                        "Failed to create an instance of " + this.serviceClass);
-            }
-        }
-
-        private void startServicesSynchronously(ServiceHost serviceHost, FactoryService factoryService,
+        private void startServicesSynchronously(ServiceHost serviceHost,
+                FactoryService factoryService,
                 Class<? extends Service> serviceClass) throws Throwable {
             URI factoryUri = UriUtils.buildFactoryUri(serviceHost, this.serviceClass);
             Operation post = Operation.createPost(UriUtils.buildUri(serviceHost,
@@ -226,7 +289,8 @@ public class StartServicesHelper {
                     Collections.singletonList(factoryService));
         }
 
-        private void startServicesSynchronously(ServiceHost serviceHost, Service... services) throws Throwable {
+        private void startServicesSynchronously(ServiceHost serviceHost, Service... services)
+                throws Throwable {
             List<Operation> posts = new ArrayList<>();
             for (Service s : services) {
                 URI u = null;
@@ -260,7 +324,6 @@ public class StartServicesHelper {
                     }
 
                     serviceHost.log(Level.FINE, "started %s", o.getUri().getPath());
-                    this.servicesToStartSynchronously.add(o.getUri().getPath());
                 } finally {
                     l.countDown();
                 }
@@ -277,7 +340,7 @@ public class StartServicesHelper {
 
             if (!l.await(TimeUnit.SECONDS.toMicros(60), TimeUnit.MICROSECONDS)) {
                 serviceHost.log(Level.SEVERE, "One of the services failed to start "
-                                + "synchronously: %s",
+                        + "synchronously: %s",
                         sb.toString(),
                         new TimeoutException());
             }

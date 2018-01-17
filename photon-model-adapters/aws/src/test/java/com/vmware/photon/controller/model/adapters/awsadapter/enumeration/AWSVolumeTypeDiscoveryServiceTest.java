@@ -13,53 +13,41 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
-import java.util.List;
-
-import com.google.gson.reflect.TypeToken;
-
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSAdapters;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSVolumeTypeDiscoveryService.VolumeTypeList;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.TestRequestSender;
 import com.vmware.xenon.common.test.VerificationHost;
 
 public class AWSVolumeTypeDiscoveryServiceTest {
+
     private VerificationHost host;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() throws Throwable {
         this.host = VerificationHost.create(0);
-        try {
-            this.host.start();
-            AWSAdapters.startServices(this.host);
-            this.host.waitForServiceAvailable(AWSVolumeTypeDiscoveryService.SELF_LINK);
-        } catch (Throwable e) {
-            throw new Exception(e);
-        }
+        this.host.start();
+
+        AWSAdapters.startServices(this.host, true);
     }
 
     @Test
     public void testVolumeTypeDiscovery() {
-        String volumeTypeDiscoveryLink = AWSVolumeTypeDiscoveryService.SELF_LINK;
+        Operation get = Operation.createGet(this.host,
+                AWSVolumeTypeDiscoveryService.SELF_LINK + "?deviceType=ebs");
 
-        volumeTypeDiscoveryLink = volumeTypeDiscoveryLink + "?deviceType=ebs";
-        TestRequestSender sender = new TestRequestSender(this.host);
-        Operation get = Operation.createGet(this.host, volumeTypeDiscoveryLink).setCompletion((o,
-                e) -> {
+        get = new TestRequestSender(this.host).sendAndWait(get);
 
-            Assert.assertNull(e);
+        VolumeTypeList volumes = get.getBody(AWSVolumeTypeDiscoveryService.VolumeTypeList.class);
 
-            List<String> volumeTypes = Utils.fromJson(o.getBodyRaw(),
-                    new TypeToken<List<String>>() {}.getType());
-
-            Assert.assertEquals("The expected number of supported ebs volumes are not matching "
-                    + "the actual number volumes from the discovery service", 5,
-                    volumeTypes.size());
-        });
-        sender.sendRequest(get);
+        Assert.assertEquals(
+                "The expected number of supported ebs volumes are not matching "
+                        + "the actual number volumes from the discovery service",
+                5,
+                volumes.volumeTypes.size());
     }
 }

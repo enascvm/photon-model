@@ -143,7 +143,6 @@ public class AWSCostStatsService extends StatelessService {
 
     public AWSCostStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.S3_TRANSFER_MANAGER);
     }
 
     protected class AWSCostStatsCreationContext {
@@ -184,10 +183,18 @@ public class AWSCostStatsService extends StatelessService {
         }
     }
 
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
     @Override
-    public void handleStart(Operation start) {
+    public void handleStart(Operation op) {
+
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.S3_TRANSFER_MANAGER);
+
         this.executor = getHost().allocateExecutor(this);
-        super.handleStart(start);
+
+        super.handleStart(op);
     }
 
     @Override

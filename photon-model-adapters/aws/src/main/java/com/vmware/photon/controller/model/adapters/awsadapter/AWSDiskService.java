@@ -76,9 +76,16 @@ public class AWSDiskService extends StatelessService {
         FAILED
     }
 
-    public AWSDiskService() {
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
+    @Override
+    public void handleStart(Operation op) {
+
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
     }
 
     /**

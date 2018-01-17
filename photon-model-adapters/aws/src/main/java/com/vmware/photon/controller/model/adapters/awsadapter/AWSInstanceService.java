@@ -126,13 +126,16 @@ public class AWSInstanceService extends StatelessService {
 
     private AWSClientManager clientManager;
 
-    // The security group specifies things such as the ports to be open,
-    // firewall rules etc and is
-    // specific to an instance and should come from the compute desc for the VM
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
+    @Override
+    public void handleStart(Operation op) {
 
-    public AWSInstanceService() {
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
     }
 
     @Override
@@ -244,7 +247,7 @@ public class AWSInstanceService extends StatelessService {
                     }
                 };
                 context.amazonEC2Client = this.clientManager
-                        .getOrCreateEC2Client(context.parentAuth,
+                        .getOrCreateEC2Client(context.endpointAuth,
                                 getRequestRegionId(context), this, c);
                 if (context.amazonEC2Client == null) {
                     return;

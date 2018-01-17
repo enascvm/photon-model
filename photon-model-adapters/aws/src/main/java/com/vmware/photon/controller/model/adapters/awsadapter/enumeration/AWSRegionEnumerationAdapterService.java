@@ -31,9 +31,11 @@ public class AWSRegionEnumerationAdapterService extends StatelessService {
 
     @Override
     public void handlePost(Operation post) {
-        List<RegionInfo> regions = Arrays.stream(Regions.values())
-                .map(r -> new RegionInfo(r.getName(), r.getName())).collect(
-                        Collectors.toList());
+
+        List<RegionInfo> regions = Arrays
+                .stream(Regions.values())
+                .map(r -> new RegionInfo(r.getName(), r.getName()))
+                .collect(Collectors.toList());
 
         RegionEnumerationResponse result = new RegionEnumerationResponse();
         result.regions = regions;

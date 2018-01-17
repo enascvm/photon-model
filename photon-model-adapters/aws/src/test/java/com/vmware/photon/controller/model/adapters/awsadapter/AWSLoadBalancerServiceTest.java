@@ -102,6 +102,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
     private EndpointState endpointState;
     private AmazonEC2AsyncClient ec2client;
 
+    @Override
     @Before
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
@@ -111,7 +112,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host);
+            AWSAdapters.startServices(this.host, true);
 
             AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
             creds.privateKey = this.secretKey;

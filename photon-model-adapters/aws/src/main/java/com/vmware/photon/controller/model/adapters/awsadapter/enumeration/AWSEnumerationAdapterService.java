@@ -123,33 +123,35 @@ public class AWSEnumerationAdapterService extends StatelessService {
      */
     public void startHelperServices(Operation startPost) {
         Operation patchAWSEnumerationCreationService = Operation
-                .createPatch(this.getHost(), AWSEnumerationAndCreationAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
+                .createPatch(getHost(), AWSEnumerationAndCreationAdapterService.SELF_LINK)
+                .setReferer(getUri());
 
         Operation patchAWSEnumerationDeletionService = Operation
-                .createPatch(this.getHost(), AWSEnumerationAndDeletionAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
+                .createPatch(getHost(), AWSEnumerationAndDeletionAdapterService.SELF_LINK)
+                .setReferer(getUri());
 
-        Operation patchAWSEBSStorageEnumerationService = Operation.createPatch(this.getHost(),
-                AWSEBSStorageEnumerationAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
+        Operation patchAWSEBSStorageEnumerationService = Operation
+                .createPatch(getHost(), AWSEBSStorageEnumerationAdapterService.SELF_LINK)
+                .setReferer(getUri());
 
-        Operation patchAWSS3StorageEnumerationService = Operation.createPatch(this.getHost(),
-                AWSS3StorageEnumerationAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
+        Operation patchAWSS3StorageEnumerationService = Operation
+                .createPatch(getHost(), AWSS3StorageEnumerationAdapterService.SELF_LINK)
+                .setReferer(getUri());
 
-        this.getHost().startService(patchAWSEnumerationCreationService,
+        getHost().startService(patchAWSEnumerationCreationService,
                 new AWSEnumerationAndCreationAdapterService());
-        this.getHost().startService(patchAWSEnumerationDeletionService,
+        getHost().startService(patchAWSEnumerationDeletionService,
                 new AWSEnumerationAndDeletionAdapterService());
-        this.getHost().startService(patchAWSEBSStorageEnumerationService,
+        getHost().startService(patchAWSEBSStorageEnumerationService,
                 new AWSEBSStorageEnumerationAdapterService());
-        this.getHost().startService(patchAWSS3StorageEnumerationService,
+        getHost().startService(patchAWSS3StorageEnumerationService,
                 new AWSS3StorageEnumerationAdapterService());
-        this.getHost().startService(new AWSVolumeTypeDiscoveryService());
+
+        getHost().startService(new AWSVolumeTypeDiscoveryService());
 
         AdapterUtils.registerForServiceAvailability(getHost(),
-                operation -> startPost.complete(), startPost::fail,
+                operation -> startPost.complete(),
+                startPost::fail,
                 LINKS);
     }
 

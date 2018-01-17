@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -70,6 +71,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -799,8 +802,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
     public AWSEnumerationAndCreationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
@@ -881,6 +882,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
         startHelperServices(startPost);
     }
 
@@ -907,40 +911,21 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      * Starts the related services for the Enumeration Service
      */
     private void startHelperServices(Operation startPost) {
-        Operation postAWScomputeDescriptionService = Operation
-                .createPost(this.getHost(),
-                        AWSComputeDescriptionEnumerationAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
 
-        Operation postAWScomputeStateService = Operation
-                .createPost(this.getHost(), AWSComputeStateCreationAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
+        ServiceMetadata[] SERVICES_METADATA = {
+                service(AWSComputeDescriptionEnumerationAdapterService.class),
+                service(AWSComputeStateCreationAdapterService.class),
+                service(AWSNetworkStateEnumerationAdapterService.class),
+                service(AWSSecurityGroupEnumerationAdapterService.class),
+                service(AWSLoadBalancerEnumerationAdapterService.class),
+        };
 
-        Operation postAWSNetworkStateService = Operation
-                .createPost(this.getHost(), AWSNetworkStateEnumerationAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
-
-        Operation postAWSSecurityGroupStateService = Operation
-                .createPost(this.getHost(), AWSSecurityGroupEnumerationAdapterService.SELF_LINK)
-                .setReferer(this.getUri());
-
-        this.getHost().startService(postAWScomputeDescriptionService,
-                new AWSComputeDescriptionEnumerationAdapterService());
-        this.getHost().startService(postAWScomputeStateService,
-                new AWSComputeStateCreationAdapterService());
-        this.getHost().startService(postAWSNetworkStateService,
-                new AWSNetworkStateEnumerationAdapterService());
-        this.getHost().startService(postAWSSecurityGroupStateService,
-                new AWSSecurityGroupEnumerationAdapterService());
-        this.getHost().startService(new AWSLoadBalancerEnumerationAdapterService());
+        StartServicesHelper.startServices(getHost(), SERVICES_METADATA);
 
         AdapterUtils.registerForServiceAvailability(getHost(),
-                operation -> startPost.complete(), startPost::fail,
-                AWSComputeDescriptionEnumerationAdapterService.SELF_LINK,
-                AWSComputeStateCreationAdapterService.SELF_LINK,
-                AWSNetworkStateEnumerationAdapterService.SELF_LINK,
-                AWSSecurityGroupEnumerationAdapterService.SELF_LINK,
-                AWSLoadBalancerEnumerationAdapterService.SELF_LINK);
+                operation -> startPost.complete(),
+                startPost::fail,
+                StartServicesHelper.getServiceLinks(SERVICES_METADATA));
     }
 
     /**

@@ -208,8 +208,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
     public AWSComputeStateCreationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+    }
+
+    @Override
+    public void handleStart(Operation startPost) {
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(startPost);
     }
 
     @Override

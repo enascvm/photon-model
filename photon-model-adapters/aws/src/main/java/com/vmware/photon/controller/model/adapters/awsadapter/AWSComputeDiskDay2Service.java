@@ -13,9 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedOS;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedVirtualizationTypes;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_OPERATION_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
@@ -37,13 +34,15 @@ import com.amazonaws.services.ec2.model.DetachVolumeResult;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
 import com.amazonaws.services.ec2.model.Reservation;
-
 import com.amazonaws.services.ec2.model.StartInstancesRequest;
 import com.amazonaws.services.ec2.model.StartInstancesResult;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.Volume;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedOS;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedVirtualizationTypes;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -91,6 +90,9 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
         Operation.CompletionHandler handler = (op, exc) -> {
             if (exc != null) {
                 startPost.fail(exc);
@@ -100,8 +102,14 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         };
         ResourceOperationUtils
                 .registerResourceOperation(this, handler, createResourceOperationSpecs());
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
+    }
+
+    @Override
+    public void handleStop(Operation op) {
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
+
+        super.handleStop(op);
     }
 
     @Override
@@ -177,7 +185,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
      */
     private DeferredResult<DiskContext> setClient(DiskContext context) {
         context.amazonEC2Client = this.clientManager
-                .getOrCreateEC2Client(context.baseAdapterContext.parentAuth,
+                .getOrCreateEC2Client(context.baseAdapterContext.endpointAuth,
                         context.baseAdapterContext.child.description.regionId, this,
                         (t) -> failTask(context, t));
         return DeferredResult.completed(context);
@@ -209,7 +217,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
     }
 
     private DeferredResult<DiskContext> performAttachOperation(DiskContext context) {
-        DeferredResult<DiskContext> dr = new DeferredResult();
+        DeferredResult<DiskContext> dr = new DeferredResult<>();
         try {
             if (context.request.isMockRequest) {
                 updateComputeAndDiskState(dr, context);
@@ -239,7 +247,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                     .withDevice(deviceName);
 
             AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult> attachDiskHandler = new AWSAttachDiskHandler(
-                    this, dr, context);
+                    dr, context);
 
             context.amazonEC2Client.attachVolumeAsync(attachVolumeRequest, attachDiskHandler);
 
@@ -262,7 +270,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
     }
 
     private DeferredResult<DiskContext> performDetachOperation(DiskContext context) {
-        DeferredResult<DiskContext> dr = new DeferredResult();
+        DeferredResult<DiskContext> dr = new DeferredResult<>();
 
         try {
             validateDetachInfo(context.diskState);
@@ -454,13 +462,10 @@ public class AWSComputeDiskDay2Service extends StatelessService {
     public class AWSAttachDiskHandler
             extends AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult> {
 
-        private StatelessService service;
         private DeferredResult<DiskContext> dr;
         private DiskContext context;
 
-        private AWSAttachDiskHandler(StatelessService service, DeferredResult<DiskContext> dr,
-                DiskContext context) {
-            this.service = service;
+        private AWSAttachDiskHandler(DeferredResult<DiskContext> dr, DiskContext context) {
             this.dr = dr;
             this.context = context;
         }

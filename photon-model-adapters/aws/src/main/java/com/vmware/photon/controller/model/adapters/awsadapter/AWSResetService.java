@@ -45,13 +45,11 @@ public class AWSResetService extends StatelessService {
 
     private AWSClientManager clientManager;
 
-    public AWSResetService() {
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
-    }
-
     @Override
     public void handleStart(Operation startPost) {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
         CompletionHandler completionHandler = (op, ex) -> {
             if (ex != null) {
                 startPost.fail(ex);
@@ -61,6 +59,14 @@ public class AWSResetService extends StatelessService {
         };
         ResourceOperationUtils.registerResourceOperation(this,
                 completionHandler, getResourceOperationSpec());
+    }
+
+    @Override
+    public void handleStop(Operation op) {
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
+
+        super.handleStop(op);
     }
 
     private void reset(AmazonEC2AsyncClient client, ResourceOperationRequest pr,
@@ -146,7 +152,7 @@ public class AWSResetService extends StatelessService {
                     .populateBaseContext(BaseAdapterStage.VMDESC)
                     .whenComplete((c, e) -> {
                         AmazonEC2AsyncClient client = this.clientManager.getOrCreateEC2Client(
-                                c.parentAuth, c.child.description.regionId, this,
+                                c.endpointAuth, c.child.description.regionId, this,
                                 (t) -> c.taskManager.patchTaskToFailure(t));
                         if (client != null) {
                             reset(client,request,c);

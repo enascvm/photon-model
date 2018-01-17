@@ -94,9 +94,16 @@ public class AWSNetworkService extends StatelessService {
 
     private AWSClientManager clientManager;
 
-    public AWSNetworkService() {
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
+    @Override
+    public void handleStart(Operation op) {
+
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
     }
 
     @Override

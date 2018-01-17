@@ -81,7 +81,6 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
 
     public AWSLoadBalancerEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.LOAD_BALANCING);
     }
 
     /**
@@ -421,6 +420,12 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
         }
 
         handleEnumeration(ctx);
+    }
+
+    @Override
+    public void handleStart(Operation op) {
+        this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.LOAD_BALANCING);
+        super.handleStart(op);
     }
 
     @Override

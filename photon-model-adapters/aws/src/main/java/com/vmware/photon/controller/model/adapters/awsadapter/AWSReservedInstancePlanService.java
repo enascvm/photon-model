@@ -65,9 +65,16 @@ public class AWSReservedInstancePlanService extends StatelessService {
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
     }
 
-    public AWSReservedInstancePlanService() {
+    /**
+     * Extend default 'start' logic with loading AWS client.
+     */
+    @Override
+    public void handleStart(Operation op) {
+
         this.ec2ClientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
     }
 
     @Override

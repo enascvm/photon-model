@@ -56,6 +56,9 @@ public class AWSRebootService extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+
         CompletionHandler completionHandler = (op, ex) -> {
             if (ex != null) {
                 startPost.fail(ex);
@@ -67,9 +70,12 @@ public class AWSRebootService extends StatelessService {
                 completionHandler, getResourceOperationSpec());
     }
 
-    public AWSRebootService() {
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
+    @Override
+    public void handleStop(Operation op) {
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
+
+        super.handleStop(op);
     }
 
     private void reboot(AmazonEC2AsyncClient client, ResourceOperationRequest pr,
@@ -118,7 +124,7 @@ public class AWSRebootService extends StatelessService {
                     .populateBaseContext(BaseAdapterStage.VMDESC)
                     .whenComplete((c, e) -> {
                         AmazonEC2AsyncClient client = this.clientManager.getOrCreateEC2Client(
-                                c.parentAuth, c.child.description.regionId, this,
+                                c.endpointAuth, c.child.description.regionId, this,
                                 (t) -> c.taskManager.patchTaskToFailure(t));
                         if (client != null) {
                             reboot(client,request,c);
