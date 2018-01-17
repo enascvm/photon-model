@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.ComputeProperties.ENDPOINT_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getAdapterUri;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.sendFailurePatch;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
@@ -966,6 +967,7 @@ public class EndpointAllocationTaskService
             cd.customProperties.putAll(state.customProperties);
         }
         cd.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
+        cd.customProperties.put(SOURCE_TASK_LINK, EndpointAllocationTaskService.FACTORY_LINK);
 
         return cd;
     }

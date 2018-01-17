@@ -70,10 +70,8 @@ import com.microsoft.azure.management.network.PublicIPAddress;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
-
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
-
 import rx.functions.Action1;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -1250,6 +1248,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.diskAdapterReference = ctx.parentCompute.description.diskAdapterReference;
             computeDescription.computeHostLink = ctx.parentCompute.documentSelfLink;
             computeDescription.customProperties = new HashMap<>();
+            computeDescription.customProperties.put(SOURCE_TASK_LINK,
+                    ResourceEnumerationTaskService.FACTORY_LINK);
 
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
             String resourceGroupName = getResourceGroupName(virtualMachine.id());

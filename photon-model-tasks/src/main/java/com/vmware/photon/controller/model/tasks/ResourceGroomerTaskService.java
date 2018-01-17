@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -726,6 +727,14 @@ public class ResourceGroomerTaskService
                         state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
             } else if (doc.documentKind.equals(COMPUTE_DESCRIPTION_DOCUMENT_KIND)) {
                 ComputeDescription state = Utils.fromJson(document, ComputeDescription.class);
+                // only deleting discovered resources
+                if (!(state.customProperties != null &&
+                        (ResourceEnumerationTaskService.FACTORY_LINK.equals(
+                                state.customProperties.get(SOURCE_TASK_LINK)) ||
+                        EndpointAllocationTaskService.FACTORY_LINK.equals(
+                                state.customProperties.get(SOURCE_TASK_LINK))))) {
+                    continue;
+                }
                 if (state.endpointLinks != null) {
                     endpointLinks.addAll(state.endpointLinks);
                 }
