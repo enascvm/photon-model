@@ -25,13 +25,13 @@ import java.util.logging.Level;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Regions;
-import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.DescribeRegionsRequest;
 import com.amazonaws.services.ec2.model.DescribeRegionsResult;
 import com.amazonaws.services.ec2.model.DescribeReservedInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeReservedInstancesResult;
 import com.amazonaws.services.ec2.model.Region;
 import com.amazonaws.services.ec2.model.ReservedInstances;
+
 import org.apache.commons.collections.CollectionUtils;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -130,10 +130,16 @@ public class AWSReservedInstancePlanService extends StatelessService {
     }
 
     protected void getReservedInstancesPlans(AWSReservedInstanceContext context) {
-        AmazonEC2AsyncClient ec2AsyncClient = this.ec2ClientManager
-                .getOrCreateEC2Client(context.parentAuth, null,
-                        this, getFailureConsumer(context, "Error while creating EC2 client for"));
-        ec2AsyncClient.describeRegionsAsync(getRegionAsyncHandler(context));
+        this.ec2ClientManager.getOrCreateEC2ClientAsync(context.parentAuth, null, this)
+                .whenComplete((ec2Client, t) -> {
+                    if (t != null) {
+                        getFailureConsumer(context, "Error while creating EC2 client for")
+                                .accept(t);
+                        return;
+                    }
+
+                    ec2Client.describeRegionsAsync(getRegionAsyncHandler(context));
+                });
     }
 
     private AsyncHandler<DescribeRegionsRequest, DescribeRegionsResult> getRegionAsyncHandler(
@@ -177,21 +183,27 @@ public class AWSReservedInstancePlanService extends StatelessService {
                                 .checkAndPatchReservedInstancesPlans();
                         continue;
                     }
-                    AmazonEC2AsyncClient amazonEC2Client = service.ec2ClientManager
-                            .getOrCreateEC2Client(context.parentAuth,
-                                    region.getRegionName(), service, getFailureConsumer(context,
-                                            "Error while creating EC2 client for"));
-                    if (amazonEC2Client == null) {
-                        new AWSReservedInstanceAsyncHandler(service.getHost(),
-                                currentStageTaskCount, region, context)
-                                .checkAndPatchReservedInstancesPlans();
-                        log(Level.WARNING, "client is null for region " + region.getRegionName()
-                                        + "for compute " + context.computeDesc.documentSelfLink);
-                    } else {
-                        amazonEC2Client.describeReservedInstancesAsync(
-                                new AWSReservedInstanceAsyncHandler(service.getHost(),
-                                        currentStageTaskCount, region, context));
-                    }
+
+                    service.ec2ClientManager.getOrCreateEC2ClientAsync(context.parentAuth,
+                            region.getRegionName(), service)
+                            .whenComplete((ec2Client, t) -> {
+                                if (t != null) {
+                                    getFailureConsumer(context,
+                                            "Error while creating EC2 client for").accept(t);
+                                    new AWSReservedInstanceAsyncHandler(service.getHost(),
+                                            currentStageTaskCount, region, context)
+                                            .checkAndPatchReservedInstancesPlans();
+                                    logWarning("client is null for region %s for compute %s",
+                                            region.getRegionName(),
+                                            context.computeDesc.documentSelfLink);
+                                    return;
+                                }
+
+                                ec2Client.describeReservedInstancesAsync(
+                                        new AWSReservedInstanceAsyncHandler(service.getHost(),
+                                                currentStageTaskCount, region, context));
+                            });
+
                 }
             }
         };

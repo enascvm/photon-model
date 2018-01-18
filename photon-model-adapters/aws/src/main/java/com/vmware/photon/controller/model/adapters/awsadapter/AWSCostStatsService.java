@@ -57,7 +57,9 @@ import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.transfer.TransferManager;
+
 import org.apache.commons.collections.CollectionUtils;
+
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
@@ -143,6 +145,7 @@ public class AWSCostStatsService extends StatelessService {
 
     public AWSCostStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AwsClientType.S3_TRANSFER_MANAGER);
     }
 
     protected class AWSCostStatsCreationContext {
@@ -183,18 +186,10 @@ public class AWSCostStatsService extends StatelessService {
         }
     }
 
-    /**
-     * Extend default 'start' logic with loading AWS client.
-     */
     @Override
-    public void handleStart(Operation op) {
-
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.S3_TRANSFER_MANAGER);
-
+    public void handleStart(Operation start) {
         this.executor = getHost().allocateExecutor(this);
-
-        super.handleStart(op);
+        super.handleStart(start);
     }
 
     @Override
@@ -423,34 +418,46 @@ public class AWSCostStatsService extends StatelessService {
             AWSCostStatsCreationStages next) {
         this.executor.submit(() -> {
             OperationContext.restoreOperationContext(statsData.opContext);
-            statsData.s3Client = this.clientManager.getOrCreateS3TransferManager(statsData.parentAuth,
-                    null, this, getFailureConsumer(statsData));
-            if (statsData.s3Client == null) {
-                logWithContext(statsData, Level.WARNING, () -> "Couldn't get S3 client.");
-                postAccumulatedCostStats(statsData, true);
-                return;
-            }
-            String billsBucketName = statsData.computeDesc.customProperties
-                    .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
-            try {
-                if (billsBucketName == null || billsBucketName.isEmpty()) {
-                    billsBucketName = AWSUtils.autoDiscoverBillsBucketName(
-                            statsData.s3Client.getAmazonS3Client(), statsData.accountId);
-                    if (billsBucketName == null || billsBucketName.isEmpty()) {
-                        logWithContext(statsData, Level.WARNING, () -> "Bills Bucket not found.");
-                        postAccumulatedCostStats(statsData, true);
-                        return;
-                    } else {
-                        setCustomProperty(statsData, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
-                                billsBucketName);
-                    }
-                }
-            } catch (Exception e) {
-                getFailureConsumer(statsData).accept(e);
-                return;
-            }
-            statsData.stage = next;
-            handleCostStatsCreationRequest(statsData);
+
+            this.clientManager.getOrCreateS3TransferManagerAsync(statsData.parentAuth, null, this)
+                    .whenComplete((client, t) -> {
+                        if (t != null) {
+                            getFailureConsumer(statsData).accept(t);
+                            return;
+                        }
+
+                        statsData.s3Client = client;
+                        if (statsData.s3Client == null) {
+                            logWithContext(statsData, Level.WARNING, () ->
+                                    "Couldn't get S3 client.");
+                            postAccumulatedCostStats(statsData, true);
+                            return;
+                        }
+                        String billsBucketName = statsData.computeDesc.customProperties
+                                .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
+                        try {
+                            if (billsBucketName == null || billsBucketName.isEmpty()) {
+                                billsBucketName = AWSUtils.autoDiscoverBillsBucketName(
+                                        statsData.s3Client.getAmazonS3Client(),
+                                        statsData.accountId);
+                                if (billsBucketName == null || billsBucketName.isEmpty()) {
+                                    logWithContext(statsData, Level.WARNING, () ->
+                                            "Bills Bucket not found.");
+                                    postAccumulatedCostStats(statsData, true);
+                                    return;
+                                } else {
+                                    setCustomProperty(statsData,
+                                            AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
+                                            billsBucketName);
+                                }
+                            }
+                        } catch (Exception e) {
+                            getFailureConsumer(statsData).accept(e);
+                            return;
+                        }
+                        statsData.stage = next;
+                        handleCostStatsCreationRequest(statsData);
+                    });
         });
     }
 

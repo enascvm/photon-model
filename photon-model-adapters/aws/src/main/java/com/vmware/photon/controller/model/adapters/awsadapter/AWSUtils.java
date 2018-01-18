@@ -107,6 +107,7 @@ import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
 import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
 import com.amazonaws.services.securitytoken.model.Credentials;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
@@ -138,17 +139,56 @@ public class AWSUtils {
     public static final String AWS_REGION_HEADER = "region";
 
     /**
-     * Properties for ARN validation/refreshing.
+     * -Dphoton-model.aws.masterAccount.accessKey
+     * -Dphoton-model.aws.masterAccount.secretKey
+     *
+     * The AWS credentials of the service accepting ARN-based credential requests. These credentials
+     * are used to authenticate to the service account that has been authorized to assume the role
+     * of a user's ARN-based AWS account.
+     *
+     * When a user generates an ARN, they authorize an account ID to assume the role on their
+     * behalf - these keys must correspond to that specific account ID.
      */
-    public static final String AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY = "awsMasterAccountAccessKey";
-    public static final String AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY = "awsMasterAccountSecretKey";
-    public static final String AWS_EXPIRATION_OFFSET_MILLIS_PROPERTY = "awsSessionExpirationOffsetMillis";
+    public static final String AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY = UriPaths.PROPERTY_PREFIX +
+            "aws.masterAccount.accessKey";
+    public static final String AWS_MASTER_ACCOUNT_ACCESS_KEY =
+            System.getProperty(AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY);
+
+    public static final String AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY = UriPaths.PROPERTY_PREFIX +
+            "aws.masterAccount.secretKey";
+    public static final String AWS_MASTER_ACCOUNT_SECRET_KEY =
+            System.getProperty(AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY);
+
+    /**
+     * -Dphoton-model.aws.sessionExpirationOffset.millis
+     *
+     * An offset in milliseconds to "look-ahead" for session credential expiration and allow
+     * credential refreshing. Defaults to 10 minutes (600000 milliseconds).
+     */
+    public static final String AWS_EXPIRATION_OFFSET_MILLIS_PROPERTY = UriPaths.PROPERTY_PREFIX +
+            "aws.sessionExpirationOffset.millis";
     public static final Long AWS_DEFAULT_EXPIRATION_OFFSET_MILLIS = TimeUnit.MINUTES.toMillis(10);
+    public static final Long AWS_EXPIRATION_OFFSET_MILLIS = Long.getLong(
+            AWS_EXPIRATION_OFFSET_MILLIS_PROPERTY, AWS_DEFAULT_EXPIRATION_OFFSET_MILLIS);
+
+    /**
+     * -Dphoton-model.aws.arnDefaultSessionDuration.seconds
+     *
+     * The AWS ARN default session duration (in seconds). Defaults to 1 hour (3600 seconds) if not
+     * set manually.
+     *
+     * This property may be between 15 minutes (900 seconds) and 1 hour (3600 seconds), as set by
+     * AWS.
+     */
     public static final String AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY =
-            "awsArnDefaultSessionDurationSeconds";
-    public static final Long ARN_DEFAULT_SESSION_DURATION_SECONDS = TimeUnit.HOURS.toSeconds(1);
+            UriPaths.PROPERTY_PREFIX + "aws.arnDefaultSessionDuration.seconds";
+    private static final Long ARN_DEFAULT_SESSION_DURATION_SECONDS = TimeUnit.HOURS.toSeconds(1);
     private static final Long AWS_MINIMUM_SESSION_DURATION_SECONDS = TimeUnit.MINUTES.toSeconds(15);
     private static final Long AWS_MAXIMUM_SESSION_DURATION_SECONDS = TimeUnit.HOURS.toSeconds(1);
+    public static final Long AWS_ARN_SESSION_DURATION_SECONDS = Long.getLong(
+            AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY,
+            ARN_DEFAULT_SESSION_DURATION_SECONDS);
+
 
     /**
      * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
@@ -272,7 +312,7 @@ public class AWSUtils {
      * @param region The region to get the AWS client in.
      * @param executorService The executor service to run async services in.
      */
-    public static DeferredResult<AmazonEC2AsyncClient> getAsyncClientAsync(
+    public static DeferredResult<AmazonEC2AsyncClient> getEc2AsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
         OperationContext operationContext = OperationContext.getOperationContext();
@@ -288,7 +328,7 @@ public class AWSUtils {
      *
      * Note: ARN-based credentials will not work unless they have already been exchanged to
      * AWS for session credentials. If unset, this method will fail. To enable ARN-based
-     * credentials, migrate to {@link #getAsyncClientAsync(AuthCredentialsServiceState, String,
+     * credentials, migrate to {@link #getEc2AsyncClient(AuthCredentialsServiceState, String,
      * ExecutorService)}.
      *
      * @param credentials An {@link AuthCredentialsServiceState} object.
@@ -382,7 +422,7 @@ public class AWSUtils {
      * @param region The region to get the AWS client in.
      * @param executorService The executor service to run async services in.
      */
-    public static DeferredResult<AmazonCloudWatchAsyncClient> getStatsAsyncClientAsync(
+    public static DeferredResult<AmazonCloudWatchAsyncClient> getCloudWatchStatsAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService, boolean isMockRequest) {
         OperationContext operationContext = OperationContext.getOperationContext();
@@ -399,8 +439,8 @@ public class AWSUtils {
      *
      * Note: ARN-based credentials will not work unless they have already been exchanged to
      * AWS for session credentials. If unset, this method will fail. To enable ARN-based
-     * credentials, migrate to {@link #getStatsAsyncClientAsync(AuthCredentialsServiceState, String,
-     * ExecutorService, boolean)}.
+     * credentials, migrate to {@link #getCloudWatchStatsAsyncClient(AuthCredentialsServiceState,
+     * String, ExecutorService, boolean)}.
      *
      * @param credentials An {@link AuthCredentialsServiceState} object.
      * @param region The region to get the AWS client in.
@@ -512,7 +552,7 @@ public class AWSUtils {
      * @param region The region to get the AWS client in.
      * @param executorService The executor service to run async services in.
      */
-    public static DeferredResult<AmazonElasticLoadBalancingAsyncClient> getLoadBalancingAsyncClientAsync(
+    public static DeferredResult<AmazonElasticLoadBalancingAsyncClient> getAwsLoadBalancingAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
         OperationContext operationContext = OperationContext.getOperationContext();
@@ -528,7 +568,7 @@ public class AWSUtils {
      *
      * Note: ARN-based credentials will not work unless they have already been exchanged to
      * AWS for session credentials. If unset, this method will fail. To enable ARN-based
-     * credentials, migrate to {@link #getLoadBalancingAsyncClientAsync(AuthCredentialsServiceState,
+     * credentials, migrate to {@link #getAwsLoadBalancingAsyncClient(AuthCredentialsServiceState,
      * String, ExecutorService)}.
      *
      * @param credentials An {@link AuthCredentialsServiceState} object.
@@ -1117,9 +1157,8 @@ public class AWSUtils {
     public static boolean isExpiredCredentials(AuthCredentialsServiceState credentials) {
         return credentials != null && credentials.customProperties != null &&
                 credentials.customProperties.containsKey(SESSION_EXPIRATION_TIME_MICROS_KEY) &&
-                (Long.parseLong(credentials.customProperties.get(SESSION_EXPIRATION_TIME_MICROS_KEY))
-                        - Long.getLong(AWS_EXPIRATION_OFFSET_MILLIS_PROPERTY,
-                        AWS_DEFAULT_EXPIRATION_OFFSET_MILLIS))
+                (Long.parseLong(credentials.customProperties
+                        .get(SESSION_EXPIRATION_TIME_MICROS_KEY)) - AWS_EXPIRATION_OFFSET_MILLIS)
                         < System.currentTimeMillis();
     }
 
@@ -1132,8 +1171,7 @@ public class AWSUtils {
      * designated duration is not within those bounds, it will be set to the nearest boundary.
      */
     private static Integer getArnSessionDurationSeconds() {
-        Long duration = Long.getLong(AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY,
-                ARN_DEFAULT_SESSION_DURATION_SECONDS);
+        Long duration = AWS_ARN_SESSION_DURATION_SECONDS;
 
         if (duration < AWS_MINIMUM_SESSION_DURATION_SECONDS) {
             duration = AWS_MINIMUM_SESSION_DURATION_SECONDS;
@@ -1186,9 +1224,8 @@ public class AWSUtils {
         AWSCredentialsProvider serviceAwsCredentials;
         try {
             serviceAwsCredentials = new AWSStaticCredentialsProvider(
-                    new BasicAWSCredentials(
-                            System.getProperty(AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY),
-                            System.getProperty(AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY)));
+                    new BasicAWSCredentials(AWS_MASTER_ACCOUNT_ACCESS_KEY,
+                            AWS_MASTER_ACCOUNT_SECRET_KEY));
         } catch (Throwable t) {
             return DeferredResult.failed(t);
         }

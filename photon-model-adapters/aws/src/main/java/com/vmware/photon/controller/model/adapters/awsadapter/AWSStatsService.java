@@ -46,6 +46,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -207,10 +208,29 @@ public class AWSStatsService extends StatelessService {
     private void getStats(AWSStatsDataHolder statsData) {
         if (statsData.isComputeHost) {
             // Get host level stats for billing and ec2.
-            getBillingStats(statsData);
+            getAWSAsyncBillingClient(statsData)
+                    .whenComplete((client, t) -> {
+                        if (t != null) {
+                            getFailureConsumer(statsData).accept(t);
+                            return;
+                        }
+
+                        statsData.billingClient = client;
+                        getBillingStats(statsData);
+                    });
             return;
         }
-        getEC2Stats(statsData, METRIC_NAMES, false);
+
+        getAWSAsyncStatsClient(statsData)
+                .whenComplete((client, t) -> {
+                    if (t != null) {
+                        getFailureConsumer(statsData).accept(t);
+                        return;
+                    }
+
+                    statsData.statsClient = client;
+                    getEC2Stats(statsData, METRIC_NAMES, false);
+                });
     }
 
     /**
@@ -222,18 +242,15 @@ public class AWSStatsService extends StatelessService {
      */
     private void getEC2Stats(AWSStatsDataHolder statsData, String[] metricNames,
             boolean isAggregateStats) {
-        if (getAWSAsyncStatsClient(statsData) == null) {
-            return;
-        }
-        Long collectionPeriod = Long.getLong(AWS_COLLECTION_PERIOD_SECONDS, DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
+        Long collectionPeriod = Long.getLong(AWS_COLLECTION_PERIOD_SECONDS,
+                DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
         for (String metricName : metricNames) {
             GetMetricStatisticsRequest metricRequest = new GetMetricStatisticsRequest();
             // get datapoint for the for the passed in time window.
             try {
                 setRequestCollectionWindow(
                         TimeUnit.MINUTES.toMicros(MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES),
-                        statsData.statsRequest.lastCollectionTimeMicrosUtc,
-                        collectionPeriod,
+                        statsData.statsRequest.lastCollectionTimeMicrosUtc, collectionPeriod,
                         metricRequest);
             } catch (IllegalStateException e) {
                 // no data to process. notify parent
@@ -258,16 +275,13 @@ public class AWSStatsService extends StatelessService {
             metricRequest.setMetricName(metricName);
 
             logFine(() -> String.format("Retrieving %s metric from AWS", metricName));
-            AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSStatsHandler(
-                    statsData, metricNames.length, isAggregateStats);
+            AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler =
+                    new AWSStatsHandler(statsData, metricNames.length, isAggregateStats);
             statsData.statsClient.getMetricStatisticsAsync(metricRequest, resultHandler);
         }
     }
 
     private void getBillingStats(AWSStatsDataHolder statsData) {
-        if (getAWSAsyncBillingClient(statsData) == null) {
-            return;
-        }
         Dimension dimension = new Dimension();
         dimension.setName(DIMENSION_CURRENCY);
         dimension.setValue(DIMENSION_CURRENCY_VALUE);
@@ -278,7 +292,8 @@ public class AWSStatsService extends StatelessService {
         // Get all 14 days worth of estimated charges data by default when last collection time is not set.
         // Otherwise set the window to lastCollectionTime - 4 hrs.
         Long lastCollectionTimeForEstimatedCharges = null;
-        Long collectionPeriod = Long.getLong(AWS_COLLECTION_PERIOD_SECONDS, DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
+        Long collectionPeriod = Long.getLong(AWS_COLLECTION_PERIOD_SECONDS,
+                DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
         if (statsData.statsRequest.lastCollectionTimeMicrosUtc != null) {
             lastCollectionTimeForEstimatedCharges =
                     statsData.statsRequest.lastCollectionTimeMicrosUtc
@@ -307,8 +322,8 @@ public class AWSStatsService extends StatelessService {
 
         logFine(() -> String.format("Retrieving %s metric from AWS",
                 AWSConstants.ESTIMATED_CHARGES));
-        AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSBillingStatsHandler(
-                statsData, lastCollectionTimeForEstimatedCharges);
+        AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler =
+                new AWSBillingStatsHandler(statsData, lastCollectionTimeForEstimatedCharges);
         statsData.billingClient.getMetricStatisticsAsync(request, resultHandler);
     }
 
@@ -355,19 +370,17 @@ public class AWSStatsService extends StatelessService {
         }
     }
 
-    private AmazonCloudWatchAsyncClient getAWSAsyncStatsClient(AWSStatsDataHolder statsData) {
-        statsData.statsClient = this.clientManager.getOrCreateCloudWatchClient(statsData.parentAuth,
+    private DeferredResult<AmazonCloudWatchAsyncClient> getAWSAsyncStatsClient(
+            AWSStatsDataHolder statsData) {
+        return this.clientManager.getOrCreateCloudWatchClientAsync(statsData.parentAuth,
                 statsData.computeDesc.description.regionId, this,
-                statsData.statsRequest.isMockRequest, getFailureConsumer(statsData));
-        return statsData.statsClient;
+                statsData.statsRequest.isMockRequest);
     }
 
-    private AmazonCloudWatchAsyncClient getAWSAsyncBillingClient(AWSStatsDataHolder statsData) {
-        statsData.billingClient = this.clientManager.getOrCreateCloudWatchClient(
-                statsData.parentAuth,
-                COST_ZONE_ID, this, statsData.statsRequest.isMockRequest,
-                getFailureConsumer(statsData));
-        return statsData.billingClient;
+    private DeferredResult<AmazonCloudWatchAsyncClient> getAWSAsyncBillingClient(
+            AWSStatsDataHolder statsData) {
+        return this.clientManager.getOrCreateCloudWatchClientAsync(statsData.parentAuth,
+                COST_ZONE_ID, this, statsData.statsRequest.isMockRequest);
     }
 
     /**

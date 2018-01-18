@@ -78,6 +78,7 @@ import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDo
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPatch;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -87,6 +88,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -158,6 +160,7 @@ import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
@@ -271,12 +274,44 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor());
-        this.s3Client = AWSUtils.getS3Client(creds, TestAWSSetupUtils.regionId);
+
+        TestContext ec2WaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+        AWSUtils.getEc2AsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor())
+                .exceptionally(t -> {
+                    ec2WaitContext.fail(t);
+                    throw new CompletionException(t);
+                })
+                .thenAccept(ec2Client -> {
+                    this.client = ec2Client;
+                    ec2WaitContext.complete();
+                });
+        ec2WaitContext.await();
+
+        TestContext s3WaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+        AWSUtils.getS3ClientAsync(creds, TestAWSSetupUtils.regionId, getExecutor())
+                .exceptionally(t -> {
+                    s3WaitContext.fail(t);
+                    throw new CompletionException(t);
+                })
+                .thenAccept(ec2Client -> {
+                    this.s3Client = ec2Client;
+                    s3WaitContext.complete();
+                });
+        s3WaitContext.await();
 
         if (ENABLE_LOAD_BALANCER_ENUMERATION) {
-            this.lbClient = AWSUtils.getLoadBalancingAsyncClient(creds, TestAWSSetupUtils.regionId,
-                    getExecutor());
+            TestContext lbWaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+            AWSUtils.getAwsLoadBalancingAsyncClient(creds, TestAWSSetupUtils.regionId,
+                    getExecutor())
+                    .exceptionally(t -> {
+                        lbWaitContext.fail(t);
+                        throw new CompletionException(t);
+                    })
+                    .thenAccept(ec2Client -> {
+                        this.lbClient = ec2Client;
+                        lbWaitContext.complete();
+                    });
+            lbWaitContext.await();
         }
 
         this.awsTestContext = new HashMap<>();

@@ -98,7 +98,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public enum AWSEBSStorageEnumerationStages {
-        CLIENT, ENUMERATE, ERROR
+        CLIENT, VALIDATE_CLIENT, ENUMERATE, ERROR
     }
 
     public enum EBSVolumesEnumerationSubStage {
@@ -211,7 +211,10 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
     private void handleEnumerationRequest(EBSStorageEnumerationContext aws) {
         switch (aws.stage) {
         case CLIENT:
-            getAWSAsyncClient(aws, AWSEBSStorageEnumerationStages.ENUMERATE);
+            getAWSAsyncClient(aws, AWSEBSStorageEnumerationStages.VALIDATE_CLIENT);
+            break;
+        case VALIDATE_CLIENT:
+            validateClient(aws, AWSEBSStorageEnumerationStages.ENUMERATE);
             break;
         case ENUMERATE:
             switch (aws.request.original.enumerationAction) {
@@ -263,13 +266,28 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(EBSStorageEnumerationContext aws,
             AWSEBSStorageEnumerationStages next) {
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.endpointAuth,
-                aws.request.regionId, this, t -> aws.error = t);
-        if (aws.error != null) {
-            aws.stage = AWSEBSStorageEnumerationStages.ERROR;
-            handleEnumerationRequest(aws);
-            return;
-        }
+        this.clientManager.getOrCreateEC2ClientAsync(aws.endpointAuth, aws.request.regionId, this)
+                .whenComplete((ec2Client, t) -> {
+                    if (t != null) {
+                        aws.error = t;
+                        aws.stage = AWSEBSStorageEnumerationStages.ERROR;
+                        handleEnumerationRequest(aws);
+                        return;
+                    }
+
+                    aws.amazonEC2Client = ec2Client;
+                    aws.stage = next;
+                    handleEnumerationRequest(aws);
+                });
+    }
+
+    /**
+     * Method to validate
+     * @param aws
+     * @param next
+     */
+    private void validateClient(EBSStorageEnumerationContext aws,
+            AWSEBSStorageEnumerationStages next) {
         OperationContext opContext = OperationContext.getOperationContext();
         AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
                 aws.request, aws.operation, this,

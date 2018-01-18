@@ -166,13 +166,17 @@ public class AWSSecurityGroupService extends StatelessService {
         }
 
         DeferredResult<AWSSecurityGroupContext> r = new DeferredResult<>();
-        context.client = new AWSSecurityGroupClient(this,
-                this.clientManager.getOrCreateEC2Client(context.credentials,
-                        context.securityGroup.regionId, this, (t) -> r.fail(t)));
+        this.clientManager.getOrCreateEC2ClientAsync(context.credentials,
+                context.securityGroup.regionId, this)
+                .whenComplete((client, t) -> {
+                    if (t != null) {
+                        r.fail(t);
+                        return;
+                    }
 
-        if (context.client != null) {
-            r.complete(context);
-        }
+                    context.client = new AWSSecurityGroupClient(client);
+                    r.complete(context);
+                });
         return r;
     }
 

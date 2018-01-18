@@ -123,15 +123,16 @@ public class AWSRebootService extends StatelessService {
             new DefaultAdapterContext(this, request)
                     .populateBaseContext(BaseAdapterStage.VMDESC)
                     .whenComplete((c, e) -> {
-                        AmazonEC2AsyncClient client = this.clientManager.getOrCreateEC2Client(
-                                c.endpointAuth, c.child.description.regionId, this,
-                                (t) -> c.taskManager.patchTaskToFailure(t));
-                        if (client != null) {
-                            reboot(client,request,c);
-                        }
-                        // if the client is found to be null, it implies the task is already patched to
-                        // failure in the catch block of getOrCreateEC2Client method (failConsumer.accept()).
-                        // So it is not required to patch it again.
+                        this.clientManager.getOrCreateEC2ClientAsync(c.endpointAuth,
+                                c.child.description.regionId, this)
+                                .whenComplete((client, t) -> {
+                                    if (t != null) {
+                                        c.taskManager.patchTaskToFailure(t);
+                                        return;
+                                    }
+
+                                    reboot(client, request, c);
+                                });
                     });
         }
     }

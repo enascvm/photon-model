@@ -155,23 +155,23 @@ public class AWSNetworkService extends StatelessService {
                 getCredentials(context, AWSNetworkStage.AWS_CLIENT);
                 break;
             case AWS_CLIENT:
-                context.client = new AWSNetworkClient(
-                        this.clientManager.getOrCreateEC2Client(
-                                context.credentials, context.network.regionId,
-                                this, (t) -> {
-                                    context.stage = AWSNetworkStage.FAILED;
-                                    context.error = t;
-                                }));
-                if (context.error != null) {
-                    handleStages(context);
-                    return;
-                }
-                if (context.networkRequest.requestType == NetworkInstanceRequest.InstanceRequestType.CREATE) {
-                    context.stage = AWSNetworkStage.PROVISION_VPC;
-                } else {
-                    context.stage = AWSNetworkStage.REMOVE_GATEWAY;
-                }
-                handleStages(context);
+                this.clientManager.getOrCreateEC2ClientAsync(context.credentials,
+                        context.network.regionId, this)
+                        .whenComplete((ec2Client, t) -> {
+                            if (t != null) {
+                                context.stage = AWSNetworkStage.FAILED;
+                                context.error = t;
+                                handleStages(context);
+                                return;
+                            }
+
+                            if (context.networkRequest.requestType == NetworkInstanceRequest.InstanceRequestType.CREATE) {
+                                context.stage = AWSNetworkStage.PROVISION_VPC;
+                            } else {
+                                context.stage = AWSNetworkStage.REMOVE_GATEWAY;
+                            }
+                            handleStages(context);
+                        });
                 break;
             case PROVISION_VPC:
                 String vpcID = context.client.createVPC(context.network.subnetCIDR);

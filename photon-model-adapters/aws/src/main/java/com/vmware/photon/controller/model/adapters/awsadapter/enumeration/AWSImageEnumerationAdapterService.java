@@ -44,6 +44,7 @@ import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Tag;
+
 import com.google.gson.reflect.TypeToken;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
@@ -283,19 +284,19 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         protected DeferredResult<AWSImageEnumerationContext> createAmazonClient(
                 AWSImageEnumerationContext context) {
-
             DeferredResult<AWSImageEnumerationContext> r = new DeferredResult<>();
+            ((AWSImageEnumerationAdapterService) context.service).clientManager
+                    .getOrCreateEC2ClientAsync(context.endpointAuthState,
+                            context.getEndpointRegion(), context.service)
+                    .whenComplete((ec2Client, t) -> {
+                        if (t != null) {
+                            r.fail(t);
+                            return;
+                        }
 
-            context.awsClient = ((AWSImageEnumerationAdapterService) context.service).clientManager
-                    .getOrCreateEC2Client(
-                            context.endpointAuthState,
-                            context.getEndpointRegion(),
-                            context.service,
-                            r::fail);
-
-            if (context.awsClient != null) {
-                r.complete(context);
-            }
+                        context.awsClient = ec2Client;
+                        r.complete(context);
+                    });
             return r;
         }
 

@@ -385,12 +385,17 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
-        context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
-                context.request.endpointAuth, context.request.regionId,
-                this, (t) -> context.operation.fail(t));
-        if (context.amazonEC2Client != null) {
-            handleNetworkStateChanges(context, next);
-        }
+        this.clientManager.getOrCreateEC2ClientAsync(context.request.endpointAuth,
+                context.request.regionId, this)
+                .whenComplete((ec2Client, t) -> {
+                    if (t != null) {
+                        context.operation.fail(t);
+                        return;
+                    }
+
+                    context.amazonEC2Client = ec2Client;
+                    handleNetworkStateChanges(context, next);
+                });
     }
 
     /**

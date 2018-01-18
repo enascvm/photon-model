@@ -78,6 +78,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
     public static enum AWSEnumerationDeletionStages {
         CLIENT,
+        VALIDATE_CLIENT,
         ENUMERATE,
         ERROR
     }
@@ -175,7 +176,10 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     private void handleEnumerationRequestForDeletion(EnumerationDeletionContext aws) {
         switch (aws.stage) {
         case CLIENT:
-            getAWSAsyncClient(aws, AWSEnumerationDeletionStages.ENUMERATE);
+            getAWSAsyncClient(aws, AWSEnumerationDeletionStages.VALIDATE_CLIENT);
+            break;
+        case VALIDATE_CLIENT:
+            validateClient(aws, AWSEnumerationDeletionStages.ENUMERATE);
             break;
         case ENUMERATE:
             switch (aws.request.original.enumerationAction) {
@@ -220,13 +224,26 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(EnumerationDeletionContext aws,
             AWSEnumerationDeletionStages next) {
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.endpointAuth,
-                aws.request.regionId, this, (t) -> aws.error = t);
-        if (aws.error != null) {
-            aws.stage = AWSEnumerationDeletionStages.ERROR;
-            handleEnumerationRequestForDeletion(aws);
-            return;
-        }
+        this.clientManager.getOrCreateEC2ClientAsync(aws.endpointAuth, aws.request.regionId, this)
+                .whenComplete((ec2Client, t) -> {
+                    if (t != null) {
+                        aws.error = t;
+                        aws.stage = AWSEnumerationDeletionStages.ERROR;
+                        handleEnumerationRequestForDeletion(aws);
+                        return;
+                    }
+
+                    aws.amazonEC2Client = ec2Client;
+                    aws.stage = next;
+                    handleEnumerationRequestForDeletion(aws);
+                });
+    }
+
+    /**
+     * Method to validate an EC2 Client
+     */
+    private void validateClient(EnumerationDeletionContext aws,
+            AWSEnumerationDeletionStages next) {
         OperationContext opContext = OperationContext.getOperationContext();
         AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
                 aws.request, aws.operation, this,

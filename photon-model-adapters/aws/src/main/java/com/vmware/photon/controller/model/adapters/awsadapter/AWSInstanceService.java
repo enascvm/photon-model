@@ -246,28 +246,37 @@ public class AWSInstanceService extends StatelessService {
                         context.taskManager.patchTaskToFailure(t);
                     }
                 };
-                context.amazonEC2Client = this.clientManager
-                        .getOrCreateEC2Client(context.endpointAuth,
-                                getRequestRegionId(context), this, c);
-                if (context.amazonEC2Client == null) {
-                    return;
-                }
-                // now that we have a client lets move onto the next step
-                switch (context.computeRequest.requestType) {
-                case CREATE:
-                    handleAllocation(context, AWSInstanceStage.POPULATE_CONTEXT);
-                    break;
-                case DELETE:
-                    handleAllocation(context, AWSInstanceStage.DELETE);
-                    break;
-                case VALIDATE_CREDENTIALS:
-                    validateAWSCredentials(context);
-                    break;
-                default:
-                    handleError(context,
-                            new IllegalStateException("Unknown AWS provisioning stage: "
-                                    + context.computeRequest.requestType));
-                }
+
+                this.clientManager.getOrCreateEC2ClientAsync(context.endpointAuth,
+                        getRequestRegionId(context), this)
+                        .whenComplete((ec2Client, t) -> {
+                            if (t != null) {
+                                c.accept(t);
+                                return;
+                            }
+
+                            context.amazonEC2Client = ec2Client;
+                            if (context.amazonEC2Client == null) {
+                                return;
+                            }
+
+                            // now that we have a client lets move onto the next step
+                            switch (context.computeRequest.requestType) {
+                            case CREATE:
+                                handleAllocation(context, AWSInstanceStage.POPULATE_CONTEXT);
+                                break;
+                            case DELETE:
+                                handleAllocation(context, AWSInstanceStage.DELETE);
+                                break;
+                            case VALIDATE_CREDENTIALS:
+                                validateAWSCredentials(context);
+                                break;
+                            default:
+                                handleError(context,
+                                        new IllegalStateException("Unknown AWS provisioning stage: "
+                                                + context.computeRequest.requestType));
+                            }
+                        });
                 break;
             case DELETE:
                 deleteInstance(context);

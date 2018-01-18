@@ -372,7 +372,7 @@ public class AWSClientManager {
      *                to be allocated.
      * @return The AWSClient
      */
-    public synchronized DeferredResult<TransferManager> getOrCreateS3TransferManager(
+    public synchronized DeferredResult<TransferManager> getOrCreateS3TransferManagerAsync(
             AuthCredentialsServiceState credentials, String regionId, StatelessService service) {
         if (this.awsClientType != AwsClientType.S3_TRANSFER_MANAGER) {
             return DeferredResult.failed(new UnsupportedOperationException(
@@ -394,7 +394,7 @@ public class AWSClientManager {
      * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
      * AWS for session credentials. If unset, this method will throw a
      * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
-     * credentials, migrate to {@link #getOrCreateS3TransferManager}.
+     * credentials, migrate to {@link #getOrCreateS3TransferManagerAsync}.
      *
      * @param credentials The auth credentials to be used for the client creation
      * @param regionId The region of the AWS client
@@ -442,7 +442,7 @@ public class AWSClientManager {
      *                to be allocated.
      * @return The AWSClient
      */
-    public synchronized DeferredResult<AmazonElasticLoadBalancingAsyncClient> getOrCreateLoadBalancingClient(
+    public synchronized DeferredResult<AmazonElasticLoadBalancingAsyncClient> getOrCreateLoadBalancingClientAsync(
             AuthCredentialsServiceState credentials, String regionId, StatelessService service,
             boolean isMock) {
         if (this.awsClientType != AwsClientType.LOAD_BALANCING) {
@@ -466,7 +466,7 @@ public class AWSClientManager {
      * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
      * AWS for session credentials. If unset, this method will throw a
      * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
-     * credentials, migrate to {@link #getOrCreateLoadBalancingClient}.
+     * credentials, migrate to {@link #getOrCreateLoadBalancingClientAsync}.
      *
      * @param credentials The auth credentials to be used for the client creation
      * @param regionId The region of the AWS client
@@ -542,7 +542,7 @@ public class AWSClientManager {
      *                to be allocated.
      * @return The AWSClient
      */
-    public synchronized DeferredResult<AmazonS3Client> getOrCreateS3Client(
+    public synchronized DeferredResult<AmazonS3Client> getOrCreateS3ClientAsync(
             AuthCredentialsServiceState credentials, String regionId, StatelessService service) {
         if (this.awsClientType != AwsClientType.S3) {
             return DeferredResult.failed(new UnsupportedOperationException(
@@ -564,7 +564,7 @@ public class AWSClientManager {
      * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
      * AWS for session credentials. If unset, this method will throw a
      * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
-     * credentials, migrate to {@link #getOrCreateS3Client}.
+     * credentials, migrate to {@link #getOrCreateS3ClientAsync}.
      *
      * @param credentials The auth credentials to be used for the client creation
      * @param regionId The region of the AWS client

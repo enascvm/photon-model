@@ -42,11 +42,13 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestProvisi
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collector;
@@ -96,6 +98,7 @@ import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.TestRequestSender;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -187,7 +190,18 @@ public class AWSComputeDiskDay2ServiceTest {
         AuthCredentialsService.AuthCredentialsServiceState creds = new AuthCredentialsService.AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor());
+
+        TestContext ec2WaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+        AWSUtils.getEc2AsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor())
+                .exceptionally(t -> {
+                    ec2WaitContext.fail(t);
+                    throw new CompletionException(t);
+                })
+                .thenAccept(ec2Client -> {
+                    this.client = ec2Client;
+                    ec2WaitContext.complete();
+                });
+        ec2WaitContext.await();
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock, this.zoneId );

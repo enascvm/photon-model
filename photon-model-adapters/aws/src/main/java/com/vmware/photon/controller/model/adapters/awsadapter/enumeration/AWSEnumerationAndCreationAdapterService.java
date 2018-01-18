@@ -1023,26 +1023,31 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      */
     private void getAWSAsyncClient(EnumerationCreationContext aws,
             AWSEnumerationCreationStages next) {
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.endpointAuth,
-                aws.request.regionId, this, (t) -> aws.error = t);
-        if (aws.error != null) {
-            aws.stage = AWSEnumerationCreationStages.ERROR;
-            handleEnumerationRequest(aws);
-            return;
-        }
-        OperationContext opContext = OperationContext.getOperationContext();
-        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
-                aws.request, aws.operation, this,
-                (describeAvailabilityZonesResult) -> {
-                    aws.stage = next;
-                    OperationContext.restoreOperationContext(opContext);
-                    handleEnumerationRequest(aws);
-                },
-                t -> {
-                    OperationContext.restoreOperationContext(opContext);
-                    aws.error = t;
-                    aws.stage = AWSEnumerationCreationStages.ERROR;
-                    handleEnumerationRequest(aws);
+        this.clientManager.getOrCreateEC2ClientAsync(aws.endpointAuth, aws.request.regionId, this)
+                .whenComplete((ec2Client, error) -> {
+                    if (error != null) {
+                        aws.error = error;
+                        aws.stage = AWSEnumerationCreationStages.ERROR;
+                        handleEnumerationRequest(aws);
+                        return;
+                    }
+
+                    aws.amazonEC2Client = ec2Client;
+
+                    OperationContext opContext = OperationContext.getOperationContext();
+                    AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager,
+                            aws.endpointAuth, aws.request, aws.operation, this,
+                            describeAvailabilityZonesResult -> {
+                                aws.stage = next;
+                                OperationContext.restoreOperationContext(opContext);
+                                handleEnumerationRequest(aws);
+                            },
+                            t -> {
+                                OperationContext.restoreOperationContext(opContext);
+                                aws.error = t;
+                                aws.stage = AWSEnumerationCreationStages.ERROR;
+                                handleEnumerationRequest(aws);
+                            });
                 });
     }
 

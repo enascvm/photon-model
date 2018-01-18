@@ -184,11 +184,19 @@ public class AWSComputeDiskDay2Service extends StatelessService {
      * create and add the amazon client to the context
      */
     private DeferredResult<DiskContext> setClient(DiskContext context) {
-        context.amazonEC2Client = this.clientManager
-                .getOrCreateEC2Client(context.baseAdapterContext.endpointAuth,
-                        context.baseAdapterContext.child.description.regionId, this,
-                        (t) -> failTask(context, t));
-        return DeferredResult.completed(context);
+        DeferredResult<DiskContext> dr = new DeferredResult<>();
+        this.clientManager.getOrCreateEC2ClientAsync(context.baseAdapterContext.endpointAuth,
+                context.baseAdapterContext.child.description.regionId, this)
+                .whenComplete((ec2Client, t) -> {
+                    if (t != null) {
+                        failTask(context, t);
+                        return;
+                    }
+
+                    context.amazonEC2Client = ec2Client;
+                    dr.complete(context);
+                });
+        return dr;
     }
 
     /**

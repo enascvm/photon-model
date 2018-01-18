@@ -391,17 +391,18 @@ public class AWSLoadBalancerEnumerationAdapterService extends StatelessService {
      * Method to instantiate the AWS Async client for future use
      */
     private void getAWSAsyncClient(LoadBalancerEnumContext context, EnumerationStages next) {
-        if (context.amazonLoadBalancerClient == null) {
-            context.amazonLoadBalancerClient = this.clientManager
-                    .getOrCreateLoadBalancingClient(context.request.endpointAuth, context.regionId,
-                            this, context.request.original.isMockRequest,
-                            (t) -> handleError(context, t));
-            if (context.amazonLoadBalancerClient == null) {
-                return;
-            }
-            context.stage = next;
-        }
-        handleEnumeration(context);
+        this.clientManager.getOrCreateLoadBalancingClientAsync(context.request.endpointAuth,
+                context.regionId, this, context.request.original.isMockRequest)
+                .whenComplete((client, t) -> {
+                    if (t != null) {
+                        handleError(context, t);
+                        return;
+                    }
+
+                    context.amazonLoadBalancerClient = client;
+                    context.stage = next;
+                    handleEnumeration(context);
+                });
     }
 
     @Override

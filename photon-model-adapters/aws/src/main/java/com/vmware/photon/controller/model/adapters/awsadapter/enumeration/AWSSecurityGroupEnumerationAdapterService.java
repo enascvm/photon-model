@@ -221,20 +221,25 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
     /**
      * Method to instantiate the AWS Async client for future use
      */
-    private void getAWSAsyncClient(SecurityGroupEnumContext context,
-            EnumerationStages next) {
-        if (context.amazonEC2Client == null) {
-            context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
-                    context.request.endpointAuth,
-                    context.getEndpointRegion(),
-                    this,
-                    (t) -> handleError(context, t));
-            if (context.amazonEC2Client == null) {
-                return;
-            }
+    private void getAWSAsyncClient(SecurityGroupEnumContext context, EnumerationStages next) {
+        if (context.amazonEC2Client != null) {
             context.stage = next;
+            handleEnumeration(context);
+            return;
         }
-        handleEnumeration(context);
+
+        this.clientManager.getOrCreateEC2ClientAsync(context.request.endpointAuth,
+                context.getEndpointRegion(), this)
+                .whenComplete((ec2Client, t) -> {
+                    if (t != null) {
+                        handleError(context, t);
+                        return;
+                    }
+
+                    context.amazonEC2Client = ec2Client;
+                    context.stage = next;
+                    handleEnumeration(context);
+                });
     }
 
     @Override

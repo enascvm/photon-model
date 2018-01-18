@@ -22,12 +22,14 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.SecurityGroup;
@@ -73,6 +75,7 @@ import com.vmware.photon.controller.model.tasks.ProvisionLoadBalancerTaskService
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -117,12 +120,42 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
             creds.privateKey = this.secretKey;
             creds.privateKeyId = this.accessKey;
-            this.client = AWSUtils
-                    .getLoadBalancingAsyncClient(creds, this.regionId, TestUtils.getExecutor());
-            this.ec2client = AWSUtils
-                    .getAsyncClient(creds, this.regionId, getExecutor());
-            this.securityGroupClient = new AWSSecurityGroupClient(
-                    AWSUtils.getAsyncClient(creds, this.regionId, getExecutor()));
+
+            TestContext lbWaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+            AWSUtils.getAwsLoadBalancingAsyncClient(creds, this.regionId, getExecutor())
+                    .exceptionally(t -> {
+                        lbWaitContext.fail(t);
+                        throw new CompletionException(t);
+                    })
+                    .thenAccept(ec2Client -> {
+                        this.client = ec2Client;
+                        lbWaitContext.complete();
+                    });
+            lbWaitContext.await();
+
+            TestContext ec2WaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+            AWSUtils.getEc2AsyncClient(creds, this.regionId, getExecutor())
+                    .exceptionally(t -> {
+                        ec2WaitContext.fail(t);
+                        throw new CompletionException(t);
+                    })
+                    .thenAccept(ec2Client -> {
+                        this.ec2client = ec2Client;
+                        ec2WaitContext.complete();
+                    });
+            ec2WaitContext.await();
+
+            TestContext secGroupWaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+            AWSUtils.getEc2AsyncClient(creds, this.regionId, getExecutor())
+                    .exceptionally(t -> {
+                        secGroupWaitContext.fail(t);
+                        throw new CompletionException(t);
+                    })
+                    .thenAccept(ec2Client -> {
+                        this.securityGroupClient = new AWSSecurityGroupClient(ec2Client);
+                        secGroupWaitContext.complete();
+                    });
+            secGroupWaitContext.await();
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
             this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);

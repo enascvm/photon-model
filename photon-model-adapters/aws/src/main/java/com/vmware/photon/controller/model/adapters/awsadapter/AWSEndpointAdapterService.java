@@ -13,10 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getEc2AsyncClient;
 import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE;
 import static com.vmware.photon.controller.model.adapters.util.AdapterConstants.PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -117,30 +120,36 @@ public class AWSEndpointAdapterService extends StatelessService {
                     Regions.DEFAULT_REGION.getName() :
                     body.endpointProperties.get(REGION_KEY);
 
-            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
-                    .thenCompose(aVoid -> validateCredentials(credentials, regionId))
-                    .whenComplete((aVoid, e) -> {
-                        if (e != null) {
-                            if (e instanceof CompletionException) {
-                                e = e.getCause();
-                            }
-
-                            ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
-                            callback.accept(r, e);
+            getEc2AsyncClient(credentials, regionId, this.clientManager.getExecutor())
+                    .whenComplete((ec2Client, t) -> {
+                        if (t != null) {
+                            callback.accept(null, t);
                             return;
                         }
-                        callback.accept(null, null);
+
+                        validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
+                                .thenCompose(aVoid -> validateCredentials(ec2Client))
+                                .whenComplete((aVoid, e) -> {
+                                    if (e != null) {
+                                        if (e instanceof CompletionException) {
+                                            e = e.getCause();
+                                        }
+
+                                        ServiceErrorResponse r = Utils
+                                                .toServiceErrorResponse(e);
+                                        callback.accept(r, e);
+                                        return;
+                                    }
+                                    callback.accept(null, null);
+                                });
                     });
         };
     }
 
-    private DeferredResult<Void> validateCredentials(
-            AuthCredentialsServiceState credentials, String regionId) {
-        AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(credentials, regionId,
-                this.clientManager.getExecutor());
-
-        AWSDeferredResultAsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult> asyncHandler = new AWSDeferredResultAsyncHandler<>(
-                this, "Validate Credentials");
+    private DeferredResult<Void> validateCredentials(AmazonEC2AsyncClient client) {
+        AWSDeferredResultAsyncHandler<DescribeAvailabilityZonesRequest,
+                DescribeAvailabilityZonesResult> asyncHandler =
+                new AWSDeferredResultAsyncHandler<>(this, "Validate Credentials");
 
         client.describeAvailabilityZonesAsync(asyncHandler);
 
@@ -189,6 +198,13 @@ public class AWSEndpointAdapterService extends StatelessService {
             } else {
                 c.privateKeyId = r.getRequired(PRIVATE_KEYID_KEY);
             }
+            c.customProperties = new HashMap<>();
+            r.get(ARN_KEY).ifPresent(arn -> {
+                c.customProperties.put(ARN_KEY, arn);
+            });
+            r.get(EXTERNAL_ID_KEY).ifPresent(externalId -> {
+                c.customProperties.put(EXTERNAL_ID_KEY, externalId);
+            });
             c.type = "accessKey";
         };
     }
@@ -246,8 +262,9 @@ public class AWSEndpointAdapterService extends StatelessService {
 
             Boolean mock = Boolean.valueOf(r.getRequired(EndpointAdapterUtils.MOCK_REQUEST));
             if (!mock) {
-                String accountId = getAccountId(r.getRequired(PRIVATE_KEYID_KEY),
-                        r.getRequired(PRIVATE_KEY_KEY));
+                String accountId = getAccountId(r.get(ARN_KEY).orElse(null),
+                        r.get(PRIVATE_KEYID_KEY).orElse(null),
+                        r.get(PRIVATE_KEY_KEY).orElse(null));
                 if (accountId != null && !accountId.isEmpty()) {
                     addEntryToCustomProperties(c, AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
                     EndpointState es = new EndpointState();
@@ -283,6 +300,42 @@ public class AWSEndpointAdapterService extends StatelessService {
     }
 
     /**
+     * Method to get the aws account ID from the specified credentials. If the ARN is set, it will
+     * retrieve the account ID from the ARN directly. Otherwise, will attempt via the private key ID
+     * and private key.
+     *
+     * @param arn An Amazon Resource Name
+     * @param privateKeyId An AWS account private key ID.
+     * @param privateKey An AWS account private key.
+     * @return
+     */
+    private String getAccountId(String arn, String privateKeyId, String privateKey) {
+        if (arn != null) {
+            return getAccountId(arn);
+        }
+
+        return getAccountId(privateKeyId, privateKey);
+    }
+
+    /**
+     * Splits the ARN key to retrieve the account ID.
+     *
+     * An ARN is of the format arn:aws:service:region:account:resource -> so limiting the split to
+     * 6 words and extracting the accountId which is 5th one in list. If the user is not authorized
+     * to perform iam:GetUser on that resource,still error mesage will have accountId
+     *
+     * @param arn An Amazon Resource Name.
+     * @return The account ID.
+     */
+    private String getAccountId(String arn) {
+        if (arn == null) {
+            return null;
+        }
+
+        return arn.split(":", 6)[4];
+    }
+
+    /**
      * Method gets the aws accountId from the specified credentials.
      *
      * @param privateKeyId
@@ -308,13 +361,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             if ((iamClient.getUser() != null) && (iamClient.getUser().getUser() != null)
                     && (iamClient.getUser().getUser().getArn() != null)) {
 
-                String arn = iamClient.getUser().getUser().getArn();
-                /*
-                 * arn:aws:service:region:account:resource -> so limiting the split to 6 words and
-                 * extracting the accountId which is 5th one in list. If the user is not authorized
-                 * to perform iam:GetUser on that resource,still error mesage will have accountId
-                 */
-                userId = arn.split(":", 6)[4];
+                return getAccountId(iamClient.getUser().getUser().getArn());
             }
         } catch (AmazonServiceException ex) {
             if (ex.getErrorCode().compareTo("AccessDenied") == 0) {
@@ -322,14 +369,13 @@ public class AWSEndpointAdapterService extends StatelessService {
                 userId = msg.split(":", 7)[5];
             } else {
                 logSevere("Exception getting the accountId %s", ex);
-
             }
         }
         return userId;
     }
 
     private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req, Operation op) {
-        String accountId = getAccountId(
+        String accountId = getAccountId(req.endpointProperties.get(ARN_KEY),
                 req.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEYID_KEY),
                 req.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEY_KEY));
         if (accountId != null && !accountId.isEmpty()) {

@@ -227,13 +227,17 @@ public class AWSSubnetService extends StatelessService {
         }
 
         DeferredResult<AWSSubnetContext> r = new DeferredResult<>();
-        context.client = new AWSNetworkClient(this,
-                this.clientManager.getOrCreateEC2Client(
-                        context.credentials, context.parentNetwork.regionId,
-                        this, (t) -> r.fail(t)));
-        if (context.client != null) {
-            r.complete(context);
-        }
+        this.clientManager.getOrCreateEC2ClientAsync(context.credentials,
+                context.parentNetwork.regionId, this)
+                .whenComplete((client, t) -> {
+                    if (t != null) {
+                        r.fail(t);
+                        return;
+                    }
+
+                    context.client = new AWSNetworkClient(client);
+                    r.complete(context);
+                });
         return r;
     }
 

@@ -28,9 +28,11 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.amazonaws.handlers.AsyncHandler;
+import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.AvailabilityZone;
 import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
@@ -161,24 +163,31 @@ public class AWSDiskService extends StatelessService {
                 getCredentials(context, AwsDiskStage.CLIENT);
                 break;
             case CLIENT:
-                context.client = new AwsDiskClient(this.clientManager.getOrCreateEC2Client(
-                        context.credentials, context.disk.regionId, this, (t) -> {
-                            context.stage = AwsDiskStage.FAILED;
-                            context.error = t;
-                        }
-                ));
-                if (context.error != null) {
-                    handleStages(context);
-                    return;
-                }
-                if (context.diskRequest.requestType == DiskInstanceRequest.DiskRequestType.CREATE) {
-                    context.stage = AwsDiskStage.CREATE;
-                } else if (context.diskRequest.requestType
-                        == DiskInstanceRequest.DiskRequestType.DELETE) {
-                    context.stage = AwsDiskStage.DELETE;
-                }
+                BiConsumer<AmazonEC2AsyncClient, Throwable> getEc2Handler = (ec2Client, t) -> {
+                    if (t != null) {
+                        context.stage = AwsDiskStage.FAILED;
+                        context.error = t;
+                        handleStages(context);
+                        return;
+                    }
 
-                handleStages(context);
+                    context.client = new AwsDiskClient(ec2Client);
+                    switch (context.diskRequest.requestType) {
+                    case CREATE:
+                        context.stage = AwsDiskStage.CREATE;
+                        break;
+                    case DELETE:
+                        context.stage = AwsDiskStage.DELETE;
+                        break;
+                    default:
+                        break;
+                    }
+
+                    handleStages(context);
+                };
+
+                this.clientManager.getOrCreateEC2ClientAsync(context.credentials,
+                        context.disk.regionId, this).whenComplete(getEc2Handler);
                 break;
             case CREATE:
                 createDisk(context);

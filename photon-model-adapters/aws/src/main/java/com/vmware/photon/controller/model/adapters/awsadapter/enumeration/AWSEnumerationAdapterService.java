@@ -13,6 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService.AWSEnumerationStages.GET_REGIONS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService.AWSEnumerationStages.KICKOFF_ENUMERATION;
+import static com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService.AWSEnumerationStages.PATCH_COMPLETION;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -78,7 +82,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
                 Operation op) {
             super(service, request);
             this.request = request;
-            this.stage = AWSEnumerationStages.GET_REGIONS;
+            this.stage = GET_REGIONS;
             this.regions = new ArrayList<>();
             this.operation = op;
         }
@@ -162,10 +166,10 @@ public class AWSEnumerationAdapterService extends StatelessService {
     public void handleEnumerationRequest(EnumerationContext aws) {
         switch (aws.stage) {
         case GET_REGIONS:
-            getRegions(aws, AWSEnumerationStages.KICKOFF_ENUMERATION);
+            getRegions(aws, KICKOFF_ENUMERATION);
             break;
         case KICKOFF_ENUMERATION:
-            kickOffEnumerationWorkFlows(aws, AWSEnumerationStages.PATCH_COMPLETION);
+            kickOffEnumerationWorkFlows(aws, PATCH_COMPLETION);
             break;
         case PATCH_COMPLETION:
             setOperationDurationStat(aws.operation);
