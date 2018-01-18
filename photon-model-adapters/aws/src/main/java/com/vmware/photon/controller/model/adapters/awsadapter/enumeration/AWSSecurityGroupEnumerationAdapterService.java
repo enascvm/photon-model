@@ -207,8 +207,12 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     }
                 }
             }
+
             // Add internalTagLink ("ec2_security_group") to the enumerated security group.
-            stateHolder.internalTagLinks.add(this.internalTagLink);
+            if (this.internalTagLink != null) {
+                stateHolder.internalTagLinks.add(this.internalTagLink);
+            }
+
             return DeferredResult.completed(stateHolder);
         }
 

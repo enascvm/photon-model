@@ -203,7 +203,7 @@ public class TagsUtil {
             // all local tag links which do not have remote correspondents and are external will be
             // removed from the currentState's tagLinks list
             Set<String> tagLinksToRemove = new HashSet<>();
-            if (localState.tagLinks == null) {
+            if (localState.tagLinks == null || localState.tagLinks.isEmpty()) {
                 removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
             } else {
                 tagLinksToRemove.addAll(localState.tagLinks);
@@ -212,15 +212,13 @@ public class TagsUtil {
                 // the result should not contain the local tags which are removed remotely
                 resultTagLinks.removeAll(tagLinksToRemove);
 
+                if (tagLinksToRemove.contains(null)) {
+                    tagLinksToRemove.remove(null);
+                }
+
                 if (tagLinksToRemove.isEmpty()) {
-
                     removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
-
                 } else {
-                    if (tagLinksToRemove.contains(null)) {
-                        tagLinksToRemove.remove(null);
-                    }
-
                     // identify which of the local tag states to remove are external
                     Query.Builder qBuilder = Query.Builder.create()
                             // Add documents' class
