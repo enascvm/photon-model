@@ -16,8 +16,11 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SESSION_TOKEN_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 
 import java.util.EnumSet;
@@ -51,6 +54,9 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
     public String accessKey = "access-key";
     public String secretKey = "secret-key";
     public String regionId = "us-east-1";
+    public String sessionToken = "session-token";
+    public String arn = "mock-arn";
+    public String externalId = "mock-external-id";
     public boolean isMock = true;
 
     @Before
@@ -82,6 +88,17 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
         new EndpointServiceTests(this.host, this.regionId, this.isMock,
                 ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
                 .testValidateCredentials(createEndpointState());
+    }
+
+    @Test
+    public void testValidateSessionCredentials() throws Throwable {
+        EndpointState endpointState = createEndpointState();
+        endpointState.endpointProperties.put(SESSION_TOKEN_KEY, this.sessionToken);
+        endpointState.endpointProperties.put(ARN_KEY, this.arn);
+        endpointState.endpointProperties.put(EXTERNAL_ID_KEY, this.externalId);
+        new EndpointServiceTests(this.host, this.regionId, this.isMock,
+                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
+                .testValidateCredentials(endpointState);
     }
 
     @Test

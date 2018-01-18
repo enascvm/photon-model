@@ -16,6 +16,10 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SESSION_EXPIRATION_TIME_MICROS_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SESSION_TOKEN_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MOCK_HOST_SYSTEM_PROPERTY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_S3PROXY_SYSTEM_PROPERTY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
@@ -32,6 +36,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_GENERAL_PURPOSED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_SECURITY_GROUP_NAME;
+import static com.vmware.xenon.common.Operation.STATUS_CODE_FORBIDDEN;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.IOException;
@@ -42,6 +47,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -54,8 +60,10 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.SdkBaseException;
+import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.BasicSessionCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Regions;
@@ -92,6 +100,12 @@ import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceAsync;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceAsyncClientBuilder;
+import com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException;
+import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
+import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
+import com.amazonaws.services.securitytoken.model.Credentials;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -102,7 +116,9 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -120,6 +136,19 @@ public class AWSUtils {
     public static final String AWS_MOCK_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
     public static final String AWS_MOCK_LOAD_BALANCING_ENDPOINT = "/aws-mock/load-balancing-endpoint/";
     public static final String AWS_REGION_HEADER = "region";
+
+    /**
+     * Properties for ARN validation/refreshing.
+     */
+    public static final String AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY = "awsMasterAccountAccessKey";
+    public static final String AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY = "awsMasterAccountSecretKey";
+    public static final String AWS_EXPIRATION_OFFSET_MILLIS_PROPERTY = "awsSessionExpirationOffsetMillis";
+    public static final Long AWS_DEFAULT_EXPIRATION_OFFSET_MILLIS = TimeUnit.MINUTES.toMillis(10);
+    public static final String AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY =
+            "awsArnDefaultSessionDurationSeconds";
+    public static final Long ARN_DEFAULT_SESSION_DURATION_SECONDS = TimeUnit.HOURS.toSeconds(1);
+    private static final Long AWS_MINIMUM_SESSION_DURATION_SECONDS = TimeUnit.MINUTES.toSeconds(15);
+    private static final Long AWS_MAXIMUM_SESSION_DURATION_SECONDS = TimeUnit.HOURS.toSeconds(1);
 
     /**
      * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
@@ -232,6 +261,40 @@ public class AWSUtils {
         IS_S3_PROXY = isAwsS3Proxy;
     }
 
+    /**
+     * Method to get an EC2 Async Client.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
+    public static DeferredResult<AmazonEC2AsyncClient> getAsyncClientAsync(
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return checkAndRefreshCredentials(credentials, region, executorService)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getAsyncClient(refreshedCredentials, region, executorService);
+                });
+    }
+
+    /**
+     * Method to get an EC2 Async Client.
+     *
+     * Note: ARN-based credentials will not work unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will fail. To enable ARN-based
+     * credentials, migrate to {@link #getAsyncClientAsync(AuthCredentialsServiceState, String,
+     * ExecutorService)}.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
     public static AmazonEC2AsyncClient getAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
@@ -243,14 +306,10 @@ public class AWSUtils {
                 DEFAULT_MAX_ERROR_RETRY,
                 false));
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-                new BasicAWSCredentials(credentials.privateKeyId,
-                        EncryptionUtils.decrypt(credentials.privateKey)));
-
         AmazonEC2AsyncClientBuilder ec2AsyncClientBuilder = AmazonEC2AsyncClientBuilder
                 .standard()
                 .withClientConfiguration(configuration)
-                .withCredentials(awsStaticCredentialsProvider)
+                .withCredentials(getAwsStaticCredentialsProvider(credentials))
                 .withExecutorFactory(() -> executorService);
 
         if (region == null) {
@@ -293,7 +352,8 @@ public class AWSUtils {
                     public void onError(Exception e) {
                         if (e instanceof AmazonServiceException) {
                             AmazonServiceException ase = (AmazonServiceException) e;
-                            if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED) {
+                            if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED ||
+                                    ase.getStatusCode() == STATUS_CODE_FORBIDDEN) {
                                 clientManager.markEc2ClientInvalid(service, credentials,
                                         context.regionId);
                                 op.complete();
@@ -311,6 +371,41 @@ public class AWSUtils {
                 });
     }
 
+    /**
+     * Method to get a CloudWatch Async Client.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
+    public static DeferredResult<AmazonCloudWatchAsyncClient> getStatsAsyncClientAsync(
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService, boolean isMockRequest) {
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return checkAndRefreshCredentials(credentials, region, executorService)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getStatsAsyncClient(refreshedCredentials, region, executorService,
+                            isMockRequest);
+                });
+    }
+
+    /**
+     * Method to get a CloudWatch Async Client.
+     *
+     * Note: ARN-based credentials will not work unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will fail. To enable ARN-based
+     * credentials, migrate to {@link #getStatsAsyncClientAsync(AuthCredentialsServiceState, String,
+     * ExecutorService, boolean)}.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
     public static AmazonCloudWatchAsyncClient getStatsAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService, boolean isMockRequest) {
@@ -321,15 +416,12 @@ public class AWSUtils {
                 DEFAULT_MAX_ERROR_RETRY,
                 false));
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-                new BasicAWSCredentials(credentials.privateKeyId,
-                        EncryptionUtils.decrypt(credentials.privateKey)));
-
-        AmazonCloudWatchAsyncClientBuilder amazonCloudWatchAsyncClientBuilder = AmazonCloudWatchAsyncClientBuilder
-                .standard()
-                .withClientConfiguration(configuration)
-                .withCredentials(awsStaticCredentialsProvider)
-                .withExecutorFactory(() -> executorService);
+        AmazonCloudWatchAsyncClientBuilder amazonCloudWatchAsyncClientBuilder =
+                AmazonCloudWatchAsyncClientBuilder
+                        .standard()
+                        .withClientConfiguration(configuration)
+                        .withCredentials(getAwsStaticCredentialsProvider(credentials))
+                        .withExecutorFactory(() -> executorService);
 
         if (region == null) {
             region = Regions.DEFAULT_REGION.getName();
@@ -348,15 +440,45 @@ public class AWSUtils {
         return (AmazonCloudWatchAsyncClient) amazonCloudWatchAsyncClientBuilder.build();
     }
 
+    /**
+     * Method to get an S3 transfer manager client.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
+    public static DeferredResult<TransferManager> getS3TransferManagerAsync(
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return checkAndRefreshCredentials(credentials, region, executorService)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getS3TransferManager(refreshedCredentials, region, executorService);
+                });
+    }
+
+    /**
+     * Method to get an S3 transfer manager client.
+     *
+     * Note: ARN-based credentials will not work unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will fail. To enable ARN-based
+     * credentials, migrate to {@link #getS3TransferManagerAsync(AuthCredentialsServiceState,
+     * String, ExecutorService)}
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
     public static TransferManager getS3TransferManager(AuthCredentialsServiceState credentials,
             String region, ExecutorService executorService) {
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-                new BasicAWSCredentials(credentials.privateKeyId,
-                        EncryptionUtils.decrypt(credentials.privateKey)));
-
         AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder.standard()
-                .withCredentials(awsStaticCredentialsProvider)
+                .withCredentials(getAwsStaticCredentialsProvider(credentials))
                 .withForceGlobalBucketAccessEnabled(true);
 
         if (region == null) {
@@ -379,6 +501,40 @@ public class AWSUtils {
         return transferManagerBuilder.build();
     }
 
+    /**
+     * Method to get a load balancing async client.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
+    public static DeferredResult<AmazonElasticLoadBalancingAsyncClient> getLoadBalancingAsyncClientAsync(
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return checkAndRefreshCredentials(credentials, region, executorService)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getLoadBalancingAsyncClient(refreshedCredentials, region, executorService);
+                });
+    }
+
+    /**
+     * Method to get a load balancing async client.
+     *
+     * Note: ARN-based credentials will not work unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will fail. To enable ARN-based
+     * credentials, migrate to {@link #getLoadBalancingAsyncClientAsync(AuthCredentialsServiceState,
+     * String, ExecutorService)}.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
     public static AmazonElasticLoadBalancingAsyncClient getLoadBalancingAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
@@ -389,15 +545,12 @@ public class AWSUtils {
                 DEFAULT_MAX_ERROR_RETRY,
                 false));
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-                new BasicAWSCredentials(credentials.privateKeyId,
-                        EncryptionUtils.decrypt(credentials.privateKey)));
-
-        AmazonElasticLoadBalancingAsyncClientBuilder amazonElasticLoadBalancingAsyncClientBuilder = AmazonElasticLoadBalancingAsyncClientBuilder
-                .standard()
-                .withClientConfiguration(configuration)
-                .withCredentials(awsStaticCredentialsProvider)
-                .withExecutorFactory(() -> executorService);
+        AmazonElasticLoadBalancingAsyncClientBuilder amazonElasticLoadBalancingAsyncClientBuilder =
+                AmazonElasticLoadBalancingAsyncClientBuilder
+                        .standard()
+                        .withClientConfiguration(configuration)
+                        .withCredentials(getAwsStaticCredentialsProvider(credentials))
+                        .withExecutorFactory(() -> executorService);
 
         if (region == null) {
             region = Regions.DEFAULT_REGION.getName();
@@ -416,6 +569,39 @@ public class AWSUtils {
                 .build();
     }
 
+    /**
+     * Method to get an S3 Async Client.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the AWS client in.
+     * @param executorService The executor service to run async services in.
+     */
+    public static DeferredResult<AmazonS3Client> getS3ClientAsync(
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return checkAndRefreshCredentials(credentials, region, executorService)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getS3Client(refreshedCredentials, region);
+                });
+    }
+
+    /**
+     * Method to get an S3 Async Client.
+     *
+     * Note: ARN-based credentials will not work unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will fail. To enable ARN-based
+     * credentials, migrate to {@link #getS3ClientAsync(AuthCredentialsServiceState, String,
+     * ExecutorService)}.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param regionId The region to get the AWS client in.
+     */
     public static AmazonS3Client getS3Client(AuthCredentialsServiceState credentials,
             String regionId) {
 
@@ -425,14 +611,10 @@ public class AWSUtils {
                 DEFAULT_MAX_ERROR_RETRY,
                 false));
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-                new BasicAWSCredentials(credentials.privateKeyId,
-                        EncryptionUtils.decrypt(credentials.privateKey)));
-
         AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder
                 .standard()
                 .withClientConfiguration(configuration)
-                .withCredentials(awsStaticCredentialsProvider)
+                .withCredentials(getAwsStaticCredentialsProvider(credentials))
                 .withRegion(regionId);
 
         if (isAwsClientMock()) {
@@ -845,5 +1027,201 @@ public class AWSUtils {
                 throw new IllegalArgumentException(message);
             }
         }
+    }
+
+    /**
+     * Generates an AWS credentials provider, determining if to use general basic authentication or
+     * if the credentials are session-based.
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     */
+    private static AWSStaticCredentialsProvider getAwsStaticCredentialsProvider(
+            AuthCredentialsServiceState credentials) throws AWSSecurityTokenServiceException {
+
+        // If the credentials are non-session based, then simply generate basic AWS credential set
+        // and return them.
+        if (credentials.customProperties == null ||
+                !credentials.customProperties.containsKey(SESSION_TOKEN_KEY)) {
+            return new AWSStaticCredentialsProvider(
+                    new BasicAWSCredentials(credentials.privateKeyId,
+                            EncryptionUtils.decrypt(credentials.privateKey)));
+        }
+
+        return new AWSStaticCredentialsProvider(
+                new BasicSessionCredentials(credentials.privateKeyId,
+                        EncryptionUtils.decrypt(credentials.privateKey),
+                        credentials.customProperties.get(SESSION_TOKEN_KEY)));
+    }
+
+    /**
+     * Helper method to check if a set of credentials have expired and if so, retrieves a set of
+     * refreshed credentials. If not, then returns the current credentials set.
+     *
+     * @param credentials An {@link AuthCredentialsServiceState} object.
+     * @param region The region to get the credentials in.
+     * @param executorService The executor service to run async services in.
+     */
+    public static DeferredResult<AuthCredentialsServiceState> checkAndRefreshCredentials(
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
+        // If the credentials are non-ARN based, or they are not yet expired, then they may be
+        // returned automatically.
+        if (credentials.customProperties == null ||
+                (!credentials.customProperties.containsKey(ARN_KEY) &&
+                        !credentials.customProperties.containsKey(SESSION_TOKEN_KEY)) ||
+                (credentials.customProperties.containsKey(SESSION_EXPIRATION_TIME_MICROS_KEY) &&
+                        !isExpiredCredentials(credentials))) {
+            return DeferredResult.completed(credentials);
+        }
+
+        return getArnSessionCredentialsAsync(credentials.customProperties.get(ARN_KEY),
+                credentials.customProperties.get(EXTERNAL_ID_KEY), region, executorService)
+                .thenApply(AWSUtils::awsSessionCredentialsToAuthCredentialsState);
+    }
+
+    /**
+     * A helper method to convert an AWS {@link Credentials} object to an
+     * {@link AuthCredentialsServiceState} object. This will use the customProperties
+     * `SESSION_TOKEN_KEY` and `SESSION_EXPIRATION_TIME_MICROS_KEY` to represent the temporary
+     * nature of these credentials.
+     */
+    public static AuthCredentialsServiceState awsSessionCredentialsToAuthCredentialsState(
+            Credentials credentials) {
+        AuthCredentialsServiceState authCredentials = new AuthCredentialsServiceState();
+        authCredentials.privateKeyId = credentials.getAccessKeyId();
+        authCredentials.privateKey = credentials.getSecretAccessKey();
+        authCredentials.customProperties = new HashMap<>();
+        authCredentials.customProperties.put(SESSION_TOKEN_KEY, credentials.getSessionToken());
+        authCredentials.customProperties.put(SESSION_EXPIRATION_TIME_MICROS_KEY,
+                String.valueOf(String.valueOf(credentials.getExpiration().getTime())));
+        return authCredentials;
+    }
+
+    /**
+     * A helper method to check if a set of credentials are ARN credentials, assumed via whether
+     * or not the ARN_KEY custom property is set.
+     *
+     * @return True if ARN_KEY is set.
+     */
+    public static boolean isArnCredentials(AuthCredentialsServiceState credentials) {
+        return credentials.customProperties != null &&
+                credentials.customProperties.containsKey(ARN_KEY);
+    }
+
+    /**
+     * Checks if a set of credentials have the key `SESSION_EXPIRATION_TIME_MICROS_KEY` and if so,
+     * whether or not that value is less than or equal to the current system time, minus the
+     * property set at {@link #AWS_EXPIRATION_OFFSET_MILLIS_PROPERTY}.
+     *
+     * @return True if the credentials are expired, false otherwise.
+     */
+    public static boolean isExpiredCredentials(AuthCredentialsServiceState credentials) {
+        return credentials != null && credentials.customProperties != null &&
+                credentials.customProperties.containsKey(SESSION_EXPIRATION_TIME_MICROS_KEY) &&
+                (Long.parseLong(credentials.customProperties.get(SESSION_EXPIRATION_TIME_MICROS_KEY))
+                        - Long.getLong(AWS_EXPIRATION_OFFSET_MILLIS_PROPERTY,
+                        AWS_DEFAULT_EXPIRATION_OFFSET_MILLIS))
+                        < System.currentTimeMillis();
+    }
+
+    /**
+     * Returns the designated ARN credentials session duration in seconds. By default, it returns
+     * 3600 (1 hour), which is the maximum AWS permits. This is toggleable via system property
+     * {@link #AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY}.
+     *
+     * The value may be between 900 seconds (15 minutes) and 3600 seconds (1 hour). If the
+     * designated duration is not within those bounds, it will be set to the nearest boundary.
+     */
+    private static Integer getArnSessionDurationSeconds() {
+        Long duration = Long.getLong(AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY,
+                ARN_DEFAULT_SESSION_DURATION_SECONDS);
+
+        if (duration < AWS_MINIMUM_SESSION_DURATION_SECONDS) {
+            duration = AWS_MINIMUM_SESSION_DURATION_SECONDS;
+            Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(), Level.WARNING,
+                    "AWS ARN session duration may not be lower than 900 seconds. Defaulting to 900 seconds.");
+        }
+
+        if (duration > AWS_MAXIMUM_SESSION_DURATION_SECONDS) {
+            duration = AWS_MAXIMUM_SESSION_DURATION_SECONDS;
+            Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(), Level.WARNING,
+                    "AWS ARN session duration may not be greater than 3600 seconds. Defaulting to 3600 seconds.");
+        }
+
+        return Math.toIntExact(duration);
+    }
+
+    /**
+     * Authenticates and returns a DeferredResult set of session credentials for a valid ARN that
+     * authorizes this system's account ID (validated through
+     * {@link #AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY} and
+     * {@link #AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY}) and the externalId parameter.
+     *
+     * If the system properties are unset, then this call will automatically fail.
+     *
+     * @param arn The Amazon Resource Name to validate.
+     * @param externalId The external ID this ARN has authorized.
+     * @param executorService The executor service to issue the request.
+     */
+    public static DeferredResult<Credentials> getArnSessionCredentialsAsync(String arn,
+            String externalId, ExecutorService executorService) {
+        return getArnSessionCredentialsAsync(arn, externalId, Regions.DEFAULT_REGION.getName(),
+                executorService);
+    }
+
+    /**
+     * Authenticates and returns a DeferredResult set of session credentials for a valid ARN that
+     * authorizes this system's account ID (validated through
+     * {@link #AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY} and
+     * {@link #AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY}) and the externalId parameter.
+     *
+     * If the system properties are unset, then this call will automatically fail.
+     *
+     * @param arn The Amazon Resource Name to validate.
+     * @param externalId The external ID this ARN has authorized.
+     * @param region The region to validate within.
+     * @param executorService The executor service to issue the request.
+     */
+    public static DeferredResult<Credentials> getArnSessionCredentialsAsync(String arn,
+            String externalId, String region, ExecutorService executorService) {
+        AWSCredentialsProvider serviceAwsCredentials;
+        try {
+            serviceAwsCredentials = new AWSStaticCredentialsProvider(
+                    new BasicAWSCredentials(
+                            System.getProperty(AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY),
+                            System.getProperty(AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY)));
+        } catch (Throwable t) {
+            return DeferredResult.failed(t);
+        }
+
+        AWSSecurityTokenServiceAsync awsSecurityTokenServiceAsync =
+                AWSSecurityTokenServiceAsyncClientBuilder.standard()
+                        .withRegion(region)
+                        .withCredentials(serviceAwsCredentials)
+                        .withExecutorFactory(() -> executorService)
+                        .build();
+
+        AssumeRoleRequest assumeRoleRequest = new AssumeRoleRequest()
+                .withRoleArn(arn)
+                .withRoleSessionName(UUID.randomUUID().toString())
+                .withDurationSeconds(getArnSessionDurationSeconds())
+                .withExternalId(externalId);
+
+        DeferredResult<AssumeRoleResult> r = new DeferredResult<>();
+        OperationContext operationContext = OperationContext.getOperationContext();
+        awsSecurityTokenServiceAsync.assumeRoleAsync(assumeRoleRequest,
+                new AsyncHandler<AssumeRoleRequest, AssumeRoleResult>() {
+                    @Override
+                    public void onSuccess(AssumeRoleRequest request, AssumeRoleResult result) {
+                        OperationContext.restoreOperationContext(operationContext);
+                        r.complete(result);
+                    }
+
+                    @Override
+                    public void onError(Exception ex) {
+                        OperationContext.restoreOperationContext(operationContext);
+                        r.fail(ex);
+                    }
+                });
+        return r.thenApply(AssumeRoleResult::getCredentials);
     }
 }

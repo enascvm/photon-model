@@ -44,6 +44,12 @@ public class EndpointConfigRequest extends ResourceRequest {
     public static final String TOKEN_REFERENCE_KEY = "tokenReference";
     public static final String REGION_KEY = "regionId";
     public static final String ZONE_KEY = "zoneId";
+
+    public static final String ARN_KEY = "arn";
+    public static final String SESSION_TOKEN_KEY = "sessionToken";
+    public static final String EXTERNAL_ID_KEY = "externalId";
+    public static final String SESSION_EXPIRATION_TIME_MICROS_KEY = "sessionTokenExpirationMicros";
+
     /**
      * A key for the property of {@link #endpointProperties} which specifies trusted certificate
      * for the endpoint

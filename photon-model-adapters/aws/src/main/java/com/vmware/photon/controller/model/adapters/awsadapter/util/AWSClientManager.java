@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CW_CLIENT_CACHE_INITIAL_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CW_CLIENT_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.EC2_CLIENT_CACHE_INITIAL_SIZE;
@@ -26,9 +28,14 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_TM_CLIENT_CACHE_INITIAL_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.S3_TM_CLIENT_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.awsSessionCredentialsToAuthCredentialsState;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getArnSessionCredentialsAsync;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.isArnCredentials;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -46,6 +53,8 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -63,6 +72,7 @@ public class AWSClientManager {
     private Map<String, AmazonS3Client> s3clientCache;
     private Map<String, TransferManager> s3TransferManagerCache;
     private Map<String, AmazonElasticLoadBalancingAsyncClient> loadBalancingClientCache;
+    private Map<String, DeferredResult<AuthCredentialsServiceState>> arnCredentialsCache;
     private ExecutorService executorService;
 
     private LRUCache<String, Long> invalidEc2Clients;
@@ -77,8 +87,8 @@ public class AWSClientManager {
             .getInteger(AWS_RETRY_AFTER_INTERVAL_MINUTES, DEFAULT_RETRY_AFTER_INTERVAL_MINUTES);
 
     AWSClientManager(AwsClientType awsClientType) {
+        this.arnCredentialsCache = Collections.synchronizedMap(new HashMap<>());
         this.awsClientType = awsClientType;
-
         switch (awsClientType) {
         case EC2:
             this.ec2ClientCache = Collections
@@ -126,23 +136,64 @@ public class AWSClientManager {
     }
 
     /**
-     * Accesses the client cache to get the EC2 client for the given auth credentials and regionId. If a client
-     * is not found to exist, creates a new one and adds an entry in the cache for it.
-     * @param credentials
-     *         The auth credentials to be used for the client creation
-     * @param regionId
-     *         The region of the AWS client
-     * @param service
-     *         The stateless service making the request and for which the executor pool needs to be allocated.
+     * Accesses the client cache to get the EC2 client for the given auth credentials and regionId.
+     * If a client is not found to exist, creates a new one and adds an entry in the cache for it.
+     * This process is done asynchronously, and the EC2 client will be passed via the
+     * successConsumer.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs
+     *                to be allocated.
+     * @return A {@link DeferredResult} of the AWS client.
+     */
+    public synchronized DeferredResult<AmazonEC2AsyncClient> getOrCreateEC2ClientAsync(
+            AuthCredentialsServiceState credentials, String regionId, StatelessService service) {
+        if (this.awsClientType != AwsClientType.EC2) {
+            return DeferredResult.failed(new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients."));
+        }
+
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return getArnCredentialsFromCache(credentials, service)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getOrCreateEC2Client(refreshedCredentials, regionId, service,
+                            t -> { throw new CompletionException(t); });
+                });
+    }
+
+    /**
+     * Accesses the client cache to get the EC2 client for the given auth credentials and regionId.
+     * If a client is not found to exist, creates a new one and adds an entry in the cache for it.
+     *
+     * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will throw a
+     * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
+     * credentials, migrate to {@link #getOrCreateEC2ClientAsync(AuthCredentialsServiceState,
+     * String, StatelessService)}.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs to be allocated.
      * @return The AWSClient
      */
-    public AmazonEC2AsyncClient getOrCreateEC2Client(
-            AuthCredentialsServiceState credentials,
+    public AmazonEC2AsyncClient getOrCreateEC2Client(AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.EC2) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
+
+        if (isArnCredentials(credentials) && !isSetCredentials(credentials)) {
+            throw new UnsupportedOperationException(
+                    "For ARN-based credentials, exchange for session-based access key/secret key first before retrieving the client.");
+        }
+
         AmazonEC2AsyncClient amazonEC2Client = null;
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         try {
@@ -153,6 +204,18 @@ public class AWSClientManager {
             failConsumer.accept(e);
         }
         return amazonEC2Client;
+    }
+
+    /**
+     * Returns true if a set of credentials has set the private key and privateKeyId fields.
+     *
+     * @param credentials A set of credentials to test.
+     * @return True if credentials object has set the privateKey and privateKeyId fields.
+     */
+    private boolean isSetCredentials(AuthCredentialsServiceState credentials) {
+        return credentials.privateKey != null && !credentials.privateKey.isEmpty() &&
+                credentials.privateKeyId != null && !credentials.privateKeyId.isEmpty();
+
     }
 
     /**
@@ -192,24 +255,62 @@ public class AWSClientManager {
 
     /**
      * Get or create a CloudWatch Client instance that will be used to get stats from AWS.
-     * @param credentials
-     *         The auth credentials to be used for the client creation
-     * @param regionId
-     *         The region of the AWS client
-     * @param service
-     *         The stateless service for which the operation is being performed.
-     * @param isMock
-     *         Indicates if this a mock request
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs
+     *                to be allocated.
+     * @return The AWSClient
+     */
+    public synchronized DeferredResult<AmazonCloudWatchAsyncClient> getOrCreateCloudWatchClientAsync(
+            AuthCredentialsServiceState credentials, String regionId, StatelessService service,
+            boolean isMock) {
+        if (this.awsClientType != AwsClientType.CLOUD_WATCH) {
+            return DeferredResult.failed(new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients."));
+        }
+
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return getArnCredentialsFromCache(credentials, service)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getOrCreateCloudWatchClient(refreshedCredentials, regionId, service,
+                                isMock, t -> { throw new CompletionException(t); });
+                });
+    }
+
+    /**
+     * Get or create a CloudWatch Client instance that will be used to get stats from AWS.
+     *
+     * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will throw a
+     * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
+     * credentials, migrate to {@link #getOrCreateCloudWatchClientAsync(AuthCredentialsServiceState,
+     * String, StatelessService, boolean)}.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service for which the operation is being performed.
+     * @param isMock Indicates if this a mock request
      * @return
      */
     public AmazonCloudWatchAsyncClient getOrCreateCloudWatchClient(
-            AuthCredentialsServiceState credentials,
-            String regionId, StatelessService service, boolean isMock,
-            Consumer<Throwable> failConsumer) {
+            AuthCredentialsServiceState credentials, String regionId, StatelessService service,
+            boolean isMock, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.CLOUD_WATCH) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
+
+        if (isArnCredentials(credentials) && !isSetCredentials(credentials)) {
+            throw new UnsupportedOperationException(
+                    "For ARN-based credentials, exchange for session-based access key/secret key first before retrieving the client.");
+        }
+
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         if (isCloudWatchClientInvalid(cacheKey)) {
             failConsumer.accept(
@@ -258,13 +359,63 @@ public class AWSClientManager {
         }
     }
 
-    public TransferManager getOrCreateS3TransferManager(
+    /**
+     * Get or create an S3 Transfer Manager client.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs
+     *                to be allocated.
+     * @return The AWSClient
+     */
+    public synchronized DeferredResult<TransferManager> getOrCreateS3TransferManager(
+            AuthCredentialsServiceState credentials, String regionId, StatelessService service) {
+        if (this.awsClientType != AwsClientType.S3_TRANSFER_MANAGER) {
+            return DeferredResult.failed(new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients."));
+        }
+
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return getArnCredentialsFromCache(credentials, service)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getOrCreateS3TransferManager(refreshedCredentials, regionId, service,
+                            t -> { throw new CompletionException(t); });
+                });
+    }
+
+    /**
+     * Get or create an S3 Transfer Manager client.
+     *
+     * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will throw a
+     * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
+     * credentials, migrate to {@link #getOrCreateS3TransferManager}.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs
+     *                to be allocated.
+     * @param failConsumer A callback to handle failure responses.
+     * @return The AWSClient
+     */
+    public synchronized TransferManager getOrCreateS3TransferManager(
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.S3_TRANSFER_MANAGER) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
+
+        if (isArnCredentials(credentials) && !isSetCredentials(credentials)) {
+            throw new UnsupportedOperationException(
+                    "For ARN-based credentials, exchange for session-based access key/secret key first before retrieving the client.");
+        }
+
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         try {
             return this.s3TransferManagerCache.computeIfAbsent(cacheKey, key -> AWSUtils
@@ -280,12 +431,46 @@ public class AWSClientManager {
     /**
      * Get or create a ElasticLoadBalancing Client instance that will be used to create/delete
      * load balancers from AWS.
-     * @param credentials
-     *         The auth credentials to be used for the client creation
-     * @param regionId
-     *         The region of the AWS client
-     * @param service
-     *         The stateless service for which the operation is being performed.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs
+     *                to be allocated.
+     * @return The AWSClient
+     */
+    public synchronized DeferredResult<AmazonElasticLoadBalancingAsyncClient> getOrCreateLoadBalancingClient(
+            AuthCredentialsServiceState credentials, String regionId, StatelessService service,
+            boolean isMock) {
+        if (this.awsClientType != AwsClientType.LOAD_BALANCING) {
+            return DeferredResult.failed(new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients."));
+        }
+
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return getArnCredentialsFromCache(credentials, service)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getOrCreateLoadBalancingClient(refreshedCredentials, regionId, service,
+                            isMock, t -> { throw new CompletionException(t); });
+                });
+    }
+
+    /**
+     * Get or create a ElasticLoadBalancing Client instance that will be used to create/delete
+     * load balancers from AWS.
+     *
+     * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will throw a
+     * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
+     * credentials, migrate to {@link #getOrCreateLoadBalancingClient}.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service for which the operation is being performed.
      * @return
      */
     public AmazonElasticLoadBalancingAsyncClient getOrCreateLoadBalancingClient(
@@ -296,6 +481,12 @@ public class AWSClientManager {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
+
+        if (isArnCredentials(credentials) && !isSetCredentials(credentials)) {
+            throw new UnsupportedOperationException(
+                    "For ARN-based credentials, exchange for session-based access key/secret key first before retrieving the client.");
+        }
+
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         if (isLoadBalancingClientInvalid(cacheKey)) {
             failConsumer.accept(new IllegalStateException(
@@ -338,12 +529,62 @@ public class AWSClientManager {
         }
     }
 
+    /**
+     * Get or create an S3 Client asynchronously.
+     *
+     * Allows for ARN-based credentials (as well as traditional key-based credentials), where a set
+     * of credentials with the ARN key set will communicate with AWS to trade for a set of session
+     * credentials that can allow the instantiation of an Amazon client.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs
+     *                to be allocated.
+     * @return The AWSClient
+     */
+    public synchronized DeferredResult<AmazonS3Client> getOrCreateS3Client(
+            AuthCredentialsServiceState credentials, String regionId, StatelessService service) {
+        if (this.awsClientType != AwsClientType.S3) {
+            return DeferredResult.failed(new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients."));
+        }
+
+        OperationContext operationContext = OperationContext.getOperationContext();
+        return getArnCredentialsFromCache(credentials, service)
+                .thenApply(refreshedCredentials -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    return getOrCreateS3Client(refreshedCredentials, regionId, service,
+                            t -> { throw new CompletionException(t); });
+                });
+    }
+
+    /**
+     * Get or create an S3 Client.
+     *
+     * Note: ARN-based credentials will not be accepted unless they have already been exchanged to
+     * AWS for session credentials. If unset, this method will throw a
+     * {@link UnsupportedOperationException} exception in this circumstance. To enable ARN-based
+     * credentials, migrate to {@link #getOrCreateS3Client}.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service making the request and for which the executor pool needs
+     *                to be allocated.
+     * @param failConsumer A callback to handle failure responses.
+     * @return The AWSClient
+     */
     public AmazonS3Client getOrCreateS3Client(AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.S3) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
+
+        if (isArnCredentials(credentials) && !isSetCredentials(credentials)) {
+            throw new UnsupportedOperationException(
+                    "For ARN-based credentials, exchange for session-based access key/secret key first before retrieving the client.");
+        }
+
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
 
         try {
@@ -432,9 +673,72 @@ public class AWSClientManager {
     }
 
     /**
+     * Common client manager method to retrieve (or update) credentials from the
+     * {@link #arnCredentialsCache} if ARN-based, or just return the current credentials set if not.
+     * If expired, the credentials will be regenerated. Otherwise, they will continue to be
+     * retrieved as normal.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param service A service to issue requests
+     */
+    public synchronized DeferredResult<AuthCredentialsServiceState> getArnCredentialsFromCache(
+            AuthCredentialsServiceState credentials, StatelessService service) {
+        if (!isArnCredentials(credentials)) {
+            return DeferredResult.completed(credentials);
+        }
+
+        String arn = credentials.customProperties.get(ARN_KEY);
+        String arnCacheKey = Utils.computeHash(arn);
+
+        // If the ARN is in the arnCredentialsCache, then retrieve the credentials and check
+        // if they are expired. If not expired, continue to use them.
+        if (this.arnCredentialsCache.containsKey(arnCacheKey)) {
+
+            // If there is already a cache entry, but it has not been completed, just return the
+            // cache reference.
+            if (!this.arnCredentialsCache.get(arnCacheKey).isDone()) {
+                return this.arnCredentialsCache.get(arnCacheKey);
+            }
+
+            // Check if the credentials are expired. If not, return. If so, refresh.
+            AuthCredentialsServiceState arnCredentials = this.arnCredentialsCache.get(arnCacheKey)
+                    .getNow(new AuthCredentialsServiceState());
+
+            if (!AWSUtils.isExpiredCredentials(arnCredentials)) {
+                return this.arnCredentialsCache.get(arnCacheKey);
+            }
+
+            service.logInfo("Refreshing session credentials for arn: '%s'", arn);
+        }
+
+        this.arnCredentialsCache.put(arnCacheKey, new DeferredResult<>());
+
+        // If unavailable in the cache, or expired, generate a new set of session credentials.
+        OperationContext operationContext = OperationContext.getOperationContext();
+        getArnSessionCredentialsAsync(arn, credentials.customProperties.get(EXTERNAL_ID_KEY),
+                getExecutor()).whenComplete((awsSessionCredentials, t) -> {
+                    OperationContext.restoreOperationContext(operationContext);
+                    if (t != null) {
+                        this.arnCredentialsCache.get(arnCacheKey).fail(t);
+                        return;
+                    }
+
+                    service.logInfo("Generated session credentials for arn: '%s'", arn);
+
+                    AuthCredentialsServiceState arnCredentials =
+                            awsSessionCredentialsToAuthCredentialsState(awsSessionCredentials);
+
+                    // Update the cache with the new credentials.
+                    this.arnCredentialsCache.get(arnCacheKey).complete(arnCredentials);
+                });
+        return this.arnCredentialsCache.get(arnCacheKey);
+    }
+
+    /**
      * Clears out the client cache and all the resources associated with each of the AWS clients.
      */
     public void cleanUp() {
+        this.arnCredentialsCache.clear();
         switch (this.awsClientType) {
         case CLOUD_WATCH:
             cleanupCache(this.cloudWatchClientCache, c -> c.shutdown());
