@@ -297,6 +297,51 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
         }
     }
 
+    public <T extends ServiceDocument> T getServiceSynchronously(
+            String serviceUri, Class<T> type, Class<? extends Throwable> expectedException)
+            throws Throwable {
+
+        List<T> responseBody = new ArrayList<T>();
+        TestContext ctx = this.host.testCreate(1);
+
+        Operation getOperation = Operation
+                .createGet(UriUtils.buildUri(this.host, serviceUri))
+                .setCompletion((operation, throwable) -> {
+
+                    boolean failureExpected = (expectedException != null);
+                    boolean failureReturned = (throwable != null);
+
+                    if (failureExpected ^ failureReturned) {
+                        Throwable t = throwable == null ? new IllegalArgumentException(
+                                "Call did not fail as expected")
+                                : throwable;
+
+                        ctx.failIteration(t);
+                        return;
+                    }
+
+                    if (failureExpected && expectedException != throwable.getClass()) {
+                        ctx.failIteration(throwable);
+                        return;
+                    }
+
+                    if (!failureExpected) {
+                        responseBody.add(operation.getBody(type));
+                    }
+
+                    ctx.completeIteration();
+                });
+
+        this.send(getOperation);
+        this.testWait(ctx);
+
+        if (!responseBody.isEmpty()) {
+            return responseBody.get(0);
+        } else {
+            return null;
+        }
+    }
+
     private <T extends ServiceDocument> void deleteServiceSynchronously(
             String serviceUri, boolean stopOnly) throws Throwable {
         TestContext ctx = this.host.testCreate(1);

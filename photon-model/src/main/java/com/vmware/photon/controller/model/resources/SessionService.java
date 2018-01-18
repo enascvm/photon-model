@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import java.util.concurrent.TimeUnit;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -29,11 +31,15 @@ import com.vmware.xenon.common.Utils;
  * <p>
  * Notable future work:
  * An authorization mechanism.
- * A periodic maintenance task will clean expired entries.
  */
 public class SessionService extends StatefulService {
 
     public static final String FACTORY_LINK = UriPaths.SESSION_SERVICE;
+
+    /**
+     * If session expiration is not set, this value will be used as a default
+     */
+    public static final Long DEFAULT_SESSION_EXPIRATION_MICROS = TimeUnit.HOURS.toMicros(1L);
 
     /**
      * The SessionState represents the relation between the local and the externally issued tokens
@@ -43,10 +49,6 @@ public class SessionService extends StatefulService {
         @Documentation(description = "The local token issued by Xenon")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public String localToken;
-
-        @Documentation(description = "Expiration of the local token. In microseconds since UNIX "
-                + "epoch")
-        public Long localTokenExpiry;
 
         @Documentation(description = "Token issued by the external service")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
@@ -59,20 +61,43 @@ public class SessionService extends StatefulService {
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
+        super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
+    }
+
+    @Override
+    public void handlePut(Operation op) {
+        if (op.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_POST_TO_PUT)) {
+            op.complete();
+            return;
+        }
+        // normal PUT is not supported
+        op.fail(Operation.STATUS_CODE_BAD_METHOD);
     }
 
     @Override
     public void handleCreate(Operation op) {
-        validateInput(op);
-        op.complete();
-    }
-
-    private void validateInput(Operation op) {
-        if (!op.hasBody()) {
-            throw (new IllegalArgumentException("body is required"));
+        if (checkForValid(op)) {
+            super.handleCreate(op);
         }
-        SessionState state = op.getBody(SessionState.class);
-        Utils.validateState(getStateDescription(), state);
     }
 
+    private boolean checkForValid(Operation op) {
+        if (op.hasBody()) {
+            try {
+                SessionState state = op.getBody(SessionState.class);
+                Utils.validateState(getStateDescription(), state);
+
+                if (state.documentExpirationTimeMicros == 0L) {
+                    state.documentExpirationTimeMicros = DEFAULT_SESSION_EXPIRATION_MICROS;
+                }
+
+                return true;
+
+            } catch (Throwable t) {
+                op.fail(t);
+                return false;
+            }
+        }
+        return false;
+    }
 }
