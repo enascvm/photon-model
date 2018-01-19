@@ -102,7 +102,9 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
                 super.host.getReferer(),
                 UUID.randomUUID().toString(),
                 ResourceType.COMPUTE,
-                UUID.randomUUID().toString()
+                UUID.randomUUID().toString(),
+                null,
+                null
         );
         ResourceOperationSpec found = join(dr);
         Assert.assertNull(found);
@@ -121,6 +123,7 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
                         super.host,
                         super.host.getReferer(),
                         computeState,
+                        null,
                         null
                 );
         List<ResourceOperationSpec> found = join(dr);
@@ -140,7 +143,8 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
                         super.host,
                         super.host.getReferer(),
                         computeState,
-                        operation
+                        operation,
+                        null
                 );
         List<ResourceOperationSpec> found = join(dr);
         Assert.assertNotNull(found);
@@ -174,7 +178,9 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
                             super.host.getReferer(),
                             endpointLink,
                             requestedState.resourceType,
-                            requestedState.operation
+                            requestedState.operation,
+                            null,
+                            null
                     );
         } else {
             dr = ResourceOperationUtils
@@ -183,7 +189,9 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
                             super.host.getReferer(),
                             requestedState.endpointType,
                             requestedState.resourceType,
-                            requestedState.operation
+                            requestedState.operation,
+                            null,
+                            null
                     );
         }
         ResourceOperationSpec found = join(dr);

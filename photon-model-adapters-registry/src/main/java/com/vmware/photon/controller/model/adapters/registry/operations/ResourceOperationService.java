@@ -84,7 +84,8 @@ public class ResourceOperationService extends StatelessService {
                     }
                     final ResourceState resourceState = tmpResourceState;
                     return ResourceOperationUtils
-                            .lookupByResourceState(getHost(), getUri(), resourceState, operation)
+                            .lookupByResourceState(getHost(), getUri(), resourceState, operation,
+                                    this.getSystemAuthorizationContext())
                             .thenApply(collectAvailable(resourceState));
                 })
                 .whenComplete((specs, e) -> {

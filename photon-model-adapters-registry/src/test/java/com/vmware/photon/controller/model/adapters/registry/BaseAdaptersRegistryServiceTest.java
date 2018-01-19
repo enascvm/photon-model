@@ -26,6 +26,7 @@ import org.junit.Before;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationService;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -42,6 +43,8 @@ public abstract class BaseAdaptersRegistryServiceTest extends BaseModelTest {
 
         PhotonModelServices.startServices(this.host);
         PhotonModelMetricServices.startServices(this.host);
+
+        this.host.addPrivilegedService(ResourceOperationService.class);
         PhotonModelAdaptersRegistryAdapters.startServices(this.host);
 
         this.host.setTimeoutSeconds(300);

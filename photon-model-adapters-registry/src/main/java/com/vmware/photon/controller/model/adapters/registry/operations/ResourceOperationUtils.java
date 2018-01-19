@@ -34,6 +34,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.AuthorizationContext;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
@@ -85,6 +86,11 @@ public class ResourceOperationUtils {
      *         the resource type
      * @param operation
      *         the operation
+     * @param queryTaskTenantLinks
+     *         tenant links used for the QueryTask
+     * @param authorizationContext
+     *         authorization context that will be used for operations (if set to null the context
+     *         will not be changed)
      * @return
      */
     public static DeferredResult<ResourceOperationSpec> lookUpByEndpointType(
@@ -92,9 +98,12 @@ public class ResourceOperationUtils {
             URI refererURI,
             String endpointType,
             ResourceType resourceType,
-            String operation) {
+            String operation,
+            List<String> queryTaskTenantLinks,
+            AuthorizationContext authorizationContext) {
 
-        return lookUp(host, refererURI, endpointType, resourceType, operation)
+        return lookUp(host, refererURI, endpointType, resourceType, operation,
+                queryTaskTenantLinks, authorizationContext)
                 .thenApply(specs -> specs.isEmpty() ? null : specs.iterator().next());
     }
 
@@ -111,6 +120,11 @@ public class ResourceOperationUtils {
      *         the resource type
      * @param operation
      *         the operation
+     * @param queryTaskTenantLinks
+     *         tenant links used for the QueryTask
+     * @param authorizationContext
+     *         authorization context that will be used for operations (if set to null the context
+     *         will not be changed)
      * @return
      */
     public static DeferredResult<ResourceOperationSpec> lookUpByEndpointLink(
@@ -118,13 +132,15 @@ public class ResourceOperationUtils {
             URI refererURI,
             String endpointLink,
             ResourceType resourceType,
-            String operation) {
+            String operation,
+            List<String> queryTaskTenantLinks,
+            AuthorizationContext authorizationContext) {
 
         return host.sendWithDeferredResult(Operation.createGet(host, endpointLink)
                 .setReferer(refererURI))
                 .thenCompose(o -> lookUpByEndpointType(host, refererURI,
                         (o.getBody(EndpointState.class)).endpointType,
-                        resourceType, operation)
+                        resourceType, operation, queryTaskTenantLinks, authorizationContext)
                 );
     }
 
@@ -138,13 +154,17 @@ public class ResourceOperationUtils {
      *         the resource state specialization for which to lookup the spec
      * @param operation
      *         the operation
+     * @param authorizationContext
+     *         authorization context that will be used for operations (if set to null the context
+     *         will not be changed)
      * @return
      */
     public static <T extends ResourceState> DeferredResult<List<ResourceOperationSpec>> lookupByResourceState(
             ServiceHost host,
             URI refererURI,
             T resourceState,
-            String operation) {
+            String operation,
+            AuthorizationContext authorizationContext) {
         AssertUtil.assertNotNull(resourceState, "'resourceState' must be set.");
         String endpointLink;
         ResourceType resourceType;
@@ -166,7 +186,8 @@ public class ResourceOperationUtils {
                 Operation.createGet(host, endpointLink).setReferer(refererURI),
                 EndpointState.class)
                 .thenCompose(ep -> lookUp(
-                        host, refererURI, (ep).endpointType, resourceType, operation)
+                        host, refererURI, (ep).endpointType, resourceType, operation,
+                        resourceState.tenantLinks, authorizationContext)
                 );
     }
 
@@ -288,6 +309,11 @@ public class ResourceOperationUtils {
      *         the resource type
      * @param operation
      *         optional operation id argument
+     * @param queryTaskTenantLinks
+     *         tenant links used for the QueryTask
+     * @param authorizationContext
+     *         authorization context that will be used for operations (if set to null the context
+     *         will not be changed)
      * @return
      */
     private static DeferredResult<List<ResourceOperationSpec>> lookUp(
@@ -295,7 +321,9 @@ public class ResourceOperationUtils {
             URI refererURI,
             String endpointType,
             ResourceType resourceType,
-            String operation) {
+            String operation,
+            List<String> queryTaskTenantLinks,
+            AuthorizationContext authorizationContext) {
 
         Query.Builder builder = Query.Builder.create()
                 .addKindFieldClause(ResourceOperationSpec.class)
@@ -313,7 +341,13 @@ public class ResourceOperationUtils {
         Query query = builder.build();
 
         QueryTop<ResourceOperationSpec> top = new QueryTop<>(
-                host, query, ResourceOperationSpec.class, null);
+                host,
+                query,
+                ResourceOperationSpec.class,
+                null)
+                .setQueryTaskTenantLinks(queryTaskTenantLinks)
+                .setAuthorizationContext(authorizationContext);
+
         if (operation != null) {
             //resource operation spec id and selfLink are built from the endpoint type, resource
             // type and operation id, so the query result is guaranteed to return at most 1 element
