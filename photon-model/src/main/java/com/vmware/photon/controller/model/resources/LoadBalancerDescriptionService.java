@@ -179,7 +179,15 @@ public class LoadBalancerDescriptionService extends StatefulService {
          * an instance cluster, or multiple ones.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_42)
+        @Deprecated
         public List<String> computeDescriptionLinks;
+
+        /**
+         * List of links to objects (ComputeDescriptions/ComputeStates/NetworkInterfaceDescription
+         * /NetworkInterfaceState) that are load balanced.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_49)
+        public List<String> targetLinks;
 
         /**
          * Name of the network the load balancer is attached to. Similar to the {@code name} field

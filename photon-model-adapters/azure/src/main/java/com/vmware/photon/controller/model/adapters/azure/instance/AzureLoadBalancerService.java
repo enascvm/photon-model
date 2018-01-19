@@ -16,9 +16,14 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -58,16 +63,17 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioning
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
@@ -88,7 +94,8 @@ public class AzureLoadBalancerService extends StatelessService {
 
         LoadBalancerStateExpanded loadBalancerStateExpanded;
         String resourceGroupName;
-        List<NetworkInterfaceState> networkInterfaceStates;
+        Set<ComputeState> computeStates;
+        Set<NetworkInterfaceState> networkInterfaceStates;
         List<NetworkInterfaceInner> networkInterfaceInners;
         List<SecurityGroupState> securityGroupStates;
         List<NetworkSecurityGroupInner> securityGroupInners;
@@ -148,7 +155,6 @@ public class AzureLoadBalancerService extends StatelessService {
             AzureLoadBalancerContext context) {
         return DeferredResult.completed(context)
                 .thenCompose(this::getLoadBalancerState)
-                .thenCompose(this::getResourceGroup)
                 .thenCompose(c -> c.populateBaseContext(BaseAdapterStage.PARENTAUTH));
     }
 
@@ -167,28 +173,8 @@ public class AzureLoadBalancerService extends StatelessService {
                         LoadBalancerStateExpanded.class)
                 .thenApply(state -> {
                     context.loadBalancerStateExpanded = state;
-                    return context;
-                });
-    }
-
-    /**
-     * Populate the context with Resource group name
-     *
-     * @param context Azure load balancer context
-     * @return DeferredResult
-     */
-    private DeferredResult<AzureLoadBalancerContext> getResourceGroup(
-            AzureLoadBalancerContext context) {
-        if (CollectionUtils.isEmpty(context.loadBalancerStateExpanded.subnets)) {
-            return DeferredResult.completed(context);
-        }
-        return this
-                .sendWithDeferredResult(Operation.createGet(context.service.getHost(),
-                        context.loadBalancerStateExpanded.subnets.iterator().next().networkLink),
-                        NetworkState.class)
-                .thenApply(state -> {
-                    //We create load balancer in the same resource group as the VIP network
-                    context.resourceGroupName = AzureUtils.getResourceGroupName(state.id);
+                    context.resourceGroupName = AzureUtils.getResourceGroupName(state.subnets
+                            .iterator().next().id);
                     return context;
                 });
     }
@@ -210,6 +196,7 @@ public class AzureLoadBalancerService extends StatelessService {
                 return execution.thenCompose(this::updateLoadBalancerState);
             } else {
                 return execution
+                        .thenCompose(this::getTargetStates)
                         .thenCompose(this::getNetworkInterfaceStates)
                         .thenCompose(this::getNetworkInterfaceInners)
                         .thenCompose(this::getSecurityGroupStates)
@@ -241,21 +228,116 @@ public class AzureLoadBalancerService extends StatelessService {
     }
 
     /**
-     * Populate NetworkInterface States in the context
+     * Populate Computes/NetworkInterfaceStates in the context
+     *
+     * @param context Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> getTargetStates(
+            AzureLoadBalancerContext context) {
+        if (context.networkInterfaceStates == null) {
+            context.networkInterfaceStates = new HashSet<>();
+        }
+        if (context.computeStates == null) {
+            context.computeStates = new HashSet<>();
+        }
+        if (context.loadBalancerStateExpanded.targetLinks != null) {
+            List<DeferredResult<Operation>> operations = getTargetDRs(context);
+            return DeferredResult.allOf(operations)
+                    .thenApply(operationsList -> {
+                        operationsList.forEach(operation -> {
+                            Object state = operation.getBodyRaw();
+                            if (state instanceof ComputeState) {
+                                context.computeStates.add((ComputeState) state);
+                            } else if (state instanceof NetworkInterfaceState) {
+                                context.networkInterfaceStates.add((NetworkInterfaceState) state);
+                            } else {
+                                throw new IllegalArgumentException("Invalid target type specified");
+                            }
+                        });
+                        return context;
+                    });
+        } else if (context.loadBalancerStateExpanded.computes != null) {
+            context.computeStates = context.loadBalancerStateExpanded.computes;
+        }
+        return DeferredResult.completed(context);
+    }
+
+    /**
+     * Get List of deferred result to fetch states for target links
+     *
+     * @param context Azure load balancer context
+     * @return List of DeferredResult
+     */
+    private List<DeferredResult<Operation>> getTargetDRs(AzureLoadBalancerContext context) {
+        return context.loadBalancerStateExpanded.targetLinks
+                .stream().map(targetLink ->
+                        sendWithDeferredResult(
+                                Operation.createGet(context.service.getHost(), targetLink))
+                                .exceptionally(ex -> {
+                                    if (ex != null) {
+                                        if (ex instanceof ServiceNotFoundException) {
+                                            throw new IllegalArgumentException(
+                                                    "Invalid target type specified");
+                                        } else {
+                                            throw new CompletionException(ex);
+                                        }
+                                    }
+                                    return null;
+                                })).collect(Collectors.toList());
+    }
+
+    /**
+     * Populate the primary nic from all computes being load balanced in the context
+     * We load balance the nic with lowest device index (primary nic) if computeLinks are specified
+     * as target
      *
      * @param context Azure load balancer context
      * @return DeferredResult
      */
     private DeferredResult<AzureLoadBalancerContext> getNetworkInterfaceStates(
             AzureLoadBalancerContext context) {
-        List<String> networkInterfaceLinks = Lists.newArrayList();
-        if (context.loadBalancerStateExpanded.computes != null) {
-            context.loadBalancerStateExpanded.computes.forEach(
-                    compute -> networkInterfaceLinks.addAll(compute.networkInterfaceLinks));
-        }
-
-        if (networkInterfaceLinks.isEmpty()) {
+        if (context.computeStates == null || context.computeStates.isEmpty()) {
             return DeferredResult.completed(context);
+        }
+        return DeferredResult.allOf(context.computeStates
+                .stream().map(computeState ->
+                        getNetworkInterfaceStatesForLinks(context,
+                                computeState.networkInterfaceLinks)
+                                .thenApply(networkInterfaceStates -> {
+                                    context.networkInterfaceStates
+                                            .add(getPrimaryNic(networkInterfaceStates));
+                                    return context;
+                                })).collect(Collectors.toList()))
+                .thenApply(__ -> context);
+    }
+
+    /**
+     * From the given list find the Network interface with lowest device index
+     * Throw error if none are found
+     *
+     * @param networkInterfaceStates list of NetworkInterfaceState objects
+     * @return NetworkInterfaceState with the lowes device index (Primary nic)
+     */
+    private NetworkInterfaceState getPrimaryNic(
+            List<NetworkInterfaceState> networkInterfaceStates) {
+        Optional<NetworkInterfaceState> optional = networkInterfaceStates.stream()
+                .sorted(Comparator.comparingInt(n -> n.deviceIndex))
+                .findFirst();
+        AssertUtil.assertTrue(optional.isPresent(), "Could not determine primary nic");
+        return optional.get();
+    }
+
+    /**
+     * Get NetworkInterfaceStates from Links
+     *
+     * @param context Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<List<NetworkInterfaceState>> getNetworkInterfaceStatesForLinks(
+            AzureLoadBalancerContext context, List<String> networkInterfaceLinks) {
+        if (networkInterfaceLinks == null || networkInterfaceLinks.isEmpty()) {
+            return DeferredResult.completed(new ArrayList<>());
         }
 
         List<DeferredResult<NetworkInterfaceState>> networkInterfaceStates =
@@ -264,12 +346,8 @@ public class AzureLoadBalancerService extends StatelessService {
                                         .createGet(context.service.getHost(), networkInterfaceLink),
                                 NetworkInterfaceState.class))
                         .collect(Collectors.toList());
+        return DeferredResult.allOf(networkInterfaceStates);
 
-        return DeferredResult.allOf(networkInterfaceStates)
-                .thenApply(networkInterfaceStateList -> {
-                    context.networkInterfaceStates = networkInterfaceStateList;
-                    return context;
-                });
     }
 
     /**
@@ -287,9 +365,8 @@ public class AzureLoadBalancerService extends StatelessService {
 
         List<DeferredResult<NetworkInterfaceInner>> networkInterfaceInners =
                 context.networkInterfaceStates.stream()
-                        .map(networkInterfacesState -> {
-                            return getNetworkInterfaceInner(context, networkInterfacesState);
-                        })
+                        .map(networkInterfacesState -> getNetworkInterfaceInner(context,
+                                networkInterfacesState))
                         .collect(Collectors.toList());
 
         return DeferredResult.allOf(networkInterfaceInners)
@@ -302,7 +379,7 @@ public class AzureLoadBalancerService extends StatelessService {
     /**
      * Fetch single Network Interface from Azure
      *
-     * @param context              Azure load balancer context
+     * @param context               Azure load balancer context
      * @param networkInterfaceState state of the network interface to be fetched from Azure
      * @return DeferredResult
      */
@@ -829,7 +906,12 @@ public class AzureLoadBalancerService extends StatelessService {
             securityRuleInner.withSourceAddressPrefix(SecurityGroupService.ANY);
             securityRuleInner.withDestinationPortRange(Integer.toString(loadBalancingRuleInner
                     .backendPort()));
+            // Azure API expects destination address prefix to be set even if we are using
+            // destination address prefixes
             securityRuleInner.withDestinationAddressPrefix(getDestinationAddressPrefix(context));
+            //TODO this should be fixed once Azure API version is updates
+            // securityRuleInner.withDestinationAddressPrefixes(getDestinationAddressPrefixes
+            // (context));
 
             securityRuleInnerList.add(securityRuleInner);
         });
@@ -844,12 +926,30 @@ public class AzureLoadBalancerService extends StatelessService {
     }
 
     /**
+     * This is a workaround until Azure API version is upgraded
      * Collect the list of IPs for the VMs being load balanced
      *
      * @param context Azure load balancer context
      * @return comma separated list of all IPs being load balanced
      */
     private String getDestinationAddressPrefix(AzureLoadBalancerContext context) {
+        if (context.networkInterfaceInners != null && !context.networkInterfaceInners.isEmpty()) {
+            List<NetworkInterfaceIPConfigurationInner> ipConfigurations = context
+                    .networkInterfaceInners.iterator().next().ipConfigurations();
+            if (ipConfigurations != null && !ipConfigurations.isEmpty()) {
+                return ipConfigurations.iterator().next().privateIPAddress();
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Collect the list of IPs for the VMs being load balanced
+     *
+     * @param context Azure load balancer context
+     * @return comma separated list of all IPs being load balanced
+     */
+    private List<String> getDestinationAddressPrefixes(AzureLoadBalancerContext context) {
         List<NetworkInterfaceIPConfigurationInner> ipConfigs = Lists.newArrayList();
         if (context.networkInterfaceInners != null) {
             context.networkInterfaceInners.forEach(
@@ -857,7 +957,7 @@ public class AzureLoadBalancerService extends StatelessService {
                             .ipConfigurations()));
         }
         return ipConfigs.stream().map(NetworkInterfaceIPConfigurationInner::privateIPAddress)
-                .collect(Collectors.joining(","));
+                .collect(Collectors.toList());
     }
 
     /**

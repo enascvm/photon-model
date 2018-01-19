@@ -34,6 +34,7 @@ import static com.vmware.photon.controller.model.tasks.ProvisionLoadBalancerTask
 import java.net.URI;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -53,8 +54,8 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.InstanceRequestType;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
@@ -73,6 +74,8 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService;
+import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
@@ -106,14 +109,19 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     private static SecurityGroupState securityGroupState;
     private static ComputeState vmState;
     private static SubnetState subnetState;
-    private static ResourceGroupState rgState;
 
     private ResourceGroupsInner rgOpsClient;
     private LoadBalancersInner loadBalancerClient;
 
+    private enum LoadBalancerTargetType {
+        COMPUTE,
+        NIC,
+        BOTH,
+        INVALID
+    }
+
     @Before
     public void setUpTests() throws Throwable {
-
         if (computeHost == null) {
             ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
             endpointState = this.createEndpointState();
@@ -122,23 +130,15 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                     endpointState);
         }
 
-        rgState = createDefaultResourceGroupState(
-                this.host,
-                this.rgName,
-                computeHost, endpointState,
+        ResourceGroupState rgState = createDefaultResourceGroupState(
+                this.host, this.rgName, computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
-
         networkState = createNetworkState(rgState.documentSelfLink);
-        securityGroupState = createSecurityGroupState(this.host, endpointState, rgState,
-                this.securityGroupName, Lists.newArrayList(), Lists.newArrayList());
-
         vmState = createDefaultVMResource(getHost(), this.rgName,
-                computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC, rgState.documentSelfLink, 0);
-
+                computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC, null, 0);
         subnetState = createSubnetState(this.subnetName);
 
         if (!this.isMock) {
-
             this.loadBalancerClient = getAzureSdkClients().getNetworkManagementClientImpl()
                     .loadBalancers();
             this.rgOpsClient = getAzureSdkClients().getResourceManagementClientImpl()
@@ -166,7 +166,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     @Override
     protected void startRequiredServices() throws Throwable {
         super.startRequiredServices();
-        AzureAdapters.startServices(this.host);
+        //AzureAdapters.startServices(this.host);
         PhotonModelMetricServices.startServices(getHost());
 
         // TODO: VSYM-992 - improve test/fix arbitrary timeout
@@ -194,9 +194,14 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     }
 
     @Test
-    public void testCreateLoadBalancer() throws Throwable {
+    public void testCreateLoadBalancerWithComputeTarget() throws Throwable {
+        securityGroupState = createSecurityGroupState(this.host, endpointState,
+                this.securityGroupName, Lists.newArrayList(), Lists.newArrayList());
+        kickOffSecurityGroupProvision(SecurityGroupInstanceRequest.InstanceRequestType.CREATE,
+                TaskStage.FINISHED);
 
-        LoadBalancerState loadBalancerState = provisionLoadBalancer(TaskStage.FINISHED);
+        LoadBalancerState loadBalancerState = provisionLoadBalancer(TaskStage.FINISHED,
+                LoadBalancerTargetType.COMPUTE);
 
         assertNotNull(loadBalancerState.id);
         assertNotEquals(loadBalancerState.id, this.loadBalancerName);
@@ -218,9 +223,66 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     }
 
     @Test
-    public void testDeleteLoadBalancer() throws Throwable {
+    public void testCreateLoadBalancerWithNICTarget() throws Throwable {
+        LoadBalancerState loadBalancerState = provisionLoadBalancer(TaskStage.FINISHED,
+                LoadBalancerTargetType.NIC);
 
-        LoadBalancerState loadBalancerState = provisionLoadBalancer(TaskStage.FINISHED);
+        assertNotNull(loadBalancerState.id);
+        assertNotEquals(loadBalancerState.id, this.loadBalancerName);
+
+        if (!this.isMock) {
+            // Verify that the load balancer was created.
+            LoadBalancerInner lbResponse = this.loadBalancerClient
+                    .getByResourceGroup(this.rgName, this.loadBalancerName);
+
+            assertEquals(this.loadBalancerName, lbResponse.name());
+            assertEquals(loadBalancerState.id, lbResponse.id());
+
+            // delete the load balancer
+            startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.DELETE,
+                    loadBalancerState, TaskStage.FINISHED);
+        }
+    }
+
+    @Test
+    public void testCreateLoadBalancerWithMixedTarget() throws Throwable {
+        LoadBalancerState loadBalancerState = provisionLoadBalancer(TaskStage.FINISHED,
+                LoadBalancerTargetType.BOTH);
+
+        assertNotNull(loadBalancerState.id);
+        assertNotEquals(loadBalancerState.id, this.loadBalancerName);
+
+        if (!this.isMock) {
+            // Verify that the load balancer was created.
+            LoadBalancerInner lbResponse = this.loadBalancerClient
+                    .getByResourceGroup(this.rgName, this.loadBalancerName);
+
+            assertEquals(this.loadBalancerName, lbResponse.name());
+            assertEquals(loadBalancerState.id, lbResponse.id());
+
+            // delete the load balancer
+            startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.DELETE,
+                    loadBalancerState, TaskStage.FINISHED);
+        }
+    }
+
+    @Test
+    public void testCreateLoadBalancerWithInvalidNICTarget() throws Throwable {
+        if (!this.isMock) {
+            LoadBalancerState loadBalancerState = createLoadBalancerState(this.loadBalancerName,
+                    LoadBalancerTargetType.INVALID);
+            ProvisionLoadBalancerTaskState provisionLoadBalancerTaskState = startLoadBalancerProvisioning(
+                    LoadBalancerInstanceRequest.InstanceRequestType.CREATE, loadBalancerState,
+                    TaskStage.FAILED);
+            assertTrue(provisionLoadBalancerTaskState.taskInfo.stage == TaskStage.FAILED);
+            assertEquals("java.lang.IllegalArgumentException: Invalid target type specified",
+                    provisionLoadBalancerTaskState.taskInfo.failure.message);
+        }
+    }
+
+    @Test
+    public void testDeleteLoadBalancer() throws Throwable {
+        LoadBalancerState loadBalancerState = provisionLoadBalancer(TaskStage.FINISHED, null);
 
         startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.DELETE,
                 loadBalancerState, TaskStage.FINISHED);
@@ -243,7 +305,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
         }
     }
 
-    public static LoadBalancerState getLoadBalancerState(VerificationHost host,
+    private LoadBalancerState getLoadBalancerState(VerificationHost host,
             String loadBalancerLink) throws Throwable {
         Operation response = new Operation();
         getLoadBalancerState(host, loadBalancerLink, response);
@@ -267,8 +329,11 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
         host.testWait();
     }
 
-    private LoadBalancerState provisionLoadBalancer(TaskStage stage) throws Throwable {
-        LoadBalancerState loadBalancerState = createLoadBalancerState(this.loadBalancerName);
+    private LoadBalancerState provisionLoadBalancer(TaskStage stage, LoadBalancerTargetType
+            loadBalancerTargetType)
+            throws Throwable {
+        LoadBalancerState loadBalancerState = createLoadBalancerState(this.loadBalancerName,
+                loadBalancerTargetType);
         startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.CREATE,
                 loadBalancerState, stage);
         return getServiceSynchronously(loadBalancerState.documentSelfLink, LoadBalancerState.class);
@@ -295,8 +360,8 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
         return route;
     }
 
-    private LoadBalancerState createLoadBalancerState(String name) throws Throwable {
-
+    private LoadBalancerState createLoadBalancerState(String name,
+            LoadBalancerTargetType loadBalancerTargetType) throws Throwable {
         LoadBalancerState loadBalancerState = new LoadBalancerState();
         loadBalancerState.id = name;
         loadBalancerState.name = name;
@@ -304,10 +369,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                 AzureLoadBalancerService.SELF_LINK);
         loadBalancerState.endpointLink = endpointState.documentSelfLink;
         loadBalancerState.tenantLinks = endpointState.tenantLinks;
-        loadBalancerState.groupLinks = Stream.of(rgState.documentSelfLink)
-                .collect(Collectors.toSet());
         loadBalancerState.regionId = this.regionId;
-
         loadBalancerState.internetFacing = true;
         loadBalancerState.subnetLinks = Stream.of(subnetState.documentSelfLink)
                 .collect(Collectors.toSet());
@@ -319,12 +381,33 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
         loadBalancerState.computeLinks = Stream.of(vmState.documentSelfLink)
                 .collect(Collectors.toSet());
 
-        loadBalancerState.securityGroupLinks = Stream.of(securityGroupState.documentSelfLink)
-                .collect(Collectors.toList());
-
+        if (loadBalancerTargetType != null) {
+            switch (loadBalancerTargetType) {
+            case COMPUTE:
+                loadBalancerState.targetLinks = Stream.of(vmState.documentSelfLink)
+                        .collect(Collectors.toSet());
+                break;
+            case NIC:
+                loadBalancerState.targetLinks = new HashSet<>(vmState.networkInterfaceLinks);
+                break;
+            case BOTH:
+                loadBalancerState.targetLinks = Stream.of(vmState.documentSelfLink)
+                        .collect(Collectors.toSet());
+                loadBalancerState.targetLinks.add(vmState.networkInterfaceLinks.get(1));
+                break;
+            case INVALID:
+                loadBalancerState.targetLinks = new HashSet<>();
+                loadBalancerState.targetLinks.add("123");
+                break;
+            default:
+                break;
+            }
+        }
+        if (securityGroupState != null) {
+            loadBalancerState.securityGroupLinks = Stream.of(securityGroupState.documentSelfLink)
+                    .collect(Collectors.toList());
+        }
         loadBalancerState.address = "1.1.1.1";
-        loadBalancerState.groupLinks = Collections.singleton(rgState.documentSelfLink);
-
         return postServiceSynchronously(
                 LoadBalancerService.FACTORY_LINK, loadBalancerState, LoadBalancerState.class);
     }
@@ -414,7 +497,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                 taskState,
                 ProvisionSubnetTaskState.class);
 
-        // Wait for image-enumeration task to complete
+        // Wait for subnet task to complete
         return waitForServiceState(
                 ProvisionSubnetTaskState.class,
                 taskState.documentSelfLink,
@@ -444,4 +527,25 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                 UriUtils.buildUri(getHost(), vmState.documentSelfLink));
     }
 
+    private ProvisionSecurityGroupTaskState kickOffSecurityGroupProvision(
+            SecurityGroupInstanceRequest.InstanceRequestType requestType,
+            TaskStage expectedTaskState) throws Throwable {
+        ProvisionSecurityGroupTaskState taskState = new ProvisionSecurityGroupTaskState();
+        taskState.requestType = requestType;
+        taskState.securityGroupDescriptionLinks = Stream.of(securityGroupState.documentSelfLink)
+                .collect(Collectors.toSet());
+        taskState.isMockRequest = this.isMock;
+
+        // Start/Post security group provisioning task
+        taskState = postServiceSynchronously(
+                ProvisionSecurityGroupTaskService.FACTORY_LINK,
+                taskState,
+                ProvisionSecurityGroupTaskState.class);
+
+        // Wait for security group provisioning task to complete
+        return waitForServiceState(
+                ProvisionSecurityGroupTaskState.class,
+                taskState.documentSelfLink,
+                liveState -> expectedTaskState == liveState.taskInfo.stage);
+    }
 }

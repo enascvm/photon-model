@@ -68,6 +68,9 @@ public class LoadBalancerServiceTest extends Suite {
         loadBalancerState.endpointLink = EndpointService.FACTORY_LINK + "/my-endpoint";
         loadBalancerState.computeLinks = new HashSet<>();
         loadBalancerState.computeLinks.add(ComputeService.FACTORY_LINK + "/a-compute");
+        loadBalancerState.targetLinks = new HashSet<>();
+        loadBalancerState.targetLinks.add(ComputeService.FACTORY_LINK + "/a-compute");
+        loadBalancerState.targetLinks.add(NetworkInterfaceService.FACTORY_LINK + "/a-nic");
         loadBalancerState.subnetLinks = new HashSet<>();
         loadBalancerState.subnetLinks.add(SubnetService.FACTORY_LINK + "/a-subnet");
         loadBalancerState.regionId = "regionId";
@@ -228,6 +231,9 @@ public class LoadBalancerServiceTest extends Suite {
             patchState.endpointLink = EndpointService.FACTORY_LINK + "/new-endpoint";
             patchState.computeLinks = new HashSet<>();
             patchState.computeLinks.add(ComputeService.FACTORY_LINK + "/b-compute");
+            patchState.targetLinks = new HashSet<>();
+            patchState.targetLinks.add(ComputeService.FACTORY_LINK + "/b-compute");
+            patchState.targetLinks.add(NetworkInterfaceService.FACTORY_LINK + "/b-nic");
             patchState.subnetLinks = new HashSet<>();
             patchState.subnetLinks.add(SubnetService.FACTORY_LINK + "/b-subnet");
             patchState.customProperties = new HashMap<>();
@@ -249,6 +255,7 @@ public class LoadBalancerServiceTest extends Suite {
             assertThat(returnState.name, is(patchState.name));
             assertThat(returnState.endpointLink, is(patchState.endpointLink)); // will change
             assertThat(returnState.computeLinks.size(), is(2));
+            assertThat(returnState.targetLinks.size(), is(4));
             assertThat(returnState.subnetLinks.size(), is(2));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));

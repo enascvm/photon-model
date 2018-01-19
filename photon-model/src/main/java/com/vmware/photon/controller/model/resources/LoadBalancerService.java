@@ -91,7 +91,14 @@ public class LoadBalancerService extends StatefulService {
          * Links to the load balanced instances.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public Set<String> computeLinks;
+
+        /**
+         * Links to the load balanced Objects (ComputeState/NetworkInterfaceState).
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Set<String> targetLinks;
 
         /**
          * List of subnets the load balancer is attached to. Typically these must be in different
@@ -148,6 +155,7 @@ public class LoadBalancerService extends StatefulService {
                 targetState.endpointLink = this.endpointLink;
                 targetState.regionId = this.regionId;
                 targetState.computeLinks = this.computeLinks;
+                targetState.targetLinks = this.targetLinks;
                 targetState.subnetLinks = this.subnetLinks;
                 targetState.routes = this.routes;
                 targetState.instanceAdapterReference = this.instanceAdapterReference;
