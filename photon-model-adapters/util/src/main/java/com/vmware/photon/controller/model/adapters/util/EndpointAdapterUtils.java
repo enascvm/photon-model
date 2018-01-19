@@ -398,21 +398,23 @@ public class EndpointAdapterUtils {
      *         (Optional) Query used to express the criteria for @{@link EndpointState}
      * @param endpointType
      *         The endpoint type of the adapter
+     * @param queryTaskTenantLinks
+     *         The tenantLinks used for creating a QueryTask
      * @return A void DeferredResult when validation is successful and a failed DeferredResult when
      * validation is not successful
      */
     public static DeferredResult<Void> validateEndpointUniqueness(ServiceHost host, Query authQuery,
-            Query endpointQuery, String endpointType) {
+            Query endpointQuery, String endpointType, List<String> queryTaskTenantLinks) {
 
-        return getAuthLinks(host, authQuery)
+        return getAuthLinks(host, authQuery, queryTaskTenantLinks)
                 .thenCompose(links -> getEndpointLinks(host,
-                        endpointQuery, links, endpointType))
+                        endpointQuery, links, endpointType, queryTaskTenantLinks))
                 .thenCompose(EndpointAdapterUtils::verifyLinks)
                 .thenApply(ignore -> null);
     }
 
     private static DeferredResult<List<String>> getAuthLinks(ServiceHost host, Query
-            authQuery) {
+            authQuery, List<String> queryTaskTenantLinks) {
         Query.Builder authQueryBuilder = Builder.create()
                 .addKindFieldClause(AuthCredentialsServiceState.class);
 
@@ -424,14 +426,16 @@ public class EndpointAdapterUtils {
                 host,
                 authQueryBuilder.build(),
                 AuthCredentialsServiceState.class,
-                null);
+                null)
+                .setQueryTaskTenantLinks(queryTaskTenantLinks);
         queryAuth.setClusterType(INVENTORY_SERVICE);
 
         return queryAuth.collectLinks(Collectors.toList());
     }
 
     private static DeferredResult<List<String>> getEndpointLinks(ServiceHost host, Query
-            endpointQuery, List<String> credentialsLinks, String endpointType) {
+            endpointQuery, List<String> credentialsLinks, String endpointType, List<String>
+            queryTaskTenantLinks) {
         if (credentialsLinks.isEmpty()) {
             return DeferredResult.completed(Collections.emptyList());
         }
@@ -450,6 +454,7 @@ public class EndpointAdapterUtils {
                 qBuilder.build(),
                 EndpointState.class,
                 null)
+                .setQueryTaskTenantLinks(queryTaskTenantLinks)
                 .setMaxResultsLimit(1);
         queryEndpoints.setClusterType(INVENTORY_SERVICE);
 

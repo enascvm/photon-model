@@ -468,7 +468,9 @@ public class ImageEnumerationTaskService
                 getHost(),
                 endpointsByTypeQuery(ctx).build(),
                 EndpointState.class,
-                null).setMaxResultsLimit(1);
+                null)
+                .setQueryTaskTenantLinks(ctx.taskState.tenantLinks)
+                .setMaxResultsLimit(1);
 
         queryEndpointsByType.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
@@ -619,7 +621,8 @@ public class ImageEnumerationTaskService
                 getHost(),
                 publicImagesByEndpointTypeQuery(ctx).build(),
                 ImageState.class,
-                null /* tenants */);
+                null /* tenants */)
+                .setQueryTaskTenantLinks(ctx.taskState.tenantLinks);
         queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
         queryAll.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 

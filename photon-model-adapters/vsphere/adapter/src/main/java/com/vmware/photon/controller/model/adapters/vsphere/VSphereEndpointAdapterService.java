@@ -109,7 +109,7 @@ public class VSphereEndpointAdapterService extends StatelessService {
             URI adapterManagementUri = getAdapterManagementUri(host);
             String id = body.endpointProperties.get(REGION_KEY);
 
-            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness, host)
+            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness, host, body.tenantLinks)
                     .whenComplete((aVoid, throwable) -> {
                         if (throwable != null) {
                             if (throwable instanceof CompletionException) {
@@ -161,7 +161,7 @@ public class VSphereEndpointAdapterService extends StatelessService {
      * Validate that the endpoint is unique by comparing the User and Host
      */
     private DeferredResult<Void> validateEndpointUniqueness(AuthCredentialsServiceState credentials,
-            Boolean endpointUniqueness, String host) {
+            Boolean endpointUniqueness, String host, List<String> queryTaskTenantLinks) {
         if (Boolean.TRUE.equals(endpointUniqueness)) {
 
             Query authQuery = Builder.create()
@@ -172,7 +172,7 @@ public class VSphereEndpointAdapterService extends StatelessService {
                             HOST_NAME_KEY, host).build();
 
             return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery,
-                    endpointQuery, EndpointType.vsphere.name());
+                    endpointQuery, EndpointType.vsphere.name(), queryTaskTenantLinks);
         }
         return DeferredResult.completed(null);
     }

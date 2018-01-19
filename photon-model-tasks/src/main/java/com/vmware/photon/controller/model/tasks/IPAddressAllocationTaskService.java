@@ -155,12 +155,13 @@ public class IPAddressAllocationTaskService extends
                     .addFieldClause(SubnetRangeState.FIELD_NAME_SUBNET_LINK,
                             this.subnetState.documentSelfLink);
 
-            QueryUtils.QueryByPages<SubnetRangeState> query = new QueryUtils.QueryByPages<>(ipAddressAllocationTaskService.getHost(),
-                            builder.build(),
-                            SubnetRangeState.class,
-                            null);
+            QueryUtils.QueryByPages<SubnetRangeState> query = new QueryUtils.QueryByPages<>(
+                    ipAddressAllocationTaskService.getHost(),
+                    builder.build(),
+                    SubnetRangeState.class,
+                    null)
+                    .setQueryTaskTenantLinks(this.subnetState.tenantLinks);
             //todo: add tenantLinks
-
             query.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
             return query.collectDocuments(toList())
@@ -238,7 +239,9 @@ public class IPAddressAllocationTaskService extends
             QueryUtils.QueryByPages<IPAddressState> queryByPages = new QueryUtils.QueryByPages<>(
                     ipAddressAllocationTaskService.getHost(),
                     getIpAddressQuery,
-                    IPAddressState.class, null);
+                    IPAddressState.class,
+                    null)
+                    .setQueryTaskTenantLinks(rangeState.tenantLinks);
             queryByPages.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
             return queryByPages.collectDocuments(toList());
@@ -1488,12 +1491,13 @@ public class IPAddressAllocationTaskService extends
                         context.subnetRangeState.documentSelfLink)
                 .addFieldClause(IPAddressState.FIELD_NAME_IP_ADDRESS,
                         ipAddress);
-        QueryUtils.QueryTop<IPAddressState> query = new QueryUtils.QueryTop<>(this.getHost(),
+        QueryUtils.QueryTop<IPAddressState> query = new QueryUtils.QueryTop<>(
+                this.getHost(),
                 builder.build(),
                 IPAddressState.class,
                 null)
+                .setQueryTaskTenantLinks(context.subnetState.tenantLinks)
                 .setMaxResultsLimit(1);
-        //todo: add tenantLinks
 
         query.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 

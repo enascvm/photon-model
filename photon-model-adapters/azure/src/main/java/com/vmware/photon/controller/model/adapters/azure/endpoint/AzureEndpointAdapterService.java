@@ -125,7 +125,7 @@ public class AzureEndpointAdapterService extends StatelessService {
                 Boolean shouldProvision = Boolean.parseBoolean(
                         body.endpointProperties.get(AZURE_PROVISIONING_PERMISSION));
 
-                validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
+                validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness, body.tenantLinks)
                         .thenCompose(aVoid -> validateCredentials(credentials))
                         .thenCompose(subscription -> getPermissions(credentials))
                         .thenCompose(permList -> verifyPermissions(permList, shouldProvision))
@@ -207,7 +207,7 @@ public class AzureEndpointAdapterService extends StatelessService {
      * Validate that the endpoint is unique by comparing the Subscription and Tenant
      */
     private DeferredResult<Void> validateEndpointUniqueness(AuthCredentialsServiceState credentials,
-            Boolean endpointUniqueness) {
+            Boolean endpointUniqueness, List<String> queryTaskTenantLinks) {
         if (Boolean.TRUE.equals(endpointUniqueness)) {
             Query authQuery = Builder.create()
                     .addFieldClause(USER_LINK_KEY, credentials.userLink)
@@ -218,7 +218,7 @@ public class AzureEndpointAdapterService extends StatelessService {
                     .build();
 
             return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery,
-                    null, EndpointType.azure.name());
+                    null, EndpointType.azure.name(), queryTaskTenantLinks);
         }
         return DeferredResult.completed(null);
     }

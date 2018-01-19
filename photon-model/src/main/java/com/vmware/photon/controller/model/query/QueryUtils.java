@@ -34,6 +34,7 @@ import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.ServiceEndpointLocator;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.AuthorizationContext;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
@@ -306,6 +307,7 @@ public class QueryUtils {
             tenantLinks.forEach(link -> qBuilder
                     .addCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, link));
         }
+
         return qBuilder;
     }
 
@@ -344,6 +346,8 @@ public class QueryUtils {
         protected boolean isDirectQuery = true;
         protected URI referer;
         protected ServiceEndpointLocator serviceLocator;
+        protected List<String> queryTaskTenantLinks;
+        protected AuthorizationContext authorizationContext;
 
         protected Level level = Level.FINE;
         protected String msg;
@@ -420,10 +424,10 @@ public class QueryUtils {
                 List<String> tenantLinks,
                 String endpointLink,
                 String computeHostLink) {
-
             this.host = host;
             this.documentClass = documentClass;
             this.tenantLinks = tenantLinks;
+            this.queryTaskTenantLinks = tenantLinks;
 
             setReferer(this.host.getUri());
 
@@ -500,6 +504,31 @@ public class QueryUtils {
         }
 
         /**
+         * Set custom tenant links list to use for REST operations.
+         * <p>
+         * Default value, if not set, is the value passed to the tenantLinks constructor
+         * parameter.
+         * <p>
+         * These are required for authorization when using external Photon Model services in
+         * Symphony. These tenant links are set only on the QueryTask and are not applied in the
+         * query. To filter result dataset from a query set the constructor parameter tenantLinks.
+         */
+        public DESC setQueryTaskTenantLinks(List<String> queryTaskTenantLinks) {
+            this.queryTaskTenantLinks = queryTaskTenantLinks;
+
+            return self();
+        }
+
+        /**
+         * Set custom AuthorizationContext to use.
+         */
+        public DESC setAuthorizationContext(AuthorizationContext authorizationContext) {
+            this.authorizationContext = authorizationContext;
+
+            return self();
+        }
+
+        /**
          * Each query strategy should provide its own {@link QueryTask} processing logic.
          *
          * @param queryTaskOp
@@ -552,6 +581,12 @@ public class QueryUtils {
                     .setResultLimit(getResultLimit());
         }
 
+        protected void setContext(Operation queryTaskOp) {
+            if (this.authorizationContext != null) {
+                queryTaskOp.setAuthorizationContext(this.authorizationContext);
+            }
+        }
+
         @SuppressWarnings("rawtypes")
         private DeferredResult<Void> queryImpl(
                 QueryTask.Builder queryTaskBuilder,
@@ -559,13 +594,15 @@ public class QueryUtils {
 
             // Prepare QueryTask
             final QueryTask queryTask = queryTaskBuilder.build();
-            queryTask.tenantLinks = this.tenantLinks;
+            queryTask.tenantLinks = this.queryTaskTenantLinks;
 
             // Prepare 'query-task' create/POST request
             final Operation createQueryTaskOp = createQueryTaskOperation(
                     this.host, queryTask, this.serviceLocator);
 
             createQueryTaskOp.setReferer(this.referer);
+
+            setContext(createQueryTaskOp);
 
             this.host.log(this.level,
                     this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));
@@ -617,6 +654,8 @@ public class QueryUtils {
             final Operation getQueryTaskOp = Operation
                     .createGet(UriUtils.buildUri(qtOp.getUri(), qt.documentSelfLink))
                     .setReferer(this.referer);
+
+            setContext(getQueryTaskOp);
 
             this.host.sendWithDeferredResult(getQueryTaskOp).thenAccept(getQtOp -> {
 
@@ -788,7 +827,6 @@ public class QueryUtils {
                 Query query,
                 Class<T> documentClass,
                 List<String> tenantLinks) {
-
             super(host, query, documentClass, tenantLinks);
         }
 
@@ -797,7 +835,6 @@ public class QueryUtils {
                 Class<T> documentClass,
                 List<String> tenantLinks,
                 String endpointLink) {
-
             super(host, query, documentClass, tenantLinks, endpointLink);
         }
 
@@ -807,7 +844,6 @@ public class QueryUtils {
                 List<String> tenantLinks,
                 String endpointLink,
                 String computeHostLink) {
-
             super(host, query, documentClass, tenantLinks, endpointLink, computeHostLink);
         }
 
@@ -855,6 +891,8 @@ public class QueryUtils {
             Operation getQueryTaskOp = Operation
                     .createGet(UriUtils.buildUri(queryTaskOp.getUri(), pageLink))
                     .setReferer(this.referer);
+
+            setContext(getQueryTaskOp);
 
             return this.host.sendWithDeferredResult(getQueryTaskOp)
                     // Handle CURRENT page of results

@@ -124,7 +124,7 @@ public class AWSEndpointAdapterService extends StatelessService {
                     Regions.DEFAULT_REGION.getName() :
                     body.endpointProperties.get(REGION_KEY);
 
-            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
+            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness, body.tenantLinks)
                     .thenCompose(aVoid -> validateCredentialsWithRegions(credentials, regionId))
                     .whenComplete((aVoid, e) -> {
                         if (e != null) {
@@ -235,13 +235,13 @@ public class AWSEndpointAdapterService extends StatelessService {
      * Validate that the endpoint is unique by comparing the Access key ID
      */
     private DeferredResult<Void> validateEndpointUniqueness(AuthCredentialsServiceState credentials,
-            Boolean endpointUniqueness) {
+            Boolean endpointUniqueness, List<String> queryTaskTenantLinks) {
         if (Boolean.TRUE.equals(endpointUniqueness)) {
             Query authQuery = Builder.create()
                     .addFieldClause(PRIVATE_KEYID_KEY, credentials.privateKeyId).build();
 
             return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery,
-                    null, EndpointType.aws.name());
+                    null, EndpointType.aws.name(), queryTaskTenantLinks);
         }
         return DeferredResult.completed(null);
     }

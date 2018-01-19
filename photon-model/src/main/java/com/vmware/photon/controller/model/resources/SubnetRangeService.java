@@ -308,7 +308,7 @@ public class SubnetRangeService extends StatefulService {
      */
     private DeferredResult<Void> validateNoRangeOverlap(SubnetRangeState subnetRangeState) {
         if (subnetRangeState.subnetLink != null) {
-            return getSubnetRangesInSubnet(subnetRangeState.subnetLink)
+            return getSubnetRangesInSubnet(subnetRangeState.subnetLink, subnetRangeState.tenantLinks)
                     .thenAccept((subnetRangeList) -> {
                         validateIpsOutsideDefinedRanges(
                                 subnetRangeState.documentSelfLink,
@@ -468,9 +468,11 @@ public class SubnetRangeService extends StatefulService {
      * Fetch all pre existing subnet ranges
      *
      * @param subnetLink
+     * @param queryTaskTenantLinks
      * @return A deferred result that contains a list of pre-existing subnet ranges
      */
-    private DeferredResult<List<SubnetRangeState>> getSubnetRangesInSubnet(String subnetLink) {
+    private DeferredResult<List<SubnetRangeState>> getSubnetRangesInSubnet(String subnetLink,
+            List<String> queryTaskTenantLinks) {
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(SubnetRangeState.class)
                 .addFieldClause(FIELD_NAME_SUBNET_LINK, subnetLink);
@@ -480,7 +482,7 @@ public class SubnetRangeService extends StatefulService {
                 qBuilder.build(),
                 SubnetRangeState.class,
                 null
-        );
+        ).setQueryTaskTenantLinks(queryTaskTenantLinks);
 
         queryTop.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 

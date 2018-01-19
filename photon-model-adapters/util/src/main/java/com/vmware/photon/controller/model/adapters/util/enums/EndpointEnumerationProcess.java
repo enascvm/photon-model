@@ -505,7 +505,9 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
-                isApplyEndpointLink() ? context.endpointState.documentSelfLink : null);
+                isApplyEndpointLink() ? context.endpointState.documentSelfLink : null,
+                null)
+                .setQueryTaskTenantLinks(context.endpointState.tenantLinks);
         queryLocalStates.setMaxPageSize(remoteIds.size());
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
@@ -712,7 +714,9 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 qBuilder.build(),
                 context.localStateClass,
                 isApplyInfraFields() ? context.endpointState.tenantLinks : null,
-                isApplyEndpointLink() ? context.endpointState.documentSelfLink : null);
+                isApplyEndpointLink() ? context.endpointState.documentSelfLink : null,
+                null)
+                .setQueryTaskTenantLinks(context.endpointState.tenantLinks);
         queryLocalStates.setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         List<DeferredResult<Operation>> disassociateDRs = new ArrayList<>();
