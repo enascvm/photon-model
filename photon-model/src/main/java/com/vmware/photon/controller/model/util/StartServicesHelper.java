@@ -148,9 +148,7 @@ public class StartServicesHelper {
          */
         public final Supplier<FactoryService> factoryCreator;
 
-        private String link;
-
-        private Service serviceInstance;
+        private final String link;
 
         private ServiceMetadata(
                 boolean isFactory,
@@ -160,6 +158,15 @@ public class StartServicesHelper {
             this.isFactory = isFactory;
             this.serviceClass = serviceClass;
             this.factoryCreator = factoryCreator;
+
+            this.link = initLink();
+        }
+
+        @Override
+        public String toString() {
+            return "ServiceMetadata["
+                    + (this.isFactory ? "factory" : "service") + ":"
+                    + this.serviceClass.getSimpleName() + "]";
         }
 
         /**
@@ -167,11 +174,7 @@ public class StartServicesHelper {
          * service or the FACTORY_LINK of a factory service.
          */
         public String getLink() {
-            return initLink();
-//            if (this.link == null) {
-//                this.link = initLink();
-//            }
-//            return this.link;
+            return this.link;
         }
 
         /**
@@ -179,11 +182,9 @@ public class StartServicesHelper {
          * instance of this service class most commonly used to call {@link Service#getStateType()}.
          */
         public Service serviceInstance() {
-            return initServiceInstance();
-//            if (this.serviceInstance == null) {
-//                this.serviceInstance = initServiceInstance();
-//            }
-//            return this.serviceInstance;
+            // Every call MUST return new service instance case the same service
+            // might be run on two hosts
+            return newServiceInstance();
         }
 
         /**
@@ -214,7 +215,7 @@ public class StartServicesHelper {
                     selfLinkOrFactoryLinkName));
         }
 
-        private Service initServiceInstance() throws InstantiationError {
+        private Service newServiceInstance() throws InstantiationError {
             try {
                 if (!this.isFactory) {
                     return this.serviceClass.newInstance();
@@ -349,7 +350,6 @@ public class StartServicesHelper {
                 throw failure[0];
             }
         }
-
     }
 
 }

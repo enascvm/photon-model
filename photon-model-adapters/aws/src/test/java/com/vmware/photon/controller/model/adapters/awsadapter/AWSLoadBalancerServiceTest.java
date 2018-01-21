@@ -112,7 +112,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host, true);
+            AWSAdapters.startServices(this.host);
 
             AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
             creds.privateKey = this.secretKey;

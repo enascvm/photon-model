@@ -32,7 +32,9 @@ public class AWSVolumeTypeDiscoveryServiceTest {
         this.host = VerificationHost.create(0);
         this.host.start();
 
-        AWSAdapters.startServices(this.host, true);
+        AWSAdapters.startServices(this.host);
+
+        this.host.waitForServiceAvailable(AWSVolumeTypeDiscoveryService.SELF_LINK);
     }
 
     @Test
