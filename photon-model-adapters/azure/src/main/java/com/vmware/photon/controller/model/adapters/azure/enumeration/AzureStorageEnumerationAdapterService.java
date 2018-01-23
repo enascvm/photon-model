@@ -66,6 +66,7 @@ import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.ResultContinuation;
 import com.microsoft.azure.storage.ResultSegment;
 import com.microsoft.azure.storage.StorageCredentials;
+import com.microsoft.azure.storage.StorageErrorCode;
 import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.BlobListingDetails;
 import com.microsoft.azure.storage.blob.CloudBlob;
@@ -957,17 +958,24 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                     }
                                 } while (nextBlobResults != null);
                             }
-                        } catch (StorageException err) {
-                            if (err.getCause() instanceof UnknownHostException) {
-                                String msg = "Probably trying to process a storage account that was "
+                        } catch (StorageException storageExc) {
+                            if (storageExc.getCause() instanceof UnknownHostException
+                                    || StorageErrorCode.RESOURCE_NOT_FOUND.equals(storageExc.getErrorCode())) {
+
+                                String msg = "Probably trying to process a storage account/container that was "
                                         + "just deleted. Skipping it and continue with the next "
                                         + "storage account. Storage account id: [" + id + "], "
                                         + "storage account connection string: ["
                                         + storageConnectionString + "]. Error: %s";
 
-                                logInfo(msg, Utils.toString(err));
+                                logInfo(msg, Utils.toString(storageExc));
                             } else {
-                                throw err;
+                                logSevere("StorageException[errorCode=%s, httpCode=%s, msg=%s, cause=%s]",
+                                        storageExc.getErrorCode(),
+                                        storageExc.getHttpStatusCode(),
+                                        storageExc.getMessage(),
+                                        Utils.toString(storageExc.getCause()));
+                                throw storageExc;
                             }
                         }
                     } while (nextContainerResults != null);
