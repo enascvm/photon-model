@@ -712,6 +712,7 @@ public class ResourceGroomerTaskService
             if (doc.documentKind.equals(COMPUTE_STATE_DOCUMENT_KIND)) {
                 ComputeState state = Utils.fromJson(document, ComputeState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -720,6 +721,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(DISK_STATE_DOCUMENT_KIND)) {
                 DiskState state = Utils.fromJson(document, DiskState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -736,6 +738,7 @@ public class ResourceGroomerTaskService
                     continue;
                 }
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -744,6 +747,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(NETWORK_STATE_DOCUMENT_KIND)) {
                 NetworkState state = Utils.fromJson(document, NetworkState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -752,6 +756,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(NETWORK_INTERFACE_STATE_DOCUMENT_KIND)) {
                 NetworkInterfaceState state = Utils.fromJson(document, NetworkInterfaceState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -760,6 +765,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(SECURITY_GROUP_STATE_DOCUMENT_KIND)) {
                 SecurityGroupState state = Utils.fromJson(document, SecurityGroupState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -768,6 +774,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(SUBNET_STATE_DOCUMENT_KIND)) {
                 SubnetState state = Utils.fromJson(document, SubnetState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -776,6 +783,7 @@ public class ResourceGroomerTaskService
             }  else if (doc.documentKind.equals(LOAD_BALANCER_DOCUMENT_KIND)) {
                 LoadBalancerState state = Utils.fromJson(document, LoadBalancerState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -784,6 +792,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(STORAGE_DESCRIPTION_DOCUMENT_KIND)) {
                 StorageDescription state = Utils.fromJson(document, StorageDescription.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -796,6 +805,7 @@ public class ResourceGroomerTaskService
                     continue;
                 }
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -804,6 +814,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(IMAGE_STATE_KIND)) {
                 ImageState state = Utils.fromJson(document, ImageState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
@@ -812,6 +823,7 @@ public class ResourceGroomerTaskService
             } else if (doc.documentKind.equals(ROUTER_STATE_KIND)) {
                 RouterState state = Utils.fromJson(document, RouterState.class);
                 if (state.endpointLinks != null) {
+                    state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
                 }
                 endpointLinksByDocumentLinks.put(state.documentSelfLink, endpointLinks);
