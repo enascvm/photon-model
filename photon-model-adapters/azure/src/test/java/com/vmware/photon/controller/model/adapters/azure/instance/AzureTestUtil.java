@@ -1567,12 +1567,8 @@ public class AzureTestUtil {
             vNet.withLocation(azureNicSpecs.network.zoneId);
 
             AddressSpace addressSpace = new AddressSpace();
-
-            // Azure's custom serializers don't handle Collections.SingletonList well, so use ArrayList
-            List<String> cidrs = new ArrayList<>();
-            cidrs.add(azureNicSpecs.network.cidr);
-
-            addressSpace.withAddressPrefixes(cidrs);
+            addressSpace.withAddressPrefixes(
+                    Collections.singletonList(azureNicSpecs.network.cidr));
             vNet.withAddressSpace(addressSpace);
 
             List<SubnetInner> subnetList = new ArrayList<>();
@@ -1621,11 +1617,7 @@ public class AzureTestUtil {
         sr.withName(AzureConstants.AZURE_LINUX_SECURITY_GROUP_NAME);
         sr.withProtocol(SecurityRuleProtocol.TCP);
 
-        // Azure's custom serializers don't handle Collections.SingletonList well, so use ArrayList
-        ArrayList<SecurityRuleInner> rules = new ArrayList<>();
-        rules.add(sr);
-
-        sharedNSG.withSecurityRules(rules);
+        sharedNSG.withSecurityRules(Collections.singletonList(sr));
 
         networkManagementClient.networkSecurityGroups()
                 .createOrUpdate(resourceGroupName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME,

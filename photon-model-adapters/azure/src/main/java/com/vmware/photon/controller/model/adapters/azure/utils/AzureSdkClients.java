@@ -28,7 +28,6 @@ import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.implementation.ComputeManager;
 import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
-import com.microsoft.azure.management.resources.fluentcore.utils.ResourceManagerThrottlingInterceptor;
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 import com.microsoft.azure.management.resources.implementation.SubscriptionClientImpl;
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
@@ -36,6 +35,7 @@ import com.microsoft.azure.serializer.AzureJacksonAdapter;
 import com.microsoft.rest.LogLevel;
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceResponseBuilder.Factory;
+
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
@@ -251,7 +251,6 @@ public class AzureSdkClients implements AutoCloseable {
         restClientBuilder.withCredentials(credentials);
         restClientBuilder.withSerializerAdapter(new AzureJacksonAdapter());
         restClientBuilder.withLogLevel(getRestClientLogLevel());
-        restClientBuilder.withInterceptor(new ResourceManagerThrottlingInterceptor());
         if (executorService != null) {
             restClientBuilder.withCallbackExecutor(executorService);
         }

@@ -100,9 +100,9 @@ import com.microsoft.azure.management.resources.implementation.SubscriptionClien
 import com.microsoft.azure.management.resources.implementation.SubscriptionInner;
 import com.microsoft.azure.management.storage.Kind;
 import com.microsoft.azure.management.storage.ProvisioningState;
+import com.microsoft.azure.management.storage.Sku;
 import com.microsoft.azure.management.storage.SkuName;
 import com.microsoft.azure.management.storage.StorageAccountKey;
-import com.microsoft.azure.management.storage.implementation.SkuInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountCreateParametersInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
@@ -640,7 +640,7 @@ public class AzureInstanceService extends StatelessService {
 
         StorageAccountCreateParametersInner storageParameters = new StorageAccountCreateParametersInner();
         storageParameters.withLocation(ctx.child.description.regionId);
-        storageParameters.withSku(new SkuInner().withName(SkuName.STANDARD_LRS));
+        storageParameters.withSku(new Sku().withName(SkuName.STANDARD_LRS));
         storageParameters.withKind(Kind.STORAGE);
 
         StorageAccountProvisioningCallback handler = new StorageAccountProvisioningCallback(ctx,
@@ -773,12 +773,8 @@ public class AzureInstanceService extends StatelessService {
         VirtualNetworkInner vNet = new VirtualNetworkInner();
         vNet.withLocation(ctx.resourceGroup.location());
 
-        // Azure's custom serializers don't handle Collections.SingletonList well, so use ArrayList
-        List<String> prefix = new ArrayList<>();
-        prefix.add(nicCtx.networkState.subnetCIDR);
-
         AddressSpace addressSpace = new AddressSpace()
-                .withAddressPrefixes(prefix);
+                .withAddressPrefixes(Collections.singletonList(nicCtx.networkState.subnetCIDR));
         vNet.withAddressSpace(addressSpace);
 
         vNet.withSubnets(subnetsToCreate);
@@ -1013,10 +1009,7 @@ public class AzureInstanceService extends StatelessService {
 
         NetworkInterfaceInner nic = new NetworkInterfaceInner();
         nic.withLocation(ctx.resourceGroup.location());
-
-        List<NetworkInterfaceIPConfigurationInner> ipConfigs = new ArrayList<>();
-        ipConfigs.add(ipConfig);
-        nic.withIpConfigurations(ipConfigs);
+        nic.withIpConfigurations(Collections.singletonList(ipConfig));
         if (nicCtx.securityGroup != null) {
             // Security group is optional so check for existence
             nic.withNetworkSecurityGroup(new SubResource().withId(nicCtx.securityGroup.id()));
@@ -1071,7 +1064,7 @@ public class AzureInstanceService extends StatelessService {
         HardwareProfile hardwareProfile = new HardwareProfile();
         hardwareProfile.withVmSize(
                 description.instanceType != null
-                        ? VirtualMachineSizeTypes.fromString(description.instanceType)
+                        ? new VirtualMachineSizeTypes(description.instanceType)
                         : VirtualMachineSizeTypes.BASIC_A0);
         request.withHardwareProfile(hardwareProfile);
 
