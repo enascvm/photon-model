@@ -974,7 +974,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                         storageExc.getErrorCode(),
                                         storageExc.getHttpStatusCode(),
                                         storageExc.getMessage(),
-                                        Utils.toString(storageExc.getCause()));
+                                        storageExc.getCause() != null
+                                            ? Utils.toString(storageExc.getCause())
+                                            : "n/a");
                                 throw storageExc;
                             }
                         }
