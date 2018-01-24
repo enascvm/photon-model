@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.49-SNAPSHOT
+
 ## 0.6.48
 * Deprecate the endpointLink for the resources where
   de-duplication is already supported.
