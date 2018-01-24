@@ -83,6 +83,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
@@ -959,8 +960,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                 } while (nextBlobResults != null);
                             }
                         } catch (StorageException storageExc) {
+
                             if (storageExc.getCause() instanceof UnknownHostException
-                                    || StorageErrorCode.RESOURCE_NOT_FOUND.equals(storageExc.getErrorCode())) {
+                                    || StorageErrorCode.RESOURCE_NOT_FOUND.toString().equals(storageExc.getErrorCode())
+                                    || AzureConstants.RESOURCE_NOT_FOUND.equals(storageExc.getErrorCode())) {
 
                                 String msg = "Probably trying to process a storage account/container that was "
                                         + "just deleted. Skipping it and continue with the next "
@@ -975,8 +978,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                         storageExc.getHttpStatusCode(),
                                         storageExc.getMessage(),
                                         storageExc.getCause() != null
-                                            ? Utils.toString(storageExc.getCause())
-                                            : "n/a");
+                                        ? Utils.toString(storageExc.getCause())
+                                                : "n/a");
+
                                 throw storageExc;
                             }
                         }
