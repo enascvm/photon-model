@@ -134,7 +134,8 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             }
             state.delayMicros = state.delayMicros != null ? state.delayMicros
                     : new Random().longs(1, 0, state.intervalMicros).findFirst().getAsLong();
-            invokeTask(state, true);
+            invokeTask(state,
+                    !start.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_FROM_MIGRATION_TASK));
             start.complete();
         } catch (Throwable e) {
             start.fail(e);
