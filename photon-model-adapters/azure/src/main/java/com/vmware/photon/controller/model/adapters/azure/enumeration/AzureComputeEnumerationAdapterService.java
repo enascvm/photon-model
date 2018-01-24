@@ -290,10 +290,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 try {
                     ctx.azureSdkClients = new AzureSdkClients(ctx.endpointAuth);
                 } catch (Throwable e) {
-                    logSevere(e);
-                    ctx.error = e;
-                    ctx.stage = EnumerationStages.ERROR;
-                    handleEnumeration(ctx);
+                    handleError(ctx, e);
                     return;
                 }
             }
@@ -343,10 +340,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         default:
             String msg = String.format("Unknown Azure compute enumeration stage %s ",
                     ctx.stage.toString());
-            logSevere(() -> msg);
-            ctx.error = new IllegalStateException(msg);
-            ctx.operation.fail(ctx.error);
-            ctx.close();
+            handleError(ctx, new IllegalStateException(msg));
         }
     }
 
@@ -354,6 +348,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Handle enumeration substages for VM data collection.
      */
     private void handleSubStage(EnumerationContext ctx) {
+        try {
+            doHandleSubStage(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    private void doHandleSubStage(EnumerationContext ctx) {
         switch (ctx.subStage) {
         case COLLECT_REGIONS:
             logInfo("IN COLLECT_REGIONS [endpointLink:%s]", ctx.request.endpointLink);
@@ -440,9 +442,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         default:
             String msg = String
                     .format("Unknown Azure enumeration sub-stage %s ", ctx.subStage.toString());
-            ctx.error = new IllegalStateException(msg);
-            ctx.stage = EnumerationStages.ERROR;
-            handleEnumeration(ctx);
+            handleError(ctx, new IllegalStateException(msg));
             break;
         }
     }
@@ -1416,20 +1416,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private DiskState createDataDiskState(EnumerationContext ctx, DataDisk dataDisk, boolean isManaged) {
+
         DiskState diskState = new DiskState();
-        String id = UUID.randomUUID().toString();
-        diskState.documentSelfLink = UriUtils.buildUriPath(DiskService.FACTORY_LINK, id);
+
+        diskState.documentSelfLink = UriUtils.buildUriPath(
+                DiskService.FACTORY_LINK, UUID.randomUUID().toString());
         diskState.name = dataDisk.name();
-        if (isManaged) {
-            diskState.id = dataDisk.managedDisk().id();
-        } else {
-            diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
-        }
         diskState.capacityMBytes = dataDisk.diskSizeGB() * 1024;
         diskState.status = DiskService.DiskStatus.ATTACHED;
         diskState.tenantLinks = ctx.parentCompute.tenantLinks;
         diskState.resourcePoolLink = ctx.request.resourcePoolLink;
         diskState.computeHostLink = ctx.parentCompute.documentSelfLink;
+
         diskState.endpointLink = ctx.request.endpointLink;
         AdapterUtils.addToEndpointLinks(diskState, ctx.request.endpointLink);
 
@@ -1437,8 +1435,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         diskState.customProperties.put(AZURE_DATA_DISK_CACHING, dataDisk.caching().name());
         diskState.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(dataDisk.lun()));
 
-        diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
-                dataDisk.managedDisk().storageAccountType().toString());
+        if (isManaged) {
+            diskState.id = dataDisk.managedDisk().id();
+            diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
+                    dataDisk.managedDisk().storageAccountType().toString());
+        } else {
+            diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
+        }
 
         return diskState;
     }
