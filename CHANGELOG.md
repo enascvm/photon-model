@@ -1,6 +1,11 @@
 # CHANGELOG
 
-## 0.6.48-SNAPSHOT
+## 0.6.48
+* Deprecate the endpointLink for the resources where
+  de-duplication is already supported.
+* Important bug fixes in AWS security group enumeration.
+* Enable ARN-based credentials in AWS Clients.
+* Refactor TagState's logic around external/internal property.
 
 ## 0.6.47
 * DeDup feature: Resources enumerated only once for 
