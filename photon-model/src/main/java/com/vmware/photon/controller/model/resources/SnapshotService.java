@@ -85,13 +85,10 @@ public class SnapshotService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        SnapshotState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -102,13 +99,10 @@ public class SnapshotService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            SnapshotState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        SnapshotState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private SnapshotState processInput(Operation op) {
@@ -126,8 +120,8 @@ public class SnapshotService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         SnapshotState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), SnapshotState.class,
-                null);
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
+                SnapshotState.class, null);
     }
 
     @Override

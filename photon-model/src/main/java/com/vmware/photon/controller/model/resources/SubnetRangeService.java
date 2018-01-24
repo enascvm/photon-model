@@ -30,7 +30,6 @@ import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.SubnetValidator;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
@@ -173,14 +172,10 @@ public class SubnetRangeService extends StatefulService {
      */
     @Override
     public void handleCreate(Operation create) {
-        try {
-
-            SubnetRangeState subnetRangeState = getOperationBody(create);
-            validateAll(subnetRangeState)
-                    .whenCompleteNotify(create);
-        } catch (Throwable t) {
-            create.fail(t);
-        }
+        SubnetRangeState subnetRangeState = getOperationBody(create);
+        validateAll(subnetRangeState)
+                .thenCompose(__ -> ResourceUtils.populateTags(this, subnetRangeState))
+                .whenCompleteNotify(create);
     }
 
     @Override
@@ -193,15 +188,12 @@ public class SubnetRangeService extends StatefulService {
      */
     @Override
     public void handlePut(Operation put) {
-        try {
-            SubnetRangeState subnetRangeState = getOperationBody(put);
+        SubnetRangeState subnetRangeState = getOperationBody(put);
 
-            validateAll(subnetRangeState)
-                    .thenAccept((ignored) -> setState(put, subnetRangeState))
-                    .whenCompleteNotify(put);
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        validateAll(subnetRangeState)
+                .thenCompose((ignored) -> ResourceUtils.populateTags(this, subnetRangeState))
+                .thenAccept((ignored) -> setState(put, subnetRangeState))
+                .whenCompleteNotify(put);
     }
 
     /**

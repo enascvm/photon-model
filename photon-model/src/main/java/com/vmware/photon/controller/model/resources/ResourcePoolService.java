@@ -162,24 +162,18 @@ public class ResourcePoolService extends StatefulService {
     }
 
     @Override
-    public void handleCreate(Operation createPost) {
-        try {
-            processInput(createPost);
-            createPost.complete();
-        } catch (Throwable t) {
-            createPost.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        ResourcePoolState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            ResourcePoolState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        ResourcePoolState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private ResourcePoolState processInput(Operation op) {
@@ -204,7 +198,7 @@ public class ResourcePoolService extends StatefulService {
         }
 
         // use standard resource merging with an additional custom handler for the query
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 ResourcePoolState.class,
                 op -> {
                     // check state and re-generate the query, if needed

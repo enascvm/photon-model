@@ -19,14 +19,21 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.UriUtils;
 
 /**
@@ -110,7 +117,7 @@ public class ResourceUtilsTest extends BaseModelTest {
         ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
                 .buildDescription(ResourceState.class);
 
-        ResourceUtils.handlePatch(patchOperation, current, desc, ResourceState.class, null);
+        ResourceUtils.handlePatch(null, patchOperation, current, desc, ResourceState.class, null);
         assertTrue(patchOperation.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED));
     }
 
@@ -160,6 +167,74 @@ public class ResourceUtilsTest extends BaseModelTest {
         assertEquals(null, current.optionalLink);
     }
 
+    @Test
+    public void testExpandTags() throws Throwable {
+        TagState tag1 = new TagState();
+        tag1.key = "a";
+        tag1.value = "1";
+        tag1 = postServiceSynchronously(TagService.FACTORY_LINK, tag1, TagState.class);
+        TagState tag2 = new TagState();
+        tag2.key = "a";
+        tag2.value = "2";
+        tag2 = postServiceSynchronously(TagService.FACTORY_LINK, tag2, TagState.class);
+        TagState tag3 = new TagState();
+        tag3.key = "a";
+        tag3.value = "3";
+        tag3 = postServiceSynchronously(TagService.FACTORY_LINK, tag3, TagState.class);
+
+        // validate expansion on POST
+        ComputeState compute = new ComputeState();
+        compute.descriptionLink = "cdLink";
+        compute.tagLinks = new HashSet<>();
+        compute.tagLinks.add(tag1.documentSelfLink);
+        compute.tagLinks.add(tag2.documentSelfLink);
+        compute = postServiceSynchronously(ComputeService.FACTORY_LINK, compute, ComputeState
+                .class);
+
+        Collection<String> tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
+        assertEquals(2, tags.size());
+        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n2")));
+
+        // validate tags cannot be modified directly
+        compute.expandedTags.remove(1);
+        assertEquals(1, compute.expandedTags.size());
+        putServiceSynchronously(compute.documentSelfLink, compute);
+        compute = getServiceSynchronously(compute.documentSelfLink, ComputeState.class);
+        tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
+        assertEquals(2, tags.size());
+        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n2")));
+
+        // validate expansion on PUT
+        compute.tagLinks.remove(tag2.documentSelfLink);
+        compute.tagLinks.add(tag3.documentSelfLink);
+        putServiceSynchronously(compute.documentSelfLink, compute);
+        compute = getServiceSynchronously(compute.documentSelfLink, ComputeState.class);
+        tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
+        assertEquals(2, tags.size());
+        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n3")));
+
+        // validate expansion on PATCH
+        ComputeState patchState = new ComputeState();
+        patchState.tagLinks = new HashSet<>();
+        patchState.tagLinks.add(tag2.documentSelfLink);
+        compute = patchServiceSynchronously(compute.documentSelfLink, patchState,
+                ComputeState.class);
+        tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
+        assertEquals(3, tags.size());
+        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n2", "a\n3")));
+
+        // validate expansion through custom PATCH body
+        Map<String, Collection<Object>> itemsToRemove = new HashMap<>();
+        itemsToRemove.put(ResourceState.FIELD_NAME_TAG_LINKS, Arrays.asList
+                (tag2.documentSelfLink, tag3.documentSelfLink));
+        patchServiceSynchronously(compute.documentSelfLink,
+                ServiceStateCollectionUpdateRequest.create(null, itemsToRemove));
+        compute = getServiceSynchronously(compute.documentSelfLink, ComputeState.class);
+        tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
+        assertEquals(1, tags.size());
+        assertTrue(tags.containsAll(Arrays.asList("a\n1")));
+    }
+
     private Operation handlePatch(ResourceState currentState, ResourceState patchState) {
         return handlePatch(currentState, patchState, ResourceState.class);
     }
@@ -172,7 +247,7 @@ public class ResourceUtilsTest extends BaseModelTest {
         ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
                 .buildDescription(type);
 
-        ResourceUtils.handlePatch(patchOperation, currentState, desc, type, null);
+        ResourceUtils.handlePatch(null, patchOperation, currentState, desc, type, null);
 
         return patchOperation;
     }

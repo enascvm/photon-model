@@ -14,11 +14,21 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.resources.ResourceState.TagInfo;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ReflectionUtils;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyDescription;
@@ -34,8 +44,8 @@ public class ResourceUtils {
      * purposes.
      *
      * This constant can be used instead of a {@code null} value. It is applicable only for
-     * {@link PropertyUsageOption.LINK} fields that are marked with
-     * {@link PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL} flag in the resource state document.
+     * {@link PropertyUsageOption#LINK} fields that are marked with
+     * {@link PropertyUsageOption#AUTO_MERGE_IF_NOT_NULL} flag in the resource state document.
      */
     public static final String NULL_LINK_VALUE = "__noLink";
 
@@ -55,11 +65,14 @@ public class ResourceUtils {
      * @param stateClass Service state class
      * @param customPatchHandler custom callback handler
      */
-    public static <T extends ResourceState> void handlePatch(Operation op, T currentState,
-            ServiceDocumentDescription description, Class<T> stateClass,
+    public static <T extends ResourceState> void handlePatch(Service service, Operation op, T
+            currentState, ServiceDocumentDescription description, Class<T> stateClass,
             Function<Operation, Boolean> customPatchHandler) {
         try {
             boolean hasStateChanged;
+            final Set<String> originalTagLinks = currentState.tagLinks != null
+                    ? new HashSet<>(currentState.tagLinks)
+                    : null;
 
             // apply standard patch merging
             EnumSet<Utils.MergeResult> mergeResult =
@@ -85,11 +98,29 @@ public class ResourceUtils {
             if (!hasStateChanged) {
                 op.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
             }
-            op.setBody(currentState);
-            op.complete();
+
+            // populate tags if tag links have changed
+            if (!Objects.equals(originalTagLinks, currentState.tagLinks)) {
+                populateTags(service, currentState).thenAccept(__ -> {
+                    op.setBody(currentState);
+                }).whenCompleteNotify(op);
+            } else {
+                op.setBody(currentState);
+                op.complete();
+            }
         } catch (NoSuchFieldException | IllegalAccessException e) {
             op.fail(e);
         }
+    }
+
+    /**
+     * @deprecated Use the handlePatch overload with a service arg
+     */
+    @Deprecated
+    public static <T extends ResourceState> void handlePatch(Operation op, T
+            currentState, ServiceDocumentDescription description, Class<T> stateClass,
+            Function<Operation, Boolean> customPatchHandler) {
+        handlePatch(null, op, currentState, description, stateClass, customPatchHandler);
     }
 
     /**
@@ -163,5 +194,61 @@ public class ResourceUtils {
         }
 
         op.complete();
+    }
+
+    /**
+     * Populates the resource tags based on the tag links.
+     */
+    public static <T extends ResourceState> DeferredResult<Void> populateTags(Service service,
+            T currentState) {
+        if (currentState.tagLinks == null) {
+            currentState.expandedTags = null;
+            return DeferredResult.completed(null);
+        }
+
+        if (service == null) {
+            return DeferredResult.completed(null);
+        }
+
+        List<DeferredResult<TagState>> tagGetDrs = currentState.tagLinks.stream()
+                .map(tagLink -> {
+                    Operation tagGetOp = Operation.createGet(service.getHost(), tagLink);
+                    return service.sendWithDeferredResult(tagGetOp, TagState.class)
+                        .exceptionally(e -> {
+                            // just log and ignore errors
+                            service.getHost().log(Level.WARNING, "Error expanding tag %s in "
+                                    + "resource %s: %s", tagLink, currentState.documentSelfLink,
+                                    e.getMessage());
+                            return null;
+                        });
+                })
+                .collect(Collectors.toList());
+
+        return DeferredResult.allOf(tagGetDrs)
+                .handle((tags, e) -> {
+                    if (e != null) {
+                        service.getHost().log(Level.WARNING, "Error populating tags in "
+                                + "resource %s: %s", currentState.documentSelfLink, e.getMessage());
+                        currentState.expandedTags = null;
+                    } else {
+                        currentState.expandedTags = tags.stream()
+                                .filter(Objects::nonNull)
+                                .map(ResourceUtils::tagStateToTagInfo)
+                                .collect(Collectors.toList());
+                    }
+                    return (Void)null;
+                });
+    }
+
+    private static TagInfo tagStateToTagInfo(TagState tagState) {
+        TagInfo tagInfo = new TagInfo();
+        tagInfo.tag = encodeTag(tagState.key, tagState.value);
+        return tagInfo;
+    }
+
+    private static String encodeTag(String key, String value) {
+        return (key != null ? key : "")
+                + TagInfo.KEY_VALUE_SEPARATOR
+                + (value != null ? value : "");
     }
 }

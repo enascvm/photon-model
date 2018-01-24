@@ -26,7 +26,6 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
-
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -122,13 +121,10 @@ public class EndpointService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        EndpointState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -142,7 +138,7 @@ public class EndpointService extends StatefulService {
         EndpointState currentState = getState(patch);
         EndpointState newState = patch.getBody(EndpointState.class);
         validateUpdates(currentState, newState);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 EndpointState.class, null);
     }
 

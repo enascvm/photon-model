@@ -327,24 +327,18 @@ public class DiskService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        DiskState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            DiskState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        DiskState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     @Override
@@ -458,7 +452,7 @@ public class DiskService extends StatefulService {
                 return hasStateChanged;
             }
         };
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), DiskState.class,
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(), DiskState.class,
                 customPatchHandler);
     }
 

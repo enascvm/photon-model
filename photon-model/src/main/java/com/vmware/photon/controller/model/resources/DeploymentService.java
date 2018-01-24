@@ -74,44 +74,36 @@ public class DeploymentService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
-        try {
-            if (!start.hasBody()) {
-                throw new IllegalArgumentException("body is required");
-            }
-
-            DeploymentState state = start.getBody(DeploymentState.class);
-            Utils.validateState(getStateDescription(), state);
-            if (state.creationTimeMicros == null) {
-                state.creationTimeMicros = System.currentTimeMillis();
-            }
-            start.complete();
-        } catch (Throwable t) {
-            logSevere(t);
-            start.fail(t);
+        if (!start.hasBody()) {
+            throw new IllegalArgumentException("body is required");
         }
+
+        DeploymentState state = start.getBody(DeploymentState.class);
+        Utils.validateState(getStateDescription(), state);
+        if (state.creationTimeMicros == null) {
+            state.creationTimeMicros = System.currentTimeMillis();
+        }
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            if (!put.hasBody()) {
-                throw new IllegalArgumentException("body is required");
-            }
-
-            DeploymentState newState = put.getBody(DeploymentState.class);
-            DeploymentState previousState = getState(put);
-            Utils.validateState(getStateDescription(), newState);
-            if (previousState.descriptionLink != null
-                    && !Objects.equals(newState.descriptionLink, previousState.descriptionLink)) {
-                throw new IllegalArgumentException("descriptionLink type can not be changed");
-            }
-            newState.creationTimeMicros = previousState.creationTimeMicros;
-            setState(put, newState);
-            put.complete();
-        } catch (Throwable t) {
-            logSevere(t);
-            put.fail(t);
+        if (!put.hasBody()) {
+            throw new IllegalArgumentException("body is required");
         }
+
+        DeploymentState newState = put.getBody(DeploymentState.class);
+        DeploymentState previousState = getState(put);
+        Utils.validateState(getStateDescription(), newState);
+        if (previousState.descriptionLink != null
+                && !Objects.equals(newState.descriptionLink, previousState.descriptionLink)) {
+            throw new IllegalArgumentException("descriptionLink type can not be changed");
+        }
+        newState.creationTimeMicros = previousState.creationTimeMicros;
+        ResourceUtils.populateTags(this, newState)
+                .thenAccept(__ -> setState(put, newState))
+                .whenCompleteNotify(put);
     }
 
     @Override
@@ -133,7 +125,7 @@ public class DeploymentService extends StatefulService {
 
             return hasStateChanged;
         };
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 DeploymentState.class, customPatchHandler);
     }
 

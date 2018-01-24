@@ -25,7 +25,6 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
-
 import io.netty.util.internal.StringUtil;
 
 import com.vmware.photon.controller.model.ServiceUtils;
@@ -187,7 +186,8 @@ public class ImageService extends StatefulService {
     @Override
     public void handleCreate(Operation createOp) {
         if (checkForValid(createOp)) {
-            super.handleCreate(createOp);
+            ResourceUtils.populateTags(this, createOp.getBody(ImageState.class))
+                    .whenCompleteNotify(createOp);
         }
     }
 
@@ -199,7 +199,9 @@ public class ImageService extends StatefulService {
     @Override
     public void handlePut(Operation putOp) {
         if (checkForValid(putOp)) {
-            super.handlePut(putOp);
+            ResourceUtils.populateTags(this, putOp.getBody(ImageState.class))
+                    .thenAccept(__ -> setState(putOp, putOp.getBody(ImageState.class)))
+                    .whenCompleteNotify(putOp);
         }
     }
 
@@ -233,7 +235,7 @@ public class ImageService extends StatefulService {
         };
 
         // Delegate to built-in PATCH logic
-        ResourceUtils.handlePatch(
+        ResourceUtils.handlePatch(this,
                 patchOp, currentState, getStateDescription(), ImageState.class, diskConfigsHandler);
     }
 

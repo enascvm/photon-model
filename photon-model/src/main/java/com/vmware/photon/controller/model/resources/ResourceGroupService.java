@@ -70,24 +70,18 @@ public class ResourceGroupService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        ResourceGroupState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            ResourceGroupState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        ResourceGroupState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private ResourceGroupState processInput(Operation op) {
@@ -105,7 +99,7 @@ public class ResourceGroupService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ResourceGroupState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 ResourceGroupState.class, null);
     }
 

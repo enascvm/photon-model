@@ -23,7 +23,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
-
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.ServiceUtils;
@@ -232,13 +231,10 @@ public class SecurityGroupService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        SecurityGroupState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -248,13 +244,10 @@ public class SecurityGroupService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            SecurityGroupState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        SecurityGroupState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     @Override
@@ -295,8 +288,8 @@ public class SecurityGroupService extends StatefulService {
             return hasStateChanged;
         };
         ResourceUtils
-                .handlePatch(patch, currentState, getStateDescription(), SecurityGroupState.class,
-                        customPatchHandler);
+                .handlePatch(this, patch, currentState, getStateDescription(),
+                        SecurityGroupState.class, customPatchHandler);
     }
 
     // check if the sourceList and destList have the same elements in any order

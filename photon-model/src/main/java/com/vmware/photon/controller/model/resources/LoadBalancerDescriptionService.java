@@ -249,13 +249,10 @@ public class LoadBalancerDescriptionService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        LoadBalancerDescription state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -265,13 +262,10 @@ public class LoadBalancerDescriptionService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            LoadBalancerDescription returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        LoadBalancerDescription returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     @Override
@@ -304,7 +298,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         LoadBalancerDescription currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 LoadBalancerDescription.class, op -> {
                     LoadBalancerDescription patchBody = op.getBody(LoadBalancerDescription.class);
                     boolean hasChanged = false;

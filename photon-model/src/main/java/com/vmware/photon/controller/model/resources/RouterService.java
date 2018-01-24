@@ -64,23 +64,17 @@ public class RouterService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+        RouterState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            RouterState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        RouterState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     @Override
@@ -91,8 +85,8 @@ public class RouterService extends StatefulService {
     @Override
     public void handlePatch(Operation patchOp) {
         try {
-            ResourceUtils.handlePatch(
-                    patchOp, getState(patchOp), getStateDescription(), RouterState.class, null);
+            ResourceUtils.handlePatch(this, patchOp, getState(patchOp), getStateDescription(),
+                    RouterState.class, null);
         } catch (Throwable t) {
             patchOp.fail(t);
         }

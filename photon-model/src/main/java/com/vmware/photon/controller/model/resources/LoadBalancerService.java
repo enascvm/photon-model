@@ -217,40 +217,23 @@ public class LoadBalancerService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        LoadBalancerState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            LoadBalancerState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        LoadBalancerState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     @Override
     public void handleDelete(Operation delete) {
         ResourceUtils.handleDelete(delete, this);
-    }
-
-    @Override
-    public void handlePost(Operation post) {
-        try {
-            LoadBalancerState returnState = processInput(post);
-            setState(post, returnState);
-            post.complete();
-        } catch (Throwable t) {
-            post.fail(t);
-        }
     }
 
     private LoadBalancerState processInput(Operation op) {
@@ -265,7 +248,7 @@ public class LoadBalancerService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         LoadBalancerState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 LoadBalancerState.class, op -> {
                     LoadBalancerState patchBody = op.getBody(LoadBalancerState.class);
                     boolean hasChanged = false;

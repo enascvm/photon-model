@@ -32,7 +32,6 @@ import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
@@ -320,24 +319,18 @@ public class ComputeDescriptionService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        ComputeDescription state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            ComputeDescription returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        ComputeDescription returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private ComputeDescription processInput(Operation op) {
@@ -366,7 +359,7 @@ public class ComputeDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ComputeDescription currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 ComputeDescription.class, op -> {
                     ComputeDescription patchBody = op.getBody(ComputeDescription.class);
                     boolean hasChanged = false;

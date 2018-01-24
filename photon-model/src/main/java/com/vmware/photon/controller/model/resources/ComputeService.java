@@ -397,23 +397,17 @@ public class ComputeService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
-        try {
-            validateCreate(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+        ComputeState state = validateCreate(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            ComputeState returnState = validatePut(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        ComputeState returnState = validatePut(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private ComputeState validateCreate(Operation op) {
@@ -529,7 +523,7 @@ public class ComputeService extends StatefulService {
 
             return hasStateChanged;
         };
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 ComputeState.class, customPatchHandler);
     }
 

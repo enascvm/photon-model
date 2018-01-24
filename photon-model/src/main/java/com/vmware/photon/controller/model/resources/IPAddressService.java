@@ -151,13 +151,10 @@ public class IPAddressService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        IPAddressState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -167,15 +164,12 @@ public class IPAddressService extends StatefulService {
 
     @Override
     public void handlePost(Operation post) {
-        try {
-            IPAddressState returnState = processInput(post);
-            setState(post, returnState);
-            logInfo("Resource %s was granted the ip %s with the status %s", returnState.connectedResourceLink,
-                    returnState.ipAddress, returnState.ipAddressStatus);
-            post.complete();
-        } catch (Throwable t) {
-            post.fail(t);
-        }
+        IPAddressState returnState = processInput(post);
+        logInfo("Resource %s was granted the ip %s with the status %s", returnState.connectedResourceLink,
+                returnState.ipAddress, returnState.ipAddressStatus);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(post, returnState))
+                .whenCompleteNotify(post);
     }
 
     @Override
@@ -206,10 +200,12 @@ public class IPAddressService extends StatefulService {
                     currentState.ipAddress, currentState.ipAddressStatus,
                     newState.ipAddress, newState.ipAddressStatus);
             validateIPAddressStatusTransition(currentState, newState);
-            setState(put, newState);
             logInfo("Resource %s was granted the ip %s with the status %s", newState.connectedResourceLink,
                     newState.ipAddress, newState.ipAddressStatus);
-            put.complete();
+
+            ResourceUtils.populateTags(this, newState)
+                    .thenAccept(__ -> setState(put, newState))
+                    .whenCompleteNotify(put);
         } catch (Throwable t) {
             put.fail(t);
         }
@@ -233,7 +229,7 @@ public class IPAddressService extends StatefulService {
         if (IPAddressStatus.RELEASED.equals(patchState.ipAddressStatus)) {
             patchState.connectedResourceLink = ResourceUtils.NULL_LINK_VALUE;
         }
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 IPAddressState.class, op -> {
                     boolean hasChanged = false;
 

@@ -111,13 +111,10 @@ public class FirewallService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        FirewallState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -127,13 +124,10 @@ public class FirewallService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            FirewallState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        FirewallState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private FirewallState processInput(Operation op) {
@@ -290,8 +284,8 @@ public class FirewallService extends StatefulService {
                 return hasStateChanged;
             }
         };
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), FirewallState.class,
-                customPatchHandler);
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
+                FirewallState.class, customPatchHandler);
     }
 
     @Override

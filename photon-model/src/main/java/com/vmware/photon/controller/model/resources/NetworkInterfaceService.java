@@ -20,7 +20,6 @@ import java.util.EnumSet;
 import java.util.List;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
-
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.ServiceUtils;
@@ -170,13 +169,10 @@ public class NetworkInterfaceService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        NetworkInterfaceState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -220,19 +216,16 @@ public class NetworkInterfaceService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            NetworkInterfaceState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        NetworkInterfaceState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     @Override
     public void handlePatch(Operation patch) {
         NetworkInterfaceState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 NetworkInterfaceState.class, t -> {
                     NetworkInterfaceState patchBody = patch.getBody(NetworkInterfaceState.class);
                     boolean hasStateChanged = false;

@@ -44,6 +44,31 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
 
     /**
+     * Contains information about an assigned tag.
+     *
+     * <p>Only the tag itself is currently included but in the future metadata about the tag
+     * and/or this particular assignment may be added (e.g. managed vs. discovered tags, etc.).</p>
+     */
+    public static class TagInfo {
+        public static final String KEY_VALUE_SEPARATOR = "\n";
+
+        /**
+         * String representation of the tag built by concatenating its key and value with
+         * {@link #KEY_VALUE_SEPARATOR} between them. The key is required while the value is
+         * optional; the separator is always included, even if the value is empty.
+         *
+         * <p>Note: Since {@link #expandedTags} is a collection of PODOs, having the key and value
+         * in separate fields in the PODO would not allow matching the key and the value of a single
+         * tag, e.g. "expandedTags.key eq location and expandedTags.value eq london" will not
+         * guarantee 'location' and 'longon' will be matched in the same tag; a match will be
+         * found even if the resource has two tags like 'location:manchester' and 'mgmt:london'.
+         * That's why the key and the value are stored in the same field, and search such as
+         * "expandedTags.tag eq location\nlondon" will match the correct tag.</p>
+         */
+        public String tag;
+    }
+
+    /**
      * Identifier of this resource instance
      */
     @UsageOption(option = PropertyUsageOption.ID)
@@ -137,6 +162,17 @@ public class ResourceState extends ServiceDocument {
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_44)
     public String computeHostLink;
+
+    /**
+     * Read-only field containing information about the assigned tags. Automatically populated
+     * on {@link #tagLinks} change.
+     */
+    @PropertyOptions(indexing = {
+            PropertyIndexingOption.EXPAND,
+            PropertyIndexingOption.CASE_INSENSITIVE,
+            PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE})
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_49)
+    public List<TagInfo> expandedTags;
 
     public void copyTo(ResourceState target) {
         super.copyTo(target);

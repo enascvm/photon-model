@@ -20,7 +20,6 @@ import java.util.EnumSet;
 import java.util.UUID;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
-
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.ServiceUtils;
@@ -106,13 +105,10 @@ public class NetworkService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        NetworkState state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -122,13 +118,10 @@ public class NetworkService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            NetworkState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        NetworkState returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private NetworkState processInput(Operation op) {
@@ -165,7 +158,7 @@ public class NetworkService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         NetworkState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 NetworkState.class, t -> {
                     NetworkState patchBody = patch.getBody(NetworkState.class);
                     boolean hasStateChanged = false;

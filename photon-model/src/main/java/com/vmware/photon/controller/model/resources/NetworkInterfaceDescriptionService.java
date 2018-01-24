@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
-
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.ServiceUtils;
@@ -127,13 +126,10 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
+    public void handleCreate(Operation start) {
+        NetworkInterfaceDescription state = processInput(start);
+        ResourceUtils.populateTags(this, state)
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -143,13 +139,10 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            NetworkInterfaceDescription returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        NetworkInterfaceDescription returnState = processInput(put);
+        ResourceUtils.populateTags(this, returnState)
+                .thenAccept(__ -> setState(put, returnState))
+                .whenCompleteNotify(put);
     }
 
     private NetworkInterfaceDescription processInput(Operation op) {
@@ -164,7 +157,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         NetworkInterfaceDescription currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+        ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 NetworkInterfaceDescription.class, t -> {
                     NetworkInterfaceDescription patchBody =
                             patch.getBody(NetworkInterfaceDescription.class);
