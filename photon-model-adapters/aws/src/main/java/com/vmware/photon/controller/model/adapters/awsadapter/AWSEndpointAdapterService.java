@@ -26,11 +26,14 @@ import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
@@ -112,6 +115,7 @@ public class AWSEndpointAdapterService extends StatelessService {
                 computeDesc(), compute(), endpoint(), validate(body));
     }
 
+
     private BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validate(
             EndpointConfigRequest body) {
 
@@ -120,31 +124,88 @@ public class AWSEndpointAdapterService extends StatelessService {
                     Regions.DEFAULT_REGION.getName() :
                     body.endpointProperties.get(REGION_KEY);
 
-            getEc2AsyncClient(credentials, regionId, this.clientManager.getExecutor())
-                    .whenComplete((ec2Client, t) -> {
-                        if (t != null) {
-                            callback.accept(null, t);
+            validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
+                    .thenCompose(aVoid -> validateCredentialsWithRegions(credentials, regionId))
+                    .whenComplete((aVoid, e) -> {
+                        if (e != null) {
+                            if (e instanceof CompletionException) {
+                                e = e.getCause();
+                            }
+
+                            ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
+                            callback.accept(r, e);
                             return;
                         }
-
-                        validateEndpointUniqueness(credentials, body.checkForEndpointUniqueness)
-                                .thenCompose(aVoid -> validateCredentials(ec2Client))
-                                .whenComplete((aVoid, e) -> {
-                                    if (e != null) {
-                                        if (e instanceof CompletionException) {
-                                            e = e.getCause();
-                                        }
-
-                                        ServiceErrorResponse r = Utils
-                                                .toServiceErrorResponse(e);
-                                        callback.accept(r, e);
-                                        return;
-                                    }
-                                    callback.accept(null, null);
-                                });
+                        callback.accept(null, null);
                     });
         };
     }
+
+
+    private DeferredResult<Void> validateCredentialsWithRegions(
+            AuthCredentialsServiceState credentials, String endpointRegion) {
+
+        AtomicInteger index = new AtomicInteger(0);
+        Regions[] regions = Regions.values();
+
+        int epRegionIndex = Arrays.stream(regions)
+                .map(Regions::getName)
+                .collect(Collectors.toList())
+                .indexOf(endpointRegion);
+
+        // if found, swap defaultRegion with the first region to optimize
+        if (epRegionIndex != -1) {
+            Regions temp = regions[0];
+            regions[0] = regions[epRegionIndex];
+            regions[epRegionIndex] = temp;
+        }
+
+        DeferredResult<Void> deferredResult = new DeferredResult<>();
+        validateCredentialsWithRegions(
+                credentials, index, regions, deferredResult);
+        return  deferredResult;
+    }
+
+
+    /**
+     * Method to validate credentials until atleast one region returns success. Validation fails if
+     * unable to validate in any region.
+     */
+    private void validateCredentialsWithRegions(
+            AuthCredentialsServiceState credentials, AtomicInteger index,
+            Regions[] regions, DeferredResult deferredResult) {
+
+        if (index.get() >= regions.length) {
+            //Unable to validate in any of the Regions.
+            deferredResult.fail(new LocalizableValidationException("Unable to validate " +
+                    "credentials in any AWS region!",
+                    PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
+                    PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE));
+            return;
+        }
+
+        String region = regions[index.get()].getName();
+        getEc2AsyncClient(credentials, region, this.clientManager.getExecutor())
+                .thenCompose(this::validateCredentials)
+                .whenComplete((res,e) -> {
+                    if (e == null) {
+                        //Validation succeeded in the region
+                        deferredResult.complete(null);
+                        return;
+                    }
+
+                    if (!(e.getCause() instanceof LocalizableValidationException)) {
+                        deferredResult.fail(new LocalizableValidationException(e,
+                                PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
+                                PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE));
+                        return;
+                    }
+
+                    index.getAndIncrement();
+                    validateCredentialsWithRegions(credentials, index, regions, deferredResult);
+                });
+    }
+
 
     private DeferredResult<Void> validateCredentials(AmazonEC2AsyncClient client) {
         AWSDeferredResultAsyncHandler<DescribeAvailabilityZonesRequest,
