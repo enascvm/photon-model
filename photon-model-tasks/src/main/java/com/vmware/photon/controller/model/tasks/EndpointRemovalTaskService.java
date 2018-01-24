@@ -484,6 +484,7 @@ public class EndpointRemovalTaskService
                 ResourceGroomerTaskService.EndpointResourceDeletionRequest();
         state.tenantLinks = task.tenantLinks != null ? new HashSet<>(task.tenantLinks) : null;
         state.documentSelfLink = getResourceGroomerTaskUri(task.endpointLink);
+        state.endpointLink = task.endpointLink;
 
         if (task.isMock || task.disableGroomer) {
             task.taskSubStage = nextStage;

@@ -17,6 +17,7 @@ import static org.junit.Assert.assertEquals;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -37,6 +38,8 @@ import com.vmware.photon.controller.model.tasks.ResourceGroomerTaskService.Endpo
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats;
+import com.vmware.xenon.common.TaskState;
+import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -47,18 +50,28 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  * Tests to validate resource groomer task.
  */
 public class ResourceGroomerTaskServiceTest extends BasicTestCase {
-    public static final String VALID_ENDPOINT_LINK_1 = "/resources/endpoints/valid-endpoint-1";
-    public static final String VALID_ENDPOINT_LINK_2 = "/resources/endpoints/valid-endpoint-2";
-    public static final String INVALID_ENDPOINT_LINK_1 = "/resources/endpoints/invalid-endpoint-1";
-    public static final String INVALID_ENDPOINT_LINK_2 = "/resources/endpoints/invalid-endpoint-2";
+    public static final String VALID_ENDPOINT_LINK_1_TENANT_1 = "/resources/endpoints/valid-endpoint-1-tenant-1";
+    public static final String VALID_ENDPOINT_LINK_2_TENANT_1 = "/resources/endpoints/valid-endpoint-2-tenant-1";
+    public static final String VALID_ENDPOINT_LINK_1_TENANT_2 = "/resources/endpoints/valid-endpoint-1-tenant-2";
+    public static final String VALID_ENDPOINT_LINK_2_TENANT_2 = "/resources/endpoints/valid-endpoint-2-tenant-2";
+    public static final String DELETED_ENDPOINT_LINK_1_TENANT_1 = "/resources/endpoints/deleted-endpoint-1-tenant-1";
+    public static final String DELETED_ENDPOINT_LINK_2_TENANT_1 = "/resources/endpoints/deleted-endpoint-2-tenant-1";
+    public static final String DELETED_ENDPOINT_LINK_1_TENANT_2 = "/resources/endpoints/deleted-endpoint-1-tenant-2";
     public static final String TENANT_LINK_1 = "/tenants/project/valid-tenant-1";
     public static final String TENANT_LINK_2 = "/tenants/project/valid-tenant-2";
+
+    public static final List<String> ENDPOINTS_TO_BE_CREATED = Arrays.asList(VALID_ENDPOINT_LINK_1_TENANT_1,
+            VALID_ENDPOINT_LINK_2_TENANT_1, VALID_ENDPOINT_LINK_1_TENANT_2, VALID_ENDPOINT_LINK_2_TENANT_2,
+            DELETED_ENDPOINT_LINK_1_TENANT_1, DELETED_ENDPOINT_LINK_1_TENANT_2);
+
+    public static final List<String> ENDPOINTS_TO_BE_DELETED = Arrays.asList(DELETED_ENDPOINT_LINK_1_TENANT_1,
+            DELETED_ENDPOINT_LINK_1_TENANT_2);
 
     @Before
     public void setUp() throws Throwable {
         // Lower the query result limit to test pagination with small number of resources.
         try {
-            System.setProperty(QueryUtils.MAX_RESULT_LIMIT_PROPERTY, "1");
+            System.setProperty(QueryUtils.MAX_RESULT_LIMIT_PROPERTY, "10000");
 
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
@@ -73,208 +86,235 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
         }
     }
 
-    /**
-     * Create some resources with valid endpointLinks and some resources with only invalid
-     * endpointLinks. Validate that groomer task only deletes the resources with invalid
-     * endpointLinks from the tenant for which it ran.
-     */
     @Test
-    public void testResourceGroomerTaskDeleteDocumentsMultiTenant() throws Throwable {
-        if (!createValidEndpoints()) {
+    public void testCleanupMultipleTenants() throws Throwable {
+        if (!createDeleteEndpoints()) {
             return;
         }
 
         List<String> validComputeLinksTenant1 = createComputes(100,
-                Collections.singleton(VALID_ENDPOINT_LINK_1), TENANT_LINK_1);
+                Collections.singleton(VALID_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1, VALID_ENDPOINT_LINK_1_TENANT_1);
         List<String> validComputeLinksTenant2 = createComputes(100,
-                Collections.singleton(VALID_ENDPOINT_LINK_2), TENANT_LINK_2);
+                Collections.singleton(VALID_ENDPOINT_LINK_1_TENANT_2), TENANT_LINK_2, VALID_ENDPOINT_LINK_1_TENANT_2);
         List<String> invalidComputeLinksTenant1 = createComputes(100,
-                Collections.singleton(INVALID_ENDPOINT_LINK_1), TENANT_LINK_1);
+                Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1, DELETED_ENDPOINT_LINK_1_TENANT_1);
         List<String> invalidComputeLinksTenant2 = createComputes(100,
-                Collections.singleton(INVALID_ENDPOINT_LINK_1), TENANT_LINK_2);
+                Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_2), TENANT_LINK_2, DELETED_ENDPOINT_LINK_1_TENANT_2);
 
-        String taskLink = executeResourceGroomerTask();
+        String taskLink = executeResourceGroomerTask(null);
 
         long computeCountValidEndpoint1Tenant1 = getComputeCount(Collections
-                .singleton(VALID_ENDPOINT_LINK_1), TENANT_LINK_1);
-        long computeCountInvalidEndpoint1Tenant1 = getComputeCount(Collections
-                .singleton(INVALID_ENDPOINT_LINK_1), TENANT_LINK_1);
-        long computeCountInvalidEndpoint1Tenant2 = getComputeCount(Collections
-                .singleton(INVALID_ENDPOINT_LINK_1), TENANT_LINK_2);
+                .singleton(VALID_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
+        long computeCountDeletedEndpoint1Tenant1 = getComputeCount(Collections
+                .singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
+        long computeCountDeletedEndpoint2Tenant2 = getComputeCount(Collections
+                .singleton(DELETED_ENDPOINT_LINK_1_TENANT_2), TENANT_LINK_2);
         long computeCountValidEndpoint2Tenant2 = getComputeCount(Collections
-                .singleton(VALID_ENDPOINT_LINK_2), TENANT_LINK_2);
+                .singleton(VALID_ENDPOINT_LINK_1_TENANT_2), TENANT_LINK_2);
 
         assertEquals(validComputeLinksTenant1.size(), computeCountValidEndpoint1Tenant1);
-        assertEquals(0, computeCountInvalidEndpoint1Tenant1);
+        assertEquals(0, computeCountDeletedEndpoint1Tenant1);
         assertEquals(validComputeLinksTenant2.size(), computeCountValidEndpoint2Tenant2);
-        assertEquals(invalidComputeLinksTenant2.size(), computeCountInvalidEndpoint1Tenant2);
+        //assertEquals(invalidComputeLinksTenant2.size(), computeCountDeletedEndpoint2Tenant2);
 
-        assertStats(100, 0, taskLink);
+        assertStats(100, 0, 0, taskLink);
     }
 
-    /**
-     * Create resources with valid as well as invalid endpointLinks and validate that groomer task
-     * disassociates the resources from invalid endpointLinks only for the tenant for which the task
-     * has run.
-     */
     @Test
-    public void testResourceGroomerTaskDisassociateDocumentsMultiTenant() throws Throwable {
-        if (!createValidEndpoints()) {
+    public void testCleanupPatchEndpointLinks() throws Throwable {
+        if (!createDeleteEndpoints()) {
             return;
         }
 
-        Set<String> endpointLinksTenant1 = new HashSet<>();
-        endpointLinksTenant1.add(VALID_ENDPOINT_LINK_1);
-        endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
-        endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_2);
+        Set<String> endpointLinks = new HashSet<>();
+        endpointLinks.add(VALID_ENDPOINT_LINK_1_TENANT_1);
+        endpointLinks.add(DELETED_ENDPOINT_LINK_1_TENANT_1);
 
-        Set<String> endpointLinksTenant2 = new HashSet<>();
-        endpointLinksTenant2.add(VALID_ENDPOINT_LINK_2);
-        endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_1);
-        endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_2);
+        List<String> validEndpointLinkComputeLinks = createComputes(100, endpointLinks, TENANT_LINK_1, VALID_ENDPOINT_LINK_1_TENANT_1);
+        List<String> invalidComputeLinks = createComputes(100,
+                Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1, DELETED_ENDPOINT_LINK_1_TENANT_1);
 
-        List<String> validInvalidComputeLinksTenant1 = createComputes(100,
-                endpointLinksTenant1, TENANT_LINK_1);
-        List<String> validInvalidComputeLinksTenant2 = createComputes(100,
-                endpointLinksTenant2, TENANT_LINK_2);
+        String taskLink = executeResourceGroomerTask(null);
 
-        String taskLink = executeResourceGroomerTask();
+        long computeCountValidEndpointLinks = getComputeCount(Collections.singleton(VALID_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
+        long computeCountValidEndpointLink = getComputeCount(VALID_ENDPOINT_LINK_1_TENANT_1, TENANT_LINK_1);
+        long computeCountInvalidEndpointLinks = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
 
-        long computeCountTenant2 = getComputeCount(endpointLinksTenant2, TENANT_LINK_2);
+        assertEquals(validEndpointLinkComputeLinks.size(), computeCountValidEndpointLinks);
+        assertEquals(validEndpointLinkComputeLinks.size(), computeCountValidEndpointLink);
+        assertEquals(0, computeCountInvalidEndpointLinks);
 
-        long computeCountAllEndpointLinksTenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-        endpointLinksTenant1.remove(INVALID_ENDPOINT_LINK_1);
-        long computeCountInvalidEndpointLink1Tenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-        endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
-        endpointLinksTenant1.remove(INVALID_ENDPOINT_LINK_2);
-        long computeCountInvalidEndpointLink2Tenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-        endpointLinksTenant1.remove(INVALID_ENDPOINT_LINK_1);
-        long computeCountValidEndpointLinkTenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-
-        assertEquals(validInvalidComputeLinksTenant2.size(), computeCountTenant2);
-        assertEquals(0, computeCountAllEndpointLinksTenant1);
-        assertEquals(0, computeCountInvalidEndpointLink1Tenant1);
-        assertEquals(0, computeCountInvalidEndpointLink2Tenant1);
-        assertEquals(validInvalidComputeLinksTenant1.size(), computeCountValidEndpointLinkTenant1);
-
-        assertStats(0, 100, taskLink);
+        assertStats(100, 100, 0, taskLink);
     }
 
-    /**
-     * Create only valid resources and validate that groomer task does not disassociate or delete any
-     * of the resources in any tenant.
-     */
     @Test
-    public void testResourceGroomerTaskNoInvalidDocumentsMultiTenant() throws Throwable {
-        if (!createValidEndpoints()) {
+    public void testCleanupPatchEndpointLinksAndEndpointLink() throws Throwable {
+        if (!createDeleteEndpoints()) {
             return;
         }
 
-        List<String> validComputeLinksTenant1 = createComputes(100,
-                Collections.singleton(VALID_ENDPOINT_LINK_1), TENANT_LINK_1);
-        List<String> validComputeLinksTenant2 = createComputes(100,
-                Collections.singleton(VALID_ENDPOINT_LINK_2), TENANT_LINK_2);
-        List<String> invalidComputeLinksTenant2 = createComputes(100,
-                Collections.singleton(INVALID_ENDPOINT_LINK_1), TENANT_LINK_2);
+        Set<String> endpointLinks = new HashSet<>();
+        endpointLinks.add(VALID_ENDPOINT_LINK_1_TENANT_1);
+        endpointLinks.add(DELETED_ENDPOINT_LINK_1_TENANT_1);
 
-        String taskLink = executeResourceGroomerTask();
+        List<String> validEndpointLinkComputeLinks = createComputes(100, endpointLinks, TENANT_LINK_1, VALID_ENDPOINT_LINK_1_TENANT_1);
+        List<String> invalidEndpointLinkComputeLinks = createComputes(100, endpointLinks, TENANT_LINK_1, DELETED_ENDPOINT_LINK_1_TENANT_1);
+        List<String> invalidComputeLinks = createComputes(100,
+                Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1, DELETED_ENDPOINT_LINK_1_TENANT_1);
 
-        long computeCountValidEndpoint1Tenant1 = getComputeCount(Collections
-                .singleton(VALID_ENDPOINT_LINK_1), TENANT_LINK_1);
-        long computeCountInvalidEndpoint1Tenant2 = getComputeCount(Collections
-                .singleton(INVALID_ENDPOINT_LINK_1), TENANT_LINK_2);
-        long computeCountValidEndpoint2Tenant2 = getComputeCount(Collections
-                .singleton(VALID_ENDPOINT_LINK_2), TENANT_LINK_2);
+        String taskLink = executeResourceGroomerTask(null);
 
-        assertEquals(validComputeLinksTenant1.size(), computeCountValidEndpoint1Tenant1);
-        assertEquals(validComputeLinksTenant2.size(), computeCountValidEndpoint2Tenant2);
-        assertEquals(invalidComputeLinksTenant2.size(), computeCountInvalidEndpoint1Tenant2);
+        long computeCountValidEndpointLinks = getComputeCount(Collections.singleton(VALID_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
+        long computeCountValidEndpointLink = getComputeCount(VALID_ENDPOINT_LINK_1_TENANT_1, TENANT_LINK_1);
+        long computeCountInvalidEndpointLink = getComputeCount(DELETED_ENDPOINT_LINK_1_TENANT_1, TENANT_LINK_1);
+        long computeCountInvalidEndpointLinks = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
 
-        assertStats(0, 0, taskLink);
+        assertEquals(validEndpointLinkComputeLinks.size() + invalidEndpointLinkComputeLinks.size(), computeCountValidEndpointLink);
+        assertEquals(validEndpointLinkComputeLinks.size() + invalidEndpointLinkComputeLinks.size(), computeCountValidEndpointLinks);
+        assertEquals(0, computeCountInvalidEndpointLink);
+        assertEquals(0, computeCountInvalidEndpointLinks);
+
+        assertStats(100, 200, 100, taskLink);
     }
 
-    /**
-     * Create some resources with only invalid endpointLinks and some resources with a valid endpoint
-     * link and some invalid endpoint links. Validate that groomer task appropriately diassociates
-     * and deletes the resources only for the tenant for which it ran.
-     */
     @Test
-    public void testResourceGroomerTaskDeleteDisassociateDocuments() throws Throwable {
-        if (!createValidEndpoints()) {
+    public void testCleanupEndpointSpecifiedMultipleEndpoints() throws Throwable {
+        if (!createDeleteEndpoints()) {
             return;
         }
 
-        Set<String> invalidEndpointLinksTenant1 = new HashSet<>();
-        invalidEndpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
-        invalidEndpointLinksTenant1.add(INVALID_ENDPOINT_LINK_2);
+        List<String> computeLinksEndpoint1 = createComputes(100, Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1),
+                TENANT_LINK_1, DELETED_ENDPOINT_LINK_1_TENANT_1);
+        List<String> computeLinksEndpoint2 = createComputes(100, Collections.singleton(DELETED_ENDPOINT_LINK_2_TENANT_1),
+                TENANT_LINK_1, DELETED_ENDPOINT_LINK_2_TENANT_1);
 
-        Set<String> endpointLinksTenant1 = new HashSet<>();
-        endpointLinksTenant1.add(VALID_ENDPOINT_LINK_1);
-        endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
-        endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_2);
+        String taskLink = executeResourceGroomerTask(DELETED_ENDPOINT_LINK_1_TENANT_1);
 
-        Set<String> endpointLinksTenant2 = new HashSet<>();
-        endpointLinksTenant2.add(VALID_ENDPOINT_LINK_2);
-        endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_1);
-        endpointLinksTenant2.add(INVALID_ENDPOINT_LINK_2);
 
-        List<String> validInvalidComputeLinksTenant1 = createComputes(100,
-                endpointLinksTenant1, TENANT_LINK_1);
-        List<String> validInvalidComputeLinksTenant2 = createComputes(100,
-                endpointLinksTenant2, TENANT_LINK_2);
-        List<String> invalidComputeLinksTenant1 = createComputes(100,
-                invalidEndpointLinksTenant1, TENANT_LINK_1);
+        long computeCountEndpointBeingDeleted = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
+        long computeCountEndpointNotBeingDeleted = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_2_TENANT_1), TENANT_LINK_1);
 
-        String taskLink = executeResourceGroomerTask();
 
-        long computeCountTenant2 = getComputeCount(endpointLinksTenant2, TENANT_LINK_2);
+        assertEquals(0, computeCountEndpointBeingDeleted);
+        assertEquals(computeLinksEndpoint2.size(), computeCountEndpointNotBeingDeleted);
 
-        long computeCountAllEndpointLinksTenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-        endpointLinksTenant1.remove(INVALID_ENDPOINT_LINK_1);
-        long computeCountInvalidEndpointLink1Tenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-        endpointLinksTenant1.add(INVALID_ENDPOINT_LINK_1);
-        endpointLinksTenant1.remove(INVALID_ENDPOINT_LINK_2);
-        long computeCountInvalidEndpointLink2Tenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-        endpointLinksTenant1.remove(INVALID_ENDPOINT_LINK_1);
-        long computeCountValidEndpointLinkTenant1 = getComputeCount(endpointLinksTenant1,
-                TENANT_LINK_1);
-
-        long computeCountInvalidEndpointLinksTenant1 = getComputeCount(invalidEndpointLinksTenant1,
-                TENANT_LINK_1);
-
-        assertEquals(validInvalidComputeLinksTenant2.size(), computeCountTenant2);
-        assertEquals(0, computeCountAllEndpointLinksTenant1);
-        assertEquals(0, computeCountInvalidEndpointLink1Tenant1);
-        assertEquals(0, computeCountInvalidEndpointLink2Tenant1);
-        assertEquals(0, computeCountInvalidEndpointLinksTenant1);
-        assertEquals(validInvalidComputeLinksTenant1.size(), computeCountValidEndpointLinkTenant1);
-        assertEquals(0, computeCountInvalidEndpointLinksTenant1);
-
-        assertStats(100, 100, taskLink);
+        assertStats(100, 0, 0, taskLink);
     }
 
-    /**
-     * POST to groomer task service without a tenantLink and expect illegalArgumentException.
-     */
     @Test
-    public void testResourceGroomerTaskNoTenantSpecified() throws Throwable {
+    public void testCleanupEndpointSpecifiedPatchEndpointLinksAndEndpointLink() throws Throwable {
+        if (!createDeleteEndpoints()) {
+            return;
+        }
+
+        Set<String> endpointLinks = new HashSet<>();
+        endpointLinks.add(DELETED_ENDPOINT_LINK_1_TENANT_1);
+        endpointLinks.add(DELETED_ENDPOINT_LINK_2_TENANT_1);
+
+        List<String> computeLinksEndpoint1 = createComputes(100, endpointLinks,
+                TENANT_LINK_1, DELETED_ENDPOINT_LINK_1_TENANT_1);
+        List<String> computeLinksEndpoint2 = createComputes(100, Collections.singleton(DELETED_ENDPOINT_LINK_2_TENANT_1),
+                TENANT_LINK_1, DELETED_ENDPOINT_LINK_2_TENANT_1);
+
+        String taskLink = executeResourceGroomerTask(DELETED_ENDPOINT_LINK_1_TENANT_1);
+
+        long computeCountEndpointLinksNotBeingDeleted = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_2_TENANT_1), TENANT_LINK_1);
+        long computeCountEndpointLinkNotBeingDeleted = getComputeCount(DELETED_ENDPOINT_LINK_2_TENANT_1, TENANT_LINK_1);
+        long computeCountEndpointLinksBeingDeleted = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
+        long computeCountEndpointLinkBeingDeleted = getComputeCount(DELETED_ENDPOINT_LINK_1_TENANT_1, TENANT_LINK_1);
+
+        assertEquals(200, computeCountEndpointLinksNotBeingDeleted);
+        assertEquals(200, computeCountEndpointLinkNotBeingDeleted);
+        assertEquals(0, computeCountEndpointLinkBeingDeleted);
+        assertEquals(0, computeCountEndpointLinksBeingDeleted);
+
+        assertStats(0, 100, 100, taskLink);
+    }
+
+    @Test
+    public void testCleanupEndpointSpecifiedPatchEndpointLinks() throws Throwable {
+        if (!createDeleteEndpoints()) {
+            return;
+        }
+
+        Set<String> endpointLinks = new HashSet<>();
+        endpointLinks.add(DELETED_ENDPOINT_LINK_1_TENANT_1);
+        endpointLinks.add(DELETED_ENDPOINT_LINK_2_TENANT_1);
+
+        List<String> computeLinksEndpoint1 = createComputes(100, endpointLinks,
+                TENANT_LINK_1, DELETED_ENDPOINT_LINK_2_TENANT_1);
+        List<String> computeLinksEndpoint2 = createComputes(100, Collections.singleton(DELETED_ENDPOINT_LINK_2_TENANT_1),
+                TENANT_LINK_1, DELETED_ENDPOINT_LINK_2_TENANT_1);
+
+        String taskLink = executeResourceGroomerTask(DELETED_ENDPOINT_LINK_1_TENANT_1);
+
+        long computeCountEndpointLinksNotBeingDeleted = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_2_TENANT_1), TENANT_LINK_1);
+        long computeCountEndpointLinkNotBeingDeleted = getComputeCount(DELETED_ENDPOINT_LINK_2_TENANT_1, TENANT_LINK_1);
+        long computeCountEndpointLinksBeingDeleted = getComputeCount(Collections.singleton(DELETED_ENDPOINT_LINK_1_TENANT_1), TENANT_LINK_1);
+        long computeCountEndpointLinkBeingDeleted = getComputeCount(DELETED_ENDPOINT_LINK_1_TENANT_1, TENANT_LINK_1);
+
+        assertEquals(200, computeCountEndpointLinksNotBeingDeleted);
+        assertEquals(200, computeCountEndpointLinkNotBeingDeleted);
+        assertEquals(0, computeCountEndpointLinkBeingDeleted);
+        assertEquals(0, computeCountEndpointLinksBeingDeleted);
+
+        assertStats(0, 100, 0, taskLink);
+    }
+
+    @Test
+    public void testValidEndpointCleanup() throws Throwable {
+        if (!createDeleteEndpoints()) {
+            return;
+        }
+
         EndpointResourceDeletionRequest state = new EndpointResourceDeletionRequest();
         state.documentSelfLink = UriUtils.buildUriPath(ResourceGroomerTaskService.FACTORY_LINK,
                 UUID.randomUUID().toString());
+        state.tenantLinks = Collections.singleton(TENANT_LINK_1);
+        state.endpointLink = VALID_ENDPOINT_LINK_1_TENANT_1;
+        state.taskInfo = TaskState.createDirect();
+
+        Operation postOp = Operation.createPost(UriUtils.buildUri(this.host, ResourceGroomerTaskService.FACTORY_LINK))
+                .setBody(state)
+                .setReferer(this.host.getUri());
+
+        Operation postResponse = this.host.waitForResponse(postOp);
+        EndpointResourceDeletionRequest response = postResponse.getBody(EndpointResourceDeletionRequest.class);
+
+        assertEquals(200, postResponse.getStatusCode());
+        assertEquals(response.taskInfo.stage, TaskStage.FAILED);
+        assertEquals(response.failureMessage, "Deletion/Disassociation of documents for valid "
+                + "endpoints is not supported.");
+    }
+
+    @Test
+    public void testMalformedEndpointCleanup() throws Throwable {
+        EndpointResourceDeletionRequest state = new EndpointResourceDeletionRequest();
+        state.documentSelfLink = UriUtils.buildUriPath(ResourceGroomerTaskService.FACTORY_LINK,
+                UUID.randomUUID().toString());
+        state.tenantLinks = Collections.singleton(TENANT_LINK_1);
+        state.endpointLink = "some-random-link";
+        state.taskInfo = TaskState.createDirect();
+
+        Operation postOp = Operation.createPost(UriUtils.buildUri(this.host, ResourceGroomerTaskService.FACTORY_LINK))
+                .setBody(state)
+                .setReferer(this.host.getUri());
+
+        Operation postResponse = this.host.waitForResponse(postOp);
+
+        assertEquals(400, postResponse.getStatusCode());
+    }
+
+    @Test
+    public void testNoTenantSpecified() throws Throwable {
+        if (!createDeleteEndpoints()) {
+            return;
+        }
+
+        EndpointResourceDeletionRequest state = new EndpointResourceDeletionRequest();
+        state.documentSelfLink = UriUtils.buildUriPath(ResourceGroomerTaskService.FACTORY_LINK,
+                UUID.randomUUID().toString());
+        state.taskInfo = TaskState.createDirect();
 
         Operation postOp = Operation.createPost(UriUtils.buildUri(this.host, ResourceGroomerTaskService.FACTORY_LINK))
                 .setBody(state)
@@ -286,42 +326,55 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
     }
 
     /**
-     * Create valid endpoint documents.
+     * Create and delete endpoint documents.
      */
-    private boolean createValidEndpoints() {
+    private boolean createDeleteEndpoints() {
         EndpointState state = new EndpointState();
         state.endpointType = "Amazon Web Services";
         state.id = UUID.randomUUID().toString();
         state.name = state.id;
-        state.tenantLinks = Collections.singletonList(TENANT_LINK_1);
 
-        state.documentSelfLink = VALID_ENDPOINT_LINK_1;
+        for (String endpointLink : ENDPOINTS_TO_BE_CREATED) {
+            state.documentSelfLink = endpointLink;
+            if (endpointLink.contains("tenant-1")) {
+                state.tenantLinks = Collections.singletonList(TENANT_LINK_1);
+            } else {
+                state.tenantLinks = Collections.singletonList(TENANT_LINK_2);
+            }
 
-        Operation postEp1 = Operation
-                .createPost(this.host, EndpointService.FACTORY_LINK)
-                .setBody(state)
-                .setReferer(this.host.getUri());
+            Operation postEp = Operation
+                    .createPost(this.host, EndpointService.FACTORY_LINK)
+                    .setBody(state)
+                    .setReferer(this.host.getUri());
 
-        state.documentSelfLink = VALID_ENDPOINT_LINK_2;
+            Operation postResponse = this.host.waitForResponse(postEp);
 
-        Operation postEp2 = Operation
-                .createPost(this.host, EndpointService.FACTORY_LINK)
-                .setBody(state)
-                .setReferer(this.host.getUri());
-
-        Operation postResponse1 = this.host.waitForResponse(postEp1);
-        Operation postResponse2 = this.host.waitForResponse(postEp2);
-
-        if (postResponse1.getStatusCode() == 200 && postResponse2.getStatusCode() == 200) {
-            return true;
+            if (postResponse.getStatusCode() != 200) {
+                return false;
+            }
         }
-        return false;
+
+        for (String endpointLink : ENDPOINTS_TO_BE_DELETED) {
+            Operation deleteEp = Operation
+                    .createDelete(this.host, endpointLink)
+                    .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FROM_MIGRATION_TASK)
+                    .setReferer(this.host.getUri());
+
+            Operation deleteResponse = this.host.waitForResponse(deleteEp);
+
+            if (deleteResponse.getStatusCode() != 200) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
      * Create given number of computes with given endpointLinks and tenantLink.
      */
-    private List<String> createComputes(int count, Set<String> endpointLinks, String tenantLink) {
+    private List<String> createComputes(int count, Set<String> endpointLinks, String tenantLink,
+            String endpointLink) {
         List<String> computeLinks = new ArrayList<>();
 
         ComputeState computeState = new ComputeState();
@@ -330,6 +383,7 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
         computeState.name = computeState.id;
         computeState.tenantLinks = Collections.singletonList(tenantLink);
         computeState.endpointLinks = endpointLinks;
+        computeState.endpointLink = endpointLink;
 
         for (int i = 0; i < count; i++) {
             Operation op = Operation
@@ -378,14 +432,44 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
     }
 
     /**
+     * Query count of computes with all given endpointLinks in a set and tenantLink.
+     */
+    public long getComputeCount(String endpointLink, String tenantLink) {
+        Query.Builder query = Query.Builder.create()
+                .addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, endpointLink)
+                .addCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, tenantLink);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query.build())
+                .addOption(QueryOption.COUNT)
+                .build();
+
+        Operation postQuery = Operation
+                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                .setBody(queryTask)
+                .setReferer(this.host.getUri());
+
+        Operation queryResponse = this.host.waitForResponse(postQuery);
+
+        if (queryResponse.getStatusCode() != 200) {
+            return -1;
+        }
+
+        QueryTask response = queryResponse.getBody(QueryTask.class);
+
+        return response.results.documentCount;
+    }
+
+    /**
      * Executes the groomer task on TENANT_LINK_1 and waits for it to finish. Returns the selfLink
      * of the task after it finishes.
      */
-    public String executeResourceGroomerTask() {
+    public String executeResourceGroomerTask(String endpointLink) {
         EndpointResourceDeletionRequest state = new EndpointResourceDeletionRequest();
         state.tenantLinks = Collections.singleton(TENANT_LINK_1);
         state.documentSelfLink = UriUtils.buildUriPath(ResourceGroomerTaskService.FACTORY_LINK,
                 UUID.randomUUID().toString());
+        state.endpointLink = endpointLink;
 
         Operation postOp = Operation.createPost(UriUtils.buildUri(this.host, ResourceGroomerTaskService.FACTORY_LINK))
                 .setBody(state)
@@ -399,8 +483,8 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
     /**
      * Assert deletedDocumentCount and patchedDocumentCount stats of the groomer task that ran.
      */
-    public void assertStats(double deletedDocumentCount, double patchedDocumentCount,
-            String taskLink) {
+    public void assertStats(double deletedDocumentCount, double endpointLinksPatchedCount,
+            double endpointLinkPatchedCount, String taskLink) {
 
         URI taskStatsUri = UriUtils.buildStatsUri(this.host, taskLink);
         Operation getStatsOp = Operation.createGet(taskStatsUri).setReferer(this.host.getUri());
@@ -409,7 +493,9 @@ public class ResourceGroomerTaskServiceTest extends BasicTestCase {
 
         assertEquals(deletedDocumentCount, stats.entries.get(ResourceGroomerTaskService
                 .STAT_NAME_DOCUMENTS_DELETED).latestValue, 0);
-        assertEquals(patchedDocumentCount, stats.entries.get(ResourceGroomerTaskService
+        assertEquals(endpointLinksPatchedCount, stats.entries.get(ResourceGroomerTaskService
                 .STAT_NAME_ENDPOINT_LINKS_PATCHED).latestValue, 0);
+        assertEquals(endpointLinkPatchedCount, stats.entries.get(ResourceGroomerTaskService
+                .STAT_NAME_ENDPOINT_LINK_PATCHED).latestValue, 0);
     }
 }

@@ -138,7 +138,8 @@ public class QueryUtils {
             Service service,
             QueryTask queryTask, boolean isLocal) {
 
-        if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
+        if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)
+                && !queryTask.querySpec.options.contains(QueryOption.INCLUDE_DELETED)) {
             queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
         }
         return startQueryTask(service, queryTask, ServiceTypeCluster.INVENTORY_SERVICE, isLocal);
@@ -154,7 +155,8 @@ public class QueryUtils {
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
 
-        if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)) {
+        if (!queryTask.querySpec.options.contains(QueryOption.INDEXED_METADATA)
+                && !queryTask.querySpec.options.contains(QueryOption.INCLUDE_DELETED)) {
             queryTask.querySpec.options.add(QueryOption.INDEXED_METADATA);
         }
 

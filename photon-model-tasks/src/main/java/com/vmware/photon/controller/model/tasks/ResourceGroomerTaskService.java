@@ -33,6 +33,8 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -60,6 +62,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskFactoryService;
@@ -70,10 +73,11 @@ import com.vmware.xenon.services.common.TaskService;
  * deleting all documents that have no endpoint associated with them.
  *
  * The task can be run periodically using ScheduledTaskService. The task requires a tenantLink
- * to be specified. Optionally, it can also be in context of a single endpoint.
+ * to be specified. Optionally, it can also be in context of a single endpoint, when endpointLink is
+ * specified.
  *
- * The task is invoked by EndpointRemovalTaskService to disassociate/delete documents which were
- * associated with the endpoint being deleted.
+ * The task is invoked by EndpointRemovalTaskService for a single endpoint to disassociate/delete
+ * documents which were associated with the endpoint being deleted.
  */
 public class ResourceGroomerTaskService
         extends TaskService<EndpointResourceDeletionRequest> {
@@ -86,6 +90,7 @@ public class ResourceGroomerTaskService
     // Set max document size to 1 MB.
     public static final int MAX_SERIALIZED_STATE_SIZE_BYTES = 1 * 1024 * 1024;
 
+    public static final String PATH_SEPARATOR = "/";
     public static final String EMPTY_STRING = "";
     public static final String STAT_NAME_DOCUMENTS_DELETED = "documentsDeletedCount";
     public static final String STAT_NAME_ENDPOINT_LINKS_PATCHED = "endpointLinksPatchedCount";
@@ -143,9 +148,9 @@ public class ResourceGroomerTaskService
         GET_NEXT_PAGE_OR_FINISH,
 
         /**
-         * Get endpointLinks of all documents and collect those which are valid.
+         * Get endpointLinks of all documents and collect those which are deleted.
          */
-        COLLECT_VALID_ENDPOINT_LINKS,
+        COLLECT_DELETED_ENDPOINT_LINKS,
 
         /**
          * Collect those documents for deletion/disassociation whose endpointLinks are not valid.
@@ -202,7 +207,7 @@ public class ResourceGroomerTaskService
 
         // Valid endpointLinks.
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
-        public Set<String> validEndpointLinks;
+        public Set<String> deletedEndpointLinks;
 
         // List of stale documents to be deleted.
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
@@ -228,6 +233,13 @@ public class ResourceGroomerTaskService
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public String nextPageLink;
 
+        // Endpoint link is passed when caller wants the groomer task to run
+        // only in context of a single endpoint i.e. only the documents that contain this
+        // endpoint are disassociated/deleted.
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
+        public String endpointLink;
+
         // Total number of documents deleted by the task.
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public int documentsDeletedCount;
@@ -242,7 +254,7 @@ public class ResourceGroomerTaskService
 
         public EndpointResourceDeletionRequest() {
             this.subStage = SubStage.QUERY_DOCUMENT_LINKS_AND_ASSOCIATED_ENDPOINT_LINKS;
-            this.validEndpointLinks = new HashSet<>();
+            this.deletedEndpointLinks = new HashSet<>();
             this.documentsToBeDeletedLinks = new HashSet<>();
             this.endpointLinkToBePatchedByDocumentLinks = new ConcurrentHashMap<>();
             this.endpointLinksByDocumentsToBeDisassociated = new ConcurrentHashMap<>();
@@ -260,8 +272,18 @@ public class ResourceGroomerTaskService
             return;
         }
 
-        logInfo("Starting stale document deletion based on [tenant = %s].",
-                state.tenantLinks.iterator().next());
+        if (state.endpointLink == null) {
+            logInfo("Starting resource groomer task for [tenant = %s].",
+                    state.tenantLinks.iterator().next());
+        } else if (state.endpointLink != null
+                && (state.endpointLink.isEmpty()
+                || !state.endpointLink.startsWith(EndpointService.FACTORY_LINK))) {
+            post.fail(new IllegalArgumentException(String.format("endpointLink (%s) is malformed.",
+                    state.endpointLink)));
+        } else {
+            logInfo("Starting resource groomer task for [endpoint = %s].",
+                    state.endpointLink);
+        }
 
         super.handleStart(post);
     }
@@ -273,7 +295,7 @@ public class ResourceGroomerTaskService
     protected void updateState(EndpointResourceDeletionRequest currentTask,
             EndpointResourceDeletionRequest patchBody) {
 
-        currentTask.validEndpointLinks = patchBody.validEndpointLinks;
+        currentTask.deletedEndpointLinks = patchBody.deletedEndpointLinks;
         currentTask.documentsToBeDeletedLinks = patchBody.documentsToBeDeletedLinks;
         currentTask.endpointLinkToBePatchedByDocumentLinks = patchBody
                 .endpointLinkToBePatchedByDocumentLinks;
@@ -328,13 +350,13 @@ public class ResourceGroomerTaskService
         switch (task.subStage) {
         case QUERY_DOCUMENT_LINKS_AND_ASSOCIATED_ENDPOINT_LINKS:
             queryDocumentLinksAndAssociatedEndpointLinks(task,
-                    SubStage.COLLECT_VALID_ENDPOINT_LINKS);
+                    SubStage.COLLECT_DELETED_ENDPOINT_LINKS);
             break;
         case GET_NEXT_PAGE_OR_FINISH:
-            getNextPageOrFinish(task, SubStage.COLLECT_VALID_ENDPOINT_LINKS);
+            getNextPageOrFinish(task, SubStage.COLLECT_DELETED_ENDPOINT_LINKS);
             break;
-        case COLLECT_VALID_ENDPOINT_LINKS:
-            collectValidEndpoints(task, SubStage.COLLECT_DOCUMENTS_TO_BE_DELETED_OR_DISASSOCIATED);
+        case COLLECT_DELETED_ENDPOINT_LINKS:
+            collectDeletedEndpoints(task, SubStage.COLLECT_DOCUMENTS_TO_BE_DELETED_OR_DISASSOCIATED);
             break;
         case COLLECT_DOCUMENTS_TO_BE_DELETED_OR_DISASSOCIATED:
             collectDocumentsToBeDeletedAndDisassociated(task, SubStage.DELETE_OR_DISASSOCIATE_STALE_DOCUMENTS);
@@ -407,7 +429,7 @@ public class ResourceGroomerTaskService
 
         task.endpointLinksByDocumentLinks.clear();
         task.endpointLinkByDocumentLinks.clear();
-        task.validEndpointLinks.clear();
+        task.deletedEndpointLinks.clear();
         task.documentsToBeDeletedLinks.clear();
         task.endpointLinkToBePatchedByDocumentLinks.clear();
         task.endpointLinksByDocumentsToBeDisassociated.clear();
@@ -442,26 +464,33 @@ public class ResourceGroomerTaskService
     }
 
     /**
-     * Get endpoints for all documents and collect valid endpointLinks by querying for all links.
+     * Get endpointLinks for all documents and collect deleted endpointLinks by querying for all links
+     * with INCLUDE_DELETED.
      */
-    private void collectValidEndpoints(EndpointResourceDeletionRequest task,
+    private void collectDeletedEndpoints(EndpointResourceDeletionRequest task,
             SubStage next) {
 
-        // Collect endpointLink and endpointLinks for all documents.
-        Set<String> currentEndpointLinks = new HashSet<>();
-        task.endpointLinksByDocumentLinks.values().stream()
-                .forEach(links -> {
-                    currentEndpointLinks.addAll(links);
-                });
-        currentEndpointLinks.addAll(task.endpointLinkByDocumentLinks.values());
+        QueryTask queryTask;
 
-        if (currentEndpointLinks.isEmpty()) {
-            task.subStage = next;
-            sendSelfPatch(task);
-            return;
+        // If endpointLink is specified, only query for that endpoint. Otherwise collect all endpointLinks
+        // from all documents and query for those.
+        if (isEndpointSpecified(task)) {
+            queryTask = buildQueryTask(task, true, Collections.singleton(task.endpointLink));
+        } else {
+            Set<String> currentEndpointLinks = new HashSet<>();
+            task.endpointLinksByDocumentLinks.values().stream()
+                    .forEach(links -> {
+                        currentEndpointLinks.addAll(links);
+                    });
+            currentEndpointLinks.addAll(task.endpointLinkByDocumentLinks.values());
+
+            if (currentEndpointLinks.isEmpty()) {
+                task.subStage = next;
+                sendSelfPatch(task);
+                return;
+            }
+            queryTask = buildQueryTask(task, true, currentEndpointLinks);
         }
-
-        QueryTask queryTask = buildQueryTask(task, true, currentEndpointLinks);
 
         QueryUtils.startInventoryQueryTask(this, queryTask)
                 .whenComplete((response, e) -> {
@@ -472,12 +501,18 @@ public class ResourceGroomerTaskService
                         return;
                     }
 
-                    if (response.results != null && response.results.documentLinks != null) {
-                        task.validEndpointLinks.addAll(response.results.documentLinks);
+                    if (response.results != null && response.results.documents != null) {
+                        response.results.documents.values().stream()
+                                .forEach(obj -> {
+                                    EndpointState state = Utils.fromJson(obj, EndpointState.class);
+                                    if (state.documentUpdateAction.equals(Action.DELETE.name())) {
+                                        task.deletedEndpointLinks.add(state.documentSelfLink);
+                                    }
+                                });
                     }
 
                     if (response.results != null && response.results.nextPageLink != null) {
-                        processValidEndpointLinksQueryPage(task, response.results.nextPageLink,
+                        processDeletedEndpointLinksQueryPage(task, response.results.nextPageLink,
                                 next);
                         return;
                     }
@@ -488,9 +523,9 @@ public class ResourceGroomerTaskService
     }
 
     /**
-     * Collects pages of valid endpoints.
+     * Collects pages of deleted endpoints.
      */
-    private void processValidEndpointLinksQueryPage(EndpointResourceDeletionRequest task,
+    private void processDeletedEndpointLinksQueryPage(EndpointResourceDeletionRequest task,
             String nextPageLink, SubStage next) {
 
         if (nextPageLink == null) {
@@ -511,12 +546,18 @@ public class ResourceGroomerTaskService
 
                     QueryTask response = o.getBody(QueryTask.class);
 
-                    if (response.results != null && response.results.documentLinks != null) {
-                        task.validEndpointLinks.addAll(response.results.documentLinks);
+                    if (response.results != null && response.results.documents != null) {
+                        response.results.documents.values().stream()
+                                .forEach(obj -> {
+                                    EndpointState state = Utils.fromJson(obj, EndpointState.class);
+                                    if (state.documentUpdateAction.equals(Action.DELETE.name())) {
+                                        task.deletedEndpointLinks.add(state.documentSelfLink);
+                                    }
+                                });
                     }
 
                     if (response.results != null && response.results.nextPageLink != null) {
-                        processValidEndpointLinksQueryPage(task, response.results.nextPageLink, next);
+                        processDeletedEndpointLinksQueryPage(task, response.results.nextPageLink, next);
                         return;
                     }
 
@@ -526,49 +567,122 @@ public class ResourceGroomerTaskService
     }
 
     /**
-     * Collect all those documents whose endpointLink is not valid for deletion.
+     * Collect documents for deletion/disassociation/patching.
      */
     private void collectDocumentsToBeDeletedAndDisassociated(EndpointResourceDeletionRequest task,
+            SubStage next) {
+        if (!isEndpointSpecified(task)) {
+            collectDocumentsForAllEndpoints(task, next);
+            return;
+        }
+
+        if (task.deletedEndpointLinks.contains(task.endpointLink)) {
+            collectDocumentsForSpecifiedEndpoint(task, next);
+        } else {
+            task.failureMessage = "Deletion/Disassociation of documents for valid "
+                    + "endpoints is not supported.";
+            task.subStage = SubStage.FAILED;
+            sendSelfPatch(task);
+        }
+
+    }
+
+    /**
+     * Collects all documents whose endpointLink is invalid for deletion/disassociation/patching.
+     */
+    private void collectDocumentsForAllEndpoints(EndpointResourceDeletionRequest task,
             SubStage next) {
 
         task.endpointLinksByDocumentLinks.entrySet().stream()
                 .forEach(entry -> {
                     // If endpointLinks set for a documentLink is empty, check the endpointLink for
-                    // that document. If the document has a null/empty/invalid endpointLink,
+                    // that document. If the document has a deleted endpointLink,
                     // delete the document.
-                    // Otherwise, if endpointLinks set is not empty, find the invalid endpointLinks
-                    // for a document by removing all valid endpointLinks from the set.
-                    // If all links in a documents endpointLinks set are invalid, we will disassociate
+                    // Otherwise, if endpointLinks set is not empty, find the valid endpointLinks
+                    // for a document by removing all deleted endpointLinks from the set.
+                    // If all links in a documents endpointLinks set are deleted, we will disassociate
                     // all of them and later be able to delete that document. So instead, directly
                     // collect that document for deletion.
                     // Otherwise, collect the document for disassociation if one or some of it's
-                    // endpointLinks are invalid. At the same time, check if the endpointLink for
+                    // endpointLinks are deleted. At the same time, check if the endpointLink for
                     // this document exists and is valid. If it is not, then we PATCH the document
                     // with one of the remaining valid endpointLinks.
-                    if (entry.getValue().isEmpty()) {
+                    Set<String> existingEndpointLinks = entry.getValue();
+                    if (existingEndpointLinks.isEmpty()) {
                         String endpointLink = task.endpointLinkByDocumentLinks.get(entry.getKey());
                         if (endpointLink == null) {
                             task.documentsToBeDeletedLinks.add(entry.getKey());
                         } else if (endpointLink.equals(EMPTY_STRING)
                                 || !endpointLink.equals(EMPTY_STRING)
-                                && !task.validEndpointLinks.contains(endpointLink)) {
+                                && task.deletedEndpointLinks.contains(endpointLink)) {
                             task.documentsToBeDeletedLinks.add(entry.getKey());
                         }
                     } else {
-                        Set<String> endpointLinks = new HashSet<>(entry.getValue());
-                        endpointLinks.removeIf(link -> !task.validEndpointLinks.contains(link));
+                        Set<String> endpointLinks = new HashSet<>(existingEndpointLinks);
+                        endpointLinks.removeIf(link -> task.deletedEndpointLinks.contains(link));
                         if (endpointLinks.isEmpty()) {
                             task.documentsToBeDeletedLinks.add(entry.getKey());
-                        } else if (!endpointLinks.isEmpty()) {
-                            entry.getValue().removeAll(endpointLinks);
-                            if (!entry.getValue().isEmpty()) {
+                        } else {
+                            existingEndpointLinks.removeAll(endpointLinks);
+                            if (!existingEndpointLinks.isEmpty()) {
                                 task.endpointLinksByDocumentsToBeDisassociated
-                                        .put(entry.getKey(), entry.getValue());
+                                        .put(entry.getKey(), existingEndpointLinks);
                             }
                             String endpointLink = task.endpointLinkByDocumentLinks
                                     .get(entry.getKey());
                             if (endpointLink != null && !endpointLinks.isEmpty() &&
                                     !endpointLinks.contains(endpointLink)) {
+                                List<String> sortedEndpointLinks = new ArrayList<>(endpointLinks);
+                                Collections.sort(sortedEndpointLinks);
+                                task.endpointLinkToBePatchedByDocumentLinks
+                                        .put(entry.getKey(), sortedEndpointLinks.get(0));
+                            }
+                        }
+                    }
+                });
+
+        task.subStage = next;
+        sendSelfPatch(task);
+    }
+
+    /**
+     * Collects documents for for deletion/disassociation/patching only for the endpoint being
+     * deleted specified in the task and ignores other endpoints, even if invalid.
+     */
+    private void collectDocumentsForSpecifiedEndpoint(EndpointResourceDeletionRequest task,
+            SubStage next) {
+        task.endpointLinksByDocumentLinks.entrySet().stream()
+                .forEach(entry -> {
+                    // If endpointLinks set for a documentLink is empty, check the endpointLink for
+                    // that document. If the document has a null/empty or endpointLink currently
+                    // being deleted, delete the document.
+                    // Otherwise, if endpointLinks set is not empty, and contains only the endpointLink
+                    // being deleted, we will disassociate and eventually delete that document, so instead
+                    // directly mark it for deletion.
+                    // Otherwise, disassociate the endpointLink being deleted.
+                    // If the endpointLink for the document being deleted is the endpointLink being
+                    // deleted, replace it with next valid endpointLink from endpointLinks.
+                    Set<String> existingEndpointLinks = entry.getValue();
+                    if (existingEndpointLinks.isEmpty()) {
+                        String endpointLink = task.endpointLinkByDocumentLinks.get(entry.getKey());
+                        if (endpointLink == null) {
+                            task.documentsToBeDeletedLinks.add(entry.getKey());
+                        } else if (endpointLink.equals(EMPTY_STRING)
+                                || endpointLink.equals(task.endpointLink)) {
+                            task.documentsToBeDeletedLinks.add(entry.getKey());
+                        }
+                    } else if (existingEndpointLinks.size() == 1
+                            && existingEndpointLinks.contains(task.endpointLink)) {
+                        task.documentsToBeDeletedLinks.add(entry.getKey());
+                    } else {
+                        task.endpointLinksByDocumentsToBeDisassociated.put(entry.getKey(),
+                                Collections.singleton(task.endpointLink));
+                        if (task.endpointLinkByDocumentLinks.get(entry.getKey())
+                                .equals(task.endpointLink)) {
+                            Set<String> endpointLinks = task.endpointLinksByDocumentLinks
+                                    .get(entry.getKey());
+                            endpointLinks.remove(task.endpointLink);
+                            if (!endpointLinks.isEmpty()) {
                                 List<String> sortedEndpointLinks = new ArrayList<>(endpointLinks);
                                 Collections.sort(sortedEndpointLinks);
                                 task.endpointLinkToBePatchedByDocumentLinks
@@ -665,8 +779,8 @@ public class ResourceGroomerTaskService
 
     /**
      * Builds QueryTask for resource document query and endpoint query.
-     * If endpointLink and tenantLinks are specified, adds clauses for that and creates a
-     * QueryTask to be executed in proper context.
+     * If endpointLink is specified, adds clauses for that and creates a
+     * QueryTask to be executed in tenant's context.
      */
     private static QueryTask buildQueryTask(EndpointResourceDeletionRequest task,
             boolean isEndpointQuery, Set<String> currentEndpointLinks) {
@@ -676,6 +790,8 @@ public class ResourceGroomerTaskService
         if (isEndpointQuery) {
             query = Query.Builder.create()
                     .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, currentEndpointLinks)
+                    .addFieldClause(ServiceDocument.FIELD_NAME_UPDATE_ACTION,
+                            Action.DELETE.name())
                     .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, task.tenantLinks)
                     .build();
         } else {
@@ -683,15 +799,29 @@ public class ResourceGroomerTaskService
                     .addInClause(ServiceDocument.FIELD_NAME_KIND, DOCUMENT_KINDS)
                     .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, task.tenantLinks)
                     .build();
+
+            if (isEndpointSpecified(task)) {
+                Query endpointSpecificClauses = Query.Builder.create(Occurance.MUST_OCCUR)
+                        .addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, task.endpointLink,
+                                Occurance.SHOULD_OCCUR)
+                        .addCollectionItemClause(ResourceState.FIELD_NAME_ENDPOINT_LINKS,
+                                task.endpointLink, Occurance.SHOULD_OCCUR)
+                        .build();
+
+                query.addBooleanClause(endpointSpecificClauses);
+            }
         }
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setResultLimit(QUERY_RESULT_LIMIT)
                 .build();
 
-        if (!isEndpointQuery) {
-            queryTask.querySpec.options.add(QueryOption.EXPAND_CONTENT);
+        if (isEndpointQuery) {
+            queryTask.querySpec.options.add(QueryOption.INCLUDE_DELETED);
+            queryTask.querySpec.options.add(QueryOption.BROADCAST);
+            queryTask.querySpec.options.add(QueryOption.OWNER_SELECTION);
         }
 
         queryTask.tenantLinks = new ArrayList<>(task.tenantLinks);
@@ -894,6 +1024,13 @@ public class ResourceGroomerTaskService
         return Operation.createPatch(this.getHost(), documentLink)
                 .setReferer(this.getUri())
                 .setBody(state);
+    }
+
+    /**
+     * Returns whether task is being invoked in context of a single endpoint.
+     */
+    private static boolean isEndpointSpecified(EndpointResourceDeletionRequest task) {
+        return task.endpointLink != null && !task.endpointLink.isEmpty();
     }
 
     /**
