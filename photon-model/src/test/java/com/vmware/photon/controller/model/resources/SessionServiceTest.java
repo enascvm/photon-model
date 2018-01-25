@@ -33,6 +33,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
@@ -148,7 +149,8 @@ public class SessionServiceTest extends Suite {
                     SessionService.FACTORY_LINK, startState, SessionService.SessionState.class);
 
             assertNotNull(returnState);
-            assertThat(startState.externalToken, is(returnState.externalToken));
+            assertThat(startState.externalToken, is(
+                    EncryptionUtils.decrypt(returnState.externalToken)));
             assertThat(startState.localToken, is(returnState.localToken));
         }
 
