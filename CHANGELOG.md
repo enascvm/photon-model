@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.47_3
+* Fix the azure account trend.
+
 ## 0.6.47_2
 * Certificate validity extended for 10 years.
 * Bug fix for DeDup.
