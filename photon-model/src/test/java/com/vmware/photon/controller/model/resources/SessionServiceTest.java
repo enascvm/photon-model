@@ -14,7 +14,9 @@
 package com.vmware.photon.controller.model.resources;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -90,12 +92,11 @@ public class SessionServiceTest extends Suite {
         @Test
         public void testSelfLinkContract() throws Throwable {
             SessionService.SessionState startState = buildState();
-            String computedSelfLink = SessionService.FACTORY_LINK + "/" + Utils.computeHash
-                    (startState.localToken);
-
             SessionService.SessionState returnState = postServiceSynchronously(
                     SessionService.FACTORY_LINK, startState, SessionService.SessionState.class);
 
+            String computedSelfLink = SessionService.FACTORY_LINK + "/" + Utils.computeHash
+                    (startState.localToken);
             assertThat(returnState.documentSelfLink, is(computedSelfLink));
         }
 
@@ -109,6 +110,19 @@ public class SessionServiceTest extends Suite {
             assertNotNull(returnState);
             assertThat(startState.documentExpirationTimeMicros, is(returnState
                     .documentExpirationTimeMicros));
+        }
+
+        @Test
+        public void testDefaultExpirationTime() throws Throwable {
+            SessionService.SessionState startState = buildState();
+            long t1 = Utils.fromNowMicrosUtc(SessionService.DEFAULT_SESSION_EXPIRATION_MICROS);
+            SessionService.SessionState returnState = postServiceSynchronously(SessionService
+                    .FACTORY_LINK, startState,SessionService.SessionState.class);
+            long t2 = Utils.fromNowMicrosUtc(SessionService.DEFAULT_SESSION_EXPIRATION_MICROS);
+
+            assertNotNull(returnState);
+            assertThat(returnState.documentExpirationTimeMicros, greaterThanOrEqualTo(t1));
+            assertThat(returnState.documentExpirationTimeMicros, lessThanOrEqualTo(t2));
         }
 
         @Test

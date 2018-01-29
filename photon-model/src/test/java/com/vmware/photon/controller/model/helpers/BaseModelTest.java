@@ -13,12 +13,10 @@
 
 package com.vmware.photon.controller.model.helpers;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import org.junit.Before;
@@ -90,7 +88,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
             String serviceUri, T body, Class<T> type, Class<? extends Throwable> expectedException)
                     throws Throwable {
 
-        List<T> responseBody = new ArrayList<T>();
+        AtomicReference<T> responseBody = new AtomicReference<>();
         TestContext ctx = this.host.testCreate(1);
 
         Operation postOperation = Operation
@@ -119,7 +117,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
                             }
 
                             if (!failureExpected) {
-                                responseBody.add(operation.getBody(type));
+                                responseBody.set(operation.getBody(type));
                             }
                             ctx.completeIteration();
                         });
@@ -127,11 +125,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
         this.host.send(postOperation);
         this.host.testWait(ctx);
 
-        if (!responseBody.isEmpty()) {
-            return responseBody.get(0);
-        } else {
-            return null;
-        }
+        return responseBody.get();
     }
 
     public <T> void patchServiceSynchronously(
@@ -150,7 +144,8 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
 
     public <T> T patchServiceSynchronously(
             String serviceUri, T patchBody, Class<T> type) throws Throwable {
-        final List<T> responseObj = Arrays.asList((T) null);
+        AtomicReference<T> responseObj = new AtomicReference<>();
+
         TestContext ctx = this.host.testCreate(1);
         Operation patchOperation = Operation
                 .createPatch(UriUtils.buildUri(this.host, serviceUri))
@@ -160,7 +155,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
                             if (throwable != null) {
                                 ctx.failIteration(throwable);
                             } else {
-                                responseObj.set(0, operation.getBody(type));
+                                responseObj.set(operation.getBody(type));
                                 ctx.completeIteration();
                             }
                         });
@@ -168,7 +163,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
         this.host.send(patchOperation);
         this.host.testWait(ctx);
 
-        return responseObj.get(0);
+        return responseObj.get();
     }
 
     public <T extends ServiceDocument> void putServiceSynchronously(
@@ -270,7 +265,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
     public <T extends ServiceDocument> T getServiceSynchronously(
             String serviceUri, Class<T> type) throws Throwable {
 
-        List<T> responseBody = new ArrayList<T>();
+        AtomicReference<T> responseBody = new AtomicReference<>();
 
         TestContext ctx = this.host.testCreate(1);
 
@@ -283,25 +278,21 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
                         return;
                     }
 
-                    responseBody.add(operation.getBody(type));
+                    responseBody.set(operation.getBody(type));
                     ctx.completeIteration();
                 });
 
         this.send(getOperation);
         this.testWait(ctx);
 
-        if (!responseBody.isEmpty()) {
-            return responseBody.get(0);
-        } else {
-            return null;
-        }
+        return responseBody.get();
     }
 
     public <T extends ServiceDocument> T getServiceSynchronously(
             String serviceUri, Class<T> type, Class<? extends Throwable> expectedException)
             throws Throwable {
 
-        List<T> responseBody = new ArrayList<T>();
+        AtomicReference<T> responseBody = new AtomicReference<>();
         TestContext ctx = this.host.testCreate(1);
 
         Operation getOperation = Operation
@@ -326,7 +317,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
                     }
 
                     if (!failureExpected) {
-                        responseBody.add(operation.getBody(type));
+                        responseBody.set(operation.getBody(type));
                     }
 
                     ctx.completeIteration();
@@ -335,11 +326,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
         this.send(getOperation);
         this.testWait(ctx);
 
-        if (!responseBody.isEmpty()) {
-            return responseBody.get(0);
-        } else {
-            return null;
-        }
+        return responseBody.get();
     }
 
     private <T extends ServiceDocument> void deleteServiceSynchronously(

@@ -88,7 +88,8 @@ public class SessionService extends StatefulService {
                 Utils.validateState(getStateDescription(), state);
 
                 if (state.documentExpirationTimeMicros == 0L) {
-                    state.documentExpirationTimeMicros = DEFAULT_SESSION_EXPIRATION_MICROS;
+                    state.documentExpirationTimeMicros = Utils.fromNowMicrosUtc
+                            (DEFAULT_SESSION_EXPIRATION_MICROS);
                 }
 
                 return true;
