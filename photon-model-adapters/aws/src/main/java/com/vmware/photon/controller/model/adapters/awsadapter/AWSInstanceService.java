@@ -1228,20 +1228,8 @@ public class AWSInstanceService extends StatelessService {
                         "Could not delete instance with id %s. Continuing... Exception on AWS"
                                 + " is: %s",
                         this.instanceId, exception);
-                deleteConstructsReferredByInstance()
-                        .whenComplete((aVoid, exc) -> {
-                            if (exc != null) {
-                                this.context.taskManager.patchTaskToFailure(
-                                        new IllegalStateException("Error deleting AWS subnet",
-                                                exc));
-                            } else {
-                                AWSInstanceService.this.logInfo(() -> String.format("Deleting"
-                                                + " subnets 'created-by' [%s]: SUCCESS",
-                                        this.context.computeRequest.resourceLink()));
 
-                                this.context.taskManager.finishTask();
-                            }
-                        });
+                deleteReferredConstructs();
                 return;
             }
             AWSInstanceService.this.logWarning(() -> String.format("Error deleting instances"
@@ -1264,26 +1252,32 @@ public class AWSInstanceService extends StatelessService {
                     return;
                 }
 
-                deleteConstructsReferredByInstance()
-                        .whenComplete((aVoid, exc) -> {
-                            if (exc != null) {
-                                this.context.taskManager.patchTaskToFailure(
-                                        new IllegalStateException("Error deleting AWS subnet",
-                                                exc));
-                            } else {
-                                AWSInstanceService.this.logInfo(() -> String.format("Deleting"
-                                                + " subnets 'created-by' [%s]: SUCCESS",
-                                        this.context.computeRequest.resourceLink()));
-
-                                this.context.taskManager.finishTask();
-                            }
-                        });
+                deleteReferredConstructs();
             };
 
             AWSTaskStatusChecker.create(this.context.amazonEC2Client, this.instanceId,
                     AWSTaskStatusChecker.AWS_TERMINATED_NAME, postTerminationCallback,
                     this.context.taskManager, AWSInstanceService.this,
                     this.context.taskExpirationMicros).start(new Instance());
+        }
+
+        private void deleteReferredConstructs() {
+            deleteConstructsReferredByInstance()
+                    .whenComplete((aVoid, exc) -> {
+                        if (exc != null) {
+                            AWSInstanceService.this.logWarning(() ->
+                                    String.format("Error deleting AWS subnet: %s", exc.getMessage()));
+                            this.context.taskManager.patchTaskToFailure(
+                                    new IllegalStateException("Error deleting AWS subnet",
+                                            exc));
+                        } else {
+                            AWSInstanceService.this.logInfo(() -> String.format("Deleting"
+                                            + " subnets 'created-by' [%s]: SUCCESS",
+                                    this.context.computeRequest.resourceLink()));
+
+                            this.context.taskManager.finishTask();
+                        }
+                    });
         }
 
         private DeferredResult<List<ResourceState>> deleteConstructsReferredByInstance() {
