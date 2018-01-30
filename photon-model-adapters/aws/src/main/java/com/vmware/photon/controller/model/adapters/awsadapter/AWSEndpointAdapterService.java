@@ -312,12 +312,15 @@ public class AWSEndpointAdapterService extends StatelessService {
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
             String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
             if (billsBucketName != null) {
-                addEntryToCustomProperties(c, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
+                addEntryToCustomProperties(c, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
+                        billsBucketName);
             }
 
-            String isAutoDiscoveryEnabled = r.get(PhotonModelConstants.IS_RESOURCE_AUTO_DISCOVERY_ENABLED).orElse(null);
+            String isAutoDiscoveryEnabled = r
+                    .get(PhotonModelConstants.IS_RESOURCE_AUTO_DISCOVERY_ENABLED).orElse(null);
             if (isAutoDiscoveryEnabled != null) {
-                addEntryToCustomProperties(c, PhotonModelConstants.IS_RESOURCE_AUTO_DISCOVERY_ENABLED,
+                addEntryToCustomProperties(c,
+                        PhotonModelConstants.IS_RESOURCE_AUTO_DISCOVERY_ENABLED,
                         isAutoDiscoveryEnabled);
             }
 
@@ -364,10 +367,12 @@ public class AWSEndpointAdapterService extends StatelessService {
      * Method to get the aws account ID from the specified credentials. If the ARN is set, it will
      * retrieve the account ID from the ARN directly. Otherwise, will attempt via the private key ID
      * and private key.
-     *
-     * @param arn An Amazon Resource Name
-     * @param privateKeyId An AWS account private key ID.
-     * @param privateKey An AWS account private key.
+     * @param arn
+     *         An Amazon Resource Name
+     * @param privateKeyId
+     *         An AWS account private key ID.
+     * @param privateKey
+     *         An AWS account private key.
      * @return
      */
     private String getAccountId(String arn, String privateKeyId, String privateKey) {
@@ -380,12 +385,12 @@ public class AWSEndpointAdapterService extends StatelessService {
 
     /**
      * Splits the ARN key to retrieve the account ID.
-     *
+     * <p>
      * An ARN is of the format arn:aws:service:region:account:resource -> so limiting the split to
      * 6 words and extracting the accountId which is 5th one in list. If the user is not authorized
      * to perform iam:GetUser on that resource,still error mesage will have accountId
-     *
-     * @param arn An Amazon Resource Name.
+     * @param arn
+     *         An Amazon Resource Name.
      * @return The account ID.
      */
     private String getAccountId(String arn) {
@@ -398,7 +403,6 @@ public class AWSEndpointAdapterService extends StatelessService {
 
     /**
      * Method gets the aws accountId from the specified credentials.
-     *
      * @param privateKeyId
      * @param privateKey
      * @return account ID
@@ -435,7 +439,15 @@ public class AWSEndpointAdapterService extends StatelessService {
         return userId;
     }
 
-    private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req, Operation op) {
+    private void checkIfAccountExistsAndGetExistingDocuments(EndpointConfigRequest req,
+            Operation op) {
+        if (req.isMockRequest) {
+            req.accountAlreadyExists = false;
+            op.setBody(req);
+            op.complete();
+            return;
+        }
+
         String accountId = getAccountId(req.endpointProperties.get(ARN_KEY),
                 req.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEYID_KEY),
                 req.endpointProperties.get(EndpointConfigRequest.PRIVATE_KEY_KEY));
