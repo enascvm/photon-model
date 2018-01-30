@@ -106,6 +106,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private static final String TEST_CASE_DELETE_VM = "Delete VM ";
     private static final String TEST_CASE_MOCK_MODE = "Mock Mode ";
     private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
+    private static final String T2_MICRO_INSTANCE_TYPE = "t2.micro";
     private static final String SEPARATOR = ": ";
     private static final String FIELD_NAME_ID = "id";
     private static final String STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT = "MemoryAvailablePercent";
@@ -273,7 +274,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
         // Provision instances on AWS
         this.instanceIds = provisionAWSVMWithEC2Client(this.client,
-                this.host, this.numberOfInstancesToProvision, T2_NANO_INSTANCE_TYPE, this.subnetId,
+                this.host, this.numberOfInstancesToProvision, T2_MICRO_INSTANCE_TYPE, this.subnetId,
                 this.securityGroupId);
         this.instancesToCleanUp.addAll(this.instanceIds);
         waitForProvisioningToComplete(this.instanceIds, this.host, this.client, 0);

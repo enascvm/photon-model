@@ -198,6 +198,7 @@ public class ResourceGroomerTaskService
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public Set<String> tenantLinks;
 
+
         // Valid endpointLinks.
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public Set<String> validEndpointLinks;

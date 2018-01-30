@@ -199,6 +199,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String TEST_BUCKET_NAME = "enumtest-bucket-" + UUID.randomUUID().toString();
     private static final int DEFAULT_TEST_PAGE_SIZE = 5;
     private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
+    private static final String T2_MICRO_INSTANCE_TYPE = "t2.micro";
     private static final String VM_NAME = "TestAWSEnumerationTask-create";
     private static final String VM_STOPPED_NAME = "TestAWSEnumerationTask-stop";
     private static final String VM_UPDATED_NAME = "TestAWSEnumerationTask-update";
@@ -405,7 +406,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         // CREATION directly on AWS
         List<String> instanceIdsToDeleteFirstTime = provisionAWSVMWithEC2Client(this.client,
-                this.host, count4, T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
+                this.host, count4, T2_MICRO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
         List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
                 instanceType, this.subnetId, this.securityGroupId);
         instanceIdsToDeleteFirstTime.addAll(instanceIds);
@@ -779,7 +780,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         // CREATION directly on AWS
         List<String> instanceIdsToDelete = provisionAWSVMWithEC2Client(this.client,
-                this.host, count4, T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
+                this.host, count4, T2_MICRO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
         List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
                 instanceType, this.subnetId, this.securityGroupId);
         instanceIdsToDelete.addAll(instanceIds);

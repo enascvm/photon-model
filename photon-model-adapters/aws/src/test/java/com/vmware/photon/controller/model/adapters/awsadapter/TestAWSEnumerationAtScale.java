@@ -87,6 +87,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
     public static final String EC2_IMAGEID = "ami-0d4cfd66";
     public static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
+    public static final String T2_MICRO_INSTANCE_TYPE = "t2.micro";
     public static final String DEFAULT_SECURITY_GROUP_NAME = "cell-manager-security-group";
     public static final String SCALE_VM_NAME = "scale-test-vm";
     public static final String TEST_CASE_BASELINE_VMs = "Baseline VMs on AWS ";
@@ -114,7 +115,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     public int awsAccountLimit = 1000;
 
     public static List<String> testComputeDescriptions = new ArrayList<String>(
-            Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE));
+            Arrays.asList(zoneId + "~" + T2_MICRO_INSTANCE_TYPE));
 
     private Map<String, Object> awsTestContext;
     private String subnetId;
@@ -243,7 +244,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     firstSpawnCycle = false;
                 }
                 instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, instancesToSpawn,
-                        T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
+                        T2_MICRO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
                 instancesToCleanUp.addAll(instanceIds);
                 this.host.log("Instances to cleanup is %d", instancesToCleanUp.size());
                 waitForProvisioningToComplete(instanceIds, this.host, this.client, this.errorRate);
