@@ -798,6 +798,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         state.id = state.name = net.getName();
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
+        if (state.endpointLink != null) {
+            state.endpointLinks = new HashSet<>();
+            state.endpointLinks.add(state.endpointLink);
+        }
 
         ManagedObjectReference parentSwitch = net.getParentSwitch();
         state.networkLink = buildStableDvsLink(parentSwitch, request.endpointLink);
@@ -1028,6 +1032,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.documentSelfLink = NetworkService.FACTORY_LINK + "/" + this.getHost().nextUUID();
         state.id = state.name = net.getName();
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
+        if (state.endpointLink != null) {
+            state.endpointLinks = new HashSet<>();
+            state.endpointLinks.add(state.endpointLink);
+        }
         state.regionId = enumerationProgress.getRegionId();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
