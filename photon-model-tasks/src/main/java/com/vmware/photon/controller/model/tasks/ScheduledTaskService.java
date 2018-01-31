@@ -197,12 +197,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             Operation op = Operation.createPost(this, state.factoryLink);
 
             if (getHost().isAuthorizationEnabled()) {
-                if (isInitial && state.userLink == null) {
-                    // make sure system authz context is used for the initial execution so that
-                    // it does not differ from periodic ones
-                    setAuthorizationContext(op, getSystemAuthorizationContext());
-                } else if (!isInitial && state.userLink != null) {
-                    // inject user identity into the op authz context
+                if (state.userLink != null) {
                     try {
                         TaskUtils.assumeIdentity(this, op, state.userLink);
                     } catch (Exception e) {
@@ -210,6 +205,10 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                                 + " for %s: %s", state.userLink, e.getMessage()));
                         return;
                     }
+                } else if (isInitial) {
+                    // make sure system authz context is used for the initial execution so that
+                    // it does not differ from periodic ones
+                    setAuthorizationContext(op, getSystemAuthorizationContext());
                 }
             }
 

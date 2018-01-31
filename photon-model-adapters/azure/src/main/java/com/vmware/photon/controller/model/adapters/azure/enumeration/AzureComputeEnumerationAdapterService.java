@@ -1423,8 +1423,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (isManaged) {
             diskState.id = dataDisk.managedDisk().id();
-            diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
-                    dataDisk.managedDisk().storageAccountType().toString());
+            if (dataDisk.managedDisk().storageAccountType() != null) {
+                diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
+                        dataDisk.managedDisk().storageAccountType().toString());
+            }
         } else {
             diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
         }
