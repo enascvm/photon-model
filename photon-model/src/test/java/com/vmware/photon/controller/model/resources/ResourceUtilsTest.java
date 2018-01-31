@@ -29,12 +29,19 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ResourceState.TagInfo;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Tests for the {@link ResourceUtils} class.
@@ -170,15 +177,15 @@ public class ResourceUtilsTest extends BaseModelTest {
     @Test
     public void testExpandTags() throws Throwable {
         TagState tag1 = new TagState();
-        tag1.key = "a";
+        tag1.key = "A";
         tag1.value = "1";
         tag1 = postServiceSynchronously(TagService.FACTORY_LINK, tag1, TagState.class);
         TagState tag2 = new TagState();
-        tag2.key = "a";
+        tag2.key = "A";
         tag2.value = "2";
         tag2 = postServiceSynchronously(TagService.FACTORY_LINK, tag2, TagState.class);
         TagState tag3 = new TagState();
-        tag3.key = "a";
+        tag3.key = "A";
         tag3.value = "3";
         tag3 = postServiceSynchronously(TagService.FACTORY_LINK, tag3, TagState.class);
 
@@ -193,7 +200,7 @@ public class ResourceUtilsTest extends BaseModelTest {
 
         Collection<String> tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
         assertEquals(2, tags.size());
-        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n2")));
+        assertTrue(tags.containsAll(Arrays.asList("A\n1", "A\n2")));
 
         // validate tags cannot be modified directly
         compute.expandedTags.remove(1);
@@ -202,7 +209,7 @@ public class ResourceUtilsTest extends BaseModelTest {
         compute = getServiceSynchronously(compute.documentSelfLink, ComputeState.class);
         tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
         assertEquals(2, tags.size());
-        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n2")));
+        assertTrue(tags.containsAll(Arrays.asList("A\n1", "A\n2")));
 
         // validate expansion on PUT
         compute.tagLinks.remove(tag2.documentSelfLink);
@@ -211,7 +218,7 @@ public class ResourceUtilsTest extends BaseModelTest {
         compute = getServiceSynchronously(compute.documentSelfLink, ComputeState.class);
         tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
         assertEquals(2, tags.size());
-        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n3")));
+        assertTrue(tags.containsAll(Arrays.asList("A\n1", "A\n3")));
 
         // validate expansion on PATCH
         ComputeState patchState = new ComputeState();
@@ -221,7 +228,7 @@ public class ResourceUtilsTest extends BaseModelTest {
                 ComputeState.class);
         tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
         assertEquals(3, tags.size());
-        assertTrue(tags.containsAll(Arrays.asList("a\n1", "a\n2", "a\n3")));
+        assertTrue(tags.containsAll(Arrays.asList("A\n1", "A\n2", "A\n3")));
 
         // validate expansion through custom PATCH body
         Map<String, Collection<Object>> itemsToRemove = new HashMap<>();
@@ -232,7 +239,25 @@ public class ResourceUtilsTest extends BaseModelTest {
         compute = getServiceSynchronously(compute.documentSelfLink, ComputeState.class);
         tags = compute.expandedTags.stream().map(t -> t.tag).collect(Collectors.toList());
         assertEquals(1, tags.size());
-        assertTrue(tags.containsAll(Arrays.asList("a\n1")));
+        assertTrue(tags.containsAll(Arrays.asList("A\n1")));
+
+        // validate query (case-insensitive) (Note: only 1 tag can be found with Xenon 1.6.1)
+        Query tagQuery = Query.Builder.create()
+                .addFieldClause(TagInfo.COMPOSITE_FIELD_NAME_TAG, "a*", MatchType.WILDCARD)
+                .build();
+        QueryTask tagQueryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(tagQuery)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
+        tagQueryTask = postServiceSynchronously(ServiceUriPaths.CORE_LOCAL_QUERY_TASKS,
+                tagQueryTask, QueryTask.class);
+        assertEquals(1, tagQueryTask.results.documentLinks.size());
+        assertEquals(1, tagQueryTask.results.documents.size());
+        assertEquals(compute.documentSelfLink, tagQueryTask.results.documentLinks.get(0));
+        ComputeState foundCompute = Utils.fromJson(tagQueryTask.results.documents.values().iterator()
+                .next(), ComputeState.class);
+        assertEquals(1, foundCompute.expandedTags.size());
+        assertEquals("A\n1", foundCompute.expandedTags.get(0).tag);
     }
 
     private Operation handlePatch(ResourceState currentState, ResourceState patchState) {

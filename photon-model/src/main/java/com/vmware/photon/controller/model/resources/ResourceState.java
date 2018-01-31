@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 /**
  * Base PODO for all photon model resource services
@@ -42,6 +43,7 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_REGION_ID = "regionId";
     public static final String FIELD_NAME_CREATION_TIME_MICROS = "creationTimeMicros";
     public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
+    public static final String FIELD_NAME_EXPANDED_TAGS = "expandedTags";
 
     /**
      * Contains information about an assigned tag.
@@ -50,6 +52,12 @@ public class ResourceState extends ServiceDocument {
      * and/or this particular assignment may be added (e.g. managed vs. discovered tags, etc.).</p>
      */
     public static class TagInfo {
+        public static final String FIELD_NAME_TAG = "tag";
+        public static final String COMPOSITE_FIELD_NAME_TAG =
+                QuerySpecification.buildCompositeFieldName(
+                        QuerySpecification.buildCollectionItemName(FIELD_NAME_EXPANDED_TAGS),
+                        FIELD_NAME_TAG);
+
         public static final String KEY_VALUE_SEPARATOR = "\n";
 
         /**
@@ -65,6 +73,7 @@ public class ResourceState extends ServiceDocument {
          * That's why the key and the value are stored in the same field, and search such as
          * "expandedTags.tag eq location\nlondon" will match the correct tag.</p>
          */
+        @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE })
         public String tag;
     }
 
