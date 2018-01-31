@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.6.48.1
+* Upgrade to Xenon 1.6.2 and required changes.
+* Important bug fixes for azure cost stats service.
+
 ## 0.6.48
 * Deprecate the endpointLink for the resources where
   de-duplication is already supported.

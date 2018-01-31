@@ -4,7 +4,7 @@
 
   <groupId>com.vmware.photon.controller</groupId>
   <artifactId>photon-model-parent</artifactId>
-  <version>0.6.48</version>
+  <version>0.6.48_1</version>
   <packaging>pom</packaging>
 
   <name>photon-model-parent</name>
@@ -96,7 +96,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <xenon.version>1.6.1</xenon.version>
+    <xenon.version>1.6.2</xenon.version>
     <xenon-utils.version>0.0.1</xenon-utils.version>
     <jacoco.version>0.7.9</jacoco.version>
     <!-- Bouncy Castle -->

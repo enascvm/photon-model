@@ -970,10 +970,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             } else {
                                 dataDiskId = dataDisk.vhd().uri();
                             }
-                            String diskStateLink = ctx.diskStates.get(dataDiskId).documentSelfLink;
 
-                            if (!cs.diskLinks.contains(diskStateLink)) {
-                                cs.diskLinks.add(diskStateLink);
+                            if (ctx.diskStates.get(dataDiskId) != null) {
+                                String diskStateLink = ctx.diskStates.get(dataDiskId).documentSelfLink;
+                                if (!cs.diskLinks.contains(diskStateLink)) {
+                                    cs.diskLinks.add(diskStateLink);
+                                }
                             }
                         });
                     }
@@ -1362,7 +1364,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 && vm.storageProfile().osDisk() != null
                 && vm.storageProfile().osDisk().diskSizeGB() != null) {
             OSDisk osDisk = vm.storageProfile().osDisk();
-            diskState.capacityMBytes = osDisk.diskSizeGB() * 1024;
+            if (osDisk.diskSizeGB() != null) {
+                diskState.capacityMBytes = osDisk.diskSizeGB() * 1024;
+            }
             diskState.name = osDisk.name();
         }
         diskState.computeHostLink = ctx.parentCompute.documentSelfLink;
@@ -1422,7 +1426,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         diskState.documentSelfLink = UriUtils.buildUriPath(
                 DiskService.FACTORY_LINK, UUID.randomUUID().toString());
         diskState.name = dataDisk.name();
-        diskState.capacityMBytes = dataDisk.diskSizeGB() * 1024;
+        if (dataDisk.diskSizeGB() != null) {
+            diskState.capacityMBytes = dataDisk.diskSizeGB() * 1024;
+        }
         diskState.status = DiskService.DiskStatus.ATTACHED;
         diskState.tenantLinks = ctx.parentCompute.tenantLinks;
         diskState.resourcePoolLink = ctx.request.resourcePoolLink;
@@ -1437,8 +1443,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (isManaged) {
             diskState.id = dataDisk.managedDisk().id();
-            diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
-                    dataDisk.managedDisk().storageAccountType().toString());
+            if (dataDisk.managedDisk().storageAccountType() != null) {
+                diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
+                        dataDisk.managedDisk().storageAccountType().toString());
+            }
         } else {
             diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
         }

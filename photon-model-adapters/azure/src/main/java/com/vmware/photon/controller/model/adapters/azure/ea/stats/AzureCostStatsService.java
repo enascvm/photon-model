@@ -27,6 +27,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.AtomicDouble;
 import com.opencsv.CSVReader;
 
 import okhttp3.Call;
@@ -1034,34 +1036,15 @@ public class AzureCostStatsService extends StatelessService {
             Map<String, AzureSubscription> newMonthlyBillBatch) {
         for (AzureSubscription subscription : newMonthlyBillBatch.values()) {
             String subscriptionGuid = subscription.entityId;
-            if (context.allSubscriptionsCost.get(subscriptionGuid) == null) {
-                AzureSubscription newSubscription = new AzureSubscription(
+            AzureSubscription existingSubscription = context.allSubscriptionsCost.get
+                    (subscriptionGuid);
+            if (existingSubscription == null) {
+                existingSubscription = new AzureSubscription(
                         subscriptionGuid, subscription.entityName, subscription.parentEntityId,
                         subscription.parentEntityName);
-                newSubscription.cost.putAll(subscription.cost);
-                context.allSubscriptionsCost.put(subscriptionGuid, newSubscription);
-            } else {
-                AzureSubscription existingSubscription = context.allSubscriptionsCost
-                        .get(subscriptionGuid);
-                Long lastTime = existingSubscription.cost.keySet().stream()
-                        .max(Long::compare).orElse(0L);
-                Long latestTime = subscription.cost.keySet().stream().max(Long::compare)
-                        .orElse(0L);
-                if (latestTime == 0) {
-                    // If there are no new cost metrics for the current day
-                    continue;
-                }
-                if (lastTime == 0) {
-                    // If there were no cost metrics for the past days
-                    existingSubscription.cost.put(latestTime, subscription.cost.get(latestTime));
-                    context.allSubscriptionsCost.put(subscriptionGuid, existingSubscription);
-                } else {
-                    existingSubscription.cost.put(latestTime,
-                            subscription.cost.get(latestTime) + existingSubscription.cost
-                                    .get(lastTime));
-                    context.allSubscriptionsCost.put(subscriptionGuid, existingSubscription);
-                }
+                context.allSubscriptionsCost.put(subscriptionGuid, existingSubscription);
             }
+            existingSubscription.cost.putAll(subscription.cost);
         }
     }
 
@@ -1122,6 +1105,14 @@ public class AzureCostStatsService extends StatelessService {
 
     // Create Azure account stats
     private void createAzureSubscriptionStats(Context context, AzureSubscription subscription) {
+
+        // convert the subscription daily costs to cumulative
+        AtomicDouble cumulativeValue = new AtomicDouble(0.0);
+        subscription.cost = subscription.cost.entrySet().stream()
+                .sorted(Comparator.comparing(Entry::getKey))
+                .collect(Collectors.toMap(Entry::getKey,
+                        e -> cumulativeValue.addAndGet(e.getValue())));
+
         Consumer<List<ComputeState>> subscriptionStatsProcessor =
                 (subscriptionComputeStates) -> subscriptionComputeStates
                         .forEach(subscriptionComputeState -> {

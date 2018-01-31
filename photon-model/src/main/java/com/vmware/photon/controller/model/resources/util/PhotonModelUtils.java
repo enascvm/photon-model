@@ -228,7 +228,7 @@ public class PhotonModelUtils {
                         return;
                     }
 
-                    service.getHost().log(Level.INFO, () -> String.format("PATCH to " +
+                    service.getHost().log(Level.FINE, () -> String.format("PATCH to " +
                             "update endpointLink in endpointLinks " +
                             "to instance service %s finished successfully",
                             updateOp.getUri()));

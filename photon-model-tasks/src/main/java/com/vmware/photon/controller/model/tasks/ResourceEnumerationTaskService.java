@@ -36,7 +36,6 @@ import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
@@ -148,7 +147,6 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
 
     public ResourceEnumerationTaskService() {
         super(ResourceEnumerationTaskState.class);
-        super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -271,11 +269,6 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
                     currentState.endpointLink, stageName, Utils.toString(err));
             return null;
         });
-    }
-
-    @Override
-    public void handlePut(Operation put) {
-        PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
     private void sendEnumRequest(Operation start, ResourceEnumerationTaskState state) {
