@@ -1554,7 +1554,9 @@ public class AzureInstanceService extends StatelessService {
                         .managedDisk().storageAccountType().toString());
                 diskStateToCreate.customProperties.put(AZURE_DATA_DISK_CACHING, azureDataDisk
                         .caching().toString());
-                diskStateToCreate.capacityMBytes = azureDataDisk.diskSizeGB() * 1024;
+                if (azureDataDisk.diskSizeGB() != null) {
+                    diskStateToCreate.capacityMBytes = azureDataDisk.diskSizeGB() * 1024;
+                }
                 diskStateToCreate.status = DiskService.DiskStatus.ATTACHED;
 
                 Operation createDiskState = Operation
