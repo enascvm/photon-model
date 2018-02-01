@@ -249,7 +249,7 @@ public class ResourceOperationUtils {
 
         service.getHost().registerForServiceAvailability((op, ex) -> {
             if (ex != null) {
-                service.getHost().log(Level.SEVERE, Utils.toString(ex));
+                service.getHost().log(Level.SEVERE, "%s", Utils.toString(ex));
                 handler.handle(op, ex);
             } else {
                 List<Operation> operations = Arrays.stream(specs)
