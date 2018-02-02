@@ -754,10 +754,6 @@ public class AWSInstanceService extends StatelessService {
         @Override
         protected void handleSuccess(RunInstancesRequest request, RunInstancesResult result) {
 
-            String message = "[AWSInstanceService] Successfully provisioned AWS instance for "
-                    + "task reference: " + this.context.computeRequest.taskReference;
-            this.service.logInfo(() -> message);
-
             // consumer to be invoked once a VM is in the running state
             Consumer<Object> consumer = instance -> {
                 OperationContext.restoreOperationContext(this.opContext);
@@ -927,6 +923,11 @@ public class AWSInstanceService extends StatelessService {
 
             String instanceId = result.getReservation().getInstances().get(0)
                     .getInstanceId();
+
+            String message = "[AWSInstanceService] Successfully provisioned AWS instance "
+                    + instanceId + " for " + "task reference: "
+                    + this.context.computeRequest.taskReference;
+            this.service.logInfo(() -> message);
 
             tagInstanceAndStartStatusChecker(instanceId, this.context.child.tagLinks, consumer);
         }
@@ -1138,6 +1139,9 @@ public class AWSInstanceService extends StatelessService {
             tagsToCreate.add(new Tag().withKey(AWS_TAG_NAME).withValue(this.context.child.name));
 
             Runnable proceed = () -> {
+                // log data to debug VCOM-3274
+                logInfo("Tagging resources and waiting instance %s to be running", instanceId);
+
                 AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, instanceId);
 
                 AWSTaskStatusChecker
