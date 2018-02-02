@@ -1173,6 +1173,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.id = sp.getProfileId();
         res.name = sp.getName();
         res.desc = sp.getDescription();
+        res.endpointLink = request.endpointLink;
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
                 .put(ComputeProperties.RESOURCE_TYPE_KEY, sp.getType())
@@ -1353,6 +1354,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ResourceGroupState res = new ResourceGroupState();
         res.id = net.getName();
         res.name = "Hosts connected to network '" + net.getName() + "'";
+        res.endpointLink = ctx.getRequest().endpointLink;
         res.tenantLinks = ctx.getTenantLinks();
         CustomProperties.of(res)
                 .put(CustomProperties.MOREF, net.getId())
@@ -1373,6 +1375,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ResourceGroupState res = new ResourceGroupState();
         res.id = ds.getName();
         res.name = "Hosts that can access datastore '" + ds.getName() + "'";
+        res.endpointLink = ctx.getRequest().endpointLink;
         res.tenantLinks = ctx.getTenantLinks();
         CustomProperties.of(res)
                 .put(CustomProperties.MOREF, ds.getId())

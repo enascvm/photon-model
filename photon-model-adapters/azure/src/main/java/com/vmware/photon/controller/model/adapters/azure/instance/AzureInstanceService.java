@@ -1558,6 +1558,8 @@ public class AzureInstanceService extends StatelessService {
                     diskStateToCreate.capacityMBytes = azureDataDisk.diskSizeGB() * 1024;
                 }
                 diskStateToCreate.status = DiskService.DiskStatus.ATTACHED;
+                diskStateToCreate.endpointLink = ctx.endpoint.documentSelfLink;
+                AdapterUtils.addToEndpointLinks(diskStateToCreate, ctx.endpoint.documentSelfLink);
 
                 Operation createDiskState = Operation
                         .createPost(ctx.service, DiskService.FACTORY_LINK)
