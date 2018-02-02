@@ -174,7 +174,7 @@ public class AWSSecurityGroupService extends StatelessService {
                         return;
                     }
 
-                    context.client = new AWSSecurityGroupClient(client);
+                    context.client = new AWSSecurityGroupClient(this, client);
                     r.complete(context);
                 });
         return r;

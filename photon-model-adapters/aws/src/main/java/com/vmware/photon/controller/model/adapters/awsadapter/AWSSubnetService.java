@@ -235,7 +235,7 @@ public class AWSSubnetService extends StatelessService {
                         return;
                     }
 
-                    context.client = new AWSNetworkClient(client);
+                    context.client = new AWSNetworkClient(this, client);
                     r.complete(context);
                 });
         return r;

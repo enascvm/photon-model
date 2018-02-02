@@ -86,7 +86,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     // As of now uniquely identify TWO AWS image: one paravirtual and one hvm.
     private static final String AMAZON_PARAVIRTUAL_IMAGE_NAME = "Amazon-Linux_WordPress";
-    private static final String AMAZON_HVM_IMAGE_NAME = "Wordpress 4.4.2 for Amazon Linux";
+    private static final String AMAZON_HVM_IMAGE_NAME = "Wordpress 4.4.2 for SuSE Linux";
 
     // As of now uniquely identify a SINGLE AWS image.
     private static final String AMAZON_PUBLIC_IMAGE_FILTER_SINGLE;

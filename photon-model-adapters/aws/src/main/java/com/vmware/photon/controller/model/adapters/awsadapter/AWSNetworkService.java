@@ -165,6 +165,7 @@ public class AWSNetworkService extends StatelessService {
                                 return;
                             }
 
+                            context.client = new AWSNetworkClient(ec2Client);
                             if (context.networkRequest.requestType == NetworkInstanceRequest.InstanceRequestType.CREATE) {
                                 context.stage = AWSNetworkStage.PROVISION_VPC;
                             } else {
