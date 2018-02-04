@@ -207,7 +207,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         statCollectionState.resourcePoolLink = pool.documentSelfLink;
         statCollectionState.statsAdapterReference = UriUtils.buildUri(this.host,
                 AWSCostStatsService.SELF_LINK);
-        statCollectionState.documentSelfLink = "cost-stats-adapter";
+        statCollectionState.documentSelfLink = "cost-stats-adapter" + UUID.randomUUID().toString();
         statCollectionState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
         statCollectionState.taskInfo = TaskState.createDirect();
         Operation op = Operation.createPost(this.host, StatsCollectionTaskService.FACTORY_LINK)
