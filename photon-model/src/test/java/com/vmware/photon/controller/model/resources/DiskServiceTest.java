@@ -372,7 +372,7 @@ public class DiskServiceTest extends Suite {
             startState.customProperties = new HashMap<>();
             startState.customProperties.put("cp1-key", "cp1-value");
 
-            DiskState returnState = postServiceSynchronously(
+            DiskState returnStartState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
                     DiskState.class);
 
@@ -380,16 +380,16 @@ public class DiskServiceTest extends Suite {
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("cp2-key", "cp2-value");
 
-            patchServiceSynchronously(returnState.documentSelfLink,
+            patchServiceSynchronously(returnStartState.documentSelfLink,
                     patchState);
 
-            returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskState.class);
+            DiskState patchedState = getServiceSynchronously(
+                    returnStartState.documentSelfLink, DiskState.class);
             HashMap<Object, Object> expectedCustomProperties = new HashMap<>();
-            expectedCustomProperties.putAll(startState.customProperties);
+            expectedCustomProperties.putAll(returnStartState.customProperties);
             expectedCustomProperties.putAll(patchState.customProperties);
 
-            assertThat(returnState.customProperties, is(expectedCustomProperties));
+            assertThat(patchedState.customProperties, is(expectedCustomProperties));
         }
 
         @Test

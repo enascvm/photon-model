@@ -40,6 +40,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.ResourceUtils;
 import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
@@ -721,6 +722,11 @@ public class ResourceGroomerTaskService
                         state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
             } else if (doc.documentKind.equals(DISK_STATE_DOCUMENT_KIND)) {
                 DiskState state = Utils.fromJson(document, DiskState.class);
+                if (state.customProperties != null && state.customProperties.containsKey(
+                        ResourceUtils.CUSTOM_PROP_NO_ENDPOINT)) {
+                    // skip resources that have never been attached to a particular endpoint
+                    continue;
+                }
                 if (state.endpointLinks != null) {
                     state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);

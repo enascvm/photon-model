@@ -1911,7 +1911,8 @@ public class AzureInstanceService extends StatelessService {
                         (ops, exc) -> {
                             if (exc != null) {
                                 handleError(ctx, new IllegalStateException(
-                                        "Error getting disk information"));
+                                        "Error getting disk information",
+                                        exc.values().iterator().next()));
                                 return;
                             }
 

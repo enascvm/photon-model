@@ -29,6 +29,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ResourceState.TagInfo;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.Operation;
@@ -258,6 +259,54 @@ public class ResourceUtilsTest extends BaseModelTest {
                 .next(), ComputeState.class);
         assertEquals(1, foundCompute.expandedTags.size());
         assertEquals("A\n1", foundCompute.expandedTags.get(0).tag);
+    }
+
+    @Test
+    public void testNoEndpointFlag() throws Throwable {
+        // validate initial state with no endpoint - the flag should be set
+        DiskState disk = new DiskState();
+        disk.name = "disk";
+        disk = postServiceSynchronously(DiskService.FACTORY_LINK, disk, DiskState.class);
+        assertTrue(disk.customProperties != null && disk.customProperties.containsKey
+                (ResourceUtils.CUSTOM_PROP_NO_ENDPOINT));
+
+        // validate PATCH with no endpoint - the flag should stay
+        DiskState diskPatch = new DiskState();
+        diskPatch.name = "new-name";
+        disk = patchServiceSynchronously(disk.documentSelfLink, diskPatch, DiskState.class);
+        assertTrue(disk.customProperties != null && disk.customProperties.containsKey
+                (ResourceUtils.CUSTOM_PROP_NO_ENDPOINT));
+
+        // validate PATCH with endpoint - the flag should be removed
+        diskPatch = new DiskState();
+        diskPatch.endpointLink = "endpoint-link";
+        disk = patchServiceSynchronously(disk.documentSelfLink, diskPatch, DiskState.class);
+        assertTrue(disk.customProperties == null || !disk.customProperties.containsKey
+                (ResourceUtils.CUSTOM_PROP_NO_ENDPOINT));
+
+        // validate PATCH that removes the endpoint - the flag should not be re-added
+        diskPatch = new DiskState();
+        diskPatch.name = "brand-new-name";
+        diskPatch.endpointLink = ResourceUtils.NULL_LINK_VALUE;
+        disk = patchServiceSynchronously(disk.documentSelfLink, diskPatch, DiskState.class);
+        assertTrue(disk.customProperties == null || !disk.customProperties.containsKey
+                (ResourceUtils.CUSTOM_PROP_NO_ENDPOINT));
+
+        // validate that the flag cannot be re-added through a PUT request
+        disk.customProperties = new HashMap<>();
+        disk.customProperties.put(ResourceUtils.CUSTOM_PROP_NO_ENDPOINT, Boolean.TRUE.toString());
+        putServiceSynchronously(disk.documentSelfLink, disk);
+        disk = getServiceSynchronously(disk.documentSelfLink, DiskState.class);
+        assertTrue(disk.customProperties == null || !disk.customProperties.containsKey
+                (ResourceUtils.CUSTOM_PROP_NO_ENDPOINT));
+
+        // validate initial state with endpoint - the flag should not be set
+        DiskState newDisk = new DiskState();
+        newDisk.name = "disk";
+        newDisk.endpointLink = "endpoint-link";
+        newDisk = postServiceSynchronously(DiskService.FACTORY_LINK, newDisk, DiskState.class);
+        assertTrue(newDisk.customProperties == null || !newDisk.customProperties.containsKey
+                (ResourceUtils.CUSTOM_PROP_NO_ENDPOINT));
     }
 
     private Operation handlePatch(ResourceState currentState, ResourceState patchState) {

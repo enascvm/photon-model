@@ -330,6 +330,7 @@ public class DiskService extends StatefulService {
     public void handleCreate(Operation start) {
         DiskState state = processInput(start);
         ResourceUtils.populateTags(this, state)
+                .thenAccept(__ -> ResourceUtils.initNoEndpointFlag(state, DiskState.class))
                 .whenCompleteNotify(start);
     }
 
@@ -337,7 +338,10 @@ public class DiskService extends StatefulService {
     public void handlePut(Operation put) {
         DiskState returnState = processInput(put);
         ResourceUtils.populateTags(this, returnState)
-                .thenAccept(__ -> setState(put, returnState))
+                .thenAccept(__ -> {
+                    ResourceUtils.updateNoEndpointFlag(returnState, getState(put), DiskState.class);
+                    setState(put, returnState);
+                })
                 .whenCompleteNotify(put);
     }
 
