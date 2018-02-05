@@ -235,7 +235,8 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                     ServiceTypeCluster.INVENTORY_SERVICE), currentState.resourcePoolLink))
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            if (e instanceof ServiceNotFoundException) {
+                            if (e instanceof ServiceNotFoundException
+                                    || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
                                 logInfo(() -> String.format(
                                         "Resource pool %s seems to have been deleted",
                                         currentState.resourcePoolLink));

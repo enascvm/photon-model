@@ -2286,7 +2286,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         populateTags(enumerationProgress, vm, snapshot);
         snapshot.tenantLinks = enumerationProgress.getTenantLinks();
         if (snapshot.endpointLinks == null) {
-            snapshot.endpointLinks = new HashSet<String>();
+            snapshot.endpointLinks = new HashSet<>();
         }
         snapshot.endpointLinks.add(enumerationProgress.getRequest().endpointLink);
         CustomProperties.of(snapshot)
@@ -2365,7 +2365,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion((o, e) -> {
                     if (e == null) {
                         updateResourcePool(enumerationProgress, ownerName, selfLink, rp);
-                    } else if (e instanceof ServiceNotFoundException) {
+                    } else if (e instanceof ServiceNotFoundException
+                            || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
                         createNewResourcePool(enumerationProgress, ownerName, selfLink, rp);
                     } else {
                         trackResourcePool(enumerationProgress, rp).handle(o, e);

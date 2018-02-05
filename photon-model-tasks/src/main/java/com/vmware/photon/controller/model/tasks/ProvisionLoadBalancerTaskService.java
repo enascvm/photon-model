@@ -223,7 +223,8 @@ public class ProvisionLoadBalancerTaskService extends TaskService<ProvisionLoadB
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
-                                if (e instanceof ServiceNotFoundException
+                                if ((e instanceof ServiceNotFoundException
+                                        || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND)
                                         && InstanceRequestType.DELETE
                                                 .equals(taskState.requestType)) {
                                     logWarning("Load balancer not found at %s, nothing to delete",

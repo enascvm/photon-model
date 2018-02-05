@@ -129,7 +129,8 @@ public class AWSMissingResourcesEnumerationService extends StatelessService {
             Operation.createGet(this, computeDescription.documentSelfLink)
                     .setReferer(this.getUri())
                     .setCompletion((o, e) -> {
-                        if (e != null && e instanceof ServiceNotFoundException) {
+                        if (e != null && (e instanceof ServiceNotFoundException
+                                || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND)) {
                             OperationSequence.create(cdOp).next(csOp)
                                     .setCompletion(completionHandler)
                                     .sendWith(this);
