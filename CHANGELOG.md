@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.48_2
+* Fixing issues related to Azure billing.
+
 ## 0.6.48.1
 * Upgrade to Xenon 1.6.2 and required changes.
 * Important bug fixes for azure cost stats service.

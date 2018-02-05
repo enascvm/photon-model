@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model.adapters.azure.ea.utils;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL_IN_MILLIS;
 
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -30,6 +32,7 @@ import com.opencsv.bean.HeaderColumnNameMappingStrategy;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureService;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
+import com.vmware.photon.controller.model.adapters.azure.model.cost.BillParsingStatus;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaDetailedBillElement;
 
 public class AzureDetailedBillHandler {
@@ -79,64 +82,70 @@ public class AzureDetailedBillHandler {
 
     }
 
-    public boolean parseDetailedCsv(CSVReader csvReader, Set<String> newSubscriptions,
+    public BillParsingStatus parseDetailedCsv(File billFile, Set<String> newSubscriptions, BillParsingStatus status,
             long billProcessedTimeMillis, String currency,
             BiConsumer<Map<String, AzureSubscription>, Long> dailyStatsConsumer)
             throws IOException {
         logger.fine(() -> "Beginning to parse CSV file.");
-        HeaderColumnNameMappingStrategy<EaDetailedBillElement> strategy =
-                new HeaderColumnNameMappingStrategy<>();
-        strategy.setType(EaDetailedBillElement.class);
-        boolean parsingComplete = false;
-        long timeToStartBillProcessing = getTimeToStartBillProcessing(billProcessedTimeMillis);
+        try (CSVReader csvReader = new CSVReader(new FileReader(billFile),
+                AzureCostConstants.DEFAULT_COLUMN_SEPARATOR, AzureCostConstants.DEFAULT_QUOTE_CHARACTER,
+                AzureCostConstants.DEFAULT_ESCAPE_CHARACTER, (int) status.getNoLinesRead())) {
 
-        // This map will contain daily subscription, service & resource cost. The subscription
-        // GUID is the key and the subscription details is the value. This map is maintained
-        // since daily-level stats are needed for services and resources.
-        Map<String, AzureSubscription> monthlyBill = new HashMap<>();
-        String[] nextRow;
-        Long prevRowEpoch = null;
-        while ((nextRow = csvReader.readNext()) != null) {
-            final String[] finalNextRow = nextRow;
-            if (nextRow.length != BillHeaders.values().length) {
-                // Skip any blank or malformed rows
-                logger.warning(() ->
-                        String.format("Skipping malformed row: %s", Arrays.toString(finalNextRow)));
-                continue;
-            }
-            logger.fine(() -> String.format("Beginning to process row: %s", Arrays.toString(finalNextRow)));
+            HeaderColumnNameMappingStrategy<EaDetailedBillElement> strategy =
+                    new HeaderColumnNameMappingStrategy<>();
+            strategy.setType(EaDetailedBillElement.class);
+            long timeToStartBillProcessing = getTimeToStartBillProcessing(billProcessedTimeMillis);
 
-            EaDetailedBillElement detailedBillElement = AzureCostHelper
-                    .sanitizeDetailedBillElement(nextRow, currency);
-            AzureSubscription subscription = populateSubscriptionCost(monthlyBill,
-                    detailedBillElement);
-            long curRowEpoch = detailedBillElement.epochDate;
-            if (shouldCreateServiceAndResourceCost(detailedBillElement, newSubscriptions,
-                    timeToStartBillProcessing)) {
-                AzureService service = populateServiceCost(subscription,
+            // This map will contain daily subscription, service & resource cost. The subscription
+            // GUID is the key and the subscription details is the value. This map is maintained
+            // since daily-level stats are needed for services and resources.
+            Map<String, AzureSubscription> monthlyBill = new HashMap<>();
+            String[] nextRow;
+            Long prevRowEpoch = null;
+            while ((nextRow = csvReader.readNext()) != null) {
+                final String[] finalNextRow = nextRow;
+                if (nextRow.length != BillHeaders.values().length) {
+                    // Skip any blank or malformed rows
+                    logger.warning(() ->
+                            String.format("Skipping malformed row: %s", Arrays.toString(finalNextRow)));
+                    continue;
+                }
+                logger.fine(() -> String.format("Beginning to process row: %s", Arrays.toString(finalNextRow)));
+
+                EaDetailedBillElement detailedBillElement = AzureCostHelper
+                        .sanitizeDetailedBillElement(nextRow, currency);
+                AzureSubscription subscription = populateSubscriptionCost(monthlyBill,
                         detailedBillElement);
-                populateResourceCost(service, detailedBillElement);
+                long curRowEpoch = detailedBillElement.epochDate;
+                if (shouldCreateServiceAndResourceCost(detailedBillElement, newSubscriptions,
+                        timeToStartBillProcessing)) {
+                    AzureService service = populateServiceCost(subscription,
+                            detailedBillElement);
+                    populateResourceCost(service, detailedBillElement);
+                }
+                billProcessedTimeMillis =
+                        billProcessedTimeMillis < curRowEpoch ?
+                                curRowEpoch : billProcessedTimeMillis;
+                monthlyBill.put(detailedBillElement.subscriptionGuid, subscription);
+                if (prevRowEpoch != null && !prevRowEpoch.equals(curRowEpoch)) {
+                    // This indicates that we have processed all rows belonging to a
+                    // corresponding day in the current month's bill.
+                    // Consume the batch
+                    // Subtract 1, to account for detecting date change line.
+                    status.setNoLinesRead(csvReader.getLinesRead() - 1);
+                    dailyStatsConsumer.accept(monthlyBill, null);
+                    break;
+                }
+                prevRowEpoch = curRowEpoch;
             }
-            billProcessedTimeMillis =
-                    billProcessedTimeMillis < curRowEpoch ?
-                            curRowEpoch : billProcessedTimeMillis;
-            monthlyBill.put(detailedBillElement.subscriptionGuid, subscription);
-            if (prevRowEpoch != null && !prevRowEpoch.equals(curRowEpoch)) {
-                // This indicates that we have processed all rows belonging to a
-                // corresponding day in the current month's bill.
-                // Consume the batch
-                dailyStatsConsumer.accept(monthlyBill, null);
-                break;
+            if ((nextRow == null && monthlyBill.size() > 0) || (nextRow == null
+                    && csvReader.getLinesRead() == AzureCostConstants.DEFAULT_LINES_TO_SKIP)) {
+                status.setParsingComplete(true);
+                dailyStatsConsumer.accept(monthlyBill, billProcessedTimeMillis);
+                logger.fine(() -> "Finished parsing CSV bill.");
             }
-            prevRowEpoch = curRowEpoch;
+            return status;
         }
-        if ((nextRow == null && monthlyBill.size() > 0) || (nextRow == null
-                && csvReader.getLinesRead() == AzureCostConstants.DEFAULT_LINES_TO_SKIP)) {
-            parsingComplete = true;
-            dailyStatsConsumer.accept(monthlyBill, billProcessedTimeMillis);
-            logger.fine(() -> "Finished parsing CSV bill.");
-        }
-        return parsingComplete;
     }
 
     /**

@@ -21,6 +21,8 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 
+import org.joda.time.DateTimeZone;
+import org.joda.time.LocalDate;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -80,7 +82,9 @@ public class TestAzureCostStatsService extends BaseModelTest {
 
     @Test
     public void testAzureCostStatsServiceEndToEnd() throws Throwable {
-        if (this.isMock) {
+        if (this.isMock || new LocalDate(DateTimeZone.UTC).getDayOfMonth() < 3) {
+            // Don't run the test in case it is the first or the second of the month since
+            // it has been observed it usually comes on the third.
             return;
         }
         ResourcePoolService.ResourcePoolState resourcePool = AzureTestUtil
