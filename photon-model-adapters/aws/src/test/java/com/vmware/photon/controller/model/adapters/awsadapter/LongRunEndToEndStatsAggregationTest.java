@@ -44,6 +44,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+import com.vmware.photon.controller.model.PhotonModelInMemoryServices;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
@@ -142,6 +143,7 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
+            PhotonModelInMemoryServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             AWSAdapters.startServices(this.host);
 
@@ -150,6 +152,7 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelInMemoryServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
             this.host.waitForServiceAvailable(AWSAdapters.LINKS);
 

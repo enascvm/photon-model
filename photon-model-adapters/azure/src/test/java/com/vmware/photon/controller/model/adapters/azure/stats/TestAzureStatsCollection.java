@@ -33,6 +33,7 @@ import java.util.logging.Level;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelInMemoryServices;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
@@ -118,12 +119,14 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
             if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
                 PhotonModelMetricServices.startServices(this.host);
+                PhotonModelInMemoryServices.startServices(this.host);
                 PhotonModelAdaptersRegistryAdapters.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
                 AzureAdapters.startServices(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+                this.host.waitForServiceAvailable(PhotonModelInMemoryServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
                 this.host.waitForServiceAvailable(AzureAdapters.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
