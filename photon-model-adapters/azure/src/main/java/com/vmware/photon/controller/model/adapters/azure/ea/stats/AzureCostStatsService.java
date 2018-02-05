@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.AUTO_DISCOVERED_ENTITY;
 
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -29,6 +28,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -42,10 +42,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.AtomicDouble;
-import com.opencsv.CSVReader;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -77,6 +77,7 @@ import com.vmware.photon.controller.model.adapters.azure.ea.utils.AzureDetailedB
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureResource;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureService;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
+import com.vmware.photon.controller.model.adapters.azure.model.cost.BillParsingStatus;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaBillLinkElement;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaBillLinks;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.OldApi;
@@ -177,7 +178,6 @@ public class AzureCostStatsService extends StatelessService {
         private Map<String, AzureSubscription> allSubscriptionsCost = new ConcurrentHashMap<>();
         protected AuthCredentialsServiceState auth;
         private File billFile;
-        private CSVReader csvReader;
         private LocalDate billMonthToDownload;
         protected long billProcessedTimeMillis = 0;
         protected ComputeStateWithDescription computeHostDesc;
@@ -200,6 +200,7 @@ public class AzureCostStatsService extends StatelessService {
                 new ConcurrentHashMap<>();
         private Set<String> subscriptionsAddedAfterLastRun = Sets.newConcurrentHashSet();
         private Set<LocalDate> summarizedBillsToGet = Sets.newConcurrentHashSet();
+        private BillParsingStatus parsingStatus = new BillParsingStatus();
         private TaskManager taskManager;
         // billParsedMillis is populated once the entire bill is parsed
         private long billParsedMillis = 0;
@@ -341,7 +342,7 @@ public class AzureCostStatsService extends StatelessService {
     private void queryResourcesForExistingSubscriptions(Context context, Stages next) {
         List<String> subscriptionsToQueryResources = getSubscriptionGuidsToQueryResources(context);
         if (subscriptionsToQueryResources.size() == 0) {
-            logInfo(() -> String.format("No subscriptions to query VMs for" +
+            logFine(() -> String.format("No subscriptions to query VMs for" +
                     " endpoint %s", context.computeHostDesc.endpointLink));
             context.stage = next;
             handleRequest(context);
@@ -869,19 +870,12 @@ public class AzureCostStatsService extends StatelessService {
     private void parseDetailedBill(Context context, Stages next) {
         try {
             AzureDetailedBillHandler billHandler = new AzureDetailedBillHandler();
-            if (context.csvReader == null) {
-                context.csvReader = new CSVReader(new FileReader(context.billFile),
-                        AzureCostConstants.DEFAULT_COLUMN_SEPARATOR,
-                        AzureCostConstants.DEFAULT_QUOTE_CHARACTER,
-                        AzureCostConstants.DEFAULT_ESCAPE_CHARACTER,
-                        AzureCostConstants.DEFAULT_LINES_TO_SKIP);
-            }
             // Get the subscription GUIDs from the subscription compute states.
-            boolean parsingComplete = billHandler.parseDetailedCsv(context.csvReader,
-                    context.subscriptionsAddedAfterLastRun,
+            context.parsingStatus = billHandler.parseDetailedCsv(context.billFile,
+                    context.subscriptionsAddedAfterLastRun, context.parsingStatus,
                     context.billProcessedTimeMillis, context.currency,
                     getDailyStatsConsumer(context, next));
-            if (parsingComplete) {
+            if (context.parsingStatus.isParsingComplete()) {
                 cleanUp(context);
             }
         } catch (IOException ioException) {
@@ -962,6 +956,8 @@ public class AzureCostStatsService extends StatelessService {
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(QueryUtils.DEFAULT_MAX_RESULT_LIMIT)
                 .setQuery(azureSubscriptionsQuery).build();
 
         queryTask.setDirect(true);
@@ -1044,7 +1040,9 @@ public class AzureCostStatsService extends StatelessService {
                         subscription.parentEntityName);
                 context.allSubscriptionsCost.put(subscriptionGuid, existingSubscription);
             }
-            existingSubscription.cost.putAll(subscription.cost);
+            for (Entry<Long, Double> cost : subscription.cost.entrySet()) {
+                existingSubscription.addToDailyCosts(cost.getKey(), cost.getValue());
+            }
         }
     }
 
@@ -1141,17 +1139,23 @@ public class AzureCostStatsService extends StatelessService {
     private void setLinkedSubscriptionGuids(Context context, Stages next) {
         Map<String, String> eaAccountProps = context.computeHostDesc.customProperties;
 
-        // Get the list of all unique subscription GUIDs(comma separated list).
-        // The list is sorted to get the same list independent of order of subscription GUIDs.
-        String linkedSubsGuids = context.allSubscriptionsCost.values().stream()
-                .map(subscription -> subscription.entityId).distinct().sorted()
-                .collect(Collectors.joining(","));
+        String prevLinkedSubsGuids = eaAccountProps.get(AzureCostConstants.LINKED_SUBSCRIPTION_GUIDS);
+        Set<String> prevLinkedSubsGuidsSet = new HashSet<>();
 
-        String prevLinkedSubsGuids = eaAccountProps
-                .getOrDefault(AzureCostConstants.LINKED_SUBSCRIPTION_GUIDS, "");
-        if (!prevLinkedSubsGuids.equals(linkedSubsGuids)) {
-            setCustomProperty(context, AzureCostConstants.LINKED_SUBSCRIPTION_GUIDS,
-                    linkedSubsGuids, next);
+        if (prevLinkedSubsGuids != null) {
+            prevLinkedSubsGuidsSet = Stream.of(prevLinkedSubsGuids.split("," )).collect(Collectors.toSet());
+        }
+
+        boolean newSubsPresent = false;
+        for (String id : context.allSubscriptionsCost.keySet()) {
+            if (!prevLinkedSubsGuidsSet.contains(id)) {
+                newSubsPresent = true;
+                prevLinkedSubsGuidsSet.add(id);
+            }
+        }
+        String linkedSubsGuids = prevLinkedSubsGuidsSet.stream().collect(Collectors.joining(","));
+        if (newSubsPresent) {
+            setCustomProperty(context, AzureCostConstants.LINKED_SUBSCRIPTION_GUIDS, linkedSubsGuids, next);
         } else {
             context.stage = next;
             handleRequest(context);
@@ -1325,7 +1329,6 @@ public class AzureCostStatsService extends StatelessService {
             // Clean-up only in case parsing has been completed for a month.
             context.allSubscriptionsCost = new ConcurrentHashMap<>();
             context.billParsedMillis = 0;
-            context.csvReader = null;
         }
     }
 
@@ -1436,7 +1439,9 @@ public class AzureCostStatsService extends StatelessService {
             case AzureCostConstants.SERVICE_COMMITMENT_TOTAL_USAGE:
                 try {
                     accountUsageCost = Double.valueOf(billElement.amount);
-                    currency = billElement.currencyCode;
+                    if (billElement.currencyCode != null) {
+                        currency = billElement.currencyCode.trim();
+                    }
                 } catch (NumberFormatException numberFormatEx) {
                     OldEaSummarizedBillElement finalBillElement = billElement;
                     logWarning(() -> String
@@ -1517,9 +1522,7 @@ public class AzureCostStatsService extends StatelessService {
 
     private void cleanUp(Context context) {
         try {
-            if (context.csvReader != null) {
-                context.csvReader.close();
-            }
+            context.parsingStatus = new BillParsingStatus();
             if (context.billFile != null) {
                 FileUtils.deleteDirectory(context.billFile.getParentFile());
             }
