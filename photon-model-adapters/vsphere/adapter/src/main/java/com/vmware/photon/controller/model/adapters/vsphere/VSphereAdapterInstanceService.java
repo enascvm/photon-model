@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-
 import io.netty.util.internal.StringUtil;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -221,7 +220,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                         // Find the host link where the computed is provisioned and patch the
                         // compute state.
-                        queryHostLinkAndUpdateCompute(state, vmOverlay.getHost())
+                        queryHostLinkAndUpdateCompute(ctx, vmOverlay.getHost())
                                 .thenCompose(links -> {
                                     CustomProperties.of(state)
                                             .put(COMPUTE_HOST_LINK_PROP_NAME, links.iterator().next());
@@ -245,7 +244,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
      * Query with the MangedObjectReference of the compute host where the VM is provisioned to
      * get the self link of host ComputeState and update the VM ComputeState with the link.
      */
-    private DeferredResult<List<String>> queryHostLinkAndUpdateCompute(ComputeState computeState,
+    private DeferredResult<List<String>> queryHostLinkAndUpdateCompute(ProvisionContext ctx,
             ManagedObjectReference hostMoref) {
         String moref = VimUtils.convertMoRefToString(hostMoref);
 
@@ -253,10 +252,10 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 .addKindFieldClause(ComputeState.class)
                 .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                         CustomProperties.MOREF, moref);
-        QueryUtils.addEndpointLink(builder, ComputeState.class, computeState.endpointLink);
+        QueryUtils.addEndpointLink(builder, ComputeState.class, ctx.child.endpointLink);
 
         QueryUtils.QueryTop<ComputeState> computeHostQuery = new QueryUtils.QueryTop<>(
-                this.getHost(), builder.build(), ComputeState.class, computeState.tenantLinks);
+                this.getHost(), builder.build(), ComputeState.class, ctx.parent.tenantLinks);
 
         computeHostQuery.setMaxResultsLimit(1);
         computeHostQuery.setClusterType(ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE);
