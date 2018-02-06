@@ -39,7 +39,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSec
 import static com.vmware.xenon.common.Operation.STATUS_CODE_FORBIDDEN;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -59,7 +58,6 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ClientConfiguration;
-import com.amazonaws.SdkBaseException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -67,8 +65,8 @@ import com.amazonaws.auth.BasicSessionCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition;
 import com.amazonaws.retry.RetryPolicy;
-import com.amazonaws.retry.RetryUtils;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClientBuilder;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
@@ -189,6 +187,27 @@ public class AWSUtils {
             AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY,
             ARN_DEFAULT_SESSION_DURATION_SECONDS);
 
+    /**
+     * -Dphoton-model.aws.max.error.retry
+     *
+     * The AWS max retry request count. This is how many times to retry the request if it fails.
+     * Default is AWS SDK default value (3).
+     */
+    public static final String AWS_MAX_ERROR_RETRY_PROPERTY =
+            UriPaths.PROPERTY_PREFIX + "aws.max.error.retry";
+    public static final int AWS_MAX_ERROR_RETRY =
+            Integer.getInteger(AWS_MAX_ERROR_RETRY_PROPERTY, DEFAULT_MAX_ERROR_RETRY);
+
+    /**
+     * -Dphoton-model.aws.log.retry.error.attempt
+     *
+     * Log retry requests after attempt count reaches this threshold.
+     * Default is aws.max.error.retry divided on two.
+     */
+    public static final String AWS_LOG_RETRY_ERROR_ATTEMPT_PROPERTY =
+            UriPaths.PROPERTY_PREFIX + "aws.log.retry.error.attempt";
+    public static final int AWS_LOG_RETRY_ERROR_ATTEMPT =
+            Integer.getInteger(AWS_LOG_RETRY_ERROR_ATTEMPT_PROPERTY, AWS_MAX_ERROR_RETRY / 2);
 
     /**
      * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
@@ -217,56 +236,23 @@ public class AWSUtils {
     private static String awsS3ProxyHost = null;
 
     /**
-     * Custom retry condition with exception logs.
+     * Retry condition with exception logging.
      */
-    public static class CustomRetryCondition implements RetryPolicy.RetryCondition {
+    public static class LoggingRetryCondition extends SDKDefaultRetryCondition {
 
         @Override
         public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
                 AmazonClientException exception,
                 int retriesAttempted) {
-            Utils.log(CustomRetryCondition.class, CustomRetryCondition.class.getSimpleName(),
-                    Level.FINE, () -> String
-                            .format("Encountered exception %s for request %s, retries attempted: %d",
-                                    Utils.toString(exception), originalRequest, retriesAttempted));
 
-            // Always retry on client exceptions caused by IOException
-            if (exception.getCause() instanceof IOException) {
-                return true;
-            }
+            Level logLevel =
+                    retriesAttempted > AWS_LOG_RETRY_ERROR_ATTEMPT ? Level.WARNING : Level.FINE;
+            Utils.log(LoggingRetryCondition.class, LoggingRetryCondition.class.getSimpleName(),
+                    logLevel,
+                    () -> String.format("Encountered exception on attempted %d, for request %s: %s",
+                            retriesAttempted, originalRequest, Utils.toString(exception)));
 
-            // Only retry on a subset of service exceptions
-            if (exception instanceof AmazonServiceException) {
-                AmazonServiceException ase = (AmazonServiceException) exception;
-
-                /*
-                 * For 500 internal server errors and 503 service unavailable errors, we want to
-                 * retry, but we need to use an exponential back-off strategy so that we don't
-                 * overload a server with a flood of retries.
-                 */
-                if (RetryUtils.isRetryableServiceException(new SdkBaseException(ase))) {
-                    return true;
-                }
-
-                /*
-                 * Throttling is reported as a 400 error from newer services. To try and smooth out
-                 * an occasional throttling error, we'll pause and retry, hoping that the pause is
-                 * long enough for the request to get through the next time.
-                 */
-                if (RetryUtils.isThrottlingException(new SdkBaseException(ase))) {
-                    return true;
-                }
-
-                /*
-                 * Clock skew exception. If it is then we will get the time offset between the
-                 * device time and the server time to set the clock skew and then retry the request.
-                 */
-                if (RetryUtils.isClockSkewError(new SdkBaseException(ase))) {
-                    return true;
-                }
-            }
-
-            return false;
+            return super.shouldRetry(originalRequest, exception, retriesAttempted);
         }
     }
 
@@ -339,12 +325,8 @@ public class AWSUtils {
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
 
-        ClientConfiguration configuration = new ClientConfiguration();
-        configuration.setMaxConnections(100);
-        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
-                DEFAULT_BACKOFF_STRATEGY,
-                DEFAULT_MAX_ERROR_RETRY,
-                false));
+        ClientConfiguration configuration = createClientConfiguration()
+                .withMaxConnections(100);
 
         AmazonEC2AsyncClientBuilder ec2AsyncClientBuilder = AmazonEC2AsyncClientBuilder
                 .standard()
@@ -367,6 +349,15 @@ public class AWSUtils {
         }
 
         return (AmazonEC2AsyncClient) ec2AsyncClientBuilder.build();
+    }
+
+    static ClientConfiguration createClientConfiguration() {
+        return new ClientConfiguration().withRetryPolicy(
+                new RetryPolicy(
+                        new LoggingRetryCondition(),
+                        DEFAULT_BACKOFF_STRATEGY,
+                        AWS_MAX_ERROR_RETRY,
+                        true));
     }
 
     private static String getAwsS3ProxyHost() {
@@ -450,11 +441,7 @@ public class AWSUtils {
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService, boolean isMockRequest) {
 
-        ClientConfiguration configuration = new ClientConfiguration();
-        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
-                DEFAULT_BACKOFF_STRATEGY,
-                DEFAULT_MAX_ERROR_RETRY,
-                false));
+        ClientConfiguration configuration = createClientConfiguration();
 
         AmazonCloudWatchAsyncClientBuilder amazonCloudWatchAsyncClientBuilder =
                 AmazonCloudWatchAsyncClientBuilder
@@ -579,16 +566,10 @@ public class AWSUtils {
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
 
-        ClientConfiguration configuration = new ClientConfiguration();
-        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
-                DEFAULT_BACKOFF_STRATEGY,
-                DEFAULT_MAX_ERROR_RETRY,
-                false));
-
         AmazonElasticLoadBalancingAsyncClientBuilder amazonElasticLoadBalancingAsyncClientBuilder =
                 AmazonElasticLoadBalancingAsyncClientBuilder
                         .standard()
-                        .withClientConfiguration(configuration)
+                        .withClientConfiguration(createClientConfiguration())
                         .withCredentials(getAwsStaticCredentialsProvider(credentials))
                         .withExecutorFactory(() -> executorService);
 
@@ -645,15 +626,9 @@ public class AWSUtils {
     public static AmazonS3Client getS3Client(AuthCredentialsServiceState credentials,
             String regionId) {
 
-        ClientConfiguration configuration = new ClientConfiguration();
-        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
-                DEFAULT_BACKOFF_STRATEGY,
-                DEFAULT_MAX_ERROR_RETRY,
-                false));
-
         AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder
                 .standard()
-                .withClientConfiguration(configuration)
+                .withClientConfiguration(createClientConfiguration())
                 .withCredentials(getAwsStaticCredentialsProvider(credentials))
                 .withRegion(regionId);
 

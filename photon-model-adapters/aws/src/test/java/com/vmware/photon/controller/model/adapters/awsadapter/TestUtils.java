@@ -13,9 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
-import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
-
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DISK_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient.DEFAULT_ALLOWED_NETWORK;
@@ -48,11 +45,10 @@ import java.util.zip.ZipOutputStream;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
+
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDateTime;
@@ -66,7 +62,6 @@ import org.supercsv.io.ICsvMapReader;
 import org.supercsv.io.ICsvMapWriter;
 import org.supercsv.prefs.CsvPreference;
 
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.CustomRetryCondition;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -535,11 +530,7 @@ public class TestUtils {
 
     public static AmazonEC2 getEC2SynchronousClient(AuthCredentialsServiceState credentials,
             String region) {
-        ClientConfiguration configuration = new ClientConfiguration();
-        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
-                DEFAULT_BACKOFF_STRATEGY,
-                DEFAULT_MAX_ERROR_RETRY,
-                true));
+        ClientConfiguration configuration = AWSUtils.createClientConfiguration();
 
         AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
                 new BasicAWSCredentials(credentials.privateKeyId,
