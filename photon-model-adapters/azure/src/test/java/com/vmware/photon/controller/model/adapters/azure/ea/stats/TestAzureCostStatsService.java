@@ -20,6 +20,7 @@ import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buil
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.UUID;
 
 import org.junit.Test;
 
@@ -140,7 +141,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
         statCollectionState.resourcePoolLink = pool.documentSelfLink;
         statCollectionState.statsAdapterReference = UriUtils.buildUri(this.host,
                 AzureCostStatsService.SELF_LINK);
-        statCollectionState.documentSelfLink = "azure-cost-stats-service";
+        statCollectionState.documentSelfLink = "azure-cost-stats-service" + UUID.randomUUID().toString();
         statCollectionState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
         statCollectionState.taskInfo = TaskState.createDirect();
         Operation op = Operation.createPost(this.host, StatsCollectionTaskService.FACTORY_LINK)
