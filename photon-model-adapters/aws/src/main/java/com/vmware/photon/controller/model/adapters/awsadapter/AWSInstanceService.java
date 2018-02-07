@@ -1139,18 +1139,20 @@ public class AWSInstanceService extends StatelessService {
             tagsToCreate.add(new Tag().withKey(AWS_TAG_NAME).withValue(this.context.child.name));
 
             Runnable proceed = () -> {
-                // log data to debug VCOM-3274
-                logInfo("Tagging resources and waiting instance %s to be running", instanceId);
+                try {
+                    AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, instanceId);
 
-                AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, instanceId);
-
-                AWSTaskStatusChecker
-                        .create(this.context.amazonEC2Client, instanceId,
-                                AWSTaskStatusChecker.AWS_RUNNING_NAME,
-                                Arrays.asList(AWSTaskStatusChecker.AWS_TERMINATED_NAME), consumer,
-                                this.context.taskManager,
-                                this.service, this.context.taskExpirationMicros)
-                        .start(new Instance());
+                    AWSTaskStatusChecker
+                            .create(this.context.amazonEC2Client, instanceId,
+                                    AWSTaskStatusChecker.AWS_RUNNING_NAME,
+                                    Arrays.asList(AWSTaskStatusChecker.AWS_TERMINATED_NAME),
+                                    consumer, this.context.taskManager,
+                                    this.service, this.context.taskExpirationMicros)
+                            .start(new Instance());
+                } catch (Exception e) {
+                    this.context.taskManager.patchTaskToFailure(
+                            "Error tagging resources for instance " + instanceId, e);
+                }
             };
 
             // add the name tag only if there are no tag links

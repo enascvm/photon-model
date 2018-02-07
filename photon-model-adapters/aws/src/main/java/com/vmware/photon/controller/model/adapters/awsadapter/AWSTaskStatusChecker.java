@@ -241,11 +241,11 @@ public class AWSTaskStatusChecker<T> {
                                     + "reason:" + stateReason));
                     return;
                 } else if (!status.equals(AWSTaskStatusChecker.this.desiredState)) {
-                    // log status to debug VCOM-3274
-                    AWSTaskStatusChecker.this.service.logInfo(
+                    AWSTaskStatusChecker.this.service.logFine(
                             "Instance %s not yet in desired state %s. Current state %s, waiting 5s",
                             AWSTaskStatusChecker.this.instanceId,
                             AWSTaskStatusChecker.this.desiredState, status);
+
                     // if the instance is not in the desired state, schedule thread
                     // to run again in 5 seconds
                     AWSTaskStatusChecker.this.service.getHost().schedule(
