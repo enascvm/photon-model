@@ -299,7 +299,7 @@ public class AWSDiskService extends StatelessService {
         Boolean encrypted = diskState.encrypted == null ? false : diskState.encrypted;
         req.withEncrypted(encrypted);
 
-        AWSUtils.setDefaultVolumeTypeIfNotSet(diskState);
+        AWSUtils.setEbsDefaultsIfNotSet(diskState, Boolean.TRUE);
 
         validateSizeSupportedByVolumeType(diskSize, diskState.customProperties.get(VOLUME_TYPE));
 

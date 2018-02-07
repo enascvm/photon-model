@@ -27,7 +27,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setDefaultVolumeTypeIfNotSet;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setEbsDefaultsIfNotSet;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.validateSizeSupportedByVolumeType;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_SSH_KEY_NAME;
@@ -463,12 +463,14 @@ public class AWSInstanceService extends StatelessService {
                 if (!aws.dataDisks.isEmpty()) {
                     if (!rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
                         instanceStoreDisks = aws.dataDisks;
+                        assertAndResetPersistence(instanceStoreDisks);
                         validateSupportForAdditionalInstanceStoreDisks(instanceStoreDisks,
                                 blockDeviceMappings, aws.instanceTypeInfo, rootDeviceType);
                     } else {
                         splitDataDisks(aws.dataDisks, instanceStoreDisks, ebsDisks);
-                        setDefaultVolumeTypeIfNotSpecified(ebsDisks);
+                        setEbsDefaultsIfNotSpecified(ebsDisks, Boolean.FALSE);
                         if (!instanceStoreDisks.isEmpty()) {
+                            assertAndResetPersistence(instanceStoreDisks);
                             validateSupportForAdditionalInstanceStoreDisks(instanceStoreDisks,
                                     blockDeviceMappings, aws.instanceTypeInfo, rootDeviceType);
                         }
@@ -692,8 +694,10 @@ public class AWSInstanceService extends StatelessService {
         }
         String deviceName = deviceMapping.getDeviceName();
         diskState.customProperties.put(DEVICE_NAME, deviceName);
+        diskState.persistent = Boolean.FALSE;
 
         EbsBlockDevice ebs = deviceMapping.getEbs();
+
         if (ebs != null) {
             diskState.capacityMBytes = ebs.getVolumeSize() * 1024;
             diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
@@ -721,15 +725,14 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Set gp2 volumes as default for ebs disks.
+     *
+     * set default values for device type, volumeType and persistent fields in each disk.
      */
-    private void setDefaultVolumeTypeIfNotSpecified(List<DiskState> dataDisks) {
+    private void setEbsDefaultsIfNotSpecified(List<DiskState> dataDisks, Boolean persist) {
         for (DiskState diskState : dataDisks) {
-            setDefaultVolumeTypeIfNotSet(diskState);
+            setEbsDefaultsIfNotSet(diskState, persist);
         }
     }
-
-
 
     private class AWSCreationHandler
             extends AWSAsyncHandler<RunInstancesRequest, RunInstancesResult> {
@@ -950,6 +953,7 @@ public class AWSInstanceService extends StatelessService {
                         String deviceName = availableEbsDiskNames.get(0);
                         availableEbsDiskNames.remove(0);
                         externalDisk.customProperties.put(DEVICE_NAME, deviceName);
+                        externalDisk.persistent = Boolean.FALSE;
 
                         AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
                                 .withInstanceId(id)
@@ -1462,24 +1466,6 @@ public class AWSInstanceService extends StatelessService {
         }
     }
 
-    /**
-     * creates the device mapping for each of the data disk and adds it to the runInstancesRequest.
-     */
-    private void addInstanceStoreDeviceMappings(List<DiskState> instanceStoreDiskStates,
-            List<BlockDeviceMapping> blockDeviceMappings, List<String> usedDeviceNames,
-            InstanceType instanceType) {
-
-
-    }
-
-    /**
-     * creates the device mapping for each of the data disk and adds it to the runInstancesRequest.
-     */
-    private void addEbsDeviceMappings(List<DiskState> ebsDiskStates,
-            List<BlockDeviceMapping> blockDeviceMappings, List<String> usedDeviceNames) {
-
-    }
-
     private void validateSupportForAdditionalInstanceStoreDisks(List<DiskState> disks,
             List<BlockDeviceMapping> blockDeviceMappings, InstanceType type,
             String rootDeviceType) {
@@ -1489,6 +1475,16 @@ public class AWSInstanceService extends StatelessService {
         AssertUtil.assertTrue(totalInstanceStoreDisks <= type.dataDiskMaxCount,
                 String.format("%s does not support %s additional instance-store disks", type,
                         disks.size()));
+    }
+
+    private void assertAndResetPersistence(List<DiskState> instanceStoreDisks) {
+        instanceStoreDisks.forEach(disk -> {
+            AssertUtil.assertTrue(
+                    Boolean.FALSE.equals(disk.persistent),
+                    String.format("disk %s is ephemeral and cannot be persisted.", disk.name));
+            disk.persistent = Boolean.FALSE;
+        });
+
     }
 
     private void validateImageAndInstanceTypeCompatibility(InstanceType type,

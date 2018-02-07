@@ -46,6 +46,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -1023,7 +1024,9 @@ public class AWSUtils {
 
     }
 
-    public static void setDefaultVolumeTypeIfNotSet(DiskService.DiskState diskState) {
+    public static void setEbsDefaultsIfNotSet(DiskService.DiskState diskState, Boolean persist) {
+        diskState.persistent = Optional.ofNullable(diskState.persistent).orElse(persist);
+
         if (diskState.customProperties == null) {
             diskState.customProperties = new HashMap<>();
         }
