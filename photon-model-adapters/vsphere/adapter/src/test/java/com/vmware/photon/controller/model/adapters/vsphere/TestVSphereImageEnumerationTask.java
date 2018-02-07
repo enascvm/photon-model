@@ -22,7 +22,6 @@ import java.util.concurrent.ExecutionException;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
@@ -56,15 +55,7 @@ public class TestVSphereImageEnumerationTask extends BaseVSphereAdapterTest {
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
 
-        EndpointState ep = new EndpointState();
-        ep.id = nextName("endpoint");
-        ep.endpointType = EndpointType.vsphere.name();
-        ep.name = ep.id;
-        ep.authCredentialsLink = this.auth.documentSelfLink;
-        ep.computeLink = this.computeHost.documentSelfLink;
-        ep.computeDescriptionLink = this.computeHostDescription.documentSelfLink;
-        ep.resourcePoolLink = this.resourcePool.documentSelfLink;
-
+        EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
 
         this.endpoint = TestUtils.doPost(this.host, ep, EndpointState.class,
                 UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));

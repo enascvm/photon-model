@@ -45,6 +45,8 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
@@ -69,7 +71,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(2);
     private ComputeDescription computeHostDescription;
 
-    private ComputeState computeHost;
+    protected ComputeState computeHost;
+    protected EndpointState endpoint;
 
     @Test
     public void testRefresh() throws Throwable {
@@ -80,6 +83,15 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
+
+        // Always create endpoint, so that there is no bogus
+        // endpointLink. This enumeration task is started on a real
+        // endpoint. This will also help tango based adapters
+        // as the existence of endpoint is more critical there to
+        // extract data collector identifier.
+        EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+        this.endpoint = TestUtils.doPost(this.host, ep, EndpointState.class,
+                UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
 
         refreshAndRetire();
 
@@ -291,8 +303,8 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         return Utils.fromJson(firstResult, ComputeState.class);
     }
 
-    private void refreshAndRetire() throws Throwable {
-        enumerateComputes(this.computeHost, null, EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES));
+    protected void refreshAndRetire() throws Throwable {
+        enumerateComputes(this.computeHost, this.endpoint, EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES));
     }
 
     private QueryTask queryForDatastore() {

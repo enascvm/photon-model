@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 
 import org.junit.Assert;
@@ -40,6 +41,8 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
@@ -64,6 +67,7 @@ import com.vmware.xenon.services.common.QueryTask;
 public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
     protected ComputeDescriptionService.ComputeDescription computeHostDescription;
     protected ComputeService.ComputeState computeHost;
+    protected EndpointState endpoint;
 
     protected static final long FLOPPY_DISK_SIZE = 2048;
     protected static final long HDD_DISK_SIZE = 62464;
@@ -82,6 +86,10 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
             }
             this.computeHostDescription = createComputeDescription();
             this.computeHost = createComputeHost(this.computeHostDescription);
+
+            EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+            this.endpoint = TestUtils.doPost(this.host, ep, EndpointState.class,
+                    UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
 
             doRefresh();
 
@@ -143,7 +151,7 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
     }
 
     protected void doRefresh() throws Throwable {
-        enumerateComputes(this.computeHost);
+        enumerateComputes(this.computeHost, this.endpoint);
     }
 
     protected ComputeDescriptionService.ComputeDescription createCloneDescription(String
@@ -159,6 +167,12 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
+
+        if (this.endpoint != null) {
+            computeDesc.endpointLink = this.endpoint.documentSelfLink;
+            computeDesc.endpointLinks = new HashSet<>(1);
+            computeDesc.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
 
         // set default cpu and memory
         computeDesc.cpuCount = 1;
@@ -187,6 +201,12 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
         computeState.powerState = ComputeService.PowerState.ON;
 
         computeState.parentLink = this.computeHost.documentSelfLink;
+
+        if (this.endpoint != null) {
+            computeState.endpointLink = this.endpoint.documentSelfLink;
+            computeState.endpointLinks = new HashSet<>(1);
+            computeState.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
 
         computeState.networkInterfaceLinks = new ArrayList<>(1);
 
@@ -289,6 +309,12 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
+        if (this.endpoint != null) {
+            computeState.endpointLink = this.endpoint.documentSelfLink;
+            computeState.endpointLinks = new HashSet<>(1);
+            computeState.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
+
         computeState.diskLinks = new ArrayList<>(1);
         if (isStoragePolicyBased) {
             computeState.diskLinks.add(createDiskWithStoragePolicy("boot", DiskService.DiskType.HDD, 1,
@@ -367,6 +393,12 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
+
+        if (this.endpoint != null) {
+            computeDesc.endpointLink = this.endpoint.documentSelfLink;
+            computeDesc.endpointLinks = new HashSet<>(1);
+            computeDesc.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
 
         // set default cpu and memory
         computeDesc.cpuCount = 1;

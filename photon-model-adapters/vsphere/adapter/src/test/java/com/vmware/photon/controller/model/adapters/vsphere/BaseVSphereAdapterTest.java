@@ -73,6 +73,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -334,6 +335,24 @@ public class BaseVSphereAdapterTest {
         CustomProperties props = CustomProperties.of(vm);
         assertNotNull(props.getMoRef(CustomProperties.MOREF));
         assertNotNull(props.getString(CustomProperties.TYPE));
+    }
+
+    /**
+     * This will help tango proxy adapter tests
+     * The endpoint can be enhanced to support tango
+     * adapters' required properties.
+     */
+    protected EndpointState createEndpointState(
+            ComputeState computeHost, ComputeDescription computeHostDescription) {
+        EndpointState ep = new EndpointState();
+        ep.id = nextName("endpoint");
+        ep.endpointType = EndpointType.vsphere.name();
+        ep.name = ep.id;
+        ep.authCredentialsLink = this.auth.documentSelfLink;
+        ep.computeLink = computeHost.documentSelfLink;
+        ep.computeDescriptionLink = computeHostDescription.documentSelfLink;
+        ep.resourcePoolLink = this.resourcePool.documentSelfLink;
+        return ep;
     }
 
     public BasicConnection createConnection() {
