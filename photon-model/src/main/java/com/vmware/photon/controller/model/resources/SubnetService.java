@@ -165,6 +165,7 @@ public class SubnetService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         SubnetState state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
     }
@@ -176,7 +177,7 @@ public class SubnetService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        SubnetState returnState = processInput(put);
+        SubnetState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))
                 .whenCompleteNotify(put);
@@ -188,6 +189,13 @@ public class SubnetService extends StatefulService {
         }
         SubnetState state = op.getBody(SubnetState.class);
         validateState(state);
+        return state;
+    }
+
+    private SubnetState validatePut(Operation op) {
+        SubnetState state = processInput(op);
+        SubnetState currentState = getState(op);
+        ResourceUtils.validatePut(state, currentState);
         return state;
     }
 

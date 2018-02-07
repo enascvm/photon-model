@@ -72,6 +72,7 @@ public class ResourceGroupService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         ResourceGroupState state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .thenAccept(__ -> ResourceUtils.initNoEndpointFlag(state, ResourceGroupState.class))
                 .whenCompleteNotify(start);
@@ -79,7 +80,7 @@ public class ResourceGroupService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        ResourceGroupState returnState = processInput(put);
+        ResourceGroupState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> {
                     ResourceUtils.updateNoEndpointFlag(returnState, getState(put),
@@ -98,6 +99,13 @@ public class ResourceGroupService extends StatefulService {
         if (state.name == null) {
             throw new IllegalArgumentException("name is required.");
         }
+        return state;
+    }
+
+    private ResourceGroupState validatePut(Operation op) {
+        ResourceGroupState state = processInput(op);
+        ResourceGroupState currentState = getState(op);
+        ResourceUtils.validatePut(state, currentState);
         return state;
     }
 

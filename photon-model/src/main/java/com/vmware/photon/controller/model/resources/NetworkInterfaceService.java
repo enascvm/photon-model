@@ -171,6 +171,7 @@ public class NetworkInterfaceService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         NetworkInterfaceState state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
     }
@@ -216,10 +217,17 @@ public class NetworkInterfaceService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        NetworkInterfaceState returnState = processInput(put);
+        NetworkInterfaceState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))
                 .whenCompleteNotify(put);
+    }
+
+    private NetworkInterfaceState validatePut(Operation op) {
+        NetworkInterfaceState state = processInput(op);
+        NetworkInterfaceState currentState = getState(op);
+        ResourceUtils.validatePut(state, currentState);
+        return state;
     }
 
     @Override

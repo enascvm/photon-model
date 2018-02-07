@@ -280,7 +280,7 @@ public class ResourcePoolQueryHelperTest extends Suite {
     private static ComputeState createCompute(BaseModelTest test, ComputeDescription cd,
             ResourcePoolState rp)
             throws Throwable {
-        ComputeState compute = ComputeServiceTest.buildValidStartState(cd);
+        ComputeState compute = ComputeServiceTest.buildValidStartState(cd, false);
         compute.resourcePoolLink = rp != null ? rp.documentSelfLink : null;
         return test.postServiceSynchronously(ComputeService.FACTORY_LINK, compute,
                 ComputeState.class);

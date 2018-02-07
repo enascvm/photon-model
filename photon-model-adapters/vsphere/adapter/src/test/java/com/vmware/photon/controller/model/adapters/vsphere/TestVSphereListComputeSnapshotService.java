@@ -91,7 +91,7 @@ public class TestVSphereListComputeSnapshotService extends BaseModelTest {
     private ComputeService.ComputeState createComputeService()
             throws Throwable {
         ComputeService.ComputeState computeState = ComputeServiceTest.buildValidStartState(
-                ComputeDescriptionServiceTest.createComputeDescription(this));
+                ComputeDescriptionServiceTest.createComputeDescription(this), false);
         return postServiceSynchronously(
                 ComputeService.FACTORY_LINK, computeState,
                 ComputeService.ComputeState.class);

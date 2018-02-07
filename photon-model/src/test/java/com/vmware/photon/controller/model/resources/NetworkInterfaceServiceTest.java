@@ -18,6 +18,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE;
 
@@ -54,6 +55,7 @@ import com.vmware.xenon.services.common.TenantService;
         NetworkInterfaceServiceTest.HandleGetTest.class,
         NetworkInterfaceServiceTest.HandleStartTest.class,
         NetworkInterfaceServiceTest.HandlePatchTest.class,
+        NetworkInterfaceServiceTest.HandlePutTest.class,
         NetworkInterfaceServiceTest.QueryTest.class })
 public class NetworkInterfaceServiceTest extends Suite {
 
@@ -62,7 +64,7 @@ public class NetworkInterfaceServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static NetworkInterfaceState buildValidStartState() {
+    private static NetworkInterfaceState buildValidStartState(boolean assignHost) {
 
         NetworkInterfaceState networkInterfaceState = new NetworkInterfaceState();
 
@@ -73,6 +75,9 @@ public class NetworkInterfaceServiceTest extends Suite {
                 ("/resources/security-groups/1");
         networkInterfaceState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
         networkInterfaceState.subnetLink = "/resources/subnet/subnet9";
+        if (assignHost) {
+            networkInterfaceState.computeHostLink = "host-1";
+        }
 
         return networkInterfaceState;
     }
@@ -124,7 +129,7 @@ public class NetworkInterfaceServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
             NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
@@ -137,8 +142,8 @@ public class NetworkInterfaceServiceTest extends Suite {
         }
 
         @Test
-        public void testDuplicatePost() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+        public void testValidStartStateWithHost() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(true);
             NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
@@ -146,16 +151,86 @@ public class NetworkInterfaceServiceTest extends Suite {
 
             assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
             assertNotNull(returnState);
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.address, is(startState.address));
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
+        public void testDuplicatePost() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(false);
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState,
+                    NetworkInterfaceState.class);
+
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
+            assertNotNull(returnState);
+            assertNull(returnState.computeHostLink);
 
             returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
                     NetworkInterfaceState.class);
+
+        }
+
+        @Test
+        public void testDuplicatePostAssignComputeHost() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(false);
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
+            assertNotNull(returnState);
+            assertNull(returnState.computeHostLink);
+
+            startState.computeHostLink = "host-1";
+            returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState,
+                    NetworkInterfaceState.class);
+            assertThat(returnState.name, is(startState.name));
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
+        public void testDuplicatePostModifyComputeHost() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(true);
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_INTERFACE_STATE);
+            assertNotNull(returnState);
+            assertNotNull(returnState.computeHostLink);
+
+            returnState.computeHostLink = "host-2";
+            postServiceSynchronously(NetworkInterfaceService.FACTORY_LINK,
+                    returnState, NetworkInterfaceState.class, IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testDuplicatePostModifyCreationTime() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(false);
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.documentCreationTimeMicros);
+
+            returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            postServiceSynchronously(NetworkInterfaceService.FACTORY_LINK,
+                    returnState, NetworkInterfaceState.class, IllegalArgumentException.class);
         }
 
         @Test
         public void testMissingId() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
             startState.id = null;
 
             NetworkInterfaceState returnState = postServiceSynchronously(
@@ -178,7 +253,7 @@ public class NetworkInterfaceServiceTest extends Suite {
 
         @Test
         public void testInvalidAddress() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
             startState.address = "bad-ip-address";
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
@@ -189,7 +264,7 @@ public class NetworkInterfaceServiceTest extends Suite {
 
         @Test
         public void testMissingAddressAndDescriptionLink() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
             startState.address = null;
             startState.networkLink = null;
             startState.subnetLink = null;
@@ -202,7 +277,7 @@ public class NetworkInterfaceServiceTest extends Suite {
 
         @Test
         public void testHavingAddressAndNetworkLink() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
             startState.address = "10.0.0.1";
             startState.networkLink = "10.0.0.2";
             postServiceSynchronously(
@@ -214,7 +289,7 @@ public class NetworkInterfaceServiceTest extends Suite {
 
         @Test
         public void testHavingAddressAndNotSubnetLink() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
             startState.address = "10.0.0.1";
             startState.subnetLink = null;
             postServiceSynchronously(
@@ -293,11 +368,13 @@ public class NetworkInterfaceServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test
         public void testPatch() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
 
             NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState, NetworkInterfaceState.class);
+            assertNull(returnState.computeHostLink);
+            assertNotNull(returnState.documentCreationTimeMicros);
 
             NetworkInterfaceState patchState = new NetworkInterfaceState();
             patchState.address = "10.0.0.1";
@@ -306,6 +383,8 @@ public class NetworkInterfaceServiceTest extends Suite {
             patchState.tenantLinks.add("tenant-linkA");
             patchState.groupLinks = new HashSet<>();
             patchState.groupLinks.add("group1");
+            patchState.computeHostLink = "host-1";
+            patchState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             returnState = getServiceSynchronously(
@@ -316,11 +395,70 @@ public class NetworkInterfaceServiceTest extends Suite {
             assertEquals(returnState.tenantLinks, patchState.tenantLinks);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
             assertEquals(returnState.securityGroupLinks.size(), 1);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(patchState.computeHostLink));
+        }
+
+        @Test
+        public void testPatchAssignHost() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(false);
+
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+            assertNull(returnState.computeHostLink);
+
+            NetworkInterfaceState patchState = new NetworkInterfaceState();
+            patchState.computeHostLink = "host-1";
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink, NetworkInterfaceState.class);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(patchState.computeHostLink));
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPatchModifyHost() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(true);
+
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+            assertNotNull(returnState.computeHostLink);
+
+            NetworkInterfaceState patchState = new NetworkInterfaceState();
+            patchState.computeHostLink = "host-2";
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
+        }
+
+        @Test
+        public void testPatchModifyCreationTime() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(false);
+
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            long originalCreationTime = returnState.documentCreationTimeMicros;
+
+            NetworkInterfaceState patchState = new NetworkInterfaceState();
+            long currentCreationTime = Utils.getNowMicrosUtc();
+            patchState.documentCreationTimeMicros = currentCreationTime;
+
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    NetworkInterfaceState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            assertThat(returnState.documentCreationTimeMicros, is(originalCreationTime));
         }
 
         @Test
         public void testPatchDuplicateSecurityGroup() throws Throwable {
-            NetworkInterfaceState startState = buildValidStartState();
+            NetworkInterfaceState startState = buildValidStartState(false);
 
             NetworkInterfaceState returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
@@ -356,12 +494,100 @@ public class NetworkInterfaceServiceTest extends Suite {
     }
 
     /**
+     * This class implements tests for the handlePut method.
+     */
+    public static class HandlePutTest extends BaseModelTest {
+
+        @Test
+        public void testPut() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(false);
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+
+            assertNotNull(returnState);
+
+            NetworkInterfaceState newState = new NetworkInterfaceState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = NetworkInterfaceServiceTest.class.getSimpleName();
+            newState.address = "9.9.9.9";
+            newState.securityGroupLinks = Collections.singletonList
+                    ("/resources/security-groups/1");
+            newState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
+            newState.subnetLink = "/resources/subnet/subnet9";
+            newState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+            NetworkInterfaceState getState = getServiceSynchronously(returnState.documentSelfLink,
+                    NetworkInterfaceState.class);
+            assertThat(getState.id, is(newState.id));
+            assertThat(getState.name, is(newState.name));
+            assertThat(getState.networkLink, is(newState.networkLink));
+            assertEquals(getState.tenantLinks, newState.tenantLinks);
+            assertEquals(getState.groupLinks, newState.groupLinks);
+            // make sure launchTimeMicros was preserved
+            assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
+            assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutModifyCreationTime() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(false);
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+
+            assertNotNull(returnState);
+
+            NetworkInterfaceState newState = new NetworkInterfaceState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = NetworkInterfaceServiceTest.class.getSimpleName();
+            newState.address = "9.9.9.9";
+            newState.securityGroupLinks = Collections.singletonList
+                    ("/resources/security-groups/1");
+            newState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
+            newState.subnetLink = "/resources/subnet/subnet9";
+
+            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutModifyHost() throws Throwable {
+            NetworkInterfaceState startState = buildValidStartState(true);
+            NetworkInterfaceState returnState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    startState, NetworkInterfaceState.class);
+
+            assertNotNull(returnState);
+
+            NetworkInterfaceState newState = new NetworkInterfaceState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = NetworkInterfaceServiceTest.class.getSimpleName();
+            newState.address = "9.9.9.9";
+            newState.securityGroupLinks = Collections.singletonList
+                    ("/resources/security-groups/1");
+            newState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
+            newState.subnetLink = "/resources/subnet/subnet9";
+            newState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
+
+            newState.computeHostLink = "host-2";
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+        }
+    }
+
+    /**
      * This class implements tests for query.
      */
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            NetworkInterfaceState nic = buildValidStartState();
+            NetworkInterfaceState nic = buildValidStartState(false);
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             nic.tenantLinks = new ArrayList<>();
             nic.tenantLinks.add(UriUtils.buildUriPath(tenantUri.getPath(),

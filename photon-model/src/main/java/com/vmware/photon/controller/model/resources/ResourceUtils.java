@@ -80,18 +80,19 @@ public class ResourceUtils {
             currentState, ServiceDocumentDescription description, Class<T> stateClass,
             Function<Operation, Boolean> customPatchHandler) {
         try {
-            boolean hasStateChanged;
             final Set<String> originalTagLinks = currentState.tagLinks != null
                     ? new HashSet<>(currentState.tagLinks)
                     : null;
 
+            T patchBody = op.getBody(stateClass);
+            boolean hasStateChanged = validateComputeHostLinkPatch(patchBody, currentState);
+
             // apply standard patch merging
             EnumSet<Utils.MergeResult> mergeResult =
                     Utils.mergeWithStateAdvanced(description, currentState, stateClass, op);
-            hasStateChanged = mergeResult.contains(Utils.MergeResult.STATE_CHANGED);
+            hasStateChanged |= mergeResult.contains(Utils.MergeResult.STATE_CHANGED);
 
             if (!mergeResult.contains(Utils.MergeResult.SPECIAL_MERGE)) {
-                T patchBody = op.getBody(stateClass);
 
                 // apply ResourceState-specific merging
                 hasStateChanged |= ResourceUtils.mergeResourceStateWithPatch(currentState,
@@ -361,5 +362,28 @@ public class ResourceUtils {
             state.customProperties = new HashMap<>();
         }
         state.customProperties.put(propertyName, propertyValue);
+    }
+
+    public static void validatePut(ResourceState state, ResourceState currentState) {
+        if (state.computeHostLink != null && currentState.computeHostLink != null
+                && !state.computeHostLink.equals(currentState.computeHostLink)) {
+            throw new IllegalArgumentException("Compute host link can not be changed");
+        }
+        if (currentState.documentCreationTimeMicros != null
+                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
+            throw new IllegalArgumentException("Document creation time can not be changed");
+        }
+    }
+
+    private static boolean validateComputeHostLinkPatch(ResourceState patch, ResourceState source) {
+        if (patch.computeHostLink != null) {
+            if (source.computeHostLink == null) {
+                source.computeHostLink = patch.computeHostLink;
+                return true;
+            } else if (!patch.computeHostLink.equals(source.computeHostLink)) {
+                throw new IllegalArgumentException("Compute host link can not be changed");
+            }
+        }
+        return false;
     }
 }

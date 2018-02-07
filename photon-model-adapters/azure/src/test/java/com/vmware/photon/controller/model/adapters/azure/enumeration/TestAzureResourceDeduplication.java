@@ -204,6 +204,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             if (!ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.equals(doc.type)) {
 
                 Assert.assertEquals(computeHostLink, doc.computeHostLink);
+                assertNotNull(doc.documentCreationTimeMicros);
                 assertNotNull(doc.endpointLink);
                 if (StringUtils.isEmpty(expectedEndpoint)) {
                     Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -228,6 +229,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
 
             if (doc.instanceType != null) {
                 Assert.assertEquals(computeHostLink, doc.computeHostLink);
+                assertNotNull(doc.documentCreationTimeMicros);
                 assertNotNull(doc.endpointLink);
                 if (StringUtils.isEmpty(expectedEndpoint)) {
                     Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -249,6 +251,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             DiskService.DiskState doc = response.getBody(DiskService.DiskState.class);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -270,6 +273,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             StorageDescriptionService.StorageDescription doc = response.getBody(StorageDescriptionService.StorageDescription.class);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -291,6 +295,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             NetworkService.NetworkState doc = response.getBody(NetworkService.NetworkState.class);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -312,6 +317,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             SubnetService.SubnetState doc = response.getBody(SubnetService.SubnetState.class);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -335,6 +341,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             NetworkInterfaceService.NetworkInterfaceState doc = response
                     .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -358,6 +365,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             NetworkInterfaceDescriptionService.NetworkInterfaceDescription doc = response
                     .getBody(NetworkInterfaceDescriptionService.NetworkInterfaceDescription.class);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -382,6 +390,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
 
             this.host.log("Id: " + doc.id + " ,endpointLinks: " + doc.endpointLinks);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -404,6 +413,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             ImageService.ImageState doc = response
                     .getBody(ImageService.ImageState.class);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
@@ -427,6 +437,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     .getBody(ResourceGroupService.ResourceGroupState.class);
 
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));

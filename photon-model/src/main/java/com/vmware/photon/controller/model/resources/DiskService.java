@@ -329,6 +329,7 @@ public class DiskService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         DiskState state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .thenAccept(__ -> ResourceUtils.initNoEndpointFlag(state, DiskState.class))
                 .whenCompleteNotify(start);
@@ -336,13 +337,20 @@ public class DiskService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        DiskState returnState = processInput(put);
+        DiskState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> {
                     ResourceUtils.updateNoEndpointFlag(returnState, getState(put), DiskState.class);
                     setState(put, returnState);
                 })
                 .whenCompleteNotify(put);
+    }
+
+    private DiskState validatePut(Operation op) {
+        DiskState state = processInput(op);
+        DiskState currentState = getState(op);
+        ResourceUtils.validatePut(state, currentState);
+        return state;
     }
 
     @Override

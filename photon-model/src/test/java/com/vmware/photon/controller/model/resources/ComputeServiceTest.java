@@ -70,7 +70,7 @@ public class ComputeServiceTest extends Suite {
     }
 
     public static ComputeService.ComputeStateWithDescription buildValidStartState(
-            ComputeDescriptionService.ComputeDescription cd) throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd, boolean assignHost) throws Throwable {
         ComputeService.ComputeStateWithDescription cs = new ComputeService.ComputeStateWithDescription();
         cs.id = UUID.randomUUID().toString();
         cs.description = cd;
@@ -96,6 +96,9 @@ public class ComputeServiceTest extends Suite {
         cs.customProperties = new HashMap<>();
         cs.customProperties.put(TEST_DESC_PROPERTY_NAME,
                 TEST_DESC_PROPERTY_VALUE);
+        if (assignHost) {
+            cs.computeHostLink = "host-1";
+        }
         return cs;
     }
 
@@ -130,14 +133,64 @@ public class ComputeServiceTest extends Suite {
      */
     public static class HandleStartTest extends BaseModelTest {
 
-        public final long startTimeMicros = Utils.getNowMicrosUtc();
+        @Test
+        public void testValidStartState() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = ComputeServiceTest
+                    .buildValidStartState(cd, false);
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.address, is(startState.address));
+            assertThat(returnState.powerState, is(startState.powerState));
+            assertThat(returnState.primaryMAC, is(startState.primaryMAC));
+            assertThat(returnState.resourcePoolLink,
+                    is(startState.resourcePoolLink));
+            assertThat(returnState.adapterManagementReference,
+                    is(startState.adapterManagementReference));
+            assertEquals(returnState.tenantLinks, startState.tenantLinks);
+            assertEquals(returnState.groupLinks, startState.groupLinks);
+            // make sure launchTimeMicros was preserved
+            assertEquals(returnState.creationTimeMicros, returnState.creationTimeMicros);
+            assertNull(returnState.computeHostLink);
+        }
+
+        @Test
+        public void testValidStartStateWithHost() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = ComputeServiceTest
+                    .buildValidStartState(cd, true);
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.address, is(startState.address));
+            assertThat(returnState.powerState, is(startState.powerState));
+            assertThat(returnState.primaryMAC, is(startState.primaryMAC));
+            assertThat(returnState.resourcePoolLink,
+                    is(startState.resourcePoolLink));
+            assertThat(returnState.adapterManagementReference,
+                    is(startState.adapterManagementReference));
+            assertEquals(returnState.tenantLinks, startState.tenantLinks);
+            assertEquals(returnState.groupLinks, startState.groupLinks);
+            // make sure launchTimeMicros was preserved
+            assertEquals(returnState.creationTimeMicros, returnState.creationTimeMicros);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+            assertNotNull(returnState.documentCreationTimeMicros);
+        }
 
         @Test
         public void testDuplicatePost() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
             ComputeService.ComputeState startState = ComputeServiceTest
-                    .buildValidStartState(cd);
+                    .buildValidStartState(cd, false);
             ComputeService.ComputeState returnState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
 
@@ -151,10 +204,65 @@ public class ComputeServiceTest extends Suite {
         }
 
         @Test
+        public void testDuplicatePostAssignComputeHost() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = ComputeServiceTest
+                    .buildValidStartState(cd, false);
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.address, is(startState.address));
+            startState.address = "new-address";
+            startState.computeHostLink = "host-1";
+            returnState = postServiceSynchronously(ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertThat(returnState.address, is(startState.address));
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
+        public void testDuplicatePostModifyComputeHost() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = ComputeServiceTest
+                    .buildValidStartState(cd, true);
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.address, is(startState.address));
+            assertNotNull(returnState.computeHostLink);
+            returnState.computeHostLink = "host-2";
+            postServiceSynchronously(ComputeService.FACTORY_LINK,
+                    returnState, ComputeService.ComputeState.class, IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testDuplicatePostModifyCreationTime() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.documentCreationTimeMicros);
+
+            returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            postServiceSynchronously(ComputeService.FACTORY_LINK,
+                    returnState, ComputeService.ComputeState.class, IllegalArgumentException.class);
+        }
+
+        @Test
         public void testMissingId() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             startState.id = null;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
@@ -168,7 +276,7 @@ public class ComputeServiceTest extends Suite {
         public void testMissingDescriptionLink() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             startState.powerState = ComputeService.PowerState.OFF;
             startState.descriptionLink = null;
 
@@ -181,7 +289,7 @@ public class ComputeServiceTest extends Suite {
         public void testMissingCreationTimeMicros() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             startState.creationTimeMicros = null;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
@@ -195,7 +303,7 @@ public class ComputeServiceTest extends Suite {
         public void testProvidedCreationTimeMicros() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             startState.creationTimeMicros = Long.MIN_VALUE;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
@@ -215,7 +323,7 @@ public class ComputeServiceTest extends Suite {
         public void testGet() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
@@ -237,7 +345,7 @@ public class ComputeServiceTest extends Suite {
         public void testGetExpand() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeStateWithDescription startState = buildValidStartState(cd);
+            ComputeService.ComputeStateWithDescription startState = buildValidStartState(cd, false);
             startState.creationTimeMicros = Long.MIN_VALUE;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
@@ -282,12 +390,14 @@ public class ComputeServiceTest extends Suite {
         public void testPatch() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK,
                             startState, ComputeService.ComputeState.class);
             assertNotNull(returnState);
+            assertNull(returnState.computeHostLink);
+            assertNotNull(returnState.documentCreationTimeMicros);
 
             ComputeService.ComputeState patchBody = new ComputeService.ComputeState();
             patchBody.id = UUID.randomUUID().toString();
@@ -301,6 +411,7 @@ public class ComputeServiceTest extends Suite {
             patchBody.tenantLinks.add("tenant1");
             patchBody.groupLinks = new HashSet<>();
             patchBody.groupLinks.add("group1");
+            patchBody.computeHostLink = "host-1";
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
 
@@ -320,13 +431,83 @@ public class ComputeServiceTest extends Suite {
             assertEquals(getState.groupLinks, patchBody.groupLinks);
             // make sure launchTimeMicros was preserved
             assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
+            assertNotNull(getState.computeHostLink);
+            assertThat(getState.computeHostLink,
+                    is(patchBody.computeHostLink));
+        }
+
+        @Test
+        public void testPatchAssignHost() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState);
+            assertNull(returnState.computeHostLink);
+
+            ComputeService.ComputeState patchState = new ComputeService.ComputeState();
+            patchState.computeHostLink = "host-2";
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    ComputeService.ComputeState.class);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink,
+                    is(patchState.computeHostLink));
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPatchModifyHost() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd, true);
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+
+            ComputeService.ComputeState patchState = new ComputeService.ComputeState();
+            patchState.computeHostLink = "host-2";
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+        }
+
+        @Test
+        public void testPatchModifyCreationTime() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            long originalCreationTime = returnState.documentCreationTimeMicros;
+
+            ComputeService.ComputeState patchState = new ComputeService.ComputeState();
+            long currentCreationTime = Utils.getNowMicrosUtc();
+            patchState.documentCreationTimeMicros = currentCreationTime;
+
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    ComputeService.ComputeState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            assertThat(returnState.documentCreationTimeMicros, is(originalCreationTime));
         }
 
         @Test(expected = IllegalArgumentException.class)
         public void testPatchFailOnTypeChange() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK,
@@ -343,7 +524,7 @@ public class ComputeServiceTest extends Suite {
         public void testPatchNoChange() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK,
@@ -372,7 +553,7 @@ public class ComputeServiceTest extends Suite {
         public void testPatchRemoveNetworkLinks() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             // startState has four networkInterfaceLinks: network, network1, network2, network3
             startState.networkInterfaceLinks.add("http://network1");
             startState.networkInterfaceLinks.add("http://network2");
@@ -420,7 +601,7 @@ public class ComputeServiceTest extends Suite {
         public void testPut() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             startState.creationTimeMicros = Long.MIN_VALUE;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
@@ -446,6 +627,7 @@ public class ComputeServiceTest extends Suite {
             newState.diskLinks.add("http://disk1");
             newState.networkInterfaceLinks = new ArrayList<>();
             newState.networkInterfaceLinks.add("http://network1");
+            newState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
 
             putServiceSynchronously(returnState.documentSelfLink,
                     newState);
@@ -470,13 +652,50 @@ public class ComputeServiceTest extends Suite {
             assertEquals(getState.networkInterfaceLinks, newState.networkInterfaceLinks);
             // make sure launchTimeMicros was preserved
             assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
+            assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutModifyCreationTime() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
+            startState.creationTimeMicros = Long.MIN_VALUE;
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState);
+
+            ComputeService.ComputeState newState = new ComputeService.ComputeState();
+            newState.id = UUID.randomUUID().toString();
+            newState.address = "10.0.0.2";
+            newState.creationTimeMicros = Long.MIN_VALUE;
+            newState.descriptionLink = startState.descriptionLink;
+            newState.powerState = ComputeService.PowerState.OFF;
+            newState.primaryMAC = "ba:98:76:54:32:10";
+            newState.resourcePoolLink = "http://newResourcePool";
+            newState.adapterManagementReference = URI
+                    .create("http://newAdapterManagementReference");
+            newState.tenantLinks = new ArrayList<>();
+            newState.tenantLinks.add("tenant1");
+            newState.groupLinks = new HashSet<>();
+            newState.groupLinks.add("group1");
+            newState.diskLinks = new ArrayList<>();
+            newState.diskLinks.add("http://disk1");
+            newState.networkInterfaceLinks = new ArrayList<>();
+            newState.networkInterfaceLinks.add("http://network1");
+            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
         }
 
         @Test(expected = IllegalArgumentException.class)
         public void testPutFailOnTypeChange() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             startState.creationTimeMicros = Long.MIN_VALUE;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
@@ -494,7 +713,7 @@ public class ComputeServiceTest extends Suite {
         public void testPutFailOnEnvronmentNameChange() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd);
+            ComputeService.ComputeState startState = buildValidStartState(cd, false);
             startState.creationTimeMicros = Long.MIN_VALUE;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
@@ -519,7 +738,7 @@ public class ComputeServiceTest extends Suite {
         public void testTenantLinksQuery() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
-            ComputeService.ComputeState cs = buildValidStartState(cd);
+            ComputeService.ComputeState cs = buildValidStartState(cd, false);
 
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             cs.tenantLinks = new ArrayList<>();
@@ -594,7 +813,7 @@ public class ComputeServiceTest extends Suite {
             for (int i = 0; i < c; i++) {
                 instances[i] = postServiceSynchronously(
                         ComputeService.FACTORY_LINK,
-                        buildValidStartState(cd),
+                        buildValidStartState(cd, false),
                         ComputeService.ComputeState.class);
             }
             return instances;

@@ -321,6 +321,7 @@ public class ComputeDescriptionService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         ComputeDescription state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
     }

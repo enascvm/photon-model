@@ -479,7 +479,7 @@ public class ResourcePoolServiceTest extends Suite {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
             ComputeService.ComputeState cs = ComputeServiceTest
-                    .buildValidStartState(cd);
+                    .buildValidStartState(cd, false);
             cs.resourcePoolLink = startState.documentSelfLink;
             ComputeService.ComputeState csStartState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK,

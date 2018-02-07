@@ -17,6 +17,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -51,6 +52,7 @@ import com.vmware.xenon.services.common.TenantService;
 @SuiteClasses({ SecurityGroupServiceTest.ConstructorTest.class,
         SecurityGroupServiceTest.HandleStartTest.class,
         SecurityGroupServiceTest.HandlePatchTest.class,
+        SecurityGroupServiceTest.HandlePutTest.class,
         SecurityGroupServiceTest.QueryTest.class })
 public class SecurityGroupServiceTest extends Suite {
 
@@ -59,7 +61,7 @@ public class SecurityGroupServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static SecurityGroupService.SecurityGroupState buildValidStartState() {
+    private static SecurityGroupService.SecurityGroupState buildValidStartState(boolean assignHost) {
         SecurityGroupService.SecurityGroupState securityGroupState =
                 new SecurityGroupService.SecurityGroupState();
         securityGroupState.id = UUID.randomUUID().toString();
@@ -71,6 +73,9 @@ public class SecurityGroupServiceTest extends Suite {
         securityGroupState.regionId = "regionId";
         securityGroupState.authCredentialsLink = "/link/to/auth";
         securityGroupState.resourcePoolLink = "/link/to/rp";
+        if (assignHost) {
+            securityGroupState.computeHostLink = "host-1";
+        }
         try {
             securityGroupState.instanceAdapterReference = new URI(
                     "http://instanceAdapterReference");
@@ -142,7 +147,7 @@ public class SecurityGroupServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            SecurityGroupService.SecurityGroupState startState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(false);
             SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
                     SecurityGroupService.FACTORY_LINK,
                             startState, SecurityGroupService.SecurityGroupState.class);
@@ -165,8 +170,33 @@ public class SecurityGroupServiceTest extends Suite {
         }
 
         @Test
+        public void testValidStartStateWithHost() throws Throwable {
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(true);
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.regionId, is(startState.regionId));
+            assertThat(returnState.authCredentialsLink,
+                    is(startState.authCredentialsLink));
+            assertThat(returnState.resourcePoolLink,
+                    is(startState.resourcePoolLink));
+            assertThat(returnState.instanceAdapterReference,
+                    is(startState.instanceAdapterReference));
+            assertThat(returnState.ingress.get(0).name,
+                    is(getAllowIngressRules().get(0).name));
+            assertThat(returnState.egress.get(0).name, is(getAllowEgressRules()
+                    .get(0).name));
+            assertThat(returnState.egress.get(1).name, is(getAllowEgressRules()
+                    .get(1).name));
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
         public void testDuplicatePost() throws Throwable {
-            SecurityGroupService.SecurityGroupState startState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(false);
             SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
                     SecurityGroupService.FACTORY_LINK,
                             startState, SecurityGroupService.SecurityGroupState.class);
@@ -181,35 +211,88 @@ public class SecurityGroupServiceTest extends Suite {
         }
 
         @Test
+        public void testDuplicatePostAssignComputeHost() throws Throwable {
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+
+            assertNotNull(returnState);
+            assertNull(returnState.computeHostLink);
+            assertThat(returnState.regionId, is(startState.regionId));
+            startState.regionId = "new-regionId";
+            startState.computeHostLink = "host-1";
+            returnState = postServiceSynchronously(SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+            assertThat(returnState.regionId, is(startState.regionId));
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
+        public void testDuplicatePostModifyComputeHost() throws Throwable {
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(true);
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.regionId, is(startState.regionId));
+
+            returnState.computeHostLink = "host-2";
+            postServiceSynchronously(SecurityGroupService.FACTORY_LINK,
+                    returnState, SecurityGroupService.SecurityGroupState.class,
+                    IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testDuplicatePostModifyCreationTime() throws Throwable {
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.documentCreationTimeMicros);
+
+            returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            postServiceSynchronously(SecurityGroupService.FACTORY_LINK,
+                    returnState, SecurityGroupService.SecurityGroupState.class,
+                    IllegalArgumentException.class);
+        }
+
+        @Test
         public void testInvalidValues() throws Throwable {
-            SecurityGroupState missingIngressRuleName = buildValidStartState();
-            SecurityGroupState missingEgressRuleName = buildValidStartState();
+            SecurityGroupState missingIngressRuleName = buildValidStartState(false);
+            SecurityGroupState missingEgressRuleName = buildValidStartState(false);
 
-            SecurityGroupState missingIngressProtocol = buildValidStartState();
-            SecurityGroupState missingEgressProtocol = buildValidStartState();
+            SecurityGroupState missingIngressProtocol = buildValidStartState(false);
+            SecurityGroupState missingEgressProtocol = buildValidStartState(false);
 
-            SecurityGroupState invalidIngressProtocol = buildValidStartState();
-            SecurityGroupState invalidEgressProtocol = buildValidStartState();
+            SecurityGroupState invalidIngressProtocol = buildValidStartState(false);
+            SecurityGroupState invalidEgressProtocol = buildValidStartState(false);
 
-            SecurityGroupState invalidIngressIpRangeNoSubnet = buildValidStartState();
-            SecurityGroupState invalidIngressIpRangeInvalidIP = buildValidStartState();
-            SecurityGroupState invalidIngressIpRangeInvalidSubnet = buildValidStartState();
+            SecurityGroupState invalidIngressIpRangeNoSubnet = buildValidStartState(false);
+            SecurityGroupState invalidIngressIpRangeInvalidIP = buildValidStartState(false);
+            SecurityGroupState invalidIngressIpRangeInvalidSubnet = buildValidStartState(false);
 
-            SecurityGroupState invalidEgressIpRangeNoSubnet = buildValidStartState();
-            SecurityGroupState invalidEgressIpRangeInvalidIP = buildValidStartState();
-            SecurityGroupState invalidEgressIpRangeInvalidSubnet = buildValidStartState();
+            SecurityGroupState invalidEgressIpRangeNoSubnet = buildValidStartState(false);
+            SecurityGroupState invalidEgressIpRangeInvalidIP = buildValidStartState(false);
+            SecurityGroupState invalidEgressIpRangeInvalidSubnet = buildValidStartState(false);
 
-            SecurityGroupService.SecurityGroupState invalidIngressPorts0 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidIngressPorts1 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidIngressPorts2 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidIngressPorts3 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidIngressPorts4 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidIngressPorts0 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidIngressPorts1 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidIngressPorts2 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidIngressPorts3 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidIngressPorts4 = buildValidStartState(false);
 
-            SecurityGroupService.SecurityGroupState invalidEgressPorts0 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidEgressPorts1 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidEgressPorts2 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidEgressPorts3 = buildValidStartState();
-            SecurityGroupService.SecurityGroupState invalidEgressPorts4 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidEgressPorts0 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidEgressPorts1 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidEgressPorts2 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidEgressPorts3 = buildValidStartState(false);
+            SecurityGroupService.SecurityGroupState invalidEgressPorts4 = buildValidStartState(false);
 
             missingIngressRuleName.ingress.get(0).name = null;
             missingEgressRuleName.egress.get(0).name = null;
@@ -271,11 +354,13 @@ public class SecurityGroupServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test
         public void testPatch() throws Throwable {
-            SecurityGroupService.SecurityGroupState startState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(false);
 
             SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
                     SecurityGroupService.FACTORY_LINK,
                             startState, SecurityGroupService.SecurityGroupState.class);
+            assertNull(returnState.computeHostLink);
+            assertNotNull(returnState.documentCreationTimeMicros);
 
             Rule newIngressrule1 = new Rule();
             newIngressrule1.name = "ssh";
@@ -310,6 +395,7 @@ public class SecurityGroupServiceTest extends Suite {
             patchState.regionId = "patchRregionID";
             patchState.authCredentialsLink = "http://patchAuthCredentialsLink";
             patchState.resourcePoolLink = "http://patchResourcePoolLink";
+            patchState.computeHostLink = "host-1";
             try {
                 patchState.instanceAdapterReference = new URI(
                         "http://patchInstanceAdapterReference");
@@ -364,6 +450,184 @@ public class SecurityGroupServiceTest extends Suite {
                     returnState.documentSelfLink,
                     SecurityGroupService.SecurityGroupState.class);
             assertEquals(returnState.documentVersion, newReturnState.documentVersion);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(patchState.computeHostLink));
+        }
+
+        @Test
+        public void testPatchAssignHost() throws Throwable {
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(false);
+
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+            assertNull(returnState.computeHostLink);
+
+            SecurityGroupService.SecurityGroupState patchState = new SecurityGroupService.SecurityGroupState();
+            patchState.computeHostLink = "host-1";
+
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    SecurityGroupService.SecurityGroupState.class);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(patchState.computeHostLink));
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPatchModifyHost() throws Throwable {
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(true);
+
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+
+            SecurityGroupService.SecurityGroupState patchState = new SecurityGroupService.SecurityGroupState();
+            patchState.computeHostLink = "host-2";
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+        }
+
+        @Test
+        public void testPatchModifyCreationTime() throws Throwable {
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState(false);
+
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            long originalCreationTime = returnState.documentCreationTimeMicros;
+
+            SecurityGroupService.SecurityGroupState patchState = new SecurityGroupService.SecurityGroupState();
+            long currentCreationTime = Utils.getNowMicrosUtc();
+            patchState.documentCreationTimeMicros = currentCreationTime;
+
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    SecurityGroupService.SecurityGroupState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            assertThat(returnState.documentCreationTimeMicros, is(originalCreationTime));
+        }
+    }
+
+    /**
+     * This class implements tests for the handlePut method.
+     */
+    public static class HandlePutTest extends BaseModelTest {
+
+        @Test
+        public void testPut() throws Throwable {
+            SecurityGroupState startState = buildValidStartState(false);
+
+            SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupState.class);
+
+            assertNotNull(returnState);
+            SecurityGroupService.SecurityGroupState newState =
+                    new SecurityGroupService.SecurityGroupState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = newState.id;
+            newState.tenantLinks = new ArrayList<>();
+            newState.tenantLinks.add("tenant-linkA");
+            newState.ingress = getAllowIngressRules();
+            newState.egress = getAllowEgressRules();
+            newState.regionId = "regionId";
+            newState.authCredentialsLink = "/link/to/auth";
+            newState.resourcePoolLink = "/link/to/rp";
+            newState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
+
+            try {
+                newState.instanceAdapterReference = new URI(
+                        "http://instanceAdapterReference");
+            } catch (Exception e) {
+                newState.instanceAdapterReference = null;
+            }
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+
+            SecurityGroupState getState = getServiceSynchronously(returnState.documentSelfLink,
+                    SecurityGroupState.class);
+            assertThat(getState.id, is(newState.id));
+            assertThat(getState.name, is(newState.name));
+            assertEquals(getState.tenantLinks, newState.tenantLinks);
+            assertEquals(getState.groupLinks, newState.groupLinks);
+            // make sure launchTimeMicros was preserved
+            assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
+            assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutModifyCreationTime() throws Throwable {
+            SecurityGroupState startState = buildValidStartState(false);
+            SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupState.class);
+
+            assertNotNull(returnState);
+
+            SecurityGroupState newState = new SecurityGroupState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = newState.id;
+            newState.tenantLinks = new ArrayList<>();
+            newState.tenantLinks.add("tenant-linkA");
+            newState.ingress = getAllowIngressRules();
+            newState.egress = getAllowEgressRules();
+            newState.regionId = "regionId";
+            newState.authCredentialsLink = "/link/to/auth";
+            newState.resourcePoolLink = "/link/to/rp";
+
+            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            try {
+                newState.instanceAdapterReference = new URI(
+                        "http://instanceAdapterReference");
+            } catch (Exception e) {
+                newState.instanceAdapterReference = null;
+            }
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutModifyHost() throws Throwable {
+            SecurityGroupState startState = buildValidStartState(true);
+            SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupState.class);
+
+            assertNotNull(returnState);
+
+            SecurityGroupState newState = new SecurityGroupState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = newState.id;
+            newState.tenantLinks = new ArrayList<>();
+            newState.tenantLinks.add("tenant-linkA");
+            newState.ingress = getAllowIngressRules();
+            newState.egress = getAllowEgressRules();
+            newState.regionId = "regionId";
+            newState.authCredentialsLink = "/link/to/auth";
+            newState.resourcePoolLink = "/link/to/rp";
+            newState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
+
+            newState.computeHostLink = "host-2";
+
+            try {
+                newState.instanceAdapterReference = new URI(
+                        "http://instanceAdapterReference");
+            } catch (Exception e) {
+                newState.instanceAdapterReference = null;
+            }
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
         }
     }
 
@@ -373,7 +637,7 @@ public class SecurityGroupServiceTest extends Suite {
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            SecurityGroupService.SecurityGroupState securityGroupState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState securityGroupState = buildValidStartState(false);
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             securityGroupState.tenantLinks = new ArrayList<>();
             securityGroupState.tenantLinks.add(UriUtils.buildUriPath(

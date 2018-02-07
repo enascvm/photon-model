@@ -280,6 +280,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                 }
 
                 Assert.assertEquals(doc.computeHostLink, computeHostLink);
+                assertNotNull(doc.documentCreationTimeMicros);
                 Assert.assertEquals(size, doc.endpointLinks.size());
 
                 for (String endpointLink : expectedEndpoints) {
@@ -323,6 +324,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
             }
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -343,6 +345,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
             }
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -363,6 +366,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
             }
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -385,6 +389,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
             }
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {
@@ -406,6 +411,7 @@ public class TestResourceDeduplication extends BasicTestCase {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
             }
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertNotNull(doc.documentCreationTimeMicros);
 
             Assert.assertEquals(size, doc.endpointLinks.size());
             for (String endpointLink : expectedEndpoints) {

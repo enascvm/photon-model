@@ -107,6 +107,7 @@ public class NetworkService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         NetworkState state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
     }
@@ -118,7 +119,7 @@ public class NetworkService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        NetworkState returnState = processInput(put);
+        NetworkState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))
                 .whenCompleteNotify(put);
@@ -130,6 +131,13 @@ public class NetworkService extends StatefulService {
         }
         NetworkState state = op.getBody(NetworkState.class);
         validateState(state);
+        return state;
+    }
+
+    private NetworkState validatePut(Operation op) {
+        NetworkState state = processInput(op);
+        NetworkState currentState = getState(op);
+        ResourceUtils.validatePut(state, currentState);
         return state;
     }
 

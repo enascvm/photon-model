@@ -398,6 +398,7 @@ public class ComputeService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         ComputeState state = validateCreate(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
     }
@@ -441,6 +442,7 @@ public class ComputeService extends StatefulService {
                 && !state.environmentName.equals(currentState.environmentName)) {
             throw new IllegalArgumentException("Environment name can not be changed");
         }
+        ResourceUtils.validatePut(state, currentState);
         Utils.validateState(getStateDescription(), state);
         return state;
     }

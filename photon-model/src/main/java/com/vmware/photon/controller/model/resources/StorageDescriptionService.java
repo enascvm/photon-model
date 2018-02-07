@@ -136,6 +136,7 @@ public class StorageDescriptionService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         StorageDescription state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
     }
@@ -147,10 +148,17 @@ public class StorageDescriptionService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        StorageDescription returnState = processInput(put);
+        StorageDescription returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))
                 .whenCompleteNotify(put);
+    }
+
+    private StorageDescription validatePut(Operation op) {
+        StorageDescription state = processInput(op);
+        StorageDescription currentState = getState(op);
+        ResourceUtils.validatePut(state, currentState);
+        return state;
     }
 
     private StorageDescription processInput(Operation op) {

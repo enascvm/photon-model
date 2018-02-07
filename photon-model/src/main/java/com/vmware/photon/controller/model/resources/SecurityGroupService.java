@@ -233,6 +233,7 @@ public class SecurityGroupService extends StatefulService {
     @Override
     public void handleCreate(Operation start) {
         SecurityGroupState state = processInput(start);
+        state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
     }
@@ -244,7 +245,7 @@ public class SecurityGroupService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        SecurityGroupState returnState = processInput(put);
+        SecurityGroupState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))
                 .whenCompleteNotify(put);
@@ -325,6 +326,13 @@ public class SecurityGroupService extends StatefulService {
         }
         SecurityGroupState state = op.getBody(SecurityGroupState.class);
         validateState(state);
+        return state;
+    }
+
+    private SecurityGroupState validatePut(Operation op) {
+        SecurityGroupState state = processInput(op);
+        SecurityGroupState currentState = getState(op);
+        ResourceUtils.validatePut(state, currentState);
         return state;
     }
 

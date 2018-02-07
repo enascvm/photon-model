@@ -18,6 +18,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,6 +39,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionS
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionServiceTest.HandleCRUDTest;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.Utils;
 
 /**
  * This class implements tests for the {@link NetworkInterfaceDescriptionService} class.
@@ -52,7 +54,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
         super(klass, builder);
     }
 
-    public static NetworkInterfaceDescription buildValidStartState()
+    public static NetworkInterfaceDescription buildValidStartState(boolean assignHost)
             throws Throwable {
 
         NetworkInterfaceDescription nd = new NetworkInterfaceDescription();
@@ -65,6 +67,9 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
         nd.securityGroupLinks = Collections.singletonList("/resources/security-groups/1");
         nd.networkLink = "/resources/network/net8";
         nd.subnetLink = "/resources/subnet/subnet8";
+        if (assignHost) {
+            nd.computeHostLink = "host-1";
+        }
 
         return nd;
     }
@@ -72,7 +77,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
     public static NetworkInterfaceDescription createNetworkInterfaceDescription(
             BaseModelTest test) throws Throwable {
 
-        NetworkInterfaceDescription nd = buildValidStartState();
+        NetworkInterfaceDescription nd = buildValidStartState(false);
 
         return test.postServiceSynchronously(
                 NetworkInterfaceDescriptionService.FACTORY_LINK, nd,
@@ -113,7 +118,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
         @Test
         public void testGet() throws Throwable {
-            NetworkInterfaceDescription startState = buildValidStartState();
+            NetworkInterfaceDescription startState = buildValidStartState(false);
 
             NetworkInterfaceDescription returnState = postServiceSynchronously(
                     NetworkInterfaceDescriptionService.FACTORY_LINK,
@@ -139,7 +144,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
         @Test
         public void testPatchNullEndpointLink() throws Throwable {
-            NetworkInterfaceDescription startState = buildValidStartState();
+            NetworkInterfaceDescription startState = buildValidStartState(false);
             startState.endpointLink = null;
 
             NetworkInterfaceDescription returnState = postServiceSynchronously(
@@ -160,7 +165,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
         @Test
         public void testPatchNotNullEndpointLink() throws Throwable {
-            NetworkInterfaceDescription startState = buildValidStartState();
+            NetworkInterfaceDescription startState = buildValidStartState(false);
             final String endpointLink = "/myEndpointLink";
 
             startState.endpointLink = endpointLink;
@@ -186,7 +191,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
         @Test
         public void testPatchDuplicateSecurityGroup() throws Throwable {
-            NetworkInterfaceDescription startState = buildValidStartState();
+            NetworkInterfaceDescription startState = buildValidStartState(false);
 
             NetworkInterfaceDescription returnState = postServiceSynchronously(
                     NetworkInterfaceDescriptionService.FACTORY_LINK,
@@ -218,6 +223,96 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
             assertEquals(returnState.securityGroupLinks.size(), 2);
             assertThat(returnState.securityGroupLinks, hasItem("/resources/security-groups/1"));
             assertThat(returnState.securityGroupLinks, hasItem("/resources/security-groups/2"));
+        }
+
+        @Test
+        public void testDuplicatePost() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState(false);
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState, NetworkInterfaceDescription.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.name, is(startState.name));
+            startState.name = "new-name";
+            startState.computeHostLink = "host-1";
+            returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState, NetworkInterfaceDescription.class);
+            assertThat(returnState.name, is(startState.name));
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
+        public void testDuplicatePostModifyComputeHost() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState(true);
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState, NetworkInterfaceDescription.class);
+
+            assertNotNull(returnState);
+            assertThat(returnState.name, is(startState.name));
+
+            returnState.computeHostLink = "host-2";
+            postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    returnState, NetworkInterfaceDescription.class, IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testPatchAssignHost() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState(false);
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState, NetworkInterfaceDescription.class);
+            assertNotNull(returnState);
+            assertNull(returnState.computeHostLink);
+
+            NetworkInterfaceDescription patchState = new NetworkInterfaceDescription();
+            patchState.computeHostLink = "host-1";
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    NetworkInterfaceDescriptionService.NetworkInterfaceDescription.class);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink,
+                    is(patchState.computeHostLink));
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPatchModifyHost() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState(true);
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState, NetworkInterfaceDescription.class);
+            assertNotNull(returnState);
+
+            NetworkInterfaceDescription patchState = new NetworkInterfaceDescription();
+            patchState.computeHostLink = "host-2";
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+        }
+
+        @Test
+        public void testPatchModifyCreationTime() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState(true);
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState, NetworkInterfaceDescription.class);
+            assertNotNull(returnState);
+
+            NetworkInterfaceDescription patchState = new NetworkInterfaceDescription();
+            patchState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
         }
     }
 }

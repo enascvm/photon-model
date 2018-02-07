@@ -168,7 +168,6 @@ public class ResourceState extends ServiceDocument {
      * Reference to compute host instance.
      */
     @UsageOption(option = PropertyUsageOption.OPTIONAL)
-    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_44)
     public String computeHostLink;
 
@@ -182,6 +181,14 @@ public class ResourceState extends ServiceDocument {
             PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE})
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_49)
     public List<TagInfo> expandedTags;
+
+    /**
+     * Document creation time in micros.
+     */
+    @UsageOption(option = PropertyUsageOption.OPTIONAL)
+    @UsageOption(option = PropertyUsageOption.SINGLE_ASSIGNMENT)
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_50)
+    public Long documentCreationTimeMicros;
 
     public void copyTo(ResourceState target) {
         super.copyTo(target);
@@ -197,5 +204,6 @@ public class ResourceState extends ServiceDocument {
         target.regionId = this.regionId;
         target.endpointLinks = this.endpointLinks;
         target.computeHostLink = this.computeHostLink;
+        target.documentCreationTimeMicros = this.documentCreationTimeMicros;
     }
 }

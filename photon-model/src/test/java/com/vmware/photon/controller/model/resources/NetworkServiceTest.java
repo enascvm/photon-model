@@ -17,6 +17,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.NETWORK_SUBTYPE_NETWORK_STATE;
 
@@ -49,6 +50,7 @@ import com.vmware.xenon.services.common.TenantService;
 @SuiteClasses({ NetworkServiceTest.ConstructorTest.class,
         NetworkServiceTest.HandleStartTest.class,
         NetworkServiceTest.HandlePatchTest.class,
+        NetworkServiceTest.HandlePutTest.class,
         NetworkServiceTest.QueryTest.class })
 public class NetworkServiceTest extends Suite {
 
@@ -57,7 +59,7 @@ public class NetworkServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static NetworkService.NetworkState buildValidStartState() {
+    private static NetworkService.NetworkState buildValidStartState(boolean assignHost) {
         NetworkService.NetworkState networkState = new NetworkService.NetworkState();
         networkState.id = UUID.randomUUID().toString();
         networkState.name = "networkName";
@@ -67,6 +69,9 @@ public class NetworkServiceTest extends Suite {
         networkState.regionId = "regionId";
         networkState.authCredentialsLink = "http://authCredentialsLink";
         networkState.resourcePoolLink = "http://resourcePoolLink";
+        if (assignHost) {
+            networkState.computeHostLink = "host-1";
+        }
         try {
             networkState.instanceAdapterReference = new URI(
                     "http://instanceAdapterReference");
@@ -106,7 +111,7 @@ public class NetworkServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            NetworkService.NetworkState startState = buildValidStartState();
+            NetworkService.NetworkState startState = buildValidStartState(false);
             NetworkService.NetworkState returnState = postServiceSynchronously(
                     NetworkService.FACTORY_LINK,
                             startState, NetworkService.NetworkState.class);
@@ -129,8 +134,32 @@ public class NetworkServiceTest extends Suite {
         }
 
         @Test
+        public void testValidStartStateWithHost() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(true);
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            assertNotNull(returnState);
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_STATE);
+            assertThat(returnState.id, is(startState.id));
+            assertThat(returnState.name, is(startState.name));
+            assertThat(returnState.subnetCIDR, is(startState.subnetCIDR));
+            assertThat(returnState.tenantLinks.get(0),
+                    is(startState.tenantLinks.get(0)));
+            assertThat(returnState.regionId, is(startState.regionId));
+            assertThat(returnState.authCredentialsLink,
+                    is(startState.authCredentialsLink));
+            assertThat(returnState.resourcePoolLink,
+                    is(startState.resourcePoolLink));
+            assertThat(returnState.instanceAdapterReference,
+                    is(startState.instanceAdapterReference));
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
         public void testInvalidStartState() throws Throwable {
-            NetworkService.NetworkState startState = buildValidStartState();
+            NetworkService.NetworkState startState = buildValidStartState(false);
             startState.subnetCIDR = null;
             NetworkService.NetworkState returnState = postServiceSynchronously(
                     NetworkService.FACTORY_LINK,
@@ -155,7 +184,7 @@ public class NetworkServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            NetworkService.NetworkState startState = buildValidStartState();
+            NetworkService.NetworkState startState = buildValidStartState(false);
             NetworkService.NetworkState returnState = postServiceSynchronously(
                     NetworkService.FACTORY_LINK,
                             startState, NetworkService.NetworkState.class);
@@ -170,12 +199,65 @@ public class NetworkServiceTest extends Suite {
         }
 
         @Test
+        public void testDuplicatePostAssignComputeHost() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(false);
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            assertNotNull(returnState);
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_STATE);
+            assertThat(returnState.name, is(startState.name));
+            assertNull(returnState.computeHostLink);
+            startState.name = "new-name";
+            startState.computeHostLink = "host-1";
+            returnState = postServiceSynchronously(NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+            assertThat(returnState.name, is(startState.name));
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink, is(startState.computeHostLink));
+        }
+
+        @Test
+        public void testDuplicatePostModifyComputeHost() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(true);
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            assertNotNull(returnState);
+            assertEquals(returnState.type, NETWORK_SUBTYPE_NETWORK_STATE);
+            assertThat(returnState.name, is(startState.name));
+            assertNotNull(returnState.computeHostLink);
+
+            returnState.computeHostLink = "host-2";
+            postServiceSynchronously(NetworkService.FACTORY_LINK,
+                    returnState, NetworkService.NetworkState.class, IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testDuplicatePostModifyCreationTime() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(true);
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.documentCreationTimeMicros);
+
+            returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            postServiceSynchronously(NetworkService.FACTORY_LINK,
+                    returnState, NetworkService.NetworkState.class, IllegalArgumentException.class);
+        }
+
+        @Test
         public void testInvalidValues() throws Throwable {
-            NetworkService.NetworkState invalidSubnet1 = buildValidStartState();
-            NetworkService.NetworkState invalidSubnet2 = buildValidStartState();
-            NetworkService.NetworkState invalidSubnet3 = buildValidStartState();
-            NetworkService.NetworkState invalidSubnet4 = buildValidStartState();
-            NetworkService.NetworkState invalidSubnet5 = buildValidStartState();
+            NetworkService.NetworkState invalidSubnet1 = buildValidStartState(false);
+            NetworkService.NetworkState invalidSubnet2 = buildValidStartState(false);
+            NetworkService.NetworkState invalidSubnet3 = buildValidStartState(false);
+            NetworkService.NetworkState invalidSubnet4 = buildValidStartState(false);
+            NetworkService.NetworkState invalidSubnet5 = buildValidStartState(false);
 
             invalidSubnet1.subnetCIDR = "10.0.0.0";
             // invalid IP
@@ -204,11 +286,13 @@ public class NetworkServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test
         public void testPatch() throws Throwable {
-            NetworkService.NetworkState startState = buildValidStartState();
+            NetworkService.NetworkState startState = buildValidStartState(false);
 
             NetworkService.NetworkState returnState = postServiceSynchronously(
                     NetworkService.FACTORY_LINK,
                             startState, NetworkService.NetworkState.class);
+            assertNull(returnState.computeHostLink);
+            assertNotNull(returnState.documentCreationTimeMicros);
 
             NetworkService.NetworkState patchState = new NetworkService.NetworkState();
             patchState.name = "patchNetworkName";
@@ -228,6 +312,7 @@ public class NetworkServiceTest extends Suite {
             patchState.tenantLinks.add("tenant1");
             patchState.groupLinks = new HashSet<String>();
             patchState.groupLinks.add("group1");
+            patchState.computeHostLink = "host-1";
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
 
@@ -249,7 +334,159 @@ public class NetworkServiceTest extends Suite {
                     is(patchState.instanceAdapterReference));
             assertEquals(returnState.tenantLinks.size(), 2);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink,
+                    is(patchState.computeHostLink));
 
+        }
+
+        @Test
+        public void testPatchAssignHost() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(false);
+
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            NetworkService.NetworkState patchState = new NetworkService.NetworkState();
+            patchState.computeHostLink = "host-2";
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    NetworkService.NetworkState.class);
+            assertNotNull(returnState.computeHostLink);
+            assertThat(returnState.computeHostLink,
+                    is(patchState.computeHostLink));
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPatchModifyHost() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(true);
+
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            NetworkService.NetworkState patchState = new NetworkService.NetworkState();
+            patchState.computeHostLink = "host-2";
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+        }
+
+        @Test
+        public void testPatchModifyCreationTime() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(true);
+
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+            long originalCreationTime = returnState.documentCreationTimeMicros;
+
+            NetworkService.NetworkState patchState = new NetworkService.NetworkState();
+            long currentCreationTime = Utils.getNowMicrosUtc();
+            patchState.documentCreationTimeMicros = currentCreationTime;
+
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    NetworkService.NetworkState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            assertThat(returnState.documentCreationTimeMicros, is(originalCreationTime));
+        }
+    }
+
+    /**
+     * This class implements tests for the handlePut method.
+     */
+    public static class HandlePutTest extends BaseModelTest {
+
+        @Test
+        public void testPut() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(true);
+
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            NetworkService.NetworkState newState = new NetworkService.NetworkState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = "networkName";
+            newState.subnetCIDR = "10.0.0.0/10";
+            newState.tenantLinks = new ArrayList<>();
+            newState.tenantLinks.add("tenant-linkA");
+            newState.regionId = "regionId";
+            newState.authCredentialsLink = "http://authCredentialsLink";
+            newState.resourcePoolLink = "http://resourcePoolLink";
+            newState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
+            try {
+                newState.instanceAdapterReference = new URI(
+                        "http://instanceAdapterReference");
+            } catch (Exception e) {
+                newState.instanceAdapterReference = null;
+            }
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+
+            NetworkService.NetworkState getState = getServiceSynchronously(returnState.documentSelfLink,
+                    NetworkService.NetworkState.class);
+            assertThat(getState.id, is(newState.id));
+            assertThat(getState.name, is(newState.name));
+            assertThat(getState.subnetCIDR, is(newState.subnetCIDR));
+            assertEquals(getState.tenantLinks, newState.tenantLinks);
+            assertEquals(getState.groupLinks, newState.groupLinks);
+            // make sure launchTimeMicros was preserved
+            assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
+            assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutModifyCreationTime() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(false);
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+
+            assertNotNull(returnState);
+
+            NetworkService.NetworkState newState = new NetworkService.NetworkState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = "networkName";
+            newState.subnetCIDR = "10.0.0.0/10";
+            newState.tenantLinks = new ArrayList<>();
+            newState.tenantLinks.add("tenant-linkA");
+            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutModifyHost() throws Throwable {
+            NetworkService.NetworkState startState = buildValidStartState(true);
+
+            NetworkService.NetworkState returnState = postServiceSynchronously(
+                    NetworkService.FACTORY_LINK,
+                    startState, NetworkService.NetworkState.class);
+            assertNotNull(returnState.documentCreationTimeMicros);
+            assertNotNull(returnState.computeHostLink);
+
+            NetworkService.NetworkState newState = new NetworkService.NetworkState();
+            newState.id = UUID.randomUUID().toString();
+            newState.name = "networkName";
+            newState.subnetCIDR = "10.0.0.0/10";
+            newState.tenantLinks = new ArrayList<>();
+            newState.tenantLinks.add("tenant-linkA");
+            newState.documentCreationTimeMicros = returnState.documentCreationTimeMicros;
+
+            newState.computeHostLink = "host-2";
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
         }
     }
 
@@ -259,7 +496,7 @@ public class NetworkServiceTest extends Suite {
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            NetworkService.NetworkState networkState = buildValidStartState();
+            NetworkService.NetworkState networkState = buildValidStartState(false);
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             networkState.tenantLinks = new ArrayList<>();
             networkState.tenantLinks.add(UriUtils.buildUriPath(
