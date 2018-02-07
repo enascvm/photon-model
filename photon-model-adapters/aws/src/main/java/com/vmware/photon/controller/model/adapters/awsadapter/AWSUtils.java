@@ -14,7 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
-import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
+import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
@@ -65,8 +65,8 @@ import com.amazonaws.auth.BasicSessionCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Regions;
-import com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition;
 import com.amazonaws.retry.RetryPolicy;
+import com.amazonaws.retry.RetryPolicy.BackoffStrategy;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClientBuilder;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
@@ -191,23 +191,23 @@ public class AWSUtils {
      * -Dphoton-model.aws.max.error.retry
      *
      * The AWS max retry request count. This is how many times to retry the request if it fails.
-     * Default is AWS SDK default value (3).
+     * Default is 7.
      */
     public static final String AWS_MAX_ERROR_RETRY_PROPERTY =
             UriPaths.PROPERTY_PREFIX + "aws.max.error.retry";
-    public static final int AWS_MAX_ERROR_RETRY =
-            Integer.getInteger(AWS_MAX_ERROR_RETRY_PROPERTY, DEFAULT_MAX_ERROR_RETRY);
+    public static final int AWS_MAX_ERROR_RETRY = Integer
+            .getInteger(AWS_MAX_ERROR_RETRY_PROPERTY, 7);
 
     /**
      * -Dphoton-model.aws.log.retry.error.attempt
      *
      * Log retry requests after attempt count reaches this threshold.
-     * Default is aws.max.error.retry divided on two.
+     * Default is 0 - all retires will be logged.
      */
     public static final String AWS_LOG_RETRY_ERROR_ATTEMPT_PROPERTY =
             UriPaths.PROPERTY_PREFIX + "aws.log.retry.error.attempt";
     public static final int AWS_LOG_RETRY_ERROR_ATTEMPT =
-            Integer.getInteger(AWS_LOG_RETRY_ERROR_ATTEMPT_PROPERTY, AWS_MAX_ERROR_RETRY / 2);
+            Integer.getInteger(AWS_LOG_RETRY_ERROR_ATTEMPT_PROPERTY, 0);
 
     /**
      * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
@@ -236,25 +236,31 @@ public class AWSUtils {
     private static String awsS3ProxyHost = null;
 
     /**
-     * Retry condition with exception logging.
+     * Backoff strategy that uses the DEFAULT_BACKOFF_STRATEGY with added error logging.
      */
-    public static class LoggingRetryCondition extends SDKDefaultRetryCondition {
-
+    public static class LoggingBackoffStrategy implements BackoffStrategy {
         @Override
-        public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
+        public long delayBeforeNextRetry(AmazonWebServiceRequest originalRequest,
                 AmazonClientException exception,
                 int retriesAttempted) {
+            long delay = DEFAULT_BACKOFF_STRATEGY.delayBeforeNextRetry(
+                    originalRequest,
+                    exception,
+                    retriesAttempted);
 
-            Level logLevel =
-                    retriesAttempted > AWS_LOG_RETRY_ERROR_ATTEMPT ? Level.WARNING : Level.FINE;
-            Utils.log(LoggingRetryCondition.class, LoggingRetryCondition.class.getSimpleName(),
-                    logLevel,
-                    () -> String.format("Encountered exception on attempted %d, for request %s: %s",
-                            retriesAttempted, originalRequest, Utils.toString(exception)));
-
-            return super.shouldRetry(originalRequest, exception, retriesAttempted);
+            if (retriesAttempted >= AWS_LOG_RETRY_ERROR_ATTEMPT) {
+                Utils.log(LoggingBackoffStrategy.class,
+                        LoggingBackoffStrategy.class.getSimpleName(),
+                        Level.WARNING,
+                        "Retriable error on attempt %d for request %s %s, will retry in %s ms: %s",
+                        retriesAttempted,
+                        Integer.toHexString(System.identityHashCode(originalRequest)),
+                        originalRequest, delay, exception);
+            }
+            return delay;
         }
     }
+
 
     public static void setAwsMockHost(String mockHost) {
         awsMockHost = mockHost;
@@ -354,8 +360,8 @@ public class AWSUtils {
     static ClientConfiguration createClientConfiguration() {
         return new ClientConfiguration().withRetryPolicy(
                 new RetryPolicy(
-                        new LoggingRetryCondition(),
-                        DEFAULT_BACKOFF_STRATEGY,
+                        DEFAULT_RETRY_CONDITION,
+                        new LoggingBackoffStrategy(),
                         AWS_MAX_ERROR_RETRY,
                         true));
     }
