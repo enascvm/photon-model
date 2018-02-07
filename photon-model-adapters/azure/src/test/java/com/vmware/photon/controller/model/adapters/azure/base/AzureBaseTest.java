@@ -18,7 +18,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestName;
 
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
@@ -99,9 +98,7 @@ public abstract class AzureBaseTest extends BaseModelTest {
 
         PhotonModelAdaptersRegistryAdapters.startServices(getHost());
 
-        AzureAdapters.startServices(getHost());
-
-        getHost().waitForServiceAvailable(AzureAdapters.CONFIG_LINK);
+        AzureAdaptersTestUtils.startServicesSynchronouslyAzure(getHost());
     }
 
     protected AzureSdkClients getAzureSdkClients() {

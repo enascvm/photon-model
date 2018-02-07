@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea;
 
+import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -22,6 +24,8 @@ import com.vmware.photon.controller.model.adapters.azure.ea.stats.AzureCostStats
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.util.StartServicesHelper;
+import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -31,10 +35,13 @@ import com.vmware.xenon.common.Utils;
  */
 public class AzureEaAdapters {
 
-    public static final String[] LINKS = {
-            AzureCostStatsService.SELF_LINK,
-            AzureSubscriptionsEnumerationService.SELF_LINK,
-            AzureEaEndpointAdapterService.SELF_LINK };
+    public static final ServiceMetadata[] SERVICES_METADATA = {
+            service(AzureCostStatsService.class),
+            service(AzureSubscriptionsEnumerationService.class),
+            service(AzureEaEndpointAdapterService.class)
+    };
+
+    public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
     /**
      * The link of Azure EA configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -45,13 +52,17 @@ public class AzureEaAdapters {
             EndpointType.azure_ea.name());
 
     public static void startServices(ServiceHost host) throws Throwable {
-        try {
-            // Eventually AzureSubscriptionsEnumerationService
-            // will be started inside the cost stats adapter
-            host.startService(new AzureCostStatsService());
-            host.startService(new AzureSubscriptionsEnumerationService());
-            host.startService(new AzureEaEndpointAdapterService());
+        startServices(host, false);
+    }
 
+    public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
+        try {
+            if (isSynchronousStart) {
+                StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
+            } else {
+                StartServicesHelper.startServices(host, SERVICES_METADATA);
+
+            }
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.azure_ea, LINKS, AzureUriPaths.AZURE_EA_ADAPTER_LINK_TYPES);
         } catch (Exception e) {

@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.tasks;
 import static com.vmware.photon.controller.model.ComputeProperties.ENDPOINT_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
-import static com.vmware.photon.controller.model.tasks.TaskUtils.getAdapterUri;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.sendFailurePatch;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
@@ -39,6 +38,8 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -53,6 +54,8 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.R
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -60,6 +63,7 @@ import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -85,6 +89,7 @@ public class EndpointAllocationTaskService
      * SubStage.
      */
     public enum SubStage {
+        POPULATE_ADAPTER_REFERENCE,
         VALIDATE_CREDENTIALS,
         CHECK_IF_ACCOUNT_EXISTS,
         CREATE_UPDATE_ENDPOINT,
@@ -146,10 +151,11 @@ public class EndpointAllocationTaskService
         @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
         public boolean accountAlreadyExists;
 
-        @Documentation(description = "The existing compute host and compute description corresponding to the account. "
-                + "This will be updated to reflect the association"
-                + "with the new endpoint being configured in the system in case they map back to "
-                + "the same cloud provider account. ")
+        @Documentation(description =
+                "The existing compute host and compute description corresponding to the account. "
+                        + "This will be updated to reflect the association"
+                        + "with the new endpoint being configured in the system in case they map back to "
+                        + "the same cloud provider account. ")
         @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
         public Map<String, ServiceDocument> existingDocuments;
     }
@@ -230,6 +236,9 @@ public class EndpointAllocationTaskService
         adjustStat(currentState.taskSubStage.toString(), 1);
 
         switch (currentState.taskSubStage) {
+        case POPULATE_ADAPTER_REFERENCE:
+            populateAdapterRef(currentState, SubStage.VALIDATE_CREDENTIALS);
+            break;
         case VALIDATE_CREDENTIALS:
             validateCredentials(currentState,
                     currentState.options.contains(TaskOption.VALIDATE_ONLY)
@@ -773,16 +782,11 @@ public class EndpointAllocationTaskService
     @Override
     protected void initializeState(EndpointAllocationTaskState state, Operation taskOperation) {
         if (state.taskSubStage == null) {
-            state.taskSubStage = SubStage.VALIDATE_CREDENTIALS;
+            state.taskSubStage = SubStage.POPULATE_ADAPTER_REFERENCE;
         }
 
         if (state.options == null) {
             state.options = EnumSet.noneOf(TaskOption.class);
-        }
-
-        if (state.adapterReference == null) {
-            state.adapterReference = getAdapterUri(this, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER,
-                    state.endpointState.endpointType);
         }
 
         if (state.documentExpirationTimeMicros == 0) {
@@ -934,7 +938,6 @@ public class EndpointAllocationTaskService
         return authState;
     }
 
-
     private ComputeDescription configureDescription(EndpointAllocationTaskState currentState,
             EndpointState state) {
         ComputeDescription cd = new ComputeDescription();
@@ -1017,7 +1020,8 @@ public class EndpointAllocationTaskService
         return computeHost;
     }
 
-    private ComputeState configureComputePatch(EndpointState state, Map<String, String> endpointProperties) {
+    private ComputeState configureComputePatch(EndpointState state,
+            Map<String, String> endpointProperties) {
         String endpointRegionId = endpointProperties != null
                 ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
         ComputeState computeHost = new ComputeState();
@@ -1084,5 +1088,64 @@ public class EndpointAllocationTaskService
 
             sendSelfPatch(state);
         }
+    }
+
+    private void populateAdapterRef(EndpointAllocationTaskState state, SubStage nextStage) {
+        if (state.adapterReference != null) {
+            sendSelfPatch(createUpdateSubStageTask(nextStage));
+            return;
+        }
+
+        getAdapterUri(this, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER,
+                state.endpointState.endpointType)
+                .whenComplete((uri, throwable) -> {
+                    if (throwable != null) {
+                        sendSelfPatch(createUpdateSubStageTask(TaskStage.FAILED,
+                                SubStage.FAILED,
+                                throwable));
+                        return;
+                    }
+
+                    if (uri == null) {
+                        sendSelfPatch(
+                                createUpdateSubStageTask(TaskStage.FAILED, SubStage.FAILED,
+                                        new LocalizableValidationException("Unable to find "
+                                                + "configuration adapter for endpoint type "
+                                                + state.endpointState.endpointType,
+                                                "photon.model.endpoint.config.adapter.not.found"
+                                        )));
+                        return;
+                    }
+
+                    EndpointAllocationTaskState updateSubStageTask = createUpdateSubStageTask(
+                            nextStage);
+                    updateSubStageTask.adapterReference = uri;
+                    sendSelfPatch(updateSubStageTask);
+                });
+    }
+
+    /**
+     * Retrieves the Adapter Reference from the Photon Adapter Registry
+     *
+     * @return DeferredResult<URI> URI can be null
+     */
+    private static DeferredResult<URI> getAdapterUri(StatefulService service, AdapterTypePath
+            adapterTypePath,
+            String endpointType) {
+        String configLink = UriUtils.buildUriPath(PhotonModelAdaptersRegistryService.FACTORY_LINK,
+                endpointType);
+        Operation op = Operation
+                .createGet(UriUtils.buildUri(service.getHost(), configLink));
+
+        return service.sendWithDeferredResult(op, PhotonModelAdapterConfig.class)
+                .thenApply(adapterConfig -> {
+                    String ref = null;
+                    if (adapterConfig != null
+                            && adapterConfig.adapterEndpoints != null) {
+                        ref = adapterConfig.adapterEndpoints
+                                .get(adapterTypePath.key);
+                    }
+                    return ref != null ? UriUtils.buildUri(ref) : null;
+                });
     }
 }

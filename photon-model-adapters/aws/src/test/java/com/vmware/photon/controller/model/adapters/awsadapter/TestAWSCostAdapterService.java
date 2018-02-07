@@ -90,14 +90,12 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         super.startRequiredServices();
         PhotonModelTaskServices.startServices(this.host);
         PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-        AWSAdapters.startServices(this.host);
+        AWSAdaptersTestUtils.startServicesSynchronously(this.host);
         this.host.startService(
                 Operation.createPost(
                         UriUtils.buildUri(this.host, MockCostStatsAdapterService.class)),
                 new MockCostStatsAdapterService());
         this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-        this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-        this.host.waitForServiceAvailable(AWSAdapters.LINKS);
         this.host.setTimeoutSeconds(900);
         if (this.isMock) {
             // We run mock-tests against a dummy bill.

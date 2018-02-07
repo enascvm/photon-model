@@ -28,8 +28,8 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
 import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionEndpointCreationService.AzureSubscriptionEndpointCreationRequest;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -67,15 +67,13 @@ public class AzureSubscriptionEndpointCreationServiceTest extends BasicReusableH
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
-            AzureEaAdapters.startServices(this.host);
             this.host.startService(new AzureSubscriptionEndpointCreationService());
+            AzureAdaptersTestUtils.startServicesSynchronouslyEaAzure(this.host);
 
             this.host.setTimeoutSeconds(300);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AzureEaAdapters.LINKS);
             this.host.waitForServiceAvailable(AzureSubscriptionEndpointCreationService.SELF_LINK);
 
             EndpointState ep = createEndpointState();

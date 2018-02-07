@@ -96,8 +96,8 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
@@ -253,12 +253,10 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 PhotonModelMetricServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
                 PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-                AzureAdapters.startServices(this.host);
+                AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-                this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-                this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
                 // TODO: VSYM-992 - improve test/fix arbitrary timeout
                 this.host.setTimeoutSeconds(600);
@@ -291,7 +289,6 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
             AzureUtils.setAzureClientMock(this.isAzureClientMock);
             AzureUtils.setAzureMockHost(this.azureMockEndpointReference);
             if (!this.isMock) {

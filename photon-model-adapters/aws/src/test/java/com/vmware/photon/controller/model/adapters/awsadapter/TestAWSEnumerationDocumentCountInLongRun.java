@@ -216,14 +216,12 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
 
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());

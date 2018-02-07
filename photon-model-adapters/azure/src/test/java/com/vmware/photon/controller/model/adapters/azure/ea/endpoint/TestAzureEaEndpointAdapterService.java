@@ -25,7 +25,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -48,14 +48,12 @@ public class TestAzureEaEndpointAdapterService extends BasicReusableHostTestCase
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
-            AzureEaAdapters.startServices(this.host);
+            AzureAdaptersTestUtils.startServicesSynchronouslyEaAzure(this.host);
 
             this.host.setTimeoutSeconds(300);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AzureEaAdapters.LINKS);
 
             this.host.log(Level.INFO, "Executing test with isMock = %s", this.isMock);
         } catch (Throwable e) {

@@ -67,15 +67,13 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
 
             this.host.setTimeoutSeconds(300);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
 
             this.host.log(Level.INFO, "Executing test with isMock = %s", this.isMock);
         } catch (Throwable e) {

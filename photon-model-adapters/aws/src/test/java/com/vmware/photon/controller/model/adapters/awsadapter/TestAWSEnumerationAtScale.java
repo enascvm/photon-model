@@ -142,7 +142,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
             // start the aws mock stats service
             this.host.startService(
                     Operation.createPost(UriUtils.buildUri(this.host, AWSMockStatsService.class)),
@@ -150,8 +150,6 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
             this.host.waitForServiceAvailable(AWSMockStatsService.SELF_LINK);
 
             // TODO: VSYM-992 - improve test/remove arbitrary timeout

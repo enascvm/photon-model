@@ -47,7 +47,6 @@ public abstract class BaseAdaptersRegistryServiceTest extends BaseModelTest {
         this.host.setTimeoutSeconds(300);
 
         this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-        this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
     }
 
     @After

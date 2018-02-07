@@ -53,8 +53,8 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.InstanceRequestType;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -115,12 +115,10 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AzureAdapters.startServices(this.host);
+            AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
             // TODO: VSYM-992 - improve test/fix arbitrary timeout
             this.host.setTimeoutSeconds(600);
@@ -181,7 +179,7 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
 
     @Override
     protected void startRequiredServices() throws Throwable {
-        AzureAdapters.startServices(this.host);
+        AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
         super.startRequiredServices();
     }

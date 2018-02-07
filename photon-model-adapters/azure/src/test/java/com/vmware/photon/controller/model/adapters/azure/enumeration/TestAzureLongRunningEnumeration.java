@@ -84,7 +84,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
@@ -279,12 +279,10 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 PhotonModelServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
                 PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-                AzureAdapters.startServices(this.host);
+                AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-                this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-                this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
                 // TODO: VSYM-992 - improve test/fix arbitrary timeout
                 this.host.setTimeoutSeconds(this.timeoutSeconds);
@@ -309,7 +307,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
             this.nodeStatsUri = UriUtils.buildUri(this.host.getUri(), ServiceUriPaths.CORE_MANAGEMENT);
             this.maxMemoryInMb = this.host.getState().systemInfo.maxMemoryByteCount / BYTES_TO_MB;

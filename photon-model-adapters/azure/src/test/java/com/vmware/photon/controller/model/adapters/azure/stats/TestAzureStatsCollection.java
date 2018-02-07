@@ -36,7 +36,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelInMemoryServices;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
@@ -122,13 +122,11 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                 PhotonModelInMemoryServices.startServices(this.host);
                 PhotonModelAdaptersRegistryAdapters.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
-                AzureAdapters.startServices(this.host);
+                AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelInMemoryServices.LINKS);
-                this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-                this.host.waitForServiceAvailable(AzureAdapters.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
 
                 this.host.setTimeoutSeconds(600);
@@ -153,7 +151,6 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
 
             this.nodeStatsUri = UriUtils.buildUri(this.host.getUri(), ServiceUriPaths.CORE_MANAGEMENT);

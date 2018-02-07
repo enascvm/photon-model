@@ -308,8 +308,7 @@ public class BaseVSphereAdapterTest {
     }
 
     protected void startAdditionalServices() throws Throwable {
-        VSphereAdapters.startServices(this.host);
-        this.host.waitForServiceAvailable(VSphereAdapters.CONFIG_LINK);
+        VSphereAdaptersTestUtils.startServicesSynchronously(this.host);
     }
 
     protected void doSetup() {

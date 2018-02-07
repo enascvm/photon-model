@@ -35,7 +35,7 @@ import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService.ImagesLoadMode;
@@ -125,10 +125,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
         getHost().waitForServiceAvailable(PhotonModelTaskServices.LINKS);
 
         PhotonModelAdaptersRegistryAdapters.startServices(getHost());
-
-        AzureAdapters.startServices(getHost());
-
-        getHost().waitForServiceAvailable(AzureAdapters.CONFIG_LINK);
+        AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
     }
 
     /**

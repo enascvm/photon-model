@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.tasks;
 
 import java.net.InetAddress;
-import java.net.URI;
 import java.net.UnknownHostException;
 import java.security.GeneralSecurityException;
 import java.util.Collection;
@@ -22,13 +21,11 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceExpirationPolicy;
 import com.vmware.xenon.common.Claims;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service.Action;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceSubscriptionState.ServiceSubscriber;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.TaskState;
@@ -47,7 +44,7 @@ public class TaskUtils {
      * Verify if IP string is an IPv4 address.
      *
      * @param IP
-     *            IP to verify
+     *         IP to verify
      * @throws IllegalArgumentException
      */
     public static void isValidInetAddress(String IP) throws IllegalArgumentException {
@@ -120,7 +117,7 @@ public class TaskUtils {
      * Verify if CIDR string is a valid CIDR address.
      *
      * @param network
-     *            CIDR to verify
+     *         CIDR to verify
      * @throws IllegalArgumentException
      */
     public static void isCIDR(String network) throws IllegalArgumentException {
@@ -141,9 +138,9 @@ public class TaskUtils {
      * Issue a patch request to the specified service
      *
      * @param service
-     *            Service to issue the patch to
+     *         Service to issue the patch to
      * @param body
-     *            Patch body
+     *         Patch body
      */
     public static void sendPatch(StatefulService service, Object body) {
         Operation patch = Operation
@@ -156,9 +153,9 @@ public class TaskUtils {
      * Patch a service to failure after logging all errors
      *
      * @param service
-     *            Service to patch
+     *         Service to patch
      * @param tList
-     *            List of throwable objects
+     *         List of throwable objects
      */
     public static void sendFailurePatch(StatefulService service, TaskServiceState taskState,
             Collection<Throwable> tList) {
@@ -174,9 +171,9 @@ public class TaskUtils {
      * Patch a service to failure
      *
      * @param service
-     *            Service to patch
+     *         Service to patch
      * @param t
-     *            Throwable object
+     *         Throwable object
      */
     public static void sendFailurePatch(StatefulService service, TaskServiceState taskState,
             Throwable t) {
@@ -192,21 +189,13 @@ public class TaskUtils {
      * Create a TaskState object with the specified stage
      *
      * @param stage
-     *            Stage for the TaskState object
+     *         Stage for the TaskState object
      * @return
      */
     public static TaskState createTaskState(TaskStage stage) {
         TaskState tState = new TaskState();
         tState.stage = stage;
         return tState;
-    }
-
-    public static URI getAdapterUri(StatefulService service, AdapterTypePath adapterTypePath,
-            String endpointType) {
-        return UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                service.getHost().getPort(),
-                adapterTypePath.adapterLink(endpointType), null);
     }
 
     public static void subscribeToNotifications(StatefulService service,
@@ -238,21 +227,21 @@ public class TaskUtils {
      * the expected number of notifications, patch the next state back
      *
      * @param service
-     *            Stateful provisioning service
+     *         Stateful provisioning service
      * @param update
-     *            Notification operation
+     *         Notification operation
      * @param notificationTaskLink
-     *            Self link of the task that raised the notification
+     *         Self link of the task that raised the notification
      * @param opTaskState
-     *            TaskState of the service that raised the notification
+     *         TaskState of the service that raised the notification
      * @param expectedNotificationCount
-     *            Expected number of notifications
+     *         Expected number of notifications
      * @param returnState
-     *            The next state for the StatefulService
+     *         The next state for the StatefulService
      * @param finishedTaskLinks
-     *            Set of self links for services from which we have received notification
+     *         Set of self links for services from which we have received notification
      * @param deleteTask
-     *            flag to delete the service that raised the notification
+     *         flag to delete the service that raised the notification
      */
     public static void handleSubscriptionNotifications(StatefulService service, Operation update,
             String notificationTaskLink, TaskState opTaskState,
@@ -309,7 +298,7 @@ public class TaskUtils {
                         (delOp, delEx) -> {
                             if (delEx != null) {
                                 service.logWarning(() -> String.format("Stopping subscriber failed"
-                                                + " %s", Utils.toString(delEx)));
+                                        + " %s", Utils.toString(delEx)));
                                 return;
                             }
                         });
@@ -340,9 +329,9 @@ public class TaskUtils {
      * Send a failure patch to the specified service
      *
      * @param service
-     *            service to send the patch to
+     *         service to send the patch to
      * @param e
-     *            Exception
+     *         Exception
      */
     private static void sendFailureSelfPatch(StatefulService service, Throwable e) {
         // It looks like Xenon can't handle correctly serializing abstract classes, so we have to
@@ -361,10 +350,14 @@ public class TaskUtils {
     /**
      * Inject user identity into operation context.
      *
-     * @param service the service invoking the operation
-     * @param op operation for which the auth context needs to be set
-     * @param userServicePath user document link
-     * @throws GeneralSecurityException any generic security exception
+     * @param service
+     *         the service invoking the operation
+     * @param op
+     *         operation for which the auth context needs to be set
+     * @param userServicePath
+     *         user document link
+     * @throws GeneralSecurityException
+     *         any generic security exception
      */
     public static void assumeIdentity(StatefulService service, Operation op,
             String userServicePath)
@@ -378,7 +371,6 @@ public class TaskUtils {
         service.setAuthorizationContext(op, null);
         op.addRequestHeader(Operation.REQUEST_AUTH_TOKEN_HEADER, token);
     }
-
 
     public static long getResourceExpirationMicros(ResourceExpirationPolicy expirationPolicy) {
         long expirationMicros = 0;

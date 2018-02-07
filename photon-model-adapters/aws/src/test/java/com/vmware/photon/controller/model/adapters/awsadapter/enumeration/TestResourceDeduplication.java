@@ -39,7 +39,7 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSAdapters;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
@@ -103,14 +103,12 @@ public class TestResourceDeduplication extends BasicTestCase {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
             throw new Exception(e);

@@ -42,7 +42,7 @@ import org.junit.rules.TestName;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
@@ -100,12 +100,10 @@ public class AzureLifecycleOperationServiceTest extends BasicReusableHostTestCas
                 PhotonModelAdaptersRegistryAdapters.startServices(this.host);
                 PhotonModelMetricServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
-                AzureAdapters.startServices(this.host);
+                AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-                this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-                this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
                 // TODO: VSYM-992 - improve test/fix arbitrary timeout
                 this.host.setTimeoutSeconds(1200);

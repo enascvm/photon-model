@@ -165,14 +165,12 @@ public class TestAWSProvisionTask {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
 
             this.host.setTimeoutSeconds(600);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
         } catch (Throwable e) {
             throw new Exception(e);
         }

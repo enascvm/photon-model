@@ -76,9 +76,7 @@ public class AWSInstanceTypeServiceTest extends BaseModelTest {
         PhotonModelAdaptersRegistryAdapters.startServices(getHost());
         getHost().waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
 
-        AWSAdapters.startServices(getHost());
-
-        getHost().waitForServiceAvailable(AWSAdapters.CONFIG_LINK);
+        AWSAdaptersTestUtils.startServicesSynchronously(this.host);
     }
 
     @Test

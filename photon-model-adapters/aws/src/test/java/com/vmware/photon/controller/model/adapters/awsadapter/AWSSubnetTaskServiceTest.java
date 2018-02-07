@@ -109,7 +109,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
 
             AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
             creds.privateKey = this.secretKey;
@@ -117,8 +117,6 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
             this.client = AWSUtils.getAsyncClient(creds, this.regionId, getExecutor());
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
 
             deleteAwsSubnet();
             deleteAwsPublicSubnet();

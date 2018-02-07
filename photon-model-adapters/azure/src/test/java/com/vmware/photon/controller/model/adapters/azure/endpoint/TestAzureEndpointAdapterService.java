@@ -27,7 +27,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -52,14 +52,12 @@ public class TestAzureEndpointAdapterService extends BasicReusableHostTestCase {
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
-            AzureAdapters.startServices(this.host);
+            AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
             this.host.setTimeoutSeconds(300);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
             this.host.log(Level.INFO, "Executing test with isMock = %s", this.isMock);
         } catch (Throwable e) {

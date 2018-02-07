@@ -27,7 +27,9 @@ import com.vmware.xenon.common.Utils;
  * URI utilities.
  */
 public class AdapterUriUtil {
-    /** Captures URI template variable names. */
+    /**
+     * Captures URI template variable names.
+     */
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{([^/]+?)\\}");
 
     /**
@@ -37,9 +39,9 @@ public class AdapterUriUtil {
      * "e"] will expand to "localhost/resourceA/d/e" "{123}", etc...
      *
      * @param pathTemplate
-     *            A {@link String} that represents the pathTemplate in form of ".../{a}/{b}/...".
+     *         A {@link String} that represents the pathTemplate in form of ".../{a}/{b}/...".
      * @param pathVariableValues
-     *            The values that will replace the variables from the template.
+     *         The values that will replace the variables from the template.
      * @return The expanded URI.
      */
     public static String expandUriPathTemplate(String pathTemplate, String... pathVariableValues) {
@@ -68,11 +70,22 @@ public class AdapterUriUtil {
     }
 
     /**
+     * Builds a adapter reference using the host's public URI.
+     */
+    public static URI buildPublicAdapterUri(ServiceHost host, String path) {
+        return buildAdapterUri(host.getPublicUri().getHost(), host.getPort(), path);
+    }
+
+    public static URI buildAdapterUri(String host, int port, String path) {
+        return UriUtils.buildUri(host, port, path, null);
+    }
+
+    /**
      * Determines whether a {@link String} contains URI variable, a character sequence like "{a}",
      * "{123}", etc...
      *
      * @param pathTemplate
-     *            A string to examine.
+     *         A string to examine.
      * @return True if URI contains a variable, false otherwise.
      */
     private static boolean containsPathVariables(String pathTemplate) {

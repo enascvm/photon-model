@@ -27,8 +27,8 @@ import org.joda.time.LocalDate;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapters.azure.base.AzureAdaptersTestUtils;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
-import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -40,7 +40,6 @@ import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
-
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -73,11 +72,8 @@ public class TestAzureCostStatsService extends BaseModelTest {
         super.startRequiredServices();
         PhotonModelTaskServices.startServices(this.host);
         PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-        this.host.startService(new AzureCostStatsService());
-        AzureEaAdapters.startServices(this.host);
+        AzureAdaptersTestUtils.startServicesSynchronouslyEaAzure(this.host);
         this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-        this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-        this.host.waitForServiceAvailable(AzureEaAdapters.LINKS);
         this.host.setTimeoutSeconds(900);
     }
 

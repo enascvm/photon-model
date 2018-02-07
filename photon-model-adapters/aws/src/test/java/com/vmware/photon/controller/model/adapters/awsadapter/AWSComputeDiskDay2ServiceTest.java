@@ -223,15 +223,13 @@ public class AWSComputeDiskDay2ServiceTest {
 
             StartServicesHelper.startServices(this.host, serviceMetadata);
 
-            AWSAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
 
             this.host.setTimeoutSeconds(1200);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
         } catch (Throwable e) {
             throw new Exception(e);
         }

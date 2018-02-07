@@ -17,7 +17,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSAdapters;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSVolumeTypeDiscoveryService.VolumeTypeList;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.test.TestRequestSender;
@@ -32,7 +31,7 @@ public class AWSVolumeTypeDiscoveryServiceTest {
         this.host = VerificationHost.create(0);
         this.host.start();
 
-        AWSAdapters.startServices(this.host);
+        this.host.startService(new AWSVolumeTypeDiscoveryService());
 
         this.host.waitForServiceAvailable(AWSVolumeTypeDiscoveryService.SELF_LINK);
     }

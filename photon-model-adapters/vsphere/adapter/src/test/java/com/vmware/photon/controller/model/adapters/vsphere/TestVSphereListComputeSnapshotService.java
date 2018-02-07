@@ -46,8 +46,7 @@ public class TestVSphereListComputeSnapshotService extends BaseModelTest {
 
         getHost().waitForServiceAvailable(PhotonModelTaskServices.LINKS);
         PhotonModelAdaptersRegistryAdapters.startServices(getHost());
-        VSphereAdapters.startServices(getHost());
-        getHost().waitForServiceAvailable(VSphereAdapters.CONFIG_LINK);
+        VSphereAdaptersTestUtils.startServicesSynchronously(this.host);
     }
 
     @Test
