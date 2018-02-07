@@ -198,7 +198,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String TEST_CASE_MOCK_MODE = "Mock Mode ";
     private static final String TEST_BUCKET_NAME = "enumtest-bucket-" + UUID.randomUUID().toString();
     private static final int DEFAULT_TEST_PAGE_SIZE = 5;
-    private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     private static final String T2_MICRO_INSTANCE_TYPE = "t2.micro";
     private static final String VM_NAME = "TestAWSEnumerationTask-create";
     private static final String VM_STOPPED_NAME = "TestAWSEnumerationTask-stop";
@@ -587,7 +586,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ServiceDocumentQueryResult subnetStateResult = queryDocumentsAndAssertExpectedCount(
                 this.host, count1, SubnetService.FACTORY_LINK, false);
-        validateTagInEntity(subnetStateResult, NetworkState.class, ec2_subnet.toString());
+        validateTagInEntity(subnetStateResult, SubnetState.class, ec2_subnet.toString());
         queryDocumentsAndAssertExpectedCount(this.host,
                 count8, DiskService.FACTORY_LINK, false);
 
