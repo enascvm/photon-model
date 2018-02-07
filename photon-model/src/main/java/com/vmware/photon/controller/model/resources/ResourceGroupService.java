@@ -73,6 +73,7 @@ public class ResourceGroupService extends StatefulService {
     public void handleCreate(Operation start) {
         ResourceGroupState state = processInput(start);
         ResourceUtils.populateTags(this, state)
+                .thenAccept(__ -> ResourceUtils.initNoEndpointFlag(state, ResourceGroupState.class))
                 .whenCompleteNotify(start);
     }
 
@@ -80,7 +81,11 @@ public class ResourceGroupService extends StatefulService {
     public void handlePut(Operation put) {
         ResourceGroupState returnState = processInput(put);
         ResourceUtils.populateTags(this, returnState)
-                .thenAccept(__ -> setState(put, returnState))
+                .thenAccept(__ -> {
+                    ResourceUtils.updateNoEndpointFlag(returnState, getState(put),
+                            ResourceGroupState.class);
+                    setState(put, returnState);
+                })
                 .whenCompleteNotify(put);
     }
 

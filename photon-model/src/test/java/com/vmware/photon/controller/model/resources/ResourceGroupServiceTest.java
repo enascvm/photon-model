@@ -17,6 +17,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -32,7 +33,6 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
@@ -98,7 +98,8 @@ public class ResourceGroupServiceTest extends Suite {
                     ResourceGroupService.ResourceGroupState.class);
 
             assertThat(returnState.name, is(startState.name));
-            assertEquals(returnState.customProperties, returnState.customProperties);
+            startState.customProperties.forEach((k, v) ->
+                    assertEquals(v, returnState.customProperties.get(k)));
         }
 
         @Test
@@ -158,7 +159,7 @@ public class ResourceGroupServiceTest extends Suite {
                     ResourceGroupService.ResourceGroupState.class);
             assertThat(newState.name, is(patchState.name));
             assertEquals(newState.tenantLinks, patchState.tenantLinks);
-            assertEquals(newState.customProperties.size(), 2);
+            assertTrue(newState.customProperties.size() >= 2);
             assertNotNull(newState.query);
         }
     }

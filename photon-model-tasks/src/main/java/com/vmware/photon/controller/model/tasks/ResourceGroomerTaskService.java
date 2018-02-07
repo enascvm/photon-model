@@ -811,6 +811,11 @@ public class ResourceGroomerTaskService
                         .containsKey(ResourceGroupService.PROPERTY_NAME_IS_USER_CREATED)) {
                     continue;
                 }
+                if (state.customProperties != null && state.customProperties.containsKey(
+                        ResourceUtils.CUSTOM_PROP_NO_ENDPOINT)) {
+                    // skip resources that have never been attached to a particular endpoint
+                    continue;
+                }
                 if (state.endpointLinks != null) {
                     state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
