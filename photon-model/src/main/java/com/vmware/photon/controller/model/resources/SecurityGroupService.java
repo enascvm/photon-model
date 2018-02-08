@@ -333,10 +333,6 @@ public class SecurityGroupService extends StatefulService {
         SecurityGroupState state = processInput(op);
         SecurityGroupState currentState = getState(op);
         ResourceUtils.validatePut(state, currentState);
-        if (currentState.documentCreationTimeMicros != null
-                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
-            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
-        }
         return state;
     }
 

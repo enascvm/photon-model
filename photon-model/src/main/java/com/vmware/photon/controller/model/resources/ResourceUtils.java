@@ -369,6 +369,15 @@ public class ResourceUtils {
                 && !state.computeHostLink.equals(currentState.computeHostLink)) {
             throw new IllegalArgumentException("Compute host link can not be changed");
         }
+        if (currentState.documentCreationTimeMicros != null
+                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
+            Utils.log(currentState.getClass(), currentState.getClass().getSimpleName(),
+                    Level.WARNING, () -> String
+                            .format("Invalid attempt to modify documentCreationTimeMicros "
+                                            + "through a PUT request for document: %s",
+                                    currentState.documentSelfLink));
+            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
+        }
     }
 
     private static boolean validateComputeHostLinkPatch(ResourceState patch, ResourceState source) {

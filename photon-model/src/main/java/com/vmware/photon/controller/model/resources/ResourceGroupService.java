@@ -106,10 +106,6 @@ public class ResourceGroupService extends StatefulService {
         ResourceGroupState state = processInput(op);
         ResourceGroupState currentState = getState(op);
         ResourceUtils.validatePut(state, currentState);
-        if (currentState.documentCreationTimeMicros != null
-                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
-            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
-        }
         return state;
     }
 
