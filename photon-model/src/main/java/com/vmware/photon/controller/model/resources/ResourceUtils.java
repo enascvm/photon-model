@@ -146,7 +146,7 @@ public class ResourceUtils {
      * @param patch patch state
      * @return whether the state has changed or not
      */
-    private static boolean mergeResourceStateWithPatch(ResourceState source,
+    public static boolean mergeResourceStateWithPatch(ResourceState source,
             ResourceState patch) {
         boolean isChanged = false;
 
