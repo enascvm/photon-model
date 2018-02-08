@@ -443,6 +443,10 @@ public class ComputeService extends StatefulService {
             throw new IllegalArgumentException("Environment name can not be changed");
         }
         ResourceUtils.validatePut(state, currentState);
+        if (currentState.documentCreationTimeMicros != null
+                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
+            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
+        }
         Utils.validateState(getStateDescription(), state);
         return state;
     }

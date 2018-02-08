@@ -227,6 +227,10 @@ public class NetworkInterfaceService extends StatefulService {
         NetworkInterfaceState state = processInput(op);
         NetworkInterfaceState currentState = getState(op);
         ResourceUtils.validatePut(state, currentState);
+        if (currentState.documentCreationTimeMicros != null
+                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
+            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
+        }
         return state;
     }
 

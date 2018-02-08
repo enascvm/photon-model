@@ -221,11 +221,13 @@ public class NetworkInterfaceServiceTest extends Suite {
 
             assertNotNull(returnState);
             assertNotNull(returnState.documentCreationTimeMicros);
+            long originalTime = returnState.documentCreationTimeMicros;
 
             returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
 
-            postServiceSynchronously(NetworkInterfaceService.FACTORY_LINK,
-                    returnState, NetworkInterfaceState.class, IllegalArgumentException.class);
+            returnState = postServiceSynchronously(NetworkInterfaceService.FACTORY_LINK,
+                    returnState, NetworkInterfaceState.class);
+            assertThat(originalTime, is(returnState.documentCreationTimeMicros));
         }
 
         @Test
@@ -531,7 +533,7 @@ public class NetworkInterfaceServiceTest extends Suite {
             assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
         }
 
-        @Test(expected = IllegalArgumentException.class)
+        @Test
         public void testPutModifyCreationTime() throws Throwable {
             NetworkInterfaceState startState = buildValidStartState(false);
             NetworkInterfaceState returnState = postServiceSynchronously(
@@ -549,10 +551,15 @@ public class NetworkInterfaceServiceTest extends Suite {
             newState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
             newState.subnetLink = "/resources/subnet/subnet9";
 
-            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            long currentTime = Utils.getNowMicrosUtc();
+            newState.documentCreationTimeMicros = currentTime;
 
             putServiceSynchronously(returnState.documentSelfLink,
                     newState);
+
+            NetworkInterfaceState getState = getServiceSynchronously(
+                    returnState.documentSelfLink, NetworkInterfaceState.class);
+            assertThat(getState.documentCreationTimeMicros, is(returnState.documentCreationTimeMicros));
         }
 
         @Test(expected = IllegalArgumentException.class)

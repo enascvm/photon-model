@@ -350,6 +350,10 @@ public class DiskService extends StatefulService {
         DiskState state = processInput(op);
         DiskState currentState = getState(op);
         ResourceUtils.validatePut(state, currentState);
+        if (currentState.documentCreationTimeMicros != null
+                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
+            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
+        }
         return state;
     }
 

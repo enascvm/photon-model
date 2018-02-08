@@ -195,11 +195,12 @@ public class ResourceGroupServiceTest extends Suite {
             assertNotNull(returnState);
             assertNotNull(returnState.documentCreationTimeMicros);
 
-            returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            long originalTime = returnState.documentCreationTimeMicros;
+            returnState.documentCreationTimeMicros = originalTime;
 
-            postServiceSynchronously(ResourceGroupService.FACTORY_LINK,
-                    returnState, ResourceGroupService.ResourceGroupState.class,
-                    IllegalArgumentException.class);
+            returnState = postServiceSynchronously(ResourceGroupService.FACTORY_LINK,
+                    returnState, ResourceGroupService.ResourceGroupState.class);
+            assertThat(originalTime, is(returnState.documentCreationTimeMicros));
         }
 
         @Test
@@ -317,7 +318,7 @@ public class ResourceGroupServiceTest extends Suite {
                     returnState.documentCreationTimeMicros);
         }
 
-        @Test(expected = IllegalArgumentException.class)
+        @Test
         public void testPutModifyCreationTime() throws Throwable {
             ResourceGroupService.ResourceGroupState startState = buildValidStartState(false);
             ResourceGroupService.ResourceGroupState returnState = postServiceSynchronously(
@@ -331,9 +332,15 @@ public class ResourceGroupServiceTest extends Suite {
             newState.customProperties = new HashMap<>();
             newState.customProperties.put("key1", "value1");
 
-            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            long currentTime = Utils.getNowMicrosUtc();
+            newState.documentCreationTimeMicros = currentTime;
 
             putServiceSynchronously(returnState.documentSelfLink, newState);
+
+            ResourceGroupService.ResourceGroupState getState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    ResourceGroupService.ResourceGroupState.class);
+            assertThat(getState.documentCreationTimeMicros, is(returnState.documentCreationTimeMicros));
         }
 
         @Test(expected = IllegalArgumentException.class)

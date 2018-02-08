@@ -224,10 +224,12 @@ public class SubnetServiceTest extends Suite {
             assertNotNull(returnState);
             assertNotNull(returnState.documentCreationTimeMicros);
 
+            long originalTime = returnState.documentCreationTimeMicros;
             returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
 
-            postServiceSynchronously(SubnetService.FACTORY_LINK,
-                    returnState, SubnetState.class, IllegalArgumentException.class);
+            returnState = postServiceSynchronously(SubnetService.FACTORY_LINK,
+                    returnState, SubnetState.class);
+            assertThat(originalTime, is(returnState.documentCreationTimeMicros));
         }
 
         @Test
@@ -423,7 +425,7 @@ public class SubnetServiceTest extends Suite {
             assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
         }
 
-        @Test(expected = IllegalArgumentException.class)
+        @Test
         public void testPutModifyCreationTime() throws Throwable {
             SubnetState startState = buildValidStartState(false);
             SubnetState returnState = postServiceSynchronously(
@@ -443,10 +445,15 @@ public class SubnetServiceTest extends Suite {
             newState.dnsServerAddresses.addAll(Arrays.asList("1.2.3.4", "11.22.33.44"));
             newState.dnsSearchDomains = new ArrayList<>();
             newState.dnsSearchDomains.addAll(Arrays.asList("foo.bar", "subdomain.foo.bar"));
-            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
 
-            putServiceSynchronously(returnState.documentSelfLink,
-                    newState);
+            long currentTime = Utils.getNowMicrosUtc();
+            newState.documentCreationTimeMicros = currentTime;
+
+            putServiceSynchronously(returnState.documentSelfLink, newState);
+
+            SubnetState getState = getServiceSynchronously(
+                    returnState.documentSelfLink, SubnetState.class);
+            assertThat(getState.documentCreationTimeMicros, is(returnState.documentCreationTimeMicros));
         }
 
         @Test(expected = IllegalArgumentException.class)

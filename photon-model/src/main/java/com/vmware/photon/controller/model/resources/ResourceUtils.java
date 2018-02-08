@@ -369,10 +369,6 @@ public class ResourceUtils {
                 && !state.computeHostLink.equals(currentState.computeHostLink)) {
             throw new IllegalArgumentException("Compute host link can not be changed");
         }
-        if (currentState.documentCreationTimeMicros != null
-                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
-            throw new IllegalArgumentException("Document creation time can not be changed");
-        }
     }
 
     private static boolean validateComputeHostLinkPatch(ResourceState patch, ResourceState source) {

@@ -158,6 +158,10 @@ public class StorageDescriptionService extends StatefulService {
         StorageDescription state = processInput(op);
         StorageDescription currentState = getState(op);
         ResourceUtils.validatePut(state, currentState);
+        if (currentState.documentCreationTimeMicros != null
+                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
+            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
+        }
         return state;
     }
 

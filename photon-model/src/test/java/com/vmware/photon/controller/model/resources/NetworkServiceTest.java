@@ -245,10 +245,12 @@ public class NetworkServiceTest extends Suite {
             assertNotNull(returnState);
             assertNotNull(returnState.documentCreationTimeMicros);
 
-            returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            long originalTime = returnState.documentCreationTimeMicros;
+            returnState.documentCreationTimeMicros = originalTime;
 
-            postServiceSynchronously(NetworkService.FACTORY_LINK,
-                    returnState, NetworkService.NetworkState.class, IllegalArgumentException.class);
+            returnState = postServiceSynchronously(NetworkService.FACTORY_LINK,
+                    returnState, NetworkService.NetworkState.class);
+            assertThat(originalTime, is(returnState.documentCreationTimeMicros));
         }
 
         @Test
@@ -459,10 +461,17 @@ public class NetworkServiceTest extends Suite {
             newState.subnetCIDR = "10.0.0.0/10";
             newState.tenantLinks = new ArrayList<>();
             newState.tenantLinks.add("tenant-linkA");
-            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+
+            long currentTime = Utils.getNowMicrosUtc();
+            newState.documentCreationTimeMicros = currentTime;
 
             putServiceSynchronously(returnState.documentSelfLink,
                     newState);
+
+            NetworkService.NetworkState getState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    NetworkService.NetworkState.class);
+            assertThat(getState.documentCreationTimeMicros, is(returnState.documentCreationTimeMicros));
         }
 
         @Test(expected = IllegalArgumentException.class)

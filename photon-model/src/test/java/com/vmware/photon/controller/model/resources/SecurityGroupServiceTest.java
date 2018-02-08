@@ -256,11 +256,12 @@ public class SecurityGroupServiceTest extends Suite {
             assertNotNull(returnState);
             assertNotNull(returnState.documentCreationTimeMicros);
 
-            returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            long originalTime = returnState.documentCreationTimeMicros;
+            returnState.documentCreationTimeMicros = originalTime;
 
-            postServiceSynchronously(SecurityGroupService.FACTORY_LINK,
-                    returnState, SecurityGroupService.SecurityGroupState.class,
-                    IllegalArgumentException.class);
+            returnState = postServiceSynchronously(SecurityGroupService.FACTORY_LINK,
+                    returnState, SecurityGroupService.SecurityGroupState.class);
+            assertThat(originalTime, is(returnState.documentCreationTimeMicros));
         }
 
         @Test
@@ -563,7 +564,7 @@ public class SecurityGroupServiceTest extends Suite {
             assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
         }
 
-        @Test(expected = IllegalArgumentException.class)
+        @Test
         public void testPutModifyCreationTime() throws Throwable {
             SecurityGroupState startState = buildValidStartState(false);
             SecurityGroupState returnState = postServiceSynchronously(
@@ -583,7 +584,8 @@ public class SecurityGroupServiceTest extends Suite {
             newState.authCredentialsLink = "/link/to/auth";
             newState.resourcePoolLink = "/link/to/rp";
 
-            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            long currentTime = Utils.getNowMicrosUtc();
+            newState.documentCreationTimeMicros = currentTime;
 
             try {
                 newState.instanceAdapterReference = new URI(
@@ -594,6 +596,10 @@ public class SecurityGroupServiceTest extends Suite {
 
             putServiceSynchronously(returnState.documentSelfLink,
                     newState);
+
+            SecurityGroupState getState = getServiceSynchronously(
+                    returnState.documentSelfLink, SecurityGroupState.class);
+            assertThat(getState.documentCreationTimeMicros, is(returnState.documentCreationTimeMicros));
         }
 
         @Test(expected = IllegalArgumentException.class)

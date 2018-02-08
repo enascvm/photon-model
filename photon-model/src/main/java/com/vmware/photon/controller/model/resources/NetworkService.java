@@ -138,6 +138,10 @@ public class NetworkService extends StatefulService {
         NetworkState state = processInput(op);
         NetworkState currentState = getState(op);
         ResourceUtils.validatePut(state, currentState);
+        if (currentState.documentCreationTimeMicros != null
+                && !currentState.documentCreationTimeMicros.equals(state.documentCreationTimeMicros)) {
+            state.documentCreationTimeMicros = currentState.documentCreationTimeMicros;
+        }
         return state;
     }
 

@@ -214,10 +214,12 @@ public class StorageDescriptionServiceTest extends Suite {
             assertNotNull(returnState);
             assertNotNull(returnState.documentCreationTimeMicros);
 
+            long originalTime = returnState.documentCreationTimeMicros;
             returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
 
-            postServiceSynchronously(StorageDescriptionService.FACTORY_LINK,
-                    returnState, StorageDescription.class, IllegalArgumentException.class);
+            returnState = postServiceSynchronously(StorageDescriptionService.FACTORY_LINK,
+                    returnState, StorageDescription.class);
+            assertThat(originalTime, is(returnState.documentCreationTimeMicros));
         }
 
         @Test
@@ -606,7 +608,7 @@ public class StorageDescriptionServiceTest extends Suite {
             assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
         }
 
-        @Test(expected = IllegalArgumentException.class)
+        @Test
         public void testPutModifyCreationTime() throws Throwable {
             StorageDescription startState = buildValidStartState(false);
 
@@ -625,10 +627,14 @@ public class StorageDescriptionServiceTest extends Suite {
             newState.authCredentialsLink = "http://authCredentialsLink";
             newState.resourcePoolLink = "http://resourcePoolLink";
 
-            newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
+            long currentTime = Utils.getNowMicrosUtc();
+            newState.documentCreationTimeMicros = currentTime;
 
-            putServiceSynchronously(returnState.documentSelfLink,
-                    newState);
+            putServiceSynchronously(returnState.documentSelfLink, newState);
+
+            StorageDescription getState = getServiceSynchronously(returnState.documentSelfLink,
+                    StorageDescription.class);
+            assertThat(getState.documentCreationTimeMicros, is(returnState.documentCreationTimeMicros));
         }
 
         @Test(expected = IllegalArgumentException.class)

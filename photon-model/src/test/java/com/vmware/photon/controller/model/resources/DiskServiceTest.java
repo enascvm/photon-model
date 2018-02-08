@@ -195,11 +195,13 @@ public class DiskServiceTest extends Suite {
 
             assertNotNull(returnState);
             assertNotNull(returnState.documentCreationTimeMicros);
+            long originalTime = returnState.documentCreationTimeMicros;
 
             returnState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
 
-            postServiceSynchronously(DiskService.FACTORY_LINK,
-                    returnState, DiskState.class, IllegalArgumentException.class);
+            returnState = postServiceSynchronously(DiskService.FACTORY_LINK,
+                    returnState, DiskState.class);
+            assertThat(originalTime, is(returnState.documentCreationTimeMicros));
         }
 
         @Test
@@ -596,7 +598,7 @@ public class DiskServiceTest extends Suite {
             assertEquals(getState.documentCreationTimeMicros, returnState.documentCreationTimeMicros);
         }
 
-        @Test(expected = IllegalArgumentException.class)
+        @Test
         public void testPutModifyCreationTime() throws Throwable {
             DiskState startState = buildValidStartState(false);
 
@@ -611,8 +613,11 @@ public class DiskServiceTest extends Suite {
             newState.tenantLinks.add("tenant-linkA");
             newState.documentCreationTimeMicros = Utils.getNowMicrosUtc();
 
-            putServiceSynchronously(returnState.documentSelfLink,
-                    newState);
+            putServiceSynchronously(returnState.documentSelfLink, newState);
+
+            DiskState getState = getServiceSynchronously(
+                    returnState.documentSelfLink, DiskState.class);
+            assertThat(getState.documentCreationTimeMicros, is(returnState.documentCreationTimeMicros));
         }
 
         @Test(expected = IllegalArgumentException.class)
