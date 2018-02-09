@@ -325,6 +325,7 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.host_summary_hardware_cpuMhz,
                 VimPath.host_summary_hardware_numCpuCores,
                 VimPath.host_summary_hardware_uuid,
+                VimPath.host_summary_runtime_inMaintenanceMode,
                 VimPath.host_parent,
                 VimPath.host_datastore,
                 VimPath.host_network,

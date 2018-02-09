@@ -1814,6 +1814,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.name = hs.getName();
         // TODO: retrieve host power state
         state.powerState = PowerState.ON;
+        if (hs.isInMaintenanceMode()) {
+            state.powerState = PowerState.SUSPEND;
+        }
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
                 .put(CustomProperties.TYPE, hs.getId().getType());

@@ -86,4 +86,8 @@ public class HostSystemOverlay extends AbstractOverlay {
     public void setParentMoref(ManagedObjectReference parentMoref) {
         this.parentMoref = parentMoref;
     }
+
+    public boolean isInMaintenanceMode() {
+        return (boolean) getOrDefault(VimPath.host_summary_runtime_inMaintenanceMode, false);
+    }
 }
