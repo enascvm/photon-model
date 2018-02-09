@@ -241,7 +241,7 @@ public class AWSTaskStatusChecker<T> {
                                     + "reason:" + stateReason));
                     return;
                 } else if (!status.equals(AWSTaskStatusChecker.this.desiredState)) {
-                    AWSTaskStatusChecker.this.service.logFine(
+                    AWSTaskStatusChecker.this.service.logInfo(
                             "Instance %s not yet in desired state %s. Current state %s, waiting 5s",
                             AWSTaskStatusChecker.this.instanceId,
                             AWSTaskStatusChecker.this.desiredState, status);

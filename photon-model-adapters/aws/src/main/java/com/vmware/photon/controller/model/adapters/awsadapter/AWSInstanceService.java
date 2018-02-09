@@ -765,160 +765,169 @@ public class AWSInstanceService extends StatelessService {
                     return;
                 }
 
-                ComputeState cs = new ComputeState();
-                cs.id = ((Instance) instance).getInstanceId();
-                cs.type = ComputeType.VM_GUEST;
-                cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-                cs.address = ((Instance) instance).getPublicIpAddress();
+                try {
+                    ComputeState cs = new ComputeState();
+                    cs.id = ((Instance) instance).getInstanceId();
+                    cs.type = ComputeType.VM_GUEST;
+                    cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
+                    cs.address = ((Instance) instance).getPublicIpAddress();
 
-                String regionId = getRequestRegionId(this.context);
-                cs.regionId = regionId;
+                    // log data to debug VCOM-3274
+                    logInfo("Running operations for instance %s after vm is running", cs.id);
 
-                cs.zoneId = ((Instance) instance).getPlacement().getAvailabilityZone();
-                cs.powerState = AWSUtils.mapToPowerState(((Instance) instance).getState());
+                    String regionId = getRequestRegionId(this.context);
+                    cs.regionId = regionId;
 
-                String computeHostLink = this.context.endpoint.computeHostLink;
-                cs.computeHostLink = computeHostLink;
+                    cs.zoneId = ((Instance) instance).getPlacement().getAvailabilityZone();
+                    cs.powerState = AWSUtils.mapToPowerState(((Instance) instance).getState());
 
-                if (this.context.child.customProperties == null) {
-                    cs.customProperties = new HashMap<>();
-                } else {
-                    cs.customProperties = this.context.child.customProperties;
-                }
+                    String computeHostLink = this.context.endpoint.computeHostLink;
+                    cs.computeHostLink = computeHostLink;
 
-                String sourceTaskLink = ProvisionComputeTaskService.FACTORY_LINK;
-                cs.customProperties.put(SOURCE_TASK_LINK, sourceTaskLink);
-                cs.customProperties.put(AWSConstants.AWS_VPC_ID,
-                        ((Instance) instance).getVpcId());
-                cs.lifecycleState = LifecycleState.READY;
-                cs.diskLinks = new ArrayList<>();
-
-                patchOperations.addAll(createPatchNICStatesOperations(this.context.nics,
-                        ((Instance) instance)));
-
-                updateAndTagDisks(this.context.bootDisk, this.context.imageDisks,
-                        this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings(),
-                        regionId, computeHostLink, sourceTaskLink, this.context.parent.tenantLinks);
-
-                DeferredResult<ComputeState> dr = new DeferredResult<>();
-                if (this.context.imageDisks != null && !this.context.imageDisks.isEmpty()) {
-
-                    DeferredResult.allOf(this.context.imageDisks.stream()
-                            .map(diskState ->
-                                    sendWithDeferredResult(
-                                            Operation.createPost(this.service.getHost(),
-                                                    DiskService.FACTORY_LINK)
-                                                    .setReferer(this.context.service.getHost()
-                                                            .getUri())
-                                                    .setBody(diskState), DiskState.class)
-                            ).collect(Collectors.toList()))
-                            .thenApply(diskStates -> {
-                                for (DiskState diskState : diskStates) {
-                                    cs.diskLinks.add(diskState.documentSelfLink);
-                                }
-                                return cs;
-                            })
-                            .whenComplete((o, exc) -> {
-                                if (exc != null) {
-                                    dr.fail(exc);
-                                    return;
-                                }
-                                dr.complete(cs);
-                            });
-                } else {
-                    dr.complete(cs);
-                }
-
-                //update boot disk size of instance-store AMI's
-                patchOperations.addAll(createPatchDiskStatesOperations(
-                        Arrays.asList(this.context.bootDisk)));
-                //update disk size and device names of the data disks
-                patchOperations.addAll(createPatchDiskStatesOperations(this.context.dataDisks));
-
-                cs.diskLinks.add(this.context.bootDisk.documentSelfLink);
-                for (DiskState dataDisk : this.context.dataDisks) {
-                    cs.diskLinks.add(dataDisk.documentSelfLink);
-                }
-
-                Operation patchState = Operation
-                        .createPatch(this.context.computeRequest.resourceReference)
-                        .setBody(cs)
-                        .setReferer(this.service.getHost().getUri());
-                patchOperations.add(patchState);
-
-                OperationJoin joinOp = OperationJoin.create(patchOperations);
-                joinOp.setCompletion((ox, exc) -> {
-                    if (exc != null) {
-                        this.service.logSevere(() -> String.format("Error updating VM state. %s",
-                                Utils.toString(exc)));
-                        this.context.taskManager.patchTaskToFailure(
-                                new IllegalStateException("Error updating VM state"));
-                        return;
+                    if (this.context.child.customProperties == null) {
+                        cs.customProperties = new HashMap<>();
+                    } else {
+                        cs.customProperties = this.context.child.customProperties;
                     }
 
-                    //attach external ebs volumes to the instance if any.
-                    if (!this.context.externalDisks.isEmpty()) {
-                        if (this.context.availableEbsDiskNames.size() < this.context.externalDisks
-                                .size()) {
-                            //fail if sufficient number of attach paths are not available.
-                            String error = "External disks cannot be attached. Insufficient device names.";
-                            logSevere(() -> "[AWSInstanceService] " + error);
+                    String sourceTaskLink = ProvisionComputeTaskService.FACTORY_LINK;
+                    cs.customProperties.put(SOURCE_TASK_LINK, sourceTaskLink);
+                    cs.customProperties.put(AWSConstants.AWS_VPC_ID,
+                            ((Instance) instance).getVpcId());
+                    cs.lifecycleState = LifecycleState.READY;
+                    cs.diskLinks = new ArrayList<>();
+
+                    patchOperations.addAll(createPatchNICStatesOperations(this.context.nics,
+                            ((Instance) instance)));
+
+                    updateAndTagDisks(this.context.bootDisk, this.context.imageDisks,
+                            this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings(),
+                            regionId, computeHostLink, sourceTaskLink, this.context.parent.tenantLinks);
+
+                    DeferredResult<ComputeState> dr = new DeferredResult<>();
+                    if (this.context.imageDisks != null && !this.context.imageDisks.isEmpty()) {
+
+                        DeferredResult.allOf(this.context.imageDisks.stream()
+                                .map(diskState ->
+                                        sendWithDeferredResult(
+                                                Operation.createPost(this.service.getHost(),
+                                                        DiskService.FACTORY_LINK)
+                                                        .setReferer(this.context.service.getHost()
+                                                                .getUri())
+                                                        .setBody(diskState), DiskState.class)
+                                ).collect(Collectors.toList()))
+                                .thenApply(diskStates -> {
+                                    for (DiskState diskState : diskStates) {
+                                        cs.diskLinks.add(diskState.documentSelfLink);
+                                    }
+                                    return cs;
+                                })
+                                .whenComplete((o, exc) -> {
+                                    if (exc != null) {
+                                        dr.fail(exc);
+                                        return;
+                                    }
+                                    dr.complete(cs);
+                                });
+                    } else {
+                        dr.complete(cs);
+                    }
+
+                    //update boot disk size of instance-store AMI's
+                    patchOperations.addAll(createPatchDiskStatesOperations(
+                            Arrays.asList(this.context.bootDisk)));
+                    //update disk size and device names of the data disks
+                    patchOperations.addAll(createPatchDiskStatesOperations(this.context.dataDisks));
+
+                    cs.diskLinks.add(this.context.bootDisk.documentSelfLink);
+                    for (DiskState dataDisk : this.context.dataDisks) {
+                        cs.diskLinks.add(dataDisk.documentSelfLink);
+                    }
+
+                    Operation patchState = Operation
+                            .createPatch(this.context.computeRequest.resourceReference)
+                            .setBody(cs)
+                            .setReferer(this.service.getHost().getUri());
+                    patchOperations.add(patchState);
+
+                    OperationJoin joinOp = OperationJoin.create(patchOperations);
+                    joinOp.setCompletion((ox, exc) -> {
+                        if (exc != null) {
+                            this.service.logSevere(() -> String.format("Error updating VM state. %s",
+                                    Utils.toString(exc)));
                             this.context.taskManager.patchTaskToFailure(
-                                    new IllegalArgumentException(error));
+                                    new IllegalStateException("Error updating VM state"));
                             return;
                         }
 
-                        Operation computeOp = ox.values().stream().filter(resourceOp ->
-                                resourceOp.getUri().getPath().contains(ComputeService.FACTORY_LINK)
-                        ).findFirst().orElse(null);
-
-                        ComputeState provisionedComputeState = computeOp
-                                .getBody(ComputeState.class);
-                        DeferredResult<DiskState> attachDr = attachExternalDisks(
-                                provisionedComputeState.id, this.context.externalDisks,
-                                this.context.availableEbsDiskNames, this.context.amazonEC2Client);
-
-                        attachDr.whenComplete((diskState, throwable) -> {
-                            if (throwable != null) {
-                                String error = String .format("Error in attaching external disks. %s.",
-                                                throwable.getCause());
+                        //attach external ebs volumes to the instance if any.
+                        if (!this.context.externalDisks.isEmpty()) {
+                            if (this.context.availableEbsDiskNames.size() < this.context.externalDisks
+                                    .size()) {
+                                //fail if sufficient number of attach paths are not available.
+                                String error = "External disks cannot be attached. Insufficient device names.";
                                 logSevere(() -> "[AWSInstanceService] " + error);
                                 this.context.taskManager.patchTaskToFailure(
                                         new IllegalArgumentException(error));
                                 return;
                             }
-                            // patch all the externally attached disks.
-                            DeferredResult<List<Operation>> externalDisksDr =
-                                    updateComputeAndDiskStates(this.context.externalDisks,
-                                            provisionedComputeState, this.service);
-                            externalDisksDr.whenComplete((c, e) -> {
-                                if (e != null) {
-                                    String error = String.format("Error updating computeState and "
-                                                    + "diskStates of external disks. %s",
-                                            Utils.toString(e));
+
+                            Operation computeOp = ox.values().stream().filter(resourceOp ->
+                                    resourceOp.getUri().getPath().contains(ComputeService.FACTORY_LINK)
+                            ).findFirst().orElse(null);
+
+                            ComputeState provisionedComputeState = computeOp
+                                    .getBody(ComputeState.class);
+                            DeferredResult<DiskState> attachDr = attachExternalDisks(
+                                    provisionedComputeState.id, this.context.externalDisks,
+                                    this.context.availableEbsDiskNames, this.context.amazonEC2Client);
+
+                            attachDr.whenComplete((diskState, throwable) -> {
+                                if (throwable != null) {
+                                    String error = String .format("Error in attaching external disks. %s.",
+                                                    throwable.getCause());
                                     logSevere(() -> "[AWSInstanceService] " + error);
                                     this.context.taskManager.patchTaskToFailure(
                                             new IllegalArgumentException(error));
                                     return;
                                 }
-                                this.context.taskManager.finishTask();
+                                // patch all the externally attached disks.
+                                DeferredResult<List<Operation>> externalDisksDr =
+                                        updateComputeAndDiskStates(this.context.externalDisks,
+                                                provisionedComputeState, this.service);
+                                externalDisksDr.whenComplete((c, e) -> {
+                                    if (e != null) {
+                                        String error = String.format("Error updating computeState and "
+                                                        + "diskStates of external disks. %s",
+                                                Utils.toString(e));
+                                        logSevere(() -> "[AWSInstanceService] " + error);
+                                        this.context.taskManager.patchTaskToFailure(
+                                                new IllegalArgumentException(error));
+                                        return;
+                                    }
+                                    this.context.taskManager.finishTask();
+                                });
                             });
-                        });
-                    } else {
-                        this.context.taskManager.finishTask();
-                    }
-                });
+                        } else {
+                            this.context.taskManager.finishTask();
+                        }
+                    });
 
-                dr.whenComplete((computeState, throwable) -> {
-                    if (throwable != null) {
-                        this.service.logSevere(() -> String.format(" [AWSInstanceService] Error "
-                                + "updating VM state. %s", Utils.toString(throwable)));
-                        this.context.taskManager.patchTaskToFailure(
-                                new IllegalStateException("Error updating VM state"));
-                        return;
-                    }
-                    joinOp.sendWith(this.service.getHost());
-                });
+                    dr.whenComplete((computeState, throwable) -> {
+                        if (throwable != null) {
+                            this.service.logSevere(() -> String.format(" [AWSInstanceService] Error "
+                                    + "updating VM state. %s", Utils.toString(throwable)));
+                            this.context.taskManager.patchTaskToFailure(
+                                    new IllegalStateException("Error updating VM state"));
+                            return;
+                        }
+                        joinOp.sendWith(this.service.getHost());
+                    });
+                } catch (Exception e) {
+                    String instanceId = ((Instance) instance).getInstanceId();
+                    this.context.taskManager.patchTaskToFailure(
+                            "Error running post-start operations for instance " + instanceId, e);
+                }
             };
 
             String instanceId = result.getReservation().getInstances().get(0)
@@ -1140,6 +1149,9 @@ public class AWSInstanceService extends StatelessService {
 
             Runnable proceed = () -> {
                 try {
+                    // log data to debug VCOM-3274
+                    logInfo("Tagging resources and waiting instance %s to be running", instanceId);
+
                     AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, instanceId);
 
                     AWSTaskStatusChecker
