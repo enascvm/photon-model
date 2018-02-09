@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -74,18 +75,19 @@ public class ResourceUtils {
      * @param currentState The current state of the service
      * @param description The service description
      * @param stateClass Service state class
-     * @param customPatchHandler custom callback handler
+     * @param customPatchSupplier optional custom patch handler
      */
-    public static <T extends ResourceState> void handlePatch(Service service, Operation op, T
+    public static <T extends ResourceState> void handlePatchAsync(Service service, Operation op, T
             currentState, ServiceDocumentDescription description, Class<T> stateClass,
-            Function<Operation, Boolean> customPatchHandler) {
-        try {
-            final Set<String> originalTagLinks = currentState.tagLinks != null
-                    ? new HashSet<>(currentState.tagLinks)
-                    : null;
+            Supplier<DeferredResult<Boolean>> customPatchSupplier) {
+        final Set<String> originalTagLinks = currentState.tagLinks != null
+                ? new HashSet<>(currentState.tagLinks)
+                : null;
+        boolean hasStateChanged = false;
 
+        try {
             T patchBody = op.getBody(stateClass);
-            boolean hasStateChanged = validateComputeHostLinkPatch(patchBody, currentState);
+            hasStateChanged |= validateComputeHostLinkPatch(patchBody, currentState);
 
             // apply standard patch merging
             EnumSet<Utils.MergeResult> mergeResult =
@@ -93,7 +95,6 @@ public class ResourceUtils {
             hasStateChanged |= mergeResult.contains(Utils.MergeResult.STATE_CHANGED);
 
             if (!mergeResult.contains(Utils.MergeResult.SPECIAL_MERGE)) {
-
                 // apply ResourceState-specific merging
                 hasStateChanged |= ResourceUtils.mergeResourceStateWithPatch(currentState,
                         patchBody);
@@ -101,32 +102,48 @@ public class ResourceUtils {
                 // handle NULL_LINK_VALUE links
                 hasStateChanged |= nullifyLinkFields(description, currentState, patchBody);
             }
-
-            // apply custom patch handler, if any
-            if (customPatchHandler != null) {
-                hasStateChanged |= customPatchHandler.apply(op);
-            }
-
-            // populate the "no endpoint" flag based on the provided endpoint links
-            // (enabled for all resources since it will do nothing if the flag is not currently set)
-            hasStateChanged |= updateNoEndpointFlag(currentState, stateClass);
-
-            if (!hasStateChanged) {
-                op.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
-            }
-
-            // populate tags if tag links have changed
-            if (!Objects.equals(originalTagLinks, currentState.tagLinks)) {
-                populateTags(service, currentState).thenAccept(__ -> {
-                    op.setBody(currentState);
-                }).whenCompleteNotify(op);
-            } else {
-                op.setBody(currentState);
-                op.complete();
-            }
         } catch (NoSuchFieldException | IllegalAccessException e) {
             op.fail(e);
+            return;
         }
+
+        // apply custom patch handler, if any
+        Boolean[] stateChangedHolder = new Boolean[] { Boolean.valueOf(hasStateChanged) };
+        DeferredResult.completed(null)
+                .thenCompose(__ -> customPatchSupplier != null
+                        ? customPatchSupplier.get()
+                        : DeferredResult.completed(Boolean.FALSE))
+                .thenAccept(hasChanged -> stateChangedHolder[0] |= hasChanged)
+                .thenAccept(__ ->
+                        // populate the "no endpoint" flag based on the provided endpoint links
+                        // (enabled for all resources since it is no-op if the flag is not set)
+                        stateChangedHolder[0] |= updateNoEndpointFlag(currentState, stateClass))
+                .thenCompose(__ -> !Objects.equals(originalTagLinks, currentState.tagLinks)
+                        ? populateTags(service, currentState)
+                        : DeferredResult.completed(null))
+                .thenAccept(__ -> {
+                    if (!stateChangedHolder[0]) {
+                        op.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_STATE_NOT_MODIFIED);
+                    }
+                    op.setBody(currentState);
+                })
+                .whenCompleteNotify(op);
+    }
+
+    /**
+     * {@code handlePatch} implementation which expects a {@code Function} instead of {@code
+     * DeferredResult} for the custom patch handler. Suitable for synchronous handlers.
+     *
+     * @see #handlePatchAsync(Service, Operation, ResourceState, ServiceDocumentDescription, Class, Supplier)
+     */
+    public static <T extends ResourceState> void handlePatch(Service service, Operation op, T
+            currentState, ServiceDocumentDescription description, Class<T> stateClass,
+            Function<Operation, Boolean> customPatchHandler) {
+        handlePatchAsync(service, op, currentState, description, stateClass, () ->
+                DeferredResult.completed(null)
+                        .thenApply(__ -> customPatchHandler != null
+                                ? customPatchHandler.apply(op)
+                                : Boolean.FALSE));
     }
 
     /**
@@ -146,8 +163,7 @@ public class ResourceUtils {
      * @param patch patch state
      * @return whether the state has changed or not
      */
-    public static boolean mergeResourceStateWithPatch(ResourceState source,
-            ResourceState patch) {
+    public static boolean mergeResourceStateWithPatch(ResourceState source, ResourceState patch) {
         boolean isChanged = false;
 
         // tenantLinks requires special handling so that although it is a list, duplicate items
