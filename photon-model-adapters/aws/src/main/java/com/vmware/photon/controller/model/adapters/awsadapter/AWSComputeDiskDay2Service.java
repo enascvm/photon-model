@@ -61,6 +61,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -383,11 +384,13 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
                     @Override
                     protected void handleError(Exception e) {
+                        OperationContext.restoreOperationContext(this.opContext);
                         dr.fail(e);
                     }
 
                     @Override
                     protected void handleSuccess(StartInstancesRequest request, StartInstancesResult result) {
+                        OperationContext.restoreOperationContext(this.opContext);
                         AWSUtils.waitForTransitionCompletion(getHost(),
                                 result.getStartingInstances(), "running",
                                 client, (is, e) -> {
@@ -419,6 +422,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         private AWSDetachDiskHandler(StatelessService service, DeferredResult<DiskContext> dr,
                 DiskContext context, Boolean performNextInstanceOp) {
+            this.opContext = OperationContext.getOperationContext();
             this.service = service;
             this.dr = dr;
             this.context = context;
@@ -427,13 +431,14 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
+            OperationContext.restoreOperationContext(this.opContext);
             this.dr.fail(exception);
         }
 
         @Override
         protected void handleSuccess(DetachVolumeRequest request, DetachVolumeResult result) {
 
-            //consumer to be invoked once a volume is deleted
+            //consumer to be invoked once a volume is detached
             Consumer<Object> consumer = volume -> {
                 this.service.logInfo(
                         () -> String.format("[AWSComputeDiskDay2Service] Successfully detached "
@@ -443,6 +448,9 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 if (this.performNextInstanceOp) {
                     //Instance will be started only if the disk is succesfully detached from the instance
                     startInstance(this.context.amazonEC2Client, this.context, this.dr);
+                } else {
+                    OperationContext.restoreOperationContext(this.opContext);
+                    updateComputeAndDiskState(this.dr, this.context);
                 }
             };
 
@@ -474,17 +482,20 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         private DiskContext context;
 
         private AWSAttachDiskHandler(DeferredResult<DiskContext> dr, DiskContext context) {
+            this.opContext = OperationContext.getOperationContext();
             this.dr = dr;
             this.context = context;
         }
 
         @Override
         protected void handleError(Exception exception) {
+            OperationContext.restoreOperationContext(this.opContext);
             failTask(this.context, exception);
         }
 
         @Override
         protected void handleSuccess(AttachVolumeRequest request, AttachVolumeResult result) {
+            OperationContext.restoreOperationContext(this.opContext);
             updateComputeAndDiskState(this.dr, this.context);
         }
     }
@@ -510,8 +521,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                         return;
                     }
                     this.logInfo(() -> String
-                            .format("[AWSComputeDiskDay2Service] Updating ComputeState %s and "
-                                            + "DiskState %s : SUCCESS", context.diskState.id,
+                            .format("[AWSComputeDiskDay2Service] Updating DiskState %s and "
+                                            + "ComputeState %s : SUCCESS", context.diskState.id,
                                     context.computeState.id));
                     dr.complete(context);
                 });
