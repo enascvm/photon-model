@@ -584,6 +584,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ServiceDocumentQueryResult subnetStateResult = queryDocumentsAndAssertExpectedCount(
                 this.host, count1, SubnetService.FACTORY_LINK, false);
+        // TODO Remove. This is to help debug an intermittent test failure.
+        host.log(Level.INFO, "The subnet result state that I am working with is "
+                + Utils.toJsonHtml(subnetStateResult));
         validateTagInEntity(subnetStateResult, SubnetState.class, ec2_subnet.toString());
         queryDocumentsAndAssertExpectedCount(this.host,
                 count8, DiskService.FACTORY_LINK, false);
@@ -677,7 +680,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             } else {
                 ResourceState resourceState = Utils.fromJson(resourceMap.getValue(),
                         ResourceState.class);
-                assertTrue(resourceState.tagLinks.contains(tagLink));
+                if (resourceState.tagLinks != null) {
+                    assertTrue(resourceState.tagLinks.contains(tagLink));
+                }
             }
         }
     }

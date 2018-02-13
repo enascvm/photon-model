@@ -41,6 +41,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -68,6 +69,7 @@ import com.amazonaws.services.ec2.model.CreateSnapshotRequest;
 import com.amazonaws.services.ec2.model.CreateSnapshotResult;
 import com.amazonaws.services.ec2.model.CreateSubnetRequest;
 import com.amazonaws.services.ec2.model.CreateSubnetResult;
+import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
 import com.amazonaws.services.ec2.model.CreateVpcRequest;
@@ -104,6 +106,7 @@ import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Snapshot;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
+import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 import com.amazonaws.services.ec2.model.Volume;
@@ -196,6 +199,7 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 public class TestAWSSetupUtils {
 
+    private static final String AVAILABILITY_ZONE_FILTER = "availabilityZone";
     public static final String awsEndpointReference = "http://ec2.us-east-1.amazonaws.com";
     public static String imageId = "ami-0d4cfd66";
     public static String securityGroup = "aws-security-group";
@@ -242,6 +246,7 @@ public class TestAWSSetupUtils {
     public static final String INTERNET_GATEWAY_KEY = "internet-gateway";
     public static final String NIC_SPECS_KEY = "nicSpecs";
     public static final String SECURITY_GROUP_KEY = "security-group";
+    public static final String DELETE_RESOURCES_KEY = "delete-resources";
 
     public static final String SNAPSHOT_KEY = "snapshot-id";
     public static final String DISK_KEY = "disk-id";
@@ -255,6 +260,18 @@ public class TestAWSSetupUtils {
 
     public static final String AWS_INSTANCE_ID_PREFIX = "i-";
     public static final String AWS_VOLUME_ID_PREFIX = "vol-";
+
+    private static final String TAG_KEY_FOR_TEST_RESOURCES = "Name";
+    private static final String TAG_VALUE_FOR_TEST_RESOURCES = "enumtest-";
+    private static final String TAG_VPC = "vpc";
+    private static final String TAG_SUBNET = "subnet";
+    private static final String TAG_SG = "sg";
+    private static final String TAG_IGW = "igw";
+    private static final String TAG_VOLUME = "volume";
+    private static final String TAG_NIC = "nic";
+    private static final String TAG_INSTANCE = "instance";
+    private static final String TAG_SNAPSHOT = "snapshot";
+
     /**
      * Return two-NIC spec where first NIC should be assigned to 'secondary' subnet and second NIC
      * should be assigned to a randomly generated subnet that should be created.
@@ -467,23 +484,17 @@ public class TestAWSSetupUtils {
     }
 
     public static void setUpTestVpc(AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock, String zoneId) {
-        awsTestContext.put(VPC_KEY, AWS_DEFAULT_VPC_ID);
-        awsTestContext.put(NIC_SPECS_KEY, SINGLE_NIC_SPEC);
-        awsTestContext.put(SUBNET_KEY, AWS_DEFAULT_SUBNET_ID);
-        awsTestContext.put(SECURITY_GROUP_KEY, AWS_DEFAULT_GROUP_ID);
 
-        // create new VPC, Subnet, InternetGateway if the default VPC doesn't exist
+        // If the pre-set VPC does not exist, get the test VPC for the given account and use it in the tests.
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
-            String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
+            String vpcId = createorGetVPCForAccount(client);
             awsTestContext.put(VPC_KEY, vpcId);
             String subnetId = createOrGetSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId, zoneId);
             awsTestContext.put(SUBNET_KEY, subnetId);
-
-            String internetGatewayId = createInternetGateway(client);
+            String internetGatewayId = createOrGetInternetGatewayForGivenVPC(client, vpcId);
             awsTestContext.put(INTERNET_GATEWAY_KEY, internetGatewayId);
-            attachInternetGateway(client, vpcId, internetGatewayId);
-            awsTestContext.put(SECURITY_GROUP_KEY, new AWSSecurityGroupClient(client)
-                    .createDefaultSecurityGroup(vpcId));
+            String securityGroupId = createOrGetDefaultSecurityGroupForGivenVPC(client, vpcId);
+            awsTestContext.put(SECURITY_GROUP_KEY, securityGroupId);
 
             NetSpec network = new NetSpec(vpcId, vpcId, AWS_DEFAULT_VPC_CIDR);
 
@@ -492,20 +503,33 @@ public class TestAWSSetupUtils {
             subnets.add(new NetSpec(subnetId,
                     AWS_DEFAULT_SUBNET_NAME,
                     AWS_DEFAULT_SUBNET_CIDR,
-                    zoneId == null ? TestAWSSetupUtils.zoneId + avalabilityZoneIdentifier : zoneId));
+                    zoneId == null ? TestAWSSetupUtils.zoneId + avalabilityZoneIdentifier
+                            : zoneId));
 
             NicSpec nicSpec = NicSpec.create()
                     .withSubnetSpec(subnets.get(0))
                     .withDynamicIpAssignment();
 
-            awsTestContext.put(NIC_SPECS_KEY, new AwsNicSpecs(network, Collections.singletonList(nicSpec)));
+            awsTestContext.put(NIC_SPECS_KEY,
+                    new AwsNicSpecs(network, Collections.singletonList(nicSpec)));
+            return;
+
         }
+        awsTestContext.put(VPC_KEY, AWS_DEFAULT_VPC_ID);
+        awsTestContext.put(NIC_SPECS_KEY, SINGLE_NIC_SPEC);
+        awsTestContext.put(SUBNET_KEY, AWS_DEFAULT_SUBNET_ID);
+        awsTestContext.put(SECURITY_GROUP_KEY, AWS_DEFAULT_GROUP_ID);
+
     }
 
     public static void tearDownTestVpc(
             AmazonEC2AsyncClient client, VerificationHost host,
             Map<String, Object> awsTestContext, boolean isMock) {
-        if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
+        //As per current flow this block will not delete the enumtest-vpc and
+        //related entities. This is to allow for reuse in subsequent runs of
+        //the test without resorting to hard coded VPC values.This flow can be edited
+        //if we feel the need to delete resources on every test run.
+        if (!isMock && awsTestContext.containsKey(DELETE_RESOURCES_KEY)) {
             final String vpcId = (String) awsTestContext.get(VPC_KEY);
             final String subnetId = (String) awsTestContext.get(SUBNET_KEY);
             final String internetGatewayId = (String) awsTestContext.get(INTERNET_GATEWAY_KEY);
@@ -544,10 +568,25 @@ public class TestAWSSetupUtils {
     }
 
     /**
+     * Tags resources with a given tag key and value.
+     */
+    public static void tagResources(AmazonEC2Client client, List<String> resourceIds,
+            String key, String value) {
+        Tag tag = new Tag(key, value);
+        CreateTagsRequest tagsRequest = new CreateTagsRequest(resourceIds, Arrays.asList(tag));
+        client.createTags(tagsRequest);
+    }
+
+    /**
      * Creates a VPC and returns the VPC id.
      */
     public static String createVPC(AmazonEC2AsyncClient client, String subnetCidr) {
-        return client.createVpc(new CreateVpcRequest().withCidrBlock(subnetCidr)).getVpc().getVpcId();
+        String vpcID = client.createVpc(new CreateVpcRequest().withCidrBlock(subnetCidr)).getVpc()
+                .getVpcId();
+        tagResources(client, Arrays.asList(vpcID), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_VPC);
+        return vpcID;
+
     }
 
     /**
@@ -567,6 +606,64 @@ public class TestAWSSetupUtils {
                 .filter(vpc -> vpc.getVpcId().equals(vpcId))
                 .collect(Collectors.toList());
         return vpcs != null && !vpcs.isEmpty();
+    }
+
+    /**
+     * Gets the test VPC for the AWS account
+     */
+    public static String createorGetVPCForAccount(AmazonEC2AsyncClient client) {
+        List<Vpc> vpcs = client.describeVpcs().getVpcs();
+        List<String> enumTestVpcIds = new ArrayList<String>();
+        vpcs.stream().forEach(vpc -> {
+            vpc.getTags().stream()
+                    .filter(tag -> tag.getKey().equalsIgnoreCase(TAG_KEY_FOR_TEST_RESOURCES)
+                            && tag.getValue()
+                                    .equalsIgnoreCase(TAG_VALUE_FOR_TEST_RESOURCES + TAG_VPC))
+                    .forEach(tag -> enumTestVpcIds.add(vpc.getVpcId()));
+        });
+        if (enumTestVpcIds != null && !enumTestVpcIds.isEmpty()) {
+            return enumTestVpcIds.get(0);
+        }
+        String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
+        return vpcId;
+    }
+
+    /**
+     *  Returns an existing internet gateway for a VPC if it exists otherwise creates a new internet gateway.
+     */
+    public static String createOrGetInternetGatewayForGivenVPC(AmazonEC2AsyncClient client,
+            String vpcID) {
+        List<String> internetGatewayIds = new ArrayList<String>();
+        client.describeInternetGateways()
+                .getInternetGateways().stream().forEach(igw -> igw.getAttachments().stream()
+                        .filter(attachment -> attachment.getVpcId().equalsIgnoreCase(vpcID))
+                        .forEach(attachment -> internetGatewayIds.add(igw.getInternetGatewayId())));
+        if (!internetGatewayIds.isEmpty()) {
+            return internetGatewayIds.get(0);
+        }
+        String internetGatewayId = createInternetGateway(client);
+        attachInternetGateway(client, vpcID, internetGatewayId);
+        return internetGatewayId;
+    }
+
+    /**
+     * Returns an existing security group for a VPC if it exists otherwise creates a new security group.
+     */
+    public static String createOrGetDefaultSecurityGroupForGivenVPC(AmazonEC2AsyncClient client,
+            String vpcID) {
+        List<SecurityGroup> securityGroupsInVPC = client.describeSecurityGroups()
+                .getSecurityGroups()
+                .stream()
+                .filter(sg -> sg.getVpcId().equals(vpcID))
+                .collect(Collectors.toList());
+        if (securityGroupsInVPC != null && !securityGroupsInVPC.isEmpty()) {
+            return securityGroupsInVPC.get(0).getGroupId();
+        }
+        String securityGroupId = new AWSSecurityGroupClient(client)
+                .createDefaultSecurityGroup(vpcID);
+        tagResources(client, Arrays.asList(securityGroupId), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_SG);
+        return securityGroupId;
     }
 
     /**
@@ -599,14 +696,14 @@ public class TestAWSSetupUtils {
     public static String createOrGetSubnet(AmazonEC2AsyncClient client, String subnetCidr,
             String vpcId, String zoneId) {
         List<Filter> filters = new ArrayList<>();
-        Filter cidrBlockFilter = new Filter();
-        cidrBlockFilter.withName("cidrBlock");
-        cidrBlockFilter.withValues(subnetCidr);
-        filters.add(cidrBlockFilter);
+        Filter vpcFilter = new Filter();
+        vpcFilter.withName(VPC_KEY);
+        vpcFilter.withValues(vpcId);
+        filters.add(vpcFilter);
 
         if (zoneId != null) {
             Filter azFilter = new Filter();
-            azFilter.withName("availabilityZone");
+            azFilter.withName(AVAILABILITY_ZONE_FILTER);
             azFilter.withValues(zoneId);
             filters.add(azFilter);
         }
@@ -623,7 +720,10 @@ public class TestAWSSetupUtils {
                 req.withAvailabilityZone(zoneId);
             }
             CreateSubnetResult res = client.createSubnet(req);
-            return res.getSubnet().getSubnetId();
+            String subnetId = res.getSubnet().getSubnetId();
+            tagResources(client, Arrays.asList(subnetId), TAG_KEY_FOR_TEST_RESOURCES,
+                    TAG_VALUE_FOR_TEST_RESOURCES + TAG_SUBNET);
+            return subnetId;
         }
     }
 
@@ -650,6 +750,8 @@ public class TestAWSSetupUtils {
             }
             return false;
         });
+        tagResources(client, Arrays.asList(volumeId), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_VOLUME);
         return volumeId;
     }
 
@@ -674,6 +776,8 @@ public class TestAWSSetupUtils {
             }
             return false;
         });
+        tagResources(client, Arrays.asList(snapshotId), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_SNAPSHOT);
         return snapshotId;
     }
 
@@ -704,7 +808,12 @@ public class TestAWSSetupUtils {
      * Creates an Internet Gateway and return the Internet Gateway id.
      */
     public static String createInternetGateway(AmazonEC2AsyncClient client) {
-        return client.createInternetGateway().getInternetGateway().getInternetGatewayId();
+        String internetGatewayId = client.createInternetGateway().getInternetGateway()
+                .getInternetGatewayId();
+        tagResources(client, Arrays.asList(internetGatewayId), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_IGW);
+        return internetGatewayId;
+
     }
 
     /**
@@ -1576,7 +1685,8 @@ public class TestAWSSetupUtils {
             return checkInstanceIdsReturnedFromAWS(numberOfInstance, creationHandler.instanceIds);
 
         });
-
+        tagResources(client, creationHandler.instanceIds, TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_INSTANCE);
         return creationHandler.instanceIds;
     }
 
@@ -1590,8 +1700,12 @@ public class TestAWSSetupUtils {
                 .withSubnetId(subnetId);
         CreateNetworkInterfaceResult createNewNicResult = client
                 .createNetworkInterface(createNewNic);
+        String networkInterfaceID = createNewNicResult.getNetworkInterface()
+                .getNetworkInterfaceId();
+        tagResources(client, Arrays.asList(networkInterfaceID), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_NIC);
+        return networkInterfaceID;
 
-        return createNewNicResult.getNetworkInterface().getNetworkInterfaceId();
     }
 
     /**
@@ -1715,7 +1829,11 @@ public class TestAWSSetupUtils {
         assertNotNull(result.getReservation().getInstances());
         assertEquals(1, result.getReservation().getInstances().size());
 
-        return result.getReservation().getInstances().get(0).getInstanceId();
+        String instanceId = result.getReservation().getInstances().get(0).getInstanceId();
+        tagResources(client, Arrays.asList(instanceId), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_INSTANCE);
+        return instanceId;
+
     }
 
     public static String provisionAWSEBSVMWithEC2Client(VerificationHost host, AmazonEC2Client client,
@@ -1742,7 +1860,10 @@ public class TestAWSSetupUtils {
         assertNotNull(result.getReservation().getInstances());
         assertEquals(1, result.getReservation().getInstances().size());
 
-        return result.getReservation().getInstances().get(0).getInstanceId();
+        String instanceId = result.getReservation().getInstances().get(0).getInstanceId();
+        tagResources(client, Arrays.asList(instanceId), TAG_KEY_FOR_TEST_RESOURCES,
+                TAG_VALUE_FOR_TEST_RESOURCES + TAG_INSTANCE);
+        return instanceId;
     }
 
     public static String provisionAWSLoadBalancerWithEC2Client(VerificationHost host,
@@ -1777,7 +1898,6 @@ public class TestAWSSetupUtils {
         if (instanceIds != null) {
             registerAWSInstancesToLoadBalancer(host, client, name, instanceIds);
         }
-
         return name;
     }
 
