@@ -47,6 +47,7 @@ import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -648,7 +649,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     } else {
                         ctx.getVmTracker().register();
                         vmOverlayList.add(vm);
-                        processFoundVm(ctx, vm);
+                        processFoundVm(ctx, vm, hosts);
                     }
                 }
                 ctx.getVmTracker().arriveAndAwaitAdvance();
@@ -1858,36 +1859,56 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param enumerationProgress
      * @param vm
      */
-    private void processFoundVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
+    private void processFoundVm(EnumerationProgress enumerationProgress, VmOverlay vm,
+            List<HostSystemOverlay> hosts) {
         long latestAcceptableModification = System.currentTimeMillis()
                 - VM_FERMENTATION_PERIOD_MILLIS;
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), vm.getInstanceUuid());
+
+        Predicate<HostSystemOverlay> predicate = c-> c.getId().getValue().equals(vm
+                .getHost().getValue());
+        HostSystemOverlay hostSystem = hosts.stream().filter(predicate).findFirst().orElse(null);
+
         withTaskResults(task, result -> {
             String vmSelfLink = null;
+            ManagedObjectReference hostOrClusterMoRef = hostSystem != null ? hostSystem.getParent
+                    () : null;
+
+            // If it is standalone host, the value to be passed should be it self
+            if (hostOrClusterMoRef != null && hostOrClusterMoRef.getType().equals(VimNames
+                    .TYPE_COMPUTE_RESOURCE)) {
+                hostOrClusterMoRef = hostSystem.getId();
+            }
+
             if (result.documentLinks.isEmpty()) {
                 if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
                     // If vm is not settled down don't create a new resource
-                    createNewVm(enumerationProgress, vm);
+                    createNewVm(enumerationProgress, vm, hostOrClusterMoRef);
                 } else {
                     enumerationProgress.getVmTracker().arrive();
                 }
             } else {
                 // always update state of a vm even if modified recently
                 ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                updateVm(oldDocument, enumerationProgress, vm);
+                updateVm(oldDocument, enumerationProgress, vm, hostOrClusterMoRef);
                 vmSelfLink = oldDocument.documentSelfLink;
             }
         });
     }
 
     private void updateVm(ComputeState oldDocument, EnumerationProgress enumerationProgress,
-            VmOverlay vm) {
+            VmOverlay vm, ManagedObjectReference hostSystemParent) {
         ComputeState state = makeVmFromResults(enumerationProgress, vm);
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
         state.lifecycleState = LifecycleState.READY;
         state.networkInterfaceLinks = oldDocument.networkInterfaceLinks;
+
+        if (hostSystemParent != null) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.CLUSTER_REF, hostSystemParent.getValue());
+        }
 
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationProgress.getTenantLinks();
@@ -2058,7 +2079,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return operation;
     }
 
-    private <T> void createNewVm(EnumerationProgress enumerationProgress, VmOverlay vm) {
+    private <T> void createNewVm(EnumerationProgress enumerationProgress, VmOverlay vm,
+            ManagedObjectReference hostSystemParent) {
         ComputeDescription desc = makeDescriptionForVm(enumerationProgress, vm);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
@@ -2069,6 +2091,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = makeVmFromResults(enumerationProgress, vm);
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = enumerationProgress.getTenantLinks();
+
+        if (hostSystemParent != null) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.CLUSTER_REF, hostSystemParent.getValue());
+        }
 
         List<Operation> operations = new ArrayList<>();
 

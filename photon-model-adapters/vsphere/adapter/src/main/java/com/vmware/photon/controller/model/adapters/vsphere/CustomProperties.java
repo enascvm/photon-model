@@ -62,6 +62,11 @@ public class CustomProperties {
     public static final String CLUSTER_LINK = "__clusterLink";
 
     /**
+     * Reference to the cluster host of the compute.
+     */
+    public static final String CLUSTER_REF = "__clusterRef";
+
+    /**
      * Stores the VIM type of the vSphere entity.
      */
     public static final String TYPE = "__computeType";

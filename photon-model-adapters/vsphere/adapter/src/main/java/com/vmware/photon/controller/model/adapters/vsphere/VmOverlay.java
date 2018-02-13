@@ -104,6 +104,10 @@ public class VmOverlay extends AbstractOverlay {
         return (String) getOrFail(VimPath.vm_config_name);
     }
 
+    public ManagedObjectReference getResourcePool() {
+        return (ManagedObjectReference) getOrFail(VimPath.res_resourcePool);
+    }
+
     public String getDatastoreMorefsAsString() {
         ArrayOfManagedObjectReference morefs = (ArrayOfManagedObjectReference) getOrDefault(
                 VimPath.vm_datastore, null);
