@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,9 +23,39 @@ import java.util.logging.Level;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2;
+import com.amazonaws.services.ec2.model.DeleteInternetGatewayRequest;
+import com.amazonaws.services.ec2.model.DeleteNatGatewayRequest;
+import com.amazonaws.services.ec2.model.DeleteNetworkAclRequest;
+import com.amazonaws.services.ec2.model.DeleteNetworkInterfaceRequest;
+import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
+import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
+import com.amazonaws.services.ec2.model.DeleteVpcRequest;
+import com.amazonaws.services.ec2.model.DeleteVpnGatewayRequest;
+import com.amazonaws.services.ec2.model.DescribeAddressesRequest;
+import com.amazonaws.services.ec2.model.DescribeAddressesResult;
+import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
+import com.amazonaws.services.ec2.model.DescribeInternetGatewaysRequest;
+import com.amazonaws.services.ec2.model.DescribeInternetGatewaysResult;
+import com.amazonaws.services.ec2.model.DescribeNatGatewaysRequest;
+import com.amazonaws.services.ec2.model.DescribeNatGatewaysResult;
+import com.amazonaws.services.ec2.model.DescribeNetworkAclsRequest;
+import com.amazonaws.services.ec2.model.DescribeNetworkAclsResult;
+import com.amazonaws.services.ec2.model.DescribeNetworkInterfacesRequest;
+import com.amazonaws.services.ec2.model.DescribeNetworkInterfacesResult;
+import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
+import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
+import com.amazonaws.services.ec2.model.DescribeSubnetsRequest;
+import com.amazonaws.services.ec2.model.DescribeSubnetsResult;
 import com.amazonaws.services.ec2.model.DescribeVpcsResult;
+import com.amazonaws.services.ec2.model.DescribeVpnGatewaysRequest;
+import com.amazonaws.services.ec2.model.DescribeVpnGatewaysResult;
+import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest;
+import com.amazonaws.services.ec2.model.DetachVpnGatewayRequest;
+import com.amazonaws.services.ec2.model.DisassociateAddressRequest;
+import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.ReleaseAddressRequest;
 import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
@@ -46,6 +77,20 @@ public class AWSRemoteCleanup extends BasicTestCase {
     public boolean isMock = true;
     public Map<String, AmazonS3Client> s3Clients = new HashMap<>();
     public Map<String, AmazonEC2> ec2Clients = new HashMap<>();
+    public List<String> vpcTagsNotToBeDeleted = new ArrayList<>();
+
+    public static final String US_EAST_1_TAG = "us-east-1";
+    public static final String NAME_TAG_KEY = "name";
+    public static final String ENUMTEST_VPC_TAG = "enumtest-vpc";
+    public static final String DEFAULT_TAG = "default";
+    public static final String DO_NOT_DELETE_TAG = "DoNotDelete";
+
+    public static final String VPC_KEY = "vpc-id";
+    public static final String ATTACHMENT_VPC_KEY = "attachment.vpc-id";
+    public static final String NETWORK_INTERFACE_KEY = "network-interface-id";
+
+    public static final String ENUMTEST_BUCKET = "enumtest-bucket";
+    public static final String ENUMTEST_BUCKET_TAG  = "enumtest-bucket-do-not-delete";
 
     @Before
     public void setUp() {
@@ -55,6 +100,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
         AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
+
+        this.vpcTagsNotToBeDeleted.add(ENUMTEST_VPC_TAG);
 
         for (Regions region : Regions.values()) {
             try {
@@ -68,71 +115,6 @@ public class AWSRemoteCleanup extends BasicTestCase {
             try {
                 this.ec2Clients.put(region.getName(), TestUtils.getEC2SynchronousClient(creds, region.getName()));
             } catch (Exception e) {
-                continue;
-            }
-        }
-    }
-
-    @Test
-    public void cleanUpAWSEC2() {
-        if (this.isMock) {
-            return;
-        }
-
-        for (AmazonEC2 ec2Client : this.ec2Clients.values()) {
-            try {
-                DescribeVpcsResult describeVpcsRequest = ec2Client.describeVpcs();
-
-                List<Vpc> vpcs = describeVpcsRequest.getVpcs();
-                List<String> enumTestVpcIds = new ArrayList<>();
-                List<String> instanceIdsToBeDeleted = new ArrayList<>();
-
-                vpcs.stream()
-                        .forEach(vpc -> {
-                            vpc.getTags().stream()
-                                    .forEach(tag -> {
-                                        if (tag.getKey().equalsIgnoreCase("name")
-                                                && tag.getValue()
-                                                .equalsIgnoreCase("enumtest-vpc")) {
-                                            enumTestVpcIds.add(vpc.getVpcId());
-                                        }
-                                    });
-                        });
-
-                DescribeInstancesResult describeInstancesResult = ec2Client.describeInstances();
-
-                List<Reservation> reservations = describeInstancesResult.getReservations();
-                for (Reservation reservation : reservations) {
-                    List<Instance> instances = reservation.getInstances();
-                    for (Instance instance : instances) {
-                        long instanceLaunchTimeMicros = TimeUnit.MILLISECONDS
-                                .toMicros(instance.getLaunchTime().getTime());
-                        long timeDifference = Utils.getNowMicrosUtc() - instanceLaunchTimeMicros;
-
-                        if (timeDifference > TimeUnit.HOURS.toMicros(1)
-                                && enumTestVpcIds.contains(instance.getVpcId())
-                                && shouldDelete(instance)) {
-                            instanceIdsToBeDeleted.add(instance.getInstanceId());
-                        }
-                    }
-                }
-
-                if (instanceIdsToBeDeleted.isEmpty()) {
-                    continue;
-                }
-
-                TerminateInstancesRequest terminateInstancesRequest = new
-                        TerminateInstancesRequest(instanceIdsToBeDeleted);
-                TerminateInstancesResult terminateInstancesResult = ec2Client
-                        .terminateInstances(terminateInstancesRequest);
-
-                terminateInstancesResult.getTerminatingInstances().stream()
-                        .forEach(instanceStateChange -> {
-                            this.host.log("Terminating stale instance: %s",
-                                    instanceStateChange.getInstanceId());
-                        });
-            } catch (Exception e) {
-                this.host.log(Level.INFO, e.getMessage());
                 continue;
             }
         }
@@ -153,9 +135,9 @@ public class AWSRemoteCleanup extends BasicTestCase {
 
             long timeDifference = Utils.getNowMicrosUtc() - bucketCreationTimeMicros;
 
-            if (bucket.getName().contains("enumtest-bucket")
+            if (bucket.getName().contains(ENUMTEST_BUCKET)
                     && timeDifference > TimeUnit.HOURS.toMicros(1)
-                    && !bucket.getName().contains("enumtest-bucket-do-not-delete")) {
+                    && !bucket.getName().contains(ENUMTEST_BUCKET_TAG)) {
                 for (AmazonS3Client s3Client : this.s3Clients.values()) {
                     try {
                         s3Client.deleteBucket(bucket.getName());
@@ -168,13 +150,212 @@ public class AWSRemoteCleanup extends BasicTestCase {
         }
     }
 
+    /**
+     * Cleaning all VPC's that are not tagged with a name: enumtest-vpc or a default VPC in US_EAST_1 region
+     * Deleting a VPC would require its dependencies to be deleted in the following order:
+     * 1) EC2 Instances
+     * 2) NAT Gateway
+     * 3) Internet Gateway
+     * 4) VPN Gateway
+     * 5) Network ACL's
+     * 6) Security Group ( not deleting default SG)
+     * 7) Subnets
+     * NOTE: Not deleting RouteTables currently
+     */
+
+    @Test
+    public void cleanUpVpc() {
+        if (this.isMock) {
+            return;
+        }
+
+        AmazonEC2 usEastEc2Client = this.ec2Clients.get(US_EAST_1_TAG);
+        DescribeVpcsResult vpcsResult = usEastEc2Client.describeVpcs();
+        List<Vpc> vpcs = vpcsResult.getVpcs();
+        List<String> vpcIdsToBeDeleted = new ArrayList<>();
+        List<String> enumTestVpcIds = new ArrayList<>();
+
+        try {
+            vpcs.stream()
+                    .forEach(vpc -> {
+                        vpc.getTags().stream()
+                                .filter(tag -> tag.getKey().equalsIgnoreCase(NAME_TAG_KEY)
+                                        && this.vpcTagsNotToBeDeleted.contains(tag.getValue().toLowerCase()))
+                                .forEach(tag -> enumTestVpcIds.add(vpc.getVpcId()));
+                        if (!vpc.getIsDefault()) {
+                            vpcIdsToBeDeleted.add(vpc.getVpcId());
+                        }
+                    });
+            vpcIdsToBeDeleted.removeAll(enumTestVpcIds);
+
+            vpcIdsToBeDeleted.stream()
+                    .forEach(vpcId -> {
+                        DescribeInstancesRequest instancesRequest = new DescribeInstancesRequest()
+                                .withFilters(new Filter(VPC_KEY, Collections.singletonList(vpcId)));
+                        DescribeInstancesResult instancesResult = usEastEc2Client.describeInstances(instancesRequest);
+                        deleteAwsEc2instances(vpcIdsToBeDeleted, instancesResult, usEastEc2Client);
+                        deleteNATGateway(vpcId, usEastEc2Client);
+                        deleteNetworkInterfaces(vpcId, usEastEc2Client);
+                        deleteInternetGateways(vpcId, usEastEc2Client);
+                        deleteVirtualPrivateGateways(vpcId, usEastEc2Client);
+                        disassociateAndDeleteNetworkACLs(vpcId, usEastEc2Client);
+                        deleteSecurityGroups(vpcId, usEastEc2Client);
+                        deleteSubnets(vpcId, usEastEc2Client);
+                        DeleteVpcRequest deleteVpcRequest = new DeleteVpcRequest()
+                                .withVpcId(vpcId);
+                        usEastEc2Client.deleteVpc(deleteVpcRequest);
+                    });
+        } catch (Exception e) {
+            this.host.log(Level.INFO, e.getMessage());
+        }
+    }
+
+    private void deleteAwsEc2instances(List<String> vpcIdsToBeDeleted, DescribeInstancesResult describeInstancesResult, AmazonEC2 ec2Client) {
+        List<String> instanceIdsToBeDeleted = new ArrayList<>();
+        List<Reservation> reservations = describeInstancesResult.getReservations();
+        for (Reservation reservation : reservations) {
+            List<Instance> instances = reservation.getInstances();
+            for (Instance instance : instances) {
+                long instanceLaunchTimeMicros = TimeUnit.MILLISECONDS
+                        .toMicros(instance.getLaunchTime().getTime());
+                long timeDifference = Utils.getNowMicrosUtc() - instanceLaunchTimeMicros;
+
+                if (timeDifference > TimeUnit.HOURS.toMicros(1)
+                        && vpcIdsToBeDeleted.contains(instance.getVpcId())
+                        && shouldDelete(instance)) {
+                    instanceIdsToBeDeleted.add(instance.getInstanceId());
+                }
+            }
+        }
+
+        if (instanceIdsToBeDeleted.isEmpty()) {
+            return;
+        }
+
+        TerminateInstancesRequest terminateInstancesRequest = new
+                TerminateInstancesRequest(instanceIdsToBeDeleted);
+        TerminateInstancesResult terminateInstancesResult = ec2Client
+                .terminateInstances(terminateInstancesRequest);
+
+        terminateInstancesResult.getTerminatingInstances().stream()
+                .forEach(instanceStateChange -> {
+                    this.host.log("Terminating stale instance: %s",
+                            instanceStateChange.getInstanceId());
+                });
+    }
+
     private static boolean shouldDelete(Instance instance) {
         for (Tag tag : instance.getTags()) {
-            if (tag.getKey().equalsIgnoreCase("name")
-                    && tag.getValue().equalsIgnoreCase("DoNotDelete")) {
+            if (tag.getKey().equalsIgnoreCase(NAME_TAG_KEY)
+                    && tag.getValue().equalsIgnoreCase(DO_NOT_DELETE_TAG)) {
                 return false;
             }
         }
         return true;
     }
+
+
+    private void disassociateAndDeleteNetworkACLs(String vpcId, AmazonEC2 usEastEc2Client) {
+        DescribeNetworkAclsRequest networkAclsRequest = new DescribeNetworkAclsRequest()
+                .withFilters(new Filter(VPC_KEY, Collections.singletonList(vpcId)));
+        DescribeNetworkAclsResult networkAclsResult = usEastEc2Client.describeNetworkAcls(networkAclsRequest);
+        networkAclsResult.getNetworkAcls().stream()
+                .filter(networkAcl -> !(networkAcl.getIsDefault()))
+                .forEach(networkAcl -> {
+                    DeleteNetworkAclRequest deleteNetworkAclRequest = new DeleteNetworkAclRequest()
+                            .withNetworkAclId(networkAcl.getNetworkAclId());
+                    usEastEc2Client.deleteNetworkAcl(deleteNetworkAclRequest);
+                });
+    }
+
+    private void deleteNetworkInterfaces(String vpcId, AmazonEC2 usEastEc2Client) {
+        DescribeNetworkInterfacesRequest networkInterfacesRequest = new DescribeNetworkInterfacesRequest()
+                .withFilters(new Filter(VPC_KEY,Collections.singletonList(vpcId)));
+        DescribeNetworkInterfacesResult networkInterfacesResult = usEastEc2Client.describeNetworkInterfaces(networkInterfacesRequest);
+        networkInterfacesResult.getNetworkInterfaces().forEach(networkInterface -> {
+            DescribeAddressesRequest addressesRequest = new DescribeAddressesRequest()
+                    .withFilters(new Filter(NETWORK_INTERFACE_KEY, Collections.singletonList(networkInterface.getNetworkInterfaceId())));
+            DescribeAddressesResult addressResult =  usEastEc2Client.describeAddresses(addressesRequest);
+            addressResult.getAddresses().forEach(address -> {
+                // There is no hardcore dependency on EIP, but we may run out of addresses and
+                // would be good to disassociate followed by releasing them.
+                DisassociateAddressRequest disassociateAddressRequest = new DisassociateAddressRequest()
+                        .withAssociationId(address.getAssociationId());
+                usEastEc2Client.disassociateAddress(disassociateAddressRequest);
+                ReleaseAddressRequest releaseAddressRequest = new ReleaseAddressRequest()
+                        .withAllocationId(address.getAllocationId());
+                usEastEc2Client.releaseAddress(releaseAddressRequest);
+            });
+            // Deleting Network Interfaces
+            DeleteNetworkInterfaceRequest deleteNetworkInterfaceRequest = new DeleteNetworkInterfaceRequest()
+                    .withNetworkInterfaceId(networkInterface.getNetworkInterfaceId());
+            usEastEc2Client.deleteNetworkInterface(deleteNetworkInterfaceRequest);
+        } );
+    }
+
+    private void deleteInternetGateways(String vpcId, AmazonEC2 usEastEc2Client) {
+        DescribeInternetGatewaysRequest internetGatewaysRequest = new DescribeInternetGatewaysRequest()
+                .withFilters(new Filter(ATTACHMENT_VPC_KEY, Collections.singletonList(vpcId)));
+        DescribeInternetGatewaysResult internetGatewaysResult = usEastEc2Client.describeInternetGateways(internetGatewaysRequest);
+        internetGatewaysResult.getInternetGateways().forEach(internetGateway -> {
+            DetachInternetGatewayRequest detachInternetGatewayRequest = new DetachInternetGatewayRequest()
+                    .withInternetGatewayId(internetGateway.getInternetGatewayId());
+            detachInternetGatewayRequest.setVpcId(vpcId);
+            usEastEc2Client.detachInternetGateway(detachInternetGatewayRequest);
+            DeleteInternetGatewayRequest deleteInternetGatewayRequest = new DeleteInternetGatewayRequest()
+                    .withInternetGatewayId(internetGateway.getInternetGatewayId());
+            usEastEc2Client.deleteInternetGateway(deleteInternetGatewayRequest);
+        });
+    }
+
+    private void deleteVirtualPrivateGateways(String vpcId, AmazonEC2 usEastEc2Client) {
+        DescribeVpnGatewaysRequest vpnGatewaysRequest = new DescribeVpnGatewaysRequest()
+                .withFilters(new Filter(ATTACHMENT_VPC_KEY, Collections.singletonList(vpcId)));
+        DescribeVpnGatewaysResult vpnGatewaysResult = usEastEc2Client.describeVpnGateways(vpnGatewaysRequest);
+        vpnGatewaysResult.getVpnGateways().forEach(vpnGateway -> {
+            DetachVpnGatewayRequest detachVpnGatewayRequest = new DetachVpnGatewayRequest()
+                    .withVpnGatewayId(vpnGateway.getVpnGatewayId());
+            detachVpnGatewayRequest.setVpcId(vpcId);
+            usEastEc2Client.detachVpnGateway(detachVpnGatewayRequest);
+            DeleteVpnGatewayRequest deleteVpnGatewayRequest = new DeleteVpnGatewayRequest()
+                    .withVpnGatewayId(detachVpnGatewayRequest.getVpnGatewayId());
+            usEastEc2Client.deleteVpnGateway(deleteVpnGatewayRequest);
+        });
+    }
+
+    private void deleteNATGateway(String vpcId, AmazonEC2 usEastEc2Client) {
+        DescribeNatGatewaysRequest natGatewaysRequest =  new DescribeNatGatewaysRequest()
+                .withFilter(new Filter(VPC_KEY,Collections.singletonList(vpcId)));
+        DescribeNatGatewaysResult natGatewaysResult = usEastEc2Client.describeNatGateways(natGatewaysRequest);
+        natGatewaysResult.getNatGateways().forEach(natGateway -> {
+            DeleteNatGatewayRequest deleteNatGatewayRequest = new DeleteNatGatewayRequest()
+                    .withNatGatewayId(natGateway.getNatGatewayId());
+            usEastEc2Client.deleteNatGateway(deleteNatGatewayRequest);
+        });
+    }
+
+    private void deleteSecurityGroups(String vpcId, AmazonEC2 usEastEc2Client) {
+        DescribeSecurityGroupsRequest securityGroupsRequest = new DescribeSecurityGroupsRequest()
+                .withFilters(new Filter(VPC_KEY, Collections.singletonList(vpcId)));
+        DescribeSecurityGroupsResult securityGroupsResult = usEastEc2Client.describeSecurityGroups(securityGroupsRequest);
+        securityGroupsResult.getSecurityGroups().forEach(securityGroup -> {
+            if (!(securityGroup.getGroupName().equalsIgnoreCase(DEFAULT_TAG))) {
+                DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest()
+                        .withGroupId(securityGroup.getGroupId());
+                usEastEc2Client.deleteSecurityGroup(deleteSecurityGroupRequest);
+            }
+        });
+    }
+
+    private void deleteSubnets(String vpcId, AmazonEC2 usEastEc2Client) {
+        DescribeSubnetsRequest subnetsRequest = new DescribeSubnetsRequest()
+                .withFilters(new Filter(VPC_KEY, Collections.singletonList(vpcId)));
+        DescribeSubnetsResult securityGroupsResult = usEastEc2Client.describeSubnets(subnetsRequest);
+        securityGroupsResult.getSubnets().forEach(subnet -> {
+            DeleteSubnetRequest deleteSubnetRequest = new DeleteSubnetRequest()
+                    .withSubnetId(subnet.getSubnetId());
+            usEastEc2Client.deleteSubnet(deleteSubnetRequest);
+        });
+    }
+
 }
