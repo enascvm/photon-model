@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.48_3
+* Fix issue related to azure disk enumeration.
+
 ## 0.6.48_2
 * Fixing issues related to Azure billing.
 

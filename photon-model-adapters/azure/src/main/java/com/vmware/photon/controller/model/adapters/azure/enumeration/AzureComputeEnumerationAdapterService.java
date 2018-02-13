@@ -15,17 +15,13 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DATA_DISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_MANAGED_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.injectOperationContext;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.isDiskManaged;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
@@ -57,7 +53,6 @@ import java.util.stream.Collectors;
 
 import com.microsoft.azure.Page;
 import com.microsoft.azure.management.Azure;
-import com.microsoft.azure.management.compute.DataDisk;
 import com.microsoft.azure.management.compute.InstanceViewStatus;
 import com.microsoft.azure.management.compute.InstanceViewTypes;
 import com.microsoft.azure.management.compute.OSDisk;
@@ -956,30 +951,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .filter(p -> p != null && p.getLeft() != null && p.getRight() != null)
                 .map(p -> {
                     ComputeState cs = p.getLeft();
-
-                    // Update data disks if added externally
-                    VirtualMachineInner vm = p.getRight();
-                    // No. of data disks + OS disk
-                    int disksCount = vm.storageProfile().dataDisks().size() + 1;
-
-                    if (disksCount != cs.diskLinks.size()) {
-                        vm.storageProfile().dataDisks().forEach(dataDisk -> {
-                            String dataDiskId;
-                            if (isDiskManaged(vm)) {
-                                dataDiskId = dataDisk.managedDisk().id();
-                            } else {
-                                dataDiskId = dataDisk.vhd().uri();
-                            }
-
-                            if (ctx.diskStates.get(dataDiskId) != null) {
-                                String diskStateLink = ctx.diskStates.get(dataDiskId).documentSelfLink;
-                                if (!cs.diskLinks.contains(diskStateLink)) {
-                                    cs.diskLinks.add(diskStateLink);
-                                }
-                            }
-                        });
-                    }
-
                     Map<String, String> tags = p.getRight().getTags();
                     DeferredResult<Set<String>> result = DeferredResult.completed(null);
                     if (tags != null && !tags.isEmpty()) {
@@ -1075,27 +1046,35 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
         ctx.diskStates.clear();
 
-        List<String> diskIdList = new ArrayList<>();
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(DiskState.class);
 
+        Query.Builder diskUriFilterParentQuery = Query.Builder.create();
+
+        List<Query> diskUriFilters = new ArrayList<>();
         for (String instanceId : ctx.virtualMachines.keySet()) {
-            VirtualMachineInner virtualMachine = ctx.virtualMachines.get(instanceId);
+            String diskId = AzureUtils.canonizeId(getVhdUri(ctx.virtualMachines.get(instanceId)));
 
-            String diskId = getVhdUri(virtualMachine);
             if (diskId == null) {
                 continue;
             }
 
-            diskIdList.add(diskId);
-
-            List<String> dataDiskIDList = getDataDisksID(virtualMachine, AzureUtils.isDiskManaged(virtualMachine));
-            if (null != dataDiskIDList && dataDiskIDList.size() > 0) {
-                diskIdList.addAll(dataDiskIDList);
-            }
+            Query diskUriFilter = Query.Builder.create(Query.Occurance.SHOULD_OCCUR)
+                    .addFieldClause(DiskState.FIELD_NAME_ID, diskId)
+                    .build();
+            diskUriFilters.add(diskUriFilter);
         }
 
-        Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(DiskState.class)
-                .addInClause(DiskState.FIELD_NAME_ID, diskIdList, Occurance.SHOULD_OCCUR);
+        if (diskUriFilters.isEmpty()) {
+            logFine(() -> "No virtual machines found to be associated with local disks");
+            ctx.subStage = next;
+            handleSubStage(ctx);
+            return;
+        }
+
+        diskUriFilters.stream()
+                .forEach(diskUriFilter -> diskUriFilterParentQuery.addClause(diskUriFilter));
+        qBuilder.addClause(diskUriFilterParentQuery.build());
 
         QueryTop<DiskState> queryDiskStates = new QueryTop<>(
                 getHost(),
@@ -1107,19 +1086,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 // Use max 10K Top, cause we collect DiskStates
                 .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
-        queryDiskStates.collectDocuments(Collectors.toList())
-                .whenComplete((diskStates, e) -> {
-                    if (e != null) {
-                        handleError(ctx, e);
-                        return;
-                    }
-                    if (diskStates == null) {
-                        return;
-                    }
-                    diskStates.forEach(diskState -> ctx.diskStates.put(diskState.id, diskState));
-                    ctx.subStage = next;
-                    handleSubStage(ctx);
-                });
+        queryDiskStates
+                .queryDocuments(diskState -> ctx.diskStates.put(diskState.id, diskState))
+                .thenRun(() -> logFine(() -> String.format(
+                        "Found %d matching disk states for Azure blobs",
+                        ctx.diskStates.size())))
+                .whenComplete(thenHandleSubStage(ctx, next));
     }
 
     /**
@@ -1314,25 +1286,46 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             Entry<String, VirtualMachineInner> vmEntry = iterator.next();
             VirtualMachineInner virtualMachine = vmEntry.getValue();
 
+            String diskUri = AzureUtils.canonizeId(getVhdUri(virtualMachine));
+
+            if (diskUri == null) {
+                logFine(() -> String.format("Disk URI not found for vm: %s", virtualMachine.id()));
+                continue;
+            }
+
+            DiskState diskToUpdate = ctx.diskStates.get(diskUri);
+            if (diskToUpdate == null) {
+                diskToUpdate = createDiskState(virtualMachine);
+                Operation.createPost(ctx.request.buildUri(DiskService.FACTORY_LINK))
+                        .setBody(diskToUpdate);
+            }
+
             if (virtualMachine.storageProfile() == null
                     || virtualMachine.storageProfile().imageReference() == null) {
                 continue;
             }
 
-            if (virtualMachine.storageProfile().osDisk() == null) {
-                logWarning(() -> "VM has empty OS disk.");
-                continue;
+            ImageReferenceInner imageReference = virtualMachine.storageProfile()
+                    .imageReference();
+            diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
+            diskToUpdate.bootOrder = 1;
+            if (diskToUpdate.customProperties == null) {
+                diskToUpdate.customProperties = new HashMap<>();
+            }
+            if (virtualMachine.storageProfile().osDisk() != null
+                    && virtualMachine.storageProfile().osDisk().caching() != null) {
+                diskToUpdate.customProperties.put(AZURE_OSDISK_CACHING,
+                        virtualMachine.storageProfile().osDisk().caching().name());
             }
 
-            String osDiskUri = getVhdUri(virtualMachine);
-            if (osDiskUri == null) {
-                logInfo(() -> String.format("OS Disk URI not found for vm: %s", virtualMachine.id()));
-                continue;
-            }
-            updateOSDiskProperties(ctx, virtualMachine, osDiskUri, opCollection);
+            diskToUpdate.computeHostLink = ctx.parentCompute.documentSelfLink;
+            AdapterUtils.addToEndpointLinks(diskToUpdate, ctx.request.endpointLink);
+            Operation diskOp = Operation
+                    .createPatch(ctx.request.buildUri(diskToUpdate.documentSelfLink))
+                    .setBody(diskToUpdate);
 
-            // create data disk states and update their custom properties
-            updateDataDiskProperties(ctx, virtualMachine, opCollection);
+            opCollection.add(diskOp);
+            ctx.diskStates.put(diskToUpdate.id, diskToUpdate);
         }
 
         if (opCollection.isEmpty()) {
@@ -1357,9 +1350,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 }).sendWith(this);
     }
 
-    private DiskState createOSDiskState(VirtualMachineInner vm, EnumerationContext ctx) {
+    private DiskState createDiskState(VirtualMachineInner vm) {
         DiskState diskState = new DiskState();
-        diskState.id = getVhdUri(vm);
+        diskState.id = AzureUtils.canonizeId(getVhdUri(vm));
         if (vm.storageProfile() != null
                 && vm.storageProfile().osDisk() != null
                 && vm.storageProfile().osDisk().diskSizeGB() != null) {
@@ -1369,118 +1362,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             }
             diskState.name = osDisk.name();
         }
-        diskState.computeHostLink = ctx.parentCompute.documentSelfLink;
-        diskState.resourcePoolLink = ctx.request.resourcePoolLink;
-        diskState.tenantLinks = ctx.parentCompute.tenantLinks;
-        diskState.status = DiskService.DiskStatus.ATTACHED;
         String id = UUID.randomUUID().toString();
         diskState.documentSelfLink = UriUtils.buildUriPath(DiskService.FACTORY_LINK, id);
-        diskState.endpointLink = ctx.request.endpointLink;
-        AdapterUtils.addToEndpointLinks(diskState, ctx.request.endpointLink);
         return diskState;
-    }
-
-    private void updateDiskCustomProperties(VirtualMachineInner vm, EnumerationContext ctx,
-                                            DiskState diskToUpdate) {
-        ImageReferenceInner imageReference = vm.storageProfile()
-                .imageReference();
-        diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
-        diskToUpdate.bootOrder = 1;
-        if (diskToUpdate.customProperties == null) {
-            diskToUpdate.customProperties = new HashMap<>();
-        }
-        if (vm.storageProfile().osDisk() != null
-                && vm.storageProfile().osDisk().caching() != null) {
-            diskToUpdate.customProperties.put(AZURE_OSDISK_CACHING,
-                    vm.storageProfile().osDisk().caching().name());
-        }
-        diskToUpdate.computeHostLink = ctx.parentCompute.documentSelfLink;
-        if (StringUtils.isEmpty(diskToUpdate.endpointLink)) {
-            diskToUpdate.endpointLink = ctx.request.endpointLink;
-        }
-        AdapterUtils.addToEndpointLinks(diskToUpdate, ctx.request.endpointLink);
-    }
-
-    private void updateOSDiskProperties(EnumerationContext ctx, VirtualMachineInner virtualMachine, String diskUri,
-                                        Collection<Operation> opCollection) {
-        DiskState diskToUpdate = ctx.diskStates.get(diskUri);
-        Operation diskToUpdateOp = null;
-        if (diskToUpdate == null) {
-            diskToUpdate = createOSDiskState(virtualMachine, ctx);
-            updateDiskCustomProperties(virtualMachine, ctx, diskToUpdate);
-            diskToUpdateOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
-                    .setBody(diskToUpdate);
-        } else {
-            updateDiskCustomProperties(virtualMachine, ctx, diskToUpdate);
-            diskToUpdateOp = Operation.createPatch(getHost(), diskToUpdate.documentSelfLink)
-                    .setBody(diskToUpdate);
-        }
-        opCollection.add(diskToUpdateOp);
-        ctx.diskStates.put(diskToUpdate.id, diskToUpdate);
-    }
-
-    private DiskState createDataDiskState(EnumerationContext ctx, DataDisk dataDisk, boolean isManaged) {
-
-        DiskState diskState = new DiskState();
-
-        diskState.documentSelfLink = UriUtils.buildUriPath(
-                DiskService.FACTORY_LINK, UUID.randomUUID().toString());
-        diskState.name = dataDisk.name();
-        if (dataDisk.diskSizeGB() != null) {
-            diskState.capacityMBytes = dataDisk.diskSizeGB() * 1024;
-        }
-        diskState.status = DiskService.DiskStatus.ATTACHED;
-        diskState.tenantLinks = ctx.parentCompute.tenantLinks;
-        diskState.resourcePoolLink = ctx.request.resourcePoolLink;
-        diskState.computeHostLink = ctx.parentCompute.documentSelfLink;
-
-        diskState.endpointLink = ctx.request.endpointLink;
-        AdapterUtils.addToEndpointLinks(diskState, ctx.request.endpointLink);
-
-        diskState.customProperties = new HashMap<>();
-        diskState.customProperties.put(AZURE_DATA_DISK_CACHING, dataDisk.caching().name());
-        diskState.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(dataDisk.lun()));
-
-        if (isManaged) {
-            diskState.id = dataDisk.managedDisk().id();
-            if (dataDisk.managedDisk().storageAccountType() != null) {
-                diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
-                        dataDisk.managedDisk().storageAccountType().toString());
-            }
-        } else {
-            diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
-        }
-
-        return diskState;
-    }
-
-    private void updateDataDiskProperties(EnumerationContext ctx, VirtualMachineInner vm,
-                                          Collection<Operation> opCollection) {
-        if (vm.storageProfile() == null) {
-            return;
-        }
-        if (vm.storageProfile().dataDisks() != null) {
-            vm.storageProfile().dataDisks().forEach(dataDisk -> {
-                DiskState diskToUpdate = null;
-                if (AzureUtils.isDiskManaged(vm)) {
-                    diskToUpdate = ctx.diskStates.get(dataDisk.managedDisk().id());
-                } else {
-                    diskToUpdate = ctx.diskStates.get(dataDisk.vhd().uri());
-                }
-
-                Operation diskToUpdateOp = null;
-                if (null == diskToUpdate) {
-                    diskToUpdate = createDataDiskState(ctx, dataDisk, AzureUtils.isDiskManaged(vm));
-                    diskToUpdateOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
-                            .setBody(diskToUpdate);
-                } else {
-                    diskToUpdateOp = Operation.createPatch(getHost(), diskToUpdate.documentSelfLink)
-                            .setBody(diskToUpdate);
-                }
-                opCollection.add(diskToUpdateOp);
-                ctx.diskStates.put(diskToUpdate.id, diskToUpdate);
-            });
-        }
     }
 
     /**
@@ -1919,24 +1803,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         List<String> vmDisks = new ArrayList<>();
         if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
-            String diskUri = getVhdUri(virtualMachine);
+            String diskUri = AzureUtils.canonizeId(getVhdUri(virtualMachine));
             if (diskUri != null) {
                 DiskState state = ctx.diskStates.remove(diskUri);
                 if (state != null) {
                     vmDisks.add(state.documentSelfLink);
                 }
-            }
-
-            // add all data disk links of VM
-            List<String> dataDiskIDs = getDataDisksID(virtualMachine, AzureUtils.isDiskManaged(virtualMachine));
-
-            if (dataDiskIDs != null) {
-                dataDiskIDs.forEach(dataDiskID -> {
-                    DiskState dataDiskState = ctx.diskStates.remove(dataDiskID);
-                    if (null != dataDiskState) {
-                        vmDisks.add(dataDiskState.documentSelfLink);
-                    }
-                });
             }
         }
 
@@ -2130,28 +2002,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
     }
 
-    private List<String> getDataDisksID(VirtualMachineInner vm, boolean isManaged) {
-        if (vm.storageProfile() != null &&
-                vm.storageProfile().dataDisks() != null) {
-            if (isManaged) {
-                return vm.storageProfile()
-                        .dataDisks()
-                        .stream()
-                        .map(dataDisk -> dataDisk.managedDisk().id())
-                        .collect(Collectors.toList());
-            } else {
-                return vm.storageProfile()
-                        .dataDisks()
-                        .stream()
-                        .map(dataDisk -> AzureUtils.canonizeId(dataDisk.vhd().uri()))
-                        .collect(Collectors.toList());
-            }
-        } else {
-            logWarning(() -> "VM has empty storage profile, or zero data disks.");
-            return null;
-        }
-    }
-
     private String getVhdUri(VirtualMachineInner vm) {
         OSDisk osDisk;
         if (vm.storageProfile() == null || vm.storageProfile().osDisk() == null) {
@@ -2160,12 +2010,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         } else {
             osDisk = vm.storageProfile().osDisk();
 
-            if (isDiskManaged(vm)) {
+            if (osDisk.vhd() == null || osDisk.vhd().uri() == null) {
                 return osDisk.managedDisk().id();
             } else {
-                return AzureUtils.canonizeId(osDisk.vhd().uri());
+                return vm.storageProfile().osDisk().vhd().uri();
             }
         }
     }
-
 }
