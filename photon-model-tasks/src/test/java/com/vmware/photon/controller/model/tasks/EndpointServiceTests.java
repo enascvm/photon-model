@@ -26,7 +26,6 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
-import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -34,10 +33,11 @@ import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 
 public class EndpointServiceTests {
+
     private final VerificationHost host;
-    public String regionId = "us-east-1";
-    public boolean isMock = false;
-    private String environmentName;
+    private final String regionId;
+    private final boolean isMock;
+    private final String environmentName;
 
     public EndpointServiceTests(VerificationHost host, String regionId, boolean isMock, String environmentName) {
         this.host = host;
@@ -54,7 +54,7 @@ public class EndpointServiceTests {
                 : EnumSet.of(TaskOption.VALIDATE_ONLY);
         validateEndpoint.endpointState = endpoint;
 
-        EndpointAllocationTaskState outTask = com.vmware.photon.controller.model.tasks.TestUtils
+        EndpointAllocationTaskState outTask = TestUtils
                 .doPost(this.host, validateEndpoint,
                         EndpointAllocationTaskState.class,
                         UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
@@ -178,7 +178,7 @@ public class EndpointServiceTests {
                         EndpointAllocationTaskState.class,
                         UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
 
-        EndpointAllocationTaskState failedTask = BasicReusableHostTestCase
+        EndpointAllocationTaskState failedTask = this.host
                 .waitForFailedTask(
                         EndpointAllocationTaskState.class,
                         outTask.documentSelfLink);
@@ -224,7 +224,7 @@ public class EndpointServiceTests {
                             UriUtils.buildUri(this.host,
                                     EndpointAllocationTaskService.FACTORY_LINK));
 
-            EndpointAllocationTaskState failedTask = BasicReusableHostTestCase
+            EndpointAllocationTaskState failedTask = this.host
                     .waitForFailedTask(
                             EndpointAllocationTaskState.class,
                             duplicateEndpointTask.documentSelfLink);

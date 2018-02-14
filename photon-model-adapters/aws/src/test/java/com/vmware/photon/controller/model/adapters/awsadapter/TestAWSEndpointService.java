@@ -30,18 +30,18 @@ import java.util.logging.Level;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointServiceTests;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-
-import com.vmware.xenon.common.BasicReusableHostTestCase;
+import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -50,7 +50,8 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
-public class TestAWSEndpointService extends BasicReusableHostTestCase {
+public class TestAWSEndpointService extends BasicTestCase {
+
     public String accessKey = "access-key";
     public String secretKey = "secret-key";
     public String regionId = "us-east-1";
@@ -59,65 +60,75 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
     public String externalId = "mock-external-id";
     public boolean isMock = true;
 
+    // The actual test Endpoint Specific runner
+    private EndpointServiceTests endpointTestsRunner;
+
+    private EndpointState endpointState;
+
     @Before
-    public void setUp() throws Exception {
-        try {
-            this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(10));
-            PhotonModelServices.startServices(this.host);
-            PhotonModelMetricServices.startServices(this.host);
-            PhotonModelTaskServices.startServices(this.host);
-            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
+    public void setUp() throws Throwable {
 
-            this.host.setTimeoutSeconds(300);
+        this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(10));
+        PhotonModelServices.startServices(this.host);
+        PhotonModelMetricServices.startServices(this.host);
+        PhotonModelTaskServices.startServices(this.host);
+        PhotonModelAdaptersRegistryAdapters.startServices(this.host);
+        AWSAdaptersTestUtils.startServicesSynchronously(this.host);
 
-            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+        this.host.setTimeoutSeconds(300);
 
-            this.host.log(Level.INFO, "Executing test with isMock = %s", this.isMock);
-        } catch (Throwable e) {
-            throw new Exception(e);
-        }
+        this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
+        this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
+        this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+
+        this.endpointTestsRunner = new EndpointServiceTests(
+                this.host, this.regionId, this.isMock, ComputeDescription.ENVIRONMENT_NAME_AWS);
+
+        this.endpointState = newEndpointState();
+
+        this.host.log(Level.INFO, "Executing test with isMock = %s", this.isMock);
+    }
+
+    @After
+    public void tearDown() {
+        setAwsClientMockInfo(false, null);
     }
 
     @Test
     public void testValidateCredentials() throws Throwable {
-        new EndpointServiceTests(this.host, this.regionId, this.isMock,
-                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
-                .testValidateCredentials(createEndpointState());
+
+        this.endpointTestsRunner.testValidateCredentials(this.endpointState);
     }
 
     @Test
+    @Ignore("https://jira.eng.vmware.com/browse/VCOM-3360")
     public void testValidateSessionCredentials() throws Throwable {
-        EndpointState endpointState = createEndpointState();
-        endpointState.endpointProperties.put(SESSION_TOKEN_KEY, this.sessionToken);
-        endpointState.endpointProperties.put(ARN_KEY, this.arn);
-        endpointState.endpointProperties.put(EXTERNAL_ID_KEY, this.externalId);
-        new EndpointServiceTests(this.host, this.regionId, this.isMock,
-                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
-                .testValidateCredentials(endpointState);
+
+        this.endpointState.endpointProperties.put(SESSION_TOKEN_KEY, this.sessionToken);
+        this.endpointState.endpointProperties.put(ARN_KEY, this.arn);
+        this.endpointState.endpointProperties.put(EXTERNAL_ID_KEY, this.externalId);
+
+        this.endpointTestsRunner.testValidateCredentials(this.endpointState);
     }
 
     @Test
     public void testCreateEndpoint() throws Throwable {
-        new EndpointServiceTests(this.host, this.regionId, this.isMock,
-                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
-                .testCreateEndpoint(createEndpointState());
+
+        this.endpointTestsRunner.testCreateEndpoint(this.endpointState);
     }
 
     @Test
     public void testCreateAndThenValidate() throws Throwable {
-        new EndpointServiceTests(this.host, this.regionId, this.isMock,
-                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
-                .testCreateAndThenValidate(createEndpointState());
+
+        this.endpointTestsRunner.testCreateAndThenValidate(this.endpointState);
 
         // Tests that EndpointService QueryTasks can use SELECT_LINKS + EXPAND_LINKS
         Query query = Builder.create()
                 .addKindFieldClause(EndpointState.class)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOptions(EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.SELECT_LINKS, QueryOption.EXPAND_LINKS))
+                .addOptions(EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.SELECT_LINKS,
+                        QueryOption.EXPAND_LINKS))
                 .addLinkTerm(EndpointState.FIELD_NAME_AUTH_CREDENTIALS_LINK)
                 .setQuery(query)
                 .build();
@@ -132,30 +143,24 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
             String authCredentialSelfLink = endpoint.authCredentialsLink;
             assertNotNull(authCredentialSelfLink);
             assertNotNull(
-                    processor.selectedDocument(authCredentialSelfLink, AuthCredentialsServiceState.class));
+                    processor.selectedDocument(authCredentialSelfLink,
+                            AuthCredentialsServiceState.class));
         }
     }
 
     @Test
     public void testShouldFailOnMissingData() throws Throwable {
-        new EndpointServiceTests(this.host, this.regionId, this.isMock,
-                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
-                .testShouldFailOnMissingData(createEndpointState());
+
+        this.endpointTestsRunner.testShouldFailOnMissingData(this.endpointState);
     }
 
     @Test
     public void testShouldFailOnDuplicateEndpoint() throws Throwable {
-        new EndpointServiceTests(this.host, this.regionId, this.isMock,
-                ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
-                .testShouldFailOnCreatingDuplicateEndpoint(createEndpointState());
+
+        this.endpointTestsRunner.testShouldFailOnCreatingDuplicateEndpoint(this.endpointState);
     }
 
-    @After
-    public void tearDown() throws InterruptedException {
-        setAwsClientMockInfo(false, null);
-    }
-
-    public EndpointState createEndpointState() {
+    private EndpointState newEndpointState() {
         EndpointState endpoint = new EndpointState();
         endpoint.endpointType = EndpointType.aws.name();
         endpoint.name = EndpointType.aws.name();
