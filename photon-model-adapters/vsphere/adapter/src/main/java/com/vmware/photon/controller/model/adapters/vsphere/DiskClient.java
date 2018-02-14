@@ -27,6 +27,7 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.List;
 
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
@@ -99,6 +100,7 @@ public class DiskClient extends BaseHelper {
                 .put(DISK_DATASTORE_NAME, dsName);
         this.diskState.status = DiskService.DiskStatus.AVAILABLE;
         this.diskState.id = diskName;
+        AdapterUtils.addToEndpointLinks(this.diskState, this.diskState.endpointLink);
     }
 
     /**

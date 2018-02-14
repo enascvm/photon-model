@@ -59,6 +59,7 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.VsphereResourceCleanerService.ResourceCleanRequest;
@@ -1174,6 +1175,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.name = sp.getName();
         res.desc = sp.getDescription();
         res.endpointLink = request.endpointLink;
+        AdapterUtils.addToEndpointLinks(res, request.endpointLink);
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
                 .put(ComputeProperties.RESOURCE_TYPE_KEY, sp.getType())
@@ -1376,6 +1378,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.id = ds.getName();
         res.name = "Hosts that can access datastore '" + ds.getName() + "'";
         res.endpointLink = ctx.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(res, ctx.getRequest().endpointLink);
         res.tenantLinks = ctx.getTenantLinks();
         CustomProperties.of(res)
                 .put(CustomProperties.MOREF, ds.getId())
@@ -1392,6 +1395,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.type = ds.getType();
         res.resourcePoolLink = request.resourcePoolLink;
         res.endpointLink = request.endpointLink;
+        AdapterUtils.addToEndpointLinks(res, request.endpointLink);
         res.adapterManagementReference = request.adapterManagementReference;
         res.capacityBytes = ds.getCapacityBytes();
         res.regionId = regionId;
@@ -2151,13 +2155,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private Operation processVirtualDevice(DiskService.DiskStateExpanded matchedDs, VirtualDevice device,
             EnumerationProgress enumerationProgress, List<String> diskLinks) {
         if (device instanceof VirtualDisk) {
-            return handleVirtualDiskUpdate(matchedDs, (VirtualDisk) device, diskLinks,
-                    enumerationProgress.getRegionId(), this);
+            return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
+                    (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), this);
         } else if (device instanceof VirtualCdrom) {
-            return handleVirtualDeviceUpdate(matchedDs, DiskService.DiskType.CDROM, device,
+            return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
+                    matchedDs, DiskService.DiskType.CDROM, device,
                     diskLinks, enumerationProgress.getRegionId(), this, false);
         } else if (device instanceof VirtualFloppy) {
-            return handleVirtualDeviceUpdate(matchedDs, DiskService.DiskType.FLOPPY, device,
+            return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
+                    matchedDs, DiskService.DiskType.FLOPPY, device,
                     diskLinks, enumerationProgress.getRegionId(), this, false);
         }
         return null;

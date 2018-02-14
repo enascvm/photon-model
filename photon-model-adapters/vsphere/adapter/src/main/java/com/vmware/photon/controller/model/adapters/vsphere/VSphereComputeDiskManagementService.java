@@ -25,6 +25,7 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -200,6 +201,8 @@ public class VSphereComputeDiskManagementService extends StatelessService {
             ctx.computeDesc.diskLinks.add(newDiskState.documentSelfLink);
         }
 
+        // update endpoint link
+        AdapterUtils.addToEndpointLinks(newDiskState, ctx.computePlacementHost.endpointLink);
         // update the disk state with mock values
         if (ctx.request.isMockRequest) {
             ctx.diskState.status = DiskService.DiskStatus.ATTACHED;

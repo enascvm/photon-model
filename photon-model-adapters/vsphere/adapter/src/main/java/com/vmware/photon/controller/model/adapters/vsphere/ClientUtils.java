@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory;
 import com.vmware.pbm.PbmFaultFaultMsg;
 import com.vmware.pbm.PbmPlacementHub;
 import com.vmware.pbm.PbmProfileId;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
@@ -834,8 +835,9 @@ public class ClientUtils {
     /**
      * Process VirtualDisk and update the details in the diskLinks of the provisioned compute
      */
-    public static Operation handleVirtualDiskUpdate(DiskService.DiskStateExpanded matchedDs, VirtualDisk
-            disk, List<String> diskLinks, String regionId, Service service) {
+    public static Operation handleVirtualDiskUpdate(String endpointLink,
+            DiskService.DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
+            String regionId, Service service) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -856,6 +858,7 @@ public class ClientUtils {
             ds.regionId = regionId;
             ds.capacityMBytes = disk.getCapacityInKB() / 1024;
             ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
             if (disk.getStorageIOAllocation() != null) {
                 StorageIOAllocationInfo storageInfo = disk.getStorageIOAllocation();
@@ -870,6 +873,7 @@ public class ClientUtils {
         } else {
             // This is known disk, hence update with the provisioned attributes.
             matchedDs.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            addEndpointLinks(matchedDs, endpointLink);
             updateDiskStateFromVirtualDisk(disk, matchedDs);
             operation = createDiskPatch(matchedDs, service);
         }
@@ -879,12 +883,14 @@ public class ClientUtils {
     /**
      * Process VirtualCdRom and update the details in the diskLinks of the provisioned compute
      */
-    public static Operation handleVirtualDeviceUpdate(DiskService.DiskStateExpanded matchedDs,
-            DiskService.DiskType type, VirtualDevice disk, List<String> diskLinks, String
-            regionId, Service service, boolean isBacking) {
+    public static Operation handleVirtualDeviceUpdate(String endpointLink,
+            DiskService.DiskStateExpanded matchedDs,
+            DiskService.DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
+            Service service, boolean isBacking) {
         Operation operation;
         if (matchedDs == null) {
             DiskService.DiskState ds = createNewDiskState(type, disk, regionId, service);
+            addEndpointLinks(ds, endpointLink);
             if (isBacking) {
                 updateDiskStateFromVirtualDevice(disk, ds, disk.getBacking());
             } else {
@@ -894,9 +900,15 @@ public class ClientUtils {
             diskLinks.add(ds.documentSelfLink);
         } else {
             updateDiskStateFromVirtualDevice(disk, matchedDs, null);
+            addEndpointLinks(matchedDs, endpointLink);
             operation = createDiskPatch(matchedDs, service);
         }
         return operation;
+    }
+
+    private static void addEndpointLinks(DiskService.DiskState ds, String endpointLink) {
+        ds.endpointLink = endpointLink;
+        AdapterUtils.addToEndpointLinks(ds, endpointLink);
     }
 
     private static DiskService.DiskState createNewDiskState(DiskService.DiskType type,
