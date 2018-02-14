@@ -18,6 +18,7 @@ import static java.util.Collections.singletonMap;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CREATE_CONTEXT_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID_FILTER;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_ENDPOINT;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_INSTANCE_TYPE;
@@ -41,6 +42,7 @@ import com.amazonaws.services.ec2.model.DescribeVpcsResult;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterfaceSpecification;
 import com.amazonaws.services.ec2.model.Subnet;
+import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -51,6 +53,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.support.InstanceTypeList.InstanceType;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -110,6 +113,8 @@ public class AWSInstanceContext
 
     public List<String> availableEbsDiskNames = new ArrayList<>();
 
+    public Set<Tag> instanceTags = new HashSet<>();
+
     public AWSInstanceContext(StatelessService service, ComputeInstanceRequest computeRequest) {
         super(service, computeRequest, AWSNicContext::new);
     }
@@ -125,6 +130,7 @@ public class AWSInstanceContext
 
     /**
      * Populate context with VPC, Subnet and Security Group objects from AWS.
+     * Also populate <code>Tag</code> objects for this instance.
      *
      * @see #getDiskStates(AWSInstanceContext)
      * @see #getBootDiskImageNativeId(AWSInstanceContext)
@@ -133,6 +139,7 @@ public class AWSInstanceContext
      * @see #getSecurityGroups(AWSInstanceContext)
      * @see #createSecurityGroupsIfNotExist(AWSInstanceContext)
      * @see #createNicSpecs(AWSInstanceContext)
+     * @see #populateAWSTags(AWSInstanceContext)
      */
     @Override
     protected DeferredResult<AWSInstanceContext> customizeContext(AWSInstanceContext context) {
@@ -153,7 +160,47 @@ public class AWSInstanceContext
                 .thenCompose(this::createSecurityGroupsIfNotExist)
                 .thenApply(log("createSecurityGroupsIfNotExist"))
 
-                .thenCompose(this::createNicSpecs).thenApply(log("createNicSpecs"));
+                .thenCompose(this::createNicSpecs).thenApply(log("createNicSpecs"))
+
+                .thenCompose(this::populateAWSTags).thenApply(log("populateAWSTags"));
+    }
+
+    /**
+     * Populate all <code>child.tagLinks</code> as <code>Tag</code> objects into instanceTags field
+     * Also add Name tag.
+     *
+     * @param context The AWSInstanceContext to manipulate
+     * @return        The same AWSInstanceContext with Tags populated
+     */
+    private DeferredResult<AWSInstanceContext> populateAWSTags(AWSInstanceContext context) {
+
+        context.instanceTags.add(new Tag().withKey(AWS_TAG_NAME).withValue(context.child.name));
+
+        if (context.child.tagLinks == null || context.child.tagLinks.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
+        List<DeferredResult<TagState>> collectTagsDR = context.child.tagLinks.stream()
+                .map(tagLink -> Operation.createGet(context.service, tagLink))
+                .map(operation -> context.service.sendWithDeferredResult(operation, TagState.class))
+                .collect(Collectors.toList());
+
+        return DeferredResult
+                .allOf(collectTagsDR)
+                .handle((tagStates, ex) -> {
+                    if (ex != null) {
+                        throw new IllegalStateException("Could not get tags from links", ex);
+                    }
+
+                    tagStates.forEach(tagState -> {
+                        Tag tag = new Tag(tagState.key, tagState.value);
+                        context.instanceTags.add(tag);
+                    });
+
+                    return context;
+                }
+        );
+
     }
 
     /**

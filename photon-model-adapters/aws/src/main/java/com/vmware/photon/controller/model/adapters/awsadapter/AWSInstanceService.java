@@ -41,13 +41,11 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.handlers.AsyncHandler;
@@ -68,9 +66,11 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.Placement;
+import com.amazonaws.services.ec2.model.ResourceType;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.ec2.model.TagSpecification;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
@@ -101,7 +101,6 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.support.InstanceTypeList.InstanceType;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -381,6 +380,13 @@ public class AWSInstanceService extends StatelessService {
                 .withMinCount(1)
                 .withMaxCount(1)
                 .withMonitoring(true);
+
+        if (!aws.instanceTags.isEmpty()) {
+            runInstancesRequest.withTagSpecifications(new TagSpecification()
+                    .withResourceType(ResourceType.Instance)
+                    .withTags(aws.instanceTags)
+            );
+        }
 
         if (aws.placement != null) {
             runInstancesRequest.withPlacement(new Placement(aws.placement));
@@ -941,7 +947,7 @@ public class AWSInstanceService extends StatelessService {
                     + this.context.computeRequest.taskReference;
             this.service.logInfo(() -> message);
 
-            tagInstanceAndStartStatusChecker(instanceId, this.context.child.tagLinks, consumer);
+            startInstanceStatusChecker(instanceId, consumer);
         }
 
         private DeferredResult<DiskState> attachExternalDisks( String id,
@@ -1145,58 +1151,23 @@ public class AWSInstanceService extends StatelessService {
             AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, diskId);
         }
 
-        private void tagInstanceAndStartStatusChecker(String instanceId, Set<String> tagLinks,
-                Consumer<Object> consumer) {
+        private void startInstanceStatusChecker(String instanceId, Consumer<Object> consumer) {
 
-            List<Tag> tagsToCreate = new ArrayList<>();
-            tagsToCreate.add(new Tag().withKey(AWS_TAG_NAME).withValue(this.context.child.name));
+            try {
+                // log data to debug VCOM-3274
+                logInfo("Waiting instance %s to be running", instanceId);
 
-            Runnable proceed = () -> {
-                try {
-                    // log data to debug VCOM-3274
-                    logInfo("Tagging resources and waiting instance %s to be running", instanceId);
-
-                    AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, instanceId);
-
-                    AWSTaskStatusChecker
-                            .create(this.context.amazonEC2Client, instanceId,
-                                    AWSTaskStatusChecker.AWS_RUNNING_NAME,
-                                    Arrays.asList(AWSTaskStatusChecker.AWS_TERMINATED_NAME),
-                                    consumer, this.context.taskManager,
-                                    this.service, this.context.taskExpirationMicros)
-                            .start(new Instance());
-                } catch (Exception e) {
-                    this.context.taskManager.patchTaskToFailure(
-                            "Error tagging resources for instance " + instanceId, e);
-                }
-            };
-
-            // add the name tag only if there are no tag links
-            if (tagLinks == null || tagLinks.isEmpty()) {
-                proceed.run();
-                return;
+                AWSTaskStatusChecker
+                        .create(this.context.amazonEC2Client, instanceId,
+                                AWSTaskStatusChecker.AWS_RUNNING_NAME,
+                                Arrays.asList(AWSTaskStatusChecker.AWS_TERMINATED_NAME),
+                                consumer, this.context.taskManager,
+                                this.service, this.context.taskExpirationMicros)
+                        .start(new Instance());
+            } catch (Exception e) {
+                this.context.taskManager.patchTaskToFailure(
+                        "Error tagging resources for instance " + instanceId, e);
             }
-
-            // if there are tag links get the TagStates and convert to amazon Tags
-            OperationJoin.JoinedCompletionHandler joinedCompletionHandler = (ops, exs) -> {
-                if (exs != null && !exs.isEmpty()) {
-                    this.context.taskManager.patchTaskToFailure(exs.values().iterator().next());
-                    return;
-                }
-
-                tagsToCreate.addAll(ops.values().stream()
-                        .map(op -> op.getBody(TagState.class))
-                        .map(tagState -> new Tag(tagState.key, tagState.value))
-                        .collect(Collectors.toList()));
-
-                proceed.run();
-            };
-
-            Stream<Operation> getTagOperations = tagLinks.stream()
-                    .map(tagLink -> Operation.createGet(this.service, tagLink));
-            OperationContext.restoreOperationContext(this.opContext);
-            OperationJoin.create(getTagOperations).setCompletion(joinedCompletionHandler)
-                    .sendWith(this.service);
         }
 
     }
