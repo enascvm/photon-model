@@ -26,18 +26,21 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_CIDR_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_DEFAULT_VPC_CIDR;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_DEFAULT_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_NON_EXISTING_PUBLIC_SUBNET_CIDR;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_NON_EXISTING_PUBLIC_SUBNET_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_NON_EXISTING_SUBNET_CIDR;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_NON_EXISTING_SUBNET_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient.STATUS_CODE_SUBNET_CONFLICT;
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -94,6 +97,9 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
     private String regionId = TestAWSSetupUtils.regionId;
     private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
     public boolean isMock = true;
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
+    private Map<String, Object> awsTestContext;
     private AmazonEC2AsyncClient client;
 
     private EndpointState endpointState;
@@ -118,8 +124,8 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
 
-            deleteAwsSubnet();
-            deleteAwsPublicSubnet();
+            this.awsTestContext = new HashMap<>();
+            setUpTestVpc(this.client, this.awsTestContext, this.isMock);
             this.endpointState = createEndpointState();
             this.networkState = createNetworkState();
 
@@ -133,6 +139,11 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
     public void tearDown() {
         deleteAwsSubnet();
         deleteAwsPublicSubnet();
+        if (this.deleteResourcesFlag) {
+            this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                    TestAWSSetupUtils.DELETE_RESOURCES_KEY);
+        }
+        tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
     }
 
     @Test
@@ -330,7 +341,8 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
             return subnet;
         }
 
-        CreateSubnetRequest createRequest = new CreateSubnetRequest(AWS_DEFAULT_VPC_ID,
+        CreateSubnetRequest createRequest = new CreateSubnetRequest(
+                (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY),
                 AWS_NON_EXISTING_SUBNET_CIDR);
         return this.client.createSubnet(createRequest).getSubnet();
     }
@@ -341,7 +353,8 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
         }
         DescribeSubnetsRequest subnetRequest = new DescribeSubnetsRequest()
                 .withFilters(
-                        new Filter(AWS_VPC_ID_FILTER, singletonList(AWS_DEFAULT_VPC_ID)))
+                        new Filter(AWS_VPC_ID_FILTER, singletonList(
+                                (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY))))
                 .withFilters(
                         new Filter(AWS_SUBNET_CIDR_FILTER,
                                 singletonList(AWS_NON_EXISTING_SUBNET_CIDR)));
@@ -358,7 +371,8 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
         }
         DescribeSubnetsRequest subnetRequest = new DescribeSubnetsRequest()
                 .withFilters(
-                        new Filter(AWS_VPC_ID_FILTER, singletonList(AWS_DEFAULT_VPC_ID)))
+                        new Filter(AWS_VPC_ID_FILTER, singletonList(
+                                (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY))))
                 .withFilters(
                         new Filter(AWS_SUBNET_CIDR_FILTER,
                                 singletonList(AWS_NON_EXISTING_PUBLIC_SUBNET_CIDR)));
@@ -390,7 +404,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
 
     private NetworkState createNetworkState() throws Throwable {
         NetworkState networkState = new NetworkState();
-        networkState.id = AWS_DEFAULT_VPC_ID;
+        networkState.id = (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY);
         networkState.subnetCIDR = AWS_DEFAULT_VPC_CIDR;
         networkState.endpointLink = this.endpointState.documentSelfLink;
         networkState.endpointLinks = new HashSet<String>();

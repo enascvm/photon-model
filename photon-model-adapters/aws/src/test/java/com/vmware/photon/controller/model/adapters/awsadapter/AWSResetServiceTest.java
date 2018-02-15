@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
@@ -28,7 +27,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.vpcIdExists;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
@@ -46,7 +44,6 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.SecurityGroup;
 
 import org.junit.After;
 import org.junit.Before;
@@ -58,7 +55,6 @@ import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
-import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
@@ -99,6 +95,8 @@ public class AWSResetServiceTest {
     private String sgToCleanUp = null;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
     public boolean isMock = true;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
@@ -166,6 +164,10 @@ public class AWSResetServiceTest {
         this.host.tearDown();
 
         setAwsClientMockInfo(false, null);
+        if (this.deleteResourcesFlag) {
+            this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                    TestAWSSetupUtils.DELETE_RESOURCES_KEY);
+        }
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
     }
 
@@ -281,7 +283,8 @@ public class AWSResetServiceTest {
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(),
                 this.currentTestName.getMethodName() + "_vm1", zoneId, regionId,
-                null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup);
+                null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup,
+                this.awsTestContext);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -318,17 +321,6 @@ public class AWSResetServiceTest {
             resourcesToDelete.addAll(this.vmState.networkInterfaceLinks);
         }
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
-
-        if (!this.isMock && !vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
-            SecurityGroup securityGroup  = new AWSSecurityGroupClient(this.client)
-                    .getSecurityGroup(AWS_DEFAULT_GROUP_NAME, (String) this
-                            .awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
-            if (securityGroup != null) {
-                deleteSecurityGroupUsingEC2Client(this.client, this.host, securityGroup.getGroupId());
-            }
-            deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
-        }
-
         verifyRemovalOfResourceState(this.host, resourcesToDelete);
 
         this.vmState = null;

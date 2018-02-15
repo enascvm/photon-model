@@ -106,6 +106,7 @@ import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Snapshot;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
+import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
@@ -241,11 +242,15 @@ public class TestAWSSetupUtils {
     public static final String AWS_NON_EXISTING_PUBLIC_SUBNET_CIDR = "172.31.176.0/20";
     public static final String AWS_NON_EXISTING_PUBLIC_SUBNET_NAME = "nonexisting-public";
 
+    public static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
+    public static final String AWS_DEFAULT_GROUP_ID = "sg-2616c559";
+
     public static final String VPC_KEY = "vpc-id";
     public static final String SUBNET_KEY = "subnet-id";
     public static final String INTERNET_GATEWAY_KEY = "internet-gateway";
     public static final String NIC_SPECS_KEY = "nicSpecs";
     public static final String SECURITY_GROUP_KEY = "security-group";
+    public static final String SECURITY_GROUP_NAME_KEY = "security-group-name";
     public static final String DELETE_RESOURCES_KEY = "delete-resources";
 
     public static final String SNAPSHOT_KEY = "snapshot-id";
@@ -264,7 +269,6 @@ public class TestAWSSetupUtils {
     private static final String TAG_KEY_FOR_TEST_RESOURCES = "Name";
     private static final String TAG_VALUE_FOR_TEST_RESOURCES = "enumtest-";
     private static final String TAG_VPC = "vpc";
-    private static final String TAG_SUBNET = "subnet";
     private static final String TAG_SG = "sg";
     private static final String TAG_IGW = "igw";
     private static final String TAG_VOLUME = "volume";
@@ -489,20 +493,21 @@ public class TestAWSSetupUtils {
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
             String vpcId = createorGetVPCForAccount(client);
             awsTestContext.put(VPC_KEY, vpcId);
-            String subnetId = createOrGetSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId, zoneId);
-            awsTestContext.put(SUBNET_KEY, subnetId);
+            Subnet subnet = createOrGetSubnet(client, AWS_DEFAULT_SUBNET_CIDR, vpcId, zoneId);
+            awsTestContext.put(SUBNET_KEY, subnet.getSubnetId());
             String internetGatewayId = createOrGetInternetGatewayForGivenVPC(client, vpcId);
             awsTestContext.put(INTERNET_GATEWAY_KEY, internetGatewayId);
-            String securityGroupId = createOrGetDefaultSecurityGroupForGivenVPC(client, vpcId);
-            awsTestContext.put(SECURITY_GROUP_KEY, securityGroupId);
+            SecurityGroup sg = createOrGetDefaultSecurityGroupForGivenVPC(client, vpcId);
+            awsTestContext.put(SECURITY_GROUP_KEY, sg.getGroupId());
+            awsTestContext.put(SECURITY_GROUP_NAME_KEY, sg.getGroupName());
 
             NetSpec network = new NetSpec(vpcId, vpcId, AWS_DEFAULT_VPC_CIDR);
 
             List<NetSpec> subnets = new ArrayList<>();
 
-            subnets.add(new NetSpec(subnetId,
+            subnets.add(new NetSpec(subnet.getSubnetId(),
                     AWS_DEFAULT_SUBNET_NAME,
-                    AWS_DEFAULT_SUBNET_CIDR,
+                    subnet.getCidrBlock(),
                     zoneId == null ? TestAWSSetupUtils.zoneId + avalabilityZoneIdentifier
                             : zoneId));
 
@@ -519,6 +524,7 @@ public class TestAWSSetupUtils {
         awsTestContext.put(NIC_SPECS_KEY, SINGLE_NIC_SPEC);
         awsTestContext.put(SUBNET_KEY, AWS_DEFAULT_SUBNET_ID);
         awsTestContext.put(SECURITY_GROUP_KEY, AWS_DEFAULT_GROUP_ID);
+        awsTestContext.put(SECURITY_GROUP_NAME_KEY, AWS_DEFAULT_GROUP_NAME);
 
     }
 
@@ -649,7 +655,8 @@ public class TestAWSSetupUtils {
     /**
      * Returns an existing security group for a VPC if it exists otherwise creates a new security group.
      */
-    public static String createOrGetDefaultSecurityGroupForGivenVPC(AmazonEC2AsyncClient client,
+    public static SecurityGroup createOrGetDefaultSecurityGroupForGivenVPC(
+            AmazonEC2AsyncClient client,
             String vpcID) {
         List<SecurityGroup> securityGroupsInVPC = client.describeSecurityGroups()
                 .getSecurityGroups()
@@ -657,13 +664,15 @@ public class TestAWSSetupUtils {
                 .filter(sg -> sg.getVpcId().equals(vpcID))
                 .collect(Collectors.toList());
         if (securityGroupsInVPC != null && !securityGroupsInVPC.isEmpty()) {
-            return securityGroupsInVPC.get(0).getGroupId();
+            return securityGroupsInVPC.get(0);
         }
         String securityGroupId = new AWSSecurityGroupClient(client)
                 .createDefaultSecurityGroup(vpcID);
         tagResources(client, Arrays.asList(securityGroupId), TAG_KEY_FOR_TEST_RESOURCES,
                 TAG_VALUE_FOR_TEST_RESOURCES + TAG_SG);
-        return securityGroupId;
+        DescribeSecurityGroupsResult result = client.describeSecurityGroups(
+                new DescribeSecurityGroupsRequest().withGroupIds(Arrays.asList(securityGroupId)));
+        return result.getSecurityGroups().get(0);
     }
 
     /**
@@ -693,7 +702,7 @@ public class TestAWSSetupUtils {
     /**
      * Creates a Subnet if not exist and return the Subnet id.
      */
-    public static String createOrGetSubnet(AmazonEC2AsyncClient client, String subnetCidr,
+    public static Subnet createOrGetSubnet(AmazonEC2AsyncClient client, String subnetCidr,
             String vpcId, String zoneId) {
         List<Filter> filters = new ArrayList<>();
         Filter vpcFilter = new Filter();
@@ -711,7 +720,7 @@ public class TestAWSSetupUtils {
         DescribeSubnetsResult result = client.describeSubnets(new DescribeSubnetsRequest()
                 .withFilters(filters));
         if (result.getSubnets() != null && !result.getSubnets().isEmpty()) {
-            return result.getSubnets().get(0).getSubnetId();
+            return result.getSubnets().get(0);
         } else {
             CreateSubnetRequest req = new CreateSubnetRequest()
                     .withCidrBlock(subnetCidr)
@@ -722,8 +731,8 @@ public class TestAWSSetupUtils {
             CreateSubnetResult res = client.createSubnet(req);
             String subnetId = res.getSubnet().getSubnetId();
             tagResources(client, Arrays.asList(subnetId), TAG_KEY_FOR_TEST_RESOURCES,
-                    TAG_VALUE_FOR_TEST_RESOURCES + TAG_SUBNET);
-            return subnetId;
+                    AWS_DEFAULT_SUBNET_NAME);
+            return res.getSubnet();
         }
     }
 
@@ -859,10 +868,7 @@ public class TestAWSSetupUtils {
 
     }
 
-    public static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
-    public static final String AWS_DEFAULT_GROUP_ID = "sg-2616c559";
     public static final String AWS_NEW_GROUP_PREFIX = "test-new-";
-
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
     public static final String DEFAULT_ROOT_DISK_NAME = "CoreOS root disk";
     public static final String DEFAULT_CONFIG_LABEL = "cidata";
@@ -1029,11 +1035,11 @@ public class TestAWSSetupUtils {
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
             ComputeState computeHost, EndpointState endpointState, @SuppressWarnings("rawtypes") Class clazz,
             String zoneId, String regionId,
-            Set<String> tagLinks, AwsNicSpecs nicSpec)
+            Set<String> tagLinks, AwsNicSpecs nicSpec, Map<String, Object> awsTestContext)
             throws Throwable {
         return createAWSVMResource(host, computeHost, endpointState, clazz,
                 instanceType, zoneId, regionId,
-                tagLinks, nicSpec, /* add new security group */ false);
+                tagLinks, nicSpec, /* add new security group */ false, awsTestContext);
     }
 
     /**
@@ -1045,7 +1051,7 @@ public class TestAWSSetupUtils {
             String vmName, String zoneId, String regionId,
             Set<String> tagLinks,
             AwsNicSpecs nicSpecs,
-            boolean addNewSecurityGroup)
+            boolean addNewSecurityGroup, Map<String, Object> awsTestContext)
             throws Throwable {
 
         // Step 1: Create an auth credential to login to the VM
@@ -1149,7 +1155,8 @@ public class TestAWSSetupUtils {
         List<String> nicLinks = null;
         if (nicSpecs != null) {
             nicLinks = createAWSNicStates(
-                    host, computeHost, endpointState, awsVMDesc.name, nicSpecs, addNewSecurityGroup)
+                    host, computeHost, endpointState, awsVMDesc.name, nicSpecs, addNewSecurityGroup,
+                    awsTestContext)
                     .stream()
                     .map(nic -> nic.documentSelfLink)
                     .collect(Collectors.toList());
@@ -1250,7 +1257,7 @@ public class TestAWSSetupUtils {
             EndpointState endpointState,
             String vmName,
             AwsNicSpecs nicSpecs,
-            boolean addNewSecurityGroup) throws Throwable {
+            boolean addNewSecurityGroup, Map<String, Object> awsTestContext) throws Throwable {
 
         // Create network state.
         NetworkState networkState;
@@ -1329,7 +1336,7 @@ public class TestAWSSetupUtils {
 
             // Create security group state for an existing security group
             SecurityGroupState existingSecurityGroupState = createSecurityGroupState(host,
-                    computeHost, endpointState, true);
+                    computeHost, endpointState, true, awsTestContext);
 
             NetworkInterfaceState nicState = new NetworkInterfaceState();
 
@@ -1353,7 +1360,7 @@ public class TestAWSSetupUtils {
             if (addNewSecurityGroup) {
                 // Create security group state for a new security group
                 SecurityGroupState newSecurityGroupState = createSecurityGroupState(host,
-                        computeHost, endpointState, false);
+                        computeHost, endpointState, false, awsTestContext);
                 nicState.securityGroupLinks.add(newSecurityGroupState.documentSelfLink);
             }
 
@@ -1369,13 +1376,14 @@ public class TestAWSSetupUtils {
 
     public static SecurityGroupState createSecurityGroupState(VerificationHost host,
             ComputeState computeHost,
-            EndpointState endpointState, boolean existing) throws Throwable {
+            EndpointState endpointState, boolean existing, Map<String, Object> awsTestContext)
+            throws Throwable {
 
         SecurityGroupState securityGroupState = new SecurityGroupState();
 
         if (existing) {
-            securityGroupState.id = AWS_DEFAULT_GROUP_ID;
-            securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
+            securityGroupState.id = (String) awsTestContext.get(SECURITY_GROUP_KEY);
+            securityGroupState.name = (String) awsTestContext.get(SECURITY_GROUP_NAME_KEY);
         } else {
             securityGroupState.id = "sg-" + UUID.randomUUID().toString().substring(0, 8);
             securityGroupState.name = AWS_NEW_GROUP_PREFIX + securityGroupState.id;

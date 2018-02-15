@@ -108,6 +108,8 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     public String awsMockEndpointReference = null;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
     public int instanceCountAtScale = 10;
     public int batchSize = 50;
     public int errorRate = 5;
@@ -196,6 +198,10 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     // terminated state on AWS
                     waitForInstancesToBeTerminated(this.client, this.host, instanceBatchToDelete);
                 }
+            }
+            if (this.deleteResourcesFlag) {
+                this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                        TestAWSSetupUtils.DELETE_RESOURCES_KEY);
             }
             tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
             this.client.shutdown();

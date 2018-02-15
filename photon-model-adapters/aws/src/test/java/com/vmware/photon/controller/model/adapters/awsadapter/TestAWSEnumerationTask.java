@@ -246,6 +246,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public String secretKey = "secretKey";
     public boolean useAllRegions = false;
     public int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
 
     private Map<String, Object> awsTestContext;
     private String vpcId;
@@ -354,6 +356,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             this.s3Client.deleteBucket(this.bucketToBeDeleted);
         }
         tearDownAwsVMs();
+        if (this.deleteResourcesFlag) {
+            this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                    TestAWSSetupUtils.DELETE_RESOURCES_KEY);
+        }
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
         this.s3Client.shutdown();
@@ -374,7 +380,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName.getMethodName());
 
         ComputeState vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
-                TestAWSSetupUtils.class, zoneId, regionId, null, this.singleNicSpec);
+                TestAWSSetupUtils.class, zoneId, regionId, null, this.singleNicSpec,
+                this.awsTestContext);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -698,7 +705,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName.getMethodName());
 
         ComputeState vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
-                TestAWSSetupUtils.class, zoneId, regionId, null, this.singleNicSpec);
+                TestAWSSetupUtils.class, zoneId, regionId, null, this.singleNicSpec,
+                this.awsTestContext);
 
         // Overriding the page size to test the pagination logic with limited instances on AWS.
         // This is a functional test
@@ -758,7 +766,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName.getMethodName());
 
         ComputeState vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
-                TestAWSSetupUtils.class, zoneId, regionId, null, this.singleNicSpec);
+                TestAWSSetupUtils.class, zoneId, regionId, null, this.singleNicSpec,
+                this.awsTestContext);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches

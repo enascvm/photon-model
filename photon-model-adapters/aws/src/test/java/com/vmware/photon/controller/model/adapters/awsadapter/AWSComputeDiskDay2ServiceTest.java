@@ -29,7 +29,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteSecurityGroupUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsInstancesByIds;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getSecurityGroupsIdUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
@@ -37,7 +36,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.vpcIdExists;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestProvisionAWSDisk.createAWSDiskState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
@@ -72,7 +70,6 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
-import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
@@ -117,6 +114,8 @@ public class AWSComputeDiskDay2ServiceTest {
 
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
 
     private AmazonEC2AsyncClient client;
     private Map<String, Object> awsTestContext;
@@ -251,6 +250,10 @@ public class AWSComputeDiskDay2ServiceTest {
         this.host.tearDown();
 
         setAwsClientMockInfo(false, null);
+        if (this.deleteResourcesFlag) {
+            this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                    TestAWSSetupUtils.DELETE_RESOURCES_KEY);
+        }
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
     }
 
@@ -281,17 +284,6 @@ public class AWSComputeDiskDay2ServiceTest {
             if (this.volumeId != null) {
                 //Explicitly delete the volume..
                 TestAWSSetupUtils.deleteVolume(this.client, this.volumeId);
-            }
-
-            if (!vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
-                SecurityGroup securityGroup = new AWSSecurityGroupClient(this.client)
-                        .getSecurityGroup(TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
-                                (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
-                if (securityGroup != null) {
-                    deleteSecurityGroupUsingEC2Client(this.client, this.host,
-                            securityGroup.getGroupId());
-                }
-                deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
             }
         }
 
@@ -545,7 +537,8 @@ public class AWSComputeDiskDay2ServiceTest {
         boolean addNonExistingSecurityGroup = true;
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(), this.currentTestName.getMethodName() + "_vm1", zoneId,
-                regionId, null, this.singleNicSpec, addNonExistingSecurityGroup);
+                regionId, null, this.singleNicSpec, addNonExistingSecurityGroup,
+                this.awsTestContext);
 
         // set placement link
         if (this.vmState.customProperties == null) {

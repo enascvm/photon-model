@@ -79,7 +79,8 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
 
     public String secretKey = "test123";
     public String accessKey = "blas123";
-
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
     public boolean isMock = true;
 
     private String regionId = "us-east-1";
@@ -141,7 +142,10 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
 
         this.host.waitForFinishedTask(ResourceRemovalTaskState.class,
                 removalTaskState.documentSelfLink);
-
+        if (this.deleteResourcesFlag) {
+            this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                    TestAWSSetupUtils.DELETE_RESOURCES_KEY);
+        }
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
     }
@@ -167,7 +171,7 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, computeHost, endpoint,
                 getClass(),
                 "trainingVM", zoneId, this.regionId, null, this.singleNicSpec,
-                addNonExistingSecurityGroup);
+                addNonExistingSecurityGroup, this.awsTestContext);
 
         this.computesToRemove.add(cs.documentSelfLink);
         assertEquals(PowerState.UNKNOWN, cs.powerState);

@@ -149,6 +149,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     public boolean isMock = true;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
     public int timeoutSeconds = 1200;
     public int enumerationFrequencyInMinutes = 1;
     public int testRunDurationInMinutes = 3;
@@ -242,6 +244,10 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             return;
         }
         tearDownAwsVMs();
+        if (this.deleteResourcesFlag) {
+            this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                    TestAWSSetupUtils.DELETE_RESOURCES_KEY);
+        }
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
         setAwsClientMockInfo(false, null);

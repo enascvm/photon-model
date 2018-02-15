@@ -38,7 +38,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.vpcIdExists;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
@@ -80,7 +79,6 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
-import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -130,6 +128,8 @@ public class TestAWSProvisionTask {
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
     public boolean isMock = true;
+    //Flag to indicate if networking resources created from the test should be deleted.
+    public boolean deleteResourcesFlag = false;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
     private AmazonEC2AsyncClient client;
@@ -197,6 +197,10 @@ public class TestAWSProvisionTask {
         this.host.tearDown();
 
         setAwsClientMockInfo(false, null);
+        if (this.deleteResourcesFlag) {
+            this.awsTestContext.put(TestAWSSetupUtils.DELETE_RESOURCES_KEY,
+                    TestAWSSetupUtils.DELETE_RESOURCES_KEY);
+        }
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
     }
 
@@ -234,7 +238,8 @@ public class TestAWSProvisionTask {
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(),
                 this.currentTestName.getMethodName() + "_vm1", zoneId, regionId,
-                null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup);
+                null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup,
+                this.awsTestContext);
 
 
         // set placement link
@@ -322,15 +327,6 @@ public class TestAWSProvisionTask {
         // delete vm
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
 
-        if (!this.isMock && !vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
-            SecurityGroup securityGroup = new AWSSecurityGroupClient(this.client)
-                    .getSecurityGroup(TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
-                    (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
-            if (securityGroup != null) {
-                deleteSecurityGroupUsingEC2Client(this.client, this.host, securityGroup.getGroupId());
-            }
-        }
-
         // validates the local documents of network links and disk links have been removed
         verifyRemovalOfResourceState(this.host, resourcesToDelete);
 
@@ -348,7 +344,7 @@ public class TestAWSProvisionTask {
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(),
                 this.currentTestName.getMethodName() + "_vm2", TestAWSSetupUtils.zoneId, regionId,
-                tagLinks, this.singleNicSpec, addNonExistingSecurityGroup);
+                tagLinks, this.singleNicSpec, addNonExistingSecurityGroup, this.awsTestContext);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
 
