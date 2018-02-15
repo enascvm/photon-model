@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.48_4
+* Adding a flag to control InMemoryMetric creation.
+
 ## 0.6.48_3
 * Fix issue related to azure disk enumeration.
 
