@@ -379,14 +379,11 @@ public class AWSInstanceService extends StatelessService {
                 .withInstanceType(instanceType)
                 .withMinCount(1)
                 .withMaxCount(1)
-                .withMonitoring(true);
-
-        if (!aws.instanceTags.isEmpty()) {
-            runInstancesRequest.withTagSpecifications(new TagSpecification()
+                .withMonitoring(true)
+                .withTagSpecifications(new TagSpecification()
                     .withResourceType(ResourceType.Instance)
-                    .withTags(aws.instanceTags)
-            );
-        }
+                    .withTags(aws.getAWSTags())
+                );
 
         if (aws.placement != null) {
             runInstancesRequest.withPlacement(new Placement(aws.placement));
@@ -1152,22 +1149,16 @@ public class AWSInstanceService extends StatelessService {
         }
 
         private void startInstanceStatusChecker(String instanceId, Consumer<Object> consumer) {
+            // log data to debug VCOM-3274
+            logInfo("Waiting instance %s to be running", instanceId);
 
-            try {
-                // log data to debug VCOM-3274
-                logInfo("Waiting instance %s to be running", instanceId);
-
-                AWSTaskStatusChecker
-                        .create(this.context.amazonEC2Client, instanceId,
-                                AWSTaskStatusChecker.AWS_RUNNING_NAME,
-                                Arrays.asList(AWSTaskStatusChecker.AWS_TERMINATED_NAME),
-                                consumer, this.context.taskManager,
-                                this.service, this.context.taskExpirationMicros)
-                        .start(new Instance());
-            } catch (Exception e) {
-                this.context.taskManager.patchTaskToFailure(
-                        "Error tagging resources for instance " + instanceId, e);
-            }
+            AWSTaskStatusChecker
+                    .create(this.context.amazonEC2Client, instanceId,
+                            AWSTaskStatusChecker.AWS_RUNNING_NAME,
+                            Arrays.asList(AWSTaskStatusChecker.AWS_TERMINATED_NAME),
+                            consumer, this.context.taskManager,
+                            this.service, this.context.taskExpirationMicros)
+                    .start(new Instance());
         }
 
     }

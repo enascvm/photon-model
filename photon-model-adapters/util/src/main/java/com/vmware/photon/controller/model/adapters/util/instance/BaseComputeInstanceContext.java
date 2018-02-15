@@ -18,8 +18,10 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -34,6 +36,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -102,6 +105,12 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     public String placement;
 
     /**
+     * A set of TagStates, which are used to tag this instance with.
+     * The instance will be tagged in AWS, Azure and anywhere else if needed.
+     */
+    public Set<TagState> tagStates = new HashSet<>();
+
+    /**
      * Supplier/Factory for creating context specific {@link BaseNicContext} instances.
      */
     protected final Supplier<S> nicContextSupplier;
@@ -163,6 +172,8 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
                 .thenApply(log("getNicNetworkStates"))
                 .thenCompose(this::getNicSecurityGroupStates)
                 .thenApply(log("getNicSecurityGroupStates"))
+                .thenCompose(this::getTagStates)
+                .thenApply(log("getTagStates"))
 
                 .thenCompose(this::customizeContext)
                 .thenApply(log("customizeContext"));
@@ -327,6 +338,34 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
             }
             return context;
         });
+    }
+
+    /**
+     * Populate all <code>child.tagLinks</code> as {@link TagState} objects into {@link #tagStates} field.
+     *
+     * @param context The context object to populate TagStates into.
+     * @return        The same context object with populated TagStates.
+     */
+    private DeferredResult<T> getTagStates(T context) {
+        if (context.child.tagLinks == null || context.child.tagLinks.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
+        List<DeferredResult<TagState>> collectTagsDRs = context.child.tagLinks.stream()
+                .map(tagLink -> Operation.createGet(context.service, tagLink))
+                .map(operation -> context.service.sendWithDeferredResult(operation, TagState.class))
+                .collect(Collectors.toList());
+
+        return DeferredResult.allOf(collectTagsDRs).handle((collectedTagStates, ex) -> {
+            if (ex != null) {
+                String msg = "Could not get TagState documents from tag links.";
+                throw new IllegalStateException(msg, ex);
+            }
+
+            context.tagStates.addAll(collectedTagStates);
+            return context;
+        });
+
     }
 
     /**
