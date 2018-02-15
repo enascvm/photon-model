@@ -490,8 +490,10 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
                 .filter(c -> c.type.equals(ComputeType.VM_GUEST))
                 .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(c.tagLinks.contains(expectedInternalTypeTag.documentSelfLink));
+                    assertNotNull("ComputeState tagLinks is NULL", c.tagLinks);
+                    assertTrue(String.format("ComputeState doesn't contain tagLink: %s",
+                            expectedInternalTypeTag.documentSelfLink),
+                            c.tagLinks.contains(expectedInternalTypeTag.documentSelfLink));
                 });
 
         // 1 network per each stale vm resource + 1 network for original vm compute state.
@@ -504,8 +506,9 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         networkResults.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
                 .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(
+                    assertNotNull("NetworkState tagLinks is NULL", c.tagLinks);
+                    assertTrue(String.format("NetworkState doesn't contain tagLink: %s",
+                            expectedNetworkInternalTypeTag.documentSelfLink),
                             c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
                 });
 
@@ -520,8 +523,9 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         subnetResults.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), SubnetState.class))
                 .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(
+                    assertNotNull("SubnetState tagLinks is NULL", c.tagLinks);
+                    assertTrue(String.format("SubnetState doesn't contain tagLink: %s",
+                            expectedSubnetInternalTypeTag.documentSelfLink),
                             c.tagLinks.contains(expectedSubnetInternalTypeTag.documentSelfLink));
                 });
 
@@ -535,8 +539,9 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .map(e -> Utils.fromJson(e.getValue(), NetworkInterfaceState.class))
                 .filter(c -> c.regionId != null)
                 .forEach(c -> {
-                    assertNotNull(c.tagLinks);
-                    assertTrue(
+                    assertNotNull("NetworkInterfaceState tagLinks is NULL", c.tagLinks);
+                    assertTrue(String.format("NetworkInterfaceState doesn't contain tagLink: %s",
+                            expectedNicInternalTypeTag.documentSelfLink),
                             c.tagLinks.contains(expectedNicInternalTypeTag.documentSelfLink));
                 });
 
@@ -550,8 +555,13 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         result.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
                 .forEach(c -> {
-                    if (c.type == ComputeType.VM_GUEST) {
-                        assertNotNull(c.creationTimeMicros);
+                    // We don't process VMs that are being terminated. Endpoint disassociation
+                    // is performed at a later stage in enumeration, after resource is created.
+                    if (c.type == ComputeType.VM_GUEST && c.endpointLinks != null &&
+                            !c.endpointLinks.isEmpty()) {
+                        this.host.log("compute state body: %s", Utils.toJsonHtml(c));
+                        assertNotNull("creationTimeMicros for ComputeState of type VM_GUEST "
+                                + "cannot be NULL", c.creationTimeMicros);
                     } else if (c.type == ComputeType.ENDPOINT_HOST) {
                         assertNull(c.creationTimeMicros);
                     }

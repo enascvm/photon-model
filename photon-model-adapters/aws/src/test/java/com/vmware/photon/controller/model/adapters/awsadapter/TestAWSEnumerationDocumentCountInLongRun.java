@@ -612,13 +612,18 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
      * associated with those ids should be the same.
      */
     public void assertDocumentCounts() {
-        // If asserting after deleting provisioned instances, there should be 0 compute state links.
+        Assert.assertTrue("Compute document count mismatch during enumeration",
+                this.instanceIds.size() == this.computeStateLinks.size());
+        // If asserting after deleting provisioned instances, there should be compute state links
+        // with 0 endpoints.
         if (this.postDeletion) {
-            Assert.assertTrue("Compute document count mismatch during enumeration",
-                    0 == this.computeStateLinks.size());
+            for (String computeLink : this.computeStateLinks) {
+                verifyEndpointLinksCount(computeLink, 0);
+            }
         } else {
-            Assert.assertTrue("Compute document count mismatch during enumeration after deletion",
-                    this.instanceIds.size() == this.computeStateLinks.size());
+            for (String computeLink : this.computeStateLinks) {
+                verifyEndpointLinksCount(computeLink, 1);
+            }
         }
 
         Assert.assertTrue("Resource pool document count mismatch during enumeration",
@@ -630,6 +635,19 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         Assert.assertTrue("Subnet document count mismatch during enumeration",
                 getEnumeratedDocumentCountByQueryingIds(this.subnetIds,
                 SubnetState.class) == this.subnetIds.size());
+    }
+
+    private void verifyEndpointLinksCount(String selfLink, int endpointCount) {
+        Operation getCompute = Operation
+                .createGet((UriUtils.buildUri(this.host, selfLink)))
+                .setReferer(this.host.getUri());
+
+        Operation compute = this.host.waitForResponse(getCompute);
+
+        if (compute.getStatusCode() == 200) {
+            ComputeState state = compute.getBody(ComputeState.class);
+            assertEquals(endpointCount, state.endpointLinks.size());
+        }
     }
 
     private void assertNetworkInterfaceLinksAreValid() {
@@ -838,9 +856,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                 .createAWSEndpointStateUsingAllocationTask(this.host,
                         auth.documentSelfLink, this.resourcePool.documentSelfLink,
                         this.accessKey, this.secretKey, "endpoint-two");
-        this.computeHostTwo = createAWSComputeHost(this.host,
-                this.endpointStateTwo, null /*zoneId*/, this.useAllRegions ? null : regionId,
-                this.isAwsClientMock, this.awsMockEndpointReference, null /*tags*/);
+        this.computeHostTwo = this.computeHost;
     }
 
     /**
