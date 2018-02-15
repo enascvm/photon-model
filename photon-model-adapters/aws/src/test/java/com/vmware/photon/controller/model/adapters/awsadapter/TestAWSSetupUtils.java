@@ -1681,12 +1681,10 @@ public class TestAWSSetupUtils {
         AWSRunInstancesAsyncHandler creationHandler = new AWSRunInstancesAsyncHandler(
                 host);
         client.runInstancesAsync(runInstancesRequest, creationHandler);
-        host.waitFor("Waiting for instanceIds to be retured from AWS", () -> {
+        host.waitFor("Waiting for instanceIds to be returned from AWS", () -> {
             return checkInstanceIdsReturnedFromAWS(numberOfInstance, creationHandler.instanceIds);
 
         });
-        tagResources(client, creationHandler.instanceIds, TAG_KEY_FOR_TEST_RESOURCES,
-                TAG_VALUE_FOR_TEST_RESOURCES + TAG_INSTANCE);
         return creationHandler.instanceIds;
     }
 
