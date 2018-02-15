@@ -144,6 +144,11 @@ public class SingleResourceStatsCollectionTaskService
         public boolean isFinalBatch = true;
 
         /**
+         * This flag will be used whether or not to publish InMemoryMetrics
+         */
+        public boolean publishInMemory = false;
+
+        /**
          * Task options.
          */
         public EnumSet<TaskOption> options;
@@ -365,6 +370,7 @@ public class SingleResourceStatsCollectionTaskService
         long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(EXPIRATION_INTERVAL);
         List<Operation> operations = new ArrayList<>();
         List<ResourceMetrics> metricsList = new ArrayList<>();
+
         List<InMemoryResourceMetric> inMemoryMetricsList = new ArrayList<>();
 
         // Push the last collection metric to the in memory stats available at the
@@ -386,13 +392,15 @@ public class SingleResourceStatsCollectionTaskService
         for (ComputeStats stats : currentState.statsList) {
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
 
-            String computeId = UriUtils.getLastPathSegment(stats.computeLink);
-
             InMemoryResourceMetric hourlyMemoryState = new InMemoryResourceMetric();
-            hourlyMemoryState.timeSeriesStats = new HashMap<>();
-            hourlyMemoryState.documentSelfLink = computeId + StatsConstants.HOUR_SUFFIX;
+            if (currentState.publishInMemory) {
+                String computeId = UriUtils.getLastPathSegment(stats.computeLink);
 
-            inMemoryMetricsList.add(hourlyMemoryState);
+                hourlyMemoryState.timeSeriesStats = new HashMap<>();
+                hourlyMemoryState.documentSelfLink = computeId + StatsConstants.HOUR_SUFFIX;
+
+                inMemoryMetricsList.add(hourlyMemoryState);
+            }
 
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 // sort stats by source time
@@ -404,9 +412,11 @@ public class SingleResourceStatsCollectionTaskService
                     if (computeLink == null) {
                         computeLink = currentState.computeLink;
                     }
-                    // update in-memory stats
-                    updateInMemoryStats(hourlyMemoryState, entries.getKey(), serviceStat,
-                            StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
+                    if (currentState.publishInMemory) {
+                        // update in-memory stats
+                        updateInMemoryStats(hourlyMemoryState, entries.getKey(), serviceStat,
+                                StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
+                    }
                     populateResourceMetrics(metricsList, entries.getKey(),
                             serviceStat, computeLink, expirationTime, stats.getCustomProperties());
                 }
@@ -417,9 +427,11 @@ public class SingleResourceStatsCollectionTaskService
                     ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
                     ResourceMetricsService.FACTORY_LINK)).setBodyNoCloning(metrics));
         }
-        for (InMemoryResourceMetric metric : inMemoryMetricsList) {
-            operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
-                            .setBodyNoCloning(metric));
+        if (currentState.publishInMemory) {
+            for (InMemoryResourceMetric metric : inMemoryMetricsList) {
+                operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
+                        .setBodyNoCloning(metric));
+            }
         }
         // Save each data point sequentially to create time based monotonically increasing sequence.
         batchPersistStats(operations, 0, currentState.isFinalBatch);
