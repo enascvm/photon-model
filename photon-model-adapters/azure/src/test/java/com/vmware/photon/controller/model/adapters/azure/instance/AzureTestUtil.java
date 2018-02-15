@@ -886,6 +886,7 @@ public class AzureTestUtil {
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.type = DiskType.HDD;
+        rootDisk.storageType = AZURE_STORAGE_DISKS;
 
         // Custom OSDisk size of 32 GBs
         rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE;

@@ -1077,14 +1077,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .addKindFieldClause(DiskState.class)
                 .addInClause(DiskState.FIELD_NAME_ID, diskIdList, Occurance.SHOULD_OCCUR);
 
-        QueryTop<DiskState> queryDiskStates = new QueryTop<>(
+        QueryByPages<DiskState> queryDiskStates = new QueryByPages<>(
                 getHost(),
                 qBuilder.build(),
                 DiskState.class,
                 ctx.parentCompute.tenantLinks,
                 null, // endpointLink
                 ctx.parentCompute.documentSelfLink)
-                // Use max 10K Top, cause we collect DiskStates
+                .setMaxPageSize(QueryUtils.MAX_RESULT_LIMIT)
                 .setClusterType(ServiceTypeCluster.INVENTORY_SERVICE);
 
         queryDiskStates.collectDocuments(Collectors.toList())
@@ -1445,7 +1445,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 if (AzureUtils.isDiskManaged(vm)) {
                     diskToUpdate = ctx.diskStates.get(dataDisk.managedDisk().id());
                 } else {
-                    diskToUpdate = ctx.diskStates.get(dataDisk.vhd().uri());
+                    diskToUpdate = ctx.diskStates.get(AzureUtils.canonizeId(dataDisk.vhd().uri()));
                 }
 
                 Operation diskToUpdateOp = null;

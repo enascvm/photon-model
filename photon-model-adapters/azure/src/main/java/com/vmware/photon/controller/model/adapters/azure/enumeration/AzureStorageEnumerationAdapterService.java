@@ -1345,6 +1345,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             handleSubStage(context);
             return;
         }
+        context.diskStates.clear();
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
@@ -1352,13 +1353,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         if (context.storageBlobs.size() <= MAX_RESOURCES_TO_QUERY) {
             // do not load resources from enumExternalResourcesIds
+            Collection<String> diskIDList = context.storageBlobs.values().stream()
+                    .map(sb -> canonizeId(QuerySpecification.toMatchValue(sb.getUri())))
+                    .collect(Collectors.toSet());
             qBuilder.addInClause(
-                    ResourceState.FIELD_NAME_ID,
-                    context.storageBlobs.values().stream()
-                            .map(sb -> canonizeId(QuerySpecification.toMatchValue(sb.getUri())))
-                            .collect(Collectors.toSet()));
+                    DiskState.FIELD_NAME_ID,
+                    diskIDList);
         }
-
         qBuilder.addInClause(AZURE_STORAGE_TYPE,
                 Arrays.asList(AZURE_STORAGE_BLOBS, AZURE_STORAGE_DISKS));
 

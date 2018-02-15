@@ -35,6 +35,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,15 +61,19 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
+import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
+import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NicSpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.VMResourceSpec;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext.ImageSource;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -79,8 +84,11 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
@@ -162,6 +170,78 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 return true;
             });
         }
+    }
+
+    /**
+     * Creates Azure instance with 2 data disks via provision task and enumerate the disks
+     * and verify disk duplication in local store.
+     */
+    @Test
+    public void testProvisionDataDisksAndEnumeration() throws Throwable {
+        ImageSource imageSource = createImageSource(getHost(), this.endpointState, IMAGE_REFERENCE);
+
+        // Create a Azure VM compute resource with 2 additional disks.
+        int numberOfAdditionalDisks = 2;
+
+        VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
+                this.endpointState, azureVMName)
+                .withImageSource(imageSource)
+                .withNicSpecs(DEFAULT_NIC_SPEC)
+                .withNumberOfAdditionalDisks(numberOfAdditionalDisks)
+                .withManagedDisk(false);
+
+        // create Azure VM compute resource.
+        this.vmState = createVMResourceFromSpec(vmResourceSpec);
+
+        kickOffProvisionTask();
+
+        runEnumeration();
+
+        // Assert if 2 additional disks were created
+        List<DiskState> diskStates = this.vmState.diskLinks.stream()
+                .map(diskLink -> getHost().getServiceState(
+                        null, DiskState.class, UriUtils.buildUri(getHost(), diskLink)))
+                .collect(Collectors.toList());
+        for (DiskState diskState : diskStates) {
+            if (diskState.bootOrder == 1) {
+                assertEquals("OS Disk size does not match", AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
+                        diskState.capacityMBytes);
+            } else {
+
+                assertEquals("Data Disk size does not match",
+                        AzureTestUtil.AZURE_CUSTOM_DATA_DISK_SIZE, diskState.capacityMBytes);
+
+                if (!this.isMock) {
+                    assertNotNull(diskState.customProperties);
+                    assertNotNull(diskState.customProperties.get(DISK_CONTROLLER_NUMBER));
+                }
+            }
+        }
+
+        // Run enumeration second time to verify disk states are not duplicated
+        runEnumeration();
+        ServiceDocumentQueryResult result = ProvisioningUtils.queryAllFactoryResources(this.host, DiskService.FACTORY_LINK);
+
+        List<DiskState> diskList = result.documents.keySet()
+                .stream()
+                .map(diskLink -> getHost().getServiceState(
+                        null, DiskState.class, UriUtils.buildUri(getHost(), diskLink)))
+                .collect(Collectors.toList());
+
+        for (DiskState diskState : diskStates) {
+            long nameCount = diskList.stream()
+                    .filter(ds -> ds.name.equalsIgnoreCase(diskState.name))
+                    .count();
+            String msg = String.format("Duplicate of DiskState %s must not be present. ", diskState.name);
+            assertEquals(msg, 1, nameCount);
+
+            long idCount = diskList.stream()
+                    .filter(ds -> ds.id.equalsIgnoreCase(diskState.id))
+                    .count();
+            String idMsg = String.format("Duplicate of DiskState ID %s must not be present. ", diskState.id);
+            assertEquals(idMsg, 1, idCount);
+        }
+
     }
 
     /**
@@ -510,7 +590,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                             azureOsDisk.managedDisk().id(), bootDiskState.id);
                 } else {
                     assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
-                            azureOsDisk.vhd().uri(), bootDiskState.id);
+                            AzureUtils.canonizeId(azureOsDisk.vhd().uri()), bootDiskState.id);
                 }
 
                 assertEquals("OS Disk size of the VM in azure does not match with the intended size",
@@ -534,11 +614,11 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
                 if (dataDiskState.customProperties != null && dataDiskState.customProperties
                         .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
-                    assertEquals("Boot DiskState.id does not match Azure managed disk id.",
+                    assertEquals("Data Disk State id does not match Azure managed disk id.",
                             azureDataDisk.managedDisk().id(), dataDiskState.id);
                 } else {
-                    assertEquals("Boot DiskState.id does not match Azure.osDisk.vhd.uri",
-                            azureDataDisk.vhd().uri(), dataDiskState.id);
+                    assertEquals("Data Disk State id does not match Azure DataDisk.vhd.uri",
+                            AzureUtils.canonizeId(azureDataDisk.vhd().uri()), dataDiskState.id);
                 }
 
                 // assert size of each of the attached disks only in case of public image
@@ -607,4 +687,38 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             }
         }
     }
+
+    private void runEnumeration() throws Throwable {
+        ResourceEnumerationTaskService.ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
+
+        enumerationTaskState.endpointLink = endpointState.documentSelfLink;
+        enumerationTaskState.tenantLinks = endpointState.tenantLinks;
+        enumerationTaskState.parentComputeLink = computeHost.documentSelfLink;
+        enumerationTaskState.enumerationAction = EnumerationAction.START;
+        enumerationTaskState.adapterManagementReference = UriUtils
+                .buildUri(AzureEnumerationAdapterService.SELF_LINK);
+        enumerationTaskState.resourcePoolLink = computeHost.resourcePoolLink;
+        if (this.isMock) {
+            enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
+
+        ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask = TestUtils
+                .doPost(this.host, enumerationTaskState, ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
+                        UriUtils.buildUri(this.host, ResourceEnumerationTaskService.FACTORY_LINK));
+
+        this.host.waitFor("Error waiting for enumeration task", () -> {
+            try {
+                ResourceEnumerationTaskService.ResourceEnumerationTaskState state = this.host
+                        .waitForFinishedTask(ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
+                                enumTask.documentSelfLink);
+                if (state != null) {
+                    return true;
+                }
+            } catch (Throwable e) {
+                return false;
+            }
+            return false;
+        });
+    }
+
 }

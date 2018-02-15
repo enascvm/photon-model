@@ -1498,7 +1498,7 @@ public class AzureInstanceService extends StatelessService {
             if (ctx.useManagedDisks()) {
                 diskStateToUpdate.id = azureOsDisk.managedDisk().id();
             } else {
-                diskStateToUpdate.id = azureOsDisk.vhd().uri();
+                diskStateToUpdate.id = AzureUtils.canonizeId(azureOsDisk.vhd().uri());
             }
             diskStateToUpdate.status = DiskService.DiskStatus.ATTACHED;
             Operation updateDiskState = Operation
@@ -1615,7 +1615,7 @@ public class AzureInstanceService extends StatelessService {
         if (ctx.useManagedDisks()) {
             diskStateToUpdate.id = azureDataDisk.managedDisk().id();
         } else {
-            diskStateToUpdate.id = azureDataDisk.vhd().uri();
+            diskStateToUpdate.id = AzureUtils.canonizeId(azureDataDisk.vhd().uri());
         }
 
         // The LUN value of disk
