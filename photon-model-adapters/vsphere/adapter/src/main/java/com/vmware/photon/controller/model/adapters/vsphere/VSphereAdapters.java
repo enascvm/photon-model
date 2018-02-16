@@ -15,6 +15,8 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
@@ -85,5 +87,15 @@ public class VSphereAdapters {
             host.log(Level.WARNING, "Exception staring vSphere adapters: %s",
                     Utils.toString(e));
         }
+    }
+
+    /**
+     * API to define the list of adapter Uris to be excluded from swagger documentation generation.
+     * The service SELF_LINK need to be specified here.
+     *
+     * @return list of self links whose swagger generation needs to be excluded.
+     */
+    public static List<String> swaggerExcludedPrefixes() {
+        return Arrays.asList(new String[]{});
     }
 }
