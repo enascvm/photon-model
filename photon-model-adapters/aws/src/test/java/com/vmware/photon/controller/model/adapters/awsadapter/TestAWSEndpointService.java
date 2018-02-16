@@ -16,11 +16,8 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SESSION_TOKEN_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 
 import java.util.EnumSet;
@@ -30,7 +27,6 @@ import java.util.logging.Level;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
@@ -55,9 +51,6 @@ public class TestAWSEndpointService extends BasicTestCase {
     public String accessKey = "access-key";
     public String secretKey = "secret-key";
     public String regionId = "us-east-1";
-    public String sessionToken = "session-token";
-    public String arn = "mock-arn";
-    public String externalId = "mock-external-id";
     public boolean isMock = true;
 
     // The actual test Endpoint Specific runner
@@ -96,17 +89,6 @@ public class TestAWSEndpointService extends BasicTestCase {
 
     @Test
     public void testValidateCredentials() throws Throwable {
-
-        this.endpointTestsRunner.testValidateCredentials(this.endpointState);
-    }
-
-    @Test
-    @Ignore("https://jira.eng.vmware.com/browse/VCOM-3360")
-    public void testValidateSessionCredentials() throws Throwable {
-
-        this.endpointState.endpointProperties.put(SESSION_TOKEN_KEY, this.sessionToken);
-        this.endpointState.endpointProperties.put(ARN_KEY, this.arn);
-        this.endpointState.endpointProperties.put(EXTERNAL_ID_KEY, this.externalId);
 
         this.endpointTestsRunner.testValidateCredentials(this.endpointState);
     }
