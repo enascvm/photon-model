@@ -358,7 +358,8 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(collectTagsDRs).handle((collectedTagStates, ex) -> {
             if (ex != null) {
-                String msg = "Could not get TagState documents from tag links.";
+                String msg = String.format(
+                        "Error getting TagState states for [%s] VM.", context.child.name);
                 throw new IllegalStateException(msg, ex);
             }
 

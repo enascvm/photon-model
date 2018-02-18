@@ -484,7 +484,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         // validate internal tags for enumerated VMs
         TagService.TagState expectedInternalTypeTag = newTagState(TAG_KEY_TYPE,
-                AzureConstants.AzureResourceType.azure_vm.toString(), false,
+                AzureConstants.AzureResourceType.azure_vm.toString(), EnumSet.of(SYSTEM),
                 endpointState.tenantLinks);
         result.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
