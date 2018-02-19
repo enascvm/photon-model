@@ -13,12 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
@@ -37,23 +39,23 @@ import com.vmware.xenon.common.Utils;
 public class VSphereAdapters {
 
     private static final ServiceMetadata[] SERVICES_METADATA = {
-            service(VSphereAdapterInstanceService.class),
-            service(VSphereAdapterPowerService.class),
-            service(VSphereAdapterSnapshotService.class),
-            service(VSphereListComputeSnapshotService.class),
-            service(VSphereAdapterResourceEnumerationService.class),
-            service(VSphereAdapterStatsService.class),
-            service(OvfImporterService.class),
-            service(DatacenterEnumeratorService.class),
-            service(VsphereResourceCleanerService.class),
-            service(VSphereEndpointAdapterService.class),
-            service(DvsNetworkService.class),
-            service(VSphereAdapterImageEnumerationService.class),
-            service(VSphereAdapterD2PowerOpsService.class),
-            service(VSphereAdapterResizeComputeService.class),
-            service(VSphereDiskService.class),
-            service(VSphereComputeDiskManagementService.class),
-            service(VSphereRegionEnumerationAdapterService.class)
+            adapter(VSphereAdapterInstanceService.class, AdapterTypePath.INSTANCE_ADAPTER),
+            adapter(VSphereAdapterPowerService.class, AdapterTypePath.POWER_ADAPTER),
+            adapter(VSphereAdapterSnapshotService.class),
+            adapter(VSphereListComputeSnapshotService.class),
+            adapter(VSphereAdapterResourceEnumerationService.class, AdapterTypePath.ENUMERATION_ADAPTER),
+            adapter(VSphereAdapterStatsService.class, AdapterTypePath.STATS_ADAPTER),
+            adapter(OvfImporterService.class),
+            adapter(DatacenterEnumeratorService.class),
+            adapter(VsphereResourceCleanerService.class),
+            adapter(VSphereEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER),
+            adapter(DvsNetworkService.class, AdapterTypePath.SUBNET_ADAPTER),
+            adapter(VSphereAdapterImageEnumerationService.class, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER),
+            adapter(VSphereAdapterD2PowerOpsService.class),
+            adapter(VSphereAdapterResizeComputeService.class),
+            adapter(VSphereDiskService.class, AdapterTypePath.DISK_ADAPTER),
+            adapter(VSphereComputeDiskManagementService.class),
+            adapter(VSphereRegionEnumerationAdapterService.class, AdapterTypePath.REGION_ENUMERATION_ADAPTER)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
@@ -82,7 +84,7 @@ public class VSphereAdapters {
                     host,
                     EndpointType.vsphere,
                     LINKS,
-                    VSphereUriPaths.VSPHERE_ADAPTER_LINK_TYPES);
+                    getPublicAdapters(SERVICES_METADATA));
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring vSphere adapters: %s",
                     Utils.toString(e));

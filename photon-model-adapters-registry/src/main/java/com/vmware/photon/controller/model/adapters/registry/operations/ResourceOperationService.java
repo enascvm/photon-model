@@ -30,33 +30,41 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
 /**
- * This service returns a list of available {@link ResourceOperationSpec}s for given {@link
- * ResourceState}
+ * This service returns a list of available {@link ResourceOperationSpec}s for given
+ * {@link ResourceState}
  * <p>
  * Supported resource states are {@link ComputeState} and {@link NetworkState}
  * <p>
- * The service serves GET requests on address /resources/resource-operations?resource=&lt;resource.documentSelfLink&gt;
- * and returns a list of {@link ResourceOperationSpec} available for the current state of the {@link
- * ResourceState} identified by the provided {@code resource.documentSelfLink}
+ * The service serves GET requests on address
+ * /resources/resource-operations?resource=&lt;resource.documentSelfLink&gt; and returns a list of
+ * {@link ResourceOperationSpec} available for the current state of the {@link ResourceState}
+ * identified by the provided {@code resource.documentSelfLink}
  * <p>
  * Example:
+ *
  * <pre>
- *  String query = UriUtils.buildUriQuery(
- *          ResourceOperationService.QUERY_PARAM_RESOURCE,
- *          createdComputeState.documentSelfLink);
+ * String query = UriUtils.buildUriQuery(
+ *         ResourceOperationService.QUERY_PARAM_RESOURCE,
+ *         createdComputeState.documentSelfLink);
  *
  * URI uri = UriUtils.buildUri(super.host, ResourceOperationService.SELF_LINK, query);
  * Operation op = Operation.createGet(uri);
  *
- *  // send get request
- *  // on response get result:
+ * // send get request
+ * // on response get result:
  *
- *  String json = Utils.toJson(operation.getBodyRaw());
- *  List&lt;ResourceOperationSpec&gt; list = Utils.fromJson(
- *          json,
- *          new TypeToken&lt;List&lt;ResourceOperationSpec&gt;&gt;() {}.getType());
+ * String json = Utils.toJson(operation.getBodyRaw());
+ * List&lt;ResourceOperationSpec&gt; list = Utils.fromJson(
+ *         json,
+ *         new TypeToken&lt;List&lt;ResourceOperationSpec&gt;&gt;() {
+ *         }.getType());
  *
  * </pre>
+ *
+ * <p>
+ * The task SHOULD be started as privileged service in order to call
+ * {@link ResourceOperationSpecService} with system auth context to get non-tenanted
+ * {@link ResourceOperationSpec} data.
  */
 public class ResourceOperationService extends StatelessService {
 

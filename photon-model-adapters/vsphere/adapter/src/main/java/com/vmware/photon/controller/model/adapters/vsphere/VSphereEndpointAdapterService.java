@@ -241,15 +241,15 @@ public class VSphereEndpointAdapterService extends StatelessService {
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
 
-            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.instanceAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     VSphereUriPaths.INSTANCE_SERVICE);
-            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.enumerationAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     VSphereUriPaths.ENUMERATION_SERVICE);
-            cd.statsAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.statsAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     VSphereUriPaths.STATS_SERVICE);
-            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.powerAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     VSphereUriPaths.POWER_SERVICE);
-            cd.diskAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.diskAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     VSphereUriPaths.DISK_SERVICE);
         };
     }

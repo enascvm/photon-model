@@ -61,21 +61,32 @@ public class AdapterUriUtil {
         return pathTemplate;
     }
 
+    /**
+     * Builds an adapter reference using {@value ServiceHost#LOCAL_HOST}.
+     * <p>NOTE: <b>use with care!</b>
+     */
     public static URI buildAdapterUri(ServiceHost host, String path) {
         return buildAdapterUri(host.getPort(), path);
     }
 
+    /**
+     * Builds an adapter reference using {@value ServiceHost#LOCAL_HOST}.
+     * <p>NOTE: <b>use with care!</b>
+     */
     public static URI buildAdapterUri(int port, String path) {
-        return UriUtils.buildUri(ServiceHost.LOCAL_HOST, port, path, null);
+        return buildAdapterUri(ServiceHost.LOCAL_HOST, port, path);
     }
 
     /**
-     * Builds a adapter reference using the host's public URI.
+     * Builds an adapter reference using the host's public URI.
      */
     public static URI buildPublicAdapterUri(ServiceHost host, String path) {
-        return buildAdapterUri(host.getPublicUri().getHost(), host.getPort(), path);
+        return buildAdapterUri(host.getPublicUri().getHost(), host.getPublicUri().getPort(), path);
     }
 
+    /**
+     * Builds an adapter reference using the given host URI.
+     */
     public static URI buildAdapterUri(String host, int port, String path) {
         return UriUtils.buildUri(host, port, path, null);
     }

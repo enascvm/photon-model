@@ -43,7 +43,7 @@ import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
-import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersConfigAccessService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
@@ -509,13 +509,13 @@ public class ImageEnumerationTaskService
     private DeferredResult<SendImageEnumerationAdapterContext> getImageEnumerationAdapterReference(
             SendImageEnumerationAdapterContext ctx) {
 
-        // We use 'endpointType' (such as aws, azure) as AdapterConfig id/selfLink!
-        String uri = buildUriPath(
-                PhotonModelAdaptersRegistryService.FACTORY_LINK, ctx.endpointState.endpointType);
+        // Use 'endpointType' (such as aws, azure) as AdapterConfig id/selfLink!
+        String configLink = buildUriPath(
+                PhotonModelAdaptersConfigAccessService.SELF_LINK, ctx.endpointState.endpointType);
 
-        Operation getEndpointConfigOp = Operation.createGet(this, uri);
+        Operation getConfigOp = Operation.createGet(this, configLink);
 
-        return sendWithDeferredResult(getEndpointConfigOp, PhotonModelAdapterConfig.class)
+        return sendWithDeferredResult(getConfigOp, PhotonModelAdapterConfig.class)
                 .thenApply(endpointConfig -> {
                     // Lookup the 'image-enumeration' URI for passed end-point
                     if (endpointConfig.adapterEndpoints != null) {

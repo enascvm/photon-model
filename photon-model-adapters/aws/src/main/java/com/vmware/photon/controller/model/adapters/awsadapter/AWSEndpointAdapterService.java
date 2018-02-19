@@ -173,7 +173,7 @@ public class AWSEndpointAdapterService extends StatelessService {
      */
     private void validateCredentialsWithRegions(
             AuthCredentialsServiceState credentials, AtomicInteger index,
-            Regions[] regions, DeferredResult deferredResult) {
+            Regions[] regions, DeferredResult<Void> deferredResult) {
 
         if (index.get() >= regions.length) {
             //Unable to validate in any of the Regions.
@@ -190,7 +190,7 @@ public class AWSEndpointAdapterService extends StatelessService {
                 .whenComplete((res,e) -> {
                     if (e == null) {
                         //Validation succeeded in the region
-                        deferredResult.complete(null);
+                        deferredResult.complete((Void) null);
                         return;
                     }
 
@@ -275,28 +275,31 @@ public class AWSEndpointAdapterService extends StatelessService {
             cd.regionId = r.get(REGION_KEY).orElse(null);
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
+
             List<String> children = new ArrayList<>();
             children.add(ComputeType.ZONE.toString());
             cd.supportedChildren = children;
 
-            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+            cd.instanceAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     AWSUriPaths.AWS_INSTANCE_ADAPTER);
-            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+            cd.enumerationAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     AWSUriPaths.AWS_ENUMERATION_ADAPTER);
-            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+            cd.powerAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     AWSUriPaths.AWS_POWER_ADAPTER);
-            cd.diskAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+            cd.diskAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     AWSUriPaths.AWS_DISK_ADAPTER);
 
-            URI statsAdapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
-                    AWSUriPaths.AWS_STATS_ADAPTER);
-            URI costStatsAdapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
-                    AWSUriPaths.AWS_COST_STATS_ADAPTER);
+            {
+                URI statsAdapterUri = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+                        AWSUriPaths.AWS_STATS_ADAPTER);
+                URI costStatsAdapterUri = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+                        AWSUriPaths.AWS_COST_STATS_ADAPTER);
 
-            cd.statsAdapterReferences = new LinkedHashSet<>();
-            cd.statsAdapterReferences.add(costStatsAdapterUri);
-            cd.statsAdapterReferences.add(statsAdapterUri);
-            cd.statsAdapterReference = statsAdapterUri;
+                cd.statsAdapterReferences = new LinkedHashSet<>();
+                cd.statsAdapterReferences.add(costStatsAdapterUri);
+                cd.statsAdapterReferences.add(statsAdapterUri);
+                cd.statsAdapterReference = statsAdapterUri;
+            }
         };
     }
 

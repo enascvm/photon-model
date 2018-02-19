@@ -13,10 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
@@ -70,8 +66,8 @@ public class AzureUriPaths {
             + "/subscription-endpoint-creator";
     public static final String AZURE_SUBSCRIPTION_ENDPOINTS_ENUMERATOR = PROVISIONING_AZURE
             + "/subscription-endpoints-enumerator";
-    public static final String AZURE_REGION_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AZURE
-            + "/region-enumeration-adapter";
+    public static final String AZURE_REGION_ENUMERATION_ADAPTER_SERVICE = AdapterTypePath.REGION_ENUMERATION_ADAPTER
+            .adapterLink(EndpointType.azure.name());
 
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.azure.name());
@@ -93,38 +89,4 @@ public class AzureUriPaths {
 
     public static final String AZURE_INSTANCE_TYPE_ADAPTER = UriUtils.buildUriPath(ADAPTER_AZURE,
             "instance-type-adapter");
-
-    /**
-     * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
-     */
-    public static final Map<String, String> AZURE_ADAPTER_LINK_TYPES;
-
-    static {
-        Map<String, String> adapterLinksByType = new HashMap<>();
-
-        adapterLinksByType.put(AZURE_INSTANCE_ADAPTER, AdapterTypePath.INSTANCE_ADAPTER.key);
-        adapterLinksByType.put(AZURE_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER.key);
-        adapterLinksByType.put(AZURE_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER.key);
-        adapterLinksByType.put(AZURE_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
-        adapterLinksByType.put(AZURE_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
-        adapterLinksByType.put(AZURE_SECURITY_GROUP_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER.key);
-        adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER.key);
-        adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER.key);
-        adapterLinksByType.put(AZURE_DISK_ADAPTER, AdapterTypePath.DISK_ADAPTER.key);
-        adapterLinksByType.put(AZURE_LOAD_BALANCER_ADAPTER, AdapterTypePath.LOAD_BALANCER_ADAPTER.key);
-        adapterLinksByType.put(AZURE_REGION_ENUMERATION_ADAPTER_SERVICE, AdapterTypePath.REGION_ENUMERATION_ADAPTER.key);
-
-        AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
-    }
-
-    public static final Map<String, String> AZURE_EA_ADAPTER_LINK_TYPES;
-
-    static {
-        Map<String, String>  azureEaLinksByType = new HashMap<>();
-        azureEaLinksByType.put(AZURE_COST_STATS_ADAPTER, AdapterTypePath.COST_STATS_ADAPTER.key);
-        azureEaLinksByType.put(AZURE_EA_ENDPOINT_CONFIG_ADAPTER,
-                AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
-
-        AZURE_EA_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(azureEaLinksByType);
-    }
 }

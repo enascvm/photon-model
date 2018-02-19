@@ -13,12 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 
@@ -51,23 +46,4 @@ public class VSphereUriPaths {
     public static final String RESOURCE_CLEANER = PROVISIONING + "/resource-cleaner";
     public static final String VSPHERE_REGION_ENUMERATION_ADAPTER_SERVICE = PROVISIONING + "/region-enumeration-adapter";
 
-    /**
-     * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
-     */
-    public static final Map<String, String> VSPHERE_ADAPTER_LINK_TYPES;
-
-    static {
-        Map<String, String> adapterLinksByType = new HashMap<>();
-
-        adapterLinksByType.put(INSTANCE_SERVICE, AdapterTypePath.INSTANCE_ADAPTER.key);
-        adapterLinksByType.put(DVS_NETWORK_SERVICE, AdapterTypePath.SUBNET_ADAPTER.key);
-        adapterLinksByType.put(STATS_SERVICE, AdapterTypePath.STATS_ADAPTER.key);
-        adapterLinksByType.put(ENUMERATION_SERVICE, AdapterTypePath.ENUMERATION_ADAPTER.key);
-        adapterLinksByType.put(IMAGE_ENUMERATION_SERVICE, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
-        adapterLinksByType.put(ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
-        adapterLinksByType.put(POWER_SERVICE, AdapterTypePath.POWER_ADAPTER.key);
-        adapterLinksByType.put(VSPHERE_REGION_ENUMERATION_ADAPTER_SERVICE, AdapterTypePath.REGION_ENUMERATION_ADAPTER.key);
-
-        VSPHERE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
-    }
 }

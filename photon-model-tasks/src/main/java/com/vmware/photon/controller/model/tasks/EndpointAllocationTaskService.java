@@ -38,7 +38,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
-import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersConfigAccessService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -63,7 +63,6 @@ import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -1096,7 +1095,7 @@ public class EndpointAllocationTaskService
             return;
         }
 
-        getAdapterUri(this, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER,
+        getAdapterUri(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER,
                 state.endpointState.endpointType)
                 .whenComplete((uri, throwable) -> {
                     if (throwable != null) {
@@ -1120,6 +1119,7 @@ public class EndpointAllocationTaskService
                     EndpointAllocationTaskState updateSubStageTask = createUpdateSubStageTask(
                             nextStage);
                     updateSubStageTask.adapterReference = uri;
+
                     sendSelfPatch(updateSubStageTask);
                 });
     }
@@ -1129,23 +1129,31 @@ public class EndpointAllocationTaskService
      *
      * @return DeferredResult<URI> URI can be null
      */
-    private static DeferredResult<URI> getAdapterUri(StatefulService service, AdapterTypePath
-            adapterTypePath,
+    private DeferredResult<URI> getAdapterUri(
+            AdapterTypePath adapterTypePath,
             String endpointType) {
-        String configLink = UriUtils.buildUriPath(PhotonModelAdaptersRegistryService.FACTORY_LINK,
-                endpointType);
-        Operation op = Operation
-                .createGet(UriUtils.buildUri(service.getHost(), configLink));
 
-        return service.sendWithDeferredResult(op, PhotonModelAdapterConfig.class)
+        // Use 'endpointType' (such as aws, azure) as AdapterConfig id/selfLink!
+        String configLink = UriUtils.buildUriPath(
+                PhotonModelAdaptersConfigAccessService.SELF_LINK, endpointType);
+
+        Operation getConfigOp = Operation.createGet(this, configLink);
+
+        return sendWithDeferredResult(getConfigOp, PhotonModelAdapterConfig.class)
                 .thenApply(adapterConfig -> {
                     String ref = null;
-                    if (adapterConfig != null
-                            && adapterConfig.adapterEndpoints != null) {
-                        ref = adapterConfig.adapterEndpoints
-                                .get(adapterTypePath.key);
+
+                    if (adapterConfig != null && adapterConfig.adapterEndpoints != null) {
+                        ref = adapterConfig.adapterEndpoints.get(adapterTypePath.key);
                     }
-                    return ref != null ? UriUtils.buildUri(ref) : null;
+
+                    final URI uri = ref != null ? UriUtils.buildUri(ref) : null;
+
+                    logInfo(() -> String.format(
+                            "[getAdapterUri] adapterRef = %s: SUCCESS",
+                            uri));
+
+                    return uri;
                 });
     }
 }

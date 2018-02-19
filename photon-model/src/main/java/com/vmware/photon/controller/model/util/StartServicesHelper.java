@@ -14,16 +14,20 @@
 package com.vmware.photon.controller.model.util;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 
@@ -68,21 +72,90 @@ public class StartServicesHelper {
      * @see com.vmware.photon.controller.model.PhotonModelServices#startServices(ServiceHost)
      */
     public static void startServices(ServiceHost host, ServiceMetadata[] servicesMetadata) {
-        Arrays.stream(servicesMetadata).forEach(serviceDesc -> serviceDesc.start(host));
+
+        startServices(host, tryAddPrivilegedService(host), servicesMetadata);
+    }
+
+    /**
+     * Use this method to start the set of services asynchronously.
+     *
+     * @see com.vmware.photon.controller.model.PhotonModelServices#startServices(ServiceHost)
+     */
+    public static void startServices(
+            ServiceHost host,
+            Consumer<Class<? extends Service>> addPrivilegedService,
+            ServiceMetadata[] servicesMetadata) {
+
+        Arrays.stream(servicesMetadata)
+                .forEach(serviceMetadata -> serviceMetadata.start(host, addPrivilegedService));
     }
 
     /**
      * Use this method to start the set of services synchronously.
      */
-    public static void startServicesSynchronously(ServiceHost host,
+    public static void startServicesSynchronously(
+            ServiceHost host,
+            ServiceMetadata[] servicesMetadata) {
+
+        startServicesSynchronously(host, tryAddPrivilegedService(host), servicesMetadata);
+    }
+
+    /**
+     * Use this method to start the set of services synchronously.
+     */
+    public static void startServicesSynchronously(
+            ServiceHost host,
+            Consumer<Class<? extends Service>> addPrivilegedService,
             ServiceMetadata[] servicesMetadata) {
         try {
             for (ServiceMetadata serviceMetadata : servicesMetadata) {
-                serviceMetadata.startSynchronously(host);
+                serviceMetadata.startSynchronously(host, addPrivilegedService);
             }
         } catch (Throwable t) {
             host.log(Level.SEVERE, "Failed starting service synchronously: %s", t.getMessage());
         }
+    }
+
+    /**
+     * The following method is introduced to prevent touching tests to start services as
+     * Privileged. It follows 'convention over configuration' principle. Passing any host that has
+     * <b>public</b> {@code addPrivilegedService} method (such as {@code VerificationHost}) will
+     * automatically use it if {@link ServiceMetadata#requirePrivileged}.
+     *
+     * <p>
+     * In production code the EXPLICIT {@code addPrivilegedService} handler should be passed to
+     * start the service.
+     */
+    private static Consumer<Class<? extends Service>> tryAddPrivilegedService(ServiceHost host) {
+
+        final String addPrivilegedServiceName = "addPrivilegedService";
+
+        Consumer<Class<? extends Service>> addPrivilegedService = null;
+        try {
+            Method addPrivilegedServiceMethod = host.getClass().getDeclaredMethod(
+                    addPrivilegedServiceName, Class.class);
+
+            if (Modifier.isPublic(addPrivilegedServiceMethod.getModifiers())) {
+
+                addPrivilegedService = (Class<? extends Service> serviceClass) -> {
+                    try {
+                        addPrivilegedServiceMethod.invoke(host, serviceClass);
+                    } catch (Exception exc) {
+                        host.log(Level.WARNING, "Failed calling '%s' method on '%s' host: %s",
+                                addPrivilegedServiceName,
+                                host.getClass().getSimpleName(),
+                                Utils.toString(exc));
+                    }
+                };
+            }
+        } catch (Exception exc) {
+            host.log(Level.WARNING, "Failed getting '%s' method on '%s' host: %s",
+                    addPrivilegedServiceName,
+                    host.getClass().getSimpleName(),
+                    Utils.toString(exc));
+        }
+
+        return addPrivilegedService;
     }
 
     /**
@@ -150,6 +223,21 @@ public class StartServicesHelper {
 
         private final String link;
 
+        /**
+         * Extra properties specific/attached to this service metadata. Used for extensibility
+         * purpose.
+         */
+        public final Map<String, Object> extension = new HashMap<>();
+
+        /**
+         * A flag indicating that this service require to be started as privileged. It is up to the
+         * starter [host] whether to grant system privilege or not.
+         *
+         * <p>
+         * Default value is {@code false}.
+         */
+        public boolean requirePrivileged = false;
+
         private ServiceMetadata(
                 boolean isFactory,
                 Class<? extends Service> serviceClass,
@@ -159,6 +247,7 @@ public class StartServicesHelper {
             this.serviceClass = serviceClass;
             this.factoryCreator = factoryCreator;
 
+            // Calculate and cache the link
             this.link = initLink();
         }
 
@@ -167,6 +256,16 @@ public class StartServicesHelper {
             return "ServiceMetadata["
                     + (this.isFactory ? "factory" : "service") + ":"
                     + this.serviceClass.getSimpleName() + "]";
+        }
+
+        /**
+         * Indicates this service require to be started as privileged or not.
+         */
+        public ServiceMetadata requirePrivileged(boolean requirePrivileged) {
+
+            this.requirePrivileged = requirePrivileged;
+
+            return this;
         }
 
         /**
@@ -182,7 +281,7 @@ public class StartServicesHelper {
          * instance of this service class most commonly used to call {@link Service#getStateType()}.
          */
         public Service serviceInstance() {
-            // Every call MUST return new service instance case the same service
+            // Every call MUST return new service instance cause the same service
             // might be run on two hosts
             return newServiceInstance();
         }
@@ -240,7 +339,14 @@ public class StartServicesHelper {
         /**
          * Start the service asynchronously considering its type.
          */
-        private void start(ServiceHost serviceHost) {
+        private void start(
+                ServiceHost serviceHost,
+                Consumer<Class<? extends Service>> addPrivilegedService) {
+
+            if (addPrivilegedService != null && this.requirePrivileged) {
+                addPrivilegedService.accept(this.serviceClass);
+            }
+
             if (!this.isFactory) {
 
                 serviceHost.startService(serviceInstance());
@@ -260,7 +366,13 @@ public class StartServicesHelper {
         /**
          * Start the service synchronously considering its type.
          */
-        private void startSynchronously(ServiceHost serviceHost) throws Throwable {
+        private void startSynchronously(
+                ServiceHost serviceHost,
+                Consumer<Class<? extends Service>> addPrivilegedService) throws Throwable {
+
+            if (addPrivilegedService != null && this.requirePrivileged) {
+                addPrivilegedService.accept(this.serviceClass);
+            }
 
             Service newServiceInstance = serviceInstance();
 

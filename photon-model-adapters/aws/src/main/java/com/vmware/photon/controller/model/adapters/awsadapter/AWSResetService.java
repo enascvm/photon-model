@@ -24,7 +24,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
@@ -39,9 +38,7 @@ import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.StatelessService;
 
 public class AWSResetService extends StatelessService {
-    public static final String SELF_LINK = ResourceOperationSpecService.buildDefaultAdapterLink(
-            EndpointType.aws.name(), ResourceType.COMPUTE,
-            ResourceOperation.RESET.name());
+    public static final String SELF_LINK = AWSUriPaths.AWS_RESET_ADAPTER;
 
     private AWSClientManager clientManager;
 

@@ -87,7 +87,7 @@ public class AzureEaEndpointAdapterService extends StatelessService {
         return (cd, r) -> {
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
-            URI costStatsAdapterUri = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            URI costStatsAdapterUri = AdapterUriUtil.buildPublicAdapterUri(getHost(),
                     AzureUriPaths.AZURE_COST_STATS_ADAPTER);
             cd.statsAdapterReferences = new LinkedHashSet<>();
             cd.statsAdapterReferences.add(costStatsAdapterUri);

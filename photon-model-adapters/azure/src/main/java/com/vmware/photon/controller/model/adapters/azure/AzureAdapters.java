@@ -13,12 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.azure;
 
-import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.azure.d2o.AzureLifecycleOperationService;
 import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
@@ -51,23 +53,23 @@ import com.vmware.xenon.common.Utils;
 public class AzureAdapters {
 
     public static final ServiceMetadata[] SERVICES_METADATA = {
-            service(AzureEnumerationAdapterService.class),
-            service(AzureImageEnumerationAdapterService.class),
-            service(AzureInstanceTypeService.class),
-            service(AzureInstanceService.class),
-            service(AzureDiskService.class),
-            service(AzureComputeDiskDay2Service.class),
-            service(AzureSubnetService.class),
-            service(AzureSecurityGroupService.class),
-            service(AzureLoadBalancerService.class),
-            service(AzureStatsService.class),
-            service(AzureComputeStatsGatherer.class),
-            service(AzureComputeHostStatsGatherer.class),
-            service(AzureComputeHostStorageStatsGatherer.class),
-            service(AzureEndpointAdapterService.class),
-            service(AzurePowerService.class),
-            service(AzureLifecycleOperationService.class),
-            service(AzureRegionEnumerationAdapterService.class)
+            adapter(AzureEnumerationAdapterService.class, AdapterTypePath.ENUMERATION_ADAPTER),
+            adapter(AzureImageEnumerationAdapterService.class, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER),
+            adapter(AzureInstanceTypeService.class),
+            adapter(AzureInstanceService.class, AdapterTypePath.INSTANCE_ADAPTER),
+            adapter(AzureDiskService.class, AdapterTypePath.DISK_ADAPTER),
+            adapter(AzureComputeDiskDay2Service.class, AdapterTypePath.DISK_DAY2_ADAPTER),
+            adapter(AzureSubnetService.class, AdapterTypePath.SUBNET_ADAPTER),
+            adapter(AzureSecurityGroupService.class, AdapterTypePath.SECURITY_GROUP_ADAPTER),
+            adapter(AzureLoadBalancerService.class, AdapterTypePath.LOAD_BALANCER_ADAPTER),
+            adapter(AzureStatsService.class, AdapterTypePath.STATS_ADAPTER),
+            adapter(AzureComputeStatsGatherer.class),
+            adapter(AzureComputeHostStatsGatherer.class),
+            adapter(AzureComputeHostStorageStatsGatherer.class),
+            adapter(AzureEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER),
+            adapter(AzurePowerService.class, AdapterTypePath.POWER_ADAPTER),
+            adapter(AzureLifecycleOperationService.class),
+            adapter(AzureRegionEnumerationAdapterService.class, AdapterTypePath.REGION_ENUMERATION_ADAPTER)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
@@ -93,7 +95,7 @@ public class AzureAdapters {
             }
 
             EndpointAdapterUtils.registerEndpointAdapters(
-                    host, EndpointType.azure, LINKS, AzureUriPaths.AZURE_ADAPTER_LINK_TYPES);
+                    host, EndpointType.azure, LINKS, getPublicAdapters(SERVICES_METADATA));
 
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring Azure adapters: %s",

@@ -13,12 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSMissingResourcesEnumerationService;
@@ -38,25 +40,25 @@ import com.vmware.xenon.common.Utils;
 public class AWSAdapters {
 
     public static final ServiceMetadata[] SERVICES_METADATA = {
-            service(AWSInstanceService.class),
-            service(AWSNetworkService.class),
-            service(AWSDiskService.class),
-            service(AWSSubnetService.class),
-            service(AWSLoadBalancerService.class),
-            service(AWSStatsService.class),
-            service(AWSCostStatsService.class),
-            service(AWSReservedInstancePlanService.class),
-            service(AWSEnumerationAdapterService.class),
-            service(AWSImageEnumerationAdapterService.class),
-            service(AWSInstanceTypeService.class),
-            service(AWSEndpointAdapterService.class),
-            service(AWSPowerService.class),
-            service(AWSSecurityGroupService.class),
-            service(AWSMissingResourcesEnumerationService.class),
-            service(AWSRebootService.class),
-            service(AWSComputeDiskDay2Service.class),
-            service(AWSResetService.class),
-            service(AWSRegionEnumerationAdapterService.class)
+            adapter(AWSInstanceService.class, AdapterTypePath.INSTANCE_ADAPTER),
+            adapter(AWSNetworkService.class, AdapterTypePath.NETWORK_ADAPTER),
+            adapter(AWSDiskService.class, AdapterTypePath.DISK_ADAPTER),
+            adapter(AWSSubnetService.class, AdapterTypePath.SUBNET_ADAPTER),
+            adapter(AWSLoadBalancerService.class, AdapterTypePath.LOAD_BALANCER_ADAPTER),
+            adapter(AWSStatsService.class, AdapterTypePath.STATS_ADAPTER),
+            adapter(AWSCostStatsService.class, AdapterTypePath.COST_STATS_ADAPTER),
+            adapter(AWSReservedInstancePlanService.class),
+            adapter(AWSEnumerationAdapterService.class, AdapterTypePath.ENUMERATION_ADAPTER),
+            adapter(AWSImageEnumerationAdapterService.class, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER),
+            adapter(AWSInstanceTypeService.class),
+            adapter(AWSEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER),
+            adapter(AWSPowerService.class, AdapterTypePath.POWER_ADAPTER),
+            adapter(AWSSecurityGroupService.class, AdapterTypePath.SECURITY_GROUP_ADAPTER),
+            adapter(AWSMissingResourcesEnumerationService.class),
+            adapter(AWSRebootService.class, AdapterTypePath.BOOT_ADAPTER),
+            adapter(AWSComputeDiskDay2Service.class, AdapterTypePath.DISK_DAY2_ADAPTER),
+            adapter(AWSResetService.class),
+            adapter(AWSRegionEnumerationAdapterService.class, AdapterTypePath.REGION_ENUMERATION_ADAPTER)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
@@ -82,7 +84,7 @@ public class AWSAdapters {
             }
 
             EndpointAdapterUtils.registerEndpointAdapters(
-                    host, EndpointType.aws, LINKS, AWSUriPaths.AWS_ADAPTER_LINK_TYPES);
+                    host, EndpointType.aws, LINKS, getPublicAdapters(SERVICES_METADATA));
 
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception starting AWS adapters: %s",

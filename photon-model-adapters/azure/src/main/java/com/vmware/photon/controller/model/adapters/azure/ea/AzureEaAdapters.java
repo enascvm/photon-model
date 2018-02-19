@@ -13,11 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea;
 
-import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
 
 import java.util.logging.Level;
 
-import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.azure.ea.endpoint.AzureEaEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService;
 import com.vmware.photon.controller.model.adapters.azure.ea.stats.AzureCostStatsService;
@@ -36,9 +37,9 @@ import com.vmware.xenon.common.Utils;
 public class AzureEaAdapters {
 
     public static final ServiceMetadata[] SERVICES_METADATA = {
-            service(AzureCostStatsService.class),
-            service(AzureSubscriptionsEnumerationService.class),
-            service(AzureEaEndpointAdapterService.class)
+            adapter(AzureCostStatsService.class, AdapterTypePath.COST_STATS_ADAPTER),
+            adapter(AzureSubscriptionsEnumerationService.class),
+            adapter(AzureEaEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
@@ -64,7 +65,7 @@ public class AzureEaAdapters {
 
             }
             EndpointAdapterUtils.registerEndpointAdapters(
-                    host, EndpointType.azure_ea, LINKS, AzureUriPaths.AZURE_EA_ADAPTER_LINK_TYPES);
+                    host, EndpointType.azure_ea, LINKS, getPublicAdapters(SERVICES_METADATA));
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring Azure ea adapters: %s",
                     Utils.toString(e));

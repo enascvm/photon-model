@@ -16,15 +16,15 @@ package com.vmware.photon.controller.model.adapters.registry;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
 
-import java.util.logging.Level;
+import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecFactoryService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.Utils;
 
 /**
  * Helper class to start Photon model adapter registry related services
@@ -32,31 +32,38 @@ import com.vmware.xenon.common.Utils;
 public class PhotonModelAdaptersRegistryAdapters {
 
     public static final ServiceMetadata[] SERVICES_METADATA = {
+
             factoryService(PhotonModelAdaptersRegistryService.class,
                     PhotonModelAdaptersRegistryFactoryService::new),
+
             factoryService(ResourceOperationSpecService.class,
                     ResourceOperationSpecFactoryService::new),
 
             service(ResourceOperationService.class)
+                    .requirePrivileged(true),
+
+            service(PhotonModelAdaptersConfigAccessService.class)
+                    .requirePrivileged(true)
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
+    /**
+     * Used mostly by tests.
+     */
     public static void startServices(ServiceHost host) {
-        startServices(host, false);
+
+        StartServicesHelper.startServices(host, SERVICES_METADATA);
     }
 
-    public static void startServices(ServiceHost host, boolean isSynchronousStart) {
-        try {
-            if (isSynchronousStart) {
-                StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
-            } else {
-                StartServicesHelper.startServices(host, SERVICES_METADATA);
-            }
-        } catch (Exception e) {
-            host.log(Level.WARNING, "Error on start adapter registry related services. %s",
-                    Utils.toString(e));
-            throw e;
-        }
+    /**
+     * Use this method by specific Xenon hosts, such a Symphony and Provisioning.
+     */
+    public static void startServices(
+            ServiceHost host,
+            Consumer<Class<? extends Service>> addPrivilegedService) {
+
+        StartServicesHelper.startServices(host, addPrivilegedService, SERVICES_METADATA);
     }
+
 }
