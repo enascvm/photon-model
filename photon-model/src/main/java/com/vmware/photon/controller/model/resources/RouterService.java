@@ -20,6 +20,7 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.StatefulService;
@@ -64,6 +65,11 @@ public class RouterService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         RouterState state = processInput(start);
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
@@ -71,6 +77,11 @@ public class RouterService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         RouterState returnState = processInput(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))

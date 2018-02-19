@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
@@ -170,6 +171,11 @@ public class NetworkInterfaceService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         NetworkInterfaceState state = processInput(start);
         state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
@@ -217,6 +223,11 @@ public class NetworkInterfaceService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         NetworkInterfaceState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))

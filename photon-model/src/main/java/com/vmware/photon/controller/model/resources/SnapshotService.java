@@ -21,6 +21,7 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
@@ -86,6 +87,11 @@ public class SnapshotService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         SnapshotState state = processInput(start);
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
@@ -99,6 +105,11 @@ public class SnapshotService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         SnapshotState returnState = processInput(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))

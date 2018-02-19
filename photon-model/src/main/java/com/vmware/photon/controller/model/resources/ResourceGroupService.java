@@ -20,6 +20,7 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
@@ -71,6 +72,11 @@ public class ResourceGroupService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         ResourceGroupState state = processInput(start);
         state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
@@ -80,6 +86,11 @@ public class ResourceGroupService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         ResourceGroupState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> {

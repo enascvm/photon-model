@@ -187,8 +187,6 @@ public class SessionServiceTest extends Suite {
                     SessionService.FACTORY_LINK, state, SessionService.SessionState.class);
 
             assertThat(stateOne.localToken, is(stateTwo.localToken));
-            assertThat(stateOne.documentExpirationTimeMicros, is(stateTwo
-                    .documentExpirationTimeMicros));
             assertThat(stateOne.externalToken, is(stateTwo.externalToken));
 
             // Since the documentSelfLink is computed, the state itself --must-- be the same, not

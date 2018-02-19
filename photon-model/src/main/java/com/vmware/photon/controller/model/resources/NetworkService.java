@@ -106,6 +106,11 @@ public class NetworkService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         NetworkState state = processInput(start);
         state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
@@ -119,6 +124,11 @@ public class NetworkService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         NetworkState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))

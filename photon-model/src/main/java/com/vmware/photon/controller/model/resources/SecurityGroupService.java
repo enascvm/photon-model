@@ -232,6 +232,11 @@ public class SecurityGroupService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         SecurityGroupState state = processInput(start);
         state.documentCreationTimeMicros = Utils.getNowMicrosUtc();
         ResourceUtils.populateTags(this, state)
@@ -245,6 +250,11 @@ public class SecurityGroupService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         SecurityGroupState returnState = validatePut(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))

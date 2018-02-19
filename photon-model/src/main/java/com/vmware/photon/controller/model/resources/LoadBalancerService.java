@@ -226,6 +226,11 @@ public class LoadBalancerService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         LoadBalancerState state = processInput(start);
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
@@ -233,6 +238,11 @@ public class LoadBalancerService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         LoadBalancerState returnState = processInput(put);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))

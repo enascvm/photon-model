@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
@@ -171,11 +172,16 @@ public class SubnetRangeService extends StatefulService {
      * Comes in here for a http post for a new document
      */
     @Override
-    public void handleCreate(Operation create) {
-        SubnetRangeState subnetRangeState = getOperationBody(create);
+    public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
+        SubnetRangeState subnetRangeState = getOperationBody(start);
         validateAll(subnetRangeState)
                 .thenCompose(__ -> ResourceUtils.populateTags(this, subnetRangeState))
-                .whenCompleteNotify(create);
+                .whenCompleteNotify(start);
     }
 
     @Override
@@ -188,6 +194,11 @@ public class SubnetRangeService extends StatefulService {
      */
     @Override
     public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
         SubnetRangeState subnetRangeState = getOperationBody(put);
 
         validateAll(subnetRangeState)

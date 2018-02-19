@@ -23,6 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.SubnetValidator;
@@ -152,6 +153,11 @@ public class IPAddressService extends StatefulService {
 
     @Override
     public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         IPAddressState state = processInput(start);
         ResourceUtils.populateTags(this, state)
                 .whenCompleteNotify(start);
@@ -176,6 +182,11 @@ public class IPAddressService extends StatefulService {
     public void handlePut(Operation put) {
         if (!put.hasBody()) {
             put.fail(new IllegalArgumentException("body is required"));
+        }
+
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
         }
 
         try {

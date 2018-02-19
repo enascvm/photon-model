@@ -30,6 +30,7 @@ import io.netty.util.internal.StringUtil;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -184,10 +185,15 @@ public class ImageService extends StatefulService {
     }
 
     @Override
-    public void handleCreate(Operation createOp) {
-        if (checkForValid(createOp)) {
-            ResourceUtils.populateTags(this, createOp.getBody(ImageState.class))
-                    .whenCompleteNotify(createOp);
+    public void handleCreate(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
+        if (checkForValid(start)) {
+            ResourceUtils.populateTags(this, start.getBody(ImageState.class))
+                    .whenCompleteNotify(start);
         }
     }
 
@@ -197,11 +203,16 @@ public class ImageService extends StatefulService {
     }
 
     @Override
-    public void handlePut(Operation putOp) {
-        if (checkForValid(putOp)) {
-            ResourceUtils.populateTags(this, putOp.getBody(ImageState.class))
-                    .thenAccept(__ -> setState(putOp, putOp.getBody(ImageState.class)))
-                    .whenCompleteNotify(putOp);
+    public void handlePut(Operation put) {
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
+        }
+
+        if (checkForValid(put)) {
+            ResourceUtils.populateTags(this, put.getBody(ImageState.class))
+                    .thenAccept(__ -> setState(put, put.getBody(ImageState.class)))
+                    .whenCompleteNotify(put);
         }
     }
 

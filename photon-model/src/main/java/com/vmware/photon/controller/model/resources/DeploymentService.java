@@ -20,6 +20,7 @@ import java.util.function.Function;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
@@ -78,6 +79,11 @@ public class DeploymentService extends StatefulService {
             throw new IllegalArgumentException("body is required");
         }
 
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         DeploymentState state = start.getBody(DeploymentState.class);
         Utils.validateState(getStateDescription(), state);
         if (state.creationTimeMicros == null) {
@@ -91,6 +97,11 @@ public class DeploymentService extends StatefulService {
     public void handlePut(Operation put) {
         if (!put.hasBody()) {
             throw new IllegalArgumentException("body is required");
+        }
+
+        if (PhotonModelUtils.isFromMigration(put)) {
+            super.handlePut(put);
+            return;
         }
 
         DeploymentState newState = put.getBody(DeploymentState.class);

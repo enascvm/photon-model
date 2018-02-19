@@ -337,6 +337,12 @@ public class PhotonModelUtils {
         put.fail(Operation.STATUS_CODE_BAD_METHOD);
     }
 
+    public static boolean isFromMigration(Operation op) {
+        return op.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_FROM_MIGRATION_TASK) &&
+                op.getAuthorizationContext() != null &&
+                op.getAuthorizationContext().isSystemUser();
+    }
+
     public static void validateRegionId(ResourceState resourceState) {
         if (resourceState.regionId == null) {
             throw (new IllegalArgumentException("regionId is required"));

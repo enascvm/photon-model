@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.resources;
 import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -66,7 +67,7 @@ public class SessionService extends StatefulService {
     @Override
     public void handlePut(Operation op) {
         if (op.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_POST_TO_PUT)) {
-            op.complete();
+            super.handlePut(op);
             return;
         }
         // normal PUT is not supported
@@ -75,6 +76,11 @@ public class SessionService extends StatefulService {
 
     @Override
     public void handleCreate(Operation op) {
+        if (PhotonModelUtils.isFromMigration(op)) {
+            op.complete();
+            return;
+        }
+
         if (checkForValid(op)) {
             SessionState body = op.getBody(SessionState.class);
             body.externalToken = EncryptionUtils.encrypt(body.externalToken);
