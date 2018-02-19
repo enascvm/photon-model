@@ -127,6 +127,11 @@ public enum AzureInstanceStage {
     /**
      * Enable monitoring on a VM.
      */
-    ENABLE_MONITORING
+    ENABLE_MONITORING,
+
+    /**
+     * Create persistent.
+     */
+    CREATE_PERSISTENT_DISKS
 
 }

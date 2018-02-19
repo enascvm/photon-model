@@ -245,6 +245,35 @@ public class TestAzureProvisionTask extends AzureBaseTest {
     }
 
     /**
+     * Creates a Azure instance with persistent disk via a provision task.
+     */
+    @Test
+    @Ignore("This test does VM provisioning with persistent disks. Ignored for timeouts of "
+            + "preflights")
+    public void testProvisionWithPersistentDisks() throws Throwable {
+        ImageSource imageSource = createImageSource(getHost(), this.endpointState, IMAGE_REFERENCE);
+
+        // Create a Azure VM compute resource with 2 additional disks.
+        int numberOfAdditionalDisks = 2;
+
+        VMResourceSpec vmResourceSpec = new VMResourceSpec(getHost(), this.computeHost,
+                this.endpointState, azureVMName)
+                .withImageSource(imageSource)
+                .withNicSpecs(DEFAULT_NIC_SPEC)
+                .withNumberOfAdditionalDisks(numberOfAdditionalDisks)
+                .withPersistentDisks(VMResourceSpec.PersistentDisks.SOME)
+                .withManagedDisk(true);
+
+        // create Azure VM compute resource.
+        this.vmState = createVMResourceFromSpec(vmResourceSpec);
+
+        kickOffProvisionTask();
+
+        // Assert if 2 additional disks were created
+        assertConfigurationOfDisks(numberOfAdditionalDisks, 0);
+    }
+
+    /**
      * Creates a Azure instance with additional disk via a provision task.
      */
     @Test

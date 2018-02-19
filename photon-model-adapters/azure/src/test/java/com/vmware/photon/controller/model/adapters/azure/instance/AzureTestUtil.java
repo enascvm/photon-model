@@ -765,6 +765,14 @@ public class AzureTestUtil {
         public List<String> externalDiskLinks;
         public boolean isManagedDisk;
 
+        public enum PersistentDisks {
+            NONE,
+            SOME,
+            ALL
+        }
+
+        public PersistentDisks persistentDisks = PersistentDisks.NONE;
+
         public VMResourceSpec(VerificationHost host, ComputeState computeHost, EndpointState endpointState,
                               String azureVmName) {
             this.host = host;
@@ -795,6 +803,11 @@ public class AzureTestUtil {
 
         public VMResourceSpec withManagedDisk(boolean isManagedDisk) {
             this.isManagedDisk = isManagedDisk;
+            return this;
+        }
+
+        public VMResourceSpec withPersistentDisks(PersistentDisks persist) {
+            this.persistentDisks = persist;
             return this;
         }
     }
@@ -937,7 +950,8 @@ public class AzureTestUtil {
         if (spec.numberOfAdditionalDisks > 0) {
             // TODO Need to modify createAdditionalDisks() to have only spec passed as parameter
             vmDisks.addAll(createAdditionalDisks(spec.host, spec.azureVmName,
-                    spec.endpointState, spec.numberOfAdditionalDisks, spec.isManagedDisk));
+                    spec.endpointState, spec.numberOfAdditionalDisks, spec.persistentDisks , spec
+                            .isManagedDisk));
         }
 
         // Add external existing data disks (if present) to the list for attaching
@@ -1084,7 +1098,8 @@ public class AzureTestUtil {
         vmDisks.add(rootDisk.documentSelfLink);
 
         //create additional disks
-        vmDisks.addAll(createAdditionalDisks(host,azureVMName,endpointState,numberOfAdditionalDisks, false));
+        vmDisks.addAll(createAdditionalDisks(host,azureVMName,endpointState,
+                numberOfAdditionalDisks, VMResourceSpec.PersistentDisks.NONE ,  false));
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
                 host, computeHost, endpointState, networkRGLinks, sgRGLinks, nicSpecs)
@@ -1140,7 +1155,9 @@ public class AzureTestUtil {
     }
 
     public static List<String> createAdditionalDisks(VerificationHost host,String azureVMName,
-            EndpointState endpointState,  int numberOfDisks, boolean isManagedDisk) throws Throwable {
+            EndpointState endpointState,  int numberOfDisks, VMResourceSpec.PersistentDisks
+            persist, boolean isManagedDisk) throws
+            Throwable {
 
         List<String> diskStateArrayList = new ArrayList<>();
         for (int i = 0; i < numberOfDisks; i++ ) {
@@ -1158,6 +1175,15 @@ public class AzureTestUtil {
             dataDisk.storageType = AZURE_STORAGE_DISKS;
             dataDisk.customProperties = new HashMap<>();
             dataDisk.customProperties.put(AZURE_DATA_DISK_CACHING, DEFAULT_DATA_DISK_CACHING.toString());
+
+            //Conditionally set persistence flag on additional disks
+            if (persist == VMResourceSpec.PersistentDisks.ALL) {
+                dataDisk.persistent = true;
+            } else if (persist == VMResourceSpec.PersistentDisks.NONE) {
+                dataDisk.persistent = false;
+            } else {
+                dataDisk.persistent = (i % 2) == 0 ? true : false;
+            }
 
             if (!isManagedDisk) {
                 dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,

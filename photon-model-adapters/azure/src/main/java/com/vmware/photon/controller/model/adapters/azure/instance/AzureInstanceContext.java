@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.management.compute.Disk;
+import com.microsoft.azure.management.compute.VirtualMachine;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
@@ -103,6 +105,8 @@ public class AzureInstanceContext extends
     public DiskService.DiskStateExpanded bootDiskState;
     public List<DiskService.DiskStateExpanded> dataDiskStates;
     public List<DiskService.DiskStateExpanded> externalDataDisks;
+    public List<Disk> persistentDisks;
+    public String rgNameForPersistentDisks;
 
     public String vmName;
     public String vmId;
@@ -112,6 +116,7 @@ public class AzureInstanceContext extends
      * and related states (such as Disk, NICs, etc).
      */
     VirtualMachineInner provisionedVm;
+    VirtualMachine virtualMachine;
 
     // Azure specific context {{
     //

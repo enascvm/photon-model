@@ -56,6 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.CloudError;
@@ -64,6 +65,7 @@ import com.microsoft.azure.SubResource;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.CachingTypes;
 import com.microsoft.azure.management.compute.DataDisk;
+import com.microsoft.azure.management.compute.Disk;
 import com.microsoft.azure.management.compute.DiskCreateOptionTypes;
 import com.microsoft.azure.management.compute.HardwareProfile;
 import com.microsoft.azure.management.compute.NetworkProfile;
@@ -72,8 +74,10 @@ import com.microsoft.azure.management.compute.OSProfile;
 import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.compute.StorageProfile;
 import com.microsoft.azure.management.compute.VirtualHardDisk;
+import com.microsoft.azure.management.compute.VirtualMachine;
 import com.microsoft.azure.management.compute.VirtualMachineSizeTypes;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.ComputeManager;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.ManagedDiskParametersInner;
 import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
@@ -92,6 +96,9 @@ import com.microsoft.azure.management.network.implementation.PublicIPAddressesIn
 import com.microsoft.azure.management.network.implementation.SubnetInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworksInner;
+import com.microsoft.azure.management.resources.fluentcore.arm.Region;
+import com.microsoft.azure.management.resources.fluentcore.model.Creatable;
+import com.microsoft.azure.management.resources.fluentcore.model.Indexable;
 import com.microsoft.azure.management.resources.implementation.ProviderInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
@@ -356,11 +363,14 @@ public class AzureInstanceService extends StatelessService {
                 break;
             case CREATE:
                 // Finally provision the VM
-                createVM(ctx, AzureInstanceStage.UPDATE_COMPUTE_STATE_DETAILS);
+                createVM(ctx, AzureInstanceStage.CREATE_PERSISTENT_DISKS);
                 break;
             case ENABLE_MONITORING:
                 // TODO VSYM-620: Enable monitoring on Azure VMs
                 enableMonitoring(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
+                break;
+            case CREATE_PERSISTENT_DISKS:
+                createPersistentDisks(ctx, AzureInstanceStage.UPDATE_COMPUTE_STATE_DETAILS);
                 break;
             case UPDATE_COMPUTE_STATE_DETAILS:
                 updateComputeStateDetails(ctx, AzureInstanceStage.GET_STORAGE_KEYS);
@@ -545,6 +555,140 @@ public class AzureInstanceService extends StatelessService {
                         return CompletableFuture.completedFuture(rg);
                     }
                 });
+    }
+
+    private void createPersistentDisks(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
+        // In case of No Persistent disks return and move on.
+        if (ctx.dataDiskStates.stream().filter(diskStateExpanded -> diskStateExpanded.persistent
+                        == true).count() == 0) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
+
+        DeferredResult.completed(ctx)
+                .thenCompose(this::createRGForPersistentDisks)
+                .thenCompose(this::createDisks)
+                .thenCompose(this::getAzureVirtualMachine)
+                .thenCompose(this::attachPersistentDisksToVM)
+                .whenComplete(thenAllocation(ctx, nextStage, AzureConstants.AZURE_STORAGE_DISKS));
+
+    }
+
+    private DeferredResult<AzureInstanceContext> createRGForPersistentDisks(AzureInstanceContext
+            ctx) {
+        // create a new resource group for persistent disks that will survive VM deletion
+        DeferredResult<AzureInstanceContext> dr = new DeferredResult<>();
+
+        // RG name derived from that of the compute
+        ctx.rgNameForPersistentDisks = AzureUtils.getResourceGroupName(ctx) + "_persist";
+
+        rx.Observable<Indexable> ob = getComputeManager(ctx).resourceManager().resourceGroups()
+                .define(ctx.rgNameForPersistentDisks)
+                .withRegion(ctx.child.description.regionId)
+                .createAsync();
+
+        ob.doOnCompleted(AzureUtils.injectOperationContext(() -> {
+            getHost().log(Level.INFO, "Created New RG for persistent disk [" + ctx
+                    .rgNameForPersistentDisks + "]");
+            dr.complete(ctx);
+        })).doOnError(AzureUtils.injectOperationContext(dr::fail))
+                .publish()
+                .connect();
+        return dr;
+    }
+
+    private DeferredResult<AzureInstanceContext> createDisks(AzureInstanceContext
+            ctx) {
+        // Iterate over managed disk that have the persistent flag set
+        DeferredResult<AzureInstanceContext> dr = new DeferredResult<>();
+        List<Creatable<Disk>> disksToCreate = ctx.dataDiskStates.stream()
+                .filter(isManagedDisk())
+                .filter(diskStateExpanded -> diskStateExpanded.persistent)
+                .map(diskState -> defineDisk(diskState, getComputeManager(ctx), ctx.rgNameForPersistentDisks,
+                        Region.fromName(ctx.child.description.regionId)))
+                .collect(Collectors.toList());
+
+        rx.Observable<Indexable> ob = getComputeManager(ctx).disks().createAsync(disksToCreate);
+        ob.doOnNext(AzureUtils.injectOperationContext(resource -> {
+            if (resource instanceof Disk) {
+                //Store the azure data disk in context. Need it to attach it to the VM later.
+                getHost().log(Level.INFO, "Created persistent disk [" + ((Disk)resource).name() + "]");
+                ctx.persistentDisks.add((Disk) resource);
+            }
+        })).doOnCompleted(AzureUtils.injectOperationContext(() -> {
+            // handle completion
+            getHost().log(Level.INFO, "Created persistent " + ctx.persistentDisks.size() + " "
+                    + "disks in Resource Group [" + ctx.rgNameForPersistentDisks + "]");
+            dr.complete(ctx);
+        })).doOnError(AzureUtils.injectOperationContext(dr::fail))
+                .publish()
+                .connect();
+
+        return dr;
+    }
+
+    private DeferredResult<AzureInstanceContext> attachPersistentDisksToVM(AzureInstanceContext
+            ctx) {
+        // Attach all the persistent disks to the VM
+        DeferredResult<AzureInstanceContext> dr = new DeferredResult<>();
+
+        VirtualMachine.Update updateVM = ctx.virtualMachine.update();
+        for (Disk disk: ctx.persistentDisks) {
+            updateVM = updateVM.withExistingDataDisk(disk);
+        }
+        rx.Observable observable = updateVM.applyAsync();
+        observable.doOnNext(resource -> {
+            if (resource instanceof VirtualMachine) {
+                //update both the inner VM and the VirtualMachine objects in context
+                ctx.virtualMachine = (VirtualMachine)resource;
+                ctx.provisionedVm = ((VirtualMachine) resource).inner();
+            }
+        }).doOnCompleted(AzureUtils.injectOperationContext(() -> {
+            // Done with attaching disks. Completing DR.
+            getHost().log(Level.INFO, "Attached persistent " + ctx.persistentDisks.size() + " disks"
+                    + " to vm " + ctx.provisionedVm.name());
+            dr.complete(ctx);
+        })).doOnError(AzureUtils.injectOperationContext(dr::fail))
+                .publish()
+                .connect();
+
+        return dr;
+
+    }
+
+    /**
+     * Method to fetch Azure VM reference. Not the inner object that we have in provisionedVM
+     */
+    private DeferredResult<AzureInstanceContext> getAzureVirtualMachine(
+            AzureInstanceContext ctx) {
+
+        final String msg = "Getting Virtual Machine Object for details for [" + ctx.vmName +
+                "]" + " with ID " + ctx.vmId;
+
+        AzureDeferredResultServiceCallback<VirtualMachine> handler = new AzureDeferredResultServiceCallback<VirtualMachine>(
+                this, msg) {
+
+            @Override
+            protected DeferredResult<VirtualMachine> consumeSuccess(VirtualMachine vm) {
+                ctx.virtualMachine = vm;
+                return DeferredResult.completed(vm);
+            }
+        };
+
+        getComputeManager(ctx).virtualMachines().getByIdAsync(ctx.vmId, handler);
+
+        return handler.toDeferredResult().thenApply(virtualMachine -> ctx);
+    }
+
+    private Creatable<Disk> defineDisk(DiskService.DiskStateExpanded diskState, ComputeManager
+            computeManager, String resourceGroupName, Region region) {
+
+        return computeManager.disks().define(diskState.name)
+                .withRegion(region)
+                .withExistingResourceGroup(resourceGroupName)
+                .withData()
+                .withSizeInGB((int) diskState.capacityMBytes / 1024); //Convert to GBs
     }
 
     private void createStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -1309,8 +1453,10 @@ public class AzureInstanceService extends StatelessService {
 
         for (DiskService.DiskStateExpanded diskState : ctx.dataDiskStates) {
 
+            if (diskState.persistent == true) {
+                continue;
+            }
             final DataDisk dataDisk = new DataDisk();
-
             dataDisk.withName(diskState.name);
             if (ctx.reuseExistingStorageAccount()) {
                 dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
@@ -1506,6 +1652,7 @@ public class AzureInstanceService extends StatelessService {
 
             final DiskState diskStateToUpdate = new DiskState();
             diskStateToUpdate.documentSelfLink = ctx.bootDiskState.documentSelfLink;
+            diskStateToUpdate.persistent = ctx.bootDiskState.persistent;
             // The actual value being updated
             if (ctx.useManagedDisks()) {
                 diskStateToUpdate.id = azureOsDisk.managedDisk().id();
@@ -1573,6 +1720,7 @@ public class AzureInstanceService extends StatelessService {
                 }
                 diskStateToCreate.status = DiskService.DiskStatus.ATTACHED;
                 diskStateToCreate.endpointLink = ctx.endpoint.documentSelfLink;
+                diskStateToCreate.persistent = ctx.bootDiskState.persistent;
                 AdapterUtils.addToEndpointLinks(diskStateToCreate, ctx.endpoint.documentSelfLink);
 
                 Operation createDiskState = Operation
@@ -1623,6 +1771,7 @@ public class AzureInstanceService extends StatelessService {
         DiskState diskState = diskOpt.get();
         final DiskState diskStateToUpdate = new DiskState();
         diskStateToUpdate.documentSelfLink = diskState.documentSelfLink;
+        diskStateToUpdate.persistent = diskState.persistent;
 
         if (ctx.useManagedDisks()) {
             diskStateToUpdate.id = azureDataDisk.managedDisk().id();
@@ -1905,6 +2054,10 @@ public class AzureInstanceService extends StatelessService {
         return ctx.azureSdkClients.getComputeManagementClientImpl();
     }
 
+    private ComputeManager getComputeManager(AzureInstanceContext ctx) {
+        return ctx.azureSdkClients.getComputeManager();
+    }
+
     /**
      * Method will retrieve disks for targeted image
      */
@@ -1932,6 +2085,7 @@ public class AzureInstanceService extends StatelessService {
 
                             ctx.dataDiskStates = new ArrayList<>();
                             ctx.externalDataDisks = new ArrayList<>();
+                            ctx.persistentDisks = new ArrayList<>();
                             for (Operation op : ops.values()) {
                                 DiskService.DiskStateExpanded disk = op
                                         .getBody(DiskService.DiskStateExpanded.class);
@@ -1945,10 +2099,21 @@ public class AzureInstanceService extends StatelessService {
                                     }
 
                                     ctx.bootDiskState = disk;
+                                    // incase persistent flag is not specified for boot disk
+                                    // default to false
+                                    if (ctx.bootDiskState.persistent == null) {
+                                        ctx.bootDiskState.persistent = false;
+                                    }
                                 } else {
                                     if (disk.status == DiskService.DiskStatus.AVAILABLE) {
+                                        disk.persistent = true; // external disks are always
+                                        // persistent
                                         ctx.externalDataDisks.add(disk);
                                     } else {
+                                        if (disk.persistent == null) {
+                                            //Default to non persistent disk
+                                            disk.persistent = false;
+                                        }
                                         ctx.dataDiskStates.add(disk);
                                     }
                                 }
