@@ -937,28 +937,37 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .map(p -> {
                     ComputeState cs = p.getLeft();
 
-                    // Update data disks if added externally
+                    // Update data disks if added and/or deleted externally
                     VirtualMachineInner vm = p.getRight();
-                    // No. of data disks + OS disk
-                    int disksCount = vm.storageProfile().dataDisks().size() + 1;
 
-                    if (disksCount != cs.diskLinks.size()) {
-                        vm.storageProfile().dataDisks().forEach(dataDisk -> {
-                            String dataDiskId;
-                            if (isDiskManaged(vm)) {
-                                dataDiskId = dataDisk.managedDisk().id();
-                            } else {
-                                dataDiskId = dataDisk.vhd().uri();
-                            }
-
-                            if (ctx.diskStates.get(dataDiskId) != null) {
-                                String diskStateLink = ctx.diskStates.get(dataDiskId).documentSelfLink;
-                                if (!cs.diskLinks.contains(diskStateLink)) {
-                                    cs.diskLinks.add(diskStateLink);
-                                }
-                            }
-                        });
+                    if (!cs.diskLinks.isEmpty()) {
+                        cs.diskLinks.clear();
                     }
+                    // Add OS disk link first
+                    OSDisk osDisk = vm.storageProfile().osDisk();
+                    String osDiskId;
+
+                    if (isDiskManaged(vm)) {
+                        osDiskId = osDisk.managedDisk().id();
+                    } else {
+                        osDiskId = AzureUtils.canonizeId(osDisk.vhd().uri());
+                    }
+                    if (ctx.diskStates.get(osDiskId) != null) {
+                        String osDiskLink = ctx.diskStates.get(osDiskId).documentSelfLink;
+                        cs.diskLinks.add(osDiskLink);
+                    }
+                    vm.storageProfile().dataDisks().forEach(dataDisk -> {
+                        String dataDiskId;
+                        if (isDiskManaged(vm)) {
+                            dataDiskId = dataDisk.managedDisk().id();
+                        } else {
+                            dataDiskId = AzureUtils.canonizeId(dataDisk.vhd().uri());
+                        }
+                        if (ctx.diskStates.get(dataDiskId) != null) {
+                            String diskStateLink = ctx.diskStates.get(dataDiskId).documentSelfLink;
+                            cs.diskLinks.add(diskStateLink);
+                        }
+                    });
 
                     Map<String, String> tags = p.getRight().getTags();
                     DeferredResult<Set<String>> result = DeferredResult.completed(null);
@@ -1423,10 +1432,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (isManaged) {
             diskState.id = dataDisk.managedDisk().id();
-            if (dataDisk.managedDisk().storageAccountType() != null) {
-                diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
-                        dataDisk.managedDisk().storageAccountType().toString());
-            }
+            diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
+                    dataDisk.managedDisk().storageAccountType().toString());
         } else {
             diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
         }
@@ -1454,6 +1461,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     diskToUpdateOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
                             .setBody(diskToUpdate);
                 } else {
+                    // case where a lying disk in Azure (also in local store) is attached to VM
+                    diskToUpdate.status = DiskService.DiskStatus.ATTACHED;
                     diskToUpdateOp = Operation.createPatch(getHost(), diskToUpdate.documentSelfLink)
                             .setBody(diskToUpdate);
                 }
@@ -1901,7 +1910,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
             String diskUri = getVhdUri(virtualMachine);
             if (diskUri != null) {
-                DiskState state = ctx.diskStates.remove(diskUri);
+                DiskState state = ctx.diskStates.get(diskUri);
                 if (state != null) {
                     vmDisks.add(state.documentSelfLink);
                 }
@@ -1912,7 +1921,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             if (dataDiskIDs != null) {
                 dataDiskIDs.forEach(dataDiskID -> {
-                    DiskState dataDiskState = ctx.diskStates.remove(dataDiskID);
+                    DiskState dataDiskState = ctx.diskStates.get(dataDiskID);
                     if (null != dataDiskState) {
                         vmDisks.add(dataDiskState.documentSelfLink);
                     }
@@ -2012,7 +2021,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     .values().stream()
                     .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
                     .map(dr -> dr.thenCompose(c -> sendWithDeferredResult(
-                            Operation.createPatch(ctx.request.buildUri(c.documentSelfLink))
+                            Operation.createPut(ctx.request.buildUri(c.documentSelfLink))
                                     .setBody(c)
                                     .setCompletion((o, e) -> {
                                         if (e != null) {

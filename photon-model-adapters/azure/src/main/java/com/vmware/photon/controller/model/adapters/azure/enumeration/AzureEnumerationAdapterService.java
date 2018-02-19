@@ -58,6 +58,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         TRIGGER_FIREWALL_ENUMERATION,
         TRIGGER_NETWORK_ENUMERATION,
         TRIGGER_COMPUTE_ENUMERATION,
+        TRIGGER_DISK_ENUMERATION,
         FINISHED,
         ERROR
     }
@@ -118,6 +119,10 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 .createPost(this, AzureStorageEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
+        Operation postManagedDiskEnumAdapterService = Operation
+                .createPost(this, AzureDiskEnumerationAdapterService.SELF_LINK)
+                .setReferer(this.getUri());
+
         Operation postSecurityGroupEnumAdapterService = Operation
                 .createPost(this, AzureSecurityGroupEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
@@ -134,6 +139,8 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 new AzureComputeEnumerationAdapterService());
         this.getHost().startService(postStorageEnumAdapterService,
                 new AzureStorageEnumerationAdapterService());
+        this.getHost().startService(postManagedDiskEnumAdapterService,
+                new AzureDiskEnumerationAdapterService());
         this.getHost().startService(postSecurityGroupEnumAdapterService,
                 new AzureSecurityGroupEnumerationAdapterService());
         this.getHost().startService(postNetworkEnumAdapterService,
@@ -145,6 +152,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 operation -> startPost.complete(), startPost::fail,
                 AzureComputeEnumerationAdapterService.SELF_LINK,
                 AzureStorageEnumerationAdapterService.SELF_LINK,
+                AzureDiskEnumerationAdapterService.SELF_LINK,
                 AzureSecurityGroupEnumerationAdapterService.SELF_LINK,
                 AzureNetworkEnumerationAdapterService.SELF_LINK,
                 AzureResourceGroupEnumerationAdapterService.SELF_LINK);
@@ -175,6 +183,10 @@ public class AzureEnumerationAdapterService extends StatelessService {
             break;
         case TRIGGER_COMPUTE_ENUMERATION:
             triggerEnumerationAdapter(context, AzureComputeEnumerationAdapterService.SELF_LINK,
+                    AzureEnumerationStages.TRIGGER_DISK_ENUMERATION);
+            break;
+        case TRIGGER_DISK_ENUMERATION:
+            triggerEnumerationAdapter(context, AzureDiskEnumerationAdapterService.SELF_LINK,
                     AzureEnumerationStages.FINISHED);
             break;
         case FINISHED:

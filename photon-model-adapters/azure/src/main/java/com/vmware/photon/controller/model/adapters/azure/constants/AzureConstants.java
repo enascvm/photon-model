@@ -164,6 +164,7 @@ public class AzureConstants {
     public static final long DEFAULT_DISK_CAPACITY = 10000L;
     public static final DiskService.DiskType DEFAULT_DISK_TYPE = DiskService.DiskType.HDD;
     public static final String DISK_CONTROLLER_NUMBER = "__logicalUnitNumber";
+    public static final String DISK_STATUS_UNATTACHED = "Unattached";
 
     // Azure container properties
     public static final String AZURE_STORAGE_CONTAINER_LEASE_STATE = "state";
@@ -174,6 +175,11 @@ public class AzureConstants {
     public static final String NETWORK_REST_API_VERSION = "2015-06-15";
     public static final String LIST_VIRTUAL_NETWORKS_URI = AzureUtils.getAzureBaseUri()
             + "subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualNetworks";
+
+    // Managed Disk REST constants
+    public static final String DISK_REST_API_VERSION = "2016-04-30-preview";
+    public static final String LIST_DISKS_URI = AzureUtils.getAzureBaseUri()
+            + "subscriptions/{subscriptionId}/providers/Microsoft.Compute/disks";
 
     // Network Security Groups
     public static final String LIST_NETWORK_SECURITY_GROUP_URI = AzureUtils.getAzureBaseUri()

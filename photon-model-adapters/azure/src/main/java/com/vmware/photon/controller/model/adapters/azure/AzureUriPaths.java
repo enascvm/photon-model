@@ -60,6 +60,8 @@ public class AzureUriPaths {
             + "/storage-enumeration-adapter";
     public static final String AZURE_NETWORK_ENUMERATION_ADAPTER = PROVISIONING_AZURE
             + "/network-enumeration-adapter";
+    public static final String AZURE_DISK_ENUMERATION_ADAPTER = PROVISIONING_AZURE
+            + "/disk-enumeration-adapter";
     public static final String AZURE_RESOURCE_GROUP_ENUMERATION_ADAPTER = PROVISIONING_AZURE
             + "/resource-group-enumeration-adapter";
     public static final String AZURE_FIREWALL_ENUMERATION_ADAPTER = PROVISIONING_AZURE
