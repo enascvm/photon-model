@@ -63,10 +63,12 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioning
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -246,13 +248,17 @@ public class AzureLoadBalancerService extends StatelessService {
             return DeferredResult.allOf(operations)
                     .thenApply(operationsList -> {
                         operationsList.forEach(operation -> {
-                            Object state = operation.getBodyRaw();
-                            if (state instanceof ComputeState) {
-                                context.computeStates.add((ComputeState) state);
-                            } else if (state instanceof NetworkInterfaceState) {
-                                context.networkInterfaceStates.add((NetworkInterfaceState) state);
+                            String servicePath = operation.getUri().getPath();
+                            if (UriUtils.isChildPath(servicePath, ComputeService.FACTORY_LINK)) {
+                                context.computeStates.add(operation.getBody(ComputeState.class));
+                            } else if (UriUtils.isChildPath(servicePath,
+                                    NetworkInterfaceService.FACTORY_LINK)) {
+                                context.networkInterfaceStates
+                                        .add(operation.getBody(NetworkInterfaceState.class));
                             } else {
-                                throw new IllegalArgumentException("Invalid target type specified");
+                                throw new IllegalArgumentException(
+                                        "Invalid target type specified. Target link: "
+                                                + servicePath);
                             }
                         });
                         return context;
