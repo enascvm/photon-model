@@ -15,7 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 
 import java.io.IOException;
 
-import org.codehaus.jackson.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * A bean that mimics the a json-repc 2.0 request.

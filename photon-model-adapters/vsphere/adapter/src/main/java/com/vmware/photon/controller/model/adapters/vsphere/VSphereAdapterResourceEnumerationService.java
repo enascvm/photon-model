@@ -51,8 +51,9 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.apache.commons.collections.CollectionUtils;
-import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.pbm.PbmProfile;
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -139,7 +140,6 @@ import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
-
 
 /**
  * Handles enumeration for vsphere endpoints. It supports up to

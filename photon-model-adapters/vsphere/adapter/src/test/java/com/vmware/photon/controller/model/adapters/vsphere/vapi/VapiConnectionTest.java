@@ -18,7 +18,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 
-import org.codehaus.jackson.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.Ignore;
 import org.junit.Test;
 

@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 
-import org.codehaus.jackson.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * A generic rpc error thrown whenever the "error" field is present in an RPC response.

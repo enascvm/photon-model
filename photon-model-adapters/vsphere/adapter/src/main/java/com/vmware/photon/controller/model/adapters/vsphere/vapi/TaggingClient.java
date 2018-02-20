@@ -17,8 +17,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.apache.http.client.HttpClient;
-import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.vim25.ManagedObjectReference;

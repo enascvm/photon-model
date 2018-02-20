@@ -22,19 +22,20 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.util.EntityUtils;
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.map.DeserializationConfig.Feature;
-import org.codehaus.jackson.map.ObjectMapper;
-import org.codehaus.jackson.map.SerializationConfig;
-import org.codehaus.jackson.map.annotate.JsonSerialize.Inclusion;
-import org.codehaus.jackson.node.JsonNodeFactory;
-import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcRequest.Params;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcRequest.Params.AppContext;
@@ -53,9 +54,9 @@ public abstract class VapiClient {
     public static final String K_OPERATION_INPUT = "operation-input";
 
     static {
-        MAPPER.enable(SerializationConfig.Feature.INDENT_OUTPUT);
-        MAPPER.disable(Feature.FAIL_ON_UNKNOWN_PROPERTIES);
-        MAPPER.setSerializationInclusion(Inclusion.NON_NULL);
+        MAPPER.enable(SerializationFeature.INDENT_OUTPUT);
+        MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        MAPPER.setSerializationInclusion(Include.NON_NULL);
     }
 
     private static final String METHOD = "invoke";
