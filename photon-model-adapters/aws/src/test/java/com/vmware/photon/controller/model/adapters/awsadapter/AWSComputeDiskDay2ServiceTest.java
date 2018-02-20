@@ -29,6 +29,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteSecurityGroupUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsInstancesByIds;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getSecurityGroupsIdUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
@@ -203,7 +204,7 @@ public class AWSComputeDiskDay2ServiceTest {
         ec2WaitContext.await();
 
         this.awsTestContext = new HashMap<>();
-        setUpTestVpc(this.client, this.awsTestContext, this.isMock, this.zoneId );
+        setUpTestVpc(this.client, this.awsTestContext, this.isMock, this.zoneId);
         this.singleNicSpec = (TestAWSSetupUtils.AwsNicSpecs) this.awsTestContext
                 .get(TestAWSSetupUtils.NIC_SPECS_KEY);
 
@@ -286,7 +287,7 @@ public class AWSComputeDiskDay2ServiceTest {
                 TestAWSSetupUtils.deleteVolume(this.client, this.volumeId);
             }
         }
-
+        deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
         verifyRemovalOfResourceState(this.host, resourcesToDelete);
 
         this.vmState = null;

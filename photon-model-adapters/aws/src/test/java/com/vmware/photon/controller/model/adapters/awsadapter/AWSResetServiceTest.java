@@ -152,7 +152,6 @@ public class AWSResetServiceTest {
         if (this.vmState != null && this.vmState.id.startsWith(INSTANCEID_PREFIX)) {
             try {
                 TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
-
                 deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
             } catch (Throwable deleteEx) {
                 // just log and move on
@@ -321,6 +320,7 @@ public class AWSResetServiceTest {
             resourcesToDelete.addAll(this.vmState.networkInterfaceLinks);
         }
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
+        deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
         verifyRemovalOfResourceState(this.host, resourcesToDelete);
 
         this.vmState = null;
