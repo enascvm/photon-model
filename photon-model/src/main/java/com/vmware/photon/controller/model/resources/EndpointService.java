@@ -150,7 +150,17 @@ public class EndpointService extends StatefulService {
         EndpointState newState = patch.getBody(EndpointState.class);
         validateUpdates(currentState, newState);
         ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
-                EndpointState.class, null);
+                EndpointState.class, op -> {
+                    EndpointState patchBody = op.getBody(EndpointState.class);
+                    boolean hasStateChanged = false;
+
+                    if (currentState.creationTimeMicros == null && patchBody.creationTimeMicros != null) {
+                        currentState.creationTimeMicros = patchBody.creationTimeMicros;
+                        hasStateChanged = true;
+                    }
+
+                    return hasStateChanged;
+                });
     }
 
     @Override
