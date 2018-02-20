@@ -296,7 +296,8 @@ public class AWSLoadBalancerService extends StatelessService {
 
     /**
      * Strips the name of invalid characters. In AWS Load Balancer name should contain only
-     * characters or digits or dash
+     * characters or digits or dash, and do not end in dash. If name ends in dash after truncating,
+     * keep removing trailing dashes
      */
     private DeferredResult<AWSLoadBalancerContext> stripDownInvalidCharactersFromLoadBalancerName(
             AWSLoadBalancerContext context) {
@@ -309,6 +310,12 @@ public class AWSLoadBalancerService extends StatelessService {
         if (context.loadBalancerStateExpanded.name.length() > MAX_NAME_LENGTH) {
             context.loadBalancerStateExpanded.name = context.loadBalancerStateExpanded.name
                     .substring(0, MAX_NAME_LENGTH);
+
+            // remove trailing dashes after truncate (not accepted by AWS)
+            while (context.loadBalancerStateExpanded.name.endsWith("-")) {
+                context.loadBalancerStateExpanded.name = context.loadBalancerStateExpanded.name
+                        .substring(0, context.loadBalancerStateExpanded.name.length() - 1);
+            }
         }
 
         return DeferredResult.completed(context);
