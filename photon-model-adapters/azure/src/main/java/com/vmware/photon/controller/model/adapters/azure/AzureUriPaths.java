@@ -36,6 +36,10 @@ public class AzureUriPaths {
             .buildDefaultAdapterLink(
                     EndpointType.azure.name(),
                     ResourceOperationSpecService.ResourceType.COMPUTE, "disk-day2-adapter");
+    public static final String AZURE_DAY2_POWER_ADAPTER = ResourceOperationSpecService
+            .buildDefaultAdapterLink(
+                    EndpointType.azure.name(),
+                    ResourceOperationSpecService.ResourceType.COMPUTE, "d2opower");
     public static final String AZURE_COST_STATS_ADAPTER = AdapterTypePath.COST_STATS_ADAPTER
             .adapterLink(EndpointType.azure_ea.name());
     public static final String AZURE_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER

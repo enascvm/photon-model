@@ -20,11 +20,11 @@ import java.util.concurrent.ExecutorService;
 import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
+import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
@@ -43,9 +43,7 @@ import com.vmware.xenon.common.Utils;
 
 public class AzureLifecycleOperationService extends StatelessService {
 
-    public static final String SELF_LINK = ResourceOperationSpecService.buildDefaultAdapterLink(
-            EndpointType.azure.name(), ResourceOperationSpecService.ResourceType.COMPUTE,
-            "d2opower");
+    public static final String SELF_LINK = AzureUriPaths.AZURE_DAY2_POWER_ADAPTER;
 
     private static class AzureLifecycleOperationContext
             extends AzureBaseAdapterContext<AzureLifecycleOperationContext> {
