@@ -1027,7 +1027,7 @@ public class AzureTestUtil {
         azureVMDesc.endpointLink = endpointState.documentSelfLink;
         azureVMDesc.endpointLinks = new HashSet<>();
         azureVMDesc.endpointLinks.add(endpointState.documentSelfLink);
-        azureVMDesc.computeHostLink = endpointState.computeHostLink;
+        azureVMDesc.computeHostLink = computeHost.documentSelfLink;
         azureVMDesc.instanceType = AZURE_VM_SIZE;
         azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureVMDesc.customProperties = new HashMap<>();
@@ -1061,7 +1061,7 @@ public class AzureTestUtil {
         rootDisk.endpointLink = endpointState.documentSelfLink;
         rootDisk.endpointLinks = new HashSet<>();
         rootDisk.endpointLinks.add(endpointState.documentSelfLink);
-        rootDisk.computeHostLink = endpointState.computeHostLink;
+        rootDisk.computeHostLink = computeHost.documentSelfLink;
         rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk.customProperties = new HashMap<>();
@@ -1107,7 +1107,7 @@ public class AzureTestUtil {
         computeState.endpointLink = endpointState.documentSelfLink;
         computeState.endpointLinks = new HashSet<>();
         computeState.endpointLinks.add(endpointState.documentSelfLink);
-        computeState.computeHostLink = endpointState.computeHostLink;
+        computeState.computeHostLink = computeHost.documentSelfLink;
         computeState.tenantLinks = endpointState.tenantLinks;
         computeState.tagLinks = createTagStateSet(host, endpointState.tenantLinks,
                         TAG_KEY_TYPE, AzureConstants.AzureResourceType.azure_vm.toString());
@@ -1240,7 +1240,7 @@ public class AzureTestUtil {
         rGroupState.endpointLink = endpointState.documentSelfLink;
         rGroupState.endpointLinks = new HashSet<>();
         rGroupState.endpointLinks.add(endpointState.documentSelfLink);
-        rGroupState.computeHostLink = endpointState.computeHostLink;
+        rGroupState.computeHostLink = computeHost.documentSelfLink;
         rGroupState.customProperties = new HashMap<>();
         rGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME, computeHost.documentSelfLink);
         rGroupState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK, endpointState.documentSelfLink);

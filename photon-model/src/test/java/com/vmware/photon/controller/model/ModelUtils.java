@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
@@ -380,6 +381,9 @@ public class ModelUtils {
         securityGroupState.tenantLinks = endpointState.tenantLinks;
         securityGroupState.endpointLink = endpointState.documentSelfLink;
         securityGroupState.resourcePoolLink = computeHost.resourcePoolLink;
+        securityGroupState.endpointLinks = new HashSet<>();
+        securityGroupState.endpointLinks.add(endpointState.documentSelfLink);
+        securityGroupState.computeHostLink = computeHost.documentSelfLink;
 
         securityGroupState.customProperties = new HashMap<>();
         securityGroupState.customProperties.put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,

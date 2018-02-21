@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_subnet;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceDisassociated;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
@@ -303,6 +304,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 // create a compute host for the Azure
                 computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
                         endpointState);
+                endpointState.computeHostLink = computeHost.documentSelfLink;
             }
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
@@ -555,7 +557,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             ComputeState later = azLrtComputeStatesEnd.get(azureVmName);
 
             // Validate number of document version changes are less than number of enumerations ran.
-            assertTrue(later.documentVersion - original.documentVersion <
+            assertTrue(later.documentVersion - original.documentVersion <=
                     this.numOfEnumerationsRan);
         }
 
@@ -617,7 +619,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 endpointState, this.isMock);
 
         for (int i = 0; i < numOfVMsToTest; i++) {
-            assertResourceExists(this.host, ComputeService.FACTORY_LINK, azureVMNames.get(i), false);
+            assertResourceDisassociated(this.host, ComputeService.FACTORY_LINK, azureVMNames.get(i),
+                    true);
 
             // clean up
             this.vmStates.set(i, null);
@@ -935,40 +938,37 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     private void assertStaleResources() {
         // Resource groups.
         for (int i = 0; i < STALE_RG_COUNT; i++) {
-            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
-                    STALE_RG_NAME_PREFIX + i,
-                    false);
+            assertResourceDisassociated(this.host, ResourceGroupService.FACTORY_LINK,
+                    STALE_RG_NAME_PREFIX + i, true);
         }
 
         // VMs
         for (int i = 0; i < STALE_VM_RESOURCES_COUNT; i++) {
-            assertResourceExists(this.host, ComputeService.FACTORY_LINK, STALE_VM_NAME_PREFIX + i,
-                    false);
+            assertResourceDisassociated(this.host, ComputeService.FACTORY_LINK, STALE_VM_NAME_PREFIX + i,
+                    true);
         }
 
         // Storage accounts
         for (int i = 0; i < STALE_STORAGE_ACCOUNTS_COUNT; i++) {
-            assertResourceExists(this.host, StorageDescriptionService.FACTORY_LINK,
-                    STALE_SA_NAME_PREFIX
-                            + i,
-                    false);
+            assertResourceDisassociated(this.host, StorageDescriptionService.FACTORY_LINK,
+                    STALE_SA_NAME_PREFIX + i, true);
         }
 
         // Storage containers
         for (int i = 0; i < STALE_CONTAINERS_COUNT; i++) {
-            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
-                    STALE_CONTAINER_NAME_PREFIX + i, false);
+            assertResourceDisassociated(this.host, ResourceGroupService.FACTORY_LINK,
+                    STALE_CONTAINER_NAME_PREFIX + i, true);
         }
 
         // Disks
         for (int i = 0; i < STALE_DISKS_COUNT; i++) {
-            assertResourceExists(this.host, DiskService.FACTORY_LINK,
-                    STALE_DISK_NAME_PREFIX + i, false);
+            assertResourceDisassociated(this.host, DiskService.FACTORY_LINK,
+                    STALE_DISK_NAME_PREFIX + i, true);
         }
 
         // Security Groups
         for (int i = 0; i < STALE_SECURITY_GROUPS_COUNT; i++) {
-            assertResourceExists(this.host, SecurityGroupService.FACTORY_LINK,
+            assertResourceDisassociated(this.host, SecurityGroupService.FACTORY_LINK,
                     STALE_SG_NAME_PREFIX + i, false);
         }
     }
