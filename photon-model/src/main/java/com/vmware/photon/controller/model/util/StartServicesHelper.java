@@ -140,19 +140,22 @@ public class StartServicesHelper {
                 addPrivilegedService = (Class<? extends Service> serviceClass) -> {
                     try {
                         addPrivilegedServiceMethod.invoke(host, serviceClass);
+
+                        host.log(Level.INFO, "Auto starting of '%s' as Privileged by '%s': SUCCESS",
+                                serviceClass.getSimpleName(),
+                                host.getClass().getSimpleName());
+
                     } catch (Exception exc) {
-                        host.log(Level.WARNING, "Failed calling '%s' method on '%s' host: %s",
-                                addPrivilegedServiceName,
-                                host.getClass().getSimpleName(),
-                                Utils.toString(exc));
+                        host.log(Level.INFO, "Auto starting of '%s' as Privileged by '%s': FAILED",
+                                serviceClass.getSimpleName(),
+                                host.getClass().getSimpleName());
                     }
                 };
             }
         } catch (Exception exc) {
-            host.log(Level.WARNING, "Failed getting '%s' method on '%s' host: %s",
-                    addPrivilegedServiceName,
-                    host.getClass().getSimpleName(),
-                    Utils.toString(exc));
+            // since this is used by tests ONLY log with FINE level
+            host.log(Level.FINE, "Auto starting of services as Privileged is not supported by '%s'",
+                    host.getClass().getSimpleName());
         }
 
         return addPrivilegedService;
