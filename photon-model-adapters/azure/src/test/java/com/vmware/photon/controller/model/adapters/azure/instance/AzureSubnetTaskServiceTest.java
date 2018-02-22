@@ -28,8 +28,10 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -161,8 +163,15 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
             this.rgOpsClient.createOrUpdate(this.rgName, rg);
 
             VirtualNetworkInner vNet = new VirtualNetworkInner();
+
+            // Azure's custom serializers don't handle well collections constructed with
+            // Collections.singletonList(), so initialize an ArrayList
             AddressSpace addressSpace = new AddressSpace();
-            addressSpace.withAddressPrefixes(Collections.singletonList(AZURE_DEFAULT_VPC_CIDR));
+            List<String> cidrs = new ArrayList<>();
+
+            cidrs.add(AZURE_DEFAULT_VPC_CIDR);
+
+            addressSpace.withAddressPrefixes(cidrs);
             vNet.withAddressSpace(addressSpace);
             vNet.withLocation(this.regionId);
             this.vNetClient.createOrUpdate(this.rgName, this.vNetName, vNet);
