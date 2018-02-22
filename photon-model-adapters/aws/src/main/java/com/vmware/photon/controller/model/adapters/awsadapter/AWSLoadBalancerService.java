@@ -150,6 +150,7 @@ public class AWSLoadBalancerService extends StatelessService {
 
         DeferredResult.completed(context)
                 .thenCompose(this::populateContext)
+                .thenCompose(this::stripDownInvalidCharactersFromLoadBalancerName)
                 .thenCompose(this::handleInstanceRequest)
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
@@ -254,7 +255,6 @@ public class AWSLoadBalancerService extends StatelessService {
                         .thenCompose(this::updateLoadBalancerState);
             } else {
                 execution = execution
-                        .thenCompose(this::stripDownInvalidCharactersFromLoadBalancerName)
                         .thenCompose(this::createSecurityGroup)
                         .thenCompose(this::createLoadBalancer)
                         .thenCompose(this::configureHealthCheck)

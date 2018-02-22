@@ -196,7 +196,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
     @Test
     public void testCreateUpdateDeleteLoadBalancer() throws Throwable {
-        this.lbName = generateLbName() + "_;.,/"; // add some invalid characters to the name
+        // set name with invalid characters and more than 32 characters
+        this.lbName = generateLbName() + "-1234567890-1234567890-1234567890_;.,/";
         LoadBalancerState lb = createLoadBalancerState(this.lbName);
 
         // Provision load balancer
@@ -239,7 +240,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         if (!this.isMock) {
             lb.computeLinks = new HashSet<>(
                     Arrays.asList(this.cs1.documentSelfLink, this.cs2.documentSelfLink));
-            lb = postServiceSynchronously(lb.documentSelfLink, lb, LoadBalancerState.class);
+            putServiceSynchronously(lb.documentSelfLink, lb);
         }
 
         kickOffLoadBalancerProvision(InstanceRequestType.UPDATE, lb.documentSelfLink,
@@ -253,7 +254,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
             // Update load balancer from 2 machines to 1 to simulate scale-in
             lb.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
-            lb = postServiceSynchronously(lb.documentSelfLink, lb, LoadBalancerState.class);
+            putServiceSynchronously(lb.documentSelfLink, lb);
 
             kickOffLoadBalancerProvision(InstanceRequestType.UPDATE, lb.documentSelfLink,
                     TaskStage.FINISHED);
