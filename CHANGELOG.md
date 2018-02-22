@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.50-SNAPSHOT
+
 ## 0.6.49
 * Populating azure managed disk links for Azure computes.
 * Fixes related to azure bills.
