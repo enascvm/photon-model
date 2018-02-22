@@ -724,8 +724,17 @@ public class TestAWSSetupUtils {
 
         DescribeSubnetsResult result = client.describeSubnets(new DescribeSubnetsRequest()
                 .withFilters(filters));
-        if (result.getSubnets() != null && !result.getSubnets().isEmpty()) {
-            return result.getSubnets().get(0);
+        List<Subnet> defaultSubnets = new ArrayList<>();
+        result.getSubnets().stream().forEach(subnet -> {
+            subnet.getTags().stream()
+                    .filter(tag -> tag.getKey().equalsIgnoreCase(TAG_KEY_FOR_TEST_RESOURCES)
+                            && tag.getValue()
+                                    .equalsIgnoreCase(AWS_DEFAULT_SUBNET_NAME))
+                    .forEach(tag -> defaultSubnets.add(subnet));
+        });
+
+        if (defaultSubnets != null && !defaultSubnets.isEmpty()) {
+            return defaultSubnets.get(0);
         } else {
             CreateSubnetRequest req = new CreateSubnetRequest()
                     .withCidrBlock(subnetCidr)
