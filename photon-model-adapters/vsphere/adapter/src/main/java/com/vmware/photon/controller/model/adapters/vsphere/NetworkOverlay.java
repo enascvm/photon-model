@@ -17,10 +17,11 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.NetworkSummary;
-import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.ObjectUpdate;
 
 public class NetworkOverlay extends AbstractOverlay {
-    public NetworkOverlay(ObjectContent cont) {
+
+    public NetworkOverlay(ObjectUpdate cont) {
         super(cont);
         String type = getId().getType();
         if (!VimUtils.isNetwork(cont.getObj())) {

@@ -62,6 +62,7 @@ import com.vmware.vim25.SelectionSpec;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TraversalSpec;
 import com.vmware.vim25.UpdateSet;
+import com.vmware.vim25.VimPortType;
 import com.vmware.vim25.VmDiskFileQuery;
 import com.vmware.vim25.VmDiskFileQueryFilter;
 import com.vmware.vim25.WaitOptions;
@@ -132,7 +133,7 @@ public class EnumerationClient extends BaseHelper {
         return getVimPort().createPropertyCollector(pc);
     }
 
-    private ManagedObjectReference createPropertyCollectorWithFilter(PropertyFilterSpec spec)
+    public ManagedObjectReference createPropertyCollectorWithFilter(PropertyFilterSpec spec)
             throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg {
         ManagedObjectReference pc = createPropertyCollector();
         boolean partialUpdates = false;
@@ -441,19 +442,18 @@ public class EnumerationClient extends BaseHelper {
         return ClientUtils.getDatastores(this.connection, pbmProfileId);
     }
 
-    private void destroyCollectorQuietly(ManagedObjectReference pc) {
+    /**
+     * Destroys the property collector associated with the vimPort type.
+     *
+     * @param pc      the property collector managed object reference
+     * @param vimPort the vimport type binding.
+     */
+    private static void destroyCollectorQuietly(ManagedObjectReference pc, VimPortType vimPort) {
         try {
-            getVimPort().destroyCollector(pc);
+            vimPort.destroyCollector(pc);
         } catch (Throwable ignore) {
 
         }
-    }
-
-    public Iterable<UpdateSet> pollForUpdates(PropertyFilterSpec spec)
-            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        ManagedObjectReference pc = createPropertyCollectorWithFilter(spec);
-
-        return () -> new ObjectUpdateIterator(pc);
     }
 
     /**
@@ -498,10 +498,10 @@ public class EnumerationClient extends BaseHelper {
                             .retrievePropertiesEx(this.pc, Collections.singletonList(this.spec), this.opts);
                     this.initialRetrievalCompleted = true;
                 } catch (RuntimeException e) {
-                    destroyCollectorQuietly(this.pc);
+                    destroyCollectorQuietly(this.pc, getVimPort());
                     throw e;
                 } catch (Exception e) {
-                    destroyCollectorQuietly(this.pc);
+                    destroyCollectorQuietly(this.pc, getVimPort());
                     throw new RuntimeException(e);
                 }
 
@@ -512,10 +512,10 @@ public class EnumerationClient extends BaseHelper {
                 this.result = getVimPort()
                         .continueRetrievePropertiesEx(this.pc, this.result.getToken());
             } catch (RuntimeException e) {
-                destroyCollectorQuietly(this.pc);
+                destroyCollectorQuietly(this.pc, getVimPort());
                 throw e;
             } catch (Exception e) {
-                destroyCollectorQuietly(this.pc);
+                destroyCollectorQuietly(this.pc, getVimPort());
                 throw new RuntimeException(e);
             }
 
@@ -523,43 +523,62 @@ public class EnumerationClient extends BaseHelper {
         }
     }
 
-    private class ObjectUpdateIterator implements Iterator<UpdateSet> {
+    public static class ObjectUpdateIterator implements Iterator<UpdateSet> {
         private final ManagedObjectReference pc;
 
         private final WaitOptions opts;
 
         private String since;
+        private UpdateSet lastResult;
+        private boolean initialRetrievalCompleted;
+        private VimPortType vimPort;
 
-        ObjectUpdateIterator(ManagedObjectReference pc) {
+        ObjectUpdateIterator(ManagedObjectReference pc, VimPortType vimPort, String since) {
             this.pc = pc;
-
+            this.vimPort = vimPort;
+            this.since = since;
             // don't fetch too much data or block for too long
             this.opts = new WaitOptions();
-            this.opts.setMaxWaitSeconds(10);
+            this.opts.setMaxWaitSeconds(1);
             this.opts.setMaxObjectUpdates(DEFAULT_FETCH_PAGE_SIZE);
+        }
+
+        public String getVersion() {
+            return this.since;
+        }
+
+        public ManagedObjectReference getPropertyCollector() {
+            return this.pc;
         }
 
         @Override
         public boolean hasNext() {
-            // updates are never exhausted, one must break the loop in other way
-            return true;
+            if (!this.initialRetrievalCompleted) {
+                // has to check, may still return an empty first page
+                return true;
+            }
+            return (null != this.lastResult && null != this.lastResult.isTruncated() && this.lastResult.isTruncated() == false);
         }
 
         @Override
         public UpdateSet next() {
             try {
-                UpdateSet result = getVimPort().waitForUpdatesEx(this.pc, this.since, this.opts);
-                this.since = result.getVersion();
-                return result;
+                UpdateSet result = this.vimPort.waitForUpdatesEx(this.pc, this.since, this.opts);
+                if (null != result) {
+                    this.since = result.getVersion();
+                }
+                this.initialRetrievalCompleted = true;
+                this.lastResult = result;
+                return result != null ? result : new UpdateSet();
             } catch (Exception e) {
-                destroyCollectorQuietly(this.pc);
+                destroyCollectorQuietly(this.pc, this.vimPort);
                 throw new RuntimeException(e);
             }
         }
     }
 
     /**
-     *  Utility method that crosschecks the availability of independent disks in vSphere.
+     * Utility method that crosschecks the availability of independent disks in vSphere.
      */
     public List<String> queryDisksAvailabilityinVSphere(Map<String, Object> diskInfoInLocalIndex) {
 
@@ -590,7 +609,7 @@ public class EnumerationClient extends BaseHelper {
                             // Folder is deleted.
                             unAvailableDisks.add(entry.getKey());
                         } else {
-                            searchResult.getHostDatastoreBrowserSearchResults().stream().forEach(result-> {
+                            searchResult.getHostDatastoreBrowserSearchResults().stream().forEach(result -> {
                                 // Folder is present but the vmdk file is deleted.
                                 if (CollectionUtils.isEmpty(result.getFile())) {
                                     unAvailableDisks.add(entry.getKey());
@@ -609,7 +628,7 @@ public class EnumerationClient extends BaseHelper {
     }
 
     /**
-     *  Create search specification that searches for exact disk name.
+     * Create search specification that searches for exact disk name.
      */
     private HostDatastoreBrowserSearchSpec createHostDatastoreBrowserSearchSpecForDisk(String diskName) {
         VmDiskFileQueryFilter vdiskFilter = new VmDiskFileQueryFilter();

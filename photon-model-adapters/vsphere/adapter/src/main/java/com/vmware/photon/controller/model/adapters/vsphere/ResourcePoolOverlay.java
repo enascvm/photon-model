@@ -16,11 +16,11 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ManagedObjectReference;
-import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.ObjectUpdate;
 
 public class ResourcePoolOverlay extends AbstractOverlay {
 
-    public ResourcePoolOverlay(ObjectContent cont) {
+    public ResourcePoolOverlay(ObjectUpdate cont) {
         super(cont);
         ensureType(VimNames.TYPE_RESOURCE_POOL);
     }

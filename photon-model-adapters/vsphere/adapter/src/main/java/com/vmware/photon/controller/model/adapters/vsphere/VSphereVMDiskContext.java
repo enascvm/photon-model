@@ -18,7 +18,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
         .DISK_DATASTORE_NAME;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_FULL_PATH;
 import static com.vmware.photon.controller.model.adapters.vsphere
-        .VSphereAdapterResourceEnumerationService.PREFIX_DATASTORE;
+        .VSphereIncrementalEnumerationService.PREFIX_DATASTORE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_CONTENT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;

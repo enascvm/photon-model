@@ -15,12 +15,12 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
-import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.ObjectUpdate;
 
 public class DatastoreOverlay extends AbstractOverlay {
     private boolean multipleHostAccess;
 
-    protected DatastoreOverlay(ObjectContent cont) {
+    protected DatastoreOverlay(ObjectUpdate cont) {
         super(cont);
     }
 

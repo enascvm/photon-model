@@ -19,6 +19,9 @@ import java.util.Map;
 import com.vmware.vim25.DynamicProperty;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.ObjectUpdate;
+import com.vmware.vim25.ObjectUpdateKind;
+import com.vmware.vim25.PropertyChange;
 
 /**
  * Much like overlays in gwt. Subclasses should define the interesting methods. Getter should fail
@@ -33,15 +36,27 @@ public abstract class AbstractOverlay {
 
     private final Map<String, Object> props;
 
-    protected AbstractOverlay(ManagedObjectReference ref, Map<String, Object> props) {
+    protected AbstractOverlay(ManagedObjectReference ref, Map<String, Object> props, ObjectUpdateKind objectUpdateKind) {
         this.ref = ref;
         this.props = props;
     }
 
+    protected AbstractOverlay(ManagedObjectReference ref, Map<String, Object> props) {
+        this(ref, props, null);
+    }
+
     protected AbstractOverlay(ObjectContent cont) {
-        this(cont.getObj(), new HashMap<>());
+        this(cont.getObj(), new HashMap<>(), null);
 
         for (DynamicProperty dp : cont.getPropSet()) {
+            this.props.put(dp.getName(), dp.getVal());
+        }
+    }
+
+    protected AbstractOverlay(ObjectUpdate cont) {
+        this(cont.getObj(), new HashMap<>(), cont.getKind());
+
+        for (PropertyChange dp : cont.getChangeSet()) {
             this.props.put(dp.getName(), dp.getVal());
         }
     }

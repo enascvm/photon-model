@@ -35,6 +35,7 @@ import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayOfVirtualMachineSnapshotTree;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.ObjectUpdate;
 import com.vmware.vim25.VirtualCdrom;
 import com.vmware.vim25.VirtualDevice;
 import com.vmware.vim25.VirtualDisk;
@@ -82,6 +83,11 @@ public class VmOverlay extends AbstractOverlay {
     };
 
     public VmOverlay(ObjectContent cont) {
+        super(cont);
+        ensureType(VimNames.TYPE_VM);
+    }
+
+    public VmOverlay(ObjectUpdate cont) {
         super(cont);
         ensureType(VimNames.TYPE_VM);
     }

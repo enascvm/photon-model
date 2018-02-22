@@ -25,11 +25,11 @@ import com.vmware.vim25.ClusterConfigInfoEx;
 import com.vmware.vim25.ClusterDrsConfigInfo;
 import com.vmware.vim25.ComputeResourceConfigInfo;
 import com.vmware.vim25.ManagedObjectReference;
-import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.ObjectUpdate;
 
 public class ComputeResourceOverlay extends AbstractOverlay {
 
-    protected ComputeResourceOverlay(ObjectContent cont) {
+    protected ComputeResourceOverlay(ObjectUpdate cont) {
         super(cont);
         String type = getId().getType();
         if (!type.equals(VimNames.TYPE_COMPUTE_RESOURCE) &&

@@ -44,6 +44,7 @@ public class VSphereAdapters {
             adapter(VSphereAdapterSnapshotService.class),
             adapter(VSphereListComputeSnapshotService.class),
             adapter(VSphereAdapterResourceEnumerationService.class, AdapterTypePath.ENUMERATION_ADAPTER),
+            ServiceMetadata.factoryService(VSphereIncrementalEnumerationService.class),
             adapter(VSphereAdapterStatsService.class, AdapterTypePath.STATS_ADAPTER),
             adapter(OvfImporterService.class),
             adapter(DatacenterEnumeratorService.class),
@@ -98,6 +99,6 @@ public class VSphereAdapters {
      * @return list of self links whose swagger generation needs to be excluded.
      */
     public static List<String> swaggerExcludedPrefixes() {
-        return Arrays.asList(new String[]{});
+        return Arrays.asList(new String[]{VSphereIncrementalEnumerationService.FACTORY_LINK});
     }
 }

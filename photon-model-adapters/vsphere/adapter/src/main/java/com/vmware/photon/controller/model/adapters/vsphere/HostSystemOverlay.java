@@ -20,13 +20,13 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ManagedObjectReference;
-import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.ObjectUpdate;
 
 public class HostSystemOverlay extends AbstractOverlay {
     private boolean clusterHost;
     private ManagedObjectReference parentMoref;
 
-    protected HostSystemOverlay(ObjectContent cont) {
+    protected HostSystemOverlay(ObjectUpdate cont) {
         super(cont);
         ensureType(VimNames.TYPE_HOST);
     }
