@@ -123,7 +123,7 @@ public class EndpointAdapterUtils {
                 if (adapterKey != null) {
                     startedAdapters.put(
                             adapterKey,
-                            AdapterUriUtil.buildAdapterUri(host, adapterPath).toString());
+                            AdapterUriUtil.buildPublicAdapterUri(host, adapterPath).toString());
                 }
             }
 
