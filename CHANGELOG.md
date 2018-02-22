@@ -1,6 +1,12 @@
 # CHANGELOG
 
-## 0.6.49-SNAPSHOT
+## 0.6.49
+* Populating azure managed disk links for Azure computes.
+* Fixes related to azure bills.
+* Upgrade xenon to version 1.6.2.
+* Populate creation time for resource documents.
+* Modified VM_HOST type to ENDPOINT_HOST for endpoint computes.
+* Improvements and fixes for Azure,AWS test failures.
 
 ## 0.6.48
 * Deprecate the endpointLink for the resources where

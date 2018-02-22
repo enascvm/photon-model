@@ -187,7 +187,7 @@ public class ResourceState extends ServiceDocument {
      */
     @UsageOption(option = PropertyUsageOption.OPTIONAL)
     @UsageOption(option = PropertyUsageOption.SINGLE_ASSIGNMENT)
-    @Since(ReleaseConstants.RELEASE_VERSION_0_6_50)
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_49)
     public Long documentCreationTimeMicros;
 
     public void copyTo(ResourceState target) {
