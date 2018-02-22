@@ -664,7 +664,12 @@ public class TestAWSSetupUtils {
                 .filter(sg -> sg.getVpcId().equals(vpcID))
                 .collect(Collectors.toList());
         if (securityGroupsInVPC != null && !securityGroupsInVPC.isEmpty()) {
-            return securityGroupsInVPC.get(0);
+            for (SecurityGroup sg : securityGroupsInVPC) {
+                //Do not use newly provisioned security groups as this could interfere with the cleanup logic of other tests.
+                if (!sg.getGroupName().startsWith(AWS_NEW_GROUP_PREFIX)) {
+                    return sg;
+                }
+            }
         }
         String securityGroupId = new AWSSecurityGroupClient(client)
                 .createDefaultSecurityGroup(vpcID);
