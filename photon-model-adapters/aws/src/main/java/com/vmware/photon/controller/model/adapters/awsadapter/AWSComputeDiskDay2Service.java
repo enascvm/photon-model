@@ -147,10 +147,11 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         } else if (request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
             fn = this::performDetachOperation;
         } else {
-            drDiskContext.thenCompose(c -> {
+            drDiskContext.thenApply(c -> {
                 Throwable err = new IllegalArgumentException(
                         String.format("Unknown Operation %s for a disk", request.operation));
-                return failTask(c, err);
+                c.baseAdapterContext.taskManager.patchTaskToFailure(err);
+                return c;
             });
             return;
         }
@@ -162,6 +163,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 .whenComplete((ctx, e) -> {
                     if (e == null) {
                         ctx.baseAdapterContext.taskManager.finishTask();
+                    } else {
+                        ctx.baseAdapterContext.taskManager.patchTaskToFailure(e);
                     }
                 });
     }
@@ -190,7 +193,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 context.baseAdapterContext.child.description.regionId, this)
                 .whenComplete((ec2Client, t) -> {
                     if (t != null) {
-                        failTask(context, t);
+                        dr.fail(t);
                         return;
                     }
 
@@ -229,23 +232,23 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         DeferredResult<DiskContext> dr = new DeferredResult<>();
         try {
             if (context.request.isMockRequest) {
-                updateComputeAndDiskState(dr, context);
+                updateComputeAndDiskState(dr, context, null);
                 return dr;
             }
 
             String instanceId = context.computeState.id;
             if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
-                return failTask(context, "compute id cannot be empty");
+                return logAndGetFailedDr("compute id cannot be empty");
             }
 
             String diskId = context.diskState.id;
             if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
-                return failTask(context, "disk id cannot be empty");
+                return logAndGetFailedDr("disk id cannot be empty");
             }
 
             String deviceName = getAvailableDeviceName(context, instanceId);
             if (deviceName == null) {
-                return failTask(context, "No device name is available for attaching new disk");
+                return logAndGetFailedDr("No device name is available for attaching new disk");
             }
 
             context.diskState.customProperties.put(DEVICE_NAME, deviceName);
@@ -261,20 +264,15 @@ public class AWSComputeDiskDay2Service extends StatelessService {
             context.amazonEC2Client.attachVolumeAsync(attachVolumeRequest, attachDiskHandler);
 
         } catch (Exception e) {
-            return failTask(context, e);
+            return DeferredResult.failed(e);
         }
 
         return dr;
     }
 
-    private DeferredResult<DiskContext> failTask(DiskContext context, String message) {
+    private DeferredResult<DiskContext> logAndGetFailedDr(String message) {
         this.logSevere("[AWSComputeDiskDay2Service] " + message);
         Throwable e = new IllegalArgumentException(message);
-        return failTask(context, e);
-    }
-
-    private DeferredResult<DiskContext> failTask(DiskContext context, Throwable e) {
-        context.baseAdapterContext.taskManager.patchTaskToFailure(e);
         return DeferredResult.failed(e);
     }
 
@@ -285,18 +283,18 @@ public class AWSComputeDiskDay2Service extends StatelessService {
             validateDetachInfo(context.diskState);
 
             if (context.request.isMockRequest) {
-                updateComputeAndDiskState(dr, context);
+                updateComputeAndDiskState(dr, context, null);
                 return dr;
             }
 
             String instanceId = context.computeState.id;
             if (instanceId == null || !instanceId.startsWith(AWS_INSTANCE_ID_PREFIX)) {
-                return failTask(context, "compute id cannot be empty");
+                return logAndGetFailedDr("compute id cannot be empty");
             }
 
             String diskId = context.diskState.id;
             if (diskId == null || !diskId.startsWith(AWS_VOLUME_ID_PREFIX)) {
-                return failTask(context, "disk id cannot be empty");
+                return logAndGetFailedDr("disk id cannot be empty");
             }
 
             //TODO: Ideally the volume must be unmounted before detaching the disk. Currently
@@ -311,17 +309,24 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                         new AWSAsyncHandler<StopInstancesRequest, StopInstancesResult>() {
                             @Override
                             protected void handleError(Exception e) {
+                                service.logSevere(() -> String.format(
+                                        "[AWSComputeDiskDay2Service] Failed to start compute. %s",
+                                        Utils.toString(e)));
+                                OperationContext.restoreOperationContext(this.opContext);
                                 dr.fail(e);
                             }
 
                             @Override
                             protected void handleSuccess(StopInstancesRequest request,
                                     StopInstancesResult result) {
-
+                                OperationContext.restoreOperationContext(this.opContext);
                                 AWSUtils.waitForTransitionCompletion(getHost(),
                                         result.getStoppingInstances(), "stopped",
                                         context.amazonEC2Client, (is, e) -> {
                                             if (e != null) {
+                                                service.logSevere(() -> String.format(
+                                                        "[AWSComputeDiskDay2Service] Failed to stop "
+                                                                + "the compute. %s", Utils.toString(e)));
                                                 dr.fail(e);
                                                 return;
                                             }
@@ -337,7 +342,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 detachVolume(context, dr, instanceId, diskId, false);
             }
         } catch (Exception e) {
-            return failTask(context, e);
+            return DeferredResult.failed(e);
         }
 
         return dr;
@@ -384,17 +389,22 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
                     @Override
                     protected void handleError(Exception e) {
-                        OperationContext.restoreOperationContext(this.opContext);
+                        service.logSevere(() -> String.format(
+                                "[AWSComputeDiskDay2Service] Failed to start the instance %s. %s",
+                                c.baseAdapterContext.child.id, Utils.toString(e)));
                         dr.fail(e);
                     }
 
                     @Override
                     protected void handleSuccess(StartInstancesRequest request, StartInstancesResult result) {
-                        OperationContext.restoreOperationContext(this.opContext);
                         AWSUtils.waitForTransitionCompletion(getHost(),
                                 result.getStartingInstances(), "running",
                                 client, (is, e) -> {
                                     if (e != null) {
+                                        service.logSevere(() -> String.format(
+                                                "[AWSComputeDiskDay2Service] Instance %s failed to reach "
+                                                        + "running state. %s",c.baseAdapterContext.child.id,
+                                                Utils.toString(e)));
                                         dr.fail(e);
                                         return;
                                     }
@@ -403,7 +413,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                                             "[AWSComputeDiskDay2Service] Successfully started the "
                                                     + "instance %s",
                                             result.getStartingInstances().get(0).getInstanceId()));
-                                    updateComputeAndDiskState(dr, c);
+                                    updateComputeAndDiskState(dr, c, this.opContext);
                                 });
                     }
                 });
@@ -443,14 +453,14 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 this.service.logInfo(
                         () -> String.format("[AWSComputeDiskDay2Service] Successfully detached "
                                         + "the volume %s from instance %s for task reference :%s",
-                                this.context.diskState.id, this.context.computeState.id,
+                                this.context.diskState.documentSelfLink,
+                                this.context.computeState.documentSelfLink,
                                 this.context.request.taskLink()));
                 if (this.performNextInstanceOp) {
                     //Instance will be started only if the disk is succesfully detached from the instance
                     startInstance(this.context.amazonEC2Client, this.context, this.dr);
                 } else {
-                    OperationContext.restoreOperationContext(this.opContext);
-                    updateComputeAndDiskState(this.dr, this.context);
+                    updateComputeAndDiskState(this.dr, this.context, this.opContext);
                 }
             };
 
@@ -489,14 +499,12 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
-            OperationContext.restoreOperationContext(this.opContext);
-            failTask(this.context, exception);
+            this.dr.fail(exception);
         }
 
         @Override
         protected void handleSuccess(AttachVolumeRequest request, AttachVolumeResult result) {
-            OperationContext.restoreOperationContext(this.opContext);
-            updateComputeAndDiskState(this.dr, this.context);
+            updateComputeAndDiskState(this.dr, this.context, this.opContext);
         }
     }
 
@@ -505,7 +513,11 @@ public class AWSComputeDiskDay2Service extends StatelessService {
      *
      */
     private void updateComputeAndDiskState(DeferredResult<DiskContext> dr,
-            DiskContext context) {
+            DiskContext context, OperationContext opCtx) {
+        if (opCtx != null) {
+            OperationContext.restoreOperationContext(opCtx);
+        }
+
         List<DeferredResult<Operation>> patchDRs = new ArrayList<>();
 
         patchDRs.add(updateDiskState(context));
@@ -515,15 +527,18 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                 .whenComplete((c, e) -> {
                     if (e != null) {
                         this.logSevere(() -> String.format(
-                                "[AWSComputeDiskDay2Service] Error updating computeState and "
-                                        + "diskState. %s", Utils.toString(e)));
-                        failTask(context, e);
+                                "[AWSComputeDiskDay2Service] Updating computeState and "
+                                        + "diskState for %s failed. %s",
+                                context.request.operation, Utils.toString(e)));
+                        dr.fail(e);
                         return;
                     }
                     this.logInfo(() -> String
                             .format("[AWSComputeDiskDay2Service] Updating DiskState %s and "
-                                            + "ComputeState %s : SUCCESS", context.diskState.id,
-                                    context.computeState.id));
+                                            + "ComputeState %s for %s : SUCCESS",
+                                    context.diskState.documentSelfLink,
+                                    context.computeState.documentSelfLink,
+                                    context.request.operation));
                     dr.complete(context);
                 });
     }
