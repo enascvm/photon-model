@@ -25,14 +25,13 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-
+import java.util.HashSet;
 
 import org.junit.Assert;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -93,6 +92,12 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
+        if (this.endpoint != null) {
+            computeState.endpointLink = this.endpoint.documentSelfLink;
+            computeState.endpointLinks = new HashSet<>(1);
+            computeState.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
+
         computeState.networkInterfaceLinks = new ArrayList<>(1);
 
         computeState.diskLinks = new ArrayList<>(1);
@@ -149,6 +154,13 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
         computeDesc.cpuCount = 2;
+
+        if (this.endpoint != null) {
+            computeDesc.endpointLink = this.endpoint.documentSelfLink;
+            computeDesc.endpointLinks = new HashSet<>(1);
+            computeDesc.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
+
         // 1G
         computeDesc.totalMemoryBytes = 1024 * 1024 * 1024;
         computeDesc.dataStoreId = dataStoreId;
@@ -215,19 +227,11 @@ public class TestVSphereLibraryProvisionTaskBase extends BaseVSphereAdapterTest 
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
 
-        EndpointService.EndpointState ep = new EndpointService.EndpointState();
-        ep.id = nextName("endpoint");
-        ep.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
-        ep.name = ep.id;
-        ep.authCredentialsLink = this.auth.documentSelfLink;
-        ep.computeLink = this.computeHost.documentSelfLink;
-        ep.computeDescriptionLink = this.computeHostDescription.documentSelfLink;
-        ep.resourcePoolLink = this.resourcePool.documentSelfLink;
-
+        EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
         this.endpoint = TestUtils.doPost(this.host, ep, EndpointService.EndpointState.class,
                 UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
 
-        enumerateComputes(this.computeHost);
+        enumerateComputes(this.computeHost, this.endpoint);
         doRefresh();
         snapshotFactoryState("libDeploy", ImageService.class);
 
