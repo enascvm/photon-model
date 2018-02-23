@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
@@ -41,6 +42,8 @@ import com.vmware.xenon.services.common.QueryTask;
 public class VSphereDiskService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.DISK_SERVICE;
     private static final String MOCK_VALUE = "mock";
+    private static final String TENANTS_PREFIX = "/tenants";
+    private static final String GROUP_IDENTIFIER = "/groups";
 
     @Override
     public void handlePatch(Operation op) {
@@ -158,7 +161,8 @@ public class VSphereDiskService extends StatelessService {
                         QueryTask.QueryTerm.MatchType.TERM, QueryTask.Query.Occurance.MUST_OCCUR);
 
         QueryUtils.QueryTop<StorageDescription> sdQuery = new QueryUtils.QueryTop<>(
-                this.getHost(), builder.build(), StorageDescription.class, ctx.diskState.tenantLinks);
+                this.getHost(), builder.build(), StorageDescription.class,
+                getTenantLinks(ctx.diskState.tenantLinks));
 
         sdQuery.setMaxResultsLimit(1);
         sdQuery.setClusterType(ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE);
@@ -169,6 +173,22 @@ public class VSphereDiskService extends StatelessService {
             }
             finishDiskCreateOperation(ctx);
         });
+    }
+
+    /**
+     * Get the tenantLinks from the list of tenantLinks which contains user, groups, projects etc.,
+     */
+    private List<String> getTenantLinks(List<String> tenantLinks) {
+        if (tenantLinks == null || tenantLinks.isEmpty()) {
+            return tenantLinks;
+
+        } else {
+            return tenantLinks.stream()
+                    .filter(Objects::nonNull)
+                    .filter(tenantLink -> tenantLink.startsWith(TENANTS_PREFIX))
+                    .filter(tenantLink -> !tenantLink.contains(GROUP_IDENTIFIER))
+                    .collect(Collectors.toList());
+        }
     }
 
     /**
