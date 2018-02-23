@@ -107,6 +107,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
+        // Temporary log for VCOM-3649
+        logInfo("Service is stopped: %s", op.toLogString());
         AWSClientManagerFactory.returnClientManager(this.clientManager,
                 AWSConstants.AwsClientType.EC2);
 
