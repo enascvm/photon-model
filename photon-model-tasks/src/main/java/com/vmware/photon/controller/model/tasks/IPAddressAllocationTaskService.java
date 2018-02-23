@@ -16,7 +16,10 @@ package com.vmware.photon.controller.model.tasks;
 import static java.util.stream.Collectors.toList;
 
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINKS;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,9 +33,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.IPAddressService;
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState;
@@ -198,9 +204,6 @@ public class IPAddressAllocationTaskService extends
 
         private DeferredResult<IPAddressAllocationContext> setUnAvailableIps() {
 
-            DeferredResult<IPAddressAllocationContext> deferredContext =
-                    new DeferredResult<>();
-
             List<IPAddressState> existingIpStates = this.ipAddressStates;
 
             //Add ips that are not available
@@ -210,16 +213,16 @@ public class IPAddressAllocationTaskService extends
                             .add(IpHelper.ipStringToLong(ipState.ipAddress));
                 }
             }
-            return deferredContext.completed(this);
+            return DeferredResult.completed(this);
         }
 
         /*Every connected resource has a count that tells you how many IPs are needed */
         private DeferredResult<IPAddressAllocationContext> setRequiredIpCounts() {
 
-            DeferredResult<IPAddressAllocationContext> deferredResult = new DeferredResult<>();
             this.requestedIpCount = this.serviceState.connectedResourceToRequiredIpCountMap
                     .values().stream().mapToInt(i -> i).sum();
-            return deferredResult.completed(this);
+
+            return DeferredResult.completed(this);
         }
 
         /**
@@ -396,6 +399,11 @@ public class IPAddressAllocationTaskService extends
                 ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL })
         public Map<String, List<String>> rsrcToAllocatedIpsMap;
 
+        @Documentation(description = "Optional list of tenants that can access this task.")
+        @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT, LINKS }, indexing = STORE_ONLY)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_50)
+        public List<String> tenantLinks;
+
         public IPAddressAllocationTaskState() {
             this.ipAddresses = new ArrayList<>();
             this.ipAddressLinks = new ArrayList<>();
@@ -425,6 +433,14 @@ public class IPAddressAllocationTaskService extends
 
             sb.append(allocatedMapStr).append(lineSeparator);
 
+            sb.append("tenant links: ");
+            if (this.tenantLinks == null || this.tenantLinks.isEmpty()) {
+                sb.append("empty");
+            } else {
+                sb.append(this.tenantLinks.stream().collect(Collectors.joining(",")));
+            }
+            sb.append(lineSeparator);
+
             return sb.toString();
         }
     }
@@ -433,6 +449,7 @@ public class IPAddressAllocationTaskService extends
     We throw this exception when an attempted modification of IP address returns a 304 not
     modified. This typically happens when two threads try to acquire the same IP simultaneously.
     */
+    @SuppressWarnings("serial")
     public static class ConcurrentRequestException extends CompletionException {
         public ConcurrentRequestException(String message) {
             super(message);
@@ -762,7 +779,7 @@ public class IPAddressAllocationTaskService extends
 
             return DeferredResult.allOf(results).thenApply((ignore) -> context);
         } catch (Exception ex) {
-            return new DeferredResult<>().failed(ex);
+            return DeferredResult.failed(ex);
         }
 
     }
@@ -852,9 +869,8 @@ public class IPAddressAllocationTaskService extends
             return DeferredResult.allOf(results).thenApply((ignore) -> context);
 
         } catch (Exception ex) {
-            return new DeferredResult<>().failed(ex);
+            return DeferredResult.failed(ex);
         }
-
     }
 
     private DeferredResult<IPAddressState> createNewIpForSingleResource(IPAddressAllocationContext context,
@@ -884,7 +900,7 @@ public class IPAddressAllocationTaskService extends
         String msg = String.format("Couldn't allocate an IP address for resource %s. No IP "
                 + "addresses were remaining", connectedResourceLink);
 
-        return (new DeferredResult<>()).failed(new Exception(msg));
+        return DeferredResult.failed(new IllegalArgumentException(msg));
     }
 
     /**
@@ -1177,7 +1193,7 @@ public class IPAddressAllocationTaskService extends
     private void addIpToContext(IPAddressAllocationContext context, String connectedResourceLink,
             IPAddressState ipAddressState) {
         context.connectedResourceToAllocatedIpsMap
-                .computeIfAbsent(connectedResourceLink, k -> new ArrayList());
+                .computeIfAbsent(connectedResourceLink, k -> new ArrayList<>());
 
         List<IPAddressState> ipStatesForResource = context.connectedResourceToAllocatedIpsMap.get
                 (connectedResourceLink);
@@ -1208,7 +1224,7 @@ public class IPAddressAllocationTaskService extends
             if (exception == null) {
                 deferredResult.complete(context);
             } else if (exception instanceof ConcurrentRequestException
-                    || exception instanceof java.util.concurrent.CompletionException) {
+                    || exception instanceof CompletionException) {
                 //Comes in here when there is a ConcurrentRequestException exception
                 //If there are IP address docs with state as available try again.
                 long availableStatusCount = context.ipAddressStates.stream().filter(state -> state
@@ -1270,7 +1286,7 @@ public class IPAddressAllocationTaskService extends
             if (exception == null) {
                 deferredResult.complete(context);
             } else if (exception instanceof ConcurrentRequestException
-                    || exception instanceof java.util.concurrent.CompletionException) {
+                    || exception instanceof CompletionException) {
                 //Comes in here when there is an exception
                 if (context.maxPossibleIpsCount > context.unavailableIpAddresses.size()) {
                     logInfo("Retrying to create new IPs.");

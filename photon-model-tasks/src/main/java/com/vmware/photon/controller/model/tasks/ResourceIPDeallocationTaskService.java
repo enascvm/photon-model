@@ -94,6 +94,7 @@ public class ResourceIPDeallocationTaskService
                 PropertyUsageOption.OPTIONAL }, indexing = PropertyIndexingOption.STORE_ONLY)
         public List<String> tenantLinks;
 
+        @Override
         public String toString() {
             String sb = "Deallocation for resource: " + this.resourceLink;
             return sb;
@@ -362,7 +363,7 @@ public class ResourceIPDeallocationTaskService
             return;
         }
 
-        logFine("Starting deallocate of (%d) IPs for compute resource [%d] using sub task %s",
+        logFine("Starting deallocate of (%s) IPs for compute resource [%s] using sub task %s",
                 ctx.networkInterfaceToIPAddressMap.size(), ctx.resourceLink, subTaskLink);
 
         List<DeferredResult<Operation>> deallocateOperationDRs = new ArrayList<>();
@@ -382,6 +383,8 @@ public class ResourceIPDeallocationTaskService
             deallocationTaskState.connectedResourceLink = networkInterfaceLink;
             deallocationTaskState.ipAddressLinks = new ArrayList<>();
             deallocationTaskState.ipAddressLinks.add(ipAddressLink);
+
+            deallocationTaskState.tenantLinks = state.tenantLinks;
 
             Operation deallocateNisOperation = Operation.createPost(this,
                     IPAddressAllocationTaskService.FACTORY_LINK)
