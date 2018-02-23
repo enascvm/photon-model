@@ -180,6 +180,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     private static final String VM_TAG_VALUE = "VMTagValue";
     private static final String SG_TAG_KEY_PREFIX = "SGTagKey";
     private static final String SG_TAG_VALUE = "SGTagValue";
+    private static final String TIME_STAMP_TAG_KEY = "TIME_STAMP";
+
 
     // Shared Compute Host / End-point between test runs.
     private static ComputeState computeHost;
@@ -222,7 +224,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     public boolean isMock = true;
     public String clientID = "clientID";
     public String clientKey = "clientKey";
-    public String subscriptionId = "subscriptionId";
+    public String subscriptionId = "subscriptionId" ;
     public String tenantId = "tenantId";
 
     public static int numOfVMsToTest = 2;
@@ -835,7 +837,9 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                     this.computeManagementClient, azureVMNames.get(i), azureVMNames.get(i));
 
             Map<String, String> vmTags = new HashMap<>();
+            String timeStamp = String.valueOf(Utils.getNowMicrosUtc());
             vmTags.put(VM_TAG_KEY_PREFIX + azureVMNames.get(i), VM_TAG_VALUE);
+            vmTags.put(TIME_STAMP_TAG_KEY, timeStamp);
             vmUpdate.withTags(vmTags);
 
             updateAzureVirtualMachine(this.computeManagementClient, azureVMNames.get(i),
