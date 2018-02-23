@@ -35,7 +35,6 @@ import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressResult;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
-import com.amazonaws.services.ec2.model.DeleteSecurityGroupResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.Filter;
@@ -51,6 +50,7 @@ import com.amazonaws.services.ec2.model.Vpc;
 
 import org.apache.commons.collections.CollectionUtils;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
@@ -413,15 +413,9 @@ public class AWSSecurityGroupClient {
     public DeferredResult<Void> deleteSecurityGroupAsync(String securityGroupId) {
         DeleteSecurityGroupRequest req = new DeleteSecurityGroupRequest()
                 .withGroupId(securityGroupId);
-        String message = "Delete AWS Security Group with id [" + securityGroupId + "].";
 
-        AWSDeferredResultAsyncHandler<DeleteSecurityGroupRequest, DeleteSecurityGroupResult>
-                handler = new AWSDeferredResultAsyncHandler<>(this.service, message);
-
-        this.client.deleteSecurityGroupAsync(req, handler);
-
-        return handler.toDeferredResult()
-                .thenApply(result -> (Void) null);
+        return AWSUtils.deleteSecurityGroupWithRetry(this.service, this.client, req,
+                Collections.singleton(AWSConstants.AWS_DEPENDENCY_VIOLATION_ERROR_CODE), 0);
     }
 
     public void deleteSecurityGroup(String securityGroupId) {

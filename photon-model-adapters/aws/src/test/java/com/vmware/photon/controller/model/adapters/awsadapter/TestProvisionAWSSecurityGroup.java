@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2018 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -18,19 +18,26 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_LINUX_AMI;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Vpc;
@@ -44,6 +51,8 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
@@ -57,11 +66,12 @@ import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.TenantService;
 
-public class TestProvisionAWSSecurityGroup {
+public class TestProvisionAWSSecurityGroup extends BaseModelTest {
 
     /*
      * This test requires the following 4 command line variables. If they are not present the tests
@@ -75,11 +85,12 @@ public class TestProvisionAWSSecurityGroup {
     public String privateKeyId;
     public String region;
     public String vpcId;
+    public String subnetId;
 
-    private VerificationHost host;
     private URI provisionSecurityGroupFactory;
     private AWSNetworkClient netClient;
     private Vpc vpc;
+    private AmazonEC2AsyncClient ec2client;
 
     @Before
     public void setUp() throws Exception {
@@ -87,14 +98,16 @@ public class TestProvisionAWSSecurityGroup {
 
         // ignore if any of the required properties are missing
         org.junit.Assume.assumeTrue(
-                TestUtils.isNull(this.privateKey, this.privateKeyId, this.region, this.vpcId));
-        this.host = VerificationHost.create(0);
+                TestUtils.isNull(this.privateKey, this.privateKeyId, this.region, this.vpcId,
+                        this.subnetId));
         try {
-            this.host.start();
             PhotonModelServices.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
-            // start the aws fw service
+            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
+            AWSAdaptersTestUtils.startServicesSynchronously(this.host);
+
+            // start the aws sg service
             this.host.startService(
                     Operation.createPost(UriUtils.buildUri(this.host, AWSSecurityGroupService.class)),
                     new AWSSecurityGroupService());
@@ -107,6 +120,22 @@ public class TestProvisionAWSSecurityGroup {
 
             this.vpc = this.netClient.getVPC(this.vpcId);
             assertNotNull(this.vpc);
+
+            AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
+            creds.privateKey = this.privateKey;
+            creds.privateKeyId = this.privateKeyId;
+
+            TestContext ec2WaitContext = new TestContext(1,  Duration.ofSeconds(30L));
+            AWSUtils.getEc2AsyncClient(creds, this.region, getExecutor())
+                    .exceptionally(t -> {
+                        ec2WaitContext.fail(t);
+                        throw new CompletionException(t);
+                    })
+                    .thenAccept(ec2Client -> {
+                        this.ec2client = ec2Client;
+                        ec2WaitContext.complete();
+                    });
+            ec2WaitContext.await();
         } catch (Throwable e) {
             throw new Exception(e);
         }
@@ -160,6 +189,73 @@ public class TestProvisionAWSSecurityGroup {
         task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.DELETE;
         Operation remove = new Operation();
         provisionSecurityGroup(task, remove);
+        ProvisionSecurityGroupTaskState removeTask = remove.getBody(ProvisionSecurityGroupTaskState.class);
+        waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, removeTask.documentSelfLink));
+
+        // verify security group state is gone
+        try {
+            getSecurityGroupState(securityGroupState.documentSelfLink);
+        } catch (Exception ex) {
+            assertTrue(ex instanceof ServiceNotFoundException);
+        }
+    }
+
+    @Test
+    public void testDeleteAWSSecurityGroupWithDependency() throws Throwable {
+        // create credentials
+        Operation authResponse = new Operation();
+        TestUtils.postCredentials(this.host, authResponse, this.privateKey, this.privateKeyId);
+        AuthCredentialsServiceState creds = authResponse.getBody(AuthCredentialsServiceState.class);
+
+        // create resource pool
+        Operation poolResponse = new Operation();
+        TestUtils.postResourcePool(this.host, poolResponse);
+        ResourcePoolState pool = poolResponse.getBody(ResourcePoolState.class);
+
+        // create sg service
+        Operation securityGroupResponse = new Operation();
+        SecurityGroupState initialSecurityGroupState = buildSecurityGroupState(creds, pool);
+
+        TestUtils.postSecurityGroup(this.host, initialSecurityGroupState, securityGroupResponse);
+        SecurityGroupState securityGroupState = securityGroupResponse.getBody(SecurityGroupState
+                .class);
+
+        // set up security group task state
+        ProvisionSecurityGroupTaskState task = new ProvisionSecurityGroupTaskState();
+        task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.CREATE;
+        task.securityGroupDescriptionLinks = Stream.of(securityGroupState.documentSelfLink)
+                .collect(Collectors.toSet());
+        task.customProperties = new HashMap<>();
+        task.customProperties.put(NETWORK_STATE_ID_PROP_NAME, this.vpcId);
+
+        Operation provision = new Operation();
+        provisionSecurityGroup(task, provision);
+        ProvisionSecurityGroupTaskState ps = provision.getBody(ProvisionSecurityGroupTaskState.class);
+        waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, ps.documentSelfLink));
+        securityGroupState = getServiceSynchronously(securityGroupState.documentSelfLink,
+                SecurityGroupState.class);
+
+        // provision machine on the newly created SG
+        String vm = provisionAWSVMWithEC2Client(this.host, this.ec2client, EC2_LINUX_AMI,
+                this.subnetId, securityGroupState.id);
+
+        // reuse previous task, but switch to a delete
+        task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.DELETE;
+        Operation remove = new Operation();
+        provisionSecurityGroup(task, remove);
+
+        // delete the newly provisioned machine after a small delay
+        Runnable deleteMachine = () -> {
+            try {
+                Thread.sleep(2000);
+                deleteVMsUsingEC2Client(this.ec2client, this.host, Collections.singletonList(vm));
+            } catch (Throwable t) {
+                assertNotNull(t);
+            }
+        };
+
+        deleteMachine.run();
+
         ProvisionSecurityGroupTaskState removeTask = remove.getBody(ProvisionSecurityGroupTaskState.class);
         waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, removeTask.documentSelfLink));
 

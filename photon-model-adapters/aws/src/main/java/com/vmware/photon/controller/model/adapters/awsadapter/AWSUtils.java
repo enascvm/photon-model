@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2018 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -47,6 +47,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -73,7 +74,10 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClientBuilder;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClientBuilder;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
+import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
+import com.amazonaws.services.ec2.model.DeleteSecurityGroupResult;
 import com.amazonaws.services.ec2.model.DeleteTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
@@ -110,6 +114,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -1244,5 +1249,62 @@ public class AWSUtils {
                     }
                 });
         return r.thenApply(AssumeRoleResult::getCredentials);
+    }
+
+    /**
+     * Deletes a security group and retries if the returned error is on the collection of retriable
+     * errors that is passed into the method.
+     * The operation is retried up to AWS_MAX_ERROR_RETRY times, and an exponential backoff
+     * strategy is used.
+     */
+    public static DeferredResult<Void> deleteSecurityGroupWithRetry(
+            StatelessService service,
+            AmazonEC2AsyncClient client,
+            DeleteSecurityGroupRequest req,
+            Set<String> retriableErrors,
+            int retryCount) {
+        String message = "Delete AWS Security Group with id [" + req.getGroupId() + "].";
+
+        AWSDeferredResultAsyncHandler<DeleteSecurityGroupRequest, DeleteSecurityGroupResult>
+                handler = new AWSDeferredResultAsyncHandler<>(service, message);
+
+        client.deleteSecurityGroupAsync(req, handler);
+
+        DeferredResult<Void> result = new DeferredResult<>();
+        handler.toDeferredResult()
+                .thenAccept(__ -> result.complete(null))
+                .exceptionally(t -> {
+                    if (t.getCause() == null ||
+                            !(t.getCause() instanceof AmazonEC2Exception) ||
+                            !retriableErrors.contains(((AmazonEC2Exception)t.getCause())
+                                    .getErrorCode())) {
+                        result.fail(t);
+                        return null;
+                    }
+
+                    if (retryCount < AWS_MAX_ERROR_RETRY) {
+                        long delay = (long)Math.pow(2, retryCount) * 1000;
+                        service.log(Level.WARNING, "Error deleting SG: [%s]. Error: [%s]. "
+                                        + "Retrying in [%s] milliseconds.",
+                                req.getGroupId(), t.getMessage(), delay);
+                        service.getHost().schedule(() -> {
+                            deleteSecurityGroupWithRetry(service, client, req, retriableErrors,
+                                    retryCount + 1).whenComplete((a, th) -> {
+                                        if (th == null) {
+                                            result.complete(null);
+                                        } else {
+                                            result.fail(th);
+                                        }
+                                    });
+                        }, delay, TimeUnit.MILLISECONDS);
+                    } else {
+                        service.log(Level.SEVERE, "Error deleting SG: [%s]. Error: [%s]. "
+                                        + "Finished retrying.",
+                                req.getGroupId(), t.getMessage());
+                        result.fail(t);
+                    }
+                    return null;
+                });
+        return result;
     }
 }

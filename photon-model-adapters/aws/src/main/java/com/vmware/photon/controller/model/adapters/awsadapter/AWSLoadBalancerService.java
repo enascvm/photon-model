@@ -361,8 +361,10 @@ public class AWSLoadBalancerService extends StatelessService {
         state.instanceAdapterReference = UriUtils.buildUri(getHost(), AWSSecurityGroupService
                 .SELF_LINK);
         state.resourcePoolLink = context.loadBalancerStateExpanded.endpointState.resourcePoolLink;
-        state.customProperties = new HashMap<>();
+        state.customProperties = new HashMap<>(2);
         state.customProperties.put(ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME,
+                Boolean.TRUE.toString());
+        state.customProperties.put(AWSConstants.AWS_LOAD_BALANCER_SECURITY_GROUP,
                 Boolean.TRUE.toString());
         state.tenantLinks = context.loadBalancerStateExpanded.tenantLinks;
         state.regionId = context.loadBalancerStateExpanded.regionId;
@@ -711,7 +713,7 @@ public class AWSLoadBalancerService extends StatelessService {
             AWSLoadBalancerContext context) {
         List<SecurityGroupState> infrastructureSecurityGroups =
                 context.securityGroupStates.stream()
-                        .filter(this::isInfrastructureResource)
+                        .filter(this::isLBProvisionedSecurityGroup)
                         .collect(Collectors.toList());
         if (infrastructureSecurityGroups.isEmpty()) {
             return DeferredResult.completed(context);
@@ -731,8 +733,8 @@ public class AWSLoadBalancerService extends StatelessService {
         return DeferredResult.allOf(deletionDRs).thenApply(ignore -> context);
     }
 
-    private boolean isInfrastructureResource(ResourceState resource) {
+    private boolean isLBProvisionedSecurityGroup(ResourceState resource) {
         return resource.customProperties != null && Boolean.TRUE.toString().equals(
-                resource.customProperties.get(ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME));
+                resource.customProperties.get(AWSConstants.AWS_LOAD_BALANCER_SECURITY_GROUP));
     }
 }

@@ -384,4 +384,5 @@ public class AWSConstants {
     public static final String AWS_ELASTIC_IP_ALLOCATION_ID = "awsAllocationId";
     public static final String AWS_NAT_GATEWAY_ID = "awsNATGatewayId";
     public static final String AWS_ROUTE_TABLE_ID = "awsRouteTableId";
+    public static final String AWS_LOAD_BALANCER_SECURITY_GROUP = "awsLoadBalancerSG";
 }
