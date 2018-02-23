@@ -45,6 +45,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandl
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AwsDiskClient;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -258,6 +259,9 @@ public class AWSDiskService extends StatelessService {
         }
 
         DiskState diskState = context.disk;
+
+        //add endpointLinks
+        AdapterUtils.addToEndpointLinks(diskState, context.disk.endpointLink);
 
         if (diskState.capacityMBytes <= 0) {
             String message = "Disk size has to be positive";

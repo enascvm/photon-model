@@ -305,6 +305,8 @@ public class AWSComputeDiskDay2ServiceTest {
         //create a disk
         provisionSingleDisk(diskspec1);
 
+        assertEquals(1, diskspec1.endpointLinks.size());
+
         //attach a disk while provisioning the vm
         provisionVMAndAttachDisk(this.zoneId, diskspec1.documentSelfLink);
 
@@ -334,6 +336,7 @@ public class AWSComputeDiskDay2ServiceTest {
 
             assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
                     attachedDisk1.status);
+            assertEquals(1, attachedDisk1.endpointLinks.size());
 
             this.volumeId = attachedDisk1.id;
         }
@@ -342,6 +345,7 @@ public class AWSComputeDiskDay2ServiceTest {
         DiskState diskSpec2 = createAWSDiskState(this.host, this.endpointState,
                 this.currentTestName.getMethodName() + "_disk2", this.zoneId, regionId);
         provisionSingleDisk(diskSpec2);
+        assertEquals(1, diskSpec2.endpointLinks.size());
 
         ServiceDocumentQueryResult diskQueryResult = ProvisioningUtils
                 .queryDiskInstances(this.host, vmStateAfterAttach1.diskLinks.size() + 1);
@@ -372,7 +376,7 @@ public class AWSComputeDiskDay2ServiceTest {
 
         DiskState attachedDisk2 = this.host.getServiceState(null, DiskState.class,
                 UriUtils.buildUri(this.host, provisionedDisk2.documentSelfLink));
-
+        assertEquals(1, attachedDisk2.endpointLinks.size());
         assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
                 attachedDisk2.status);
 

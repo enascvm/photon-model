@@ -442,7 +442,7 @@ public class AWSInstanceService extends StatelessService {
 
                     copyCustomProperties(diskState, bootDisk);
 
-                    addMandatoryProperties(diskState, blockDeviceMapping, aws.instanceTypeInfo);
+                    addMandatoryProperties(diskState, blockDeviceMapping, aws);
 
                     updateDeviceMapping(diskType, bootDiskType, blockDeviceMapping.getDeviceName(),
                             ebs,
@@ -684,12 +684,13 @@ public class AWSInstanceService extends StatelessService {
         diskState.customProperties = customProperties.size() > 0 ? customProperties : null;
     }
 
+
     /**
      * Add the disk information to disk state so that the disk state reflects the volume
      * information
      */
     private void addMandatoryProperties(DiskState diskState, BlockDeviceMapping deviceMapping,
-            InstanceType instanceType) {
+                                        AWSInstanceContext instanceType) {
 
         if (diskState.customProperties == null) {
             diskState.customProperties = new HashMap<>();
@@ -704,9 +705,11 @@ public class AWSInstanceService extends StatelessService {
             diskState.capacityMBytes = ebs.getVolumeSize() * 1024;
             diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
         } else {
-            diskState.capacityMBytes = instanceType.dataDiskSizeInMB;
+            diskState.capacityMBytes = instanceType.instanceTypeInfo.dataDiskSizeInMB;
             diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.INSTANCE_STORE.getName());
         }
+        //add the endpointLinks
+        diskState.endpointLinks = instanceType.child.endpointLinks;
     }
 
     /**
