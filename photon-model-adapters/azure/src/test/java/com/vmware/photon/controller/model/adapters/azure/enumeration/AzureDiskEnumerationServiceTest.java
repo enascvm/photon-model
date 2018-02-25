@@ -33,10 +33,14 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.xenon.common.UriUtils;
 
@@ -99,7 +103,21 @@ public class AzureDiskEnumerationServiceTest extends AzureBaseTest {
                 .getResourceStates(getHost(), DiskService.FACTORY_LINK, DiskState.class);
 
         assertTrue("Newly created disk state is not found.", diskStateMap.keySet().stream()
-                .anyMatch(s -> s.toLowerCase().equals(disk.id().toLowerCase())));
+                .anyMatch(s -> s.equalsIgnoreCase(disk.id())));
+
+        // verify internal tag links
+        DiskState createdDisk = diskStateMap.entrySet().stream()
+                .filter(en -> en.getKey().equalsIgnoreCase(disk.id()))
+                .findFirst().get().getValue();
+        assertNotNull(createdDisk.tagLinks);
+        TagState typeTag = TagsUtil.newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+                AzureConstants.AzureResourceType.azure_managed_disk.toString(),
+                false, this.computeHost.tenantLinks);
+        assertTrue("internal tag not found",
+                createdDisk.tagLinks.stream()
+                        .anyMatch(s -> s.equalsIgnoreCase(typeTag.documentSelfLink)));
+        // verify regionId
+        assertNotNull("regionId not found", createdDisk.regionId);
 
         // Delete disk from Azure
         getAzureSdkClients().getComputeManager()
@@ -116,7 +134,7 @@ public class AzureDiskEnumerationServiceTest extends AzureBaseTest {
         diskStateMap = ProvisioningUtils
                 .getResourceStates(getHost(), DiskService.FACTORY_LINK, DiskState.class);
         diskStateMap.values().forEach(diskState -> {
-            if (diskState.name.equalsIgnoreCase(disk.name())) {
+            if (diskState.id.equalsIgnoreCase(disk.id())) {
                 assertTrue("Endpoint link must be null", diskState.endpointLink.isEmpty());
                 assertTrue("Endpoint links in DiskState must be empty", diskState.endpointLinks.isEmpty());
             }
@@ -161,7 +179,7 @@ public class AzureDiskEnumerationServiceTest extends AzureBaseTest {
         Map<String, DiskState> diskStateMap = ProvisioningUtils
                 .getResourceStates(getHost(), DiskService.FACTORY_LINK, DiskState.class);
         assertTrue(diskStateMap.keySet().stream().anyMatch(s ->
-                s.toLowerCase().equals(dataDisk.managedDisk().id().toLowerCase())));
+                s.equalsIgnoreCase(dataDisk.managedDisk().id())));
 
         // Detach disk
         vm.update()

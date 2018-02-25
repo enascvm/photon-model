@@ -1601,13 +1601,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             diskState.documentSelfLink = oldDiskState.documentSelfLink;
             diskState.regionId = oldDiskState.regionId;
         } else {
-            StorageAccount storageAccount = context.storageAccountBlobUriMap
-                    .get(blob.getUri().toString());
             diskState.id = canonizeId(blob.getUri().toString());
-            diskState.documentSelfLink = UUID.randomUUID().toString();
+            StorageAccount storageAccount = context.storageAccountBlobUriMap
+                    .get(diskState.id);
             if (storageAccount != null) {
                 diskState.regionId = storageAccount.location;
             }
+            diskState.documentSelfLink = UUID.randomUUID().toString();
         }
         return diskState;
     }

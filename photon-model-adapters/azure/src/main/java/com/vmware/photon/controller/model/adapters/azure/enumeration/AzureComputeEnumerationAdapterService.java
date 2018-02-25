@@ -1384,6 +1384,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         diskState.status = DiskService.DiskStatus.ATTACHED;
         String id = UUID.randomUUID().toString();
         diskState.documentSelfLink = UriUtils.buildUriPath(DiskService.FACTORY_LINK, id);
+        diskState.regionId = vm.location();
         diskState.endpointLink = ctx.request.endpointLink;
         AdapterUtils.addToEndpointLinks(diskState, ctx.request.endpointLink);
         return diskState;
@@ -1394,6 +1395,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         ImageReferenceInner imageReference = vm.storageProfile()
                 .imageReference();
         diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
+        diskToUpdate.regionId = vm.location();
         diskToUpdate.bootOrder = 1;
         if (diskToUpdate.customProperties == null) {
             diskToUpdate.customProperties = new HashMap<>();
@@ -2174,6 +2176,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             osDisk = vm.storageProfile().osDisk();
 
             if (isDiskManaged(vm)) {
+                if (osDisk.managedDisk() == null) {
+                    return null;
+                }
                 return osDisk.managedDisk().id();
             } else {
                 return AzureUtils.canonizeId(osDisk.vhd().uri());

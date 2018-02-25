@@ -236,6 +236,7 @@ public class AzureConstants {
     public static enum AzureResourceType {
         azure_vm("azure_vm"),
         azure_vhd("azure_vhd"),
+        azure_managed_disk("azure_managed_disk"),
         azure_blob("azure_blob"),
         azure_vnet("azure_vnet"),
         azure_subnet("azure_subnet"),

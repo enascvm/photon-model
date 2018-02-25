@@ -505,7 +505,7 @@ public class DiskServiceTest extends Suite {
                     patchState);
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink, DiskState.class);
-            assertThat(returnState.regionId, is(startState.regionId));
+            assertThat(returnState.regionId, is(patchState.regionId)); // PATCH on regionId is supported
             assertThat(returnState.resourcePoolLink,
                     is(startState.resourcePoolLink));
             assertThat(returnState.authCredentialsLink,

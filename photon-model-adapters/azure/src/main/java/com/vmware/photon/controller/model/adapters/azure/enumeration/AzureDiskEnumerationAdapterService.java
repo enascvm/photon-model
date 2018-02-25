@@ -27,8 +27,10 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -38,13 +40,16 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.Disk;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.ManagedDiskList;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
@@ -53,6 +58,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 
@@ -80,6 +86,7 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_DISK_ENUMERATION_ADAPTER;
 
     private enum DiskEnumStages {
+        CREATE_INTERNAL_TYPE_TAG,
         GET_DISKS,
         GET_LOCAL_DISK_STATES,
         UPDATE_LOCAL_DISK_STATES,
@@ -107,6 +114,8 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
         Operation operation;
 
         long enumerationStartTimeInMicros;
+
+        public Set<String> internalTagLinks = new HashSet<>();
 
         // key -> Managed disk id and value -> DataDisk
         Map<String, Disk> managedDisks = new ConcurrentHashMap<>();
@@ -180,7 +189,7 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
                 break;
             case REFRESH:
                 ctx.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
-                ctx.subStage = DiskEnumStages.GET_DISKS;
+                ctx.subStage = DiskEnumStages.CREATE_INTERNAL_TYPE_TAG;
                 handleSubStage(ctx);
                 break;
             case STOP:
@@ -220,6 +229,9 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
     private void handleSubStage(DiskEnumContext ctx) {
         switch (ctx.subStage) {
 
+        case CREATE_INTERNAL_TYPE_TAG:
+            createInternalTypeTag(ctx, DiskEnumStages.GET_DISKS);
+            break;
         case GET_DISKS:
             getManagedDisks(ctx, DiskEnumStages.GET_LOCAL_DISK_STATES);
             break;
@@ -392,6 +404,11 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
                                 diskState.customProperties.containsKey(DISK_CONTROLLER_NUMBER)) {
                             diskState.customProperties.remove(DISK_CONTROLLER_NUMBER);
                         }
+                        if (diskState.tagLinks == null) {
+                            diskState.tagLinks = new HashSet<>();
+                        }
+                        diskState.tagLinks.addAll(ctx.internalTagLinks);
+                        diskState.regionId = entry.getValue().location;
                         diskOp = Operation.createPatch(getHost(), diskState.documentSelfLink)
                                 .setBody(diskState);
                     } else {
@@ -495,6 +512,12 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
         diskState.endpointLink = ctx.request.endpointLink;
         AdapterUtils.addToEndpointLinks(diskState, ctx.request.endpointLink);
 
+        diskState.regionId = disk.location;
+        if (diskState.tagLinks == null) {
+            diskState.tagLinks = new HashSet<>();
+        }
+        // add internal type tags
+        diskState.tagLinks.addAll(ctx.internalTagLinks);
         diskState.customProperties = new HashMap<>();
         diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE, disk.properties.accountType);
 
@@ -506,5 +529,28 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
      */
     private String getEnumKey(DiskEnumContext ctx) {
         return ctx.request.getEnumKey();
+    }
+
+    private void createInternalTypeTag(DiskEnumContext context, DiskEnumStages next) {
+        TagService.TagState typeTag = TagsUtil.newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+                AzureConstants.AzureResourceType.azure_managed_disk.toString(),
+                false, context.parentCompute.tenantLinks);
+
+        Operation.createPost(this, TagService.FACTORY_LINK)
+                .setBody(typeTag)
+                .setReferer(this.getUri())
+                .setCompletion((op, ex) -> {
+                    if (ex != null) {
+                        // log the error and continue with enumeration
+                        logWarning(() -> String
+                                .format("Error creating internal tag: %s", ex.getMessage()));
+                    } else {
+                        // if no error, store the internal tag into context
+                        context.internalTagLinks.add(typeTag.documentSelfLink);
+                    }
+                }).sendWith(this);
+
+        context.subStage = next;
+        handleSubStage(context);
     }
 }

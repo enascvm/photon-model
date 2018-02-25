@@ -472,6 +472,11 @@ public class DiskService extends StatefulService {
                     currentState.capacityMBytes = patchBody.capacityMBytes;
                     hasStateChanged = true;
                 }
+                if (patchBody.regionId != null && !patchBody.regionId.isEmpty()
+                        && !patchBody.regionId.equals(currentState.regionId)) {
+                    currentState.regionId = patchBody.regionId;
+                    hasStateChanged = true;
+                }
                 return hasStateChanged;
             }
         };
