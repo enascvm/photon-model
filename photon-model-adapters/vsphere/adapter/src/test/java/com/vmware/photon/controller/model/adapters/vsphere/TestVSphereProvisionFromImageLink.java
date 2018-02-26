@@ -17,13 +17,13 @@ import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -92,6 +92,12 @@ public class TestVSphereProvisionFromImageLink extends BaseVSphereAdapterTest {
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
+        if (this.endpoint != null) {
+            computeState.endpointLink = this.endpoint.documentSelfLink;
+            computeState.endpointLinks = new HashSet<>(1);
+            computeState.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
+
         computeState.networkInterfaceLinks = new ArrayList<>(1);
 
         computeState.diskLinks = new ArrayList<>(1);
@@ -138,6 +144,12 @@ public class TestVSphereProvisionFromImageLink extends BaseVSphereAdapterTest {
         // 1G
         computeDesc.totalMemoryBytes = 1024 * 1024 * 1024;
         computeDesc.dataStoreId = dataStoreId;
+
+        if (this.endpoint != null) {
+            computeDesc.endpointLink = this.endpoint.documentSelfLink;
+            computeDesc.endpointLinks = new HashSet<>(1);
+            computeDesc.endpointLinks.add(this.endpoint.documentSelfLink);
+        }
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
@@ -196,19 +208,11 @@ public class TestVSphereProvisionFromImageLink extends BaseVSphereAdapterTest {
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
 
-        EndpointState ep = new EndpointState();
-        ep.id = nextName("endpoint");
-        ep.endpointType = EndpointType.vsphere.name();
-        ep.name = ep.id;
-        ep.authCredentialsLink = this.auth.documentSelfLink;
-        ep.computeLink = this.computeHost.documentSelfLink;
-        ep.computeDescriptionLink = this.computeHostDescription.documentSelfLink;
-        ep.resourcePoolLink = this.resourcePool.documentSelfLink;
-
+        EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
         this.endpoint = TestUtils.doPost(this.host, ep, EndpointState.class,
-                UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
+              UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
 
-        enumerateComputes(this.computeHost);
+        enumerateComputes(this.computeHost, this.endpoint);
         doRefresh();
         snapshotFactoryState("images", ImageService.class);
 
