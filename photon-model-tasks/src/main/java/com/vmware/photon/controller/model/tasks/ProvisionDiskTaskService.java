@@ -338,7 +338,6 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
     private void validateDiskAndStart(ProvisionDiskTaskState state, Operation startPost) {
         URI diskUri = UriUtils.buildUri(getHost(), state.diskLink);
         sendRequest(Operation.createGet(diskUri)
-                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logWarning(() ->
