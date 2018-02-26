@@ -235,6 +235,7 @@ public class IPAddressAllocationTaskService extends
                 IPAddressAllocationTaskService ipAddressAllocationTaskService,
                 SubnetRangeState rangeState) {
             QueryTask.Query getIpAddressQuery = QueryTask.Query.Builder.create()
+                    .addKindFieldClause(IPAddressState.class)
                     .addFieldClause(IPAddressState.FIELD_NAME_SUBNET_RANGE_LINK,
                             rangeState.documentSelfLink)
                     .build();
