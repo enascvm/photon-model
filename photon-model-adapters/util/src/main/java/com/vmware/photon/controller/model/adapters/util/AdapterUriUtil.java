@@ -81,7 +81,8 @@ public class AdapterUriUtil {
      * Builds an adapter reference using the host's public URI.
      */
     public static URI buildPublicAdapterUri(ServiceHost host, String path) {
-        return buildAdapterUri(host.getPublicUri().getHost(), host.getPublicUri().getPort(), path);
+        return buildAdapterUri(host.getPublicUri().getScheme(), host.getPublicUri().getHost(),
+                host.getPublicUri().getPort(), path);
     }
 
     /**
@@ -89,6 +90,13 @@ public class AdapterUriUtil {
      */
     public static URI buildAdapterUri(String host, int port, String path) {
         return UriUtils.buildUri(host, port, path, null);
+    }
+
+    /**
+     * Builds an adapter reference using the given host URI.
+     */
+    public static URI buildAdapterUri(String scheme, String host, int port, String path) {
+        return UriUtils.buildUri(scheme, host, port, path, null);
     }
 
     /**
