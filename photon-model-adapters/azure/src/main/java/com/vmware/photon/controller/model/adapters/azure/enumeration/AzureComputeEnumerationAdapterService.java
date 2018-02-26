@@ -2077,11 +2077,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         return handler.toDeferredResult().thenApply(vm -> {
             for (InstanceViewStatus status : vm.instanceView().statuses()) {
-                if (status.code()
-                        .equals(AzureConstants.AZURE_VM_PROVISIONING_STATE_SUCCEEDED)) {
+                if (computeState.creationTimeMicros == null && status.time() != null) {
                     computeState.creationTimeMicros = TimeUnit.MILLISECONDS
                             .toMicros(status.time().getMillis());
-                } else if (status.code()
+                }
+                if (status.code()
                         .equals(AzureConstants.AZURE_VM_POWER_STATE_RUNNING)) {
                     computeState.powerState = PowerState.ON;
                 } else if (status.code()
