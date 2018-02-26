@@ -1003,21 +1003,41 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         ctx.regions.keySet().removeAll(existingRegionIds.keySet());
         ctx.computeStates.keySet().removeAll(existingRegionIds.keySet());
 
-        DeferredResult.allOf(
-                existingRegionIds.values().stream().map(
-                        compute -> {
-                            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
-                                    (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
-                                            Collections.singletonList(ctx.request.endpointLink));
+        List<DeferredResult<Operation>> updateRegionComputeStates = existingRegionIds.values().stream().map(
+                compute -> {
+                    Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                            (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
+                                    Collections.singletonList(ctx.request.endpointLink));
 
-                            ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
-                                    .create(collectionsToAddMap, null);
+                    ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                            .create(collectionsToAddMap, null);
 
-                            return this.sendWithDeferredResult(Operation.createPatch(this.getHost(), compute.documentSelfLink)
+                    return this.sendWithDeferredResult(
+                            Operation.createPatch(this.getHost(), compute.documentSelfLink)
                                     .setReferer(this.getHost().getUri())
                                     .setBody(updateEndpointLinksRequest));
-                        }).collect(Collectors.toList()))
-                .whenComplete(thenHandleSubStage(ctx, next));
+                }).collect(Collectors.toList());
+
+        List<DeferredResult<Operation>> updateRegionComputeDescs = existingRegionIds.values().stream().map(
+                compute -> {
+                    Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
+                            (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
+                                    Collections.singletonList(ctx.request.endpointLink));
+
+                    ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                            .create(collectionsToAddMap, null);
+
+                    return this.sendWithDeferredResult(
+                            Operation.createPatch(this.getHost(), compute.descriptionLink)
+                                    .setReferer(this.getHost().getUri())
+                                    .setBody(updateEndpointLinksRequest));
+                }).collect(Collectors.toList());
+
+        ArrayList<DeferredResult<Operation>> updates = new ArrayList<>();
+        updates.addAll(updateRegionComputeStates);
+        updates.addAll(updateRegionComputeDescs);
+
+        DeferredResult.allOf().whenComplete(thenHandleSubStage(ctx, next));
     }
 
     private void updateComputeDescriptions(EnumerationContext ctx, ComputeEnumerationSubStages next) {
