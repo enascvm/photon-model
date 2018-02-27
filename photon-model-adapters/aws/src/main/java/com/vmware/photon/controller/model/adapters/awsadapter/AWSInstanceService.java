@@ -73,7 +73,6 @@ import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagSpecification;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
-
 import org.apache.commons.lang3.EnumUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -1271,6 +1270,7 @@ public class AWSInstanceService extends StatelessService {
 
             // Query all states that are usedBy/createdBy the VM state we are deleting
             Query query = Builder.create()
+                    .addKindFieldClause(SubnetState.class)
                     .addCompositeFieldClause(
                             ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.CREATE_CONTEXT_PROP_NAME,

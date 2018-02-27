@@ -37,7 +37,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -89,7 +88,6 @@ public class EndpointRemovalTaskService
             Utils.buildKind(DiskState.class),
             Utils.buildKind(ComputeState.class),
             Utils.buildKind(ComputeDescription.class),
-            Utils.buildKind(ComputeStateWithDescription.class),
             Utils.buildKind(NetworkState.class),
             Utils.buildKind(NetworkInterfaceState.class),
             Utils.buildKind(NetworkInterfaceDescription.class),
