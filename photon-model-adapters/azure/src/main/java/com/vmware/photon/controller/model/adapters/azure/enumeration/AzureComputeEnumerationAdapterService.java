@@ -2077,6 +2077,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         return handler.toDeferredResult().thenApply(vm -> {
             for (InstanceViewStatus status : vm.instanceView().statuses()) {
+                // TODO: temoporarily added logs for debugging creation time, to be removed.
+                logInfo("VM to be patched: %s", vm.name());
+                logInfo("Patching compute state: %s with status: %s",
+                        Utils.toJsonHtml(computeState),  Utils.toJsonHtml(status));
                 if (computeState.creationTimeMicros == null && status.time() != null) {
                     computeState.creationTimeMicros = TimeUnit.MILLISECONDS
                             .toMicros(status.time().getMillis());

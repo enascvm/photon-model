@@ -409,7 +409,8 @@ public class EndpointAllocationTaskService
                         if (exs != null) {
                             long firstKey = exs.keySet().iterator().next();
                             exs.values()
-                                    .forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                    .forEach(ex -> logWarning(() -> String.format("Error in "
+                                                    + "sequence to create auth credentials: %s",
                                             ex.getMessage())));
                             sendFailurePatch(this, currentState, exs.get(firstKey));
                             return;
@@ -433,7 +434,8 @@ public class EndpointAllocationTaskService
                     if (exs != null) {
                         long firstKey = exs.keySet().iterator().next();
                         exs.values()
-                                .forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                .forEach(ex -> logWarning(() -> String.format("Error in "
+                                                + "sequence to create compute description: %s",
                                         ex.getMessage())));
                         sendFailurePatch(this, currentState, exs.get(firstKey));
                         return;
@@ -506,7 +508,8 @@ public class EndpointAllocationTaskService
                             if (exs != null) {
                                 long firstKey = exs.keySet().iterator().next();
                                 exs.values().forEach(
-                                        ex -> logWarning(() -> String.format("Error: %s",
+                                        ex -> logWarning(() -> String.format("Error in "
+                                                        + "sequence to create compute state: %s",
                                                 ex.getMessage())));
                                 sendFailurePatch(this, currentState, exs.get(firstKey));
                                 return;
@@ -525,7 +528,9 @@ public class EndpointAllocationTaskService
                         long firstKey = exs.keySet().iterator().next();
                         exs.values().forEach(
                                 ex -> logWarning(
-                                        () -> String.format("Error: %s", ex.getMessage())));
+                                        () -> String.format("Error in "
+                                                + "sequence to create endpoint state: %s",
+                                                ex.getMessage())));
                         sendFailurePatch(this, currentState, exs.get(firstKey));
                         return;
                     }
@@ -614,7 +619,9 @@ public class EndpointAllocationTaskService
                                     long firstKey = failures.keySet().iterator().next();
                                     failures.values()
                                             .forEach(ex -> logWarning(
-                                                    () -> String.format("Error: %s",
+                                                    () -> String.format("Error executing patch "
+                                                                    + "operations while creating/updating "
+                                                                    + "endpoint: %s",
                                                             ex.getMessage())));
                                     sendFailurePatch(this, currentState, failures.get(firstKey));
                                     return;

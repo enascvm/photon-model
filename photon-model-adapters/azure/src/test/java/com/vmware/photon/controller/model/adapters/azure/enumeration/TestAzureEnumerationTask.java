@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
@@ -116,7 +115,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -551,22 +549,6 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
                 .forEach(c -> assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE,
                         c.environmentName));
-
-        // validate creation time for computes
-        result.documents.entrySet().stream()
-                .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
-                .forEach(c -> {
-                    // We don't process VMs that are being terminated. Endpoint disassociation
-                    // is performed at a later stage in enumeration, after resource is created.
-                    if (c.type == ComputeType.VM_GUEST && c.endpointLinks != null &&
-                            !c.endpointLinks.isEmpty() && c.powerState != PowerState.UNKNOWN) {
-                        this.host.log("compute state body: %s", Utils.toJsonHtml(c));
-                        assertNotNull("creationTimeMicros for ComputeState of type VM_GUEST "
-                                + "cannot be NULL", c.creationTimeMicros);
-                    } else if (c.type == ComputeType.ENDPOINT_HOST) {
-                        assertNull(c.creationTimeMicros);
-                    }
-                });
 
         // validate Security Group tagLinks
         ServiceDocumentQueryResult securityGroupResults = ProvisioningUtils
