@@ -13,12 +13,15 @@
 
 package com.vmware.photon.controller.model.adapters.util;
 
+import static com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster.SELF_SERVICE;
+
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -78,11 +81,20 @@ public class AdapterUriUtil {
     }
 
     /**
-     * Builds an adapter reference using the host's public URI.
+     * Builds an public adapter reference using
+     * {@link com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster#SELF_SERVICE}.
+     *
+     * If SELF_SERVICE is not defined it will use {@link AdapterUriUtil#buildAdapterUri(ServiceHost, String)}.
+     * <p>
+     * <p>NOTE: <b>use with care!</b>
      */
     public static URI buildPublicAdapterUri(ServiceHost host, String path) {
-        return buildAdapterUri(host.getPublicUri().getScheme(), host.getPublicUri().getHost(),
-                host.getPublicUri().getPort(), path);
+
+        if (ClusterUtil.isClusterDefined(SELF_SERVICE)) {
+            return UriUtils.buildUri(ClusterUtil.getClusterUri(host, SELF_SERVICE), path);
+        }
+
+        return buildAdapterUri(host, path);
     }
 
     /**

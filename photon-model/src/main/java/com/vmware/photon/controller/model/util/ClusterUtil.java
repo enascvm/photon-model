@@ -17,7 +17,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -50,6 +49,12 @@ public class ClusterUtil {
             .getProperty(UriPaths.PROPERTY_PREFIX + "inventory.uri", DISCOVERY_URI);
 
     /**
+     * Self URI set as a system property.
+     */
+    public static final String SELF_URI = System
+            .getProperty(UriPaths.PROPERTY_PREFIX + "self.uri");
+
+    /**
      * Enum mapping Clusters with their URIs.
      */
     public enum ServiceTypeCluster implements ServiceEndpointLocator {
@@ -57,7 +62,18 @@ public class ClusterUtil {
         METRIC_SERVICE(METRICS_URI),
         @Deprecated
         DISCOVERY_SERVICE(INVENTORY_URI),
-        INVENTORY_SERVICE(INVENTORY_URI);
+        INVENTORY_SERVICE(INVENTORY_URI),
+
+        /**
+         * A Service pointing to this service's cluster.
+         * If the service is running in single node this is the public ip of host
+         *
+         * If the service is in cluster this is the URI pointing to the Cluster Uri / LoadBalancer
+         * URI / K8S service uri.
+         *
+         * Eg: -Dphoton-model.self.uri=http://localhost/
+         */
+        SELF_SERVICE(SELF_URI);
 
         private String uri;
 
