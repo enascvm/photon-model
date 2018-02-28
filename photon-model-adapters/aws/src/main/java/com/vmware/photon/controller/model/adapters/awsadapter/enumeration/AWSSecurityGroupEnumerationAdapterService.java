@@ -90,7 +90,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         AWSSecurityGroupEnumerationResponse response = new AWSSecurityGroupEnumerationResponse();
 
         if (context.enumExternalResourcesIds == null  || context.enumExternalResourcesIds.isEmpty()) {
-            return new DeferredResult<AWSSecurityGroupEnumerationResponse>().thenApply(aVoid ->response);
+            DeferredResult<AWSSecurityGroupEnumerationResponse> deferredResult = new DeferredResult<>();
+            deferredResult.complete(response);
+            return deferredResult;
         }
 
         Query.Builder findSecurityGroupStates = Builder.create()
