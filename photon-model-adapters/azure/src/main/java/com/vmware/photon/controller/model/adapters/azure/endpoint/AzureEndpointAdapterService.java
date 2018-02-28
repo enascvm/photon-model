@@ -268,15 +268,15 @@ public class AzureEndpointAdapterService extends StatelessService {
             children.add(ComputeType.ZONE.toString());
             cd.supportedChildren = children;
 
-            cd.instanceAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AzureUriPaths.AZURE_INSTANCE_ADAPTER);
-            cd.enumerationAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AzureUriPaths.AZURE_ENUMERATION_ADAPTER);
-            cd.statsAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.statsAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AzureUriPaths.AZURE_STATS_ADAPTER);
-            cd.powerAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AzureUriPaths.AZURE_POWER_ADAPTER);
-            cd.diskAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.diskAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AzureUriPaths.AZURE_DISK_ADAPTER);
         };
     }

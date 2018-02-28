@@ -280,19 +280,19 @@ public class AWSEndpointAdapterService extends StatelessService {
             children.add(ComputeType.ZONE.toString());
             cd.supportedChildren = children;
 
-            cd.instanceAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_INSTANCE_ADAPTER);
-            cd.enumerationAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_ENUMERATION_ADAPTER);
-            cd.powerAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_POWER_ADAPTER);
-            cd.diskAdapterReference = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+            cd.diskAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_DISK_ADAPTER);
 
             {
-                URI statsAdapterUri = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+                URI statsAdapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
                         AWSUriPaths.AWS_STATS_ADAPTER);
-                URI costStatsAdapterUri = AdapterUriUtil.buildPublicAdapterUri(getHost(),
+                URI costStatsAdapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
                         AWSUriPaths.AWS_COST_STATS_ADAPTER);
 
                 cd.statsAdapterReferences = new LinkedHashSet<>();
