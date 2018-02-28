@@ -63,7 +63,6 @@ import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -522,8 +521,10 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         List<DeferredResult<Operation>> patchDRs = new ArrayList<>();
 
-        patchDRs.add(updateDiskState(context));
-        patchDRs.add(updateComputeState(context));
+        patchDRs.add(AWSUtils.updateDiskState(context.diskState, context.request.operation,
+                this));
+        patchDRs.add(AWSUtils.updateComputeState(context.computeState, context.diskState,
+                context.request.operation, this));
 
         DeferredResult.allOf(patchDRs)
                 .whenComplete((c, e) -> {
@@ -543,59 +544,6 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                                     context.request.operation));
                     dr.complete(context);
                 });
-    }
-
-    /**
-     * Update attach status of disk
-     */
-    private DeferredResult<Operation> updateDiskState(DiskContext context) {
-        DiskState diskState = context.diskState;
-        Operation diskOp = null;
-
-        if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
-            diskState.status = DiskService.DiskStatus.ATTACHED;
-            diskOp = Operation.createPatch(this.getHost(),
-                    diskState.documentSelfLink)
-                    .setBody(diskState)
-                    .setReferer(this.getUri());
-        } else if (context.request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
-            diskState.status = DiskService.DiskStatus.AVAILABLE;
-            diskState.customProperties.remove(DEVICE_NAME);
-            diskOp = Operation.createPut(UriUtils.buildUri(this.getHost(), diskState
-                    .documentSelfLink))
-                    .setBody(diskState)
-                    .setReferer(this.getUri());
-        }
-
-        return this.sendWithDeferredResult(diskOp);
-    }
-
-    /**
-     * Add/remove diskLink to/from ComputeState
-     */
-    private DeferredResult<Operation> updateComputeState(DiskContext context) {
-        ComputeState computeState = context.computeState;
-        Operation computeStateOp = null;
-
-        if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
-            if (computeState.diskLinks == null) {
-                computeState.diskLinks = new ArrayList<>();
-            }
-
-            computeState.diskLinks.add(context.diskState.documentSelfLink);
-            computeStateOp = Operation.createPatch(UriUtils.buildUri(this.getHost(),
-                    computeState.documentSelfLink))
-                    .setBody(computeState)
-                    .setReferer(this.getUri());
-
-        } else if (context.request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
-            computeState.diskLinks.remove(context.diskState.documentSelfLink);
-            computeStateOp = Operation.createPut(UriUtils.buildUri(this.getHost(),
-                    computeState.documentSelfLink))
-                    .setBody(computeState)
-                    .setReferer(this.getUri());
-        }
-        return this.sendWithDeferredResult(computeStateOp);
     }
 
     private String getAvailableDeviceName(DiskContext context, String instanceId) {

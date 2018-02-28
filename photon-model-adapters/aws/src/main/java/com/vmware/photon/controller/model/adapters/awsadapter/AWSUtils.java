@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MOCK_HOST_SYSTEM_PROPERTY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_S3PROXY_SYSTEM_PROPERTY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_PENDING;
@@ -46,6 +47,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -116,16 +118,21 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -1306,5 +1313,60 @@ public class AWSUtils {
                     return null;
                 });
         return result;
+    }
+
+    /**
+     * Update attach/detach status of disk
+     */
+    public static DeferredResult<Operation> updateDiskState(DiskService.DiskState diskState,
+            String operation, Service service) {
+        Operation diskOp = null;
+
+        if (operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
+            diskState.status = DiskService.DiskStatus.ATTACHED;
+            diskOp = Operation.createPatch(service.getHost(),
+                    diskState.documentSelfLink)
+                    .setBody(diskState)
+                    .setReferer(service.getUri());
+        } else if (operation.equals(ResourceOperation.DETACH_DISK.operation)) {
+            diskState.status = DiskService.DiskStatus.AVAILABLE;
+            diskState.customProperties.remove(DEVICE_NAME);
+            diskOp = Operation.createPut(UriUtils.buildUri(service.getHost(), diskState
+                    .documentSelfLink))
+                    .setBody(diskState)
+                    .setReferer(service.getUri());
+        }
+
+        return service.sendWithDeferredResult(diskOp);
+    }
+
+    /**
+     * Add or remove diskLink from ComputeState by sending a ServiceStateCollectionUpdateRequest.
+     */
+    public static DeferredResult<Operation> updateComputeState(
+            ComputeService.ComputeState computeState, DiskService.DiskState diskState,
+            String operation, Service service) {
+        Map<String, Collection<Object>> collectionsToModify = Collections
+                .singletonMap(ComputeService.ComputeState.FIELD_NAME_DISK_LINKS,
+                        Collections.singletonList(diskState.documentSelfLink));
+
+        Map<String, Collection<Object>> collectionsToAdd = null;
+        Map<String, Collection<Object>> collectionsToRemove = null;
+        if (operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
+            collectionsToAdd = collectionsToModify;
+        } else {
+            //DETACH case
+            collectionsToRemove = collectionsToModify;
+        }
+
+        ServiceStateCollectionUpdateRequest updateDiskLinksRequest = ServiceStateCollectionUpdateRequest
+                .create(collectionsToAdd, collectionsToRemove);
+
+        Operation computeStateOp = Operation.createPatch(UriUtils.buildUri(service.getHost(),
+                computeState.documentSelfLink))
+                .setBody(updateDiskLinksRequest)
+                .setReferer(service.getUri());
+
+        return service.sendWithDeferredResult(computeStateOp);
     }
 }

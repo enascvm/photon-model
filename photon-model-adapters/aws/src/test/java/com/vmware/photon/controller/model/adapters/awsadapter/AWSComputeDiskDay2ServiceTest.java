@@ -294,6 +294,13 @@ public class AWSComputeDiskDay2ServiceTest {
         this.sgToCleanUp = null;
     }
 
+    /**
+     * This test does the following
+     * 1. provision a vm with one bootdisk, two new inline ebs disks and one existing disk.
+     * 2. Creates two independent disks and then attaches them to the VM and verifies the disklinks in
+     * compute and the properties of those two attached disks
+     * 3. Detaches the two independently created disks and verifies if those disks are available.
+     */
     @Test
     public void testDiskOperations() throws Throwable {
         Gson gson = new Gson();
@@ -344,11 +351,18 @@ public class AWSComputeDiskDay2ServiceTest {
         //create disk2
         DiskState diskSpec2 = createAWSDiskState(this.host, this.endpointState,
                 this.currentTestName.getMethodName() + "_disk2", this.zoneId, regionId);
+
+        //create disk2
         provisionSingleDisk(diskSpec2);
         assertEquals(1, diskSpec2.endpointLinks.size());
 
+        DiskState diskSpec3 = createAWSDiskState(this.host, this.endpointState,
+                this.currentTestName.getMethodName() + "_disk3", this.zoneId, regionId);
+
+        provisionSingleDisk(diskSpec3);
+
         ServiceDocumentQueryResult diskQueryResult = ProvisioningUtils
-                .queryDiskInstances(this.host, vmStateAfterAttach1.diskLinks.size() + 1);
+                .queryDiskInstances(this.host, vmStateAfterAttach1.diskLinks.size() + 2);
 
         List<String> existingNames = new ArrayList<>();
         for (String diskLink : diskQueryResult.documentLinks) {
@@ -361,12 +375,26 @@ public class AWSComputeDiskDay2ServiceTest {
                 diskQueryResult.documents.get(diskSpec2.documentSelfLink).toString(),
                 DiskState.class);
 
+        DiskState provisionedDisk3 = gson.fromJson(
+                diskQueryResult.documents.get(diskSpec3.documentSelfLink).toString(),
+                DiskState.class);
+
         assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
                 provisionedDisk2.status);
 
+        assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
+                provisionedDisk3.status);
+
         //attach disk to an available vm and verify the details.
-        performDiskOperation(vmStateAfterAttach1, provisionedDisk2.documentSelfLink,
-                ResourceOperation.ATTACH_DISK.operation);
+        performDiskOperation(
+                vmStateAfterAttach1,
+                new ArrayList<String>() {
+                    {
+                        add(provisionedDisk2.documentSelfLink);
+                    }
+                },
+                ResourceOperation.ATTACH_DISK.operation
+        );
 
         ComputeState vmStateAfterAttach2 = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
@@ -374,19 +402,47 @@ public class AWSComputeDiskDay2ServiceTest {
         assertEquals(vmStateAfterAttach1.diskLinks.size() + 1,
                 vmStateAfterAttach2.diskLinks.size());
 
+        //attach disk to an available vm and verify the details.
+        performDiskOperation(vmStateAfterAttach2,
+                new ArrayList<String>() {
+                    {
+                        add(provisionedDisk3.documentSelfLink);
+                    }
+                },
+                ResourceOperation.ATTACH_DISK.operation
+        );
+
+        ComputeState vmStateAfterAttach3 = this.host.getServiceState(null, ComputeState.class,
+                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+        assertEquals(vmStateAfterAttach2.diskLinks.size() + 1,
+                vmStateAfterAttach3.diskLinks.size());
+
         DiskState attachedDisk2 = this.host.getServiceState(null, DiskState.class,
                 UriUtils.buildUri(this.host, provisionedDisk2.documentSelfLink));
         assertEquals(1, attachedDisk2.endpointLinks.size());
         assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
                 attachedDisk2.status);
 
+        DiskState attachedDisk3 = this.host.getServiceState(null, DiskState.class,
+                UriUtils.buildUri(this.host, provisionedDisk3.documentSelfLink));
+
+        assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
+                attachedDisk3.status);
+
         //assert the device name
         assertDeviceName(instance, attachedDisk2, existingNames);
 
-        //detach disk from the vm and verify the details
-        ComputeState vmStateAfterDetach1 = detachDiskAndVerify(vmStateAfterAttach2, attachedDisk2);
+        //detach disks from the vm and verify the details of the detached disks
+        ComputeState vmStateAfterDetach2 = detachDiskAndVerify(vmStateAfterAttach3,
+                new ArrayList<String>() {
+                    {
+                        add(attachedDisk2.documentSelfLink);
+                        add(attachedDisk3.documentSelfLink);
+                    }
+                });
 
-        this.vmState = vmStateAfterDetach1;
+        this.vmState = vmStateAfterDetach2;
     }
 
     protected void assertDeviceName(Instance awsInstance, DiskState diskState, List<String> existingNames) {
@@ -400,60 +456,76 @@ public class AWSComputeDiskDay2ServiceTest {
     }
 
     private ComputeState detachDiskAndVerify(ComputeState vmStateAfterAttach,
-            DiskState attachedDisk2) throws Throwable {
-        performDiskOperation(vmStateAfterAttach, attachedDisk2.documentSelfLink,
+            List<String> detachedDiskLinks) throws Throwable {
+
+        performDiskOperation(vmStateAfterAttach, detachedDiskLinks,
                 ResourceOperation.DETACH_DISK.operation);
 
         ComputeState vmStateAfterDetach = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        assertEquals(vmStateAfterAttach.diskLinks.size() - 1, vmStateAfterDetach.diskLinks.size());
+        assertEquals(vmStateAfterAttach.diskLinks.size() - detachedDiskLinks.size(),
+                vmStateAfterDetach.diskLinks.size());
 
-        DiskState detachedDisk = this.host.getServiceState(null, DiskState.class,
-                UriUtils.buildUri(this.host, attachedDisk2.documentSelfLink));
+        detachedDiskLinks.forEach(detachedDiskLink -> {
+            DiskState detachedDisk = this.host.getServiceState(null, DiskState.class,
+                    UriUtils.buildUri(this.host, detachedDiskLink));
 
-        assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
-                detachedDisk.status);
+            assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
+                    detachedDisk.status);
+            this.diskStates.add(detachedDisk);
+        });
 
-        this.diskStates.add(detachedDisk);
         return vmStateAfterDetach;
     }
 
-    private void performDiskOperation(ComputeState compute, String diskLink, String requestType) throws Throwable {
-        DiskTaskService.DiskTaskState diskOpTask = new DiskTaskService.DiskTaskState();
-        diskOpTask.taskSubStage = DiskTaskService.DiskTaskState.SubStage.STARTED;
+    private void performDiskOperation(ComputeState compute, List<String> diskLinks,
+            String requestType) throws Throwable {
+        List<String> taskServiceLinks = new ArrayList<>();
 
-        diskOpTask = TestUtils
-                .doPost(this.host, diskOpTask, DiskTaskService.DiskTaskState.class,
-                        UriUtils.buildUri(this.host, DiskTaskService.FACTORY_LINK));
+        diskLinks.forEach(diskLink -> {
+            DiskTaskService.DiskTaskState diskOpTask = new DiskTaskService.DiskTaskState();
+            diskOpTask.taskSubStage = DiskTaskService.DiskTaskState.SubStage.STARTED;
 
-        ResourceOperationRequest request = new ResourceOperationRequest();
+            try {
+                diskOpTask = TestUtils
+                        .doPost(this.host, diskOpTask, DiskTaskService.DiskTaskState.class,
+                                UriUtils.buildUri(this.host, DiskTaskService.FACTORY_LINK));
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
 
-        request.isMockRequest = this.isMock;
-        request.operation = requestType;
-        request.payload = new HashMap<>();
-        request.payload.put(PhotonModelConstants.DISK_LINK, diskLink);
-        request.resourceReference = UriUtils.buildUri(this.host, compute.documentSelfLink);
-        request.taskReference = UriUtils.buildUri(this.host, diskOpTask.documentSelfLink);
+            ResourceOperationRequest request = new ResourceOperationRequest();
 
-        Operation diskOp = Operation
-                .createPatch(UriUtils.buildUri(this.host, AWSComputeDiskDay2Service.SELF_LINK))
-                .setBody(request)
-                .setReferer(this.host.getReferer());
+            request.isMockRequest = this.isMock;
+            request.operation = requestType;
+            request.payload = new HashMap<>();
+            request.payload.put(PhotonModelConstants.DISK_LINK, diskLink);
+            request.resourceReference = UriUtils.buildUri(this.host, compute.documentSelfLink);
+            request.taskReference = UriUtils.buildUri(this.host, diskOpTask.documentSelfLink);
 
-        TestRequestSender sender = new TestRequestSender(this.host);
-        sender.sendRequest(diskOp);
+            Operation diskOp = Operation
+                    .createPatch(UriUtils.buildUri(this.host, AWSComputeDiskDay2Service.SELF_LINK))
+                    .setBody(request)
+                    .setReferer(this.host.getReferer());
 
-        this.host.log("Waiting for disk operation to complete");
-        final String taskServiceLink = diskOpTask.documentSelfLink;
-        this.host.waitFor("disk Operation failed.", () -> {
-            DiskTaskService.DiskTaskState diskTaskState = this.host
-                    .getServiceState(null, DiskTaskService.DiskTaskState.class,
-                            UriUtils.buildUri(this.host, taskServiceLink));
+            TestRequestSender sender = new TestRequestSender(this.host);
+            sender.sendRequest(diskOp);
 
-            // Check if the disk operation is successful or not.
-            return diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FINISHED ||
-                    diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FAILED;
+            this.host.log("Waiting for disk operation to complete");
+            taskServiceLinks.add(diskOpTask.documentSelfLink);
+        });
+
+        taskServiceLinks.forEach(taskServiceLink -> {
+            this.host.waitFor("disk Operation failed.", () -> {
+                DiskTaskService.DiskTaskState diskTaskState = this.host
+                        .getServiceState(null, DiskTaskService.DiskTaskState.class,
+                                UriUtils.buildUri(this.host, taskServiceLink));
+
+                // Check if the disk operation is successful or not.
+                return diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FINISHED
+                        || diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FAILED;
+            });
         });
     }
 
