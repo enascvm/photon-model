@@ -129,7 +129,9 @@ public class PhotonModelConstants {
         azure("Azure"),
         gcp("GCP"),
         vsphere("vSphere"),
-        azure_ea("Azure-EA");
+        azure_ea("Azure-EA"),
+        nsxv("NSX-V"),
+        nsxt("NSX-T");
 
         private final String value;
 
