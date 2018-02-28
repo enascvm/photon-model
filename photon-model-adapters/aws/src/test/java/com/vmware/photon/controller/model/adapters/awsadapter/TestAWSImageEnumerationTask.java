@@ -15,6 +15,8 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.waitToComplete;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
 import java.util.Arrays;
@@ -27,8 +29,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.amazonaws.regions.Regions;
+import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.BlockDeviceMapping;
+import com.amazonaws.services.ec2.model.DescribeImagesRequest;
+import com.amazonaws.services.ec2.model.DescribeImagesResult;
+import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Filter;
+import com.amazonaws.services.ec2.model.Image;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -47,7 +54,6 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants.Endpoin
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -66,6 +72,7 @@ import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 public class TestAWSImageEnumerationTask extends BaseModelTest {
@@ -74,6 +81,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
     public boolean isMock = true;
+    public String regionId = TestAWSSetupUtils.regionId;
 
     // Unfortunately for some reason on Jenkins JOB aws ALL images enum times out.
     // On my local machine it runs in less than 20 secs.
@@ -82,32 +90,14 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     private static final String AMAZON_PRIVATE_IMAGE_FILTER = null;
 
-    private static final String ENDPOINT_REGION = Regions.US_EAST_1.getName();
-
     // As of now uniquely identify TWO AWS image: one paravirtual and one hvm.
-    private static final String AMAZON_PARAVIRTUAL_IMAGE_NAME = "Amazon-Linux_WordPress";
-    private static final String AMAZON_HVM_IMAGE_NAME = "Wordpress 4.4.2 for SuSE Linux";
+    private static String AMAZON_PARAVIRTUAL_IMAGE_NAME = null; // "Amazon-Linux_WordPress";
+    private static String AMAZON_HVM_IMAGE_NAME = null; // "Wordpress 4.4.2 for SuSE Linux";
 
     // As of now uniquely identify a SINGLE AWS image.
-    private static final String AMAZON_PUBLIC_IMAGE_FILTER_SINGLE;
+    private static String AMAZON_PUBLIC_IMAGE_FILTER_SINGLE;
 
-    static {
-        Filter nameFilter = new Filter("name").withValues(AMAZON_PARAVIRTUAL_IMAGE_NAME + "*");
-
-        // Serialize the list of filters to JSON string
-        AMAZON_PUBLIC_IMAGE_FILTER_SINGLE = Utils.toJson(Arrays.asList(nameFilter));
-    }
-
-    private static final String AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING;
-
-    static {
-        Filter nameFilter = new Filter("name").withValues(
-                AMAZON_PARAVIRTUAL_IMAGE_NAME + "*",
-                AMAZON_HVM_IMAGE_NAME + "*");
-
-        // Serialize the list of filters to JSON string
-        AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING = Utils.toJson(Arrays.asList(nameFilter));
-    }
+    private static String AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING;
 
     private static final String AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING_NO_MATCH;
 
@@ -154,6 +144,90 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     public final void beforeTest() throws Throwable {
 
         CommandLineArgumentParser.parseFromProperties(this);
+
+        if (this.isMock) {
+            return;
+        }
+
+        if (AMAZON_PARAVIRTUAL_IMAGE_NAME == null || AMAZON_HVM_IMAGE_NAME == null) {
+
+            // create credentials
+            AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
+            creds.privateKey = this.secretKey;
+            creds.privateKeyId = this.accessKey;
+
+            AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(
+                    creds, this.regionId, getExecutor());
+
+            // Get arbitrary PARAVIRTUAL image name
+            AMAZON_PARAVIRTUAL_IMAGE_NAME = lookupAwsImage(
+                    client, AWSConstants.AWS_IMAGE_VIRTUALIZATION_TYPE_PARAVIRTUAL);
+
+            // Get arbitrary HVM image name
+            AMAZON_HVM_IMAGE_NAME = lookupAwsImage(
+                    client, AWSConstants.AWS_IMAGE_VIRTUALIZATION_TYPE_HVM);
+
+            {
+                Filter nameFilter = new Filter("name").withValues(AMAZON_PARAVIRTUAL_IMAGE_NAME);
+
+                // Serialize the list of filters to JSON string
+                AMAZON_PUBLIC_IMAGE_FILTER_SINGLE = Utils.toJson(Arrays.asList(nameFilter));
+            }
+
+            {
+                Filter nameFilter = new Filter("name").withValues(
+                        AMAZON_PARAVIRTUAL_IMAGE_NAME,
+                        AMAZON_HVM_IMAGE_NAME);
+
+                // Serialize the list of filters to JSON string
+                AMAZON_PUBLIC_IMAGE_FILTER_PARTITIONING = Utils.toJson(Arrays.asList(nameFilter));
+            }
+        }
+    }
+
+    // Kind of overhead cause it loads almost all images just to get the first one.
+    // Still we need that to make the tests STABLE.
+    private String lookupAwsImage(AmazonEC2AsyncClient client, String virtualizationType) {
+
+        DescribeImagesRequest request = new DescribeImagesRequest()
+
+                .withFilters(new Filter(AWSConstants.AWS_IMAGE_STATE_FILTER)
+                        .withValues(AWSConstants.AWS_IMAGE_STATE_AVAILABLE))
+
+                .withFilters(new Filter(AWSConstants.AWS_IMAGE_IS_PUBLIC_FILTER)
+                        .withValues(Boolean.TRUE.toString()))
+
+                .withFilters(new Filter("root-device-type")
+                        .withValues("ebs"))
+
+                .withFilters(new Filter(AWSConstants.AWS_IMAGE_VIRTUALIZATION_TYPE_FILTER)
+                        .withValues(virtualizationType));
+
+        DescribeImagesResult describeImages = client.describeImages(request);
+
+        Image image = describeImages.getImages()
+                .stream()
+                .filter(img -> {
+                    for (BlockDeviceMapping blockDeviceMapping : img.getBlockDeviceMappings()) {
+                        // blockDeviceMapping can be with noDevice
+                        EbsBlockDevice ebs = blockDeviceMapping.getEbs();
+                        if (ebs != null) {
+                            return true;
+                        }
+                    }
+                    return false;
+                })
+                .findFirst()
+                .get();
+
+        getHost().log(Level.INFO,
+                "AWS '%s' image loaded (out of %s): %s [%s]",
+                virtualizationType,
+                describeImages.getImages().size(),
+                image.getName(),
+                image);
+
+        return image.getName();
     }
 
     @After
@@ -168,7 +242,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         AtomicInteger counter = new AtomicInteger(0);
 
-        QueryTemplate.waitToComplete(queryAll.queryLinks(imageLink -> {
+        waitToComplete(queryAll.queryLinks(imageLink -> {
             try {
                 deleteServiceSynchronously(imageLink);
                 counter.incrementAndGet();
@@ -442,7 +516,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 task.tenantLinks);
         queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
 
-        Long imagesCount = QueryByPages.waitToComplete(
+        Long imagesCount = waitToComplete(
                 queryAll.collectLinks(Collectors.counting()));
 
         Assert.assertTrue("Expected at least " + AMAZON_PUBLIC_IMAGES_ALL_COUNT
@@ -469,7 +543,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                     ImageState.class,
                     task.tenantLinks);
 
-            long imagesCount = QueryByPages.waitToComplete(
+            long imagesCount = waitToComplete(
                     queryAll.collectDocuments(Collectors.counting()));
 
             Assert.assertEquals("No images expected", 0, imagesCount);
@@ -486,17 +560,17 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                     ImageState.class,
                     task.tenantLinks);
 
-            List<ImageState> images = QueryByPages.waitToComplete(
+            List<ImageState> images = waitToComplete(
                     queryAll.collectDocuments(Collectors.toList()));
 
             Assert.assertEquals("Only TWO images expected", 2, images.size());
 
             Assert.assertTrue(AMAZON_PARAVIRTUAL_IMAGE_NAME + " is missing", images.stream()
-                    .filter(image -> image.name.startsWith(AMAZON_PARAVIRTUAL_IMAGE_NAME))
+                    .filter(image -> image.name.equals(AMAZON_PARAVIRTUAL_IMAGE_NAME))
                     .findFirst()
                     .isPresent());
             Assert.assertTrue(AMAZON_HVM_IMAGE_NAME + " is missing", images.stream()
-                    .filter(image -> image.name.startsWith(AMAZON_HVM_IMAGE_NAME))
+                    .filter(image -> image.name.equals(AMAZON_HVM_IMAGE_NAME))
                     .findFirst()
                     .isPresent());
         }
@@ -585,7 +659,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
             taskState.tenantLinks = endpointState.tenantLinks;
         }
 
-        taskState.regionId = ENDPOINT_REGION;
+        taskState.regionId = this.regionId;
         taskState.filter = filter;
         taskState.options = this.isMock
                 ? EnumSet.of(TaskOption.IS_MOCK)
@@ -630,8 +704,8 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         image.id = "dummy-" + this.currentTestName.getMethodName();
 
         image.regionId = epRegion
-                ? ENDPOINT_REGION
-                : ENDPOINT_REGION + "_diff";
+                ? this.regionId
+                : this.regionId + "_diff";
 
         return postServiceSynchronously(
                 ImageService.FACTORY_LINK,
