@@ -1152,7 +1152,7 @@ public class TestAWSSetupUtils {
         rootDisk.endpointLink = endpointState.documentSelfLink;
         rootDisk.endpointLinks = new HashSet<String>();
         rootDisk.endpointLinks.add(endpointState.documentSelfLink);
-        rootDisk.computeHostLink = endpointState.computeHostLink;
+        rootDisk.computeHostLink = computeHost.documentSelfLink;
         rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk = TestUtils.doPost(host, rootDisk,
@@ -1160,7 +1160,7 @@ public class TestAWSSetupUtils {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
         vmDisks.add(rootDisk.documentSelfLink);
-        List<DiskState> additionalDisks = getAdditionalDiskConfiguration(host, endpointState);
+        List<DiskState> additionalDisks = getAdditionalDiskConfiguration(host, endpointState, computeHost);
         for (DiskState additionalDisk : additionalDisks) {
             vmDisks.add(additionalDisk.documentSelfLink);
         }
@@ -1203,7 +1203,7 @@ public class TestAWSSetupUtils {
     }
 
     private static List<DiskState> getAdditionalDiskConfiguration(VerificationHost host,
-            EndpointState endpointState) throws Throwable {
+            EndpointState endpointState, ComputeState computeHost) throws Throwable {
         List<String[]> additionalDiskConfigs = new ArrayList<>();
         String[] disk1properties = { "ebs", "gp2" };
         String[] disk2properties = { "ebs", "io1", "900" };
@@ -1233,7 +1233,7 @@ public class TestAWSSetupUtils {
             disk.endpointLinks = new HashSet<String>();
             disk.endpointLinks.add(endpointState.documentSelfLink);
             disk.tenantLinks = endpointState.tenantLinks;
-            disk.computeHostLink = endpointState.computeHostLink;
+            disk.computeHostLink = computeHost.documentSelfLink;
 
             disk.encrypted = (i == 0) ? true : null;
 
@@ -1290,7 +1290,7 @@ public class TestAWSSetupUtils {
             networkState.endpointLinks = new HashSet<String>();
             networkState.endpointLinks.add(endpointState.documentSelfLink);
             networkState.tenantLinks = endpointState.tenantLinks;
-            networkState.computeHostLink = endpointState.computeHostLink;
+            networkState.computeHostLink = computeHost.documentSelfLink;
 
             networkState = TestUtils.doPost(host, networkState,
                     NetworkState.class,

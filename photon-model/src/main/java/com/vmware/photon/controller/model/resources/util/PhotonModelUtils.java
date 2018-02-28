@@ -50,6 +50,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.RouterService.RouterState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
@@ -64,6 +65,7 @@ import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -95,6 +97,7 @@ public class PhotonModelUtils {
         set.add(SecurityGroupState.class);
         set.add(StorageDescription.class);
         set.add(SubnetState.class);
+        set.add(SnapshotState.class);
 
         ENDPOINT_LINK_EXPLICIT_SUPPORT = Collections.unmodifiableSet(set);
     }
@@ -123,16 +126,21 @@ public class PhotonModelUtils {
             return null;
         }
 
-        if (ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(state.getClass())) {
+        Class<? extends ResourceState> resourceClass = ENDPOINT_LINK_EXPLICIT_SUPPORT
+                .stream()
+                .filter(clazz -> state.documentKind.equals(Utils.buildKind(clazz)))
+                .findFirst()
+                .orElse(null);
+
+        if (resourceClass != null) {
 
             ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
-                    .buildDescription(state.getClass());
+                    .buildDescription(resourceClass);
 
             return (String) ReflectionUtils.getPropertyValue(
                     sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK),
                     state);
         }
-
         return null;
     }
 
@@ -197,8 +205,8 @@ public class PhotonModelUtils {
      * Utility method to create an operation to remove an endpointLink from the endpointLinks set of
      * the resourceState and also update the endpointLink property of the specific resourceState
      */
-    public static Operation createRemoveEndpointLinksOperation(
-            Service service, String endpointLink, ResourceState resource) {
+    public static <T extends ResourceState> Operation createRemoveEndpointLinksOperation(
+            Service service, String endpointLink, T resource) {
 
         /*
          * endpointLink is also updated to provide backward compatibility to Tango team's Day 2

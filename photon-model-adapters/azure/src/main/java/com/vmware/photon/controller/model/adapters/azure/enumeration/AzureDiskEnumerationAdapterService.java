@@ -400,6 +400,12 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
 
                     if (diskState != null) {
                         diskState.status = DiskStatus.DETACHED;
+                        if (diskState.endpointLinks != null && !diskState.endpointLinks.contains(ctx.request.endpointLink)) {
+                            AdapterUtils.addToEndpointLinks(diskState, ctx.request.endpointLink);
+                        }
+                        if (diskState.endpointLink == null || diskState.endpointLink.equals("")) {
+                            diskState.endpointLink = ctx.request.endpointLink;
+                        }
                         if (diskState.customProperties != null &&
                                 diskState.customProperties.containsKey(DISK_CONTROLLER_NUMBER)) {
                             diskState.customProperties.remove(DISK_CONTROLLER_NUMBER);

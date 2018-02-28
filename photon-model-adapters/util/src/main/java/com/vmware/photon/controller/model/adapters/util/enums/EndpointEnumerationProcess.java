@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -387,7 +388,9 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 this.endpointState,
                 "endpointState should have been initialized by getEndpointState()");
 
-        return this.endpointState.endpointProperties != null
+        return this.endpointState.endpointType != null &&
+                !this.endpointState.endpointType.equals(EndpointType.azure.name()) &&
+                this.endpointState.endpointProperties != null
                 ? this.endpointState.endpointProperties.get(EndpointConfigRequest.REGION_KEY)
                 : null;
     }

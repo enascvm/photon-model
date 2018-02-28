@@ -177,9 +177,11 @@ public abstract class AzureBaseTest extends BaseModelTest {
         ComputeState computeHost = AzureTestUtil.createDefaultComputeHost(
                 getHost(), this.resourcePool.documentSelfLink, this.endpointState);
         this.endpointState.computeHostLink = computeHost.documentSelfLink;
+        this.endpointState.computeLink = computeHost.documentSelfLink;
 
         ComputeDescription computeDescription = getServiceSynchronously(
                 computeHost.descriptionLink, ComputeDescription.class);
+        computeDescription.computeHostLink = computeHost.documentSelfLink;
 
         return ComputeStateWithDescription.create(computeDescription, computeHost);
     }

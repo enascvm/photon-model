@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_NAME;
 import static com.vmware.photon.controller.model.resources.EndpointService.ENDPOINT_REMOVAL_REQUEST_REFERRER_VALUE;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.ENDPOINT_LINK_EXPLICIT_SUPPORT;
 import static com.vmware.photon.controller.model.tasks.monitoring.StatsUtil.SEPARATOR;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
@@ -392,7 +393,14 @@ public class EndpointRemovalTaskService
             // and issue an update request to its associated instance service.
             for (String selfLink : queryTask.results.documentLinks) {
                 Object document = queryTask.results.documents.get(selfLink);
-                ResourceState resourceState = Utils.fromJson(document, ResourceState.class);
+                ServiceDocument serviceDoc = Utils.fromJson(document, ServiceDocument.class);
+                Class<? extends ResourceState> resourceClass = ENDPOINT_LINK_EXPLICIT_SUPPORT
+                        .stream()
+                        .filter(clazz -> serviceDoc.documentKind.equals(Utils.buildKind(clazz)))
+                        .findFirst()
+                        .orElse(null);
+
+                ResourceState resourceState = Utils.fromJson(document, resourceClass);
                 Operation operation = PhotonModelUtils.createRemoveEndpointLinksOperation(
                         this, endpointLink, resourceState);
                 if (operation != null) {

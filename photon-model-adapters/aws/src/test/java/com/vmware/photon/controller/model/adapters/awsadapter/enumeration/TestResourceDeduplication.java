@@ -279,35 +279,13 @@ public class TestResourceDeduplication extends BasicTestCase {
 
                 Assert.assertEquals(doc.computeHostLink, computeHostLink);
                 assertNotNull(doc.documentCreationTimeMicros);
-                Assert.assertEquals(size, doc.endpointLinks.size());
+                Assert.assertTrue(doc.endpointLinks.size() >= size);
 
                 for (String endpointLink : expectedEndpoints) {
                     assertTrue(doc.endpointLinks.contains(endpointLink));
                 }
             }
         }
-
-        /*List<String> computeDescDocLinks = getDocumentLinks(ComputeDescriptionService.ComputeDescription.class);
-        for (String docLink : computeDescDocLinks) {
-            Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
-                    .setReferer(this.host.getUri());
-            Operation response = this.host.waitForResponse(op);
-            assertTrue("Error retrieving state",
-                    response.getStatusCode() == 200);
-            ComputeDescriptionService.ComputeDescription doc = response.getBody(ComputeDescriptionService.ComputeDescription.class);
-
-            if (doc.zoneId != null) {
-                assertNotNull(doc.endpointLink);
-                if (StringUtils.isEmpty(expectedEndpoint)) {
-                    Assert.assertEquals(expectedEndpoint, doc.endpointLink);
-                }
-                Assert.assertEquals(doc.computeHostLink, computeHostLink);
-                Assert.assertEquals(size, doc.endpointLinks.size());
-                for (String endpointLink : expectedEndpoints) {
-                    assertTrue(doc.endpointLinks.contains(endpointLink));
-                }
-            }
-        }*/
 
         List<String> diskDocLinks = getDocumentLinks(DiskService.DiskState.class);
         for (String docLink : diskDocLinks) {
@@ -324,7 +302,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -345,7 +323,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -366,7 +344,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -389,7 +367,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -411,7 +389,7 @@ public class TestResourceDeduplication extends BasicTestCase {
             Assert.assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 assertTrue(doc.endpointLinks.contains(endpointLink));
             }

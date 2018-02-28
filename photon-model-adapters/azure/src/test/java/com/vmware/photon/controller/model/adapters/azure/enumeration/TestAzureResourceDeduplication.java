@@ -57,7 +57,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
         if (this.isMock) {
             return;
         }
-        endpointState.computeLink = this.computeHost.documentSelfLink;
+
         this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
                 .setBody(endpointState));
 
@@ -78,34 +78,12 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
         expectedEndpoints.add(this.endpointState2.documentSelfLink);
         this.host.log("Expected endpoint links: " + expectedEndpoints);
         validateEndpointLinks(2, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
-    }
-
-    @Test
-    public void testEndpointDisassociationOnEndpointDeletion() throws Throwable {
-        this.host.log("Running test: " + this.currentTestName);
-
-        // if mock, simply return.
-        if (this.isMock) {
-            return;
-        }
-
-        // perform resource enumeration on given AWS endpoint
-        runEnumeration(this.endpointState);
-
-        List<String> expectedEndpoints = new ArrayList<>();
-        expectedEndpoints.add(this.endpointState.documentSelfLink);
-        this.host.log("Expected endpoint links: " + expectedEndpoints);
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
-
-        endpointState.computeLink = this.computeHost.documentSelfLink;
-        this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
-                .setBody(endpointState));
 
         // delete endpoint
         EndpointRemovalTaskService.EndpointRemovalTaskState endpointRemovalTaskState =
                 new EndpointRemovalTaskService.EndpointRemovalTaskState();
-        endpointRemovalTaskState.endpointLink = endpointState.documentSelfLink;
-        endpointRemovalTaskState.tenantLinks = endpointState.tenantLinks;
+        endpointRemovalTaskState.endpointLink = this.endpointState.documentSelfLink;
+        endpointRemovalTaskState.tenantLinks = this.endpointState.tenantLinks;
         endpointRemovalTaskState.disableGroomer = true;
 
         EndpointRemovalTaskService.EndpointRemovalTaskState returnState = TestUtils
@@ -115,78 +93,36 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
 
         host.waitForFinishedTask(EndpointRemovalTaskService.EndpointRemovalTaskState.class,
                 returnState.documentSelfLink);
-        //        assertTrue(returnState.taskInfo.stage == TaskState.TaskStage.FINISHED);
 
         expectedEndpoints.remove(this.endpointState.documentSelfLink);
+        validateEndpointLinks(1, expectedEndpoints, this.endpointState2.documentSelfLink, this.computeHost.documentSelfLink);
+
+        // delete endpoint
+        endpointRemovalTaskState =
+                new EndpointRemovalTaskService.EndpointRemovalTaskState();
+        endpointRemovalTaskState.endpointLink = this.endpointState2.documentSelfLink;
+        endpointRemovalTaskState.tenantLinks = this.endpointState2.tenantLinks;
+        endpointRemovalTaskState.disableGroomer = true;
+
+        returnState = TestUtils
+                .doPost(host, endpointRemovalTaskState,
+                        EndpointRemovalTaskService.EndpointRemovalTaskState.class,
+                        UriUtils.buildUri(host, EndpointRemovalTaskService.FACTORY_LINK));
+
+        host.waitForFinishedTask(EndpointRemovalTaskService.EndpointRemovalTaskState.class,
+                returnState.documentSelfLink);
+
+        expectedEndpoints.remove(this.endpointState2.documentSelfLink);
         validateEndpointLinks(0, expectedEndpoints, "", this.computeHost.documentSelfLink);
 
-        // Add duplicate end point and verify the endpoints again.
         this.endpointState2 = createEndpointState();
-        this.computeHost.endpointLink = this.endpointState2.documentSelfLink;
-        this.computeHost.endpointLinks.add(this.endpointState2.documentSelfLink);
-        this.host.waitForResponse(Operation.createPatch(this.host, this.computeHost.documentSelfLink)
-                .setBody(this.computeHost));
-
         this.endpointState2.computeLink = this.computeHost.documentSelfLink;
         this.host.waitForResponse(Operation.createPatch(this.host, this.endpointState2.documentSelfLink)
                 .setBody(this.endpointState2));
         runEnumeration(this.endpointState2);
-        expectedEndpoints.clear();
         expectedEndpoints.add(this.endpointState2.documentSelfLink);
-        this.host.log("Expected endpoint links: %s", expectedEndpoints.toString());
+        this.host.log("Expected endpoint links: " + expectedEndpoints);
         validateEndpointLinks(1, expectedEndpoints, this.endpointState2.documentSelfLink, this.computeHost.documentSelfLink);
-    }
-
-
-    @Test
-    public void testEndpointDisassociationOnEndpointDeletionWithMultipleEndpoints() throws Throwable {
-        this.host.log("Running test: " + this.currentTestName);
-
-        // if mock, simply return.
-        if (this.isMock) {
-            return;
-        }
-
-        endpointState.computeLink = this.computeHost.documentSelfLink;
-        this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
-                .setBody(endpointState));
-
-        // perform resource enumeration on given AWS endpoint
-        runEnumeration(this.endpointState);
-
-        List<String> expectedEndpoints = new ArrayList<>();
-        expectedEndpoints.add(this.endpointState.documentSelfLink);
-        this.host.log("Expected endpoint links: " + expectedEndpoints);
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
-
-        // Add duplicate end point and verify the endpoints again.
-        this.endpointState2 = createEndpointState();
-        this.endpointState2.computeLink = computeHost.documentSelfLink;
-        this.host.waitForResponse(Operation.createPatch(this.host, this.endpointState2.documentSelfLink)
-                .setBody(this.endpointState2));
-        runEnumeration(this.endpointState2);
-        expectedEndpoints.add(this.endpointState2.documentSelfLink);
-        this.host.log("Expected endpoint links: " + expectedEndpoints);
-        validateEndpointLinks(2, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
-
-        // delete endpoint
-        EndpointRemovalTaskService.EndpointRemovalTaskState endpointRemovalTaskState =
-                new EndpointRemovalTaskService.EndpointRemovalTaskState();
-        endpointRemovalTaskState.endpointLink = endpointState.documentSelfLink;
-        endpointRemovalTaskState.tenantLinks = endpointState.tenantLinks;
-        endpointRemovalTaskState.disableGroomer = true;
-
-        EndpointRemovalTaskService.EndpointRemovalTaskState returnState = TestUtils
-                .doPost(host, endpointRemovalTaskState,
-                        EndpointRemovalTaskService.EndpointRemovalTaskState.class,
-                        UriUtils.buildUri(host, EndpointRemovalTaskService.FACTORY_LINK));
-
-        host.waitForFinishedTask(EndpointRemovalTaskService.EndpointRemovalTaskState.class,
-                returnState.documentSelfLink);
-        //        assertTrue(returnState.taskInfo.stage == TaskState.TaskStage.FINISHED);
-
-        expectedEndpoints.remove(this.endpointState.documentSelfLink);
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
     }
 
     private void validateEndpointLinks(int size, List<String> expectedEndpoints, String expectedEndpoint, String computeHostLink) {
@@ -208,9 +144,10 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                 assertNotNull(doc.endpointLink);
                 if (StringUtils.isEmpty(expectedEndpoint)) {
                     Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                    Assert.assertEquals(size, doc.endpointLinks.size());
                 }
 
-                Assert.assertEquals(size, doc.endpointLinks.size());
+                Assert.assertTrue(doc.endpointLinks.size() >= size);
                 for (String endpointLink : expectedEndpoints) {
                     Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
                 }
@@ -233,8 +170,9 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                 assertNotNull(doc.endpointLink);
                 if (StringUtils.isEmpty(expectedEndpoint)) {
                     Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                    Assert.assertEquals(size, doc.endpointLinks.size());
                 }
-                Assert.assertEquals(size, doc.endpointLinks.size());
+                Assert.assertTrue(doc.endpointLinks.size() >= size);
                 for (String endpointLink : expectedEndpoints) {
                     Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
                 }
@@ -250,14 +188,16 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             Assert.assertTrue("Error retrieving state",
                     response.getStatusCode() == 200);
             DiskService.DiskState doc = response.getBody(DiskService.DiskState.class);
+
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -277,9 +217,10 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -299,9 +240,10 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -321,9 +263,10 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -340,14 +283,16 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                     response.getStatusCode() == 200);
             NetworkInterfaceService.NetworkInterfaceState doc = response
                     .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
+
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -371,9 +316,10 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
             }
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
         }
 
@@ -388,18 +334,18 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             SecurityGroupService.SecurityGroupState doc = response
                     .getBody(SecurityGroupService.SecurityGroupState.class);
 
-            this.host.log("Id: " + doc.id + " ,endpointLinks: " + doc.endpointLinks);
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
 
-            /*Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
-            }*/
+            }
         }
 
         List<String> imageDocLinks = getDocumentLinks(ImageService.ImageState.class);
@@ -417,9 +363,10 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
                 Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
 
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
             }
@@ -438,9 +385,10 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
 
             Assert.assertEquals(computeHostLink, doc.computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
-            Assert.assertEquals(size, doc.endpointLinks.size());
+            Assert.assertTrue(doc.endpointLinks.size() >= size);
             for (String endpointLink : expectedEndpoints) {
                 Assert.assertTrue(doc.endpointLinks.contains(endpointLink));
+                Assert.assertEquals(size, doc.endpointLinks.size());
             }
         }
     }
