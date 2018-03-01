@@ -569,7 +569,8 @@ public class EnumerationClient extends BaseHelper {
                 // has to check, may still return an empty first page
                 return true;
             }
-            return (null != this.lastResult && null != this.lastResult.isTruncated() && this.lastResult.isTruncated() == false);
+            return (null != this.lastResult && null != this.lastResult.isTruncated() &&
+                    this.lastResult.isTruncated());
         }
 
         @Override
