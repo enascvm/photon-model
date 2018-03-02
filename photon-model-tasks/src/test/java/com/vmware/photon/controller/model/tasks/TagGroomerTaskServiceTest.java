@@ -104,7 +104,7 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
 
         QueryTask tagsQT = createTagsQueryTask(false);
         List<TagState> tagsAfterGrooming = getTags(tagsQT);
-        // the only tags returned should the ones not marked as deleted
+        // the only tags returned should be the ones not marked as deleted
         assertEquals(totalTagsCreated - unusedTagsExt.size(), tagsAfterGrooming.size());
         // assert used tags are marked as deleted
         assertUsedTags(tagsAfterGrooming);

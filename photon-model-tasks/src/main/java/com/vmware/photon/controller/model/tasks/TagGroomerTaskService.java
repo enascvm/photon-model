@@ -191,7 +191,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
     private void handleSubStage(TagDeletionRequest task) {
         switch (task.subStage) {
         case QUERY_FOR_ALL_TAG_STATES:
-            getAllDiscoveredTagStates(task, SubStage.GET_TAGS_NEXT_PAGE);
+            getDiscoveredNotDeletedTagStates(task, SubStage.GET_TAGS_NEXT_PAGE);
             break;
         case GET_TAGS_NEXT_PAGE:
             getNextPageOfTagStates(task, SubStage.QUERY_FOR_DOCUMENTS_TAGGED_WITH_TAG_STATE);
@@ -220,11 +220,12 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
     }
 
     /**
-     * Collect all tag states with origins ["DISCOVERED"] and start soft deletion of stale ones by page.
+     * Collect all tag states with origins ["DISCOVERED"] that have not been soft deleted, and
+     * perform soft deletion of stale ones by page.
      *
      * If the tag has multiple origins, do not delete the tag.
      */
-    private void getAllDiscoveredTagStates(TagDeletionRequest task, SubStage next) {
+    private void getDiscoveredNotDeletedTagStates(TagDeletionRequest task, SubStage next) {
         Query query = Query.Builder.create()
                 .addKindFieldClause(TagState.class).build();
 
@@ -235,6 +236,10 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
 
         Query externalQuery = createOriginTagQuery(Boolean.TRUE, origin);
         query.addBooleanClause(externalQuery);
+
+        query.addBooleanClause(new Query()
+                .setTermPropertyName(TagState.FIELD_NAME_DELETED)
+                .setTermMatchValue(Boolean.FALSE.toString()));
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
