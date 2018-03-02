@@ -294,7 +294,7 @@ public class AzureInstanceService extends StatelessService {
      * @see #handleAllocation(AzureInstanceContext, AzureInstanceStage)
      */
     private void handleAllocation(AzureInstanceContext ctx) {
-        logInfo("Azure instance management at stage %s", ctx.stage);
+        logInfo("Azure instance management at stage %s for [%s]", ctx.stage, ctx.vmName);
         try {
             switch (ctx.stage) {
             case CLIENT:
@@ -303,6 +303,8 @@ public class AzureInstanceService extends StatelessService {
                 }
                 switch (ctx.computeRequest.requestType) {
                 case CREATE:
+                    logInfo("Provisioning [%s] for compute %s", ctx.vmName,
+                            ctx.resourceReference.getPath());
                     handleAllocation(ctx, AzureInstanceStage.CHILDAUTH);
                     break;
                 case VALIDATE_CREDENTIALS:
