@@ -47,4 +47,8 @@ public class DatastoreOverlay extends AbstractOverlay {
     public void setMultipleHostAccess(boolean multipleHostAccess) {
         this.multipleHostAccess = multipleHostAccess;
     }
+
+    public String getPath() {
+        return (String) getOrFail(VimPath.ds_summary_url);
+    }
 }

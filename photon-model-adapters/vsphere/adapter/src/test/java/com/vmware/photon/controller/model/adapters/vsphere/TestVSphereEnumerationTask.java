@@ -182,13 +182,16 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         }
 
         if (anUnusedHostLink != null) {
-            // the unsused host is wiped out unconditionally
+            // the unused host is wiped out unconditionally
             Operation op = Operation.createGet(this.host, anUnusedHostLink);
             op = this.host.waitForResponse(op);
             assertEquals(op.getStatusCode(), 404);
         }
 
         verifyDatastoreAndStoragePolicy();
+        if (!isMock()) {
+            verifyCIGapForComputeResourcesAndVMs();
+        }
     }
 
     @Test
@@ -245,6 +248,15 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
             });
         }
     }
+
+    private void verifyCIGapForComputeResourcesAndVMs() throws Throwable {
+        ComputeState cd = findRandomVm();
+        assertNotNull(cd.customProperties.get(CustomProperties.VM_SOFTWARE_NAME));
+        ComputeState host = findRandomHost();
+        assertNotNull(host.customProperties.get(CustomProperties.MODEL_NAME));
+        assertNotNull(host.customProperties.get(CustomProperties.MANUFACTURER));
+    }
+
 
     protected void captureFactoryState(String marker)
             throws ExecutionException, InterruptedException, IOException {

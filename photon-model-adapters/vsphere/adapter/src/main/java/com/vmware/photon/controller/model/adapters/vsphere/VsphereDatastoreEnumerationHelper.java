@@ -86,7 +86,10 @@ public class VsphereDatastoreEnumerationHelper {
                 .put(CustomProperties.MOREF, ds.getId())
                 .put(STORAGE_USED_BYTES, ds.getCapacityBytes() - ds.getFreeSpaceBytes())
                 .put(STORAGE_AVAILABLE_BYTES, ds.getFreeSpaceBytes())
-                .put(CUSTOM_PROP_STORAGE_SHARED, ds.isMultipleHostAccess());
+                .put(CUSTOM_PROP_STORAGE_SHARED, ds.isMultipleHostAccess())
+                .put(CustomProperties.TYPE, ds.getType())
+                .put(CustomProperties.DS_PATH, ds.getPath())
+                .put(CustomProperties.PROPERTY_NAME, ds.getName());
 
         return res;
     }

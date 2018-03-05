@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
+
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -42,10 +44,12 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.AboutInfo;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectUpdate;
 import com.vmware.vim25.PropertyFilterSpec;
@@ -60,6 +64,7 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 
 /**
  * Stateless service responsible for a vsphere endpoint enumeration.
@@ -74,6 +79,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
     public static final String PREFIX_NETWORK = "network";
     public static final String PREFIX_DATASTORE = "datastore";
+    private String vcUuid;
 
     public enum InterfaceStateMode {
         INTERFACE_STATE_WITH_OPAQUE_NETWORK,
@@ -243,7 +249,12 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
     private DeferredResult<Set<String>> collectAllEndpointResources(ComputeEnumerateResourceRequest req,
                                                                     String parentLink) {
-        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+        QueryTask.Query combinedClause = new QueryTask.Query()
+                .setOccurance(Occurance.MUST_OCCUR);
+
+        // The next clauses are the boolean clauses that will be added to the
+        // combinedClause. At the top, all further queries should have SHOULD_OCCUR
+        QueryTask.Query resourceClause = QueryTask.Query.Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ENDPOINT_LINK, req.endpointLink)
                 .addFieldClause(ComputeService.ComputeState.FIELD_NAME_LIFECYCLE_STATE, ComputeService.LifecycleState.PROVISIONING.toString(),
                         QueryTask.QueryTerm.MatchType.TERM, QueryTask.Query.Occurance.MUST_NOT_OCCUR)
@@ -253,10 +264,37 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                         Utils.buildKind(ComputeService.ComputeState.class),
                         Utils.buildKind(NetworkService.NetworkState.class),
                         Utils.buildKind(StorageDescriptionService.StorageDescription.class),
-                        Utils.buildKind(SubnetService.SubnetState.class)));
+                        Utils.buildKind(SubnetService.SubnetState.class))).build()
+                .setOccurance(Occurance.SHOULD_OCCUR);
+
+        // The below two queries are added to get the Folders and Datacenters that are enumerated
+        // They are persisted as ResourceGroupState documents, and there are other documents of the same
+        // kind (which have a different lifecycle), we're filtering on the "__computeType" property
+        // Adding these documents here will enable automatic deletion of "untouched" resources in
+        // the further logic
+
+        QueryTask.Query folderClause = QueryTask.Query.Builder.create()
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.TYPE, VimNames.TYPE_FOLDER)
+                .addKindFieldClause(ResourceGroupState.class).build()
+                .setOccurance(Occurance.SHOULD_OCCUR);
+
+        QueryTask.Query datacenterClause = QueryTask.Query.Builder.create()
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.TYPE, VimNames.TYPE_DATACENTER)
+                .addKindFieldClause(ResourceGroupState.class).build()
+                .setOccurance(Occurance.SHOULD_OCCUR);
+
+        // Add all the clauses to the combined clause
+        // The query structure is now --> MUST(SHOULD A + SHOULD B + SHOULD C)
+        // where A, B, C are independent queries
+        combinedClause
+                .addBooleanClause(resourceClause)
+                .addBooleanClause(folderClause)
+                .addBooleanClause(datacenterClause);
 
         QueryTask task = QueryTask.Builder.createDirectTask()
-                .setQuery(builder.build())
+                .setQuery(combinedClause)
                 .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
                 .build();
 
@@ -323,6 +361,12 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             return;
         }
 
+        // Get instanceUuid of the vCenter
+        // TODO: vcUuid is required by CI to form the Functional Key. For now just logging it
+        AboutInfo about = connection.getServiceContent().getAbout();
+        this.vcUuid = about.getInstanceUuid();
+        logInfo("vcUuid %s", this.vcUuid);
+
         DatacenterLister lister = new DatacenterLister(connection);
 
         try {
@@ -338,6 +382,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
                 try {
                     refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
+                    VsphereDatacenterEnumerationHelper.processDatacenterInfo(this, element, enumerationProgress);
                 } catch (Exception e) {
                     logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
                 }
@@ -406,6 +451,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         List<ComputeResourceOverlay> clusters = new ArrayList<>();
         List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
         List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
+        List<FolderOverlay> folders = new ArrayList<>();
 
         // put results in different buckets by type
         PropertyFilterSpec spec = client.createResourcesFilterSpec();
@@ -447,6 +493,9 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                             } else if (VimUtils.isResourcePool(cont.getObj())) {
                                 ResourcePoolOverlay rp = new ResourcePoolOverlay(cont);
                                 resourcePools.add(rp);
+                            } else if (VimUtils.isFolder(cont.getObj())) {
+                                FolderOverlay folder = new FolderOverlay(cont);
+                                folders.add(folder);
                             }
                         }
                     }
@@ -457,6 +506,16 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             logWarning(() -> msg + ": " + e.toString());
             mgr.patchTaskToFailure(msg, e);
             return;
+        }
+
+        // Process Folder list
+        ctx.expectFolderCount(folders.size());
+        for (FolderOverlay folder : folders) {
+            try {
+                VsphereFolderEnumerationHelper.processFoundFolder(this, ctx, folder);
+            } catch (Exception e) {
+                logWarning(() -> "Error processing folder information" + ": " + e.toString());
+            }
         }
 
         // Process HostSystem list to get the datastore access level whether local / shared
@@ -505,6 +564,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         try {
             ctx.getDatastoreTracker().await();
             ctx.getNetworkTracker().await();
+            ctx.getFolderTracker().await();
         } catch (InterruptedException e) {
             threadInterrupted(mgr, e);
             return;
@@ -570,7 +630,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         }
 
         spec = client.createVmFilterSpec(client.getDatacenter());
-        List<VmOverlay> vmOverlayList = new ArrayList();
+        List<VmOverlay> vmOverlayList = new ArrayList<>();
         EnumerationClient.ObjectUpdateIterator vmIterator;
         try {
             ManagedObjectReference vmPropertyCollector = client.createPropertyCollectorWithFilter(spec);
@@ -708,7 +768,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
      */
     private void deleteIndependentDisksUnavailableInVSphere(EnumerationProgress ctx, EnumerationClient client) {
         QueryTask task = queryAvailableDisks(ctx);
-        VsphereEnumerationHelper.withTaskResults(this, task, result -> {
+        withTaskResults(this, task, result -> {
             if (result.documentLinks.isEmpty()) {
                 // no independent disks
                 ctx.getDeleteDiskTracker().track();

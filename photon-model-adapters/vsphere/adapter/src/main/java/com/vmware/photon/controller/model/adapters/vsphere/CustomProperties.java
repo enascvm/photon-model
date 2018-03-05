@@ -166,6 +166,28 @@ public class CustomProperties {
      */
     public static final String DEVICE_CONNECTED = "__deviceConnected";
 
+    // Added for CI GAP
+    public static final String DATACENTER = "datacenter";
+    public static final String VC_VIEW = "view";
+    public static final String FOLDER_TYPE = "folderType";
+    public static final String PARENT_ID = "parentId";
+    public static final String DS_PATH = "path";
+    public static final String DISK_PROVISION_IN_GB = "provisionGB";
+    public static final String DISK_PARENT_VM = "vm";
+    public static final String CR_IS_VSAN_ENABLED = "isVsanEnabled";
+    public static final String CR_VSAN_CONFIG_ID = "vsanConfigId";
+    public static final String HS_CPU_GHZ = "cpuGHZ";
+    public static final String HS_CPU_PKG_COUNT = "cpuPkgCount";
+    public static final String HS_MEMORY_IN_GB = "memoryGB";
+    public static final String HS_CPU_DESC = "cpuDescription";
+    public static final String HS_NIC_COUNT = "nics";
+    public static final String MANUFACTURER = "manufacturer";
+    public static final String PROPERTY_NAME = "name";
+    public static final String VENDOR = "vendor";
+    public static final String MODEL_NAME = "modelName";
+    public static final String VM_SOFTWARE_NAME = "softwareName";
+    public static final String IS_PHYSICAL = "isPhysical";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

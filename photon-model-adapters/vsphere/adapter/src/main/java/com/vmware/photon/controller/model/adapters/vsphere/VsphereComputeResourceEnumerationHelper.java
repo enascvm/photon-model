@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.VsanHostConfigInfo;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.services.common.QueryTask;
@@ -97,7 +98,10 @@ public class VsphereComputeResourceEnumerationHelper {
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, cr.getId())
-                .put(CustomProperties.TYPE, cr.getId().getType());
+                .put(CustomProperties.TYPE, cr.getId().getType())
+                .put(CustomProperties.CR_IS_VSAN_ENABLED, cr.isVsanEnabled())
+                .put(CustomProperties.CR_VSAN_CONFIG_ID, cr.getVsanConfigId())
+                .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
         return state;
     }
 
@@ -212,6 +216,18 @@ public class VsphereComputeResourceEnumerationHelper {
                 ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
                 updateCluster(service, oldDocument, enumerationProgress, cr);
             }
+            // TODO: process server disks
+            if (!cr.getVsanHostConfig().isEmpty()) {
+                processServerDisks(service, cr.getVsanHostConfig());
+            }
         });
+    }
+
+    private static void processServerDisks(VSphereIncrementalEnumerationService service, List<VsanHostConfigInfo> vsanHostConfigInfo) {
+        vsanHostConfigInfo.forEach(config -> {
+            // TODO: Add persistence logic for server disk
+            service.logInfo("Processing server disk %s", config.getStorageInfo());
+        });
+
     }
 }

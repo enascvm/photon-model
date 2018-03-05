@@ -96,4 +96,8 @@ public abstract class AbstractOverlay {
         return getClass().getSimpleName() + ":" + VimUtils.convertMoRefToString(this.ref) + ": "
                 + this.props;
     }
+
+    public String getMoRefValue() {
+        return this.ref.getValue();
+    }
 }

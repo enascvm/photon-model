@@ -403,6 +403,10 @@ public final class VimUtils {
         byte[] digest = md.digest();
         return Hex.encodeHexString(digest);
     }
+
+    public static boolean isFolder(ManagedObjectReference obj) {
+        return obj != null && VimNames.TYPE_FOLDER.equals(obj.getType());
+    }
 }
 
 

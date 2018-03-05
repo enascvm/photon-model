@@ -158,7 +158,9 @@ public class VSphereVirtualMachineEnumerationHelper {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
-                .put(CustomProperties.TYPE, VimNames.TYPE_VM);
+                .put(CustomProperties.TYPE, VimNames.TYPE_VM)
+                .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS())
+                .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
         return state;
     }
 
@@ -302,10 +304,10 @@ public class VSphereVirtualMachineEnumerationHelper {
 
     static Operation processVirtualDevice(
             VSphereIncrementalEnumerationService service, DiskService.DiskStateExpanded matchedDs,
-            VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks) {
+            VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks, String vm) {
         if (device instanceof VirtualDisk) {
             return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
-                    (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service);
+                    (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service, vm);
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.CDROM, device,
@@ -382,7 +384,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                                 currentDisks);
 
                         Operation vdOp = processVirtualDevice(service, matchedDs, device,
-                                enumerationProgress, state.diskLinks);
+                                enumerationProgress, state.diskLinks, VimUtils.convertMoRefToString(vm.getId()));
                         if (vdOp != null) {
                             diskUpdateOps.add(vdOp);
                         }
@@ -467,7 +469,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                 state.diskLinks = new ArrayList<>(disks.size());
                 for (VirtualDevice device : disks) {
                     Operation vdOp = processVirtualDevice(service, null, device, enumerationProgress, state
-                            .diskLinks);
+                            .diskLinks, VimUtils.convertMoRefToString(vm.getId()));
                     if (vdOp != null) {
                         operations.add(vdOp);
                     }

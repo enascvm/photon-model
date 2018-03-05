@@ -21,10 +21,12 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectUpdate;
+import com.vmware.vim25.VsanHostConfigInfo;
 
 public class HostSystemOverlay extends AbstractOverlay {
     private boolean clusterHost;
     private ManagedObjectReference parentMoref;
+    private static final String HOST_SUMMARY_CONFIG_VSANCONFIG = "summary.config.vsanHostConfig";
 
     protected HostSystemOverlay(ObjectUpdate cont) {
         super(cont);
@@ -89,5 +91,28 @@ public class HostSystemOverlay extends AbstractOverlay {
 
     public boolean isInMaintenanceMode() {
         return (boolean) getOrDefault(VimPath.host_summary_runtime_inMaintenanceMode, false);
+    }
+
+    // Added for CI Gap
+    public String getVendor() {
+        return (String) getOrFail(VimPath.host_summary_hardware_vendor);
+    }
+
+    public String getModel() {
+        return (String) getOrFail(VimPath.host_summary_hardware_model);
+    }
+
+    public int getNumNics() {
+        return (int) getOrFail(VimPath.host_summary_hardware_numNics);
+    }
+
+    public int getNumCpuPkgs() {
+        return (short) getOrFail(VimPath.host_summary_hardware_numCpuPkgs);
+    }
+
+    // TODO: Check if this makes more sense processing it from Cluster info rather than host info as
+    // we already get VimPath.res_configurationEx for cluster
+    public VsanHostConfigInfo getVsanConfigInfo() {
+        return (VsanHostConfigInfo) getOrFail(HOST_SUMMARY_CONFIG_VSANCONFIG);
     }
 }

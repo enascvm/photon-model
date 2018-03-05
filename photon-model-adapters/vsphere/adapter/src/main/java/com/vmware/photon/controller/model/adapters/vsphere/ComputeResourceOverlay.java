@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -26,6 +27,8 @@ import com.vmware.vim25.ClusterDrsConfigInfo;
 import com.vmware.vim25.ComputeResourceConfigInfo;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectUpdate;
+import com.vmware.vim25.VsanClusterConfigInfo;
+import com.vmware.vim25.VsanHostConfigInfo;
 
 public class ComputeResourceOverlay extends AbstractOverlay {
 
@@ -44,7 +47,7 @@ public class ComputeResourceOverlay extends AbstractOverlay {
         return (String) getOrFail(VimNames.PROPERTY_NAME);
     }
 
-    public Collection<ManagedObjectReference> getHosts() {
+    private Collection<ManagedObjectReference> getHosts() {
         ArrayOfManagedObjectReference hosts = (ArrayOfManagedObjectReference) getOrDefault(
                 VimPath.res_host, null);
         if (hosts != null) {
@@ -55,15 +58,14 @@ public class ComputeResourceOverlay extends AbstractOverlay {
     }
 
     public boolean isDrsEnabled() {
-        ComputeResourceConfigInfo cfg = ((ComputeResourceConfigInfo) getOrFail(
-                VimPath.res_configurationEx));
+        ClusterConfigInfoEx info = getClusterConfigInfoEx();
 
-        if (cfg instanceof ClusterConfigInfoEx) {
-            ClusterDrsConfigInfo drsConfig = ((ClusterConfigInfoEx) cfg).getDrsConfig();
-            return drsConfig == null || drsConfig.isEnabled();
-        } else {
-            return false;
+        Boolean isDrsEnabled = false;
+        if (null != info) {
+            ClusterDrsConfigInfo drsConfig = info.getDrsConfig();
+            isDrsEnabled = drsConfig == null || drsConfig.isEnabled();
         }
+        return isDrsEnabled;
     }
 
     /**
@@ -113,5 +115,47 @@ public class ComputeResourceOverlay extends AbstractOverlay {
         } else {
             return res.getManagedObjectReference();
         }
+    }
+
+    public String getVsanConfigId() {
+        ClusterConfigInfoEx info = getClusterConfigInfoEx();
+
+        String vsanConfigId = "";
+        if (null != info) {
+            VsanClusterConfigInfo vsanConfig = info.getVsanConfigInfo();
+            vsanConfigId = null == vsanConfig.getDefaultConfig().getUuid() ? "" : vsanConfig.getDefaultConfig().getUuid();
+        }
+        return vsanConfigId;
+    }
+
+    public boolean isVsanEnabled() {
+        ClusterConfigInfoEx info = getClusterConfigInfoEx();
+
+        Boolean isVsanEnabled = false;
+        if (null != info) {
+            VsanClusterConfigInfo vsanConfig = info.getVsanConfigInfo();
+            isVsanEnabled = null == vsanConfig ? false : vsanConfig.isEnabled();
+        }
+        return isVsanEnabled;
+    }
+
+    public List<VsanHostConfigInfo> getVsanHostConfig() {
+
+        ClusterConfigInfoEx info = getClusterConfigInfoEx();
+        List<VsanHostConfigInfo> hostConfig = new ArrayList<>();
+        if (null != info) {
+            hostConfig.addAll(info.getVsanHostConfig());
+        }
+        return hostConfig;
+    }
+
+    private ClusterConfigInfoEx getClusterConfigInfoEx() {
+        ComputeResourceConfigInfo cfg = ((ComputeResourceConfigInfo) getOrFail(
+                VimPath.res_configurationEx));
+        ClusterConfigInfoEx info = null;
+        if (cfg instanceof ClusterConfigInfoEx) {
+            info = (((ClusterConfigInfoEx) cfg));
+        }
+        return info;
     }
 }

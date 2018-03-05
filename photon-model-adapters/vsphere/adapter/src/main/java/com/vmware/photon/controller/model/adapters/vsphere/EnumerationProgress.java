@@ -39,6 +39,7 @@ public class EnumerationProgress {
     private ResourceTracker resourcePoolTracker;
     private ResourceTracker storagePolicyTracker;
     private ResourceTracker deleteDiskTracker;
+    private ResourceTracker folderTracker;
 
     private final MoRefKeyedMap<AbstractOverlay> overlays;
 
@@ -117,6 +118,14 @@ public class EnumerationProgress {
 
     public ResourceTracker getComputeResourceTracker() {
         return this.computeResourceTracker;
+    }
+
+    public void expectFolderCount(int count) {
+        this.folderTracker = new ResourceTracker(count);
+    }
+
+    public ResourceTracker getFolderTracker() {
+        return this.folderTracker;
     }
 
     public void expectResourcePoolCount(int count) {

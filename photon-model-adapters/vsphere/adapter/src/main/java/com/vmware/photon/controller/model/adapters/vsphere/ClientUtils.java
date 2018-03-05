@@ -837,7 +837,7 @@ public class ClientUtils {
      */
     public static Operation handleVirtualDiskUpdate(String endpointLink,
             DiskService.DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
-            String regionId, Service service) {
+            String regionId, Service service, String vm) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -846,9 +846,10 @@ public class ClientUtils {
 
         VirtualDeviceFileBackingInfo backing = (VirtualDeviceFileBackingInfo) disk.getBacking();
         Operation operation;
+        DiskService.DiskState ds;
         if (matchedDs == null) {
             // This is the new disk, hence add it to the list
-            DiskService.DiskState ds = new DiskService.DiskState();
+            ds = new DiskService.DiskStateExpanded();
             ds.documentSelfLink = UriUtils.buildUriPath(
                     DiskService.FACTORY_LINK, service.getHost().nextUUID());
 
@@ -867,16 +868,23 @@ public class ClientUtils {
                         .put(LIMIT_IOPS, storageInfo.getLimit())
                         .put(SHARES_LEVEL, storageInfo.getShares().getLevel().value());
             }
+
             fillInControllerUnitNumber(ds, disk.getUnitNumber());
-            operation = createDisk(ds, service);
             diskLinks.add(ds.documentSelfLink);
         } else {
             // This is known disk, hence update with the provisioned attributes.
-            matchedDs.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
-            addEndpointLinks(matchedDs, endpointLink);
-            updateDiskStateFromVirtualDisk(disk, matchedDs);
-            operation = createDiskPatch(matchedDs, service);
+            ds = matchedDs;
+            ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            addEndpointLinks(ds, endpointLink);
+            updateDiskStateFromVirtualDisk(disk, ds);
         }
+        CustomProperties.of(ds)
+                .put(CustomProperties.DISK_DATASTORE_NAME, backing.getDatastore().getValue())
+                .put(CustomProperties.TYPE, VirtualDisk.class.getSimpleName())
+                .put(CustomProperties.DISK_PROVISION_IN_GB, disk.getCapacityInKB() / (1024 * 1024))
+                .put(CustomProperties.DISK_PARENT_VM, vm);
+
+        operation = createDisk(ds, service);
         return operation;
     }
 

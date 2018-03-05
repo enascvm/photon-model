@@ -97,7 +97,17 @@ public class VSphereHostSystemEnumerationHelper {
         }
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
-                .put(CustomProperties.TYPE, hs.getId().getType());
+                .put(CustomProperties.TYPE, hs.getId().getType())
+                .put(CustomProperties.HS_CPU_GHZ,hs.getCpuMhz() / 1024)
+                .put(CustomProperties.MANUFACTURER, hs.getVendor())
+                .put(CustomProperties.MODEL_NAME, hs.getModel())
+                .put(CustomProperties.HS_CPU_PKG_COUNT, hs.getNumCpuPkgs())
+                .put(CustomProperties.HS_MEMORY_IN_GB, hs.getTotalMemoryBytes() / (1024 * 1024 * 1024))
+                .put(CustomProperties.HS_NIC_COUNT, hs.getNumNics())
+                // TODO : Find the logic for setting these props
+                .put(CustomProperties.HS_CPU_DESC, "")
+                .put(CustomProperties.IS_PHYSICAL,"");
+
         if (hs.isClusterHost()) {
             CustomProperties.of(state)
                     .put(CustomProperties.CLUSTER_LINK, enumerationProgress

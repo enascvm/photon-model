@@ -303,7 +303,8 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName,
                 VimPath.vm_snapshot_rootSnapshotList,
-                VimPath.res_resourcePool
+                VimPath.res_resourcePool,
+                VimPath.vm_summary_config_guestFullName
         ));
 
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
@@ -331,7 +332,11 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.host_parent,
                 VimPath.host_datastore,
                 VimPath.host_network,
-                VimNames.PROPERTY_NAME
+                VimNames.PROPERTY_NAME,
+                VimPath.host_summary_hardware_numNics,
+                VimPath.host_summary_hardware_numCpuPkgs,
+                VimPath.host_summary_hardware_vendor,
+                VimPath.host_summary_hardware_model
         ));
 
         PropertySpec rpSpec = new PropertySpec();
@@ -367,6 +372,7 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.ds_summary_type,
                 VimPath.ds_summary_freeSpace,
                 VimPath.ds_summary_capacity,
+                VimPath.ds_summary_url,
                 VimNames.PROPERTY_NAME
         ));
 
@@ -392,6 +398,11 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.dvs_uuid
         ));
 
+        PropertySpec folderSpec = new PropertySpec();
+        folderSpec.setType(VimNames.TYPE_FOLDER);
+        // TODO: Select only required properties
+        folderSpec.setAll(true);
+
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
         filterSpec.getObjectSet().add(ospec);
         filterSpec.getPropSet().add(hostSpec);
@@ -401,6 +412,7 @@ public class EnumerationClient extends BaseHelper {
         filterSpec.getPropSet().add(netSpec);
         filterSpec.getPropSet().add(pgSpec);
         filterSpec.getPropSet().add(dvsSpec);
+        filterSpec.getPropSet().add(folderSpec);
         return filterSpec;
     }
 
