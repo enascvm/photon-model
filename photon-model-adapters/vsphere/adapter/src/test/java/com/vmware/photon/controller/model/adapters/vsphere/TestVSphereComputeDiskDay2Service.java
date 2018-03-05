@@ -20,7 +20,6 @@ import static org.junit.Assert.assertNotNull;
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
-import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
@@ -30,7 +29,6 @@ import java.net.URI;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 
 import org.junit.Test;
 
@@ -40,7 +38,6 @@ import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
-import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -169,7 +166,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
 
             // Step 2: Create Disk
             diskState = createDiskWithDatastore("AdditionalDisk1",
-                    DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties());
+                    DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties(), false);
             // start provision task to do the actual disk creation
             String documentSelfLink = performDiskRequest(diskState,
                     ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.CREATING_DISK);
@@ -232,9 +229,87 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             assertEquals(DiskService.DiskStatus.AVAILABLE, diskState.status);
         } finally {
             if (!isMock()) {
-                cleanupISOFolder();
                 // Step 7: Delete VM
                 cleanUpVm(this.vm, null);
+                // Step 8: Delete disk
+                if (diskState != null) {
+                    String documentSelfLink = performDiskRequest(diskState,
+                            ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.DELETING_DISK);
+
+                    this.host.waitForFinishedTask(
+                            ProvisionDiskTaskService.ProvisionDiskTaskState.class,
+                            documentSelfLink);
+                }
+            }
+        }
+    }
+
+    @Test
+    /**
+     * 1. Create a VM
+     * 2. Create a HDD persistent disk
+     * 3. Attach HDD disk created in Step 2 to VM.
+     * 4. Delete VM.
+     * 5. Verify HDD disk still remains
+     * 6. Delete HDD disk
+     */
+    public void testComputePersistentDisk() throws Throwable {
+        DiskService.DiskState diskState =  null;
+        try {
+            // Step 1: Create VM
+            prepareEnvironment();
+            if (isMock()) {
+                createNetwork(networkId);
+            }
+            snapshotFactoryState("clone-refresh", NetworkService.class);
+            ComputeDescriptionService.ComputeDescription vmDescription = createVmDescription();
+            this.vm = createVmState(vmDescription, true, null, false);
+
+            // kick off a provision task to do the actual VM creation
+            ProvisionComputeTaskService.ProvisionComputeTaskState provisionTask = createProvisionTask(
+                    this.vm);
+            awaitTaskEnd(provisionTask);
+
+            this.vm = getComputeState(this.vm);
+
+            // put fake moref in the vm
+            if (isMock()) {
+                ManagedObjectReference moref = new ManagedObjectReference();
+                moref.setValue("vm-0");
+                moref.setType(VimNames.TYPE_VM);
+                CustomProperties.of(this.vm).put(MOREF, moref);
+                this.vm = doPost(this.host, this.vm,
+                        ComputeState.class,
+                        UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+                return;
+            }
+
+            // Step 2: Create Disk
+            diskState = createDiskWithDatastore("AdditionalDisk1",
+                    DiskService.DiskType.HDD, ADDITIONAL_DISK_SIZE, buildCustomProperties(), true);
+            // start provision task to do the actual disk creation
+            String documentSelfLink = performDiskRequest(diskState,
+                    ProvisionDiskTaskService.ProvisionDiskTaskState.SubStage.CREATING_DISK);
+
+            this.host.waitForFinishedTask(ProvisionDiskTaskService.ProvisionDiskTaskState.class,
+                    documentSelfLink);
+
+            // Step 3: Attach Disk created in step 2
+            ResourceOperationRequest request = createResourceOperationRequest(diskState,
+                    createComputeDiskTaskService(), ResourceOperation.ATTACH_DISK);
+            sendRequest(request, DiskService.DiskType.HDD, computeAttachWaitHandler());
+            this.vm = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, this.vm.documentSelfLink));
+
+            // Step 4: Delete VM
+            cleanUpVm(this.vm, null);
+
+            // Get the latest state of the detached disk
+            diskState = this.host.getServiceState(null, DiskService.DiskState.class,
+                    UriUtils.buildUri(this.host, diskState.documentSelfLink));
+            assertEquals(DiskService.DiskStatus.AVAILABLE, diskState.status);
+        } finally {
+            if (!isMock()) {
                 // Step 8: Delete disk
                 if (diskState != null) {
                     String documentSelfLink = performDiskRequest(diskState,
@@ -311,24 +386,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             assertEquals(3, this.vm.diskLinks.size());
         } finally {
             if (!isMock()) {
-                cleanupISOFolder();
-                // Step 2: Delete VM
                 cleanUpVm(this.vm, null);
-            }
-        }
-    }
-
-    private void cleanupISOFolder() {
-        if (this.CDDiskState != null) {
-            BasicConnection conn = createConnection();
-            String path = CustomProperties.of(this.CDDiskState).getString(DISK_PARENT_DIRECTORY);
-            ManagedObjectReference datacenterMoRef = VimUtils
-                    .convertStringToMoRef(this.datacenterId);
-
-            try {
-                ClientUtils.deleteFolder(conn, datacenterMoRef, path);
-            } catch (Exception ex) {
-                this.host.log(Level.WARNING, "Unable to cleanup folder %s", path);
             }
         }
     }
@@ -479,9 +537,11 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
     }
 
     private DiskService.DiskState createDiskWithDatastore(String alias, DiskService.DiskType type,
-            long capacityMBytes, HashMap<String, String> customProperties) throws Throwable {
+            long capacityMBytes, HashMap<String, String> customProperties, boolean isPersistent)
+            throws Throwable {
         DiskService.DiskState diskState = constructDiskState(alias, type, 0, null,
                 capacityMBytes, customProperties);
+        diskState.persistent = isPersistent;
         StorageDescription sd = new StorageDescription();
         sd.name = sd.id = this.dataStoreId != null ? this.dataStoreId : "testDatastore";
         sd = TestUtils.doPost(this.host, sd,

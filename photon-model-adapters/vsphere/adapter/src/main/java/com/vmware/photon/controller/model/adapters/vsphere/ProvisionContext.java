@@ -80,7 +80,7 @@ public class ProvisionContext {
 
     public ServiceDocument task;
     private final URI provisioningTaskReference;
-    private final InstanceRequestType instanceRequestType;
+    public final InstanceRequestType instanceRequestType;
     /**
      * Used to store the calling operation.
      */
@@ -330,8 +330,7 @@ public class ProvisionContext {
             return;
         }
 
-        if (ctx.computeMoRef == null
-                && ctx.instanceRequestType == InstanceRequestType.CREATE) {
+        if (ctx.computeMoRef == null) {
             String placementLink = CustomProperties.of(ctx.child)
                     .getString(ComputeProperties.PLACEMENT_LINK);
 
@@ -390,7 +389,7 @@ public class ProvisionContext {
             return;
         }
 
-        if (ctx.disks == null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
+        if (ctx.disks == null) {
             // no disks attached
             if (ctx.child.diskLinks == null || ctx.child.diskLinks
                     .isEmpty()) {

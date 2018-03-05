@@ -18,9 +18,11 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.VM
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createCdrom;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createFloppy;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createHdd;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.detachDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.fillInControllerUnitNumber;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findFreeScsiUnit;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findFreeUnit;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findMatchingVirtualDevice;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDatastoreFromStoragePolicy;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDatastorePathForDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDiskMode;
@@ -28,6 +30,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.ge
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getFirstIdeController;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getFirstScsiController;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getFirstSioController;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getListOfVirtualDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getPbmProfileSpec;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getStorageIOAllocationInfo;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.insertCdrom;
@@ -35,7 +38,10 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.in
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.makePathToVmdkFile;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.nextUnitNumber;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.toKb;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_DATASTORE_NAME;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_PARENT_DIRECTORY;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVIDER_DISK_UNIQUE_ID;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_REFERENCE;
 
 import java.net.URI;
@@ -56,10 +62,13 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import org.apache.commons.collections.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
+import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NetworkDeviceBackingFactory;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
@@ -77,11 +86,13 @@ import com.vmware.photon.controller.model.adapters.vsphere.vapi.LibraryClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -129,6 +140,10 @@ import com.vmware.vim25.VirtualPCIController;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSCSISharing;
 import com.vmware.vim25.VmConfigSpec;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -176,7 +191,8 @@ public class InstanceClient extends BaseHelper {
 
         this.ctx = ctx;
 
-        if (ctx.disks != null) {
+        if (ctx.disks != null
+                && ctx.instanceRequestType == ComputeInstanceRequest.InstanceRequestType.CREATE) {
             this.dataDisks = new ArrayList<>(ctx.disks.size());
             this.imageDisks = new ArrayList<>(ctx.disks.size());
             this.externalDisks = new ArrayList<>(ctx.disks.size());
@@ -500,13 +516,19 @@ public class InstanceClient extends BaseHelper {
         }
     }
 
-    public void deleteInstance() throws Exception {
+    public void deleteInstance(ServiceHost serviceHost) throws Exception {
         ManagedObjectReference vm = CustomProperties.of(this.ctx.child)
                 .getMoRef(CustomProperties.MOREF);
         if (vm == null) {
             logger.info("No moref associated with the given instance, skipping delete.");
             return;
         }
+
+        ArrayOfVirtualDevice devices = this.get
+                .entityProp(vm, VimPath.vm_config_hardware_device);
+
+        // Handle disks of the VM during VM deletion based on its persistent flag.
+        handleVirtualDiskCleanup(serviceHost, vm, devices, this.ctx.disks);
 
         TaskInfo info;
         // power off
@@ -518,11 +540,84 @@ public class InstanceClient extends BaseHelper {
         task = getVimPort().destroyTask(vm);
         info = waitTaskEnd(task);
         ignoreError("Ignore error deleting VM", info);
+
+        // Handle CD ROM folder clean up.
+        handleVirtualCDRomCleanup(this.ctx.disks);
     }
 
     private void ignoreError(String s, TaskInfo info) {
         if (info.getState() == TaskInfoState.ERROR) {
             logger.info(s + ": " + info.getError().getLocalizedMessage());
+        }
+    }
+
+    /**
+     * For every disk states in the compute based on the persistent flag if it is set as TRUE,
+     * then disk will be detached before we delete the vm.
+     */
+    private void handleVirtualDiskCleanup(ServiceHost serviceHost, ManagedObjectReference vm,
+            ArrayOfVirtualDevice devices, List<DiskStateExpanded> disks) throws Exception {
+        if (CollectionUtils.isEmpty(disks)) {
+            return;
+        }
+
+        List<DiskStateExpanded> persistDisks = disks.stream()
+                .filter(disk -> disk.persistent)
+                .collect(Collectors.toList());
+
+        if (CollectionUtils.isEmpty(persistDisks)) {
+            return;
+        }
+        List<Operation> diskUpdateOps = new ArrayList<>(persistDisks.size());
+        for (DiskStateExpanded ds: persistDisks) {
+            VirtualDisk vd = (VirtualDisk) findMatchingVirtualDevice(getListOfVirtualDisk
+                    (devices), ds);
+            detachDisk(this.connection, vd, vm, getVimPort());
+
+            // Now update the status of the persistent disks to be AVAILABLE
+            ds.status = DiskService.DiskStatus.AVAILABLE;
+            CustomProperties.of(ds)
+                    .put(DISK_CONTROLLER_NUMBER, (String) null)
+                    .put(PROVIDER_DISK_UNIQUE_ID, (String) null);
+            ds.id = UriUtils.getLastPathSegment(ds.documentSelfLink);
+
+            diskUpdateOps.add(Operation.createPut(
+                    PhotonModelUriUtils.createInventoryUri(serviceHost, ds.documentSelfLink))
+                    .setReferer(serviceHost.getUri())
+                    .setBody(ds));
+            disks.remove(ds);
+        }
+
+        // call patch operations on the disk states
+        OperationJoin.create(diskUpdateOps)
+                .setCompletion((os, errors) -> {
+                    if (errors != null && !errors.isEmpty()) {
+                        logger.warn(String.format(
+                                "Exception in updating persistent disk during deletion of VM."
+                                        + " Error : %s", Utils.toString(errors)));
+                    }
+                }).sendWith(serviceHost);
+    }
+
+    private void handleVirtualCDRomCleanup(List<DiskStateExpanded> disks) throws Exception {
+        if (CollectionUtils.isEmpty(disks)) {
+            return;
+        }
+
+        // Clean up ISO folders for the remaining disks if any
+        List<DiskStateExpanded> cdRomDisks = disks.stream()
+                .filter(disk -> disk.type == DiskType.CDROM)
+                .filter(disk -> CustomProperties.of(disk).getString(DISK_PARENT_DIRECTORY, null)
+                        != null)
+                .collect(Collectors.toList());
+
+        if (CollectionUtils.isEmpty(cdRomDisks)) {
+            return;
+        }
+
+        for (DiskStateExpanded ds: cdRomDisks) {
+            String path = CustomProperties.of(ds).getString(DISK_PARENT_DIRECTORY);
+            ClientUtils.deleteFolder(this.connection, this.ctx.datacenterMoRef, path);
         }
     }
 

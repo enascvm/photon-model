@@ -223,7 +223,6 @@ public class VSphereComputeDiskManagementService extends StatelessService {
     private void updateComputeAndDiskStateForDetach(VSphereVMDiskContext ctx) {
         // Update the disk state to be AVAILABLE as it is detached successfully
         ctx.diskState.status = DiskService.DiskStatus.AVAILABLE;
-        ctx.diskState.sourceImageReference = null;
         CustomProperties.of(ctx.diskState)
                 .put(DISK_CONTROLLER_NUMBER, (String) null)
                 .put(PROVIDER_DISK_UNIQUE_ID, (String) null);

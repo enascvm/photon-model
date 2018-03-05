@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.ha
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -29,6 +30,8 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import io.netty.util.internal.StringUtil;
+
+import org.apache.commons.collections.CollectionUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -40,6 +43,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -69,6 +73,7 @@ import com.vmware.vim25.VirtualFloppy;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.services.common.QueryTask;
@@ -521,9 +526,18 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(conn, ctx);
-                        client.deleteInstance();
-
-                        ctx.mgr.finishTask();
+                        client.deleteInstance(this.getHost());
+                        if (CollectionUtils.isNotEmpty(ctx.child.diskLinks) && ctx.child
+                                .diskLinks.size() == ctx.disks.size()) {
+                            // No removal hence finish the operation
+                            ctx.mgr.finishTask();
+                            return;
+                        }
+                        // Now update the compute diskLinks with the latest list so that deletion
+                        // of compute will not mark disks as deleted.
+                        ctx.child.diskLinks.removeAll(ctx.disks.stream().map(disk -> disk.documentSelfLink)
+                                .collect(Collectors.toList()));
+                        updateComputeStateDiskLinks(ctx, ctx.child);
                     } catch (Exception e) {
                         ctx.fail(e);
                     }
@@ -532,5 +546,31 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
     private void handleMockRequest(TaskManager mgr) {
         mgr.patchTask(TaskStage.FINISHED);
+    }
+
+    /**
+     * Remove diskLink from ComputeState by sending a ServiceStateCollectionUpdateRequest.
+     */
+    public void updateComputeStateDiskLinks(ProvisionContext ctx, ComputeState computeState) {
+        Map<String, Collection<Object>> collectionsToRemove = Collections
+                .singletonMap(ComputeService.ComputeState.FIELD_NAME_DISK_LINKS,
+                        new ArrayList<>(computeState.diskLinks));
+
+        ServiceStateCollectionUpdateRequest updateDiskLinksRequest = ServiceStateCollectionUpdateRequest
+                .create(null, collectionsToRemove);
+
+        Operation.createPatch(PhotonModelUriUtils
+                .createInventoryUri(this.getHost(), computeState.documentSelfLink))
+                .setBody(updateDiskLinksRequest)
+                .setReferer(this.getUri())
+                .setCompletion((op, t) -> {
+                    if (t != null) {
+                        log(Level.INFO, "Not able to update the compute state with the detached "
+                                + "disks %s", t.getMessage());
+                    }
+                    ctx.mgr.finishTask();
+                })
+                .sendWith(this.getHost());
+
     }
 }

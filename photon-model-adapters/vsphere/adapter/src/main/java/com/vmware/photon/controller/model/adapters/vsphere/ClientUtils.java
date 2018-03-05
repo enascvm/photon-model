@@ -524,6 +524,9 @@ public class ClientUtils {
      */
     public static void updateDiskStateFromVirtualDisk(VirtualDisk vd, DiskService.DiskState disk) {
         disk.status = DiskService.DiskStatus.ATTACHED;
+        if (disk.persistent == null) {
+            disk.persistent = Boolean.FALSE;
+        }
         disk.id = vd.getDiskObjectId();
         CustomProperties.of(disk)
                 .put(PROVIDER_DISK_UNIQUE_ID, vd.getDeviceInfo().getLabel());
@@ -541,6 +544,9 @@ public class ClientUtils {
                     .datastorePathToUri(((VirtualDeviceFileBackingInfo) backing).getFileName());
         }
         disk.status = DiskService.DiskStatus.ATTACHED;
+        if (disk.persistent == null) {
+            disk.persistent = Boolean.FALSE;
+        }
         CustomProperties.of(disk)
                 .put(PROVIDER_DISK_UNIQUE_ID, vd.getDeviceInfo().getLabel());
         if (vd.getConnectable() != null) {
@@ -859,6 +865,7 @@ public class ClientUtils {
             ds.regionId = regionId;
             ds.capacityMBytes = disk.getCapacityInKB() / 1024;
             ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            ds.persistent = Boolean.FALSE;
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
             if (disk.getStorageIOAllocation() != null) {
@@ -875,6 +882,9 @@ public class ClientUtils {
             // This is known disk, hence update with the provisioned attributes.
             ds = matchedDs;
             ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            if (matchedDs.persistent == null) {
+                matchedDs.persistent = Boolean.FALSE;
+            }
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
         }
@@ -883,8 +893,8 @@ public class ClientUtils {
                 .put(CustomProperties.TYPE, VirtualDisk.class.getSimpleName())
                 .put(CustomProperties.DISK_PROVISION_IN_GB, disk.getCapacityInKB() / (1024 * 1024))
                 .put(CustomProperties.DISK_PARENT_VM, vm);
-
         operation = (matchedDs == null) ? createDisk(ds, service) : createDiskPatch(ds, service);
+
         return operation;
     }
 
@@ -908,6 +918,9 @@ public class ClientUtils {
             diskLinks.add(ds.documentSelfLink);
         } else {
             updateDiskStateFromVirtualDevice(disk, matchedDs, null);
+            if (matchedDs.persistent == null) {
+                matchedDs.persistent = Boolean.FALSE;
+            }
             addEndpointLinks(matchedDs, endpointLink);
             operation = createDiskPatch(matchedDs, service);
         }
@@ -930,6 +943,7 @@ public class ClientUtils {
         ds.type = type;
         ds.regionId = regionId;
         ds.capacityMBytes = 0;
+        ds.persistent = Boolean.FALSE;
 
         return ds;
     }
@@ -953,5 +967,54 @@ public class ClientUtils {
         } catch (Exception e) {
             // Ignore the error message. Don't log. Attempt with the rest of the flow.
         }
+    }
+
+    /**
+     * Detaching disk from the vm.
+     */
+    public static void detachDisk(Connection connection, VirtualDisk vd,
+            ManagedObjectReference vm, VimPortType vimPortType) throws Exception {
+        VirtualDeviceConfigSpec deviceConfigSpec = new VirtualDeviceConfigSpec();
+        deviceConfigSpec.setOperation(VirtualDeviceConfigSpecOperation.REMOVE);
+        deviceConfigSpec.setDevice(vd);
+
+        VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
+        spec.getDeviceChange().add(deviceConfigSpec);
+
+        ManagedObjectReference reconfigureTask = vimPortType.reconfigVMTask(vm, spec);
+        TaskInfo info = VimUtils.waitTaskEnd(connection, reconfigureTask);
+        if (info.getState() == TaskInfoState.ERROR) {
+            VimUtils.rethrow(info.getError());
+        }
+    }
+
+    public static List<VirtualDevice> getListOfVirtualDisk(ArrayOfVirtualDevice devices) {
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .collect(Collectors.toList());
+    }
+
+    public static List<VirtualDevice> getListOfVirtualCdRom(ArrayOfVirtualDevice devices) {
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualCdrom)
+                .collect(Collectors.toList());
+    }
+
+    public static List<VirtualDevice> getListOfVirtualFloppy(ArrayOfVirtualDevice devices) {
+        return devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualFloppy)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Find matching VirtualDisk for the given disk information using its controller unit number
+     * filled in during creation of the disk.
+     */
+    public static VirtualDevice findMatchingVirtualDevice(List<VirtualDevice> virtualDevices,
+            DiskService.DiskStateExpanded diskState) {
+        return virtualDevices.stream()
+                .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(diskState))
+                .findFirst()
+                .orElse(null);
     }
 }
