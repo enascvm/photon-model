@@ -884,7 +884,7 @@ public class ClientUtils {
                 .put(CustomProperties.DISK_PROVISION_IN_GB, disk.getCapacityInKB() / (1024 * 1024))
                 .put(CustomProperties.DISK_PARENT_VM, vm);
 
-        operation = createDisk(ds, service);
+        operation = (matchedDs == null) ? createDisk(ds, service) : createDiskPatch(ds, service);
         return operation;
     }
 
