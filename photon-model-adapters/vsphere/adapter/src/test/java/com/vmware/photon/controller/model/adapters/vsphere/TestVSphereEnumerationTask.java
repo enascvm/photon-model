@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -191,6 +192,10 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         verifyDatastoreAndStoragePolicy();
         if (!isMock()) {
             verifyCIGapForComputeResourcesAndVMs();
+            verifyCIGapForDatacenterOrFolder(VimNames.TYPE_DATACENTER);
+            verifyCIGapForDatacenterOrFolder(VimNames.TYPE_FOLDER);
+            verifyCIGapForDatastore();
+            verifyCIGapForComputeResource();
         }
     }
 
@@ -257,6 +262,57 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         assertNotNull(host.customProperties.get(CustomProperties.MANUFACTURER));
     }
 
+    private void verifyCIGapForDatacenterOrFolder(String type) {
+        Query.Builder builder = Query.Builder.create()
+                .addKindFieldClause(ResourceGroupService.ResourceGroupState.class)
+                .addCompositeFieldClause(ResourceGroupService.ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.TYPE, type);
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+
+        withTaskResults(task, result -> assertTrue(result.documentCount != 0));
+    }
+
+    private void verifyCIGapForDatastore() {
+        withTaskResults(queryForDatastore(), result -> {
+            if (result.documentLinks.isEmpty()) {
+                assertTrue("Could not enumerate Datastore", !result.documentLinks.isEmpty());
+            } else {
+                int randInt = getRandomIntWithinBounds(result.documentCount.intValue());
+                StorageDescriptionService.StorageDescription sd = Utils
+                        .fromJson(result.documents.get(result.documentLinks.get(randInt)),
+                                StorageDescriptionService.StorageDescription.class);
+
+                assertNotNull(sd.customProperties.get(CustomProperties.DS_PATH), sd.customProperties.get(CustomProperties.DS_PATH));
+                assertNotNull(sd.customProperties.get(CustomProperties.PROPERTY_NAME), sd.customProperties.get(CustomProperties.PROPERTY_NAME));
+            }
+        });
+    }
+
+    private void verifyCIGapForComputeResource() {
+        Query.Builder builder = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.TYPE, VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE);
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+        withTaskResults(task, result -> {
+            if (result.documentLinks.isEmpty()) {
+                assertTrue("Could not enumerate Compute Cluster Resource", !result.documentLinks.isEmpty());
+            } else {
+                int randInt = getRandomIntWithinBounds(result.documentCount.intValue());
+                ComputeState sd = Utils
+                        .fromJson(result.documents.get(result.documentLinks.get(randInt)),
+                                ComputeState.class);
+
+                assertNotNull(sd.customProperties.get(CustomProperties.CR_VSAN_CONFIG_ID), sd.customProperties.get(CustomProperties.CR_VSAN_CONFIG_ID));
+                assertNotNull(sd.customProperties.get(CustomProperties.CR_IS_VSAN_ENABLED), sd.customProperties.get(CustomProperties.CR_IS_VSAN_ENABLED));
+            }
+        });
+    }
 
     protected void captureFactoryState(String marker)
             throws ExecutionException, InterruptedException, IOException {
@@ -366,5 +422,9 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                     .substring(this.dataStoreId.lastIndexOf("/") + 1, this.dataStoreId.length());
         }
         return "";
+    }
+
+    private int getRandomIntWithinBounds(int bound) {
+        return new Random().nextInt(bound);
     }
 }
