@@ -39,7 +39,6 @@ import com.vmware.xenon.services.common.TaskService.TaskServiceState;
  * Utility functions used in provisioning hosts.
  */
 public class TaskUtils {
-
     /**
      * Verify if IP string is an IPv4 address.
      *
@@ -360,8 +359,7 @@ public class TaskUtils {
      *         any generic security exception
      */
     public static void assumeIdentity(StatefulService service, Operation op,
-            String userServicePath)
-            throws GeneralSecurityException {
+            String userServicePath) throws GeneralSecurityException {
         Claims.Builder builder = new Claims.Builder();
         builder.setSubject(userServicePath);
         Claims claims = builder.getResult();

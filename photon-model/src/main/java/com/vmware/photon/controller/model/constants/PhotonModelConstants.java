@@ -191,4 +191,7 @@ public class PhotonModelConstants {
 
     // Batch size for operation joins.
     public static final int OPERATION_BATCH_SIZE = 100;
+
+    // Default partition ID header.
+    public static final String DEFAULT_PARTITION_ID_HEADER = "cb-tenant-id";
 }

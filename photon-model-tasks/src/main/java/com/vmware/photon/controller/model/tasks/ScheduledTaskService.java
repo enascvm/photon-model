@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.addPartitionIdToOperation;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -94,6 +96,11 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_45)
         public Boolean noDelayOnInitialExecution;
+
+        @Documentation(description = "The identifier to be passed on the partition header when invoking task.")
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        public String partitionId;
     }
 
     public ScheduledTaskService() {
@@ -212,6 +219,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                 }
             }
 
+            addPartitionIdToOperation(op, state.partitionId);
             sendRequest(op.setBody(state.initialStateJson)
                     .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
                     .setCompletion(

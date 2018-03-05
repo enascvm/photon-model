@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.resources.util;
 import static java.util.Collections.singletonMap;
 
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DEFAULT_PARTITION_ID_HEADER;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -33,6 +34,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -78,6 +80,12 @@ public class PhotonModelUtils {
      * field.
      */
     public static final Set<Class<? extends ResourceState>> ENDPOINT_LINK_EXPLICIT_SUPPORT;
+
+
+    public static final String PROPERTY_NAME_PARTITION_ID_HEADER =
+            UriPaths.PROPERTY_PREFIX + "partition.id.header";
+    public static final String PARTITION_ID_HEADER = System
+            .getProperty(PROPERTY_NAME_PARTITION_ID_HEADER, DEFAULT_PARTITION_ID_HEADER);
 
     static {
         Set<Class<? extends ResourceState>> set = new HashSet<>();
@@ -457,5 +465,12 @@ public class PhotonModelUtils {
                 .setOccurance(Occurance.MUST_OCCUR);
 
         return originOrExternalQuery;
+    }
+
+    public static void addPartitionIdToOperation(Operation op, String partitionId) {
+        if (PARTITION_ID_HEADER != null && !PARTITION_ID_HEADER.isEmpty()
+                && partitionId != null && !partitionId.isEmpty()) {
+            op.addRequestHeader(PARTITION_ID_HEADER, partitionId);
+        }
     }
 }
