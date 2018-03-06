@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -78,6 +79,7 @@ import com.microsoft.azure.management.network.implementation.VirtualNetworkInner
 import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 
+import org.hamcrest.CoreMatchers;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -224,12 +226,12 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     public boolean isMock = true;
     public String clientID = "clientID";
     public String clientKey = "clientKey";
-    public String subscriptionId = "subscriptionId" ;
+    public String subscriptionId = "subscriptionId";
     public String tenantId = "tenantId";
 
     public static int numOfVMsToTest = 2;
     public int enumerationFrequencyInMinutes = 1;
-    public int testRunDurationInMinutes = 3;
+    public int testRunDurationInMinutes = 2;
     public int timeoutSeconds = 1200;
 
     public static String azureVMNamePrefix = "az-lrt-";
@@ -551,17 +553,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         // 5. Validate enumerated compute states have not changed.
 
         Map<String, ComputeState> azLrtComputeStatesEnd = getVMComputeStatesWithPrefix(azureVMNamePrefix);
-        Assert.assertEquals(numOfVMsToTest, azLrtComputeStatesEnd.size());
+        assertTrue(numOfVMsToTest <= azLrtComputeStatesEnd.size());
         assertComputeStatesEqual(azLrtComputeStates, azLrtComputeStatesEnd);
-
-        for (String azureVmName : azLrtComputeStates.keySet()) {
-            ComputeState original = azLrtComputeStates.get(azureVmName);
-            ComputeState later = azLrtComputeStatesEnd.get(azureVmName);
-
-            // Validate number of document version changes are less than number of enumerations ran.
-            assertTrue(later.documentVersion - original.documentVersion <=
-                    this.numOfEnumerationsRan);
-        }
 
         // 1 network per each stale vm resource + 1 network for original vm compute state.
         ServiceDocumentQueryResult networkResults = ProvisioningUtils
@@ -669,11 +662,11 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             Assert.assertEquals(initDocument.adapterManagementReference, newDoc.adapterManagementReference);
 
             for (int i = 0; i < initDocument.diskLinks.size(); i++) {
-                Assert.assertEquals(initDocument.diskLinks.get(i), newDoc.diskLinks.get(i));
+                assertThat(newDoc.diskLinks, CoreMatchers.hasItem(initDocument.diskLinks.get(i)));
             }
 
             for (int i = 0; i < initDocument.networkInterfaceLinks.size(); i++) {
-                Assert.assertEquals(initDocument.networkInterfaceLinks.get(i), newDoc.networkInterfaceLinks.get(i));
+                assertThat(newDoc.networkInterfaceLinks, CoreMatchers.hasItem(initDocument.networkInterfaceLinks.get(i)));
             }
 
             Assert.assertEquals(initDocument.endpointLink, newDoc.endpointLink);
@@ -694,7 +687,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
         // add limit, otherwise the query will not return if there are too many docs or versions
         queryUri = UriUtils.extendUriWithQuery(queryUri, UriUtils.URI_PARAM_ODATA_LIMIT,
-                String.valueOf(numOfVMsToTest * 2));
+                String.valueOf(numOfVMsToTest * 100));
         ServiceDocumentQueryResult res = host.getFactoryState(queryUri);
 
         // Add compute states with the prefix to map.
@@ -703,7 +696,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             String json = Utils.toJson(res.documents.get(key));
             ComputeService.ComputeState doc = Utils.fromJson(json,
                     ComputeService.ComputeState.class);
-            if (doc.name.startsWith(vmPrefix)) {
+            if (azureVMNames.contains(doc.name)) {
                 filteredComputeStates.put(doc.name, doc);
             }
         }
