@@ -375,6 +375,7 @@ public class TestVSphereCloneTaskBase extends BaseVSphereAdapterTest {
         try {
             return result.getBody(QueryTask.class).results.documentLinks.get(0);
         } catch (Exception e) {
+            result.fail(e);
             Assert.fail(e.getMessage());
             // never gets here
             return null;
