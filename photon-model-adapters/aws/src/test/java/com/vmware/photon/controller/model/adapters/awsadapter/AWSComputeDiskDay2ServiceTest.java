@@ -13,9 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
@@ -30,7 +30,9 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteSecurityGroupUsingEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsDisksByIds;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsInstancesByIds;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getResourceState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getSecurityGroupsIdUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
@@ -58,6 +60,7 @@ import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
+import com.amazonaws.services.ec2.model.Volume;
 import com.google.gson.Gson;
 
 import org.junit.After;
@@ -122,6 +125,8 @@ public class AWSComputeDiskDay2ServiceTest {
     private Map<String, Object> awsTestContext;
 
     private ComputeState vmState;
+
+    private List<String> allAvailableDisks = new ArrayList<>();
 
     //The disks added to this list are deleted with AWSDiskService.Delete
     private List<DiskState> diskStates = new ArrayList<>();
@@ -260,35 +265,22 @@ public class AWSComputeDiskDay2ServiceTest {
 
     private void deleteProvisionedResources() throws Throwable {
 
-        // store the network links and disk links for removal check later
-        List<String> resourcesToDelete = new ArrayList<>();
-        if (this.vmState.diskLinks != null) {
-            resourcesToDelete.addAll(this.vmState.diskLinks);
-        }
+        // add deleted disk links
+        List<String> deletedResources = new ArrayList<>();
 
-        resourcesToDelete.add(this.diskStates.get(0).documentSelfLink);
-
+        //add deleted network interface links
         if (this.vmState.networkInterfaceLinks != null) {
-            resourcesToDelete.addAll(this.vmState.networkInterfaceLinks);
+            deletedResources.addAll(this.vmState.networkInterfaceLinks);
         }
 
-        TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
-
-        List<String> diskLinks = this.diskStates.stream()
-                .map(diskState -> diskState.documentSelfLink).collect(Collectors.toList());
-
-        TestAWSSetupUtils.deleteDisks(diskLinks, this.isMock, this.host,
+        TestAWSSetupUtils.deleteDisks(this.allAvailableDisks, this.isMock, this.host,
                 this.endpointState.tenantLinks);
 
-        if (!this.isMock) {
+        //add the disk link of the detached disk which is not yet deleted.
+        deletedResources.addAll(this.allAvailableDisks);
 
-            if (this.volumeId != null) {
-                //Explicitly delete the volume..
-                TestAWSSetupUtils.deleteVolume(this.client, this.volumeId);
-            }
-        }
         deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
-        verifyRemovalOfResourceState(this.host, resourcesToDelete);
+        verifyRemovalOfResourceState(this.host, deletedResources);
 
         this.vmState = null;
         this.sgToCleanUp = null;
@@ -330,7 +322,6 @@ public class AWSComputeDiskDay2ServiceTest {
             List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
                     Collections.singletonList(vmStateAfterAttach1.id));
             instance = instances.get(0);
-            //            instanceZoneId = instance.getPlacement().getAvailabilityZone();
 
             ComputeState vm = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
@@ -351,8 +342,6 @@ public class AWSComputeDiskDay2ServiceTest {
         //create disk2
         DiskState diskSpec2 = createAWSDiskState(this.host, this.endpointState,
                 this.currentTestName.getMethodName() + "_disk2", this.zoneId, regionId);
-
-        //create disk2
         provisionSingleDisk(diskSpec2);
         assertEquals(1, diskSpec2.endpointLinks.size());
 
@@ -440,9 +429,10 @@ public class AWSComputeDiskDay2ServiceTest {
                         add(attachedDisk2.documentSelfLink);
                         add(attachedDisk3.documentSelfLink);
                     }
-                });
+                },
+                this.allAvailableDisks);
 
-        this.vmState = vmStateAfterDetach2;
+        deleteVMAndVerifyDisks(vmStateAfterDetach2.documentSelfLink, vmStateAfterDetach2.diskLinks);
     }
 
     protected void assertDeviceName(Instance awsInstance, DiskState diskState, List<String> existingNames) {
@@ -456,7 +446,7 @@ public class AWSComputeDiskDay2ServiceTest {
     }
 
     private ComputeState detachDiskAndVerify(ComputeState vmStateAfterAttach,
-            List<String> detachedDiskLinks) throws Throwable {
+            List<String> detachedDiskLinks, List<String> availableDiskLinks) throws Throwable {
 
         performDiskOperation(vmStateAfterAttach, detachedDiskLinks,
                 ResourceOperation.DETACH_DISK.operation);
@@ -473,7 +463,7 @@ public class AWSComputeDiskDay2ServiceTest {
 
             assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
                     detachedDisk.status);
-            this.diskStates.add(detachedDisk);
+            availableDiskLinks.add(detachedDisk.documentSelfLink);
         });
 
         return vmStateAfterDetach;
@@ -615,7 +605,7 @@ public class AWSComputeDiskDay2ServiceTest {
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(), this.currentTestName.getMethodName() + "_vm1", zoneId,
                 regionId, null, this.singleNicSpec, addNonExistingSecurityGroup,
-                this.awsTestContext);
+                this.awsTestContext, true);
 
         // set placement link
         if (this.vmState.customProperties == null) {
@@ -690,5 +680,58 @@ public class AWSComputeDiskDay2ServiceTest {
         // create a compute host for the AWS EC2 VM
         this.computeHost = createAWSComputeHost(this.host,this.endpointState, zoneId, regionId,
                 this.isAwsClientMock, this.awsMockEndpointReference, null /*tags*/);
+    }
+
+    private void deleteVMAndVerifyDisks(String computeStateLink, List<String> totalAttachedDisks)
+            throws Throwable {
+        TestAWSSetupUtils.deleteVMs(computeStateLink, this.isMock, this.host);
+
+        List<DiskState> persistedDisks = new ArrayList<>();
+        List<DiskState> deletedDisks = new ArrayList<>();
+
+        //divide all disklinks into persisted ones and deleted ones.
+        partitionDisks(totalAttachedDisks, persistedDisks,
+                deletedDisks);
+
+        //add all persisted disks to detached disk list
+        persistedDisks.forEach(diskState -> this.allAvailableDisks
+                .add(diskState.documentSelfLink));
+
+        //verify the properties of persisted disk.
+        verifyPersistedDisks(this.isMock, persistedDisks);
+
+        //On VM delete, two inline disks(Test_Volume_1 and Test_Volume_2) and one non-inline external(*_disk1)
+        // disk should be deleted. Only 1 disk should be persisted.
+        assertEquals(totalAttachedDisks.size() - deletedDisks.size(),
+                persistedDisks.size());
+    }
+
+    private void partitionDisks(List<String> allAttachedDiskLinks,
+            List<DiskState> persistedDisks, List<DiskState> deletedDisks) throws Throwable {
+        for (String resourceLink : allAttachedDiskLinks) {
+            DiskState diskState = getResourceState(this.host, resourceLink, DiskState.class);
+            if (diskState.documentSelfLink != null) {
+                persistedDisks.add(diskState);
+            } else {
+                deletedDisks.add(diskState);
+            }
+        }
+    }
+
+    private void verifyPersistedDisks(boolean isMock, List<DiskState> persistedDisks)
+            throws Throwable {
+        for (DiskState diskState : persistedDisks) {
+            assertNotNull(diskState);
+            assertNotNull(diskState.persistent);
+            assertTrue(diskState.persistent);
+            assertNotNull(diskState.id);
+            if (!isMock) {
+                assertTrue(diskState.id.startsWith("vol-"));
+                List<Volume> volumes = getAwsDisksByIds(this.client, this.host,
+                        Collections.singletonList(diskState.id));
+                Volume volume = volumes.get(0);
+                assertNotNull(volume);
+            }
+        }
     }
 }

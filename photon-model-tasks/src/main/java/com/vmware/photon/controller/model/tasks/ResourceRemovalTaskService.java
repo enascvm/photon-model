@@ -36,6 +36,7 @@ import com.vmware.photon.controller.model.tasks.ResourceIPDeallocationTaskServic
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
@@ -326,40 +327,61 @@ public class ResourceRemovalTaskService
             return;
         }
 
-        Stream<Operation> deletes = queryTask.results.documents.values().stream()
+        List<DeferredResult<Operation>> getComputeStateDrs = queryTask.results.documents.values()
+                .stream()
                 .map(d -> Utils.fromJson(d, ComputeState.class))
-                .flatMap(c -> {
-                    Stream<Operation> ops = Stream
-                            .of(Operation.createDelete(this, c.documentSelfLink));
-                    if (c.diskLinks != null && !c.diskLinks.isEmpty()) {
-                        ops = Stream.concat(ops,
-                                c.diskLinks.stream().map(l -> Operation.createDelete(this, l)));
-                    }
-                    if (c.networkInterfaceLinks != null && !c.networkInterfaceLinks.isEmpty()) {
-                        ops = Stream.concat(ops, c.networkInterfaceLinks.stream()
-                                .map(l -> Operation.createDelete(this, l)));
-                    }
-                    return ops;
-                });
-        OperationJoin.create(deletes)
-                .setCompletion((ox, exc) -> {
-                    if (exc != null) {
-                        logSevere(() -> String.format("Failure deleting compute states from the"
-                                + " local system", Utils.toString(exc)));
-                        sendFailureSelfPatch(exc.values().iterator().next());
+                .map(cs -> this.sendWithDeferredResult(Operation.createGet(this,
+                        cs.documentSelfLink))
+                ).collect(Collectors.toList());
+
+        DeferredResult.allOf(getComputeStateDrs).whenComplete((computeOps, ex) -> {
+                    if (ex != null) {
+                        logSevere(() -> String.format("Failure getting compute states from the"
+                                + " local system", Utils.toString(ex)));
+                        sendFailureSelfPatch(ex);
                         return;
                     }
 
-                    if (queryTask.results.nextPageLink != null) {
-                        sendSelfPatch(currentState.taskInfo.stage, currentState.taskSubStage, s -> {
-                            s.nextPageLink = queryTask.results.nextPageLink;
-                        });
-                    } else {
-                        sendSelfPatch(currentState.taskInfo.stage,
-                                SubStage.QUERY_AND_DELETE_SUPPORTING_DOCUMENTS, null);
-                    }
-                })
-                .sendWith(this);
+                    Stream<Operation> deletes = computeOps.stream()
+                            .map(op -> op.getBody(ComputeState.class))
+                            .flatMap(c -> {
+                                Stream<Operation> ops = Stream
+                                        .of(Operation.createDelete(this, c.documentSelfLink));
+                                if (c.diskLinks != null && !c.diskLinks.isEmpty()) {
+                                    ops = Stream.concat(ops, c.diskLinks.stream()
+                                            .map(l -> Operation.createDelete(this, l)));
+                                }
+                                if (c.networkInterfaceLinks != null &&
+                                        !c.networkInterfaceLinks.isEmpty()) {
+                                    ops = Stream.concat(ops, c.networkInterfaceLinks.stream()
+                                            .map(l -> Operation.createDelete(this, l)));
+                                }
+                                return ops;
+                            });
+
+                    OperationJoin.create(deletes)
+                            .setCompletion((ox, exc) -> {
+                                if (exc != null) {
+                                    logSevere(() -> String
+                                            .format("Failure deleting compute states from the"
+                                                    + " local system", Utils.toString(exc)));
+                                    sendFailureSelfPatch(exc.values().iterator().next());
+                                    return;
+                                }
+
+                                if (queryTask.results.nextPageLink != null) {
+                                    sendSelfPatch(currentState.taskInfo.stage,
+                                            currentState.taskSubStage, s -> {
+                                                s.nextPageLink = queryTask.results.nextPageLink;
+                                            });
+                                } else {
+                                    sendSelfPatch(currentState.taskInfo.stage,
+                                            SubStage.QUERY_AND_DELETE_SUPPORTING_DOCUMENTS, null);
+                                }
+                            })
+                            .sendWith(this);
+                }
+        );
     }
 
     private void queryAndDeleteSupportingDocuments(ResourceRemovalTaskState currentState,

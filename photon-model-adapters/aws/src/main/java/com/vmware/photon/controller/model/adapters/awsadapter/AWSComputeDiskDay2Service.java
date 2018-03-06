@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -442,6 +443,12 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
+            this.service.logWarning(
+                    () -> String.format("[AWSComputeDiskDay2Service] Detaching "
+                            + "the volume %s from instance %s for task reference :%s. FAILED",
+                    this.context.diskState.id,
+                    this.context.computeState.id,
+                    this.context.request.taskLink()));
             OperationContext.restoreOperationContext(this.opContext);
             this.dr.fail(exception);
         }
@@ -523,7 +530,9 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         patchDRs.add(AWSUtils.updateDiskState(context.diskState, context.request.operation,
                 this));
-        patchDRs.add(AWSUtils.updateComputeState(context.computeState, context.diskState,
+        patchDRs.add(AWSUtils.updateComputeState(
+                context.computeState.documentSelfLink,
+                Arrays.asList(context.diskState.documentSelfLink),
                 context.request.operation, this));
 
         DeferredResult.allOf(patchDRs)

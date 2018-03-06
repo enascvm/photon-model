@@ -27,7 +27,9 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.MAX_IOPS_PER_GiB;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.removeDiskLinks;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setEbsDefaultsIfNotSet;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.updatePersistentDiskAsAvailable;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.validateSizeSupportedByVolumeType;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_SSH_KEY_NAME;
@@ -61,10 +63,15 @@ import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
+import com.amazonaws.services.ec2.model.EbsInstanceBlockDeviceSpecification;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceAttributeName;
 import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
+import com.amazonaws.services.ec2.model.InstanceBlockDeviceMappingSpecification;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
+import com.amazonaws.services.ec2.model.ModifyInstanceAttributeRequest;
+import com.amazonaws.services.ec2.model.ModifyInstanceAttributeResult;
 import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.ResourceType;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
@@ -904,6 +911,7 @@ public class AWSInstanceService extends StatelessService {
                                         updateComputeAndDiskStates(this.context.externalDisks,
                                                 provisionedComputeState, this.service);
                                 externalDisksDr.whenComplete((c, e) -> {
+                                    OperationContext.restoreOperationContext(this.opContext);
                                     if (e != null) {
                                         String error = String.format("Error updating computeState and "
                                                         + "diskStates of external disks. %s",
@@ -953,12 +961,12 @@ public class AWSInstanceService extends StatelessService {
                 List<DiskState> externalDisks, List<String> availableEbsDiskNames,
                 AmazonEC2AsyncClient client) {
 
+            Map<String, Pair<String, Boolean>> deleteDiskMapByDeviceName = new HashMap<>();
             List<DeferredResult<Pair<DiskState, Throwable>>> diskStateResults =
                     externalDisks.stream().map(externalDisk -> {
                         String deviceName = availableEbsDiskNames.get(0);
                         availableEbsDiskNames.remove(0);
                         externalDisk.customProperties.put(DEVICE_NAME, deviceName);
-                        externalDisk.persistent = Boolean.FALSE;
 
                         AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
                                 .withInstanceId(id)
@@ -971,22 +979,29 @@ public class AWSInstanceService extends StatelessService {
                                 new AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult>() {
                                     @Override protected void handleError(
                                             Exception exception) {
+                                        OperationContext.restoreOperationContext(this.opContext);
                                         diskDr.fail(exception);
                                     }
 
                                     @Override protected void handleSuccess(
                                             AttachVolumeRequest request,
                                             AttachVolumeResult result) {
+                                        OperationContext.restoreOperationContext(this.opContext);
+                                        if (externalDisk.persistent == null) {
+                                            externalDisk.persistent = Boolean.TRUE;
+                                        } else if (!externalDisk.persistent) {
+                                            deleteDiskMapByDeviceName.put(deviceName,
+                                                    Pair.of(externalDisk.id, !externalDisk.persistent));
+                                        }
                                         diskDr.complete(externalDisk);
                                     }
                                 };
                         client.attachVolumeAsync(attachVolumeRequest, attachDiskHandler);
                         return diskDr;
                     }).map(diskDr -> diskDr
-                            .thenApply(
-                                    diskState -> Pair.of(diskState, (Throwable) null))
-                            .exceptionally(ex -> Pair.of(null, ex.getCause())))
-                            .collect(Collectors.toList());
+                            .thenApply(diskState -> Pair.of(diskState, (Throwable) null))
+                            .exceptionally(ex -> Pair.of(null, ex.getCause()))
+                    ).collect(Collectors.toList());
 
             return DeferredResult.allOf(diskStateResults)
                     .thenCompose(pairs -> {
@@ -995,12 +1010,53 @@ public class AWSInstanceService extends StatelessService {
                         pairs.stream().filter(p -> p.left == null)
                                 .forEach(p -> stringJoiner.add(p.right.getMessage()));
                         if (stringJoiner.length() > 0) {
-                            return DeferredResult.failed(new Throwable(stringJoiner
-                                    .toString()));
+                            return DeferredResult.failed(new Throwable(stringJoiner.toString()));
+                        } else if (!deleteDiskMapByDeviceName.isEmpty()) {
+                            return setDeleteOnTerminateAttribute(client, id,
+                                    deleteDiskMapByDeviceName);
                         } else {
                             return DeferredResult.completed(new DiskState());
                         }
                     });
+        }
+
+        private DeferredResult<DiskState> setDeleteOnTerminateAttribute(
+                AmazonEC2AsyncClient client, String instanceId, Map<String, Pair<String, Boolean>> deleteDiskMapByDeviceName) {
+            List<InstanceBlockDeviceMappingSpecification> instanceBlockDeviceMappingSpecificationList =
+                    deleteDiskMapByDeviceName.entrySet().stream()
+                            .map(entry -> new InstanceBlockDeviceMappingSpecification()
+                                    .withDeviceName(entry.getKey())
+                                    .withEbs(
+                                            new EbsInstanceBlockDeviceSpecification()
+                                            .withDeleteOnTermination(entry.getValue().right)
+                                            .withVolumeId(entry.getValue().left)
+                                    )
+                            ).collect(Collectors.toList());
+
+            DeferredResult<DiskState> modifyInstanceAttrDr = new DeferredResult();
+            ModifyInstanceAttributeRequest modifyInstanceAttrReq =
+                    new ModifyInstanceAttributeRequest()
+                            .withInstanceId(instanceId).withAttribute(InstanceAttributeName.BlockDeviceMapping)
+                            .withBlockDeviceMappings(instanceBlockDeviceMappingSpecificationList);
+
+            AWSAsyncHandler<ModifyInstanceAttributeRequest, ModifyInstanceAttributeResult> modifyInstanceAttrHandler =
+                    new AWSAsyncHandler<ModifyInstanceAttributeRequest, ModifyInstanceAttributeResult>() {
+                        @Override
+                        protected void handleError(Exception exception) {
+                            OperationContext.restoreOperationContext(this.opContext);
+                            modifyInstanceAttrDr.fail(exception);
+                        }
+
+                        @Override
+                        protected void handleSuccess(
+                                ModifyInstanceAttributeRequest request,
+                                ModifyInstanceAttributeResult result) {
+                            OperationContext.restoreOperationContext(this.opContext);
+                            modifyInstanceAttrDr.complete(new DiskState());
+                        }
+                    };
+            client.modifyInstanceAttributeAsync(modifyInstanceAttrReq, modifyInstanceAttrHandler);
+            return modifyInstanceAttrDr;
         }
 
         /**
@@ -1010,8 +1066,7 @@ public class AWSInstanceService extends StatelessService {
         private DeferredResult<List<Operation>> updateComputeAndDiskStates(
                 List<DiskState> externalDisks, ComputeState computeState, StatelessService service) {
             List<DeferredResult<Operation>> patchDRs = new ArrayList<>();
-
-            patchDRs.addAll(updateDiskStates(externalDisks, service));
+            patchDRs.addAll(updateDiskStates(externalDisks, service, DiskService.DiskStatus.ATTACHED));
             patchDRs.add(updateComputeState(computeState, externalDisks, service));
 
             return DeferredResult.allOf(patchDRs);
@@ -1039,20 +1094,11 @@ public class AWSInstanceService extends StatelessService {
             return service.sendWithDeferredResult(computeStateOp);
         }
 
-        /**
-         * Update attach status of each disk
-         */
-        private List<DeferredResult<Operation>> updateDiskStates(List<DiskState> diskStates, StatelessService service) {
-            List<Operation> diskOps = new ArrayList<>();
-
-            for (DiskState diskState : diskStates) {
-                diskState.status = DiskService.DiskStatus.ATTACHED;
-                diskOps.add(Operation.createPatch(service.getHost(), diskState.documentSelfLink)
-                        .setBody(diskState)
-                        .setReferer(service.getHost().getUri()));
-            }
-
-            return diskOps.stream().map(diskOp -> service.sendWithDeferredResult(diskOp))
+        private List<DeferredResult<Operation>> updateDiskStates(
+                List<DiskService.DiskState> diskStates,
+                StatelessService service, DiskService.DiskStatus status) {
+            return diskStates.stream()
+                    .map(diskState -> AWSUtils.getUpdateDiskStatusDr(service, status, diskState))
                     .collect(Collectors.toList());
         }
 
@@ -1168,7 +1214,14 @@ public class AWSInstanceService extends StatelessService {
     private void deleteInstance(AWSInstanceContext aws) {
 
         if (aws.computeRequest.isMockRequest) {
-            aws.taskManager.finishTask();
+            detachPersistentDisks(aws)
+                    .whenComplete((o, e) -> {
+                        if (e != null) {
+                            aws.taskManager.patchTaskToFailure(e);
+                        } else {
+                            aws.taskManager.finishTask();
+                        }
+                    });
             return;
         }
 
@@ -1188,6 +1241,14 @@ public class AWSInstanceService extends StatelessService {
 
         aws.amazonEC2Client.terminateInstancesAsync(termRequest,
                 terminateHandler);
+    }
+
+    private DeferredResult<ResourceState> detachPersistentDisks(AWSInstanceContext aws) {
+        return updatePersistentDiskAsAvailable(
+                aws.child.diskLinks, AWSInstanceService.this)
+                .thenCompose(persistedDiskLinks ->
+                        removeDiskLinks(aws.resourceReference.getPath(),
+                                persistedDiskLinks, AWSInstanceService.this));
     }
 
     private class AWSTerminateHandler implements
@@ -1252,13 +1313,13 @@ public class AWSInstanceService extends StatelessService {
                     .whenComplete((aVoid, exc) -> {
                         if (exc != null) {
                             AWSInstanceService.this.logWarning(() ->
-                                    String.format("Error deleting AWS subnet: %s", exc.getMessage()));
+                                    String.format("Error deleting AWS resource: %s", exc.getMessage()));
                             this.context.taskManager.patchTaskToFailure(
-                                    new IllegalStateException("Error deleting AWS subnet",
+                                    new IllegalStateException("Error deleting AWS resource",
                                             exc));
                         } else {
                             AWSInstanceService.this.logInfo(() -> String.format("Deleting"
-                                            + " subnets 'created-by' [%s]: SUCCESS",
+                                            + " resources 'created-by' [%s]: SUCCESS",
                                     this.context.computeRequest.resourceLink()));
 
                             this.context.taskManager.finishTask();
@@ -1287,10 +1348,30 @@ public class AWSInstanceService extends StatelessService {
 
             // Once got states to delete process with actual deletion
             return statesToDeleteQuery.collectDocuments(Collectors.toList())
-                    .thenCompose(this::handleStatesToDelete);
+                    .thenCompose(this::handleResourceStatesToDelete);
         }
 
-        private DeferredResult<List<ResourceState>> handleStatesToDelete(
+        /**
+         *
+         * Delete subnets and disks that are referred by the instance.
+         */
+        private DeferredResult<List<ResourceState>> handleResourceStatesToDelete(
+                List<ResourceState> statesToDelete) {
+
+            List<DeferredResult<ResourceState>> resourceStatesToDeleteDR = getSubnetsToDelete(
+                    statesToDelete);
+
+            DeferredResult<ResourceState> computeDr = detachPersistentDisks(this.context);
+
+            resourceStatesToDeleteDR.add(computeDr);
+
+            return DeferredResult.allOf(resourceStatesToDeleteDR);
+        }
+
+        /**
+         * Return the Dr's for deleting the subnets
+         */
+        private List<DeferredResult<ResourceState>> getSubnetsToDelete(
                 List<ResourceState> statesToDelete) {
 
             List<DeferredResult<ResourceState>> statesToDeleteDR = statesToDelete.stream()
@@ -1300,7 +1381,7 @@ public class AWSInstanceService extends StatelessService {
                     .map(rS -> deleteAWSSubnet(rS).thenCompose(this::deleteSubnetState))
                     .collect(Collectors.toList());
 
-            return DeferredResult.allOf(statesToDeleteDR);
+            return statesToDeleteDR;
         }
 
         // Do AWS subnet deletion
@@ -1407,6 +1488,7 @@ public class AWSInstanceService extends StatelessService {
     private void customizeBootDiskProperties(DiskState bootDisk, String rootDeviceType,
             BlockDeviceMapping rootDeviceMapping, boolean hasHardConstraint,
             AWSInstanceContext aws) {
+        bootDisk.persistent = Boolean.FALSE;
         if (rootDeviceType.equals(AWSStorageType.EBS.name().toLowerCase())) {
             String requestedType = bootDisk.customProperties.get(DEVICE_TYPE);
             EbsBlockDevice ebs = rootDeviceMapping.getEbs();
@@ -1445,7 +1527,7 @@ public class AWSInstanceService extends StatelessService {
     private void assertAndResetPersistence(List<DiskState> instanceStoreDisks) {
         instanceStoreDisks.forEach(disk -> {
             AssertUtil.assertTrue(
-                    Boolean.FALSE.equals(disk.persistent),
+                    Boolean.TRUE.equals(disk.persistent),
                     String.format("disk %s is ephemeral and cannot be persisted.", disk.name));
             disk.persistent = Boolean.FALSE;
         });
@@ -1522,6 +1604,7 @@ public class AWSInstanceService extends StatelessService {
                     EbsBlockDevice ebsBlockDevice = new EbsBlockDevice();
                     int diskSize = (int) diskState.capacityMBytes / 1024;
                     ebsBlockDevice.setVolumeSize(diskSize);
+                    ebsBlockDevice.setDeleteOnTermination(!diskState.persistent);
 
                     if (diskState.customProperties != null) {
                         String requestedVolumeType = diskState.customProperties.get(VOLUME_TYPE);
@@ -1559,7 +1642,7 @@ public class AWSInstanceService extends StatelessService {
                     }
                     diskState.customProperties.put(DEVICE_NAME, deviceName);
                 } else {
-                    String message = "Additional disk size cannot be zero";
+                    String message = "Additional disk size capacity has to be positive";
                     this.logWarning(() -> "[AWSInstanceService] " + message);
                     throw new IllegalArgumentException(message);
                 }

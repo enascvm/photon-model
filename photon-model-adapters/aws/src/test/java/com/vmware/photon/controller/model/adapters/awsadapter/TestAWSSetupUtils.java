@@ -21,6 +21,7 @@ import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_VOLUME_ID_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.URI_PARAM_ENDPOINT;
@@ -59,6 +60,7 @@ import java.util.stream.Collectors;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2Client;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
 import com.amazonaws.services.ec2.model.AttachInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.AttachNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.AttachNetworkInterfaceResult;
@@ -693,6 +695,33 @@ public class TestAWSSetupUtils {
     }
 
     /**
+     * Method to get Disk details directly from Amazon
+     */
+    public static List<Volume> getAwsDisksByIds(AmazonEC2AsyncClient client,
+            VerificationHost host, List<String> diskIds) throws Throwable {
+        try {
+
+            host.log("Getting disks with ids " + diskIds
+                    + " from the AWS endpoint using the EC2 client.");
+
+            DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
+                    .withVolumeIds(diskIds);
+
+            DescribeVolumesResult describeVolumesResult = client
+                    .describeVolumes(describeVolumesRequest);
+
+            return describeVolumesResult.getVolumes();
+        } catch (Exception e) {
+            if (e instanceof AmazonEC2Exception
+                    && ((AmazonEC2Exception) e).getErrorCode()
+                    .equalsIgnoreCase(AWS_INVALID_VOLUME_ID_ERROR_CODE)) {
+                return null;
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    /**
      * Return true if snapshotId exists.
      */
     public static boolean snapshotIdExists(AmazonEC2AsyncClient client, String snapshotId) {
@@ -1056,9 +1085,6 @@ public class TestAWSSetupUtils {
                 tagLinks, nicSpec, /* add new security group */ false, awsTestContext);
     }
 
-    /**
-     * Create a compute resource for an AWS instance
-     */
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
             ComputeState computeHost, EndpointState endpointState,
             @SuppressWarnings("rawtypes") Class clazz,
@@ -1066,6 +1092,23 @@ public class TestAWSSetupUtils {
             Set<String> tagLinks,
             AwsNicSpecs nicSpecs,
             boolean addNewSecurityGroup, Map<String, Object> awsTestContext)
+            throws Throwable {
+        return createAWSVMResource(host, computeHost, endpointState, clazz, vmName, zoneId,
+                regionId, tagLinks, nicSpecs, addNewSecurityGroup, awsTestContext, false);
+    }
+
+    /**
+     * Create a compute resource for an AWS instance.
+     */
+    public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
+            ComputeState computeHost, EndpointState endpointState,
+            @SuppressWarnings("rawtypes") Class clazz,
+            String vmName, String zoneId, String regionId,
+            Set<String> tagLinks,
+            AwsNicSpecs nicSpecs,
+            boolean addNewSecurityGroup,
+            Map<String, Object> awsTestContext,
+            boolean persistDiskOnVmDelete)
             throws Throwable {
 
         // Step 1: Create an auth credential to login to the VM
@@ -1152,7 +1195,7 @@ public class TestAWSSetupUtils {
         rootDisk.endpointLink = endpointState.documentSelfLink;
         rootDisk.endpointLinks = new HashSet<String>();
         rootDisk.endpointLinks.add(endpointState.documentSelfLink);
-        rootDisk.computeHostLink = computeHost.documentSelfLink;
+        rootDisk.computeHostLink = endpointState.computeHostLink;
         rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk = TestUtils.doPost(host, rootDisk,
@@ -1160,7 +1203,8 @@ public class TestAWSSetupUtils {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
         vmDisks.add(rootDisk.documentSelfLink);
-        List<DiskState> additionalDisks = getAdditionalDiskConfiguration(host, endpointState, computeHost);
+        List<DiskState> additionalDisks = getAdditionalDiskConfiguration(host, endpointState,
+                computeHost, persistDiskOnVmDelete);
         for (DiskState additionalDisk : additionalDisks) {
             vmDisks.add(additionalDisk.documentSelfLink);
         }
@@ -1202,8 +1246,11 @@ public class TestAWSSetupUtils {
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
     }
 
+    /**
+     * Returns 2 Test diskStates. first disk is marked for encryption and to persistent on vm delete.
+     */
     private static List<DiskState> getAdditionalDiskConfiguration(VerificationHost host,
-            EndpointState endpointState, ComputeState computeHost) throws Throwable {
+            EndpointState endpointState, ComputeState computeHost, Boolean persistent) throws Throwable {
         List<String[]> additionalDiskConfigs = new ArrayList<>();
         String[] disk1properties = { "ebs", "gp2" };
         String[] disk2properties = { "ebs", "io1", "900" };
@@ -1216,7 +1263,7 @@ public class TestAWSSetupUtils {
             disk.id = UUID.randomUUID().toString();
             disk.documentSelfLink = disk.id;
             disk.bootOrder = null;
-            disk.name = "Test Volume" + i;
+            disk.name = "Test_Volume_" + i;
             disk.sourceImageReference = URI.create(imageId);
             disk.capacityMBytes = ADDITIONAL_DISK_SIZE_IN_MEBI_BYTES;
 
@@ -1230,11 +1277,15 @@ public class TestAWSSetupUtils {
 
             disk.regionId = regionId;
             disk.endpointLink = endpointState.documentSelfLink;
-            disk.endpointLinks = new HashSet<String>();
+            disk.endpointLinks = new HashSet<>();
             disk.endpointLinks.add(endpointState.documentSelfLink);
+            disk.authCredentialsLink = endpointState.authCredentialsLink;
             disk.tenantLinks = endpointState.tenantLinks;
-            disk.computeHostLink = computeHost.documentSelfLink;
 
+            disk.computeHostLink = endpointState.computeHostLink;
+            disk.diskAdapterReference = UriUtils.buildUri(host, AWSDiskService.SELF_LINK);
+
+            disk.persistent = (i == 0) ? persistent : null;
             disk.encrypted = (i == 0) ? true : null;
 
             disk = TestUtils.doPost(host, disk, DiskService.DiskState.class,
@@ -1659,10 +1710,15 @@ public class TestAWSSetupUtils {
      *
      * @throws Throwable
      */
-    private static ResourceState getResourceState(VerificationHost host, String resourceLink)
+    public static ResourceState getResourceState(VerificationHost host, String resourceLink)
+            throws Throwable {
+        return getResourceState(host,resourceLink, ResourceState.class);
+    }
+
+    public static <T> T getResourceState(VerificationHost host, String resourceLink, Class<T> clazz)
             throws Throwable {
         Operation response = host.waitForResponse(Operation.createGet(host, resourceLink));
-        return response.getBody(ResourceState.class);
+        return response.getBody(clazz);
     }
 
     /**

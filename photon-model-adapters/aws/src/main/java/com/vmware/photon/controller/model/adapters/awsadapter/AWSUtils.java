@@ -112,6 +112,8 @@ import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
 import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
 import com.amazonaws.services.securitytoken.model.Credentials;
 
+import org.apache.commons.collections.CollectionUtils;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -124,6 +126,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -1315,6 +1318,15 @@ public class AWSUtils {
         return result;
     }
 
+    public static DeferredResult<Operation> getUpdateDiskStatusDr(StatelessService service,
+            DiskService.DiskStatus status, ResourceState diskState) {
+        ((DiskService.DiskState)diskState).status = status;
+        return service.sendWithDeferredResult(
+                Operation.createPatch(service.getHost(), diskState.documentSelfLink)
+                        .setBody(diskState)
+                        .setReferer(service.getHost().getUri()));
+    }
+
     /**
      * Update attach/detach status of disk
      */
@@ -1344,11 +1356,11 @@ public class AWSUtils {
      * Add or remove diskLink from ComputeState by sending a ServiceStateCollectionUpdateRequest.
      */
     public static DeferredResult<Operation> updateComputeState(
-            ComputeService.ComputeState computeState, DiskService.DiskState diskState,
+            String computeStateLink, List<String> diskLinks,
             String operation, Service service) {
         Map<String, Collection<Object>> collectionsToModify = Collections
                 .singletonMap(ComputeService.ComputeState.FIELD_NAME_DISK_LINKS,
-                        Collections.singletonList(diskState.documentSelfLink));
+                        new ArrayList<>(diskLinks));
 
         Map<String, Collection<Object>> collectionsToAdd = null;
         Map<String, Collection<Object>> collectionsToRemove = null;
@@ -1363,10 +1375,49 @@ public class AWSUtils {
                 .create(collectionsToAdd, collectionsToRemove);
 
         Operation computeStateOp = Operation.createPatch(UriUtils.buildUri(service.getHost(),
-                computeState.documentSelfLink))
+                computeStateLink))
                 .setBody(updateDiskLinksRequest)
                 .setReferer(service.getUri());
 
         return service.sendWithDeferredResult(computeStateOp);
     }
+
+    public static DeferredResult<List<String>> updatePersistentDiskAsAvailable(
+            List<String> diskLinks, StatelessService service) {
+        List<DeferredResult<Operation>> getDiskStatesOp = diskLinks.stream()
+                .map(diskLink -> service.sendWithDeferredResult(
+                        Operation.createGet(service.getHost(), diskLink)
+                                .setReferer(service.getHost().getUri()))
+                ).collect(Collectors.toList());
+
+        return DeferredResult.allOf(getDiskStatesOp)
+                .thenApply(ops -> ops.stream()
+                        .map(op -> op.getBody(DiskService.DiskState.class))
+                        .filter(diskState -> diskState.persistent != null && diskState.persistent)
+                        .map(diskState -> updateDiskAsAvailable(diskState, service))
+                        .collect(Collectors.toList()));
+    }
+
+    private static String updateDiskAsAvailable(DiskService.DiskState diskState, Service service) {
+        AWSUtils.updateDiskState(diskState, ResourceOperation.DETACH_DISK.operation, service)
+                .thenApply(op -> op.getBody(DiskService.DiskState.class));
+        return diskState.documentSelfLink;
+    }
+
+    /**
+     *
+     * removes the disklinks from the compute.
+     */
+    public static DeferredResult<ResourceState> removeDiskLinks(String computeStateLink,
+            List<String> diskLinks, Service service) {
+
+        if (CollectionUtils.isEmpty(diskLinks)) {
+            return DeferredResult.completed(new ResourceState());
+        }
+
+        return AWSUtils.updateComputeState(computeStateLink, diskLinks,
+                ResourceOperation.DETACH_DISK.operation, service)
+                .thenApply(op -> (ResourceState) (op.getBody(ComputeService.ComputeState.class)));
+    }
+
 }

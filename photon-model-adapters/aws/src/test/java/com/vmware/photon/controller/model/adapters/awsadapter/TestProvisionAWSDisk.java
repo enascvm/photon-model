@@ -17,13 +17,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_VOLUME_ID_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EBS_VOLUME_SIZE_IN_MEBI_BYTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsDisksByIds;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,9 +32,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.AmazonEC2Exception;
-import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
-import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.Volume;
 
 import org.junit.After;
@@ -213,37 +209,9 @@ public class TestProvisionAWSDisk {
             String volumeId = disk.id;
             List<Volume> volumes = getAwsDisksByIds(this.client, this.host,
                     Collections.singletonList(volumeId));
+            //assert that the volume is deleted on aws.
             assertNull(volumes);
         }
-    }
-
-
-
-    /**
-     * Method to get Disk details directly from Amazon
-     */
-    public static List<Volume> getAwsDisksByIds(AmazonEC2AsyncClient client,
-            VerificationHost host, List<String> diskIds) throws Throwable {
-        try {
-
-            host.log("Getting disks with ids " + diskIds
-                    + " from the AWS endpoint using the EC2 client.");
-
-            DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
-                    .withVolumeIds(diskIds);
-
-            DescribeVolumesResult describeVolumesResult = client
-                    .describeVolumes(describeVolumesRequest);
-
-            return describeVolumesResult.getVolumes();
-        } catch (Exception e) {
-            if (e instanceof AmazonEC2Exception
-                    && ((AmazonEC2Exception) e).getErrorCode()
-                    .equalsIgnoreCase(AWS_INVALID_VOLUME_ID_ERROR_CODE)) {
-                return null;
-            }
-        }
-        return new ArrayList<>();
     }
 
     public static DiskState getDisk(VerificationHost host, String diskLink)
@@ -266,6 +234,7 @@ public class TestProvisionAWSDisk {
 
         diskDesc.zoneId = zoneId;
         diskDesc.regionId = regionId;
+        diskDesc.persistent = false;
 
         diskDesc.endpointLink = endpointState.documentSelfLink;
         diskDesc.endpointLinks = new HashSet<String>();
