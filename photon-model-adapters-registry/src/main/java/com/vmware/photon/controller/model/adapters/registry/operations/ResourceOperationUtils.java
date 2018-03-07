@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
+import static com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster.SELF_SERVICE;
+
 import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
@@ -32,14 +34,15 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.AssertUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ServiceEndpointLocator;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.AuthorizationContext;
 import com.vmware.xenon.common.Operation.CompletionHandler;
-import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
@@ -260,37 +263,73 @@ public class ResourceOperationUtils {
      */
     public static void registerResourceOperation(Service service, CompletionHandler handler,
             ResourceOperationSpec... specs) {
-        if (specs == null || specs.length == 0) {
-            service.getHost().log(Level.FINE,
-                    "No ResourceOperationSpec to register by %s",
-                    service.getSelfLink());
-            handler.handle(null, null);
-            return;
-        }
 
-        service.getHost().registerForServiceAvailability((op, ex) -> {
-            if (ex != null) {
-                service.getHost().log(Level.SEVERE, "%s", Utils.toString(ex));
-                handler.handle(op, ex);
-            } else {
-                List<Operation> operations = Arrays.stream(specs)
-                        .map(spec -> createOperation(service, spec))
-                        .collect(Collectors.toList());
-
-                JoinedCompletionHandler jh = (ops, err) -> {
+        registerResourceOperations(service.getHost(), null, service.getSelfLink(), specs)
+                .whenComplete((ops, err) -> {
                     if (err != null) {
                         service.getHost().log(Level.SEVERE, "Error: %s", Utils.toString(err));
-                        handler.handle(ops.values().iterator().next(),
-                                err.values().iterator().next());
+                        handler.handle(ops.iterator().next(), err);
                     } else {
                         service.getHost().log(Level.FINE,
                                 "Successfully registered operations.");
                         handler.handle(null, null);
                     }
-                };
-                OperationJoin.create(operations).setCompletion(jh).sendWith(service);
-            }
-        },  true, ResourceOperationSpecService.FACTORY_LINK);
+                });
+    }
+
+    /**
+     * A generic utility method to register any Day 2 Operation service/adapter with the framework
+     * as a ResourceOperationSpecService. It accepts a list of {@code specs} which a service can
+     * handle as input and submits them to the ResourceOperationSpecService's Factory. This call
+     * should generally be part of handleStart method of the adapter/service, preferably near the
+     * end after any service specification configuration settings.
+     * @param host
+     *         the host of the Service
+     * @param locator
+     *         Locator referencing the ResourceOperationSpecService's location can be @null if
+     *         the registry is on the same host
+     * @param adapterLink
+     *         the adapter's SELF_LINK
+     * @param specs
+     *         list of intended the ResourceOperationSpec's to register with the service
+     */
+    public static void registerResourceOperation(ServiceHost host,
+            ServiceEndpointLocator locator,
+            String adapterLink,
+            ResourceOperationSpec... specs) {
+
+        registerResourceOperations(host, locator, adapterLink, specs)
+                .whenComplete((op, err) -> {
+                    if (err != null) {
+                        host.log(Level.SEVERE, "Error: %s", Utils.toString(err));
+                    } else {
+                        host.log(Level.FINE, "Successfully registered operations.");
+                    }
+                }
+            );
+    }
+
+    private static DeferredResult<List<Operation>> registerResourceOperations(ServiceHost host,
+            ServiceEndpointLocator locator,
+            String adapterLink,
+            ResourceOperationSpec... specs) {
+
+        if (specs == null || specs.length == 0) {
+            host.log(Level.FINE,
+                    "No ResourceOperationSpec to register by %s",
+                    adapterLink);
+            return DeferredResult.completed(null);
+        }
+
+        List<DeferredResult<Operation>> operations = Arrays.stream(specs)
+                .map(spec -> {
+                    spec.adapterReference = buildPublicAdapterUri(host, adapterLink);
+                    Operation op = createOperation(host, locator, spec);
+                    return host.sendWithDeferredResult(op);
+                })
+                .collect(Collectors.toList());
+
+        return DeferredResult.allOf(operations);
     }
 
     /**
@@ -357,13 +396,95 @@ public class ResourceOperationUtils {
         return top.collectDocuments(Collectors.toList());
     }
 
-    private static Operation createOperation(Service service, ResourceOperationSpec spec) {
-        service.getHost().log(Level.FINE,
+    private static Operation createOperation(ServiceHost host, ResourceOperationSpec spec) {
+        return createOperation(host, null, spec);
+    }
+
+    private static Operation createOperation(ServiceHost host, ServiceEndpointLocator locator,
+            ResourceOperationSpec spec) {
+        host.log(Level.FINE,
                 "Going to register Resource Operation name=%s, operation='%s'",
                 spec.name, spec.operation);
-        return Operation.createPost(service, ResourceOperationSpecService.FACTORY_LINK)
+
+        URI uri = UriUtils.buildUri(ClusterUtil.getClusterUri(host, locator),
+                ResourceOperationSpecService.FACTORY_LINK);
+
+        return Operation.createPost(uri)
                 .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
+                .setReferer(host.getUri())
                 .setBody(spec);
+    }
+
+    /**
+     * Handles Resource Operation Registration during an adapter's start
+     *
+     * @param service the Adapter Service
+     * @param startPost the startPost operation
+     * @param registerResourceOperation should the Resource Operation Specs be registered
+     * @param resourceOperationSpecs Resource Operation Specs to register
+     */
+    public static void handleAdapterResourceOperationRegistration(Service service, Operation startPost,
+            boolean registerResourceOperation, ResourceOperationSpec... resourceOperationSpecs) {
+        if (registerResourceOperation) {
+            Operation.CompletionHandler handler = (op, exc) -> {
+                if (exc != null) {
+                    startPost.fail(exc);
+                } else {
+                    startPost.complete();
+                }
+            };
+            ResourceOperationUtils.registerResourceOperation(service, handler,
+                    resourceOperationSpecs);
+        } else {
+            startPost.complete();
+        }
+    }
+
+    /**
+     * Builds an adapter reference using {@value ServiceHost#LOCAL_HOST}.
+     * <p>NOTE: <b>use with care!</b>
+     */
+    public static URI buildAdapterUri(ServiceHost host, String path) {
+        return buildAdapterUri(host.getPort(), path);
+    }
+
+    /**
+     * Builds an adapter reference using {@value ServiceHost#LOCAL_HOST}.
+     * <p>NOTE: <b>use with care!</b>
+     */
+    public static URI buildAdapterUri(int port, String path) {
+        return buildAdapterUri(ServiceHost.LOCAL_HOST, port, path);
+    }
+
+    /**
+     * Builds an public adapter reference using
+     * {@link com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster#SELF_SERVICE}.
+     *
+     * If SELF_SERVICE is not defined it will use {@link ResourceOperationUtils#buildAdapterUri(ServiceHost, String)}.
+     * <p>
+     * <p>NOTE: <b>use with care!</b>
+     */
+    public static URI buildPublicAdapterUri(ServiceHost host, String path) {
+
+        if (ClusterUtil.isClusterDefined(SELF_SERVICE)) {
+            return UriUtils.buildUri(ClusterUtil.getClusterUri(host, SELF_SERVICE), path);
+        }
+
+        return buildAdapterUri(host, path);
+    }
+
+    /**
+     * Builds an adapter reference using the given host URI.
+     */
+    public static URI buildAdapterUri(String host, int port, String path) {
+        return UriUtils.buildUri(host, port, path, null);
+    }
+
+    /**
+     * Builds an adapter reference using the given host URI.
+     */
+    public static URI buildAdapterUri(String scheme, String host, int port, String path) {
+        return UriUtils.buildUri(scheme, host, port, path, null);
     }
 
 }

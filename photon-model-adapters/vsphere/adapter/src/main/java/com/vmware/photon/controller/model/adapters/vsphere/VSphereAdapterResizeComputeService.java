@@ -15,11 +15,11 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static java.lang.Math.toIntExact;
 
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
+
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -29,7 +29,10 @@ import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualMachineConfigSpec;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.Utils;
@@ -62,16 +65,36 @@ public class VSphereAdapterResizeComputeService extends StatelessService {
     private static final long MEGA_BYTES_TO_BYTES_CONSTANT = 1048576L; // 1024 * 1024 = 1048576
     private static final long SOFT_POWER_OFF_TIMEOUT_MICROS = 180000000L;
 
+    private boolean registerResourceOperation;
+
+    public static class VSphereAdapterResizeComputeFactoryService extends FactoryService {
+
+        private boolean registerResourceOperation;
+
+        public VSphereAdapterResizeComputeFactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new VSphereAdapterResizeComputeService(this.registerResourceOperation);
+        }
+    }
+
+    public VSphereAdapterResizeComputeService() {
+        this(true);
+    }
+
+    public VSphereAdapterResizeComputeService(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
+    }
+
     @Override
     public void handleStart(Operation startPost) {
-        Operation.CompletionHandler handler = (op, exc) -> {
-            if (exc != null) {
-                startPost.fail(exc);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils.registerResourceOperation(this, handler, getResourceOperationSpecs());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpecs());
     }
 
     @Override
@@ -207,15 +230,15 @@ public class VSphereAdapterResizeComputeService extends StatelessService {
                 });
     }
 
-    private ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
-        ResourceOperationSpecService.ResourceOperationSpec resizeOperationSpec = getResourceOperationSpec(ResourceOperation.RESIZE, null);
-        return new ResourceOperationSpecService.ResourceOperationSpec[]{resizeOperationSpec};
+    public static ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
+        ResourceOperationSpecService.ResourceOperationSpec resizeOperationSpec = getResourceOperationSpec(
+                ResourceOperation.RESIZE, null);
+        return new ResourceOperationSpecService.ResourceOperationSpec[] { resizeOperationSpec };
     }
 
-    private ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
-                                                                                        String targetCriteria) {
+    private static ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(
+            ResourceOperation operationType, String targetCriteria) {
         ResourceOperationSpecService.ResourceOperationSpec spec = new ResourceOperationSpecService.ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
         spec.resourceType = ResourceOperationSpecService.ResourceType.COMPUTE;
         spec.operation = operationType.operation;

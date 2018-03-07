@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
+
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.StartInstancesRequest;
 import com.amazonaws.services.ec2.model.StartInstancesResult;
@@ -27,36 +29,56 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.DefaultAdapterContext;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 
 public class AWSResetService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_RESET_ADAPTER;
 
     private AWSClientManager clientManager;
+    private boolean registerResourceOperation;
+
+    public static class AWSResetServiceFactoryService extends FactoryService {
+
+        private boolean registerResourceOperation;
+
+        public AWSResetServiceFactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new AWSResetService(this.registerResourceOperation);
+        }
+    }
+
+    public AWSResetService() {
+        this(true);
+    }
+
+    public AWSResetService(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
+    }
 
     @Override
     public void handleStart(Operation startPost) {
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
 
-        CompletionHandler completionHandler = (op, ex) -> {
-            if (ex != null) {
-                startPost.fail(ex);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils.registerResourceOperation(this,
-                completionHandler, getResourceOperationSpec());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpec());
     }
+
 
     @Override
     public void handleStop(Operation op) {
@@ -162,9 +184,8 @@ public class AWSResetService extends StatelessService {
         }
     }
 
-    private ResourceOperationSpec getResourceOperationSpec() {
+    public static ResourceOperationSpec getResourceOperationSpec() {
         ResourceOperationSpec spec = new ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = EndpointType.aws.name();
         spec.resourceType = ResourceType.COMPUTE;
         spec.operation = ResourceOperation.RESET.operation;

@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation.ATTACH_DISK;
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_CONTROLLER_NUMBER;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVIDER_DISK_UNIQUE_ID;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
@@ -26,16 +27,17 @@ import java.util.Map;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState;
@@ -48,17 +50,35 @@ import com.vmware.xenon.common.UriUtils;
 public class VSphereComputeDiskManagementService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.COMPUTE_DISK_DAY2_SERVICE;
 
+    private boolean registerResourceOperation;
+
+    public static class VSphereComputeDiskManagementFactoryService extends FactoryService {
+        private boolean registerResourceOperation;
+
+        public VSphereComputeDiskManagementFactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new VSphereComputeDiskManagementService(this.registerResourceOperation);
+        }
+    }
+
+    public VSphereComputeDiskManagementService() {
+        this(true);
+    }
+
+    public VSphereComputeDiskManagementService(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
+    }
+
     @Override
     public void handleStart(Operation startPost) {
-        Operation.CompletionHandler handler = (op, exc) -> {
-            if (exc != null) {
-                startPost.fail(exc);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils
-                .registerResourceOperation(this, handler, getResourceOperationSpecs());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpecs());
     }
 
     @Override
@@ -290,7 +310,7 @@ public class VSphereComputeDiskManagementService extends StatelessService {
     /**
      * List of resource operations that are supported by this service.
      */
-    private ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
+    public static ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
         ResourceOperationSpecService.ResourceOperationSpec attachDiskSpec = getResourceOperationSpec(
                 ATTACH_DISK);
         ResourceOperationSpecService.ResourceOperationSpec detachDiskSpec = getResourceOperationSpec(
@@ -302,10 +322,9 @@ public class VSphereComputeDiskManagementService extends StatelessService {
     /**
      * Define a resource operation
      */
-    private ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(
+    private static ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(
             ResourceOperation operationType) {
         ResourceOperationSpecService.ResourceOperationSpec spec = new ResourceOperationSpecService.ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
         spec.resourceType = ResourceOperationSpecService.ResourceType.COMPUTE;
         spec.operation = operationType.operation;

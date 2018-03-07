@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.d2o;
 
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
 import static com.vmware.photon.controller.model.resources.ComputeService.PowerState.SUSPEND;
 
 import java.util.concurrent.ExecutorService;
@@ -27,17 +28,17 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 
@@ -63,25 +64,43 @@ public class AzureLifecycleOperationService extends StatelessService {
         }
     }
 
+    public static class AzureLifecycleOperationFactoryService extends FactoryService {
+
+        private boolean registerResourceOperation;
+
+        public AzureLifecycleOperationFactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new AzureLifecycleOperationService(this.registerResourceOperation);
+        }
+    }
+
     private ExecutorService executorService;
+    private boolean registerResourceOperation;
+
+    public AzureLifecycleOperationService() {
+        this(true);
+    }
+
+    public AzureLifecycleOperationService(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
+    }
 
     @Override
     public void handleStart(Operation startPost) {
 
         this.executorService = getHost().allocateExecutor(this);
 
-        CompletionHandler completionHandler = (op, exc) -> {
-            if (exc != null) {
-                startPost.fail(exc);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils.registerResourceOperation(this,
-                completionHandler, getResourceOperationSpecs());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpecs());
     }
 
-    private ResourceOperationSpec[] getResourceOperationSpecs() {
+    public static ResourceOperationSpec[] getResourceOperationSpecs() {
         ResourceOperationSpec operationSpec1 = getResourceOperationSpec(ResourceOperation.RESTART,
                 TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
         ResourceOperationSpec operationSpec2 = getResourceOperationSpec(ResourceOperation.SUSPEND,
@@ -89,10 +108,9 @@ public class AzureLifecycleOperationService extends StatelessService {
         return new ResourceOperationSpec[] { operationSpec1, operationSpec2 };
     }
 
-    private ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
+    private static ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
             String targetCriteria) {
         ResourceOperationSpec spec = new ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = EndpointType.azure.name();
         spec.resourceType = ResourceType.COMPUTE;
         spec.operation = operationType.operation;

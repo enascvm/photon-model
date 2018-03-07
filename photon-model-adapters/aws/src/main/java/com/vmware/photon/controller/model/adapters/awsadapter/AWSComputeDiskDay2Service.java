@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
@@ -55,8 +56,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.DefaultAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.Pair;
@@ -66,8 +65,11 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 
@@ -78,6 +80,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_DISK_DAY2_ADAPTER;
 
     private AWSClientManager clientManager;
+    private boolean registerResourceOperation;
 
     private static class DiskContext {
 
@@ -93,6 +96,30 @@ public class AWSComputeDiskDay2Service extends StatelessService {
             this.taskExpirationMicros = Utils.getNowMicrosUtc() + TimeUnit.MINUTES.toMicros(
                     AWS_DISK_OPERATION_TIMEOUT_MINUTES);
         }
+
+    }
+
+    public static class AWSComputeDiskDay2FactoryService extends FactoryService {
+
+        private boolean registerResourceOperation;
+
+        public AWSComputeDiskDay2FactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new AWSComputeDiskDay2Service(this.registerResourceOperation);
+        }
+    }
+
+    public AWSComputeDiskDay2Service() {
+        this(true);
+    }
+
+    public AWSComputeDiskDay2Service(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
     }
 
     @Override
@@ -100,15 +127,9 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
 
-        Operation.CompletionHandler handler = (op, exc) -> {
-            if (exc != null) {
-                startPost.fail(exc);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils
-                .registerResourceOperation(this, handler, createResourceOperationSpecs());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpecs());
     }
 
     @Override
@@ -655,19 +676,18 @@ public class AWSComputeDiskDay2Service extends StatelessService {
         return usedDeviceNames;
     }
 
-    private ResourceOperationSpecService.ResourceOperationSpec[] createResourceOperationSpecs() {
-        ResourceOperationSpecService.ResourceOperationSpec attachDiskSpec = createResourceOperationSpec(
+    public static ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
+        ResourceOperationSpecService.ResourceOperationSpec attachDiskSpec = getResourceOperationSpec(
                 ResourceOperation.ATTACH_DISK);
-        ResourceOperationSpecService.ResourceOperationSpec detachDiskSpec = createResourceOperationSpec(
+        ResourceOperationSpecService.ResourceOperationSpec detachDiskSpec = getResourceOperationSpec(
                 ResourceOperation.DETACH_DISK);
         return new ResourceOperationSpecService.ResourceOperationSpec[] { attachDiskSpec,
                 detachDiskSpec };
     }
 
-    private ResourceOperationSpecService.ResourceOperationSpec createResourceOperationSpec(
+    private static ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(
             ResourceOperation operationType) {
         ResourceOperationSpecService.ResourceOperationSpec spec = new ResourceOperationSpecService.ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.aws.name();
         spec.resourceType = ResourceOperationSpecService.ResourceType.COMPUTE;
         spec.operation = operationType.operation;

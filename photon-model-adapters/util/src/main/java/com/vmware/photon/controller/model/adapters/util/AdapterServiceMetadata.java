@@ -24,7 +24,10 @@ import com.vmware.xenon.common.Service;
 /**
  * Helper class, kind of extension to {@link ServiceMetadata}, which ease Adapters specific metadata
  * manipulation.
+ *
+ * @deprecated Use {@link AdapterServiceMetadataBuilder}
  */
+@Deprecated
 public class AdapterServiceMetadata {
 
     private static final String ADAPTER_TYPE_KEY_NAME = AdapterTypePath.class.getSimpleName();
@@ -35,6 +38,7 @@ public class AdapterServiceMetadata {
      *
      * @return cached ServiceMetadata
      */
+    @Deprecated
     public static ServiceMetadata adapter(Class<? extends Service> adapterClass) {
 
         return adapter(adapterClass, null);
@@ -46,6 +50,7 @@ public class AdapterServiceMetadata {
      *
      * @return cached ServiceMetadata
      */
+    @Deprecated
     public static ServiceMetadata adapter(
             Class<? extends Service> adapterClass,
             AdapterTypePath adapterType) {
@@ -63,6 +68,7 @@ public class AdapterServiceMetadata {
      * Returns mapping of adapter link to adapter type key for public adapters (those are adapters
      * that should be registered into Adapters Registry).
      */
+    @Deprecated
     public static Map<String, String> getPublicAdapters(
             ServiceMetadata[] adaptersMetadata) {
 

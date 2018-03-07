@@ -84,12 +84,20 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             Operation.createGet(uri).setReferer(this.getHost().getUri()).setCompletion((o, e) -> {
                 if (null != e || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
                     // service not found, create a new one
-                    createNewEnumerationService(enumerationRequest);
+                    createNewEnumerationService(enumerationRequest, mgr);
                 } else {
                     Operation patchRequest = Operation
                             .createPatch(uri)
                             .setBody(enumerationRequest)
-                            .setReferer(this.getHost().getUri());
+                            .setReferer(this.getHost().getUri())
+                            .setCompletion((operation, err) -> {
+                                if (err != null) {
+                                    logSevere("Unable to send enumeration request to enumeration"
+                                                    + " service for endpoint %s",
+                                            enumerationRequest.documentSelfLink);
+                                    mgr.patchTaskToFailure(err);
+                                }
+                            });
                     patchRequest.sendWith(this.getHost());
                 }
             }).sendWith(this.getHost());
@@ -110,19 +118,27 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                             mgr.patchTask(TaskState.TaskStage.FINISHED);
                         } else {
                             logInfo("Creating the enumeration service for endpoint %s", request.endpointLink);
-                            createNewEnumerationService(enumerationRequest);
+                            createNewEnumerationService(enumerationRequest, mgr);
                         }
                     });
             deleteRequest.sendWith(this.getHost());
         }
     }
 
-    private void createNewEnumerationService(VSphereIncrementalEnumerationRequest enumerationRequest) {
+    private void createNewEnumerationService(
+            VSphereIncrementalEnumerationRequest enumerationRequest, TaskManager mgr) {
         Operation createRequest = Operation
                 .createPost(buildFactoryUri(this.getHost(),
                         VSphereIncrementalEnumerationService.class))
                 .setBody(Utils.toJson(enumerationRequest))
-                .setReferer(this.getHost().getUri());
+                .setReferer(this.getHost().getUri())
+                .setCompletion((op, err) -> {
+                    if (err != null) {
+                        logSevere("Unable to start enumeration service for endpoint %s",
+                                enumerationRequest.documentSelfLink);
+                        mgr.patchTaskToFailure(err);
+                    }
+                });
         createRequest.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE);
         createRequest.sendWith(this.getHost());
     }

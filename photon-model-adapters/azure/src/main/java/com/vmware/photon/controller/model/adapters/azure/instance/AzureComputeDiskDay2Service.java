@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DISK_CONTROLLER_NUMBER;
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -36,8 +37,6 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResu
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -45,7 +44,10 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -57,6 +59,8 @@ import com.vmware.xenon.common.Utils;
 public class AzureComputeDiskDay2Service extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_DISK_DAY2_ADAPTER;
+
+    private boolean registerResourceOperation;
 
     /**
      * Azure Disk request context.
@@ -90,19 +94,36 @@ public class AzureComputeDiskDay2Service extends StatelessService {
             return UriUtils.buildUri(createInventoryUri(context.service.getHost(),
                     context.endpointState.authCredentialsLink));
         }
+
+    }
+
+    public static class AzureComputeDiskDay2FactoryService extends FactoryService {
+        private boolean registerResourceOperation;
+
+        public AzureComputeDiskDay2FactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new AzureComputeDiskDay2Service(this.registerResourceOperation);
+        }
+    }
+
+    public AzureComputeDiskDay2Service() {
+        this(true);
+    }
+
+    public AzureComputeDiskDay2Service(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
     }
 
     @Override
     public void handleStart(Operation startPost) {
-        Operation.CompletionHandler completionHandler = (op, exc) -> {
-            if (exc != null) {
-                startPost.fail(exc);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils.registerResourceOperation(this,
-                completionHandler, getResourceOperationSpecs());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpecs());
     }
 
     @Override
@@ -505,7 +526,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * List of resource operations that are supported by this service.
      */
-    private ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
+    public static ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
         ResourceOperationSpecService.ResourceOperationSpec attachDiskSpec = createResourceOperationSpec(
                 ResourceOperation.ATTACH_DISK);
         ResourceOperationSpecService.ResourceOperationSpec detachDiskSpec = createResourceOperationSpec(
@@ -517,10 +538,9 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     /**
      * Create a resource operation spec
      */
-    private ResourceOperationSpecService.ResourceOperationSpec createResourceOperationSpec(
+    private static ResourceOperationSpecService.ResourceOperationSpec createResourceOperationSpec(
             ResourceOperation operationType) {
         ResourceOperationSpecService.ResourceOperationSpec spec = new ResourceOperationSpecService.ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.azure.name();
         spec.resourceType = ResourceOperationSpecService.ResourceType.COMPUTE;
         spec.operation = operationType.operation;

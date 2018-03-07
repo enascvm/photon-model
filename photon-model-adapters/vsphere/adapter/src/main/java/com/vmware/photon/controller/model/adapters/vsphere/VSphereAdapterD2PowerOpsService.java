@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
+
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
@@ -21,12 +23,14 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 
 
@@ -43,16 +47,36 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
     private static final long SHUTDOWN_GUEST_OS_TIMEOUT = Long.parseLong(System.getProperty("vsphere.shutdown.guest.timeout",
             "180000")); // 180000L microseconds = 180 seconds (3 minutes)
 
+    private boolean registerResourceOperation;
+
+    public static class VSphereAdapterD2PowerOpsFactoryService extends FactoryService {
+
+        private boolean registerResourceOperation;
+
+        public VSphereAdapterD2PowerOpsFactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new VSphereAdapterD2PowerOpsService(this.registerResourceOperation);
+        }
+    }
+
+    public VSphereAdapterD2PowerOpsService() {
+        this(true);
+    }
+
+    public VSphereAdapterD2PowerOpsService(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
+    }
+
     @Override
     public void handleStart(Operation startPost) {
-        Operation.CompletionHandler handler = (op, exc) -> {
-            if (exc != null) {
-                startPost.fail(exc);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils.registerResourceOperation(this, handler, getResourceOperationSpecs());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpecs());
     }
 
     @Override
@@ -206,7 +230,7 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
         }
     }
 
-    private ResourceOperationSpec[] getResourceOperationSpecs() {
+    public static ResourceOperationSpec[] getResourceOperationSpecs() {
         ResourceOperationSpec operationSpec1 = getResourceOperationSpec(ResourceOperation.REBOOT,
                 ResourceOperationUtils.TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
         ResourceOperationSpec operationSpec2 = getResourceOperationSpec(ResourceOperation.SUSPEND,
@@ -218,10 +242,9 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
         return new ResourceOperationSpec[] {operationSpec1, operationSpec2, operationSpec3, operationSpec4};
     }
 
-    private ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
-                                                                                        String targetCriteria) {
+    private static ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
+            String targetCriteria) {
         ResourceOperationSpec spec = new ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
         spec.resourceType = ResourceType.COMPUTE;
         spec.operation = operationType.operation;

@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.handleAdapterResourceOperationRegistration;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -32,10 +33,7 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils
-        .TargetCriteria;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
@@ -51,10 +49,13 @@ import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.QueryResultsProcessor;
+import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -72,6 +73,31 @@ public class VSphereAdapterSnapshotService extends StatelessService {
             "snapshot");
     public static final Boolean REMOVE_CHILDREN = false;
     public static final Boolean SNAPSHOT_CONSOLIDATION = true;
+
+    private boolean registerResourceOperation;
+
+    public static class VSphereAdapterSnapshotFactoryService extends FactoryService {
+
+        private boolean registerResourceOperation;
+
+        public VSphereAdapterSnapshotFactoryService(boolean registerResourceOperation) {
+            super(ServiceDocument.class);
+            this.registerResourceOperation = registerResourceOperation;
+        }
+
+        @Override
+        public Service createServiceInstance() {
+            return new VSphereAdapterSnapshotService(this.registerResourceOperation);
+        }
+    }
+
+    public VSphereAdapterSnapshotService() {
+        this(true);
+    }
+
+    public VSphereAdapterSnapshotService(boolean registerResourceOperation) {
+        this.registerResourceOperation = registerResourceOperation;
+    }
 
     private static class SnapshotContext {
         SnapshotState snapshotState;
@@ -100,14 +126,9 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
-        Operation.CompletionHandler handler = (op, exc) -> {
-            if (exc != null) {
-                startPost.fail(exc);
-            } else {
-                startPost.complete();
-            }
-        };
-        ResourceOperationUtils.registerResourceOperation(this, handler, getResourceOperationSpecs());
+        handleAdapterResourceOperationRegistration(this, startPost,
+                this.registerResourceOperation,
+                getResourceOperationSpecs());
     }
 
     @Override
@@ -692,19 +713,22 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         return qTask;
     }
 
-    private ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
-        ResourceOperationSpecService.ResourceOperationSpec createSnapshotSpec = getResourceOperationSpec(ResourceOperation.CREATE_SNAPSHOT, null);
-        ResourceOperationSpecService.ResourceOperationSpec deleteSnapshotSpec = getResourceOperationSpec(ResourceOperation.DELETE_SNAPSHOT,
-                TargetCriteria.RESOURCE_HAS_SNAPSHOTS.getCriteria());
-        ResourceOperationSpecService.ResourceOperationSpec revertSnapshotSpec = getResourceOperationSpec(ResourceOperation.REVERT_SNAPSHOT,
-                TargetCriteria.RESOURCE_HAS_SNAPSHOTS.getCriteria());
-        return new ResourceOperationSpecService.ResourceOperationSpec[]{createSnapshotSpec, deleteSnapshotSpec, revertSnapshotSpec};
+    public static ResourceOperationSpecService.ResourceOperationSpec[] getResourceOperationSpecs() {
+        ResourceOperationSpecService.ResourceOperationSpec createSnapshotSpec =
+                getResourceOperationSpec(ResourceOperation.CREATE_SNAPSHOT, null);
+        ResourceOperationSpecService.ResourceOperationSpec deleteSnapshotSpec =
+                getResourceOperationSpec(ResourceOperation.DELETE_SNAPSHOT,
+                        TargetCriteria.RESOURCE_HAS_SNAPSHOTS.getCriteria());
+        ResourceOperationSpecService.ResourceOperationSpec revertSnapshotSpec =
+                getResourceOperationSpec(ResourceOperation.REVERT_SNAPSHOT,
+                        TargetCriteria.RESOURCE_HAS_SNAPSHOTS.getCriteria());
+        return new ResourceOperationSpecService.ResourceOperationSpec[] { createSnapshotSpec,
+                deleteSnapshotSpec, revertSnapshotSpec };
     }
 
-    private ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,
-                                                                                        String targetCriteria) {
+    private static ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(
+            ResourceOperation operationType, String targetCriteria) {
         ResourceOperationSpecService.ResourceOperationSpec spec = new ResourceOperationSpecService.ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
         spec.resourceType = ResourceOperationSpecService.ResourceType.COMPUTE;
         spec.operation = operationType.operation;

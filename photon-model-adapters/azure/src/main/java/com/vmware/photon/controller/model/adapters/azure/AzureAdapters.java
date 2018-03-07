@@ -13,8 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure;
 
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.createAdapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.getPublicAdapters;
 
 import java.util.Arrays;
 import java.util.List;
@@ -22,12 +22,14 @@ import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.azure.d2o.AzureLifecycleOperationService;
+import com.vmware.photon.controller.model.adapters.azure.d2o.AzureLifecycleOperationService.AzureLifecycleOperationFactoryService;
 import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureInstanceTypeService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureRegionEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureComputeDiskDay2Service;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureComputeDiskDay2Service.AzureComputeDiskDay2FactoryService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureDiskService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureLoadBalancerService;
@@ -53,23 +55,60 @@ import com.vmware.xenon.common.Utils;
 public class AzureAdapters {
 
     public static final ServiceMetadata[] SERVICES_METADATA = {
-            adapter(AzureEnumerationAdapterService.class, AdapterTypePath.ENUMERATION_ADAPTER),
-            adapter(AzureImageEnumerationAdapterService.class, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER),
-            adapter(AzureInstanceTypeService.class),
-            adapter(AzureInstanceService.class, AdapterTypePath.INSTANCE_ADAPTER),
-            adapter(AzureDiskService.class, AdapterTypePath.DISK_ADAPTER),
-            adapter(AzureComputeDiskDay2Service.class, AdapterTypePath.DISK_DAY2_ADAPTER),
-            adapter(AzureSubnetService.class, AdapterTypePath.SUBNET_ADAPTER),
-            adapter(AzureSecurityGroupService.class, AdapterTypePath.SECURITY_GROUP_ADAPTER),
-            adapter(AzureLoadBalancerService.class, AdapterTypePath.LOAD_BALANCER_ADAPTER),
-            adapter(AzureStatsService.class, AdapterTypePath.STATS_ADAPTER),
-            adapter(AzureComputeStatsGatherer.class),
-            adapter(AzureComputeHostStatsGatherer.class),
-            adapter(AzureComputeHostStorageStatsGatherer.class),
-            adapter(AzureEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER),
-            adapter(AzurePowerService.class, AdapterTypePath.POWER_ADAPTER),
-            adapter(AzureLifecycleOperationService.class),
-            adapter(AzureRegionEnumerationAdapterService.class, AdapterTypePath.REGION_ENUMERATION_ADAPTER)
+            //Public Adapters
+            createAdapter(AzureEnumerationAdapterService.class)
+                    .withAdapterType(AdapterTypePath.ENUMERATION_ADAPTER)
+                    .build(),
+            createAdapter(AzureImageEnumerationAdapterService.class)
+                    .withAdapterType(AdapterTypePath.IMAGE_ENUMERATION_ADAPTER)
+                    .build(),
+            createAdapter(AzureInstanceService.class)
+                    .withAdapterType(AdapterTypePath.INSTANCE_ADAPTER)
+                    .build(),
+            createAdapter(AzureDiskService.class)
+                    .withAdapterType(AdapterTypePath.DISK_ADAPTER)
+                    .build(),
+            createAdapter(AzureSubnetService.class)
+                    .withAdapterType(AdapterTypePath.SUBNET_ADAPTER)
+                    .build(),
+            createAdapter(AzureSecurityGroupService.class)
+                    .withAdapterType(AdapterTypePath.SECURITY_GROUP_ADAPTER)
+                    .build(),
+            createAdapter(AzureLoadBalancerService.class)
+                    .withAdapterType(AdapterTypePath.LOAD_BALANCER_ADAPTER)
+                    .build(),
+            createAdapter(AzureStatsService.class)
+                    .withAdapterType(AdapterTypePath.STATS_ADAPTER)
+                    .build(),
+            createAdapter(AzureEndpointAdapterService.class)
+                    .withAdapterType(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER)
+                    .build(),
+            createAdapter(AzurePowerService.class)
+                    .withAdapterType(AdapterTypePath.POWER_ADAPTER)
+                    .build(),
+            createAdapter(AzureRegionEnumerationAdapterService.class)
+                    .withAdapterType(AdapterTypePath.REGION_ENUMERATION_ADAPTER)
+                    .build(),
+
+            //Resource Operation Adapters
+            createAdapter(AzureComputeDiskDay2Service.class)
+                    .withAdapterType(AdapterTypePath.DISK_DAY2_ADAPTER)
+                    .withFactoryCreator(() -> new AzureComputeDiskDay2FactoryService(true))
+                    .withResourceOperationSpecs(
+                            AzureComputeDiskDay2Service.getResourceOperationSpecs())
+                    .build(),
+            createAdapter(AzureLifecycleOperationService.class)
+                    .withFactoryCreator(() -> new AzureLifecycleOperationFactoryService(true))
+                    .withResourceOperationSpecs(
+                            AzureLifecycleOperationService.getResourceOperationSpecs())
+                    .build(),
+
+            //Helper Adapter Services
+            createAdapter(AzureComputeStatsGatherer.class).build(),
+            createAdapter(AzureInstanceTypeService.class).build(),
+            createAdapter(AzureComputeHostStatsGatherer.class).build(),
+            createAdapter(AzureComputeHostStorageStatsGatherer.class).build()
+
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);

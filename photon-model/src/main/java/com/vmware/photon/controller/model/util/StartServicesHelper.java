@@ -188,6 +188,19 @@ public class StartServicesHelper {
         }
 
         /**
+         * Creates meta-data for a {@link Service}.
+         *
+         * @return cached ServiceMetadata
+         */
+        public static ServiceMetadata service(Class<? extends Service> serviceClass,
+                Supplier<FactoryService> factoryCreator) {
+
+            return servicesCache.computeIfAbsent(
+                    serviceClass,
+                    key -> new ServiceMetadata(false /* isFactory */, serviceClass, factoryCreator));
+        }
+
+        /**
          * Creates meta-data for a {@link FactoryService}.
          *
          * @return cached ServiceMetadata
@@ -319,17 +332,13 @@ public class StartServicesHelper {
 
         private Service newServiceInstance() throws InstantiationError {
             try {
-                if (!this.isFactory) {
+
+                if (this.factoryCreator != null) {
+                    FactoryService factoryService = this.factoryCreator.get();
+                    return factoryService.createServiceInstance();
+                } else {
                     return this.serviceClass.newInstance();
                 }
-
-                if (this.factoryCreator == null) {
-                    return this.serviceClass.newInstance();
-                }
-
-                FactoryService factoryService = this.factoryCreator.get();
-
-                return factoryService.createServiceInstance();
 
             } catch (Throwable thr) {
                 throw new InstantiationError("Failed to create an instance of "
@@ -350,19 +359,20 @@ public class StartServicesHelper {
                 addPrivilegedService.accept(this.serviceClass);
             }
 
-            if (!this.isFactory) {
+            Service newServiceInstance = serviceInstance();
 
-                serviceHost.startService(serviceInstance());
-
-            } else {
+            if (this.isFactory) {
                 if (this.factoryCreator == null) {
 
-                    serviceHost.startFactory(serviceInstance());
+                    serviceHost.startFactory(newServiceInstance);
 
                 } else {
 
                     serviceHost.startFactory(this.serviceClass, this.factoryCreator);
                 }
+            } else {
+
+                serviceHost.startService(newServiceInstance);
             }
         }
 

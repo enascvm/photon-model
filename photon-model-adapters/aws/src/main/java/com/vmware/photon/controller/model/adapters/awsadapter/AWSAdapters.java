@@ -13,14 +13,17 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.createAdapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.getPublicAdapters;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSComputeDiskDay2Service.AWSComputeDiskDay2FactoryService;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSRebootService.AWSRebootFactoryService;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSResetService.AWSResetServiceFactoryService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSMissingResourcesEnumerationService;
@@ -40,25 +43,68 @@ import com.vmware.xenon.common.Utils;
 public class AWSAdapters {
 
     public static final ServiceMetadata[] SERVICES_METADATA = {
-            adapter(AWSInstanceService.class, AdapterTypePath.INSTANCE_ADAPTER),
-            adapter(AWSNetworkService.class, AdapterTypePath.NETWORK_ADAPTER),
-            adapter(AWSDiskService.class, AdapterTypePath.DISK_ADAPTER),
-            adapter(AWSSubnetService.class, AdapterTypePath.SUBNET_ADAPTER),
-            adapter(AWSLoadBalancerService.class, AdapterTypePath.LOAD_BALANCER_ADAPTER),
-            adapter(AWSStatsService.class, AdapterTypePath.STATS_ADAPTER),
-            adapter(AWSCostStatsService.class, AdapterTypePath.COST_STATS_ADAPTER),
-            adapter(AWSReservedInstancePlanService.class),
-            adapter(AWSEnumerationAdapterService.class, AdapterTypePath.ENUMERATION_ADAPTER),
-            adapter(AWSImageEnumerationAdapterService.class, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER),
-            adapter(AWSInstanceTypeService.class),
-            adapter(AWSEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER),
-            adapter(AWSPowerService.class, AdapterTypePath.POWER_ADAPTER),
-            adapter(AWSSecurityGroupService.class, AdapterTypePath.SECURITY_GROUP_ADAPTER),
-            adapter(AWSMissingResourcesEnumerationService.class),
-            adapter(AWSRebootService.class, AdapterTypePath.BOOT_ADAPTER),
-            adapter(AWSComputeDiskDay2Service.class, AdapterTypePath.DISK_DAY2_ADAPTER),
-            adapter(AWSResetService.class),
-            adapter(AWSRegionEnumerationAdapterService.class, AdapterTypePath.REGION_ENUMERATION_ADAPTER)
+
+            //Public Adapters
+            createAdapter(AWSInstanceService.class)
+                    .withAdapterType(AdapterTypePath.INSTANCE_ADAPTER)
+                    .build(),
+            createAdapter(AWSNetworkService.class)
+                    .withAdapterType(AdapterTypePath.NETWORK_ADAPTER)
+                    .build(),
+            createAdapter(AWSDiskService.class)
+                    .withAdapterType(AdapterTypePath.DISK_ADAPTER)
+                    .build(),
+            createAdapter(AWSSubnetService.class)
+                    .withAdapterType(AdapterTypePath.SUBNET_ADAPTER)
+                    .build(),
+            createAdapter(AWSLoadBalancerService.class)
+                    .withAdapterType(AdapterTypePath.LOAD_BALANCER_ADAPTER)
+                    .build(),
+            createAdapter(AWSStatsService.class)
+                    .withAdapterType(AdapterTypePath.STATS_ADAPTER)
+                    .build(),
+            createAdapter(AWSCostStatsService.class)
+                    .withAdapterType(AdapterTypePath.COST_STATS_ADAPTER)
+                    .build(),
+            createAdapter(AWSEnumerationAdapterService.class)
+                    .withAdapterType(AdapterTypePath.ENUMERATION_ADAPTER)
+                    .build(),
+            createAdapter(AWSImageEnumerationAdapterService.class)
+                    .withAdapterType(AdapterTypePath.IMAGE_ENUMERATION_ADAPTER)
+                    .build(),
+            createAdapter(AWSEndpointAdapterService.class)
+                    .withAdapterType(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER)
+                    .build(),
+            createAdapter(AWSPowerService.class)
+                    .withAdapterType(AdapterTypePath.POWER_ADAPTER)
+                    .build(),
+            createAdapter(AWSSecurityGroupService.class)
+                    .withAdapterType(AdapterTypePath.SECURITY_GROUP_ADAPTER)
+                    .build(),
+            createAdapter(AWSRegionEnumerationAdapterService.class)
+                    .withAdapterType(AdapterTypePath.REGION_ENUMERATION_ADAPTER)
+                    .build(),
+
+            //Resource Operation Adapters
+            createAdapter(AWSRebootService.class)
+                    .withAdapterType(AdapterTypePath.BOOT_ADAPTER)
+                    .withFactoryCreator(() -> new AWSRebootFactoryService(true))
+                    .withResourceOperationSpecs(AWSRebootService.getResourceOperationSpec())
+                    .build(),
+            createAdapter(AWSComputeDiskDay2Service.class)
+                    .withAdapterType(AdapterTypePath.DISK_DAY2_ADAPTER)
+                    .withFactoryCreator(() -> new AWSComputeDiskDay2FactoryService(true))
+                    .withResourceOperationSpecs(AWSComputeDiskDay2Service.getResourceOperationSpecs())
+                    .build(),
+            createAdapter(AWSResetService.class)
+                    .withFactoryCreator(() -> new AWSResetServiceFactoryService(true))
+                    .withResourceOperationSpecs(AWSResetService.getResourceOperationSpec())
+                    .build(),
+
+            //Helper Adapter Services
+            createAdapter(AWSMissingResourcesEnumerationService.class).build(),
+            createAdapter(AWSInstanceTypeService.class).build(),
+            createAdapter(AWSReservedInstancePlanService.class).build()
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);

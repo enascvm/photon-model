@@ -13,8 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.createAdapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.createFactoryAdapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.getPublicAdapters;
 
 import java.util.Arrays;
 import java.util.List;
@@ -23,6 +24,10 @@ import java.util.logging.Level;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
+import com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterD2PowerOpsService.VSphereAdapterD2PowerOpsFactoryService;
+import com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterResizeComputeService.VSphereAdapterResizeComputeFactoryService;
+import com.vmware.photon.controller.model.adapters.vsphere.VSphereAdapterSnapshotService.VSphereAdapterSnapshotFactoryService;
+import com.vmware.photon.controller.model.adapters.vsphere.VSphereComputeDiskManagementService.VSphereComputeDiskManagementFactoryService;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.adapters.vsphere.stats.VSphereAdapterStatsService;
@@ -39,24 +44,64 @@ import com.vmware.xenon.common.Utils;
 public class VSphereAdapters {
 
     private static final ServiceMetadata[] SERVICES_METADATA = {
-            adapter(VSphereAdapterInstanceService.class, AdapterTypePath.INSTANCE_ADAPTER),
-            adapter(VSphereAdapterPowerService.class, AdapterTypePath.POWER_ADAPTER),
-            adapter(VSphereAdapterSnapshotService.class),
-            adapter(VSphereListComputeSnapshotService.class),
-            adapter(VSphereAdapterResourceEnumerationService.class, AdapterTypePath.ENUMERATION_ADAPTER),
-            ServiceMetadata.factoryService(VSphereIncrementalEnumerationService.class),
-            adapter(VSphereAdapterStatsService.class, AdapterTypePath.STATS_ADAPTER),
-            adapter(OvfImporterService.class),
-            adapter(DatacenterEnumeratorService.class),
-            adapter(VsphereResourceCleanerService.class),
-            adapter(VSphereEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER),
-            adapter(DvsNetworkService.class, AdapterTypePath.SUBNET_ADAPTER),
-            adapter(VSphereAdapterImageEnumerationService.class, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER),
-            adapter(VSphereAdapterD2PowerOpsService.class),
-            adapter(VSphereAdapterResizeComputeService.class),
-            adapter(VSphereDiskService.class, AdapterTypePath.DISK_ADAPTER),
-            adapter(VSphereComputeDiskManagementService.class),
-            adapter(VSphereRegionEnumerationAdapterService.class, AdapterTypePath.REGION_ENUMERATION_ADAPTER)
+            //Public Adapters
+            createAdapter(VSphereDiskService.class)
+                    .withAdapterType(AdapterTypePath.DISK_ADAPTER)
+                    .build(),
+            createAdapter(VSphereEndpointAdapterService.class)
+                    .withAdapterType(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER)
+                    .build(),
+            createAdapter(VSphereAdapterResourceEnumerationService.class)
+                    .withAdapterType(AdapterTypePath.ENUMERATION_ADAPTER)
+                    .build(),
+            createAdapter(VSphereAdapterImageEnumerationService.class)
+                    .withAdapterType(AdapterTypePath.IMAGE_ENUMERATION_ADAPTER)
+                    .build(),
+            createAdapter(VSphereAdapterInstanceService.class)
+                    .withAdapterType(AdapterTypePath.INSTANCE_ADAPTER)
+                    .build(),
+            createAdapter(VSphereAdapterPowerService.class)
+                    .withAdapterType(AdapterTypePath.POWER_ADAPTER)
+                    .build(),
+            createAdapter(VSphereRegionEnumerationAdapterService.class)
+                    .withAdapterType(AdapterTypePath.REGION_ENUMERATION_ADAPTER)
+                    .build(),
+            createAdapter(VSphereAdapterStatsService.class)
+                    .withAdapterType(AdapterTypePath.STATS_ADAPTER)
+                    .build(),
+            createAdapter(DvsNetworkService.class)
+                    .withAdapterType(AdapterTypePath.SUBNET_ADAPTER)
+                    .build(),
+
+            //Resource Operation Adapters
+            createAdapter(VSphereAdapterSnapshotService.class)
+                    .withFactoryCreator(() -> new VSphereAdapterSnapshotFactoryService(true))
+                    .withResourceOperationSpecs(
+                            VSphereAdapterSnapshotService.getResourceOperationSpecs())
+                    .build(),
+            createAdapter(VSphereAdapterD2PowerOpsService.class)
+                    .withFactoryCreator(() -> new VSphereAdapterD2PowerOpsFactoryService(true))
+                    .withResourceOperationSpecs(
+                            VSphereAdapterD2PowerOpsService.getResourceOperationSpecs())
+                    .build(),
+            createAdapter(VSphereAdapterResizeComputeService.class)
+                    .withFactoryCreator(() -> new VSphereAdapterResizeComputeFactoryService(true))
+                    .withResourceOperationSpecs(
+                            VSphereAdapterResizeComputeService.getResourceOperationSpecs())
+                    .build(),
+            createAdapter(VSphereComputeDiskManagementService.class)
+                    .withFactoryCreator(() -> new VSphereComputeDiskManagementFactoryService(true))
+                    .withResourceOperationSpecs(
+                            VSphereComputeDiskManagementService.getResourceOperationSpecs())
+                    .build(),
+
+            //Helper Adapter Services
+            createAdapter(VSphereListComputeSnapshotService.class).build(),
+            createAdapter(OvfImporterService.class).build(),
+            createAdapter(DatacenterEnumeratorService.class).build(),
+            createAdapter(VsphereResourceCleanerService.class).build(),
+            createFactoryAdapter(VSphereIncrementalEnumerationService.class).build()
+
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
@@ -95,10 +140,9 @@ public class VSphereAdapters {
     /**
      * API to define the list of adapter Uris to be excluded from swagger documentation generation.
      * The service SELF_LINK need to be specified here.
-     *
      * @return list of self links whose swagger generation needs to be excluded.
      */
     public static List<String> swaggerExcludedPrefixes() {
-        return Arrays.asList(new String[]{VSphereIncrementalEnumerationService.FACTORY_LINK});
+        return Arrays.asList(new String[] { VSphereIncrementalEnumerationService.FACTORY_LINK });
     }
 }

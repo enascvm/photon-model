@@ -13,8 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.ea;
 
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.adapter;
-import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadata.getPublicAdapters;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.createAdapter;
+import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.getPublicAdapters;
 
 import java.util.logging.Level;
 
@@ -37,9 +37,13 @@ import com.vmware.xenon.common.Utils;
 public class AzureEaAdapters {
 
     public static final ServiceMetadata[] SERVICES_METADATA = {
-            adapter(AzureCostStatsService.class, AdapterTypePath.COST_STATS_ADAPTER),
-            adapter(AzureSubscriptionsEnumerationService.class),
-            adapter(AzureEaEndpointAdapterService.class, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER)
+            createAdapter(AzureCostStatsService.class)
+                    .withAdapterType(AdapterTypePath.COST_STATS_ADAPTER)
+                    .build(),
+            createAdapter(AzureEaEndpointAdapterService.class)
+                    .withAdapterType(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER)
+                    .build(),
+            createAdapter(AzureSubscriptionsEnumerationService.class).build()
     };
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
