@@ -45,6 +45,7 @@ import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressSt
 import com.vmware.photon.controller.model.resources.IPAddressService.IPAddressState.IPAddressStatus;
 import com.vmware.photon.controller.model.resources.SubnetRangeService.SubnetRangeState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.support.IPVersion;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
@@ -538,23 +539,28 @@ public class IPAddressAllocationTaskService extends
     }
 
     @Override
-    public void handleStart(Operation startOp) {
+    public void handleStart(Operation start) {
+        if (PhotonModelUtils.isFromMigration(start)) {
+            start.complete();
+            return;
+        }
+
         try {
-            IPAddressAllocationTaskState taskState = validateStartPost(startOp);
-            if (startOp == null) {
+            IPAddressAllocationTaskState taskState = validateStartPost(start);
+            if (start == null) {
                 return;
             }
 
-            initializeState(taskState, startOp);
+            initializeState(taskState, start);
 
             // Send completion to the caller (with a CREATED state)
-            startOp.setBody(taskState).complete();
+            start.setBody(taskState).complete();
 
             // And then start internal state machine
             sendSelfPatch(taskState, TaskState.TaskStage.STARTED, null);
         } catch (Throwable e) {
             logSevere(e);
-            startOp.fail(e);
+            start.fail(e);
         }
     }
 
