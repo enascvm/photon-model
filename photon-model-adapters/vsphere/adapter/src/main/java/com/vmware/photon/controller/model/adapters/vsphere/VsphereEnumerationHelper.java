@@ -64,12 +64,14 @@ public class VsphereEnumerationHelper {
     /**
      * Executes a direct query and invokes the provided handler with the results.
      *
-     * @param vSphereIncrementalEnumerationService
+     * @param service
      * @param task
      * @param handler
      * @param resultLimit
      */
-    static void withTaskResults(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, QueryTask task, Consumer<ServiceDocumentQueryResult> handler, int resultLimit) {
+    static void withTaskResults(
+            VSphereIncrementalEnumerationService service, QueryTask task,
+            Consumer<ServiceDocumentQueryResult> handler, int resultLimit) {
         task.querySpec.options = EnumSet.of(
                 QueryOption.EXPAND_CONTENT,
                 QueryOption.INDEXED_METADATA,
@@ -80,10 +82,10 @@ public class VsphereEnumerationHelper {
 
         task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
 
-        QueryUtils.startInventoryQueryTask(vSphereIncrementalEnumerationService, task)
+        QueryUtils.startInventoryQueryTask(service, task)
                 .whenComplete((o, e) -> {
                     if (e != null) {
-                        vSphereIncrementalEnumerationService.logWarning(() -> String.format("Error processing task %s",
+                        service.logWarning(() -> String.format("Error processing task %s",
                                 task.documentSelfLink));
                         return;
                     }
@@ -95,12 +97,13 @@ public class VsphereEnumerationHelper {
     /**
      * Executes a direct query and invokes the provided handler with the results.
      *
-     * @param vSphereIncrementalEnumerationService
+     * @param service
      * @param task
      * @param handler
      */
-    static void withTaskResults(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
-        withTaskResults(vSphereIncrementalEnumerationService, task, handler, 1);
+    static void withTaskResults(VSphereIncrementalEnumerationService service,
+                                QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
+        withTaskResults(service, task, handler, 1);
     }
 
     /**
@@ -130,20 +133,17 @@ public class VsphereEnumerationHelper {
     /**
      * Retreives all tags for a MoRef from an endpoint.
      *
-     * @param vSphereIncrementalEnumerationService
-     * @param endpoint
-     * @param ref
-     * @param tenantLinks
      * @return empty list if no tags found, never null
      */
-    static List<TagState> retrieveAttachedTags(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, VapiConnection endpoint,
-                                               ManagedObjectReference ref, List<String> tenantLinks) throws IOException, RpcException {
+    static List<TagState> retrieveAttachedTags(
+            VSphereIncrementalEnumerationService service, VapiConnection endpoint,
+            ManagedObjectReference ref, List<String> tenantLinks) throws IOException, RpcException {
         TaggingClient taggingClient = endpoint.newTaggingClient();
         List<String> tagIds = taggingClient.getAttachedTags(ref);
 
         List<TagState> res = new ArrayList<>();
         for (String id : tagIds) {
-            TagState cached = vSphereIncrementalEnumerationService.getTagCache().get(id, newTagRetriever(taggingClient));
+            TagState cached = service.getTagCache().get(id, newTagRetriever(taggingClient));
             if (cached != null) {
                 TagState tag = TagsUtil.newTagState(cached.key, cached.value, true, tenantLinks);
                 res.add(tag);
@@ -153,18 +153,19 @@ public class VsphereEnumerationHelper {
         return res;
     }
 
-    static Set<String> createTagsAsync(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, List<TagState> tags) {
+    static Set<String> createTagsAsync(VSphereIncrementalEnumerationService service,
+                                       List<TagState> tags) {
         if (tags == null || tags.isEmpty()) {
             return new HashSet<>();
         }
 
         Stream<Operation> ops = tags.stream()
                 .map(s -> Operation
-                        .createPost(UriUtils.buildFactoryUri(vSphereIncrementalEnumerationService.getHost(), TagService.class))
+                        .createPost(UriUtils.buildFactoryUri(service.getHost(), TagService.class))
                         .setBody(s));
 
         OperationJoin.create(ops)
-                .sendWith(vSphereIncrementalEnumerationService);
+                .sendWith(service);
 
         return tags.stream()
                 .map(s -> s.documentSelfLink)
@@ -174,30 +175,31 @@ public class VsphereEnumerationHelper {
     /**
      * After the tags for the ref are retrieved from the endpoint they are posted to the tag service
      * and the selfLinks are collected ready to be used in a {@link ComputeState#tagLinks}.
-     *
      */
-    static Set<String> retrieveTagLinksAndCreateTagsAsync(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, VapiConnection endpoint,
-                                                          ManagedObjectReference ref, List<String> tenantLinks) {
+    static Set<String> retrieveTagLinksAndCreateTagsAsync(
+            VSphereIncrementalEnumerationService service, VapiConnection endpoint,
+            ManagedObjectReference ref, List<String> tenantLinks) {
         List<TagState> tags = null;
         try {
-            tags = retrieveAttachedTags(vSphereIncrementalEnumerationService, endpoint, ref, tenantLinks);
+            tags = retrieveAttachedTags(service, endpoint, ref, tenantLinks);
         } catch (IOException | RpcException ignore) {
 
         }
 
-        return createTagsAsync(vSphereIncrementalEnumerationService, tags);
+        return createTagsAsync(service, tags);
     }
 
-    static void populateTags(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, EnumerationProgress enumerationProgress, AbstractOverlay obj,
-                             ResourceState state) {
-        state.tagLinks = retrieveTagLinksAndCreateTagsAsync(vSphereIncrementalEnumerationService, enumerationProgress.getEndpoint(),
+    static void populateTags(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            AbstractOverlay obj, ResourceState state) {
+        state.tagLinks = retrieveTagLinksAndCreateTagsAsync(service, enumerationProgress.getEndpoint(),
                 obj.getId(), enumerationProgress.getTenantLinks());
     }
 
-    static void submitWorkToVSpherePool(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, Runnable work) {
+    static void submitWorkToVSpherePool(VSphereIncrementalEnumerationService service, Runnable work) {
         // store context at the moment of submission
         OperationContext orig = OperationContext.getOperationContext();
-        VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(vSphereIncrementalEnumerationService);
+        VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(service);
 
         pool.submit(() -> {
             OperationContext old = OperationContext.getOperationContext();
@@ -211,15 +213,16 @@ public class VsphereEnumerationHelper {
         });
     }
 
-    static void updateLocalTags(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, EnumerationProgress enumerationProgress, AbstractOverlay obj,
+    static void updateLocalTags(VSphereIncrementalEnumerationService service,
+                                EnumerationProgress enumerationProgress, AbstractOverlay obj,
                                 ResourceState patchResponse) {
         List<TagState> tags;
         try {
-            tags = retrieveAttachedTags(vSphereIncrementalEnumerationService, enumerationProgress.getEndpoint(),
+            tags = retrieveAttachedTags(service, enumerationProgress.getEndpoint(),
                     obj.getId(),
                     enumerationProgress.getTenantLinks());
         } catch (IOException | RpcException e) {
-            vSphereIncrementalEnumerationService.logWarning("Error updating local tags for %s", patchResponse.documentSelfLink);
+            service.logWarning("Error updating local tags for %s", patchResponse.documentSelfLink);
             return;
         }
 
@@ -228,7 +231,7 @@ public class VsphereEnumerationHelper {
             remoteTagMap.put(ts.key, ts.value);
         }
 
-        TagsUtil.updateLocalTagStates(vSphereIncrementalEnumerationService, patchResponse, remoteTagMap, null);
+        TagsUtil.updateLocalTagStates(service, patchResponse, remoteTagMap, null);
     }
 
     static String computeGroupStableLink(ManagedObjectReference ref, String prefix, String endpointLink) {

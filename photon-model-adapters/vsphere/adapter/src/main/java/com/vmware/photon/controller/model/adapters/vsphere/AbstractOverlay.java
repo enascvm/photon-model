@@ -36,9 +36,12 @@ public abstract class AbstractOverlay {
 
     private final Map<String, Object> props;
 
+    private final ObjectUpdateKind objectUpdateKind;
+
     protected AbstractOverlay(ManagedObjectReference ref, Map<String, Object> props, ObjectUpdateKind objectUpdateKind) {
         this.ref = ref;
         this.props = props;
+        this.objectUpdateKind = objectUpdateKind;
     }
 
     protected AbstractOverlay(ManagedObjectReference ref, Map<String, Object> props) {
@@ -89,6 +92,10 @@ public abstract class AbstractOverlay {
 
     public ManagedObjectReference getId() {
         return this.ref;
+    }
+
+    public ObjectUpdateKind getObjectUpdateKind() {
+        return this.objectUpdateKind;
     }
 
     @Override

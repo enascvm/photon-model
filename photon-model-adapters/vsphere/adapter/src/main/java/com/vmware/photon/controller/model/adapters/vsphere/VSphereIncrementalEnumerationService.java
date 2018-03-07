@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -99,6 +100,15 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         private String resourcesCollectorVersion;
         private String vmCollectorVersion;
         private String datacenter;
+    }
+
+    private static class SegregatedOverlays {
+        MoRefKeyedMap<NetworkOverlay> networks = new MoRefKeyedMap<>();
+        List<HostSystemOverlay> hosts = new ArrayList<>();
+        List<DatastoreOverlay> datastores = new ArrayList<>();
+        List<ComputeResourceOverlay> clusters = new ArrayList<>();
+        List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
+        List<FolderOverlay> folders = new ArrayList<>();
     }
 
     /**
@@ -180,8 +190,8 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
             Operation.createGet(parentUri)
                     .setCompletion(o -> {
-                        ComputeService.ComputeStateWithDescription computeStateWithDesc =
-                                o.getBody(ComputeService.ComputeStateWithDescription.class);
+                        ComputeStateWithDescription computeStateWithDesc =
+                                o.getBody(ComputeStateWithDescription.class);
                         VapiConnection vapiConnection = VapiConnection.createFromVimConnection(this.connection);
 
                         try {
@@ -190,6 +200,8 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                             logWarning(() -> String.format("Cannot login into vAPI endpoint: %s",
                                     Utils.toString(rpce)));
                             mgr.patchTaskToFailure(rpce);
+                            // self delete service so that full enumeration kicks in next invocation.
+                            selfDeleteService();
                             return;
                         }
                         try {
@@ -200,17 +212,22 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                 EnumerationProgress enumerationProgress = new EnumerationProgress(
                                         new HashSet<>(), request, computeStateWithDesc, vapiConnection, collectorDetails.datacenter);
 
-                                List<ObjectUpdate> resourcesUpdates = collectResourcesData(collectorDetails);
-                                List<ObjectUpdate> vmUpdates = collectVMData(collectorDetails);
-                                logInfo("Received updates for datacenter: " + collectorDetails.datacenter);
-                                for (ObjectUpdate updates : resourcesUpdates) {
-                                    logInfo(Utils.toJson(updates));
-                                    logInfo("-----");
-                                }
+                                EnumerationClient client = new EnumerationClient(this.connection, computeStateWithDesc,
+                                        VimUtils.convertStringToMoRef(collectorDetails.datacenter));
 
-                                for (ObjectUpdate objectUpdate : vmUpdates) {
-                                    logInfo("VM Update");
-                                    logInfo(Utils.toJson(objectUpdate));
+                                List<ObjectUpdate> resourcesUpdates = collectResourcesData(collectorDetails);
+
+                                List<ObjectUpdate> vmUpdates = collectVMData(collectorDetails);
+                                logInfo("Received resources updates for datacenter: %s : %s",
+                                        collectorDetails.datacenter, resourcesUpdates.size());
+
+
+                                if (!resourcesUpdates.isEmpty()) {
+                                    SegregatedOverlays segregatedOverlays =
+                                            segregateObjectUpdates(enumerationProgress, resourcesUpdates);
+
+                                    VSphereNetworkEnumerationHelper
+                                            .handleNetworkChanges(this, segregatedOverlays.networks, enumerationProgress, client);
                                 }
                             }
                             mgr.patchTask(TaskStage.FINISHED);
@@ -218,7 +235,10 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                             String msg = "Error processing PropertyCollector results during incremental retrieval";
                             logWarning(() -> msg + ": " + exception.toString());
                             mgr.patchTaskToFailure(exception);
-                            //TODO: Handle session failure here. Invoke full enumeration here
+                            // self delete service so that full enumeration kicks in next invocation.
+                            //TODO: This is not complete. We need to enable owner selection on this service.
+                            selfDeleteService();
+                            return;
                         } finally {
                             vapiConnection.close();
                         }
@@ -230,6 +250,10 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
     public void handleDelete(Operation delete) {
         cleanupConnection();
         super.handleDelete(delete);
+    }
+
+    private void selfDeleteService() {
+        this.sendRequest(Operation.createDelete(this.getUri()).setReferer(this.getHost().getUri()));
     }
 
     private void cleanupConnection() {
@@ -444,63 +468,28 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,
                                               TaskManager mgr) {
-        MoRefKeyedMap<NetworkOverlay> networks = new MoRefKeyedMap<>();
-        List<HostSystemOverlay> hosts = new ArrayList<>();
         Set<String> sharedDatastores = new HashSet<>();
-        List<DatastoreOverlay> datastores = new ArrayList<>();
-        List<ComputeResourceOverlay> clusters = new ArrayList<>();
-        List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
         List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
-        List<FolderOverlay> folders = new ArrayList<>();
 
         // put results in different buckets by type
         PropertyFilterSpec spec = client.createResourcesFilterSpec();
         CollectorDetails collectorDetails = new CollectorDetails();
         EnumerationClient.ObjectUpdateIterator resourcesIterator;
+        SegregatedOverlays segregatedOverlays;
         try {
             ManagedObjectReference resourcesPropertyCollector = client.createPropertyCollectorWithFilter(spec);
             // remove getObjectIterator API
             resourcesIterator = new ObjectUpdateIterator(resourcesPropertyCollector, this.connection.getVimPort(), "");
+            List<ObjectUpdate> updates = new ArrayList<>();
             while (resourcesIterator.hasNext()) {
                 UpdateSet page = resourcesIterator.next();
                 if (null != page) {
                     for (PropertyFilterUpdate propertyFilterUpdate : page.getFilterSet()) {
-                        for (ObjectUpdate cont : propertyFilterUpdate.getObjectSet()) {
-                            if (VimUtils.isNetwork(cont.getObj())) {
-                                NetworkOverlay net = new NetworkOverlay(cont);
-                                ctx.track(net);
-                                if (!net.getName().toLowerCase().contains("dvuplinks")) {
-                                    // skip uplinks altogether,
-                                    // TODO starting with 6.5 query the property config.uplink instead
-                                    networks.put(net.getId(), net);
-                                }
-                            } else if (VimUtils.isHost(cont.getObj())) {
-                                // this includes all standalone and clustered hosts
-                                HostSystemOverlay hs = new HostSystemOverlay(cont);
-                                hosts.add(hs);
-                            } else if (VimUtils.isComputeResource(cont.getObj())) {
-                                ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
-                                if (cr.isDrsEnabled()) {
-                                    // when DRS is enabled add the cluster itself and skip the hosts
-                                    clusters.add(cr);
-                                } else {
-                                    // ignore non-clusters and non-drs cluster: they are handled as hosts
-                                    continue;
-                                }
-                            } else if (VimUtils.isDatastore(cont.getObj())) {
-                                DatastoreOverlay ds = new DatastoreOverlay(cont);
-                                datastores.add(ds);
-                            } else if (VimUtils.isResourcePool(cont.getObj())) {
-                                ResourcePoolOverlay rp = new ResourcePoolOverlay(cont);
-                                resourcePools.add(rp);
-                            } else if (VimUtils.isFolder(cont.getObj())) {
-                                FolderOverlay folder = new FolderOverlay(cont);
-                                folders.add(folder);
-                            }
-                        }
+                        updates.addAll(propertyFilterUpdate.getObjectSet());
                     }
                 }
             }
+            segregatedOverlays = segregateObjectUpdates(ctx, updates);
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
             logWarning(() -> msg + ": " + e.toString());
@@ -509,8 +498,8 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         }
 
         // Process Folder list
-        ctx.expectFolderCount(folders.size());
-        for (FolderOverlay folder : folders) {
+        ctx.expectFolderCount(segregatedOverlays.folders.size());
+        for (FolderOverlay folder : segregatedOverlays.folders) {
             try {
                 VsphereFolderEnumerationHelper.processFoundFolder(this, ctx, folder);
             } catch (Exception e) {
@@ -520,7 +509,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
         // Process HostSystem list to get the datastore access level whether local / shared
         try {
-            for (HostSystemOverlay hs : hosts) {
+            for (HostSystemOverlay hs : segregatedOverlays.hosts) {
                 sharedDatastores.addAll(client.getDatastoresHostMountInfo(hs));
             }
         } catch (Exception e) {
@@ -547,14 +536,14 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         }
 
         // process results in topological order
-        ctx.expectNetworkCount(networks.size());
-        for (NetworkOverlay net : networks.values()) {
+        ctx.expectNetworkCount(segregatedOverlays.networks.size());
+        for (NetworkOverlay net : segregatedOverlays.networks.values()) {
             VSphereNetworkEnumerationHelper
-                    .processFoundNetwork(this, ctx, net, networks);
+                    .processFoundNetwork(this, ctx, net, segregatedOverlays.networks);
         }
 
-        ctx.expectDatastoreCount(datastores.size());
-        for (DatastoreOverlay ds : datastores) {
+        ctx.expectDatastoreCount(segregatedOverlays.datastores.size());
+        for (DatastoreOverlay ds : segregatedOverlays.datastores) {
             ds.setMultipleHostAccess(sharedDatastores.contains(ds.getName()));
             VsphereDatastoreEnumerationHelper
                     .processFoundDatastore(this, ctx, ds);
@@ -587,10 +576,10 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             }
         }
 
-        ctx.expectComputeResourceCount(clusters.size());
-        for (ComputeResourceOverlay cluster : clusters) {
+        ctx.expectComputeResourceCount(segregatedOverlays.clusters.size());
+        for (ComputeResourceOverlay cluster : segregatedOverlays.clusters) {
             ctx.track(cluster);
-            cluster.markHostAsClustered(hosts);
+            cluster.markHostAsClustered(segregatedOverlays.hosts);
             VsphereComputeResourceEnumerationHelper.processFoundComputeResource(this, ctx, cluster);
         }
 
@@ -603,19 +592,19 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         }
 
         // process clustered as well as non-clustered hosts
-        ctx.expectHostSystemCount(hosts.size());
-        for (HostSystemOverlay hs : hosts) {
+        ctx.expectHostSystemCount(segregatedOverlays.hosts.size());
+        for (HostSystemOverlay hs : segregatedOverlays.hosts) {
             ctx.track(hs);
             VSphereHostSystemEnumerationHelper.processFoundHostSystem(this, ctx, hs);
         }
 
         // exclude all root resource pools
         // no need to collect the root resource pool
-        resourcePools.removeIf(rp -> !VimNames.TYPE_RESOURCE_POOL.equals(rp.getParent().getType()));
+        segregatedOverlays.resourcePools.removeIf(rp -> !VimNames.TYPE_RESOURCE_POOL.equals(rp.getParent().getType()));
 
-        MoRefKeyedMap<String> computeResourceNamesByMoref = collectComputeNames(hosts, clusters);
-        ctx.expectResourcePoolCount(resourcePools.size());
-        for (ResourcePoolOverlay rp : resourcePools) {
+        MoRefKeyedMap<String> computeResourceNamesByMoref = collectComputeNames(segregatedOverlays.hosts, segregatedOverlays.clusters);
+        ctx.expectResourcePoolCount(segregatedOverlays.resourcePools.size());
+        for (ResourcePoolOverlay rp : segregatedOverlays.resourcePools) {
             String ownerName = computeResourceNamesByMoref.get(rp.getOwner());
             VSphereResourcePoolEnumerationHelper.processFoundResourcePool(this, ctx, rp, ownerName);
         }
@@ -690,6 +679,51 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             collectorDetails.datacenter = ctx.getRegionId();
             this.collectors.add(collectorDetails);
         }
+    }
+
+    private SegregatedOverlays segregateObjectUpdates(
+            EnumerationProgress ctx,
+            List<ObjectUpdate> updates) {
+        SegregatedOverlays segregatedOverlays = new SegregatedOverlays();
+        for (ObjectUpdate cont : updates) {
+            if (VimUtils.isNetwork(cont.getObj())) {
+                NetworkOverlay net = new NetworkOverlay(cont);
+                ctx.track(net);
+                String nameOrNull = net.getNameOrNull();
+                /*add overlay if name is null or name doesn't contain dvuplinks
+                When a DV port group is removed, we do not get name but we have to process it
+                i.e. remove the subnet document from photon-model
+                for that we need to add it to segregatedOverlays.*/
+                if ((null == nameOrNull) || (!nameOrNull.toLowerCase().contains("dvuplinks"))) {
+                    // TODO starting with 6.5 query the property config.uplink instead
+                    segregatedOverlays.networks.put(net.getId(), net);
+                }
+            } else if (VimUtils.isHost(cont.getObj())) {
+                // this includes all standalone and clustered hosts
+                HostSystemOverlay hs = new HostSystemOverlay(cont);
+                segregatedOverlays.hosts.add(hs);
+            } else if (VimUtils.isComputeResource(cont.getObj())) {
+                ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
+                if (cr.isDrsEnabled()) {
+                    // when DRS is enabled add the cluster itself and skip the hosts
+                    segregatedOverlays.clusters.add(cr);
+                } else {
+                    // ignore non-clusters and non-drs cluster: they are handled as hosts
+                    continue;
+                }
+            } else if (VimUtils.isDatastore(cont.getObj())) {
+                DatastoreOverlay ds = new DatastoreOverlay(cont);
+                segregatedOverlays.datastores.add(ds);
+            } else if (VimUtils.isResourcePool(cont.getObj())) {
+                ResourcePoolOverlay rp = new ResourcePoolOverlay(cont);
+                segregatedOverlays.resourcePools.add(rp);
+            } else if (VimUtils.isFolder(cont.getObj())) {
+                FolderOverlay folder = new FolderOverlay(cont);
+                segregatedOverlays.folders.add(folder);
+            }
+        }
+
+        return segregatedOverlays;
     }
 
     /**

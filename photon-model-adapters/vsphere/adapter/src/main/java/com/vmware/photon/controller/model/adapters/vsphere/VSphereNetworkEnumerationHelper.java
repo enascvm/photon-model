@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.convertOnlyResultToDocument;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
+
 import java.net.URI;
 import java.util.HashSet;
 
@@ -33,10 +36,14 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.ObjectUpdateKind;
 import com.vmware.vim25.OpaqueNetworkSummary;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -45,8 +52,8 @@ import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 
 public class VSphereNetworkEnumerationHelper {
 
-    static CompletionHandler trackNetwork(EnumerationProgress enumerationProgress,
-                                          NetworkOverlay net) {
+    private static CompletionHandler trackNetwork(EnumerationProgress enumerationProgress,
+                                                  NetworkOverlay net) {
         return (o, e) -> {
             enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
             if (e == null) {
@@ -63,8 +70,9 @@ public class VSphereNetworkEnumerationHelper {
                 + VimUtils.buildStableManagedObjectId(ref, endpointLink);
     }
 
-    static NetworkState makeNetworkStateFromResults(VSphereIncrementalEnumerationService service,
-                                                    EnumerationProgress enumerationProgress, NetworkOverlay net) {
+    private static NetworkState makeNetworkStateFromResults(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            NetworkOverlay net) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         ComputeStateWithDescription parent = enumerationProgress.getParent();
 
@@ -107,7 +115,7 @@ public class VSphereNetworkEnumerationHelper {
         return state;
     }
 
-    static QueryTask queryForNetwork(EnumerationProgress ctx, NetworkOverlay net) {
+    private static QueryTask queryForNetwork(EnumerationProgress ctx, NetworkOverlay net) {
         URI adapterManagementReference = ctx.getRequest().adapterManagementReference;
         String regionId = ctx.getRegionId();
 
@@ -128,8 +136,8 @@ public class VSphereNetworkEnumerationHelper {
                 .build();
     }
 
-    static SubnetState createSubnetStateForNetwork(NetworkState networkState,
-                                                   EnumerationProgress enumerationProgress, NetworkOverlay net) {
+    private static SubnetState createSubnetStateForNetwork(
+            NetworkState networkState, EnumerationProgress enumerationProgress, NetworkOverlay net) {
 
         if (!VimNames.TYPE_NETWORK.equals(net.getId().getType()) &&
                 !VimNames.TYPE_OPAQUE_NETWORK.equals(net.getId().getType())) {
@@ -161,8 +169,8 @@ public class VSphereNetworkEnumerationHelper {
         return subnet;
     }
 
-    static void updateNetwork(VSphereIncrementalEnumerationService service,
-                              NetworkState oldDocument, EnumerationProgress enumerationProgress, NetworkOverlay net) {
+    private static void updateNetwork(VSphereIncrementalEnumerationService service, NetworkState oldDocument,
+                                      EnumerationProgress enumerationProgress, NetworkOverlay net) {
         NetworkState networkState = makeNetworkStateFromResults(
                 service, enumerationProgress, net);
         //restore original selfLink
@@ -191,7 +199,7 @@ public class VSphereNetworkEnumerationHelper {
         }
     }
 
-    static ResourceGroupState makeNetworkGroup(NetworkOverlay net, EnumerationProgress ctx) {
+    private static ResourceGroupState makeNetworkGroup(NetworkOverlay net, EnumerationProgress ctx) {
         ResourceGroupState res = new ResourceGroupState();
         res.id = net.getName();
         res.name = "Hosts connected to network '" + net.getName() + "'";
@@ -206,15 +214,19 @@ public class VSphereNetworkEnumerationHelper {
         return res;
     }
 
-    static QueryTask queryForSubnet(EnumerationProgress ctx, NetworkOverlay portgroup) {
-        String dvsLink = buildStableDvsLink(portgroup.getParentSwitch(), ctx.getRequest().endpointLink);
+    private static QueryTask queryForSubnet(
+            EnumerationProgress ctx, NetworkOverlay portgroup, ManagedObjectReference parent) {
         String moref = VimUtils.convertMoRefToString(portgroup.getId());
 
         Builder builder = Builder.create()
                 .addKindFieldClause(SubnetState.class)
-                .addFieldClause(SubnetState.FIELD_NAME_NETWORK_LINK, dvsLink)
                 .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                         CustomProperties.MOREF, moref);
+        if (parent != null) {
+            String dvsLink = buildStableDvsLink(parent, ctx.getRequest().endpointLink);
+            builder.addFieldClause(SubnetState.FIELD_NAME_NETWORK_LINK, dvsLink);
+        }
+
         QueryUtils.addEndpointLink(builder, NetworkState.class, ctx.getRequest().endpointLink);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
 
@@ -223,7 +235,8 @@ public class VSphereNetworkEnumerationHelper {
                 .build();
     }
 
-    static SubnetState makeSubnetStateFromResults(EnumerationProgress enumerationProgress, NetworkOverlay net) {
+    private static SubnetState makeSubnetStateFromResults(
+            EnumerationProgress enumerationProgress, NetworkOverlay net) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
 
         SubnetState state = new SubnetState();
@@ -249,101 +262,211 @@ public class VSphereNetworkEnumerationHelper {
         return state;
     }
 
-    static void createNewNetwork(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService,
-                                 EnumerationProgress enumerationProgress, NetworkOverlay net) {
+    private static SubnetState makeSubnetStateFromChanges(NetworkOverlay networkOverlay) {
+        SubnetState state = new SubnetState();
+        // if name is changed
+        String name = networkOverlay.getNameOrNull();
+        if (null != name) {
+            state.name = name;
+            state.id = name;
+        }
+
+        return state;
+    }
+
+    private static void createNewNetwork(VSphereIncrementalEnumerationService service,
+                                         EnumerationProgress enumerationProgress, NetworkOverlay net) {
         NetworkState networkState = makeNetworkStateFromResults(
-                vSphereIncrementalEnumerationService, enumerationProgress, net);
+                service, enumerationProgress, net);
         networkState.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
-                PhotonModelUriUtils.createInventoryUri(vSphereIncrementalEnumerationService.getHost(),
+                PhotonModelUriUtils.createInventoryUri(service.getHost(),
                         NetworkService.FACTORY_LINK))
                 .setBody(networkState)
                 .setCompletion((o, e) -> {
                     trackNetwork(enumerationProgress, net).handle(o, e);
                     Operation.createPost(PhotonModelUriUtils.createInventoryUri(
-                            vSphereIncrementalEnumerationService.getHost(),
+                            service.getHost(),
                             ResourceGroupService.FACTORY_LINK))
                             .setBody(makeNetworkGroup(net, enumerationProgress))
-                            .sendWith(vSphereIncrementalEnumerationService);
+                            .sendWith(service);
                 })
-                .sendWith(vSphereIncrementalEnumerationService);
+                .sendWith(service);
 
-        vSphereIncrementalEnumerationService.logFine(() -> String.format("Found new Network %s", net.getName()));
+        service.logFine(() -> String.format("Found new Network %s", net.getName()));
 
         SubnetState subnet = createSubnetStateForNetwork(networkState, enumerationProgress, net);
 
         if (subnet != null) {
             Operation.createPost(
-                    PhotonModelUriUtils.createInventoryUri(vSphereIncrementalEnumerationService.getHost(),
+                    PhotonModelUriUtils.createInventoryUri(service.getHost(),
                             SubnetService.FACTORY_LINK))
                     .setBody(subnet)
-                    .sendWith(vSphereIncrementalEnumerationService);
+                    .sendWith(service);
         }
     }
 
-    static void createNewSubnet(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService,
-                                EnumerationProgress enumerationProgress, NetworkOverlay net,
-                                NetworkOverlay parentSwitch) {
+    private static void createNewSubnet(VSphereIncrementalEnumerationService service,
+                                        EnumerationProgress enumerationProgress, NetworkOverlay net,
+                                        String dvsUuid) {
         SubnetState state = makeSubnetStateFromResults(enumerationProgress, net);
-        state.customProperties.put(DvsProperties.DVS_UUID, parentSwitch.getDvsUuid());
+        state.customProperties.put(DvsProperties.DVS_UUID, dvsUuid);
 
         state.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(PhotonModelUriUtils.createInventoryUri(
-                vSphereIncrementalEnumerationService.getHost(), SubnetService.FACTORY_LINK))
+                service.getHost(), SubnetService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion(trackNetwork(enumerationProgress, net))
-                .sendWith(vSphereIncrementalEnumerationService);
+                .sendWith(service);
 
-        vSphereIncrementalEnumerationService.logFine(() -> String.format("Found new Subnet(Portgroup) %s",
+        service.logFine(() -> String.format("Found new Subnet(Portgroup) %s",
                 net.getName()));
     }
 
-    static void updateSubnet(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService,
-                             SubnetState oldDocument, EnumerationProgress enumerationProgress, NetworkOverlay net) {
-        SubnetState state = makeSubnetStateFromResults(enumerationProgress, net);
+    private static void updateSubnet(
+            VSphereIncrementalEnumerationService service, SubnetState oldDocument,
+            EnumerationProgress enumerationProgress, NetworkOverlay net, boolean fullUpdate) {
+        SubnetState state;
+        if (fullUpdate) {
+            state = makeSubnetStateFromResults(enumerationProgress, net);
+        } else {
+            state = makeSubnetStateFromChanges(net);
+        }
         state.documentSelfLink = oldDocument.documentSelfLink;
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
-        vSphereIncrementalEnumerationService.logFine(() -> String.format("Syncing Subnet(Portgroup) %s",
+        service.logFine(() -> String.format("Syncing Subnet(Portgroup) %s",
                 net.getName()));
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(
-                vSphereIncrementalEnumerationService.getHost(), oldDocument.documentSelfLink))
+                service.getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackNetwork(enumerationProgress, net))
-                .sendWith(vSphereIncrementalEnumerationService);
+                .sendWith(service);
     }
 
-    static void processFoundNetwork(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService,
-                                    EnumerationProgress enumerationProgress, NetworkOverlay net,
-                                    MoRefKeyedMap<NetworkOverlay> allNetworks) {
+    public static void processFoundNetwork(VSphereIncrementalEnumerationService service,
+                                           EnumerationProgress enumerationProgress, NetworkOverlay net,
+                                           MoRefKeyedMap<NetworkOverlay> allNetworks) {
         if (net.getParentSwitch() != null) {
             // portgroup: create subnet
-            QueryTask task = queryForSubnet(enumerationProgress, net);
-            VsphereEnumerationHelper.withTaskResults(vSphereIncrementalEnumerationService, task,
+            QueryTask task = queryForSubnet(enumerationProgress, net, net.getParentSwitch());
+            withTaskResults(service, task,
                     (ServiceDocumentQueryResult result) -> {
                         if (result.documentLinks.isEmpty()) {
-                            createNewSubnet(vSphereIncrementalEnumerationService, enumerationProgress, net,
-                                    allNetworks.get(net.getParentSwitch()));
+                            createNewSubnet(service, enumerationProgress, net,
+                                    allNetworks.get(net.getParentSwitch()).getDvsUuid());
                         } else {
-                            SubnetState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(
+                            SubnetState oldDocument = convertOnlyResultToDocument(
                                     result, SubnetState.class);
-                            updateSubnet(vSphereIncrementalEnumerationService, oldDocument, enumerationProgress, net);
+                            updateSubnet(service, oldDocument, enumerationProgress, net, true);
                         }
                     });
         } else {
             // DVS or opaque network
             QueryTask task = queryForNetwork(enumerationProgress, net);
-            VsphereEnumerationHelper.withTaskResults(vSphereIncrementalEnumerationService, task, result -> {
+            withTaskResults(service, task, result -> {
                 if (result.documentLinks.isEmpty()) {
-                    createNewNetwork(vSphereIncrementalEnumerationService, enumerationProgress, net);
+                    createNewNetwork(service, enumerationProgress, net);
                 } else {
-                    NetworkState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(
+                    NetworkState oldDocument = convertOnlyResultToDocument(
                             result, NetworkState.class);
-                    updateNetwork(vSphereIncrementalEnumerationService, oldDocument, enumerationProgress, net);
+                    updateNetwork(service, oldDocument, enumerationProgress, net);
                 }
             });
         }
+    }
+
+    /**
+     * Handles incremental changes on networks.
+     *
+     * @param service             the incremental service
+     * @param networks            the filtered network overlays
+     * @param enumerationProgress the context for enumeration.
+     * @param client              the enumeration client
+     */
+    public static void handleNetworkChanges(
+            VSphereIncrementalEnumerationService service, MoRefKeyedMap<NetworkOverlay> networks,
+            EnumerationProgress enumerationProgress, EnumerationClient client)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+
+        enumerationProgress.expectNetworkCount(networks.values().size());
+        for (NetworkOverlay netOverlay : networks.values()) {
+
+            // if a network | DVS | DV port group is added.
+            if (ObjectUpdateKind.ENTER == netOverlay.getObjectUpdateKind()) {
+                // if DV port group is added
+                if (netOverlay.getParentSwitch() != null) {
+                    // check if the parent switch is present as part of this enumeration
+                    NetworkOverlay parentSwitch = networks.get(netOverlay.getParentSwitch());
+                    String dvsUUID;
+                    if (parentSwitch == null) {
+                        // retrieve the uuid from vCenter
+                        dvsUUID = client.getUUIDForDVS(netOverlay);
+                    } else {
+                        dvsUUID = parentSwitch.getDvsUuid();
+                    }
+                    createNewSubnet(service, enumerationProgress, netOverlay, dvsUUID);
+                } else {
+                    createNewNetwork(service, enumerationProgress, netOverlay);
+                }
+            } else {
+                // if DV port group is changed
+                if (netOverlay.getId().getType().equals(VimNames.TYPE_PORTGROUP)) {
+
+                    ManagedObjectReference parentSwitch = netOverlay.getParentSwitch();
+                    // if parent is not retrieved, Retrieve it.
+                    if (null == parentSwitch && ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
+                        parentSwitch = client.getParentSwitchForDVPortGroup(netOverlay);
+                    }
+                    QueryTask task = queryForSubnet(enumerationProgress, netOverlay, parentSwitch);
+                    withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
+                        if (!result.documentLinks.isEmpty()) {
+                            SubnetState oldDocument = convertOnlyResultToDocument(result, SubnetState.class);
+                            if (ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
+                                updateSubnet(service, oldDocument, enumerationProgress, netOverlay, false);
+                            } else {
+                                // DV port group has been removed. Remove the subnet state document.
+                                deleteNetwork(service, enumerationProgress, netOverlay, oldDocument);
+                            }
+                        } else {
+                            enumerationProgress.getNetworkTracker().track();
+                        }
+                    });
+                } else {
+                    // DVS or Opaque network.
+                    QueryTask task = queryForNetwork(enumerationProgress, netOverlay);
+                    VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                        if (!result.documentLinks.isEmpty()) {
+                            NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);
+                            if (ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
+                                updateNetwork(service, oldDocument, enumerationProgress, netOverlay);
+                            } else {
+                                deleteNetwork(service, enumerationProgress, netOverlay, oldDocument);
+                            }
+                        } else {
+                            enumerationProgress.getNetworkTracker().track();
+                        }
+                    });
+                }
+            }
+        }
+
+        try {
+            enumerationProgress.getNetworkTracker().await();
+        } catch (InterruptedException e) {
+            service.logSevere("Interrupted during incremental enumeration for networks!", e);
+        }
+    }
+
+    private static void deleteNetwork(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            NetworkOverlay netOverlay, ServiceDocument oldDocument) {
+        Operation.createDelete(
+                PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                .setCompletion((o, e) -> {
+                    trackNetwork(enumerationProgress, netOverlay).handle(o, e);
+                }).sendWith(service);
     }
 }

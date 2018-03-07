@@ -128,6 +128,17 @@ public class EnumerationClient extends BaseHelper {
         return sharedDs;
     }
 
+    public ManagedObjectReference getParentSwitchForDVPortGroup(NetworkOverlay net)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ManagedObjectReference parent = this.getMoRef.entityProp(net.getId(), VimPath.pg_config_distributedVirtualSwitch);
+        return parent;
+    }
+
+    public String getUUIDForDVS(NetworkOverlay net) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        String uuid = this.getMoRef.entityProp(net.getParentSwitch(), VimPath.dvs_uuid);
+        return uuid;
+    }
+
     private ManagedObjectReference createPropertyCollector() throws RuntimeFaultFaultMsg {
         ManagedObjectReference pc = this.connection.getServiceContent().getPropertyCollector();
         return getVimPort().createPropertyCollector(pc);
