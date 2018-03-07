@@ -416,9 +416,23 @@ public class ComputeService extends StatefulService {
         }
 
         ComputeState returnState = validatePut(put);
+        logIfDuplicatedDiskLinks(put, returnState);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))
                 .whenCompleteNotify(put);
+    }
+
+    private void logIfDuplicatedDiskLinks(Operation operation, ComputeState computeState) {
+        if (computeState.diskLinks != null) {
+            long diskLinksUniqueCount = computeState.diskLinks.stream().distinct().count();
+            if (diskLinksUniqueCount != computeState.diskLinks.size()) {
+                // There are duplicate diskLinks in the body
+                logSevere("Referer '%s' is making a call (caught in 'handlePut') with" +
+                                "repeated disk links to ComputeState#id: '%s'",
+                        operation.getReferer(),
+                        computeState.id);
+            }
+        }
     }
 
     private ComputeState validateCreate(Operation op) {
