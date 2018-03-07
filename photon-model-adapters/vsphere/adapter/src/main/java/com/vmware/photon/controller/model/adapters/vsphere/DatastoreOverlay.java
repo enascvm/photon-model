@@ -51,4 +51,12 @@ public class DatastoreOverlay extends AbstractOverlay {
     public String getPath() {
         return (String) getOrFail(VimPath.ds_summary_url);
     }
+
+    public String getNameOrNull() {
+        return (String) getOrDefault(VimNames.PROPERTY_NAME, null);
+    }
+
+    public long getCapacityBytesOrZero() {
+        return (long) getOrDefault(VimPath.ds_summary_capacity, 0L);
+    }
 }

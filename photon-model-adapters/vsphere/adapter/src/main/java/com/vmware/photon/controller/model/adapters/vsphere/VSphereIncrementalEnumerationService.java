@@ -228,6 +228,8 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
                                     VSphereNetworkEnumerationHelper
                                             .handleNetworkChanges(this, segregatedOverlays.networks, enumerationProgress, client);
+                                    VsphereDatastoreEnumerationHelper
+                                            .handleDatastoreChanges(this, segregatedOverlays.datastores, enumerationProgress);
                                 }
                             }
                             mgr.patchTask(TaskStage.FINISHED);

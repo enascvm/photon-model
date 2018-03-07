@@ -156,7 +156,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                                     Utils.toString(exs)));
                         } else {
                             QueryTask task = VsphereDatastoreEnumerationHelper.queryForStorage(
-                                    ctx, null, selfLink);
+                                    ctx, null, null, selfLink);
                             VsphereEnumerationHelper.withTaskResults(service, task, result -> {
                                 // Call patch on all to update the group links
                                 updateStorageDescription(service, ops.values().stream(), selfLink, result);
