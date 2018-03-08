@@ -144,7 +144,7 @@ public class TestProvisionAWSDisk {
         createEndpoint();
 
         this.diskState = createAWSDiskState(this.host, this.endpointState,
-                this.currentTestName.getMethodName() + "_disk1", null, regionId);
+                this.currentTestName.getMethodName() + "_disk1", Boolean.TRUE, null, regionId);
 
         String taskLink = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils
                 .getProvisionDiskTask(this.diskState.documentSelfLink,
@@ -221,8 +221,8 @@ public class TestProvisionAWSDisk {
         return response.getBody(DiskState.class);
     }
 
-    public static DiskState createAWSDiskState(VerificationHost host,
-            EndpointState endpointState, String diskName, String zoneId, String regionId)
+    public static DiskState createAWSDiskState(VerificationHost host, EndpointState endpointState,
+            String diskName, Boolean persistent, String zoneId, String regionId)
             throws Throwable {
 
         // Step 1: Create a Disk State
@@ -234,7 +234,7 @@ public class TestProvisionAWSDisk {
 
         diskDesc.zoneId = zoneId;
         diskDesc.regionId = regionId;
-        diskDesc.persistent = false;
+        diskDesc.persistent = persistent;
 
         diskDesc.endpointLink = endpointState.documentSelfLink;
         diskDesc.endpointLinks = new HashSet<String>();

@@ -88,10 +88,15 @@ import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeTagsResult;
 import com.amazonaws.services.ec2.model.DescribeVpcsResult;
+import com.amazonaws.services.ec2.model.EbsInstanceBlockDeviceSpecification;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceAttributeName;
+import com.amazonaws.services.ec2.model.InstanceBlockDeviceMappingSpecification;
 import com.amazonaws.services.ec2.model.InstanceState;
 import com.amazonaws.services.ec2.model.InstanceStateChange;
+import com.amazonaws.services.ec2.model.ModifyInstanceAttributeRequest;
+import com.amazonaws.services.ec2.model.ModifyInstanceAttributeResult;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
@@ -116,12 +121,14 @@ import org.apache.commons.collections.CollectionUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSSecurityGroupClient;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
+import com.vmware.photon.controller.model.adapters.util.Pair;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -1341,6 +1348,7 @@ public class AWSUtils {
                     .setBody(diskState)
                     .setReferer(service.getUri());
         } else if (operation.equals(ResourceOperation.DETACH_DISK.operation)) {
+            diskState.persistent = Boolean.TRUE;
             diskState.status = DiskService.DiskStatus.AVAILABLE;
             diskState.customProperties.remove(DEVICE_NAME);
             diskOp = Operation.createPut(UriUtils.buildUri(service.getHost(), diskState
@@ -1418,6 +1426,48 @@ public class AWSUtils {
         return AWSUtils.updateComputeState(computeStateLink, diskLinks,
                 ResourceOperation.DETACH_DISK.operation, service)
                 .thenApply(op -> (ResourceState) (op.getBody(ComputeService.ComputeState.class)));
+    }
+
+
+    public static DeferredResult<DiskService.DiskState> setDeleteOnTerminateAttribute(
+            AmazonEC2AsyncClient client, String instanceId,
+            Map<String, Pair<String, Boolean>> deleteDiskMapByDeviceName,
+            OperationContext opCtx) {
+        List<InstanceBlockDeviceMappingSpecification> instanceBlockDeviceMappingSpecificationList =
+                deleteDiskMapByDeviceName.entrySet().stream()
+                        .map(entry -> new InstanceBlockDeviceMappingSpecification()
+                                .withDeviceName(entry.getKey())
+                                .withEbs(
+                                        new EbsInstanceBlockDeviceSpecification()
+                                                .withDeleteOnTermination(entry.getValue().right)
+                                                .withVolumeId(entry.getValue().left)
+                                )
+                        ).collect(Collectors.toList());
+
+        DeferredResult<DiskService.DiskState> modifyInstanceAttrDr = new DeferredResult();
+        ModifyInstanceAttributeRequest modifyInstanceAttrReq =
+                new ModifyInstanceAttributeRequest()
+                        .withInstanceId(instanceId).withAttribute(InstanceAttributeName.BlockDeviceMapping)
+                        .withBlockDeviceMappings(instanceBlockDeviceMappingSpecificationList);
+
+        AWSAsyncHandler<ModifyInstanceAttributeRequest, ModifyInstanceAttributeResult> modifyInstanceAttrHandler =
+                new AWSAsyncHandler<ModifyInstanceAttributeRequest, ModifyInstanceAttributeResult>() {
+                    @Override
+                    protected void handleError(Exception exception) {
+                        OperationContext.restoreOperationContext(opCtx);
+                        modifyInstanceAttrDr.fail(exception);
+                    }
+
+                    @Override
+                    protected void handleSuccess(
+                            ModifyInstanceAttributeRequest request,
+                            ModifyInstanceAttributeResult result) {
+                        OperationContext.restoreOperationContext(opCtx);
+                        modifyInstanceAttrDr.complete(new DiskService.DiskState());
+                    }
+                };
+        client.modifyInstanceAttributeAsync(modifyInstanceAttrReq, modifyInstanceAttrHandler);
+        return modifyInstanceAttrDr;
     }
 
 }

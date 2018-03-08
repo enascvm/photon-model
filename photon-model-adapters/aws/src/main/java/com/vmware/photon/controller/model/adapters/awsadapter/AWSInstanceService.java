@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.removeDiskLinks;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setDeleteOnTerminateAttribute;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setEbsDefaultsIfNotSet;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.updatePersistentDiskAsAvailable;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.validateSizeSupportedByVolumeType;
@@ -63,15 +64,10 @@ import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
-import com.amazonaws.services.ec2.model.EbsInstanceBlockDeviceSpecification;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.InstanceAttributeName;
 import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
-import com.amazonaws.services.ec2.model.InstanceBlockDeviceMappingSpecification;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
-import com.amazonaws.services.ec2.model.ModifyInstanceAttributeRequest;
-import com.amazonaws.services.ec2.model.ModifyInstanceAttributeResult;
 import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.ResourceType;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
@@ -1013,50 +1009,11 @@ public class AWSInstanceService extends StatelessService {
                             return DeferredResult.failed(new Throwable(stringJoiner.toString()));
                         } else if (!deleteDiskMapByDeviceName.isEmpty()) {
                             return setDeleteOnTerminateAttribute(client, id,
-                                    deleteDiskMapByDeviceName);
+                                    deleteDiskMapByDeviceName, this.opContext);
                         } else {
                             return DeferredResult.completed(new DiskState());
                         }
                     });
-        }
-
-        private DeferredResult<DiskState> setDeleteOnTerminateAttribute(
-                AmazonEC2AsyncClient client, String instanceId, Map<String, Pair<String, Boolean>> deleteDiskMapByDeviceName) {
-            List<InstanceBlockDeviceMappingSpecification> instanceBlockDeviceMappingSpecificationList =
-                    deleteDiskMapByDeviceName.entrySet().stream()
-                            .map(entry -> new InstanceBlockDeviceMappingSpecification()
-                                    .withDeviceName(entry.getKey())
-                                    .withEbs(
-                                            new EbsInstanceBlockDeviceSpecification()
-                                            .withDeleteOnTermination(entry.getValue().right)
-                                            .withVolumeId(entry.getValue().left)
-                                    )
-                            ).collect(Collectors.toList());
-
-            DeferredResult<DiskState> modifyInstanceAttrDr = new DeferredResult();
-            ModifyInstanceAttributeRequest modifyInstanceAttrReq =
-                    new ModifyInstanceAttributeRequest()
-                            .withInstanceId(instanceId).withAttribute(InstanceAttributeName.BlockDeviceMapping)
-                            .withBlockDeviceMappings(instanceBlockDeviceMappingSpecificationList);
-
-            AWSAsyncHandler<ModifyInstanceAttributeRequest, ModifyInstanceAttributeResult> modifyInstanceAttrHandler =
-                    new AWSAsyncHandler<ModifyInstanceAttributeRequest, ModifyInstanceAttributeResult>() {
-                        @Override
-                        protected void handleError(Exception exception) {
-                            OperationContext.restoreOperationContext(this.opContext);
-                            modifyInstanceAttrDr.fail(exception);
-                        }
-
-                        @Override
-                        protected void handleSuccess(
-                                ModifyInstanceAttributeRequest request,
-                                ModifyInstanceAttributeResult result) {
-                            OperationContext.restoreOperationContext(this.opContext);
-                            modifyInstanceAttrDr.complete(new DiskState());
-                        }
-                    };
-            client.modifyInstanceAttributeAsync(modifyInstanceAttrReq, modifyInstanceAttrHandler);
-            return modifyInstanceAttrDr;
         }
 
         /**

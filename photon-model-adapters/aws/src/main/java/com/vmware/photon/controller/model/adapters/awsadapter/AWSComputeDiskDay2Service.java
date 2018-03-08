@@ -20,7 +20,10 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -55,6 +58,7 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.DefaultAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.Pair;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -260,8 +264,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                     .withVolumeId(diskId)
                     .withDevice(deviceName);
 
-            AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult> attachDiskHandler = new AWSAttachDiskHandler(
-                    dr, context);
+            AWSAsyncHandler<AttachVolumeRequest, AttachVolumeResult> attachDiskHandler =
+                    new AWSAttachDiskHandler(dr, context);
 
             context.amazonEC2Client.attachVolumeAsync(attachVolumeRequest, attachDiskHandler);
 
@@ -507,12 +511,49 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
+            this.service.logWarning(
+                    () -> String.format("[AWSComputeDiskDay2Service] Attaching "
+                                    + "volume %s to instance %s FAILED for task reference :%s",
+                            this.context.diskState.id,
+                            this.context.computeState.id,
+                            this.context.request.taskLink()));
+            OperationContext.restoreOperationContext(this.opContext);
             this.dr.fail(exception);
         }
 
         @Override
         protected void handleSuccess(AttachVolumeRequest request, AttachVolumeResult result) {
-            updateComputeAndDiskState(this.dr, this.context, this.opContext);
+            Map<String, Pair<String, Boolean>> deleteDiskMapByDeviceName = new HashMap<>();
+
+            this.context.diskState.persistent = Optional
+                    .ofNullable(this.context.diskState.persistent)
+                    .orElse(Boolean.TRUE);
+
+            DeferredResult<DiskService.DiskState> modifyInstanceAttrDr = null;
+
+            if (!this.context.diskState.persistent) {
+                deleteDiskMapByDeviceName.put(
+                        this.context.diskState.customProperties.get(DEVICE_NAME),
+                        Pair.of(this.context.diskState.id, !this.context.diskState.persistent)
+                );
+                modifyInstanceAttrDr = AWSUtils.setDeleteOnTerminateAttribute(
+                        this.context.amazonEC2Client, request.getInstanceId(),
+                        deleteDiskMapByDeviceName, this.opContext);
+            } else {
+                modifyInstanceAttrDr = DeferredResult.completed(this.context.diskState);
+            }
+
+            modifyInstanceAttrDr.whenComplete((ds, exc) -> {
+                if (exc != null) {
+                    logSevere(() -> String.format(
+                            "[AWSComputeDiskDay2Service] Update deleteOnTerminate for "
+                                    + "diskState %s FAILED. %s",
+                            this.context.diskState.documentSelfLink, Utils.toString(exc)));
+                    this.dr.fail(exc);
+                    return;
+                }
+                updateComputeAndDiskState(this.dr, this.context, this.opContext);
+            });
         }
     }
 

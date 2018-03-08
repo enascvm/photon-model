@@ -45,6 +45,7 @@ import static com.vmware.photon.controller.model.util.StartServicesHelper.Servic
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -126,7 +127,7 @@ public class AWSComputeDiskDay2ServiceTest {
 
     private ComputeState vmState;
 
-    private List<String> allAvailableDisks = new ArrayList<>();
+    private List<String> disksToCleanUp = new ArrayList<>();
 
     //The disks added to this list are deleted with AWSDiskService.Delete
     private List<DiskState> diskStates = new ArrayList<>();
@@ -273,11 +274,11 @@ public class AWSComputeDiskDay2ServiceTest {
             deletedResources.addAll(this.vmState.networkInterfaceLinks);
         }
 
-        TestAWSSetupUtils.deleteDisks(this.allAvailableDisks, this.isMock, this.host,
+        TestAWSSetupUtils.deleteDisks(this.disksToCleanUp, this.isMock, this.host,
                 this.endpointState.tenantLinks);
 
         //add the disk link of the detached disk which is not yet deleted.
-        deletedResources.addAll(this.allAvailableDisks);
+        deletedResources.addAll(this.disksToCleanUp);
 
         deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
         verifyRemovalOfResourceState(this.host, deletedResources);
@@ -287,11 +288,11 @@ public class AWSComputeDiskDay2ServiceTest {
     }
 
     /**
-     * This test does the following
-     * 1. provision a vm with one bootdisk, two new inline ebs disks and one existing disk.
-     * 2. Creates two independent disks and then attaches them to the VM and verifies the disklinks in
-     * compute and the properties of those two attached disks
-     * 3. Detaches the two independently created disks and verifies if those disks are available.
+     * This test performs the following steps in sequence.
+     * 1. provision a VM with one bootdisk, two new inline disks and one existing disk.
+     * 2. Create three independent disks and then explicitly attach all of them to the VM
+     * 3. Detach the first two disks that are explicitly attached.
+     * 4. Delete VM(all the attached disks which are marked are not marked to persist will also be deleted).
      */
     @Test
     public void testDiskOperations() throws Throwable {
@@ -299,7 +300,8 @@ public class AWSComputeDiskDay2ServiceTest {
         initResourcePoolAndComputeHost(this.zoneId);
 
         DiskState diskspec1 = createAWSDiskState(this.host, this.endpointState,
-                this.currentTestName.getMethodName() + "_disk1", this.zoneId, regionId);
+                this.currentTestName.getMethodName() + "_disk1",
+                Boolean.FALSE, this.zoneId, regionId);
 
         //create a disk
         provisionSingleDisk(diskspec1);
@@ -339,116 +341,118 @@ public class AWSComputeDiskDay2ServiceTest {
             this.volumeId = attachedDisk1.id;
         }
 
-        //create disk2
-        DiskState diskSpec2 = createAWSDiskState(this.host, this.endpointState,
-                this.currentTestName.getMethodName() + "_disk2", this.zoneId, regionId);
-        provisionSingleDisk(diskSpec2);
-        assertEquals(1, diskSpec2.endpointLinks.size());
-
-        DiskState diskSpec3 = createAWSDiskState(this.host, this.endpointState,
-                this.currentTestName.getMethodName() + "_disk3", this.zoneId, regionId);
-
-        provisionSingleDisk(diskSpec3);
-
-        ServiceDocumentQueryResult diskQueryResult = ProvisioningUtils
-                .queryDiskInstances(this.host, vmStateAfterAttach1.diskLinks.size() + 2);
+        ServiceDocumentQueryResult initialDiskQueryResult = ProvisioningUtils
+                .queryDiskInstances(this.host, vmStateAfterAttach1.diskLinks.size());
 
         List<String> existingNames = new ArrayList<>();
-        for (String diskLink : diskQueryResult.documentLinks) {
-            DiskState diskState = Utils.fromJson(diskQueryResult.documents.get(diskLink),
+        for (String diskLink : initialDiskQueryResult.documentLinks) {
+            DiskState diskState = Utils.fromJson(initialDiskQueryResult.documents.get(diskLink),
                     DiskState.class);
             existingNames.add(diskState.customProperties.get(AWSConstants.DEVICE_NAME));
         }
 
-        DiskState provisionedDisk2 = gson.fromJson(
-                diskQueryResult.documents.get(diskSpec2.documentSelfLink).toString(),
-                DiskState.class);
+        ComputeState vmStateBeforeAttach = vmStateAfterAttach1;
 
-        DiskState provisionedDisk3 = gson.fromJson(
-                diskQueryResult.documents.get(diskSpec3.documentSelfLink).toString(),
-                DiskState.class);
+        int numExternalDisks = 3;
+        List<String> externallyProvisionedDisks = new ArrayList<>();
+        ComputeState vmAfterExternalDiskAttach = createAndAttachExternalDisks(instance, existingNames,
+                vmStateBeforeAttach, externallyProvisionedDisks, numExternalDisks);
 
-        assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
-                provisionedDisk2.status);
-
-        assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
-                provisionedDisk3.status);
-
-        //attach disk to an available vm and verify the details.
-        performDiskOperation(
-                vmStateAfterAttach1,
-                new ArrayList<String>() {
-                    {
-                        add(provisionedDisk2.documentSelfLink);
-                    }
-                },
-                ResourceOperation.ATTACH_DISK.operation
-        );
-
-        ComputeState vmStateAfterAttach2 = this.host.getServiceState(null, ComputeState.class,
-                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
-
-        assertEquals(vmStateAfterAttach1.diskLinks.size() + 1,
-                vmStateAfterAttach2.diskLinks.size());
-
-        //attach disk to an available vm and verify the details.
-        performDiskOperation(vmStateAfterAttach2,
-                new ArrayList<String>() {
-                    {
-                        add(provisionedDisk3.documentSelfLink);
-                    }
-                },
-                ResourceOperation.ATTACH_DISK.operation
-        );
-
-        ComputeState vmStateAfterAttach3 = this.host.getServiceState(null, ComputeState.class,
-                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
-
-        assertEquals(vmStateAfterAttach2.diskLinks.size() + 1,
-                vmStateAfterAttach3.diskLinks.size());
-
-        DiskState attachedDisk2 = this.host.getServiceState(null, DiskState.class,
-                UriUtils.buildUri(this.host, provisionedDisk2.documentSelfLink));
-        assertEquals(1, attachedDisk2.endpointLinks.size());
-        assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
-                attachedDisk2.status);
-
-        DiskState attachedDisk3 = this.host.getServiceState(null, DiskState.class,
-                UriUtils.buildUri(this.host, provisionedDisk3.documentSelfLink));
-
-        assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
-                attachedDisk3.status);
-
-        //assert the device name
-        assertDeviceName(instance, attachedDisk2, existingNames);
+        List<String> diskLinksToDetach = externallyProvisionedDisks.stream()
+                .filter(diskLink -> !diskLink
+                        .equals(externallyProvisionedDisks.get(numExternalDisks - 1)))
+                .collect(Collectors.toList());
 
         //detach disks from the vm and verify the details of the detached disks
-        ComputeState vmStateAfterDetach2 = detachDiskAndVerify(vmStateAfterAttach3,
-                new ArrayList<String>() {
-                    {
-                        add(attachedDisk2.documentSelfLink);
-                        add(attachedDisk3.documentSelfLink);
-                    }
-                },
-                this.allAvailableDisks);
+        ComputeState vmStateAfterExplicitDetach = detachDiskAndVerify(vmAfterExternalDiskAttach,
+                diskLinksToDetach, this.disksToCleanUp);
 
-        deleteVMAndVerifyDisks(vmStateAfterDetach2.documentSelfLink, vmStateAfterDetach2.diskLinks);
+        assertEquals(5, vmStateAfterExplicitDetach.diskLinks.size());
+
+        deleteVMAndVerifyDisks(vmStateAfterExplicitDetach.documentSelfLink,
+                vmStateAfterExplicitDetach.diskLinks);
+    }
+
+    private ComputeState createAndAttachExternalDisks(Instance instance, List<String> existingNames,
+            ComputeState vmStateBeforeAttach, List<String> externallyProvisionedDisks, int numDisks)
+            throws Throwable {
+
+        for (int i = 2, j = 1; i < numDisks + 2; i++, j++) {
+
+            //create disk
+            DiskState diskSpec = createAWSDiskState(this.host, this.endpointState,
+                    this.currentTestName.getMethodName() + "_disk" + i,
+                    !(j == numDisks), this.zoneId, regionId);
+
+            provisionSingleDisk(diskSpec);
+
+            assertEquals(1, diskSpec.endpointLinks.size());
+
+            ServiceDocumentQueryResult diskQueryResult = ProvisioningUtils
+                    .queryDiskInstances(this.host, vmStateBeforeAttach.diskLinks.size() + 1);
+
+            DiskState provisionedDisk = new Gson().fromJson(
+                    diskQueryResult.documents.get(diskSpec.documentSelfLink).toString(),
+                    DiskState.class);
+
+            //assert that the disk is available
+            assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
+                    provisionedDisk.status);
+
+            //collect external disks into a list
+            externallyProvisionedDisks.add(provisionedDisk.documentSelfLink);
+
+            //attach disk to the vm.
+            performDiskOperation(vmStateBeforeAttach.documentSelfLink,
+                    Arrays.asList(externallyProvisionedDisks.get(i - 2)),
+                    ResourceOperation.ATTACH_DISK.operation);
+
+            ComputeState vmStateAfterAttach = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+            //assert the number of disklinks have increased by 1.
+            assertEquals(vmStateBeforeAttach.diskLinks.size() + 1,
+                    vmStateAfterAttach.diskLinks.size());
+
+            DiskState attachedDisk = this.host.getServiceState(null, DiskState.class,
+                    UriUtils.buildUri(this.host, provisionedDisk.documentSelfLink));
+
+            //assert that the attached disk has one endpoint in its endpointLinks.
+            assertEquals(1, attachedDisk.endpointLinks.size());
+
+            //assert that the disk is attached.
+            assertEquals("disk status not matching", DiskService.DiskStatus.ATTACHED,
+                    attachedDisk.status);
+
+            //assert the used device name is same as expected returned by AWS Device name utility.
+            assertDeviceName(instance, attachedDisk, existingNames);
+
+            vmStateBeforeAttach = vmStateAfterAttach;
+        }
+
+        return vmStateBeforeAttach;
     }
 
     protected void assertDeviceName(Instance awsInstance, DiskState diskState, List<String> existingNames) {
         if (!this.isMock) {
             AWSSupportedOS os = AWSSupportedOS.get(awsInstance.getPlatform());
-            AWSSupportedVirtualizationTypes virtualizationType = AWSSupportedVirtualizationTypes.get(awsInstance.getVirtualizationType());
-            AWSStorageType storageType = AWSStorageType.get(diskState.customProperties.get(DEVICE_TYPE));
-            List<String> expectedNames = AWSBlockDeviceNameMapper.getAvailableNames(os, virtualizationType, storageType, awsInstance.getInstanceType(), existingNames);
-            assertEquals(expectedNames.get(0), diskState.customProperties.get(DEVICE_NAME));
+            AWSSupportedVirtualizationTypes virtualizationType =
+                    AWSSupportedVirtualizationTypes.get(awsInstance.getVirtualizationType());
+            AWSStorageType storageType =
+                    AWSStorageType.get(diskState.customProperties.get(DEVICE_TYPE));
+            List<String> expectedNames =
+                    AWSBlockDeviceNameMapper.getAvailableNames(os, virtualizationType, storageType,
+                            awsInstance.getInstanceType(), existingNames);
+            String expectedName = expectedNames.get(0);
+            assertEquals(expectedName, diskState.customProperties.get(DEVICE_NAME));
+            existingNames.add(expectedName);
         }
     }
 
     private ComputeState detachDiskAndVerify(ComputeState vmStateAfterAttach,
             List<String> detachedDiskLinks, List<String> availableDiskLinks) throws Throwable {
 
-        performDiskOperation(vmStateAfterAttach, detachedDiskLinks,
+        performDiskOperation(vmStateAfterAttach.documentSelfLink, detachedDiskLinks,
                 ResourceOperation.DETACH_DISK.operation);
 
         ComputeState vmStateAfterDetach = this.host.getServiceState(null, ComputeState.class,
@@ -469,7 +473,7 @@ public class AWSComputeDiskDay2ServiceTest {
         return vmStateAfterDetach;
     }
 
-    private void performDiskOperation(ComputeState compute, List<String> diskLinks,
+    private void performDiskOperation(String computeStateLink, List<String> diskLinks,
             String requestType) throws Throwable {
         List<String> taskServiceLinks = new ArrayList<>();
 
@@ -491,7 +495,7 @@ public class AWSComputeDiskDay2ServiceTest {
             request.operation = requestType;
             request.payload = new HashMap<>();
             request.payload.put(PhotonModelConstants.DISK_LINK, diskLink);
-            request.resourceReference = UriUtils.buildUri(this.host, compute.documentSelfLink);
+            request.resourceReference = UriUtils.buildUri(this.host, computeStateLink);
             request.taskReference = UriUtils.buildUri(this.host, diskOpTask.documentSelfLink);
 
             Operation diskOp = Operation
@@ -684,26 +688,24 @@ public class AWSComputeDiskDay2ServiceTest {
 
     private void deleteVMAndVerifyDisks(String computeStateLink, List<String> totalAttachedDisks)
             throws Throwable {
+
         TestAWSSetupUtils.deleteVMs(computeStateLink, this.isMock, this.host);
 
         List<DiskState> persistedDisks = new ArrayList<>();
         List<DiskState> deletedDisks = new ArrayList<>();
 
         //divide all disklinks into persisted ones and deleted ones.
-        partitionDisks(totalAttachedDisks, persistedDisks,
-                deletedDisks);
+        partitionDisks(totalAttachedDisks, persistedDisks, deletedDisks);
 
         //add all persisted disks to detached disk list
-        persistedDisks.forEach(diskState -> this.allAvailableDisks
-                .add(diskState.documentSelfLink));
+        persistedDisks.forEach(diskState -> this.disksToCleanUp.add(diskState.documentSelfLink));
 
         //verify the properties of persisted disk.
         verifyPersistedDisks(this.isMock, persistedDisks);
 
-        //On VM delete, two inline disks(Test_Volume_1 and Test_Volume_2) and one non-inline external(*_disk1)
-        // disk should be deleted. Only 1 disk should be persisted.
-        assertEquals(totalAttachedDisks.size() - deletedDisks.size(),
-                persistedDisks.size());
+        //On VM delete, two inline(Test_Volume_1 and Test_Volume_2), one non-inline external(*_disk1),
+        // one external-disk should be deleted. Only one of the attached disks should be persisted.
+        assertEquals(totalAttachedDisks.size() - deletedDisks.size(), persistedDisks.size());
     }
 
     private void partitionDisks(List<String> allAttachedDiskLinks,
