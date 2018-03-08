@@ -831,7 +831,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                 // TODO VSYM-2341 add logic to update the compute state to be linked to this
                 // disk based on the list of attachments
             } else {
-                diskState.status = DiskStatus.DETACHED;
+                diskState.status = DiskStatus.AVAILABLE;
             }
         }
 
