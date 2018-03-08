@@ -93,26 +93,25 @@ public class HostSystemOverlay extends AbstractOverlay {
         return (boolean) getOrDefault(VimPath.host_summary_runtime_inMaintenanceMode, false);
     }
 
-    // Added for CI Gap
     public String getVendor() {
-        return (String) getOrFail(VimPath.host_summary_hardware_vendor);
+        return (String) getOrDefault(VimPath.host_summary_hardware_vendor, null);
     }
 
     public String getModel() {
-        return (String) getOrFail(VimPath.host_summary_hardware_model);
+        return (String) getOrDefault(VimPath.host_summary_hardware_model, null);
     }
 
     public int getNumNics() {
-        return (int) getOrFail(VimPath.host_summary_hardware_numNics);
+        return (int) getOrDefault(VimPath.host_summary_hardware_numNics, 0);
     }
 
     public int getNumCpuPkgs() {
-        return (short) getOrFail(VimPath.host_summary_hardware_numCpuPkgs);
+        return (short) getOrDefault(VimPath.host_summary_hardware_numCpuPkgs, 0);
     }
 
     // TODO: Check if this makes more sense processing it from Cluster info rather than host info as
     // we already get VimPath.res_configurationEx for cluster
     public VsanHostConfigInfo getVsanConfigInfo() {
-        return (VsanHostConfigInfo) getOrFail(HOST_SUMMARY_CONFIG_VSANCONFIG);
+        return (VsanHostConfigInfo) getOrDefault(HOST_SUMMARY_CONFIG_VSANCONFIG, null);
     }
 }

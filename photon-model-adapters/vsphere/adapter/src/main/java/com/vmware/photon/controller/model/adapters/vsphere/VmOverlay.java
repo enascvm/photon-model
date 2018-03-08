@@ -312,6 +312,6 @@ public class VmOverlay extends AbstractOverlay {
     }
 
     public String getOS() {
-        return (String) getOrFail(VimPath.vm_summary_config_guestFullName);
+        return (String) getOrDefault(VimPath.vm_summary_config_guestFullName, null);
     }
 }

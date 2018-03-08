@@ -49,7 +49,7 @@ public class DatastoreOverlay extends AbstractOverlay {
     }
 
     public String getPath() {
-        return (String) getOrFail(VimPath.ds_summary_url);
+        return (String) getOrDefault(VimPath.ds_summary_url, null);
     }
 
     public String getNameOrNull() {
