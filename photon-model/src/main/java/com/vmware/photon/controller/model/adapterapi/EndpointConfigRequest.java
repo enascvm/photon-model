@@ -22,7 +22,9 @@ import java.util.Map;
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
-import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+
 import com.vmware.xenon.common.ServiceDocument.Documentation;
 import com.vmware.xenon.common.ServiceDocument.PropertyOptions;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -109,10 +111,17 @@ public class EndpointConfigRequest extends ResourceRequest {
     @PropertyOptions(usage = { SERVICE_USE })
     public boolean accountAlreadyExists;
 
-    @Documentation(description = "The existing compute host state and description corresponding to the account. "
+    @Documentation(description = "The existing compute host state corresponding to the account. "
             + "This will be updated to reflect the association "
             + "with the new endpoint being configured in the system in case they map back to "
             + "the same cloud provider account. ")
-    @PropertyOptions(usage = { SERVICE_USE })
-    public Map<String, ServiceDocument> existingDocuments;
+    @PropertyOptions(usage = {SERVICE_USE})
+    public ComputeState existingComputeState;
+
+    @Documentation(description = "The existing compute description corresponding to the account. "
+            + "This will be updated to reflect the association "
+            + "with the new endpoint being configured in the system in case they map back to "
+            + "the same cloud provider account. ")
+    @PropertyOptions(usage = {SERVICE_USE})
+    public ComputeDescription existingComputeDescription;
 }

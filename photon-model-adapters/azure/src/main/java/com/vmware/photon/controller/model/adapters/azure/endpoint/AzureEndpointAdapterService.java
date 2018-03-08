@@ -370,15 +370,12 @@ public class AzureEndpointAdapterService extends StatelessService {
                             return;
                         }
                         if (qrt.results.documentCount > 0) {
-                            req.existingDocuments = new HashMap<>();
-                            for (Object s : qrt.results.documents.values()) {
-                                req.accountAlreadyExists = true;
-                                ComputeState computeHost = Utils.fromJson(s,
-                                        ComputeState.class);
-                                req.existingDocuments.put(computeHost.documentSelfLink,
-                                        computeHost);
-                                getComputeDescription(req, computeHost.descriptionLink, op);
-                            }
+                            req.accountAlreadyExists = true;
+                            Object state = qrt.results.documents.values().iterator().next();
+                            ComputeState computeHost = Utils.fromJson(state,
+                                    ComputeState.class);
+                            req.existingComputeState = computeHost;
+                            getComputeDescription(req, computeHost.descriptionLink, op);
                         } else {
                             req.accountAlreadyExists = false;
                             op.setBody(req);
@@ -409,8 +406,7 @@ public class AzureEndpointAdapterService extends StatelessService {
                         return;
                     }
                     ComputeDescription computeHostDescription = o.getBody(ComputeDescription.class);
-                    req.existingDocuments.put(computeHostDescription.documentSelfLink,
-                            computeHostDescription);
+                    req.existingComputeDescription = computeHostDescription;
                     op.setBody(req);
                     op.complete();
                     return;

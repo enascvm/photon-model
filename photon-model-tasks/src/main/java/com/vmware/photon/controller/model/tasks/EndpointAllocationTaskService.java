@@ -151,12 +151,20 @@ public class EndpointAllocationTaskService
         public boolean accountAlreadyExists;
 
         @Documentation(description =
-                "The existing compute host and compute description corresponding to the account. "
+                "The existing compute host corresponding to the account. "
                         + "This will be updated to reflect the association"
                         + "with the new endpoint being configured in the system in case they map back to "
                         + "the same cloud provider account. ")
-        @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
-        public Map<String, ServiceDocument> existingDocuments;
+        @PropertyOptions(usage = {SERVICE_USE}, indexing = STORE_ONLY)
+        public ComputeState existingComputeState;
+
+        @Documentation(description =
+                "The existing compute description corresponding to the account. "
+                        + "This will be updated to reflect the association"
+                        + "with the new endpoint being configured in the system in case they map back to "
+                        + "the same cloud provider account. ")
+        @PropertyOptions(usage = {SERVICE_USE}, indexing = STORE_ONLY)
+        public ComputeDescription existingComputeDescription;
     }
 
     public static class ResourceEnumerationRequest {
@@ -358,7 +366,8 @@ public class EndpointAllocationTaskService
                     EndpointAllocationTaskState state = createUpdateSubStageTask(
                             nextStage);
                     state.accountAlreadyExists = returnedRequest.accountAlreadyExists;
-                    state.existingDocuments = returnedRequest.existingDocuments;
+                    state.existingComputeState = returnedRequest.existingComputeState;
+                    state.existingComputeDescription = returnedRequest.existingComputeDescription;
                     sendSelfPatch(state);
                 }));
     }
@@ -855,8 +864,13 @@ public class EndpointAllocationTaskService
             isUpdate = true;
         }
 
-        if (body.existingDocuments != null) {
-            currentState.existingDocuments = body.existingDocuments;
+        if (body.existingComputeState != null) {
+            currentState.existingComputeState = body.existingComputeState;
+            isUpdate = true;
+        }
+
+        if (body.existingComputeDescription != null) {
+            currentState.existingComputeDescription = body.existingComputeDescription;
             isUpdate = true;
         }
 
@@ -946,25 +960,24 @@ public class EndpointAllocationTaskService
 
     private ComputeDescription configureDescription(EndpointAllocationTaskState currentState,
             EndpointState state) {
-        ComputeDescription cd = new ComputeDescription();
-        if (currentState.accountAlreadyExists) {
-            for (ServiceDocument document : currentState.existingDocuments.values()) {
-                if (document instanceof ComputeDescription) {
-                    cd = (ComputeDescription) document;
-                }
-            }
+        ComputeDescription cd;
+        if (currentState.accountAlreadyExists
+                && currentState.existingComputeDescription != null) {
+            cd = currentState.existingComputeDescription;
             if (cd.endpointLinks == null) {
                 cd.endpointLinks = new HashSet<>();
             }
             cd.endpointLinks.add(state.documentSelfLink);
             return cd;
         }
+
+        cd = new ComputeDescription();
         // setting up a host, so all have ENDPOINT_HOST as a child
         cd.tenantLinks = state.tenantLinks;
         cd.endpointLink = state.documentSelfLink;
 
         if (cd.endpointLinks == null) {
-            cd.endpointLinks = new HashSet<String>();
+            cd.endpointLinks = new HashSet<>();
         }
         cd.endpointLinks.add(state.documentSelfLink);
         cd.computeHostLink = state.computeHostLink;
@@ -990,20 +1003,18 @@ public class EndpointAllocationTaskService
 
     private ComputeState configureCompute(EndpointAllocationTaskState currentState,
             EndpointState state, Map<String, String> endpointProperties) {
-        ComputeState computeHost = new ComputeState();
-        if (currentState.accountAlreadyExists) {
-            for (ServiceDocument document : currentState.existingDocuments.values()) {
-                if (document instanceof ComputeState) {
-                    computeHost = (ComputeState) document;
-                }
-            }
+        ComputeState computeHost;
+        if (currentState.accountAlreadyExists
+                && currentState.existingComputeState != null) {
+            computeHost = currentState.existingComputeState;
             if (computeHost.endpointLinks == null) {
-                computeHost.endpointLinks = new HashSet<String>();
+                computeHost.endpointLinks = new HashSet<>();
             }
             computeHost.endpointLinks.add(state.documentSelfLink);
             return computeHost;
         }
 
+        computeHost = new ComputeState();
         String endpointRegionId = endpointProperties != null
                 ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
         computeHost.id = UUID.randomUUID().toString();
