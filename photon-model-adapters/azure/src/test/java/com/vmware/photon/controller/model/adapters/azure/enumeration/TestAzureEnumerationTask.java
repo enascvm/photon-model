@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertDiskExist;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceDisassociated;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
@@ -713,8 +714,8 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         assertResourceExists(this.host, StorageDescriptionService.FACTORY_LINK, (azureVMName +
                 "sa").replace("-", ""), true);
 
-        assertResourceExists(this.host, DiskService.FACTORY_LINK, azureVMName + "-boot-disk",
-                true);
+        assertDiskExist(this.host, DiskService.FACTORY_LINK, azureVMName + "-boot-disk", true);
+
         validateDiskInternalTag(this.host);
 
         // Tags

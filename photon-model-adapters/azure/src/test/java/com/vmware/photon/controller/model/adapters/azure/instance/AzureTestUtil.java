@@ -911,6 +911,14 @@ public class AzureTestUtil {
         rootDisk.endpointLinks.add(spec.endpointState.documentSelfLink);
         rootDisk.computeHostLink = spec.endpointState.computeHostLink;
         rootDisk.tenantLinks = spec.endpointState.tenantLinks;
+        if (spec.isManagedDisk) {
+            rootDisk.tagLinks = createTagStateSet(spec.host, spec.endpointState.tenantLinks,
+                    TAG_KEY_TYPE, AzureResourceType.azure_managed_disk.name());
+        } else {
+            rootDisk.tagLinks = createTagStateSet(spec.host, spec.endpointState.tenantLinks,
+                    TAG_KEY_TYPE, AzureResourceType.azure_vhd.name());
+        }
+
 
         rootDisk.customProperties = new HashMap<>();
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING.name());
@@ -1078,6 +1086,9 @@ public class AzureTestUtil {
         rootDisk.endpointLinks.add(endpointState.documentSelfLink);
         rootDisk.computeHostLink = computeHost.documentSelfLink;
         rootDisk.tenantLinks = endpointState.tenantLinks;
+        rootDisk.storageType = AZURE_STORAGE_DISKS;
+        rootDisk.tagLinks = createTagStateSet(host, endpointState.tenantLinks,
+                TAG_KEY_TYPE, AzureResourceType.azure_vhd.name());
 
         rootDisk.customProperties = new HashMap<>();
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING.name());
@@ -1334,7 +1345,7 @@ public class AzureTestUtil {
         List<String> tenantLinks = Collections.singletonList( EndpointType.azure.name() + "-tenant");
         diskState.tagLinks = createTagStateSet(host, endpointState.tenantLinks,
                 TAG_KEY_TYPE, AzureResourceType.azure_vhd.name());
-
+        diskState.tenantLinks = tenantLinks;
         diskState.storageDescriptionLink = storageContainerLink;
         diskState.type = DEFAULT_DISK_TYPE;
         diskState.storageType = AZURE_STORAGE_DISKS;
@@ -1770,6 +1781,33 @@ public class AzureTestUtil {
             ResourceState state = Utils.fromJson(document, ResourceState.class);
 
             if (name.equals(state.name)) {
+                exists = true;
+                break;
+            }
+        }
+
+        assertEquals("Expected: " + shouldExists + ", but was: " + exists, shouldExists, exists);
+    }
+
+    /**
+     * Assert that a managed / un-managed disk with the provided name exist in the document store.
+     *
+     * @param factoryLink
+     *            Factory link to the stateful service which states to check.
+     * @param name
+     *            name of the resource to assert if exists.
+     * @param shouldExists
+     *            whether to assert if a resource exists or not.
+     */
+    public static void assertDiskExist(VerificationHost host, String factoryLink,
+                                       String name, boolean shouldExists) {
+        ServiceDocumentQueryResult result = host.getExpandedFactoryState(
+                UriUtils.buildUri(host, factoryLink));
+
+        boolean exists = false;
+        for (Object document : result.documents.values()) {
+            DiskState diskState = Utils.fromJson(document, DiskState.class);
+            if (diskState.name.contains(name)) {
                 exists = true;
                 break;
             }
