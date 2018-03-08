@@ -62,9 +62,11 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -98,6 +100,7 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -107,7 +110,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -115,6 +117,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
@@ -129,6 +132,9 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -245,7 +251,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                     StorageDescription.class,
                     NetworkState.class,
                     NetworkInterfaceState.class,
-                    NetworkInterfaceDescription.class,
                     SubnetState.class,
                     TagState.class,
                     SecurityGroupState.class));
@@ -254,10 +259,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
     private Map<String, Long> resourcesCountAfterFirstEnumeration = new HashMap<>();
     private Map<String, Long> resourcesCountAfterMultipleEnumerations = new HashMap<>();
-    private Map<String, Double> resourceDeltaMap = new HashMap<>();
-    public long resourceDeltaValue = 10;
-
-    private boolean resourceCountAssertError = true;
 
     @BeforeClass
     public static void setupClass() {
@@ -444,7 +445,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, numOfVMsToTest,
                 DiskService.FACTORY_LINK, false);
 
-        Map<String, ComputeState> azLrtComputeStates = getVMComputeStatesWithPrefix(azureVMNamePrefix);
+        Map<String, ComputeState> azLrtComputeStates = getVMComputeStatesWithPrefix();
         Assert.assertEquals(numOfVMsToTest, azLrtComputeStates.size());
 
         if (this.isMock) {
@@ -515,10 +516,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             return true;
         });
 
-        if (this.resourceCountAssertError) {
-            this.host.log(Level.SEVERE, "Resource count assertions failed.");
-            fail("Resource count assertions failed.");
-        }
+        verifyResourceDuplicates();
 
         // 4. Validate extra resources
         assertRemoteResources();
@@ -553,7 +551,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
         // 5. Validate enumerated compute states have not changed.
 
-        Map<String, ComputeState> azLrtComputeStatesEnd = getVMComputeStatesWithPrefix(azureVMNamePrefix);
+        Map<String, ComputeState> azLrtComputeStatesEnd = getVMComputeStatesWithPrefix();
         assertTrue(numOfVMsToTest <= azLrtComputeStatesEnd.size());
         assertComputeStatesEqual(azLrtComputeStates, azLrtComputeStatesEnd);
 
@@ -679,10 +677,9 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
     /**
      * Filters and returns all compute states with a VM name starting with a particular prefix.
-     * @param vmPrefix A VM name prefix for distinguishing relevant compute states.
      * @return A map of ComputeStates with a prefix, with each VM name as the key.
      */
-    private Map<String, ComputeState> getVMComputeStatesWithPrefix(String vmPrefix) {
+    private Map<String, ComputeState> getVMComputeStatesWithPrefix() {
         URI queryUri = UriUtils.buildExpandLinksQueryUri(createServiceURI(host,
                 host.getUri(), ComputeService.FACTORY_LINK));
 
@@ -722,8 +719,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             }
             // perform check on resource counts after each enumeration
             generateResourcesCounts();
-            // assert check on resources count after first and last enumeration.
-            verifyResourcesCount();
             // assert check on resources count for internal tags
             verifyInternalTagsResourceCount();
         }, 0, this.enumerationFrequencyInMinutes, TimeUnit.MINUTES);
@@ -738,9 +733,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 this.resourcesCountAfterFirstEnumeration
                         .put(resource.toString(), getDocumentCount(resource));
             }
-
-            // populate error delta margin for resources.
-            populateResourceDelta();
         } else {
             for (Class resource : resourcesList) {
                 this.resourcesCountAfterMultipleEnumerations
@@ -750,40 +742,62 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     }
 
     /**
-     * Verify document count of resources after first enumeration and later enumerations.
+     * Verify documents for duplicates after multiple enumerations.
      */
-    private void verifyResourcesCount() {
-        if (this.numOfEnumerationsRan > 1) {
-            this.host.log(Level.INFO, "Verifying Resources counts...");
+    private void verifyResourceDuplicates() {
+        int total_dup_resource_count = 0;
 
-            for (Class resource : resourcesList) {
-                this.host.log(Level.INFO, "resource values are: [resource: %s],"
-                        + "[1st enumeration value: %d], "
-                        + "[latest enumeration value: %d],"
-                        + "[delta value: %f]",
-                        resource.toString(),
-                        this.resourcesCountAfterFirstEnumeration.get(resource.toString()),
-                        this.resourcesCountAfterMultipleEnumerations.get(resource.toString()),
-                        this.resourceDeltaMap.get(resource.toString()));
-
-                assertTrue((this.resourcesCountAfterFirstEnumeration.get(resource.toString())
-                        + this.resourceDeltaMap.get(resource.toString()))
-                        >= this.resourcesCountAfterMultipleEnumerations.get(resource.toString()));
-            }
-            this.resourceCountAssertError = false;
-            this.host.log(Level.INFO, "Resources count assertions successful.");
-        }
-    }
-
-    /**
-     * Populate delta error margin for resources counts.
-     */
-    private void populateResourceDelta() {
         for (Class resource : resourcesList) {
-            this.resourceDeltaMap.put(resource.toString(), Math.ceil(
-                    this.resourcesCountAfterFirstEnumeration.get(resource.toString()) *
-                            this.resourceDeltaValue / 100));
+            QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                    .addKindFieldClause(resource)
+                    .addFieldClause("endpointLinks.item", this.endpointState.documentSelfLink,
+                            QueryTask.QueryTerm.MatchType.TERM,
+                            QueryTask.Query.Occurance.MUST_OCCUR);
+
+            if (resource.getSimpleName().equals("ComputeState")) {
+                qBuilder.addFieldClause("type", "VM_GUEST",
+                        QueryTask.QueryTerm.MatchType.TERM,
+                        QueryTask.Query.Occurance.MUST_OCCUR);
+            }
+
+            QueryTask resourceQt = QueryTask.Builder.createDirectTask()
+                    .setQuery(qBuilder.build())
+                    .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
+                    .setResultLimit(10000)
+                    .build();
+
+            Operation queryDocuments = QueryUtils
+                    .createQueryTaskOperation(this.host, resourceQt,
+                            ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
+            Operation queryResponse = this.host.waitForResponse(queryDocuments);
+
+            Assert.assertTrue("Error retrieving enumerated documents",
+                    queryResponse.getStatusCode() == 200);
+
+            QueryTask qt = queryResponse.getBody(QueryTask.class);
+            Set<String> resourceIdSet = new HashSet<>();
+            if (qt.results != null && qt.results.documentLinks != null
+                    && qt.results.documentLinks.size() > 0) {
+                this.host.log("Number of %s docs: %d", resource.getSimpleName(), qt.results.documentLinks.size());
+                for (String resourceDocumentLink : qt.results.documentLinks) {
+                    Object object = qt.results.documents
+                            .get(resourceDocumentLink);
+                    ResourceState resourceState = Utils
+                            .fromJson(object, ResourceState.class);
+
+                    String resourceId = resourceState.id;
+                    if (!resourceIdSet.contains(resourceId)) {
+                        resourceIdSet.add(resourceId);
+                    } else {
+                        this.host.log("duplicate %s id = %s, with state: ",
+                                resource.getSimpleName(), resourceId, Utils.toJsonHtml(resourceState));
+                        total_dup_resource_count++;
+                    }
+                }
+            }
         }
+        assertEquals("Duplicate resources found: ", 0, total_dup_resource_count);
     }
 
     /**

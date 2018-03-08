@@ -13,7 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
@@ -24,14 +26,13 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 
 import org.apache.commons.lang3.StringUtils;
+import org.hamcrest.CoreMatchers;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -83,6 +84,7 @@ public class TestResourceDeduplication extends BasicTestCase {
 
     public boolean useAllRegions = true;
     public int timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
+    public static final String ENDPOINT_LINKS_FIELD_CLAUSE = "endpointLinks.item";
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -178,17 +180,12 @@ public class TestResourceDeduplication extends BasicTestCase {
 
         // perform resource enumeration on given AWS endpoint
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock, TEST_CASE_RUN);
-
-        List<String> expectedEndpoints = new ArrayList<>();
-        expectedEndpoints.add(this.endpointState.documentSelfLink);
-
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
+        validateEndpointLinks(this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
 
         // Add duplicate end point and verify the endpoints again.
         this.computeHost.endpointLinks.add(this.endpointState2.documentSelfLink);
         enumerateResources(this.host, this.computeHost, this.endpointState2, this.isMock, TEST_CASE_RUN);
-        expectedEndpoints.add(this.endpointState2.documentSelfLink);
-        validateEndpointLinks(2, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
+        validateEndpointLinks(this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
     }
 
     @Test
@@ -203,25 +200,24 @@ public class TestResourceDeduplication extends BasicTestCase {
         // perform resource enumeration on given AWS endpoint
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_RUN);
-
-        List<String> expectedEndpoints = new ArrayList<>();
-        expectedEndpoints.add(this.endpointState.documentSelfLink);
-
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
+        validateEndpointLinks(this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
 
         // delete endpoint
         EndpointRemovalTaskService.EndpointRemovalTaskState completeState = TestAWSSetupUtils
                 .deleteEndpointState(this.host, this.endpointState, true);
         assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
+        Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), this.endpointState.documentSelfLink))
+                .setReferer(this.host.getUri());
+        Operation response = this.host.waitForResponse(op);
+        assertTrue("Endpoint was expected to be deleted",
+                response.getStatusCode() == 404);
 
-        validateEndpointLinks(0, new ArrayList<>(), "", this.computeHost.documentSelfLink);
+        validateEndpointLinks("", this.computeHost.documentSelfLink);
 
         // Add end point again and verify the endpoints.
         enumerateResources(this.host, this.computeHost, this.endpointState2, this.isMock,
                 TEST_CASE_RUN);
-        expectedEndpoints.clear();
-        expectedEndpoints.add(this.endpointState2.documentSelfLink);
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState2.documentSelfLink, this.computeHost.documentSelfLink);
+        validateEndpointLinks(this.endpointState2.documentSelfLink, this.computeHost.documentSelfLink);
 
     }
 
@@ -239,29 +235,28 @@ public class TestResourceDeduplication extends BasicTestCase {
         enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_RUN);
 
-        List<String> expectedEndpoints = new ArrayList<>();
-        expectedEndpoints.add(this.endpointState.documentSelfLink);
-
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
+        validateEndpointLinks(this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
 
         // Add duplicate end point and verify the endpoints again.
         enumerateResources(this.host, this.computeHost, this.endpointState2, this.isMock,
                 TEST_CASE_RUN);
-        expectedEndpoints.add(this.endpointState2.documentSelfLink);
-        //        validateEndpointLinks(2, expectedEndpoints, this.endpointState.documentSelfLink);
 
         // delete endpoint
         EndpointRemovalTaskService.EndpointRemovalTaskState completeState = TestAWSSetupUtils
                 .deleteEndpointState(this.host, this.endpointState2, true);
         assertTrue(completeState.taskInfo.stage == TaskState.TaskStage.FINISHED);
-
-        expectedEndpoints.remove(this.endpointState2.documentSelfLink);
-        validateEndpointLinks(1, expectedEndpoints, this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
+        Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), this.endpointState2.documentSelfLink))
+                .setReferer(this.host.getUri());
+        Operation response = this.host.waitForResponse(op);
+        assertTrue("Endpoint was expected to be deleted",
+                response.getStatusCode() == 404);
+        validateEndpointLinks(this.endpointState.documentSelfLink, this.computeHost.documentSelfLink);
     }
 
-    private void validateEndpointLinks(int size, List<String> expectedEndpoints, String expectedEndpoint, String computeHostLink) {
+    private void validateEndpointLinks(String expectedEndpoint, String computeHostLink) {
 
-        List<String> computeDocLinks = getDocumentLinks(ComputeService.ComputeState.class);
+        List<String> computeDocLinks =  getDocumentLinks(ComputeService.ComputeState.class, expectedEndpoint);
+        this.host.log("ComputeState docs size: " + computeDocLinks.size());
         for (String docLink : computeDocLinks) {
             Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
                     .setReferer(this.host.getUri());
@@ -274,20 +269,19 @@ public class TestResourceDeduplication extends BasicTestCase {
                     && !ComputeDescriptionService.ComputeDescription.ComputeType.ZONE.equals(doc.type)) {
                 assertNotNull(doc.endpointLink);
                 if (StringUtils.isEmpty(expectedEndpoint)) {
-                    Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                    assertEquals("EndpointLink should be empty", expectedEndpoint, doc.endpointLink);
+                } else {
+                    assertThat(String.format("EndpointLinks should have: %s", expectedEndpoint),
+                            doc.endpointLinks, CoreMatchers.hasItem(expectedEndpoint));
                 }
 
-                Assert.assertEquals(doc.computeHostLink, computeHostLink);
+                assertEquals(doc.computeHostLink, computeHostLink);
                 assertNotNull(doc.documentCreationTimeMicros);
-                Assert.assertTrue(doc.endpointLinks.size() >= size);
-
-                for (String endpointLink : expectedEndpoints) {
-                    assertTrue(doc.endpointLinks.contains(endpointLink));
-                }
             }
         }
 
-        List<String> diskDocLinks = getDocumentLinks(DiskService.DiskState.class);
+        List<String> diskDocLinks = getDocumentLinks(DiskService.DiskState.class, expectedEndpoint);
+        this.host.log("DiskState docs size: " + diskDocLinks.size());
         for (String docLink : diskDocLinks) {
             Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
                     .setReferer(this.host.getUri());
@@ -295,20 +289,20 @@ public class TestResourceDeduplication extends BasicTestCase {
             assertTrue("Error retrieving state",
                     response.getStatusCode() == 200);
             DiskService.DiskState doc = response.getBody(DiskService.DiskState.class);
+
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
-                Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                assertEquals("EndpointLink should be empty", expectedEndpoint, doc.endpointLink);
+            } else {
+                assertThat(String.format("EndpointLinks should have: %s", expectedEndpoint),
+                        doc.endpointLinks, CoreMatchers.hasItem(expectedEndpoint));
             }
-            Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
-
-            Assert.assertTrue(doc.endpointLinks.size() >= size);
-            for (String endpointLink : expectedEndpoints) {
-                assertTrue(doc.endpointLinks.contains(endpointLink));
-            }
         }
 
-        List<String> networkDocLinks = getDocumentLinks(NetworkService.NetworkState.class);
+        List<String> networkDocLinks = getDocumentLinks(NetworkService.NetworkState.class, expectedEndpoint);
+        this.host.log("NetworkState docs size: " + networkDocLinks.size());
         for (String docLink : networkDocLinks) {
             Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
                     .setReferer(this.host.getUri());
@@ -316,20 +310,20 @@ public class TestResourceDeduplication extends BasicTestCase {
             assertTrue("Error retrieving state",
                     response.getStatusCode() == 200);
             NetworkService.NetworkState doc = response.getBody(NetworkService.NetworkState.class);
+
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
-                Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                assertEquals("EndpointLink should be empty", expectedEndpoint, doc.endpointLink);
+            } else {
+                assertThat(String.format("EndpointLinks should have: %s", expectedEndpoint),
+                        doc.endpointLinks, CoreMatchers.hasItem(expectedEndpoint));
             }
-            Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
-
-            Assert.assertTrue(doc.endpointLinks.size() >= size);
-            for (String endpointLink : expectedEndpoints) {
-                assertTrue(doc.endpointLinks.contains(endpointLink));
-            }
         }
 
-        List<String> subnetDocLinks = getDocumentLinks(SubnetService.SubnetState.class);
+        List<String> subnetDocLinks = getDocumentLinks(SubnetService.SubnetState.class, expectedEndpoint);
+        this.host.log("SubnetState docs size: " + subnetDocLinks.size());
         for (String docLink : subnetDocLinks) {
             Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
                     .setReferer(this.host.getUri());
@@ -337,21 +331,21 @@ public class TestResourceDeduplication extends BasicTestCase {
             assertTrue("Error retrieving state",
                     response.getStatusCode() == 200);
             SubnetService.SubnetState doc = response.getBody(SubnetService.SubnetState.class);
+
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
-                Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                assertEquals("EndpointLink should be empty", expectedEndpoint, doc.endpointLink);
+            } else {
+                assertThat(String.format("EndpointLinks should have: %s", expectedEndpoint),
+                        doc.endpointLinks, CoreMatchers.hasItem(expectedEndpoint));
             }
-            Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
-
-            Assert.assertTrue(doc.endpointLinks.size() >= size);
-            for (String endpointLink : expectedEndpoints) {
-                assertTrue(doc.endpointLinks.contains(endpointLink));
-            }
         }
 
         List<String> nicDocLinks = getDocumentLinks(
-                NetworkInterfaceService.NetworkInterfaceState.class);
+                NetworkInterfaceService.NetworkInterfaceState.class, expectedEndpoint);
+        this.host.log("NetworkInterfaceState docs size: " + nicDocLinks.size());
         for (String docLink : nicDocLinks) {
             Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
                     .setReferer(this.host.getUri());
@@ -360,20 +354,20 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             NetworkInterfaceService.NetworkInterfaceState doc = response
                     .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
+
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
-                Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                assertEquals("EndpointLink should be empty", expectedEndpoint, doc.endpointLink);
+            } else {
+                assertThat(String.format("EndpointLinks should have: %s", expectedEndpoint),
+                        doc.endpointLinks, CoreMatchers.hasItem(expectedEndpoint));
             }
-            Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
-
-            Assert.assertTrue(doc.endpointLinks.size() >= size);
-            for (String endpointLink : expectedEndpoints) {
-                assertTrue(doc.endpointLinks.contains(endpointLink));
-            }
         }
 
-        List<String> sgDocLinks = getDocumentLinks(SecurityGroupService.SecurityGroupState.class);
+        List<String> sgDocLinks = getDocumentLinks(SecurityGroupService.SecurityGroupState.class, expectedEndpoint);
+        this.host.log("SecurityGroupState docs size: " + sgDocLinks.size());
         for (String docLink : sgDocLinks) {
             Operation op = Operation.createGet(UriUtils.buildUri(this.host.getUri(), docLink))
                     .setReferer(this.host.getUri());
@@ -382,24 +376,29 @@ public class TestResourceDeduplication extends BasicTestCase {
                     response.getStatusCode() == 200);
             SecurityGroupService.SecurityGroupState doc = response
                     .getBody(SecurityGroupService.SecurityGroupState.class);
+
             assertNotNull(doc.endpointLink);
             if (StringUtils.isEmpty(expectedEndpoint)) {
-                Assert.assertEquals(expectedEndpoint, doc.endpointLink);
+                assertEquals("EndpointLink should be empty", expectedEndpoint, doc.endpointLink);
+            } else {
+                assertThat(String.format("EndpointLinks should have: %s", expectedEndpoint),
+                        doc.endpointLinks, CoreMatchers.hasItem(expectedEndpoint));
             }
-            Assert.assertEquals(doc.computeHostLink, computeHostLink);
+            assertEquals(doc.computeHostLink, computeHostLink);
             assertNotNull(doc.documentCreationTimeMicros);
-
-            Assert.assertTrue(doc.endpointLinks.size() >= size);
-            for (String endpointLink : expectedEndpoints) {
-                assertTrue(doc.endpointLinks.contains(endpointLink));
-            }
         }
     }
 
-
-    private List<String> getDocumentLinks(Class resourceState) {
+    private List<String> getDocumentLinks(Class resourceState, String endpointLink) {
         QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
                 .addKindFieldClause(resourceState);
+        if (endpointLink != null && !endpointLink.equals("")) {
+            qBuilder.addFieldClause(ENDPOINT_LINKS_FIELD_CLAUSE, endpointLink);
+        } else {
+            qBuilder.addFieldClause(ENDPOINT_LINKS_FIELD_CLAUSE, "*",
+                    QueryTask.QueryTerm.MatchType.WILDCARD,
+                    QueryTask.Query.Occurance.MUST_NOT_OCCUR);
+        }
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)

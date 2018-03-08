@@ -17,7 +17,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
@@ -59,18 +58,14 @@ import org.junit.rules.TestName;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.query.QueryUtils;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
-import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
@@ -165,24 +160,13 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private int numOfEnumerationsRan = 0;
 
     private static final List<Class> resourcesList = new ArrayList<>(
-            Arrays.asList(ResourceGroupState.class,
-                    ComputeState.class,
-                    ComputeDescription.class,
+            Arrays.asList(ComputeState.class,
                     DiskState.class,
-                    StorageDescription.class,
                     NetworkState.class,
                     NetworkInterfaceState.class,
-                    NetworkInterfaceDescription.class,
                     SubnetState.class,
                     TagState.class,
                     SecurityGroupState.class));
-
-    private Map<String, Long> resourcesCountAfterFirstEnumeration = new HashMap<>();
-    private Map<String, Long> resourcesCountAfterMultipleEnumerations = new HashMap<>();
-    private Map<String, Double> resourceDeltaMap = new HashMap<>();
-    public long resourceDeltaValue = 10;
-
-    private boolean resourceCountAssertError = true;
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -318,10 +302,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             return true;
         });
 
-        if (this.resourceCountAssertError) {
-            this.host.log(Level.SEVERE, "Resource count assertions failed.");
-            fail("Resource count assertions failed.");
-        }
+        verifyResourceDuplicates();
 
         // Store document links and ids for enumerated resources to obtain expected number of documents
         // and actual number of documents.
@@ -368,77 +349,68 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             } catch (Throwable e) {
                 this.host.log(Level.WARNING, "Error running enumeration in test" + e.getMessage());
             }
-            // perform check on resource counts after each enumeration
-            generateResourcesCounts();
-            // assert check on resources count after first and last enumeration.
-            verifyResourcesCount();
             // delete a nic and test use cases
             deleteNetworkInterface();
         }, 0, this.enumerationFrequencyInMinutes, TimeUnit.MINUTES);
     }
 
     /**
-     * Fetch the document count for resources
+     * Verify documents for duplicates after multiple enumerations.
      */
-    private void generateResourcesCounts() {
-        if (this.numOfEnumerationsRan == 1) {
-            for (Class resource : resourcesList) {
-                this.resourcesCountAfterFirstEnumeration
-                        .put(resource.toString(), getDocumentCount(resource));
-            }
+    private void verifyResourceDuplicates() {
+        int total_dup_resource_count = 0;
 
-            // populate error delta margin for resources.
-            populateResourceDelta();
-        } else {
-            for (Class resource : resourcesList) {
-                this.resourcesCountAfterMultipleEnumerations
-                        .put(resource.toString(), getDocumentCount(resource));
-            }
-        }
-    }
-
-    /**
-     * Populate delta error margin for resources counts.
-     */
-    private void populateResourceDelta() {
         for (Class resource : resourcesList) {
-            this.resourceDeltaMap.put(resource.toString(), Math.ceil(
-                    this.resourcesCountAfterFirstEnumeration.get(resource.toString()) *
-                            this.resourceDeltaValue / 100));
-        }
-    }
+            QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                    .addKindFieldClause(resource)
+                    .addFieldClause("endpointLinks.item", this.endpointState.documentSelfLink,
+                            QueryTask.QueryTerm.MatchType.TERM,
+                            QueryTask.Query.Occurance.MUST_OCCUR);
 
-    /**
-     * Returns the count of resource documents for given Resource type.
-     */
-    private long getDocumentCount(Class <? extends ServiceDocument> T) {
-        QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
-                .addKindFieldClause(T);
-
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.COUNT)
-                .setQuery(qBuilder.build())
-                .build();
-
-        this.host.createQueryTaskService(queryTask, false, true, queryTask, null);
-        return queryTask.results.documentCount;
-    }
-
-    /**
-     * Verify document count of resources after first enumeration and later enumerations.
-     */
-    private void verifyResourcesCount() {
-        if (this.numOfEnumerationsRan > 1) {
-            this.host.log(Level.INFO, "Verifying Resources counts...");
-
-            for (Class resource : resourcesList) {
-                assertTrue((this.resourcesCountAfterFirstEnumeration.get(resource.toString())
-                        + this.resourceDeltaMap.get(resource.toString()))
-                        >= this.resourcesCountAfterMultipleEnumerations.get(resource.toString()));
+            if (resource.getSimpleName().equals("ComputeState")) {
+                qBuilder.addFieldClause("type", "VM_GUEST",
+                        QueryTask.QueryTerm.MatchType.TERM,
+                        QueryTask.Query.Occurance.MUST_OCCUR);
             }
-            this.resourceCountAssertError = false;
-            this.host.log(Level.INFO, "Resources count assertions successful.");
+
+            QueryTask resourceQt = QueryTask.Builder.createDirectTask()
+                    .setQuery(qBuilder.build())
+                    .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
+                    .setResultLimit(10000)
+                    .build();
+
+            Operation queryDocuments = QueryUtils
+                    .createQueryTaskOperation(this.host, resourceQt,
+                            ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
+            Operation queryResponse = this.host.waitForResponse(queryDocuments);
+
+            Assert.assertTrue("Error retrieving enumerated documents",
+                    queryResponse.getStatusCode() == 200);
+
+            QueryTask qt = queryResponse.getBody(QueryTask.class);
+            Set<String> resourceIdSet = new HashSet<>();
+            if (qt.results != null && qt.results.documentLinks != null
+                    && qt.results.documentLinks.size() > 0) {
+                this.host.log("Number of %s docs: %d", resource.getSimpleName(), qt.results.documentLinks.size());
+                for (String resourceDocumentLink : qt.results.documentLinks) {
+                    Object object = qt.results.documents
+                            .get(resourceDocumentLink);
+                    ResourceState resourceState = Utils
+                            .fromJson(object, ResourceState.class);
+
+                    String resourceId = resourceState.id;
+                    if (!resourceIdSet.contains(resourceId)) {
+                        resourceIdSet.add(resourceId);
+                    } else {
+                        this.host.log("duplicate %s id = %s, with state: ",
+                                resource.getSimpleName(), resourceId, Utils.toJsonHtml(resourceState));
+                        total_dup_resource_count++;
+                    }
+                }
+            }
         }
+        assertEquals("Duplicate resources found: ", 0, total_dup_resource_count);
     }
 
     /**
