@@ -47,6 +47,8 @@ import com.vmware.xenon.common.Utils;
 public class ComputeService extends StatefulService {
 
     public static final String FACTORY_LINK = UriPaths.RESOURCES + "/compute";
+    public static final boolean FAIL_ON_NON_UNIQUE_LINKS = "true".equals(System
+            .getProperty(UriPaths.PROPERTY_PREFIX + "computestate.failonnonuniq", "false"));
 
     /**
      * Compute State document.
@@ -408,6 +410,31 @@ public class ComputeService extends StatefulService {
                 .whenCompleteNotify(start);
     }
 
+    private boolean checkDuplicatedDiskLinks(ComputeState computeState) {
+        return computeState.diskLinks != null
+                && computeState.diskLinks.stream().distinct().count()
+                != computeState.diskLinks.size();
+    }
+
+    private void validateDiskLinks(ComputeState state, ComputeState currentState, Operation op) {
+        if (checkDuplicatedDiskLinks(state)) {
+            // There are duplicate diskLinks in the body
+            String duplicateDiskLinksError = String.format(
+                    "Referer '%s' is making a call with " +
+                            "repeated disk links to ComputeState#id: '%s'.",
+                    op.getReferer(), state.id);
+
+            if (checkDuplicatedDiskLinks(currentState)) {
+                duplicateDiskLinksError += " Current disk links are also not unique.";
+            }
+            logSevere(duplicateDiskLinksError);
+
+            if (FAIL_ON_NON_UNIQUE_LINKS) {
+                op.fail(new IllegalStateException(duplicateDiskLinksError));
+            }
+        }
+    }
+
     @Override
     public void handlePut(Operation put) {
         if (PhotonModelUtils.isFromMigration(put)) {
@@ -416,23 +443,9 @@ public class ComputeService extends StatefulService {
         }
 
         ComputeState returnState = validatePut(put);
-        logIfDuplicatedDiskLinks(put, returnState);
         ResourceUtils.populateTags(this, returnState)
                 .thenAccept(__ -> setState(put, returnState))
                 .whenCompleteNotify(put);
-    }
-
-    private void logIfDuplicatedDiskLinks(Operation operation, ComputeState computeState) {
-        if (computeState.diskLinks != null) {
-            long diskLinksUniqueCount = computeState.diskLinks.stream().distinct().count();
-            if (diskLinksUniqueCount != computeState.diskLinks.size()) {
-                // There are duplicate diskLinks in the body
-                logSevere("Referer '%s' is making a call (caught in 'handlePut') with" +
-                                "repeated disk links to ComputeState#id: '%s'",
-                        operation.getReferer(),
-                        computeState.id);
-            }
-        }
     }
 
     private ComputeState validateCreate(Operation op) {
@@ -466,6 +479,7 @@ public class ComputeService extends StatefulService {
                 && !state.environmentName.equals(currentState.environmentName)) {
             throw new IllegalArgumentException("Environment name can not be changed");
         }
+        validateDiskLinks(state, currentState, op);
         ResourceUtils.validatePut(state, currentState);
         Utils.validateState(getStateDescription(), state);
         return state;
