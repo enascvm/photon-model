@@ -735,10 +735,17 @@ public class AWSClientManager {
     }
 
     /**
+     * Helper method to clean up this client manager's arnCredentialsCache.
+     */
+    public void cleanUpArnCache() {
+        this.arnCredentialsCache.clear();
+    }
+
+    /**
      * Clears out the client cache and all the resources associated with each of the AWS clients.
      */
     public void cleanUp() {
-        this.arnCredentialsCache.clear();
+        cleanUpArnCache();
         switch (this.awsClientType) {
         case CLOUD_WATCH:
             cleanupCache(this.cloudWatchClientCache, c -> c.shutdown());
