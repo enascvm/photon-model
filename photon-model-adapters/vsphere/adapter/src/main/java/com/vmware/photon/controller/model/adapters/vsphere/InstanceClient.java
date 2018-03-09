@@ -562,6 +562,7 @@ public class InstanceClient extends BaseHelper {
         }
 
         List<DiskStateExpanded> persistDisks = disks.stream()
+                .filter(disk -> disk.type == DiskType.HDD)
                 .filter(disk -> disk.persistent)
                 .collect(Collectors.toList());
 
@@ -572,7 +573,9 @@ public class InstanceClient extends BaseHelper {
         for (DiskStateExpanded ds: persistDisks) {
             VirtualDisk vd = (VirtualDisk) findMatchingVirtualDevice(getListOfVirtualDisk
                     (devices), ds);
-            detachDisk(this.connection, vd, vm, getVimPort());
+            if (vd != null) {
+                detachDisk(this.connection, vd, vm, getVimPort());
+            }
 
             // Now update the status of the persistent disks to be AVAILABLE
             ds.status = DiskService.DiskStatus.AVAILABLE;

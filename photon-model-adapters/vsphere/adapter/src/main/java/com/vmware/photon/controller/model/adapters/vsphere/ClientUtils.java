@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
+import static com.vmware.vim25.VirtualDiskMode.PERSISTENT;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -90,6 +91,7 @@ import com.vmware.vim25.VirtualDeviceConfigSpecOperation;
 import com.vmware.vim25.VirtualDeviceConnectInfo;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
+import com.vmware.vim25.VirtualDiskFlatVer1BackingInfo;
 import com.vmware.vim25.VirtualDiskFlatVer2BackingInfo;
 import com.vmware.vim25.VirtualDiskMode;
 import com.vmware.vim25.VirtualDiskType;
@@ -236,7 +238,7 @@ public class ClientUtils {
      */
     public static String getDiskMode(DiskService.DiskStateExpanded diskState) {
         if (diskState.customProperties == null) {
-            return VirtualDiskMode.PERSISTENT.value();
+            return PERSISTENT.value();
         }
 
         boolean isIndependent = Boolean.valueOf(diskState.customProperties.get(DISK_MODE_INDEPENDENT));
@@ -246,7 +248,7 @@ public class ClientUtils {
                 (isPersistent ?
                         VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
                         VirtualDiskMode.INDEPENDENT_NONPERSISTENT.value()) :
-                VirtualDiskMode.PERSISTENT.value();
+                PERSISTENT.value();
     }
 
     /**
@@ -868,6 +870,7 @@ public class ClientUtils {
             ds.persistent = Boolean.FALSE;
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
+            updateDiskStateFromBackingInfo(backing, ds);
             if (disk.getStorageIOAllocation() != null) {
                 StorageIOAllocationInfo storageInfo = disk.getStorageIOAllocation();
                 CustomProperties.of(ds)
@@ -887,6 +890,7 @@ public class ClientUtils {
             }
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
+            updateDiskStateFromBackingInfo(backing, ds);
         }
         CustomProperties.of(ds)
                 .put(CustomProperties.DISK_DATASTORE_NAME, backing.getDatastore().getValue())
@@ -925,6 +929,52 @@ public class ClientUtils {
             operation = createDiskPatch(matchedDs, service);
         }
         return operation;
+    }
+
+    private static void updateDiskStateFromBackingInfo(VirtualDeviceFileBackingInfo backing,
+            DiskService.DiskState ds) {
+
+        try {
+            if (backing instanceof VirtualDiskFlatVer1BackingInfo) {
+                VirtualDiskFlatVer1BackingInfo flatVer1 = (VirtualDiskFlatVer1BackingInfo) backing;
+                updateDiskModeInDiskState(VirtualDiskMode.fromValue(flatVer1.getDiskMode()), ds);
+            } else if (backing instanceof VirtualDiskFlatVer2BackingInfo) {
+                VirtualDiskFlatVer2BackingInfo flatVer2 = (VirtualDiskFlatVer2BackingInfo) backing;
+                updateDiskModeInDiskState(VirtualDiskMode.fromValue(flatVer2.getDiskMode()), ds);
+                // Update the provisioning type as well.
+                VirtualDiskType diskType = VirtualDiskType.THICK;
+                if (flatVer2.isThinProvisioned()) {
+                    diskType = VirtualDiskType.THIN;
+                } else if (flatVer2.isEagerlyScrub()) {
+                    diskType = VirtualDiskType.EAGER_ZEROED_THICK;
+                }
+                CustomProperties.of(ds).put(PROVISION_TYPE, diskType.value());
+            }
+        } catch (Exception e) {
+            // any exception ignore it. it won't update the properties in the disk.
+        }
+    }
+
+    private static void updateDiskModeInDiskState(VirtualDiskMode diskMode, DiskService.DiskState ds) {
+        boolean isIndependent;
+        boolean isPersistent;
+        switch (diskMode) {
+        case INDEPENDENT_PERSISTENT:
+            isIndependent = true;
+            isPersistent = true;
+            break;
+        case INDEPENDENT_NONPERSISTENT:
+            isIndependent = true;
+            isPersistent = false;
+            break;
+        case PERSISTENT:
+        default:
+            isIndependent = false;
+            isPersistent = true;
+        }
+        CustomProperties.of(ds)
+                .put(DISK_MODE_INDEPENDENT, isIndependent)
+                .put(DISK_MODE_PERSISTENT, isPersistent);
     }
 
     private static void addEndpointLinks(DiskService.DiskState ds, String endpointLink) {
