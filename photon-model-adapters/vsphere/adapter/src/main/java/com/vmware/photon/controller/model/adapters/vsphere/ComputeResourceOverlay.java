@@ -91,12 +91,20 @@ public class ComputeResourceOverlay extends AbstractOverlay {
         return (short) getOrFail(VimPath.res_summary_numCpuCores);
     }
 
+    public int getTotalCpuCoresOrZero() {
+        return (short) getOrDefault(VimPath.res_summary_numCpuCores, 0);
+    }
+
     public long getTotalMemoryBytes() {
         return (long) getOrDefault(VimPath.res_summary_totalMemory, 0L);
     }
 
     public int getTotalCpuMhz() {
         return (int) getOrFail(VimPath.res_summary_totalCpu);
+    }
+
+    public int getTotalCpuMhzOrZero() {
+        return (int) getOrDefault(VimPath.res_summary_totalCpu, 0);
     }
 
     public List<ManagedObjectReference> getDatastore() {
@@ -157,5 +165,9 @@ public class ComputeResourceOverlay extends AbstractOverlay {
             info = (((ClusterConfigInfoEx) cfg));
         }
         return info;
+    }
+
+    public String getNameOrNull() {
+        return (String) getOrDefault(VimNames.PROPERTY_NAME, null);
     }
 }

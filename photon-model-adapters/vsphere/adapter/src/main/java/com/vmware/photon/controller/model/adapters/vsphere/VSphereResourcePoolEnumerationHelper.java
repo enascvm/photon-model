@@ -31,8 +31,10 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectUpdateKind;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
@@ -46,7 +48,8 @@ public class VSphereResourcePoolEnumerationHelper {
     }
 
     private static ComputeState makeResourcePoolFromResults(
-            EnumerationProgress enumerationProgress, ResourcePoolOverlay rp, String selfLink) {
+            EnumerationProgress enumerationProgress, ResourcePoolOverlay rp, String selfLink, EnumerationClient client)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
 
         ComputeState state = new ComputeState();
@@ -66,13 +69,13 @@ public class VSphereResourcePoolEnumerationHelper {
         AbstractOverlay ov = enumerationProgress.getOverlay(owner);
         if (ov instanceof ComputeResourceOverlay) {
             ComputeResourceOverlay cr = (ComputeResourceOverlay) ov;
-            state.groupLinks = VsphereComputeResourceEnumerationHelper
-                    .getConnectedDatastoresAndNetworks(enumerationProgress, cr.getDatastore(), cr.getNetwork());
+            state.groupLinks = VsphereEnumerationHelper
+                    .getConnectedDatastoresAndNetworks(enumerationProgress, cr.getDatastore(), cr.getNetwork(), client);
         } else if (ov instanceof HostSystemOverlay) {
             HostSystemOverlay cr = (HostSystemOverlay) ov;
-            state.groupLinks = VsphereComputeResourceEnumerationHelper
+            state.groupLinks = VsphereEnumerationHelper
                     .getConnectedDatastoresAndNetworks(enumerationProgress,
-                            cr.getDatastore(), cr.getNetwork());
+                            cr.getDatastore(), cr.getNetwork(), client);
         }
 
         CustomProperties.of(state)
@@ -131,13 +134,14 @@ public class VSphereResourcePoolEnumerationHelper {
         };
     }
 
-    private static void updateResourcePool(VSphereIncrementalEnumerationService service,
-                                           EnumerationProgress enumerationProgress, String ownerName, String selfLink,
-                                           ResourcePoolOverlay rp, boolean fullUpdate) {
+    private static void updateResourcePool(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            String ownerName, String selfLink, ResourcePoolOverlay rp, boolean fullUpdate,
+            EnumerationClient client) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeState state;
         ComputeDescription desc;
         if (fullUpdate) {
-            state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink);
+            state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink, client);
             state.name = rp.makeUserFriendlyName(ownerName);
             state.tenantLinks = enumerationProgress.getTenantLinks();
             state.resourcePoolLink = null;
@@ -172,10 +176,11 @@ public class VSphereResourcePoolEnumerationHelper {
         return state;
     }
 
-    private static void createNewResourcePool(VSphereIncrementalEnumerationService service,
-                                              EnumerationProgress enumerationProgress, String ownerName, String selfLink,
-                                              ResourcePoolOverlay rp) {
-        ComputeState state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink);
+    private static void createNewResourcePool(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            String ownerName, String selfLink, ResourcePoolOverlay rp, EnumerationClient client)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ComputeState state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink, client);
         state.name = rp.makeUserFriendlyName(ownerName);
         state.tenantLinks = enumerationProgress.getTenantLinks();
 
@@ -197,19 +202,23 @@ public class VSphereResourcePoolEnumerationHelper {
 
     public static void processFoundResourcePool(VSphereIncrementalEnumerationService service,
                                                 EnumerationProgress enumerationProgress, ResourcePoolOverlay rp,
-                                                String ownerName) {
+                                                String ownerName, EnumerationClient client) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         String selfLink = buildStableResourcePoolLink(rp.getId(), request.endpointLink);
 
         Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), selfLink))
                 .setCompletion((o, e) -> {
-                    if (e == null) {
-                        updateResourcePool(service, enumerationProgress, ownerName, selfLink, rp, true);
-                    } else if (e instanceof ServiceNotFoundException
-                            || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
-                        createNewResourcePool(service, enumerationProgress, ownerName, selfLink, rp);
-                    } else {
-                        trackResourcePool(enumerationProgress, rp).handle(o, e);
+                    try {
+                        if (e == null) {
+                            updateResourcePool(service, enumerationProgress, ownerName, selfLink, rp, true, client);
+                        } else if (e instanceof ServiceNotFoundException
+                                || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
+                            createNewResourcePool(service, enumerationProgress, ownerName, selfLink, rp, client);
+                        } else {
+                            enumerationProgress.getResourcePoolTracker().track();
+                        }
+                    } catch (Exception ex) {
+                        enumerationProgress.getResourcePoolTracker().track(rp.getId(), ResourceTracker.ERROR);
                     }
                 })
                 .sendWith(service);
@@ -217,7 +226,7 @@ public class VSphereResourcePoolEnumerationHelper {
 
     public static void handleResourcePoolChanges(
             VSphereIncrementalEnumerationService service, List<ResourcePoolOverlay> resourcePools,
-            EnumerationProgress enumerationProgress) {
+            EnumerationProgress enumerationProgress, EnumerationClient client) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         enumerationProgress.expectResourcePoolCount(resourcePools.size());
 
@@ -232,32 +241,42 @@ public class VSphereResourcePoolEnumerationHelper {
                 QueryTask task = queryForRPOwner(ownerMoRefId, enumerationProgress);
                 String selfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
                 withTaskResults(service, task, result -> {
-                    if (!result.documentLinks.isEmpty()) {
-                        ComputeService.ComputeState ownerDocument = convertOnlyResultToDocument(result, ComputeService.ComputeState.class);
-                        createNewResourcePool(service, enumerationProgress, ownerDocument.name, selfLink, resourcePool);
-                    } else {
-                        // This happens for the resource pools within Host. The owner is a ComputeResource and
-                        // is not currently enumerated in photon
-                        createNewResourcePool(service, enumerationProgress, null, selfLink, resourcePool);
+                    try {
+                        if (!result.documentLinks.isEmpty()) {
+                            ComputeState ownerDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                            createNewResourcePool(
+                                    service, enumerationProgress, ownerDocument.name, selfLink, resourcePool, client);
+                        } else {
+                            // This happens for the resource pools within Host. The owner is a ComputeResource and
+                            // is not currently enumerated in photon
+                            createNewResourcePool(
+                                    service, enumerationProgress, null, selfLink, resourcePool, client);
+                        }
+                    } catch (Exception e) {
+                        enumerationProgress.getResourcePoolTracker().track();
                     }
                 });
             } else {
                 String rpSelfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
                 Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
                         .setCompletion((o, e) -> {
-                            if (e == null) {
-                                ComputeService.ComputeState oldState = o.getBody(ComputeService.ComputeState.class);
-                                String existingOwnerName = getOwnerNameFromResourcePoolName(oldState.name);
-                                if (ObjectUpdateKind.MODIFY.equals(resourcePool.getObjectUpdateKind())) {
-                                    updateResourcePool(
-                                            service, enumerationProgress, existingOwnerName, oldState.documentSelfLink, resourcePool, false);
+                            try {
+                                if (e == null) {
+                                    ComputeState oldState = o.getBody(ComputeState.class);
+                                    String existingOwnerName = getOwnerNameFromResourcePoolName(oldState.name);
+                                    if (ObjectUpdateKind.MODIFY.equals(resourcePool.getObjectUpdateKind())) {
+                                        updateResourcePool(
+                                                service, enumerationProgress, existingOwnerName, oldState.documentSelfLink, resourcePool, false, client);
+                                    } else {
+                                        Operation.createDelete(
+                                                PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
+                                                .setCompletion(trackResourcePool(enumerationProgress, resourcePool))
+                                                .sendWith(service);
+                                    }
                                 } else {
-                                    Operation.createDelete(
-                                            PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
-                                            .setCompletion(trackResourcePool(enumerationProgress, resourcePool))
-                                            .sendWith(service);
+                                    enumerationProgress.getResourcePoolTracker().track();
                                 }
-                            } else {
+                            } catch (Exception ex) {
                                 enumerationProgress.getResourcePoolTracker().track();
                             }
                         })

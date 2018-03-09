@@ -128,9 +128,9 @@ public class EnumerationClient extends BaseHelper {
         return sharedDs;
     }
 
-    public ManagedObjectReference getParentSwitchForDVPortGroup(NetworkOverlay net)
+    public ManagedObjectReference getParentSwitchForDVPortGroup(ManagedObjectReference portGroupMoref)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        ManagedObjectReference parent = this.getMoRef.entityProp(net.getId(), VimPath.pg_config_distributedVirtualSwitch);
+        ManagedObjectReference parent = this.getMoRef.entityProp(portGroupMoref, VimPath.pg_config_distributedVirtualSwitch);
         return parent;
     }
 

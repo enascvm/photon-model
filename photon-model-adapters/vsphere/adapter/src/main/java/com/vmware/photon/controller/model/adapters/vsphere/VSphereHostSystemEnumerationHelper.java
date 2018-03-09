@@ -31,7 +31,9 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ObjectUpdateKind;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.services.common.QueryTask;
@@ -90,8 +92,9 @@ public class VSphereHostSystemEnumerationHelper {
         return res;
     }
 
-    private static ComputeState makeHostSystemFromChanges(EnumerationProgress enumerationProgress,
-                                                          HostSystemOverlay hs) {
+    private static ComputeState makeHostSystemFromChanges(
+            EnumerationProgress enumerationProgress, HostSystemOverlay hs, EnumerationClient client)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeState state = new ComputeState();
         // add name if its changed.
         state.name = hs.getNameOrNull();
@@ -100,14 +103,15 @@ public class VSphereHostSystemEnumerationHelper {
             state.powerState = PowerState.SUSPEND;
         }
         // update group links if there are any addition/ removal of data stores and networks
-        state.groupLinks = VsphereComputeResourceEnumerationHelper.getConnectedDatastoresAndNetworks(
-                enumerationProgress, hs.getDatastore(), hs.getNetwork());
+        state.groupLinks = VsphereEnumerationHelper.getConnectedDatastoresAndNetworks(
+                enumerationProgress, hs.getDatastore(), hs.getNetwork(), client);
 
         return state;
     }
 
     private static ComputeState makeHostSystemFromResults(EnumerationProgress enumerationProgress,
-                                                          HostSystemOverlay hs) {
+                                                          HostSystemOverlay hs, EnumerationClient client)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeState state = new ComputeState();
         state.type = hs.isClusterHost() ? ComputeType.CLUSTER_HOST : ComputeType.VM_HOST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
@@ -119,8 +123,8 @@ public class VSphereHostSystemEnumerationHelper {
                 .getRequest().adapterManagementReference;
         state.parentLink = enumerationProgress.getRequest().resourceLink();
         state.resourcePoolLink = enumerationProgress.getRequest().resourcePoolLink;
-        state.groupLinks = VsphereComputeResourceEnumerationHelper
-                .getConnectedDatastoresAndNetworks(enumerationProgress, hs.getDatastore(), hs.getNetwork());
+        state.groupLinks = VsphereEnumerationHelper
+                .getConnectedDatastoresAndNetworks(enumerationProgress, hs.getDatastore(), hs.getNetwork(), client);
 
         state.name = hs.getName();
         // TODO: retrieve host power state
@@ -165,14 +169,15 @@ public class VSphereHostSystemEnumerationHelper {
         };
     }
 
-    private static void updateHostSystem(VSphereIncrementalEnumerationService service, ComputeState oldDocument,
-                                         EnumerationProgress enumerationProgress, HostSystemOverlay hs, boolean fullUpdate) {
-
+    private static void updateHostSystem(
+            VSphereIncrementalEnumerationService service, ComputeState oldDocument,
+            EnumerationProgress enumerationProgress, HostSystemOverlay hs, boolean fullUpdate,
+            EnumerationClient client) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeState state;
         if (fullUpdate) {
-            state = makeHostSystemFromResults(enumerationProgress, hs);
+            state = makeHostSystemFromResults(enumerationProgress, hs, client);
         } else {
-            state = makeHostSystemFromChanges(enumerationProgress, hs);
+            state = makeHostSystemFromChanges(enumerationProgress, hs, client);
         }
 
         state.documentSelfLink = oldDocument.documentSelfLink;
@@ -209,7 +214,7 @@ public class VSphereHostSystemEnumerationHelper {
     }
 
     private static void createNewHostSystem(
-            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress, HostSystemOverlay hs, EnumerationClient client) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeDescription desc = makeDescriptionForHost(service, enumerationProgress, hs);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
@@ -217,7 +222,7 @@ public class VSphereHostSystemEnumerationHelper {
                 .setBody(desc)
                 .sendWith(service);
 
-        ComputeState state = makeHostSystemFromResults(enumerationProgress, hs);
+        ComputeState state = makeHostSystemFromResults(enumerationProgress, hs, client);
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = enumerationProgress.getTenantLinks();
 
@@ -236,42 +241,57 @@ public class VSphereHostSystemEnumerationHelper {
      * Process all the host system retrieved from the endpoint.
      */
     public static void processFoundHostSystem(VSphereIncrementalEnumerationService service,
-                                              EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
+                                              EnumerationProgress enumerationProgress, HostSystemOverlay hs, EnumerationClient client) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
 
         withTaskResults(service, task, result -> {
-            if (result.documentLinks.isEmpty()) {
-                createNewHostSystem(service, enumerationProgress, hs);
-            } else {
-                ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                updateHostSystem(service, oldDocument, enumerationProgress, hs, true);
+            try {
+                if (result.documentLinks.isEmpty()) {
+                    createNewHostSystem(service, enumerationProgress, hs, client);
+                } else {
+                    ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                    updateHostSystem(service, oldDocument, enumerationProgress, hs, true, client);
+                }
+            } catch (Exception e) {
+                service.logSevere("Error occurred while processing host system!", e);
+                enumerationProgress.getHostSystemTracker().track();
             }
         });
     }
 
     public static void handleHostSystemChanges(VSphereIncrementalEnumerationService service, List<HostSystemOverlay> hostSystemOverlays,
-                                               EnumerationProgress enumerationProgress) {
+                                               EnumerationProgress enumerationProgress, EnumerationClient client) {
 
         enumerationProgress.expectHostSystemCount(hostSystemOverlays.size());
         for (HostSystemOverlay hs : hostSystemOverlays) {
-            if (ObjectUpdateKind.ENTER.equals(hs.getObjectUpdateKind())) {
-                createNewHostSystem(service, enumerationProgress, hs);
-            } else {
-                ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-                QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
-                withTaskResults(service, task, result -> {
-                    if (!result.documentLinks.isEmpty()) {
-                        ComputeService.ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeService.ComputeState.class);
-                        if (ObjectUpdateKind.MODIFY.equals(hs.getObjectUpdateKind())) {
-                            updateHostSystem(service, oldDocument, enumerationProgress, hs, false);
+            try {
+                if (ObjectUpdateKind.ENTER.equals(hs.getObjectUpdateKind())) {
+                    createNewHostSystem(service, enumerationProgress, hs, client);
+                } else {
+                    ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+                    QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
+                    withTaskResults(service, task, result -> {
+                        if (!result.documentLinks.isEmpty()) {
+                            try {
+                                ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                                if (ObjectUpdateKind.MODIFY.equals(hs.getObjectUpdateKind())) {
+                                    updateHostSystem(service, oldDocument, enumerationProgress, hs, false, client);
+                                } else {
+                                    deleteHostSystem(service, enumerationProgress, hs, oldDocument);
+                                }
+                            } catch (Exception ex) {
+                                service.logSevere("Error occurred while processing host system!", ex);
+                                enumerationProgress.getHostSystemTracker().track();
+                            }
                         } else {
-                            deleteHostSystem(service, enumerationProgress, hs, oldDocument);
+                            enumerationProgress.getHostSystemTracker().track();
                         }
-                    } else {
-                        enumerationProgress.getHostSystemTracker().track();
-                    }
-                });
+                    });
+                }
+            } catch (Exception ex) {
+                service.logSevere("Error occurred while processing host system!", ex);
+                enumerationProgress.getHostSystemTracker().track();
             }
         }
     }

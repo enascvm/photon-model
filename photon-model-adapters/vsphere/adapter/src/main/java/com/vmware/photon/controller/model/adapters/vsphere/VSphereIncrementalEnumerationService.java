@@ -55,6 +55,7 @@ import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.AboutInfo;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectUpdate;
+import com.vmware.vim25.ObjectUpdateKind;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.PropertyFilterUpdate;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
@@ -232,10 +233,12 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                             .handleNetworkChanges(this, segregatedOverlays.networks, enumerationProgress, client);
                                     VsphereDatastoreEnumerationHelper
                                             .handleDatastoreChanges(this, segregatedOverlays.datastores, enumerationProgress);
+                                    VsphereComputeResourceEnumerationHelper
+                                            .handleComputeResourceChanges(this, segregatedOverlays.clusters, enumerationProgress, client);
                                     VSphereHostSystemEnumerationHelper
-                                            .handleHostSystemChanges(this, segregatedOverlays.hosts, enumerationProgress);
+                                            .handleHostSystemChanges(this, segregatedOverlays.hosts, enumerationProgress, client);
                                     VSphereResourcePoolEnumerationHelper
-                                            .handleResourcePoolChanges(this, segregatedOverlays.resourcePools, enumerationProgress);
+                                            .handleResourcePoolChanges(this, segregatedOverlays.resourcePools, enumerationProgress, client);
                                 }
                             }
                             mgr.patchTask(TaskStage.FINISHED);
@@ -601,7 +604,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         for (ComputeResourceOverlay cluster : segregatedOverlays.clusters) {
             ctx.track(cluster);
             cluster.markHostAsClustered(segregatedOverlays.hosts);
-            VsphereComputeResourceEnumerationHelper.processFoundComputeResource(this, ctx, cluster);
+            VsphereComputeResourceEnumerationHelper.processFoundComputeResource(this, ctx, cluster, client);
         }
 
         // checkpoint compute
@@ -617,7 +620,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         logInfo("Processing hosts on datacenter: " + ctx.getDcLink());
         for (HostSystemOverlay hs : segregatedOverlays.hosts) {
             ctx.track(hs);
-            VSphereHostSystemEnumerationHelper.processFoundHostSystem(this, ctx, hs);
+            VSphereHostSystemEnumerationHelper.processFoundHostSystem(this, ctx, hs, client);
         }
 
         // exclude all root resource pools
@@ -629,7 +632,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         logInfo("Processing resource pools on datacenter: " + ctx.getDcLink());
         for (ResourcePoolOverlay rp : segregatedOverlays.resourcePools) {
             String ownerName = computeResourceNamesByMoref.get(rp.getOwner());
-            VSphereResourcePoolEnumerationHelper.processFoundResourcePool(this, ctx, rp, ownerName);
+            VSphereResourcePoolEnumerationHelper.processFoundResourcePool(this, ctx, rp, ownerName, client);
         }
 
         // checkpoint compute
@@ -727,8 +730,10 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                 segregatedOverlays.hosts.add(hs);
             } else if (VimUtils.isComputeResource(cont.getObj())) {
                 ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
-                if (cr.isDrsEnabled()) {
+                if ((ObjectUpdateKind.ENTER.equals(cr.getObjectUpdateKind()) && cr.isDrsEnabled())
+                        || (!ObjectUpdateKind.ENTER.equals(cr.getObjectUpdateKind()))) {
                     // when DRS is enabled add the cluster itself and skip the hosts
+                    // if a cluster is modified or deleted, add it to overlays
                     segregatedOverlays.clusters.add(cr);
                 } else {
                     // ignore non-clusters and non-drs cluster: they are handled as hosts

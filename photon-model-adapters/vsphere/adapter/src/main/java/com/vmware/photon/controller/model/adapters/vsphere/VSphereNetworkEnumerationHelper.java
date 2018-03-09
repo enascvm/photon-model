@@ -191,7 +191,7 @@ public class VSphereNetworkEnumerationHelper {
 
         if (subnet != null) {
             Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(),
-                    SubnetService.FACTORY_LINK))
+                    subnet.documentSelfLink))
                     .setBody(subnet)
                     .sendWith(service);
         }
@@ -412,7 +412,7 @@ public class VSphereNetworkEnumerationHelper {
                     ManagedObjectReference parentSwitch = netOverlay.getParentSwitch();
                     // if parent is not retrieved, Retrieve it.
                     if (null == parentSwitch && ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
-                        parentSwitch = client.getParentSwitchForDVPortGroup(netOverlay);
+                        parentSwitch = client.getParentSwitchForDVPortGroup(netOverlay.getId());
                     }
                     QueryTask task = queryForSubnet(enumerationProgress, netOverlay, parentSwitch);
                     withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {

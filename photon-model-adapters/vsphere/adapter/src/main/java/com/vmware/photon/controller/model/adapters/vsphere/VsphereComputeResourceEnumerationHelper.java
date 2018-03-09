@@ -13,15 +13,17 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_PORTGROUP;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.convertOnlyResultToDocument;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.getConnectedDatastoresAndNetworks;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.submitWorkToVSpherePool;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.updateLocalTags;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
 import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_SERVER_DISK;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
@@ -37,7 +39,9 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.HostScsiDisk;
-import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
+import com.vmware.vim25.ObjectUpdateKind;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.VsanHostConfigInfo;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -45,8 +49,8 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 public class VsphereComputeResourceEnumerationHelper {
-    static QueryTask queryForCluster(EnumerationProgress ctx, String parentComputeLink,
-                                     String moRefId) {
+    private static QueryTask queryForCluster(EnumerationProgress ctx, String parentComputeLink,
+                                             String moRefId) {
         Builder builder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink)
@@ -60,33 +64,9 @@ public class VsphereComputeResourceEnumerationHelper {
                 .build();
     }
 
-    static Set<String> getConnectedDatastoresAndNetworks(EnumerationProgress ctx, List<ManagedObjectReference> datastores,
-                                                         List<ManagedObjectReference> networks) {
-        Set<String> res = new TreeSet<>();
-
-        for (ManagedObjectReference ref : datastores) {
-            res.add(VsphereEnumerationHelper.computeGroupStableLink(ref,
-                    VSphereIncrementalEnumerationService.PREFIX_DATASTORE, ctx.getRequest().endpointLink));
-        }
-
-        for (ManagedObjectReference ref : networks) {
-            NetworkOverlay ov = (NetworkOverlay) ctx.getOverlay(ref);
-            if (ov.getParentSwitch() != null) {
-                // instead of a portgroup add the switch
-                res.add(VsphereEnumerationHelper.computeGroupStableLink(ov.getParentSwitch(),
-                        VSphereIncrementalEnumerationService.PREFIX_NETWORK, ctx.getRequest().endpointLink));
-            } else if (!TYPE_PORTGROUP.equals(ov.getId().getType())) {
-                // skip portgroups and care only about opaque nets and standard swtiches
-                res.add(VsphereEnumerationHelper.computeGroupStableLink(ov.getId(),
-                        VSphereIncrementalEnumerationService.PREFIX_NETWORK, ctx.getRequest().endpointLink));
-            }
-        }
-
-        return res;
-    }
-
-    static ComputeState makeComputeResourceFromResults(EnumerationProgress enumerationProgress,
-                                                       ComputeResourceOverlay cr) {
+    private static ComputeState makeComputeResourceFromResults(
+            EnumerationProgress enumerationProgress, ComputeResourceOverlay cr,
+            EnumerationClient client) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeState state = new ComputeState();
         state.id = cr.getId().getValue();
         state.type = cr.isDrsEnabled() ? ComputeType.ZONE : ComputeType.VM_HOST;
@@ -99,7 +79,7 @@ public class VsphereComputeResourceEnumerationHelper {
         state.parentLink = enumerationProgress.getRequest().resourceLink();
         state.resourcePoolLink = enumerationProgress.getRequest().resourcePoolLink;
         state.groupLinks = getConnectedDatastoresAndNetworks(enumerationProgress,
-                cr.getDatastore(), cr.getNetwork());
+                cr.getDatastore(), cr.getNetwork(), client);
 
         state.name = cr.getName();
         state.powerState = PowerState.ON;
@@ -113,8 +93,8 @@ public class VsphereComputeResourceEnumerationHelper {
         return state;
     }
 
-    static CompletionHandler trackComputeResource(EnumerationProgress enumerationProgress,
-                                                  ComputeResourceOverlay cr) {
+    private static CompletionHandler trackComputeResource(EnumerationProgress enumerationProgress,
+                                                          ComputeResourceOverlay cr) {
         return (o, e) -> {
             enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
             if (e == null) {
@@ -126,8 +106,8 @@ public class VsphereComputeResourceEnumerationHelper {
         };
     }
 
-    static ComputeDescription makeDescriptionForCluster(VSphereIncrementalEnumerationService service,
-                                                        EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
+    private static ComputeDescription makeDescriptionForCluster(VSphereIncrementalEnumerationService service,
+                                                                EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
         ComputeDescription res = new ComputeDescription();
         res.name = cr.getName();
         res.documentSelfLink =
@@ -153,8 +133,10 @@ public class VsphereComputeResourceEnumerationHelper {
         return res;
     }
 
-    static void createNewComputeResource(VSphereIncrementalEnumerationService service,
-                                         EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
+    private static void createNewComputeResource(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            ComputeResourceOverlay cr, EnumerationClient client)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeDescription desc = makeDescriptionForCluster(service, enumerationProgress, cr);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
@@ -162,11 +144,11 @@ public class VsphereComputeResourceEnumerationHelper {
                 .setBody(desc)
                 .sendWith(service);
 
-        ComputeState state = makeComputeResourceFromResults(enumerationProgress, cr);
+        ComputeState state = makeComputeResourceFromResults(enumerationProgress, cr, client);
         state.tenantLinks = enumerationProgress.getTenantLinks();
         state.descriptionLink = desc.documentSelfLink;
 
-        VsphereEnumerationHelper.submitWorkToVSpherePool(service, () -> {
+        submitWorkToVSpherePool(service, () -> {
             VsphereEnumerationHelper.populateTags(service, enumerationProgress, cr, state);
 
             service.logFine(() -> String.format("Found new ComputeResource %s", cr.getId().getValue()));
@@ -177,9 +159,16 @@ public class VsphereComputeResourceEnumerationHelper {
         });
     }
 
-    static void updateCluster(VSphereIncrementalEnumerationService service, ComputeState oldDocument,
-                              EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
-        ComputeState state = makeComputeResourceFromResults(enumerationProgress, cr);
+    private static void updateCluster(
+            VSphereIncrementalEnumerationService service, ComputeState oldDocument,
+            EnumerationProgress enumerationProgress, ComputeResourceOverlay cr,
+            EnumerationClient client, boolean fullUpdate) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ComputeState state;
+        if (fullUpdate) {
+            state = makeComputeResourceFromResults(enumerationProgress, cr, client);
+        } else {
+            state = makeComputeResourceFromChanges(enumerationProgress, cr, client);
+        }
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
 
@@ -193,13 +182,18 @@ public class VsphereComputeResourceEnumerationHelper {
                 .setCompletion((o, e) -> {
                     trackComputeResource(enumerationProgress, cr).handle(o, e);
                     if (e == null) {
-                        VsphereEnumerationHelper.submitWorkToVSpherePool(service, ()
-                                -> VsphereEnumerationHelper.updateLocalTags(service,
+                        submitWorkToVSpherePool(service, ()
+                                -> updateLocalTags(service,
                                 enumerationProgress, cr, o.getBody(ResourceState.class)));
                     }
-                }).sendWith(service);
-
-        ComputeDescription desc = makeDescriptionForCluster(service, enumerationProgress, cr);
+                })
+                .sendWith(service);
+        ComputeDescription desc;
+        if (fullUpdate) {
+            desc = makeDescriptionForCluster(service, enumerationProgress, cr);
+        } else {
+            desc = makeDescriptionFromChanges(enumerationProgress, cr);
+        }
         desc.documentSelfLink = oldDocument.descriptionLink;
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), desc.documentSelfLink))
                 .setBody(desc)
@@ -211,20 +205,26 @@ public class VsphereComputeResourceEnumerationHelper {
      * querying for a compute with id equals to moref value of a cluster whose parent is the Compute
      * from the request.
      */
-    static void processFoundComputeResource(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
-                                            ComputeResourceOverlay cr) {
+    public static void processFoundComputeResource(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+                                                   ComputeResourceOverlay cr, EnumerationClient client) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForCluster(enumerationProgress, request.resourceLink(), cr.getId().getValue());
 
-        VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-            if (result.documentLinks.isEmpty()) {
-                createNewComputeResource(service, enumerationProgress, cr);
-            } else {
-                ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
-                updateCluster(service, oldDocument, enumerationProgress, cr);
-            }
-            if (!cr.getVsanHostConfig().isEmpty()) {
-                processServerDisks(service, cr.getVsanHostConfig(), enumerationProgress);
+        withTaskResults(service, task, result -> {
+            try {
+                if (result.documentLinks.isEmpty()) {
+                    createNewComputeResource(service, enumerationProgress, cr, client);
+                } else {
+                    ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                    updateCluster(service, oldDocument, enumerationProgress, cr, client, true);
+                }
+                if (!cr.getVsanHostConfig().isEmpty()) {
+                    processServerDisks(service, cr.getVsanHostConfig(), enumerationProgress);
+                }
+            } catch (Exception e) {
+                // if there's an error while processing compute resource
+                service.logSevere("Error occurred while processing update of compute resource!", e);
+                enumerationProgress.getComputeResourceTracker().track(cr.getId(), ResourceTracker.ERROR);
             }
         });
     }
@@ -240,11 +240,11 @@ public class VsphereComputeResourceEnumerationHelper {
             disks.add(vsanHostDiskMapping.getSsd());
             disks.forEach(disk -> {
                 QueryTask task = queryForServerDisks(ctx, disk);
-                VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                withTaskResults(service, task, result -> {
                     if (result.documentLinks.isEmpty()) {
                         createServerDisk(service, disk, ctx, config.getHostSystem().getValue());
                     } else {
-                        DiskService.DiskState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, DiskService.DiskState.class);
+                        DiskService.DiskState oldDocument = convertOnlyResultToDocument(result, DiskService.DiskState.class);
                         updateServerDisk(service, disk, oldDocument, ctx, config.getHostSystem().getValue());
                     }
                 });
@@ -274,7 +274,7 @@ public class VsphereComputeResourceEnumerationHelper {
 
     private static DiskService.DiskState makeServerDisksFromResults(HostScsiDisk serverDisk, EnumerationProgress ctx,
                                                                     String server) {
-        DiskService.DiskState ds =  new DiskService.DiskState();
+        DiskService.DiskState ds = new DiskService.DiskState();
         ds.name = serverDisk.getDisplayName();
         // block size is in Bytes - converting to GigaBytes
         long capacityInGB = serverDisk.getCapacity().getBlockSize() * serverDisk.getCapacity().getBlock() / (1024L * 1024L * 1024L);
@@ -305,5 +305,83 @@ public class VsphereComputeResourceEnumerationHelper {
         return QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
                 .build();
+    }
+
+    private static ComputeDescription makeDescriptionFromChanges(EnumerationProgress enumerationProgress, ComputeResourceOverlay cr) {
+        ComputeDescription res = new ComputeDescription();
+        res.name = cr.getNameOrNull();
+        res.cpuCount = cr.getTotalCpuCoresOrZero();
+        if (cr.getTotalCpuCoresOrZero() != 0 && cr.getTotalCpuMhzOrZero() != 0) {
+            res.cpuMhzPerCore = cr.getTotalCpuMhzOrZero() / cr.getTotalCpuCoresOrZero();
+        }
+        return res;
+    }
+
+    private static ComputeState makeComputeResourceFromChanges(
+            EnumerationProgress enumerationProgress, ComputeResourceOverlay cr, EnumerationClient client)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ComputeService.ComputeState state = new ComputeState();
+        state.name = cr.getNameOrNull();
+        // connected network or datastore membership changes
+        state.groupLinks = getConnectedDatastoresAndNetworks(enumerationProgress, cr.getDatastore(), cr.getNetwork(), client);
+        return state;
+    }
+
+    public static void handleComputeResourceChanges(
+            VSphereIncrementalEnumerationService service, List<ComputeResourceOverlay> computeResourceOverlays,
+            EnumerationProgress ctx, EnumerationClient client) {
+
+        ctx.expectComputeResourceCount(computeResourceOverlays.size());
+        //process compute resource changes
+        for (ComputeResourceOverlay cluster : computeResourceOverlays) {
+            try {
+                // check if its a new compute resource
+                //TODO If a host is part of cluster then the host needs to be populated with cluster link.
+                if (ObjectUpdateKind.ENTER == cluster.getObjectUpdateKind()) {
+                    // create a cluster object only for DRS enabled clusters
+                    if (cluster.isDrsEnabled()) {
+                        createNewComputeResource(service, ctx, cluster, client);
+                    }
+                } else {
+                    // If an existing compute resource is modified or removed.
+                    ComputeEnumerateResourceRequest request = ctx.getRequest();
+                    QueryTask task = queryForCluster(ctx, request.resourceLink(), cluster.getId().getValue());
+
+                    withTaskResults(service, task, result -> {
+                        try {
+                            if (!result.documentLinks.isEmpty()) {
+                                ComputeState oldDocument = convertOnlyResultToDocument(
+                                        result, ComputeState.class);
+                                // check if the compute resource is modified.
+                                if (ObjectUpdateKind.MODIFY.equals(cluster.getObjectUpdateKind())) {
+                                    updateCluster(service, oldDocument, ctx, cluster, client, false);
+                                } else {
+                                    // Compute resource has been removed. remove the compute resource from photon model here
+                                    // Delete only compute state document as compute description can be shared among compute resources.
+                                    Operation.createDelete(
+                                            PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                                            .setCompletion((o, e) -> {
+                                                trackComputeResource(ctx, cluster).handle(o, e);
+                                            }).sendWith(service);
+                                }
+                            }
+                        } catch (Exception ex) {
+                            service.logSevere("Error occurred while processing update of compute resource!", ex);
+                            ctx.getComputeResourceTracker().track(cluster.getId(), ResourceTracker.ERROR);
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                service.logSevere("Error occurred while processing update of compute resource!", e);
+                ctx.getComputeResourceTracker().track(cluster.getId(), ResourceTracker.ERROR);
+            }
+        }
+
+        // checkpoint compute resource
+        try {
+            ctx.getComputeResourceTracker().await();
+        } catch (InterruptedException e) {
+            service.logSevere("Interrupted during incremental enumeration for networks!", e);
+        }
     }
 }

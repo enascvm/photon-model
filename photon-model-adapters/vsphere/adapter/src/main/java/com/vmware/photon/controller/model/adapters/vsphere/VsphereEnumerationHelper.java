@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_PORTGROUP;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -21,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -38,7 +41,9 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -239,5 +244,37 @@ public class VsphereEnumerationHelper {
                 ResourceGroupService.FACTORY_LINK,
                 prefix + "-" +
                         VimUtils.buildStableManagedObjectId(ref, endpointLink));
+    }
+
+    public static Set<String> getConnectedDatastoresAndNetworks(
+            EnumerationProgress ctx, List<ManagedObjectReference> datastores,
+            List<ManagedObjectReference> networks, EnumerationClient enumerationClient)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        Set<String> res = new TreeSet<>();
+
+        for (ManagedObjectReference ref : datastores) {
+            res.add(computeGroupStableLink(ref,
+                    VSphereIncrementalEnumerationService.PREFIX_DATASTORE, ctx.getRequest().endpointLink));
+        }
+
+        for (ManagedObjectReference ref : networks) {
+            NetworkOverlay ov = (NetworkOverlay) ctx.getOverlay(ref);
+            //The ctx.getOverlay can be null in incremental
+            if (TYPE_PORTGROUP.equals(ref.getType())) {
+                NetworkOverlay ovly = (NetworkOverlay) ctx.getOverlay(ref);
+                ManagedObjectReference parentSwitch = null;
+                if (null == ovly) {
+                    parentSwitch = enumerationClient.getParentSwitchForDVPortGroup(ref);
+                } else {
+                    parentSwitch = ovly.getParentSwitch();
+                }
+                res.add(computeGroupStableLink(parentSwitch,
+                        VSphereIncrementalEnumerationService.PREFIX_NETWORK, ctx.getRequest().endpointLink));
+            } else {
+                res.add(computeGroupStableLink(ov.getId(),
+                        VSphereIncrementalEnumerationService.PREFIX_NETWORK, ctx.getRequest().endpointLink));
+            }
+        }
+        return res;
     }
 }
