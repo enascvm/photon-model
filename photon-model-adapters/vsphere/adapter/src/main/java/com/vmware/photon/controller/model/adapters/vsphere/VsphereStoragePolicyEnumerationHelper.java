@@ -55,7 +55,7 @@ public class VsphereStoragePolicyEnumerationHelper {
     }
 
     static ResourceGroupState makeStoragePolicyFromResults(ComputeEnumerateResourceRequest request,
-                                                           StoragePolicyOverlay sp) {
+                                                           StoragePolicyOverlay sp, final String dcLink) {
         ResourceGroupState res = new ResourceGroupState();
         res.id = sp.getProfileId();
         res.name = sp.getName();
@@ -65,6 +65,7 @@ public class VsphereStoragePolicyEnumerationHelper {
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
                 .put(ComputeProperties.RESOURCE_TYPE_KEY, sp.getType())
+                .put(CustomProperties.DATACENTER_SELF_LINK, dcLink)
                 .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, request.endpointLink);
 
         return res;
@@ -166,12 +167,11 @@ public class VsphereStoragePolicyEnumerationHelper {
         }
     }
 
-    static void updateStoragePolicy(
-            VSphereIncrementalEnumerationService service, ResourceGroupState oldDocument,
-            EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
-        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+    static void updateStoragePolicy(VSphereIncrementalEnumerationService service, ResourceGroupState oldDocument,
+                                    EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
 
-        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp);
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, enumerationProgress.getDcLink());
         rgState.documentSelfLink = oldDocument.documentSelfLink;
 
         if (oldDocument.tenantLinks == null) {
@@ -192,11 +192,11 @@ public class VsphereStoragePolicyEnumerationHelper {
                 }).sendWith(service);
     }
 
-    static void createNewStoragePolicy(
-            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
-            StoragePolicyOverlay sp) {
+    static void createNewStoragePolicy(VSphereIncrementalEnumerationService service,
+                                       EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
+
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp);
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, enumerationProgress.getDcLink());
         rgState.tenantLinks = enumerationProgress.getTenantLinks();
         service.logFine(() -> String.format("Found new Storage Policy %s", sp.getName()));
 
@@ -218,9 +218,8 @@ public class VsphereStoragePolicyEnumerationHelper {
      * it already present, then update its properties. Process the updates on its compatible
      * datastores.
      */
-    static void processFoundStoragePolicy(
-            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
-            StoragePolicyOverlay sp) {
+    static void processFoundStoragePolicy(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+                                          StoragePolicyOverlay sp) {
         QueryTask task = queryForStoragePolicy(enumerationProgress, sp.getProfileId(), sp.getName());
 
         VsphereEnumerationHelper.withTaskResults(service, task, result -> {

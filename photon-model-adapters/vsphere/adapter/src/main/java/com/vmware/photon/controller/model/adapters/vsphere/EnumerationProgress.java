@@ -40,12 +40,14 @@ public class EnumerationProgress {
     private ResourceTracker storagePolicyTracker;
     private ResourceTracker deleteDiskTracker;
     private ResourceTracker folderTracker;
+    private ResourceTracker dcTracker;
 
     private final MoRefKeyedMap<AbstractOverlay> overlays;
 
     private Phaser vmTracker;
     private Phaser snapshotTracker;
     private String regionId;
+    private String dcLink;
 
     public EnumerationProgress(Set<String> resourceLinks, ComputeEnumerateResourceRequest request,
             ComputeStateWithDescription parent, VapiConnection endpoint, String regionId) {
@@ -160,10 +162,26 @@ public class EnumerationProgress {
         this.overlays.put(overlay.getId(), overlay);
     }
 
+    public String getDcLink() {
+        return this.dcLink;
+    }
+
+    public void setDcLink(String dcLink) {
+        this.dcLink = dcLink;
+    }
+
     public void touchResource(String selfLink) {
         if (selfLink != null) {
             this.resourceLinks.remove(selfLink);
         }
+    }
+
+    public ResourceTracker getDcTracker() {
+        return this.dcTracker;
+    }
+
+    public void expectDatacenterCount(int count) {
+        this.dcTracker = new ResourceTracker(count);
     }
 
     public ResourceTracker getDeleteDiskTracker() {

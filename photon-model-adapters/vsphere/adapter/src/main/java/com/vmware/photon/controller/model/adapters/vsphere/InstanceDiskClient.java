@@ -128,11 +128,15 @@ public class InstanceDiskClient extends BaseHelper {
                         matchedDs.customProperties = new HashMap<>();
                     }
                     matchedDs.customProperties.putAll(this.diskState.customProperties);
-                    updateDiskStateFromVirtualDevice(virtualDevice, matchedDs, virtualDevice.getBacking());
+                    updateDiskStateFromVirtualDevice(virtualDevice, matchedDs, virtualDevice.getBacking(),
+                            CustomProperties.of(this.diskState)
+                                    .getString(CustomProperties.DATACENTER_SELF_LINK));
                     CustomProperties.of(matchedDs).put(TEMPLATE_DISK_LINK, this.diskState.documentSelfLink);
                     return matchedDs;
                 } else {
-                    updateDiskStateFromVirtualDevice(virtualDevice, this.diskState, virtualDevice.getBacking());
+                    updateDiskStateFromVirtualDevice(virtualDevice, this.diskState, virtualDevice.getBacking(),
+                            CustomProperties.of(this.diskState)
+                                    .getString(CustomProperties.DATACENTER_SELF_LINK));
                 }
             }
         } else {
@@ -140,7 +144,9 @@ public class InstanceDiskClient extends BaseHelper {
             VirtualDevice virtualDevice = findMatchingVirtualDevice(getListOfVirtualFloppy
                     (devices), this.diskState);
             if (virtualDevice != null) {
-                updateDiskStateFromVirtualDevice(virtualDevice, this.diskState, virtualDevice.getBacking());
+                updateDiskStateFromVirtualDevice(virtualDevice, this.diskState, virtualDevice.getBacking(),
+                        CustomProperties.of(this.diskState)
+                                .getString(CustomProperties.DATACENTER_SELF_LINK));
             }
         }
         return this.diskState;

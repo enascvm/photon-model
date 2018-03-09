@@ -249,6 +249,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                     assertNotNull(rg.customProperties);
                     assertNotNull(rg.customProperties.get(RESOURCE_TYPE_KEY));
                     assertNotNull(rg.customProperties.get(ComputeProperties.ENDPOINT_LINK_PROP_NAME));
+                    assertNotNull(rg.customProperties.get(CustomProperties.DATACENTER_SELF_LINK));
                 }
             });
         }
@@ -257,9 +258,11 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private void verifyCIGapForComputeResourcesAndVMs() throws Throwable {
         ComputeState cd = findRandomVm();
         assertNotNull(cd.customProperties.get(CustomProperties.VM_SOFTWARE_NAME));
+        assertNotNull(cd.customProperties.get(CustomProperties.DATACENTER_SELF_LINK));
         ComputeState host = findRandomHost();
         assertNotNull(host.customProperties.get(CustomProperties.MODEL_NAME));
         assertNotNull(host.customProperties.get(CustomProperties.MANUFACTURER));
+        assertNotNull(host.customProperties.get(CustomProperties.DATACENTER_SELF_LINK));
     }
 
     private void verifyCIGapForDatacenterOrFolder(String type) {

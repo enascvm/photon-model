@@ -491,18 +491,22 @@ public class VSphereAdapterInstanceService extends StatelessService {
         // Handle all the HDD disk
         for (VirtualDevice disk : disks) {
             DiskStateExpanded matchedDs = findMatchingDiskState(disk, ctx.disks);
-
             if (disk instanceof VirtualDisk) {
                 handleVirtualDiskUpdate(ctx.child.endpointLink, matchedDs, (VirtualDisk) disk,
                         diskLinks, ctx.parent.description.regionId, this, CustomProperties.of(state)
-                                .getString(CustomProperties.MOREF))
+                                .getString(CustomProperties.MOREF), CustomProperties.of(state)
+                                .getString(CustomProperties.DATACENTER_SELF_LINK))
                         .sendWith(this);
             } else if (disk instanceof VirtualCdrom) {
                 handleVirtualDeviceUpdate(ctx.child.endpointLink, matchedDs, DiskType.CDROM, disk,
-                        diskLinks, ctx.parent.description.regionId, this, true).sendWith(this);
+                        diskLinks, ctx.parent.description.regionId, this, true, CustomProperties.of(state)
+                                .getString(CustomProperties.DATACENTER_SELF_LINK))
+                        .sendWith(this);
             } else if (disk instanceof VirtualFloppy) {
                 handleVirtualDeviceUpdate(ctx.child.endpointLink, matchedDs, DiskType.FLOPPY, disk,
-                        diskLinks, ctx.parent.description.regionId, this, true).sendWith(this);
+                        diskLinks, ctx.parent.description.regionId, this, true, CustomProperties.of(state)
+                                .getString(CustomProperties.DATACENTER_SELF_LINK))
+                        .sendWith(this);
             }
         }
         state.diskLinks = diskLinks;

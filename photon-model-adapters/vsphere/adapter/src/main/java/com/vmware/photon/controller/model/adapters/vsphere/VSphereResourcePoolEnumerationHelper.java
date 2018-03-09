@@ -77,6 +77,7 @@ public class VSphereResourcePoolEnumerationHelper {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, rp.getId())
+                .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.TYPE, VimNames.TYPE_RESOURCE_POOL);
         return state;
     }

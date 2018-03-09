@@ -130,6 +130,7 @@ public class VSphereHostSystemEnumerationHelper {
         }
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
+                .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.TYPE, hs.getId().getType())
                 .put(CustomProperties.HS_CPU_GHZ, hs.getCpuMhz() / 1024)
                 .put(CustomProperties.MANUFACTURER, hs.getVendor())
@@ -164,9 +165,9 @@ public class VSphereHostSystemEnumerationHelper {
         };
     }
 
-    private static void updateHostSystem(
-            VSphereIncrementalEnumerationService service, ComputeState oldDocument,
-            EnumerationProgress enumerationProgress, HostSystemOverlay hs, boolean fullUpdate) {
+    private static void updateHostSystem(VSphereIncrementalEnumerationService service, ComputeState oldDocument,
+                                         EnumerationProgress enumerationProgress, HostSystemOverlay hs, boolean fullUpdate) {
+
         ComputeState state;
         if (fullUpdate) {
             state = makeHostSystemFromResults(enumerationProgress, hs);

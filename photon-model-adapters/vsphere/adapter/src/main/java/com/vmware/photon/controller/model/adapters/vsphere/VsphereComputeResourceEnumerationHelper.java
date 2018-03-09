@@ -108,6 +108,7 @@ public class VsphereComputeResourceEnumerationHelper {
                 .put(CustomProperties.TYPE, cr.getId().getType())
                 .put(CustomProperties.CR_IS_VSAN_ENABLED, cr.isVsanEnabled())
                 .put(CustomProperties.CR_VSAN_CONFIG_ID, cr.getVsanConfigId())
+                .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
         return state;
     }
@@ -196,8 +197,7 @@ public class VsphereComputeResourceEnumerationHelper {
                                 -> VsphereEnumerationHelper.updateLocalTags(service,
                                 enumerationProgress, cr, o.getBody(ResourceState.class)));
                     }
-                })
-                .sendWith(service);
+                }).sendWith(service);
 
         ComputeDescription desc = makeDescriptionForCluster(service, enumerationProgress, cr);
         desc.documentSelfLink = oldDocument.descriptionLink;

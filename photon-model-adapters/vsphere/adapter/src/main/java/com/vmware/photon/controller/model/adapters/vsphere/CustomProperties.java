@@ -125,6 +125,11 @@ public class CustomProperties {
     public static final String DISK_FULL_PATH = "__diskFullPath";
 
     /**
+     * documentSelfLink of Datacenter
+     */
+    public static final String DATACENTER_SELF_LINK = "__dcSelfLink";
+
+    /**
      * Disk parent directory
      */
     public static final String DISK_PARENT_DIRECTORY = "__diskParentDir";

@@ -544,7 +544,7 @@ public class ClientUtils {
      * Capture virtual cdrom attributes in the disk state for reference.
      */
     public static void updateDiskStateFromVirtualDevice(VirtualDevice vd, DiskService.DiskState
-            disk, VirtualDeviceBackingInfo backing) {
+            disk, VirtualDeviceBackingInfo backing, String dcLink) {
         fillInControllerUnitNumber(disk, vd.getUnitNumber());
         if (backing != null && backing instanceof VirtualDeviceFileBackingInfo) {
             disk.sourceImageReference = VimUtils
@@ -560,6 +560,10 @@ public class ClientUtils {
             CustomProperties.of(disk)
                     .put(DEVICE_CONNECTED, vd.getConnectable().isConnected())
                     .put(DEVICE_STATUS, vd.getConnectable().getStatus());
+        }
+        if (dcLink != null) {
+            CustomProperties.of(disk)
+                    .put(CustomProperties.DATACENTER_SELF_LINK, dcLink);
         }
     }
 
@@ -839,7 +843,7 @@ public class ClientUtils {
      */
     public static Operation handleVirtualDiskUpdate(String endpointLink,
             DiskService.DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
-            String regionId, Service service, String vm) {
+            String regionId, Service service, String vm, String dcLink) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -890,6 +894,7 @@ public class ClientUtils {
                 .put(CustomProperties.DISK_DATASTORE_NAME, backing.getDatastore().getValue())
                 .put(CustomProperties.TYPE, VirtualDisk.class.getSimpleName())
                 .put(CustomProperties.DISK_PROVISION_IN_GB, disk.getCapacityInKB() / (1024 * 1024))
+                .put(CustomProperties.DATACENTER_SELF_LINK, dcLink)
                 .put(CustomProperties.DISK_PARENT_VM, vm);
         operation = (matchedDs == null) ? createDisk(ds, service) : createDiskPatch(ds, service);
 
@@ -902,20 +907,20 @@ public class ClientUtils {
     public static Operation handleVirtualDeviceUpdate(String endpointLink,
             DiskService.DiskStateExpanded matchedDs,
             DiskService.DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
-            Service service, boolean isBacking) {
+            Service service, boolean isBacking, String dcLink) {
         Operation operation;
         if (matchedDs == null) {
             DiskService.DiskState ds = createNewDiskState(type, disk, regionId, service);
             addEndpointLinks(ds, endpointLink);
             if (isBacking) {
-                updateDiskStateFromVirtualDevice(disk, ds, disk.getBacking());
+                updateDiskStateFromVirtualDevice(disk, ds, disk.getBacking(), dcLink);
             } else {
-                updateDiskStateFromVirtualDevice(disk, ds, null);
+                updateDiskStateFromVirtualDevice(disk, ds, null, dcLink);
             }
             operation = createDisk(ds, service);
             diskLinks.add(ds.documentSelfLink);
         } else {
-            updateDiskStateFromVirtualDevice(disk, matchedDs, null);
+            updateDiskStateFromVirtualDevice(disk, matchedDs, null, dcLink);
             if (matchedDs.persistent == null) {
                 matchedDs.persistent = Boolean.FALSE;
             }

@@ -73,6 +73,7 @@ public class VSphereVMSnapshotEnumerationHelper {
         snapshot.endpointLinks.add(enumerationProgress.getRequest().endpointLink);
         CustomProperties.of(snapshot)
                 .put(CustomProperties.MOREF, VimUtils.convertMoRefToString(current.getSnapshot()))
+                .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.TYPE, current.getSnapshot().getType());
         return snapshot;
     }
@@ -115,8 +116,8 @@ public class VSphereVMSnapshotEnumerationHelper {
         QueryTask task = queryForSnapshot(enumerationProgress, current.getId().toString(),
                 vmSelfLink);
         VsphereEnumerationHelper.withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
-            SnapshotState snapshotState = constructSnapshot(service, current, parentLink, vmSelfLink,
-                    enumerationProgress, vm);
+            SnapshotState snapshotState = constructSnapshot(service, current, parentLink,
+                    vmSelfLink, enumerationProgress, vm);
             if (result.documentLinks.isEmpty()) {
                 VSphereVirtualMachineEnumerationHelper.createSnapshot(service, snapshotState)
                         .thenCompose(createdSnapshotState ->
@@ -136,12 +137,10 @@ public class VSphereVMSnapshotEnumerationHelper {
                         current.getId().toString())
                         .thenCompose(updatedSnapshotState ->
                                 trackAndProcessChildSnapshots(service, current, enumerationProgress, vm,
-                                        vmSelfLink,
-                                        updatedSnapshotState))
+                                        vmSelfLink, updatedSnapshotState))
                         .whenComplete((ss, e) -> {
                             if (e != null) {
-                                service.log(Level.SEVERE, "Updation of snapshot with name {%s}, " +
-                                                "selflink {%s} failed.",
+                                service.logSevere("Updating of snapshot with name {%s}, selfLink {%s} failed",
                                         snapshotState.name, oldState.documentSelfLink);
                             }
                             enumerationProgress.getSnapshotTracker().arrive();

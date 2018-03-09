@@ -394,7 +394,6 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         logInfo("vcUuid %s", this.vcUuid);
 
         DatacenterLister lister = new DatacenterLister(connection);
-
         try {
             for (Element element : lister.listAllDatacenters()) {
                 ManagedObjectReference datacenter = element.object;
@@ -405,15 +404,14 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
                 EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
                         parent, vapiConnection, VimUtils.convertMoRefToString(datacenter));
-
-                try {
-                    refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
-                    VsphereDatacenterEnumerationHelper.processDatacenterInfo(this, element, enumerationProgress);
-                } catch (Exception e) {
-                    logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
-                }
+                enumerationProgress.expectDatacenterCount(1); //since we are processing DC sequentially one at a time
+                VsphereDatacenterEnumerationHelper.processDatacenterInfo(this, element, enumerationProgress);
+                enumerationProgress.getDcTracker().await();
+                logInfo("Proceeding to refresh resources on datacenter: " + enumerationProgress.getDcLink());
+                refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
             }
         } catch (Exception e) {
+            logWarning(String.format("Error during enumeration: %s", Utils.toString(e)));
             mgr.patchTaskToFailure(e);
         }
 
@@ -478,6 +476,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         CollectorDetails collectorDetails = new CollectorDetails();
         EnumerationClient.ObjectUpdateIterator resourcesIterator;
         SegregatedOverlays segregatedOverlays;
+        logInfo("Processing resources on datacenter: " + ctx.getDcLink());
         try {
             ManagedObjectReference resourcesPropertyCollector = client.createPropertyCollectorWithFilter(spec);
             // remove getObjectIterator API
@@ -513,6 +512,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         List<FolderOverlay> trueFolders = folderMap.get(Boolean.FALSE);
         List<FolderOverlay> rootFolders = folderMap.get(Boolean.TRUE);
         ctx.expectFolderCount(trueFolders.size());
+        logInfo("Processing folders on datacenter: " + ctx.getDcLink());
         for (FolderOverlay folder : trueFolders) {
             try {
                 // The parent list will be passed along. This is to achieve the below
@@ -556,12 +556,14 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
         // process results in topological order
         ctx.expectNetworkCount(segregatedOverlays.networks.size());
+        logInfo("Processing network on datacenter: " + ctx.getDcLink());
         for (NetworkOverlay net : segregatedOverlays.networks.values()) {
             VSphereNetworkEnumerationHelper
                     .processFoundNetwork(this, ctx, net, segregatedOverlays.networks);
         }
 
         ctx.expectDatastoreCount(segregatedOverlays.datastores.size());
+        logInfo("Processing datastore on datacenter: " + ctx.getDcLink());
         for (DatastoreOverlay ds : segregatedOverlays.datastores) {
             ds.setMultipleHostAccess(sharedDatastores.contains(ds.getName()));
             VsphereDatastoreEnumerationHelper
@@ -612,6 +614,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
         // process clustered as well as non-clustered hosts
         ctx.expectHostSystemCount(segregatedOverlays.hosts.size());
+        logInfo("Processing hosts on datacenter: " + ctx.getDcLink());
         for (HostSystemOverlay hs : segregatedOverlays.hosts) {
             ctx.track(hs);
             VSphereHostSystemEnumerationHelper.processFoundHostSystem(this, ctx, hs);
@@ -623,6 +626,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
         MoRefKeyedMap<String> computeResourceNamesByMoref = collectComputeNames(segregatedOverlays.hosts, segregatedOverlays.clusters);
         ctx.expectResourcePoolCount(segregatedOverlays.resourcePools.size());
+        logInfo("Processing resource pools on datacenter: " + ctx.getDcLink());
         for (ResourcePoolOverlay rp : segregatedOverlays.resourcePools) {
             String ownerName = computeResourceNamesByMoref.get(rp.getOwner());
             VSphereResourcePoolEnumerationHelper.processFoundResourcePool(this, ctx, rp, ownerName);
@@ -637,6 +641,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             return;
         }
 
+        logInfo("Processing VMs on datacenter: " + ctx.getDcLink());
         spec = client.createVmFilterSpec(client.getDatacenter());
         List<VmOverlay> vmOverlayList = new ArrayList<>();
         EnumerationClient.ObjectUpdateIterator vmIterator;
@@ -668,7 +673,6 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                             }
                         }
                         ctx.getVmTracker().arriveAndAwaitAdvance();
-
                         VSphereVMSnapshotEnumerationHelper.enumerateSnapshots(this, ctx, vmOverlayList);
                     }
                 }

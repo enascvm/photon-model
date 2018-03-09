@@ -67,6 +67,7 @@ public class VsphereFolderEnumerationHelper  {
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, folder.getId())
                 .put(CustomProperties.TYPE, folder.getId().getType())
+                .put(CustomProperties.DATACENTER_SELF_LINK, ctx.getDcLink())
                 .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, ctx.getRequest().endpointLink)
                 .put(CustomProperties.DATACENTER, ctx.getRegionId())
                 .put(CustomProperties.PARENT_ID, parentId[0])
@@ -81,12 +82,11 @@ public class VsphereFolderEnumerationHelper  {
         ResourceGroupState state = makeFolderFromResults(ctx, folder, rootFolders);
         Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(), ResourceGroupService.FACTORY_LINK))
                 .setBody(state)
-                .setCompletion((o,e) -> {
+                .setCompletion((o, e) -> {
                     trackFolder(ctx, folder).handle(o, e);
                     service.logInfo("Creating document for folder with name %s", folder.getName());
                 })
                 .sendWith(service);
-
     }
 
     private static void updateFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
@@ -96,12 +96,11 @@ public class VsphereFolderEnumerationHelper  {
         state.documentSelfLink = oldDocument.documentSelfLink;
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), state.documentSelfLink))
                 .setBody(state)
-                .setCompletion((o,e) -> {
+                .setCompletion((o, e) -> {
                     trackFolder(ctx, folder).handle(o, e);
                     service.logInfo("updating document for folder: %s  ", folder.getName());
                 })
                 .sendWith(service);
-
     }
 
     private static QueryTask queryForFolder(EnumerationProgress ctx, FolderOverlay folder) {

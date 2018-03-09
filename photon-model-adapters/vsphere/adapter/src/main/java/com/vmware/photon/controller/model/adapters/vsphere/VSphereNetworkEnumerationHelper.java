@@ -94,6 +94,7 @@ public class VSphereNetworkEnumerationHelper {
 
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
         if (net.getSummary() instanceof OpaqueNetworkSummary) {
@@ -169,8 +170,7 @@ public class VSphereNetworkEnumerationHelper {
 
     private static void updateNetwork(VSphereIncrementalEnumerationService service, NetworkState oldDocument,
                                       EnumerationProgress enumerationProgress, NetworkOverlay net) {
-        NetworkState networkState = makeNetworkStateFromResults(
-                service, enumerationProgress, net);
+        NetworkState networkState = makeNetworkStateFromResults(service, enumerationProgress, net);
         //restore original selfLink
         networkState.documentSelfLink = oldDocument.documentSelfLink;
         networkState.resourcePoolLink = null;
@@ -234,8 +234,8 @@ public class VSphereNetworkEnumerationHelper {
                 .build();
     }
 
-    private static SubnetState makeSubnetStateFromResults(
-            EnumerationProgress enumerationProgress, NetworkOverlay net) {
+    private static SubnetState makeSubnetStateFromResults(EnumerationProgress enumerationProgress,
+                                                          NetworkOverlay net) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
 
         SubnetState state = new SubnetState();
@@ -248,12 +248,12 @@ public class VSphereNetworkEnumerationHelper {
 
         state.regionId = enumerationProgress.getRegionId();
 
-        CustomProperties custProp = CustomProperties.of(state)
+        CustomProperties customProperties = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
-        custProp.put(DvsProperties.PORT_GROUP_KEY, net.getPortgroupKey());
-
+        customProperties.put(DvsProperties.PORT_GROUP_KEY, net.getPortgroupKey());
         return state;
     }
 
@@ -318,9 +318,8 @@ public class VSphereNetworkEnumerationHelper {
                 net.getName()));
     }
 
-    private static void updateSubnet(
-            VSphereIncrementalEnumerationService service, SubnetState oldDocument,
-            EnumerationProgress enumerationProgress, NetworkOverlay net, boolean fullUpdate) {
+    private static void updateSubnet(VSphereIncrementalEnumerationService service, SubnetState oldDocument,
+                                     EnumerationProgress enumerationProgress, NetworkOverlay net, boolean fullUpdate) {
         SubnetState state;
         if (fullUpdate) {
             state = makeSubnetStateFromResults(enumerationProgress, net);

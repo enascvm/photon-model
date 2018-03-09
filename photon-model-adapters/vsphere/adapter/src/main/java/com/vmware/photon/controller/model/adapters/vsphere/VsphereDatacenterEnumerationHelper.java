@@ -32,13 +32,16 @@ import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.services.common.QueryTask;
 
 public class VsphereDatacenterEnumerationHelper {
-    static void processDatacenterInfo(VSphereIncrementalEnumerationService service, Element element, EnumerationProgress ctx) {
-        QueryTask task = queryForDatacenter(ctx, VimUtils.convertMoRefToString(element.object));
+
+    static void processDatacenterInfo(VSphereIncrementalEnumerationService service,
+                                      Element element, EnumerationProgress ctx) {
+        QueryTask task = queryForDatacenter(ctx, element.object.getValue());
         withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
             if (result.documentLinks.isEmpty()) {
                 createDatacenter(service, ctx, element);
             } else {
-                ResourceGroupService.ResourceGroupState oldDocument = convertOnlyResultToDocument(result, ResourceGroupService.ResourceGroupState.class);
+                ResourceGroupService.ResourceGroupState oldDocument =
+                        convertOnlyResultToDocument(result, ResourceGroupService.ResourceGroupState.class);
                 updateDatacenter(service, ctx, element, oldDocument);
             }
         });
@@ -64,25 +67,29 @@ public class VsphereDatacenterEnumerationHelper {
         return state;
     }
 
-    private static void createDatacenter(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, Element element) {
+    private static void createDatacenter(VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
+                                         Element element) {
         ResourceGroupService.ResourceGroupState state = makeDatacenterFromResults(ctx, element);
 
         Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(), ResourceGroupService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion((o, e) -> {
-                    ctx.touchResource(getSelfLinkFromOperation(o));
+                    ctx.setDcLink(getSelfLinkFromOperation(o));
+                    trackDatacenter(ctx).handle(o, e);
                     service.logInfo("Creating Document for datacenter: %s  ", state.name);
                 })
                 .sendWith(service);
     }
 
-    private static void updateDatacenter(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, Element element, ResourceGroupService.ResourceGroupState oldDocument) {
-        ResourceGroupService.ResourceGroupState state =  makeDatacenterFromResults(ctx, element);
+    private static void updateDatacenter(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, Element element,
+                                         ResourceGroupService.ResourceGroupState oldDocument) {
+        ResourceGroupService.ResourceGroupState state = makeDatacenterFromResults(ctx, element);
         state.documentSelfLink = oldDocument.documentSelfLink;
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
-                .setCompletion((o,e) -> {
-                    ctx.touchResource(getSelfLinkFromOperation(o));
+                .setCompletion((o, e) -> {
+                    ctx.setDcLink(getSelfLinkFromOperation(o));
+                    trackDatacenter(ctx).handle(o, e);
                     service.logInfo("Syncing document for datacenter: %s  ", state.name);
                 })
                 .sendWith(service);
@@ -100,5 +107,14 @@ public class VsphereDatacenterEnumerationHelper {
         return QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
                 .build();
+    }
+
+    private static Operation.CompletionHandler trackDatacenter(EnumerationProgress enumerationProgress) {
+        return (o, e) -> {
+            if (e == null) {
+                enumerationProgress.touchResource(getSelfLinkFromOperation(o));
+            }
+            enumerationProgress.getDcTracker().track();
+        };
     }
 }

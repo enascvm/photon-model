@@ -163,6 +163,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                 .put(CustomProperties.MOREF, vm.getId())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM)
                 .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS())
+                .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
         return state;
     }
@@ -310,15 +311,16 @@ public class VSphereVirtualMachineEnumerationHelper {
             VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks, String vm) {
         if (device instanceof VirtualDisk) {
             return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
-                    (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service, vm);
+                    (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service,
+                    vm, enumerationProgress.getDcLink());
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.CDROM, device,
-                    diskLinks, enumerationProgress.getRegionId(), service, false);
+                    diskLinks, enumerationProgress.getRegionId(), service, false, enumerationProgress.getDcLink());
         } else if (device instanceof VirtualFloppy) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.FLOPPY, device,
-                    diskLinks, enumerationProgress.getRegionId(), service, false);
+                    diskLinks, enumerationProgress.getRegionId(), service, false, enumerationProgress.getDcLink());
         }
         return null;
     }
@@ -404,6 +406,7 @@ public class VSphereVirtualMachineEnumerationHelper {
 
     static void createNewVm(VSphereIncrementalEnumerationService service,
                             EnumerationProgress enumerationProgress, VmOverlay vm) {
+
         ComputeDescription desc = makeDescriptionForVm(service, enumerationProgress, vm);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
@@ -432,6 +435,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                     iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                             service.getHost().nextUUID());
                     iface.address = getPrimaryIPv4Address(nic, nicToIPv4Addresses);
+                    CustomProperties.of(iface)
+                            .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink());
                     Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(),
                             NetworkInterfaceService.FACTORY_LINK))
                             .setBody(iface)
