@@ -114,4 +114,8 @@ public class HostSystemOverlay extends AbstractOverlay {
     public VsanHostConfigInfo getVsanConfigInfo() {
         return (VsanHostConfigInfo) getOrDefault(HOST_SUMMARY_CONFIG_VSANCONFIG, null);
     }
+
+    public String getNameOrNull() {
+        return (String) getOrDefault(VimNames.PROPERTY_NAME, null);
+    }
 }

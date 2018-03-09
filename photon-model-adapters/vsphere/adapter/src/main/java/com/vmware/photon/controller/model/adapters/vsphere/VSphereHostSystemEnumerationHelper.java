@@ -13,9 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.convertOnlyResultToDocument;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.util.Collections;
+import java.util.List;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -27,6 +30,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.ObjectUpdateKind;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.services.common.QueryTask;
@@ -37,7 +41,8 @@ public class VSphereHostSystemEnumerationHelper {
     /**
      * Builds a query for finding a HostSystems by its manage object reference.
      */
-    static QueryTask queryForHostSystem(EnumerationProgress ctx, String parentComputeLink, String moRefId) {
+    private static QueryTask queryForHostSystem(
+            EnumerationProgress ctx, String parentComputeLink, String moRefId) {
         Builder builder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_ID, moRefId)
@@ -51,12 +56,20 @@ public class VSphereHostSystemEnumerationHelper {
                 .build();
     }
 
-    static ComputeDescription makeDescriptionForHost(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, EnumerationProgress enumerationProgress,
-                                                     HostSystemOverlay hs) {
+    private static ComputeDescription makeDescriptionForHostFromChange(HostSystemOverlay hs) {
+        ComputeDescription res = new ComputeDescription();
+        res.name = hs.getNameOrNull();
+
+        return res;
+    }
+
+    private static ComputeDescription makeDescriptionForHost(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            HostSystemOverlay hs) {
         ComputeDescription res = new ComputeDescription();
         res.name = hs.getName();
         res.documentSelfLink =
-                buildUriPath(ComputeDescriptionService.FACTORY_LINK, vSphereIncrementalEnumerationService.getHost().nextUUID());
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, service.getHost().nextUUID());
         res.cpuCount = hs.getCoreCount();
         res.endpointLink = enumerationProgress.getRequest().endpointLink;
         res.cpuMhzPerCore = hs.getCpuMhz();
@@ -75,8 +88,24 @@ public class VSphereHostSystemEnumerationHelper {
         return res;
     }
 
-    static ComputeState makeHostSystemFromResults(EnumerationProgress enumerationProgress,
-                                                  HostSystemOverlay hs) {
+    private static ComputeState makeHostSystemFromChanges(EnumerationProgress enumerationProgress,
+                                                          HostSystemOverlay hs) {
+        ComputeState state = new ComputeState();
+        // add name if its changed.
+        state.name = hs.getNameOrNull();
+        // if host goes into maintenance mode
+        if (hs.isInMaintenanceMode()) {
+            state.powerState = PowerState.SUSPEND;
+        }
+        // update group links if there are any addition/ removal of data stores and networks
+        state.groupLinks = VsphereComputeResourceEnumerationHelper.getConnectedDatastoresAndNetworks(
+                enumerationProgress, hs.getDatastore(), hs.getNetwork());
+
+        return state;
+    }
+
+    private static ComputeState makeHostSystemFromResults(EnumerationProgress enumerationProgress,
+                                                          HostSystemOverlay hs) {
         ComputeState state = new ComputeState();
         state.type = hs.isClusterHost() ? ComputeType.CLUSTER_HOST : ComputeType.VM_HOST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
@@ -87,7 +116,8 @@ public class VSphereHostSystemEnumerationHelper {
                 .getRequest().adapterManagementReference;
         state.parentLink = enumerationProgress.getRequest().resourceLink();
         state.resourcePoolLink = enumerationProgress.getRequest().resourcePoolLink;
-        state.groupLinks = VsphereComputeResourceEnumerationHelper.getConnectedDatastoresAndNetworks(enumerationProgress, hs.getDatastore(), hs.getNetwork());
+        state.groupLinks = VsphereComputeResourceEnumerationHelper
+                .getConnectedDatastoresAndNetworks(enumerationProgress, hs.getDatastore(), hs.getNetwork());
 
         state.name = hs.getName();
         // TODO: retrieve host power state
@@ -98,7 +128,7 @@ public class VSphereHostSystemEnumerationHelper {
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
                 .put(CustomProperties.TYPE, hs.getId().getType())
-                .put(CustomProperties.HS_CPU_GHZ,hs.getCpuMhz() / 1024)
+                .put(CustomProperties.HS_CPU_GHZ, hs.getCpuMhz() / 1024)
                 .put(CustomProperties.MANUFACTURER, hs.getVendor())
                 .put(CustomProperties.MODEL_NAME, hs.getModel())
                 .put(CustomProperties.HS_CPU_PKG_COUNT, hs.getNumCpuPkgs())
@@ -106,7 +136,7 @@ public class VSphereHostSystemEnumerationHelper {
                 .put(CustomProperties.HS_NIC_COUNT, hs.getNumNics())
                 // TODO : Find the logic for setting these props
                 .put(CustomProperties.HS_CPU_DESC, "")
-                .put(CustomProperties.IS_PHYSICAL,"");
+                .put(CustomProperties.IS_PHYSICAL, "");
 
         if (hs.isClusterHost()) {
             CustomProperties.of(state)
@@ -116,8 +146,8 @@ public class VSphereHostSystemEnumerationHelper {
         return state;
     }
 
-    static CompletionHandler trackHostSystem(EnumerationProgress enumerationProgress,
-                                             HostSystemOverlay hs) {
+    private static CompletionHandler trackHostSystem(EnumerationProgress enumerationProgress,
+                                                     HostSystemOverlay hs) {
         return (o, e) -> {
             enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
             if (e == null) {
@@ -130,9 +160,16 @@ public class VSphereHostSystemEnumerationHelper {
         };
     }
 
-    static void updateHostSystem(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, ComputeState oldDocument, EnumerationProgress enumerationProgress,
-                                 HostSystemOverlay hs) {
-        ComputeState state = makeHostSystemFromResults(enumerationProgress, hs);
+    private static void updateHostSystem(
+            VSphereIncrementalEnumerationService service, ComputeState oldDocument,
+            EnumerationProgress enumerationProgress, HostSystemOverlay hs, boolean fullUpdate) {
+        ComputeState state;
+        if (fullUpdate) {
+            state = makeHostSystemFromResults(enumerationProgress, hs);
+        } else {
+            state = makeHostSystemFromChanges(enumerationProgress, hs);
+        }
+
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
 
@@ -140,63 +177,106 @@ public class VSphereHostSystemEnumerationHelper {
             state.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
-        vSphereIncrementalEnumerationService.logFine(() -> String.format("Syncing HostSystem %s", oldDocument.documentSelfLink));
-        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(vSphereIncrementalEnumerationService.getHost(), state.documentSelfLink))
+        service.logFine(() -> String.format("Syncing HostSystem %s", oldDocument.documentSelfLink));
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), state.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     trackHostSystem(enumerationProgress, hs).handle(o, e);
                     if (e == null) {
-                        VsphereEnumerationHelper.submitWorkToVSpherePool(vSphereIncrementalEnumerationService, ()
-                                -> VsphereEnumerationHelper.updateLocalTags(vSphereIncrementalEnumerationService, enumerationProgress, hs, o.getBody(ResourceState.class)));
+                        VsphereEnumerationHelper.submitWorkToVSpherePool(service, ()
+                                -> VsphereEnumerationHelper
+                                .updateLocalTags(service, enumerationProgress, hs, o.getBody(ResourceState.class)));
                     }
                 })
-                .sendWith(vSphereIncrementalEnumerationService);
+                .sendWith(service);
 
-        ComputeDescription desc = makeDescriptionForHost(vSphereIncrementalEnumerationService, enumerationProgress, hs);
+        ComputeDescription desc;
+        if (fullUpdate) {
+            desc = makeDescriptionForHost(service, enumerationProgress, hs);
+        } else {
+            desc = makeDescriptionForHostFromChange(hs);
+        }
+
         desc.documentSelfLink = oldDocument.descriptionLink;
-        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(vSphereIncrementalEnumerationService.getHost(), desc.documentSelfLink))
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), desc.documentSelfLink))
                 .setBody(desc)
-                .sendWith(vSphereIncrementalEnumerationService);
+                .sendWith(service);
     }
 
-    static void createNewHostSystem(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService, EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
-        ComputeDescription desc = makeDescriptionForHost(vSphereIncrementalEnumerationService, enumerationProgress, hs);
+    private static void createNewHostSystem(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
+        ComputeDescription desc = makeDescriptionForHost(service, enumerationProgress, hs);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
-                PhotonModelUriUtils.createInventoryUri(vSphereIncrementalEnumerationService.getHost(), ComputeDescriptionService.FACTORY_LINK))
+                PhotonModelUriUtils.createInventoryUri(service.getHost(), ComputeDescriptionService.FACTORY_LINK))
                 .setBody(desc)
-                .sendWith(vSphereIncrementalEnumerationService);
+                .sendWith(service);
 
         ComputeState state = makeHostSystemFromResults(enumerationProgress, hs);
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = enumerationProgress.getTenantLinks();
 
-        VsphereEnumerationHelper.submitWorkToVSpherePool(vSphereIncrementalEnumerationService, () -> {
-            VsphereEnumerationHelper.populateTags(vSphereIncrementalEnumerationService, enumerationProgress, hs, state);
+        VsphereEnumerationHelper.submitWorkToVSpherePool(service, () -> {
+            VsphereEnumerationHelper.populateTags(service, enumerationProgress, hs, state);
 
-            vSphereIncrementalEnumerationService.logFine(() -> String.format("Found new HostSystem %s", hs.getName()));
-            Operation.createPost(PhotonModelUriUtils.createInventoryUri(vSphereIncrementalEnumerationService.getHost(), ComputeService.FACTORY_LINK))
+            service.logFine(() -> String.format("Found new HostSystem %s", hs.getName()));
+            Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(), ComputeService.FACTORY_LINK))
                     .setBody(state)
                     .setCompletion(trackHostSystem(enumerationProgress, hs))
-                    .sendWith(vSphereIncrementalEnumerationService);
+                    .sendWith(service);
         });
     }
 
     /**
      * Process all the host system retrieved from the endpoint.
      */
-    static void processFoundHostSystem(VSphereIncrementalEnumerationService service,
-                                       EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
+    public static void processFoundHostSystem(VSphereIncrementalEnumerationService service,
+                                              EnumerationProgress enumerationProgress, HostSystemOverlay hs) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
 
-        VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+        withTaskResults(service, task, result -> {
             if (result.documentLinks.isEmpty()) {
                 createNewHostSystem(service, enumerationProgress, hs);
             } else {
-                ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
-                updateHostSystem(service, oldDocument, enumerationProgress, hs);
+                ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                updateHostSystem(service, oldDocument, enumerationProgress, hs, true);
             }
         });
+    }
+
+    public static void handleHostSystemChanges(VSphereIncrementalEnumerationService service, List<HostSystemOverlay> hostSystemOverlays,
+                                               EnumerationProgress enumerationProgress) {
+
+        enumerationProgress.expectHostSystemCount(hostSystemOverlays.size());
+        for (HostSystemOverlay hs : hostSystemOverlays) {
+            if (ObjectUpdateKind.ENTER.equals(hs.getObjectUpdateKind())) {
+                createNewHostSystem(service, enumerationProgress, hs);
+            } else {
+                ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+                QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
+                withTaskResults(service, task, result -> {
+                    if (!result.documentLinks.isEmpty()) {
+                        ComputeService.ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeService.ComputeState.class);
+                        if (ObjectUpdateKind.MODIFY.equals(hs.getObjectUpdateKind())) {
+                            updateHostSystem(service, oldDocument, enumerationProgress, hs, false);
+                        } else {
+                            deleteHostSystem(service, enumerationProgress, hs, oldDocument);
+                        }
+                    } else {
+                        enumerationProgress.getHostSystemTracker().track();
+                    }
+                });
+            }
+        }
+    }
+
+    private static void deleteHostSystem(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+                                         HostSystemOverlay hostSystemOverlay, ComputeState oldDocument) {
+        Operation.createDelete(
+                PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                .setCompletion((o, e) -> {
+                    trackHostSystem(enumerationProgress, hostSystemOverlay).handle(o, e);
+                }).sendWith(service);
     }
 }
