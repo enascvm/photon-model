@@ -14,14 +14,18 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_PORTGROUP;
+import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_SERVER_DISK;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -29,8 +33,10 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.HostScsiDisk;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.VsanHostConfigInfo;
 import com.vmware.xenon.common.Operation;
@@ -202,7 +208,6 @@ public class VsphereComputeResourceEnumerationHelper {
      * Either creates a new Compute or update an already existing one. Existence is checked by
      * querying for a compute with id equals to moref value of a cluster whose parent is the Compute
      * from the request.
-     *
      */
     static void processFoundComputeResource(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
                                             ComputeResourceOverlay cr) {
@@ -216,18 +221,87 @@ public class VsphereComputeResourceEnumerationHelper {
                 ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
                 updateCluster(service, oldDocument, enumerationProgress, cr);
             }
-            // TODO: process server disks
             if (!cr.getVsanHostConfig().isEmpty()) {
-                processServerDisks(service, cr.getVsanHostConfig());
+                processServerDisks(service, cr.getVsanHostConfig(), enumerationProgress);
             }
         });
     }
 
-    private static void processServerDisks(VSphereIncrementalEnumerationService service, List<VsanHostConfigInfo> vsanHostConfigInfo) {
-        vsanHostConfigInfo.forEach(config -> {
-            // TODO: Add persistence logic for server disk
-            service.logInfo("Processing server disk %s", config.getStorageInfo());
-        });
+    private static void processServerDisks(VSphereIncrementalEnumerationService service, List<VsanHostConfigInfo> vsanHostConfigInfo,
+                                           EnumerationProgress ctx) {
+        // Server disks are two types - SSD and Non SSD. Vsphere API returns SSD as an HostScsiDisk Object and non SSD
+        // as a list of HostScsiDisk objects.
+        // getDiskMapping never returns a null. So NPE check not necessary here
+        vsanHostConfigInfo.forEach(config -> config.getStorageInfo().getDiskMapping().forEach(vsanHostDiskMapping -> {
+            // Process SSD and non SSD
+            List<HostScsiDisk> disks = new ArrayList<>(vsanHostDiskMapping.getNonSsd());
+            disks.add(vsanHostDiskMapping.getSsd());
+            disks.forEach(disk -> {
+                QueryTask task = queryForServerDisks(ctx, disk);
+                VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                    if (result.documentLinks.isEmpty()) {
+                        createServerDisk(service, disk, ctx, config.getHostSystem().getValue());
+                    } else {
+                        DiskService.DiskState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, DiskService.DiskState.class);
+                        updateServerDisk(service, disk, oldDocument, ctx, config.getHostSystem().getValue());
+                    }
+                });
+            });
+        }));
+    }
 
+    private static void createServerDisk(VSphereIncrementalEnumerationService service, HostScsiDisk serverDisk,
+                                         EnumerationProgress ctx, String server) {
+        DiskService.DiskState ds = makeServerDisksFromResults(serverDisk, ctx, server);
+        Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(), DiskService.FACTORY_LINK))
+                .setBody(ds)
+                .setCompletion((op, ex) -> ctx.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(op)))
+                .sendWith(service);
+    }
+
+    private static void updateServerDisk(VSphereIncrementalEnumerationService service, HostScsiDisk serverDisk,
+                                         DiskService.DiskState oldDocument,
+                                         EnumerationProgress ctx, String server) {
+        DiskService.DiskState ds = makeServerDisksFromResults(serverDisk, ctx, server);
+        ds.documentSelfLink = oldDocument.documentSelfLink;
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                .setBody(ds)
+                .setCompletion((op, ex) -> ctx.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(op)))
+                .sendWith(service);
+    }
+
+    private static DiskService.DiskState makeServerDisksFromResults(HostScsiDisk serverDisk, EnumerationProgress ctx,
+                                                                    String server) {
+        DiskService.DiskState ds =  new DiskService.DiskState();
+        ds.name = serverDisk.getDisplayName();
+        // block size is in Bytes - converting to GigaBytes
+        long capacityInGB = serverDisk.getCapacity().getBlockSize() * serverDisk.getCapacity().getBlock() / (1024L * 1024L * 1024L);
+        ds.tenantLinks = ctx.getTenantLinks();
+        ds.endpointLink = ctx.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(ds, ctx.getRequest().endpointLink);
+        CustomProperties.of(ds)
+                .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, ctx.getRequest().endpointLink)
+                .put(CustomProperties.TYPE, TYPE_SERVER_DISK)
+                .put(CustomProperties.MODEL, serverDisk.getModel())
+                .put(CustomProperties.VENDOR, serverDisk.getVendor())
+                .put(CustomProperties.CAPACITY_IN_GB, capacityInGB)
+                .put(CustomProperties.SERVER, server)
+                .put(CustomProperties.SERVER_DISK_TYPE, serverDisk.getScsiDiskType());
+        return ds;
+    }
+
+    private static QueryTask queryForServerDisks(EnumerationProgress ctx, HostScsiDisk serverDisk) {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(DiskService.DiskState.class)
+                .addFieldClause(ResourceState.FIELD_NAME_NAME, serverDisk.getDisplayName())
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.TYPE, TYPE_SERVER_DISK)
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        ComputeProperties.ENDPOINT_LINK_PROP_NAME, ctx.getRequest().endpointLink);
+
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
     }
 }

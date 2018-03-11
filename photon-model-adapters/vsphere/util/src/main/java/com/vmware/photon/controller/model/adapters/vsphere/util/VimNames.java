@@ -35,4 +35,6 @@ public class VimNames {
     public static final String TYPE_PORTGROUP = "DistributedVirtualPortgroup";
     public static final String TYPE_DVS = "VmwareDistributedVirtualSwitch";
     public static final String TYPE_OPAQUE_NETWORK = "OpaqueNetwork";
+
+    public static final String TYPE_SERVER_DISK = "ServerDisk";
 }

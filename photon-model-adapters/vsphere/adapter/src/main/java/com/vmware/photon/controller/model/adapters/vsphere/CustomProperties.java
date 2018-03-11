@@ -185,8 +185,12 @@ public class CustomProperties {
     public static final String PROPERTY_NAME = "name";
     public static final String VENDOR = "vendor";
     public static final String MODEL_NAME = "modelName";
+    public static final String MODEL = "model";
     public static final String VM_SOFTWARE_NAME = "softwareName";
     public static final String IS_PHYSICAL = "isPhysical";
+    public static final String SERVER = "server";
+    public static final String CAPACITY_IN_GB = "capacityInGB";
+    public static final String SERVER_DISK_TYPE = "scsiDiskType";
 
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;

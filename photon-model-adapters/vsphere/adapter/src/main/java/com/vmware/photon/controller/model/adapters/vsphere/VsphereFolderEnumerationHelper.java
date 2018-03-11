@@ -37,7 +37,7 @@ public class VsphereFolderEnumerationHelper  {
     static void processFoundFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
                                    FolderOverlay folder, List<FolderOverlay> rootFolders) {
         QueryTask task = queryForFolder(ctx, folder);
-        withTaskResults(service,task, (ServiceDocumentQueryResult result) -> {
+        withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
             if (result.documentLinks.isEmpty()) {
                 createFolder(service, ctx, folder, rootFolders);
             } else {
