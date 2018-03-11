@@ -33,7 +33,7 @@ import com.vmware.xenon.services.common.QueryTask;
 
 public class VsphereDatacenterEnumerationHelper {
     static void processDatacenterInfo(VSphereIncrementalEnumerationService service, Element element, EnumerationProgress ctx) {
-        QueryTask task = queryForDatacenter(ctx, element.object.getValue());
+        QueryTask task = queryForDatacenter(ctx, VimUtils.convertMoRefToString(element.object));
         withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
             if (result.documentLinks.isEmpty()) {
                 createDatacenter(service, ctx, element);
@@ -47,7 +47,7 @@ public class VsphereDatacenterEnumerationHelper {
     private static ResourceGroupService.ResourceGroupState makeDatacenterFromResults(EnumerationProgress ctx, Element element) {
         ComputeEnumerateResourceRequest request = ctx.getRequest();
         String dcName = StringUtils.substringAfterLast(element.path, "/");
-        String moref = element.object.getValue();
+        String moref = VimUtils.convertMoRefToString(element.object);
         String type = element.object.getType();
 
         ResourceGroupService.ResourceGroupState state = new ResourceGroupService.ResourceGroupState();

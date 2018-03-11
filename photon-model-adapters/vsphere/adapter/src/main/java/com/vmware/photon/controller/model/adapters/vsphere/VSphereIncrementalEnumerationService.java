@@ -19,8 +19,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.logging.Level;
@@ -497,15 +499,32 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             return;
         }
 
-        // Process Folder list
-        ctx.expectFolderCount(segregatedOverlays.folders.size());
-        for (FolderOverlay folder : segregatedOverlays.folders) {
+        // This will split the folders into two lists. Default folders (vm, host, network, datastore) have parent as datacenter
+        // and are not visible in vCenter. These need not be persisted. Any other folders will have another folder as a parent
+        // and will be persisted with  appropriate parent.
+        // partitioningBy will always return a map with two entries, one for where the predicate is true and one for
+        // where it is false. Even though the entries can be empty, they will be present in the map , i.e. map size will be
+        // always be two
+
+        Map<Boolean, List<FolderOverlay>> folderMap = new HashMap<>(segregatedOverlays.folders.stream()
+                .collect(Collectors.partitioningBy(s -> s.getParent().getType().equals(VimNames.TYPE_DATACENTER))));
+
+        // Process true Folder and root folder list
+        List<FolderOverlay> trueFolders = folderMap.get(Boolean.FALSE);
+        List<FolderOverlay> rootFolders = folderMap.get(Boolean.TRUE);
+        ctx.expectFolderCount(trueFolders.size());
+        for (FolderOverlay folder : trueFolders) {
             try {
-                VsphereFolderEnumerationHelper.processFoundFolder(this, ctx, folder);
+                // The parent list will be passed along. This is to achieve the below
+                // Folder A is root folder and has datacenter as the parent.
+                // Folder Ac has parent as A. Since 'A' is not persisted anymore, 'Ac'
+                // should have the datacenter as its parent.
+                VsphereFolderEnumerationHelper.processFoundFolder(this, ctx, folder, rootFolders);
             } catch (Exception e) {
                 logWarning(() -> "Error processing folder information" + ": " + e.toString());
             }
         }
+
 
         // Process HostSystem list to get the datastore access level whether local / shared
         try {

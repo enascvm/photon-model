@@ -17,10 +17,13 @@ import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumera
 import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.getSelfLinkFromOperation;
 import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
 
+import java.util.List;
+
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
@@ -31,41 +34,51 @@ import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 public class VsphereFolderEnumerationHelper  {
 
-    // This method will also process the root folders - vm, host, network which are not physically present in
-    // the vCenter
-    static void processFoundFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, FolderOverlay folder) {
+    static void processFoundFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
+                                   FolderOverlay folder, List<FolderOverlay> rootFolders) {
         QueryTask task = queryForFolder(ctx, folder);
         withTaskResults(service,task, (ServiceDocumentQueryResult result) -> {
             if (result.documentLinks.isEmpty()) {
-                createFolder(service, ctx, folder);
+                createFolder(service, ctx, folder, rootFolders);
             } else {
-                ResourceGroupService.ResourceGroupState oldDocument = convertOnlyResultToDocument(result, ResourceGroupService.ResourceGroupState.class);
-                updateFolder(service, ctx, folder, oldDocument);
+                ResourceGroupState oldDocument = convertOnlyResultToDocument(result, ResourceGroupState.class);
+                updateFolder(service, ctx, folder, oldDocument, rootFolders);
             }
         });
     }
 
-    private static ResourceGroupService.ResourceGroupState makeFolderFromResults(EnumerationProgress ctx, FolderOverlay folder) {
-        ResourceGroupService.ResourceGroupState state =  new ResourceGroupService.ResourceGroupState();
+    private static ResourceGroupState makeFolderFromResults(EnumerationProgress ctx, FolderOverlay folder,
+                                                            List<FolderOverlay> rootFolders) {
+        ResourceGroupState state =  new ResourceGroupState();
         state.name = state.id = folder.getName();
         state.endpointLink = ctx.getRequest().endpointLink;
         AdapterUtils.addToEndpointLinks(state, ctx.getRequest().endpointLink);
         state.tenantLinks = ctx.getTenantLinks();
+
+        // Get the parent of the folder.
+        // If the parent is one of the root folder, set the parent as root folders parent
+        final String[] parentId = {VimUtils.convertMoRefToString(folder.getParent())};
+        rootFolders.forEach(rootFolder-> {
+            if (folder.getParent().getValue().equals(rootFolder.getMoRefValue())) {
+                parentId[0] = VimUtils.convertMoRefToString(rootFolder.getParent());
+            }
+        });
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, folder.getId())
                 .put(CustomProperties.TYPE, folder.getId().getType())
                 .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, ctx.getRequest().endpointLink)
                 .put(CustomProperties.DATACENTER, ctx.getRegionId())
-                .put(CustomProperties.PARENT_ID, folder.getParent().getValue())
+                .put(CustomProperties.PARENT_ID, parentId[0])
                 .put(CustomProperties.VC_VIEW, folder.getView())
                 .put(CustomProperties.FOLDER_TYPE, folder.getFolderType());
 
         return state;
     }
 
-    private static void createFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, FolderOverlay folder) {
-        ResourceGroupService.ResourceGroupState state = makeFolderFromResults(ctx, folder);
+    private static void createFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
+                                     FolderOverlay folder, List<FolderOverlay> rootFolders) {
+        ResourceGroupState state = makeFolderFromResults(ctx, folder, rootFolders);
         Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(), ResourceGroupService.FACTORY_LINK))
                 .setBody(state)
                 .setCompletion((o,e) -> {
@@ -76,8 +89,10 @@ public class VsphereFolderEnumerationHelper  {
 
     }
 
-    private static void updateFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, FolderOverlay folder, ResourceGroupService.ResourceGroupState oldDocument) {
-        ResourceGroupService.ResourceGroupState state =  makeFolderFromResults(ctx, folder);
+    private static void updateFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
+                                     FolderOverlay folder, ResourceGroupService.ResourceGroupState oldDocument,
+                                     List<FolderOverlay> rootFolders) {
+        ResourceGroupState state =  makeFolderFromResults(ctx, folder, rootFolders);
         state.documentSelfLink = oldDocument.documentSelfLink;
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), state.documentSelfLink))
                 .setBody(state)
@@ -92,7 +107,7 @@ public class VsphereFolderEnumerationHelper  {
     private static QueryTask queryForFolder(EnumerationProgress ctx, FolderOverlay folder) {
         String moref = VimUtils.convertMoRefToString(folder.getId());
         Builder builder = QueryTask.Query.Builder.create()
-                .addKindFieldClause(ResourceGroupService.ResourceGroupState.class)
+                .addKindFieldClause(ResourceGroupState.class)
                 .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                         CustomProperties.MOREF, moref)
                 .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
