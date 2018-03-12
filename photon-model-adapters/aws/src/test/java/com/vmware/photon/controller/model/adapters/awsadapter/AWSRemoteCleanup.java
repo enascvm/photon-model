@@ -203,6 +203,7 @@ public class AWSRemoteCleanup extends BasicTestCase {
                         deleteSubnets(vpcId, usEastEc2Client);
                         DeleteVpcRequest deleteVpcRequest = new DeleteVpcRequest()
                                 .withVpcId(vpcId);
+                        this.host.log("Terminating stale vpc: %s", vpcId);
                         usEastEc2Client.deleteVpc(deleteVpcRequest);
                     });
         } catch (Exception e) {
@@ -223,11 +224,16 @@ public class AWSRemoteCleanup extends BasicTestCase {
                 if (timeDifference > TimeUnit.HOURS.toMicros(1)
                         && vpcIdsToBeDeleted.contains(instance.getVpcId())
                         && shouldDelete(instance)) {
+                    this.host.log(Level.INFO, "Marking %s instance for deletion", instance.getInstanceId());
                     instanceIdsToBeDeleted.add(instance.getInstanceId());
                 }
             }
         }
 
+        triggerEC2Deletion(instanceIdsToBeDeleted, ec2Client);
+    }
+
+    private void triggerEC2Deletion(List<String> instanceIdsToBeDeleted, AmazonEC2 ec2Client) {
         if (instanceIdsToBeDeleted.isEmpty()) {
             return;
         }
@@ -242,6 +248,34 @@ public class AWSRemoteCleanup extends BasicTestCase {
                     this.host.log("Terminating stale instance: %s",
                             instanceStateChange.getInstanceId());
                 });
+    }
+
+    /**
+     * Delete stale AWS EC2 Instances.
+     */
+    @Test
+    public void deleteStaleAwsEc2instances() {
+        AmazonEC2 usEastEc2Client = this.ec2Clients.get(US_EAST_1_TAG);
+        List<String> instanceIdsToBeDeleted = new ArrayList<>();
+        DescribeInstancesResult instancesResult = usEastEc2Client.describeInstances();
+        List<Reservation> reservations = instancesResult.getReservations();
+
+        for (Reservation reservation : reservations) {
+            List<Instance> instances = reservation.getInstances();
+            for (Instance instance : instances) {
+                long instanceLaunchTimeMicros = TimeUnit.MILLISECONDS
+                        .toMicros(instance.getLaunchTime().getTime());
+                long timeDifference = Utils.getNowMicrosUtc() - instanceLaunchTimeMicros;
+
+                if (timeDifference > TimeUnit.HOURS.toMicros(1)
+                        && shouldDelete(instance)) {
+                    this.host.log(Level.INFO, "Marking %s instance for deletion", instance.getInstanceId());
+                    instanceIdsToBeDeleted.add(instance.getInstanceId());
+                }
+            }
+        }
+
+        triggerEC2Deletion(instanceIdsToBeDeleted, usEastEc2Client);
     }
 
     private static boolean shouldDelete(Instance instance) {
@@ -264,6 +298,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
                 .forEach(networkAcl -> {
                     DeleteNetworkAclRequest deleteNetworkAclRequest = new DeleteNetworkAclRequest()
                             .withNetworkAclId(networkAcl.getNetworkAclId());
+                    this.host.log("Terminating stale network acl: %s",
+                            networkAcl.getNetworkAclId());
                     usEastEc2Client.deleteNetworkAcl(deleteNetworkAclRequest);
                 });
     }
@@ -289,6 +325,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
             // Deleting Network Interfaces
             DeleteNetworkInterfaceRequest deleteNetworkInterfaceRequest = new DeleteNetworkInterfaceRequest()
                     .withNetworkInterfaceId(networkInterface.getNetworkInterfaceId());
+            this.host.log("Terminating stale NIC: %s",
+                    networkInterface.getNetworkInterfaceId());
             usEastEc2Client.deleteNetworkInterface(deleteNetworkInterfaceRequest);
         } );
     }
@@ -304,6 +342,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
             usEastEc2Client.detachInternetGateway(detachInternetGatewayRequest);
             DeleteInternetGatewayRequest deleteInternetGatewayRequest = new DeleteInternetGatewayRequest()
                     .withInternetGatewayId(internetGateway.getInternetGatewayId());
+            this.host.log("Terminating stale internet gateway: %s",
+                    internetGateway.getInternetGatewayId());
             usEastEc2Client.deleteInternetGateway(deleteInternetGatewayRequest);
         });
     }
@@ -319,6 +359,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
             usEastEc2Client.detachVpnGateway(detachVpnGatewayRequest);
             DeleteVpnGatewayRequest deleteVpnGatewayRequest = new DeleteVpnGatewayRequest()
                     .withVpnGatewayId(detachVpnGatewayRequest.getVpnGatewayId());
+            this.host.log("Terminating stale virtual private gateway: %s",
+                    detachVpnGatewayRequest.getVpnGatewayId());
             usEastEc2Client.deleteVpnGateway(deleteVpnGatewayRequest);
         });
     }
@@ -330,6 +372,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
         natGatewaysResult.getNatGateways().forEach(natGateway -> {
             DeleteNatGatewayRequest deleteNatGatewayRequest = new DeleteNatGatewayRequest()
                     .withNatGatewayId(natGateway.getNatGatewayId());
+            this.host.log("Terminating stale NAT gateway: %s",
+                    natGateway.getNatGatewayId());
             usEastEc2Client.deleteNatGateway(deleteNatGatewayRequest);
         });
     }
@@ -342,6 +386,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
             if (!(securityGroup.getGroupName().equalsIgnoreCase(DEFAULT_TAG))) {
                 DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest()
                         .withGroupId(securityGroup.getGroupId());
+                this.host.log("Terminating stale security group: %s",
+                        securityGroup.getGroupId());
                 usEastEc2Client.deleteSecurityGroup(deleteSecurityGroupRequest);
             }
         });
@@ -354,6 +400,8 @@ public class AWSRemoteCleanup extends BasicTestCase {
         securityGroupsResult.getSubnets().forEach(subnet -> {
             DeleteSubnetRequest deleteSubnetRequest = new DeleteSubnetRequest()
                     .withSubnetId(subnet.getSubnetId());
+            this.host.log("Terminating stale subnet: %s",
+                    subnet.getSubnetId());
             usEastEc2Client.deleteSubnet(deleteSubnetRequest);
         });
     }
