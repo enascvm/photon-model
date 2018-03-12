@@ -672,6 +672,8 @@ public class TestAWSProvisionTask {
         assertEquals("Boot Disk capacity in diskstate is not matching the boot disk size of the "
                 + "vm launched in aws", diskState.capacityMBytes, bootVolume.getSize() * 1024);
 
+        assertNotNull("Boot disk creation time cannot be empty", diskState.creationTimeMicros);
+
         assertEquals(
                 "Boot disk type in diskstate is not same as the type of the volume attached to the VM",
                 diskState.customProperties.get("volumeType"), bootVolume.getVolumeType());
@@ -717,6 +719,8 @@ public class TestAWSProvisionTask {
         assertEquals(
                 "Additional disk capacity in diskstate is not matching the volume size in aws",
                 diskState.capacityMBytes, volume.getSize() * 1024);
+
+        assertNotNull("Disk creation time cannot be empty", diskState.creationTimeMicros);
 
         assertEquals(
                 "Additional disk type in diskstate is not same as the type of the volume in aws",

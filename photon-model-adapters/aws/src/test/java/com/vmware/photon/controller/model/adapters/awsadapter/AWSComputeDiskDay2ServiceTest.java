@@ -399,6 +399,8 @@ public class AWSComputeDiskDay2ServiceTest {
             assertEquals("disk status not matching", DiskService.DiskStatus.AVAILABLE,
                     provisionedDisk.status);
 
+            assertNotNull("Disk creation time cannot be empty", provisionedDisk.creationTimeMicros);
+
             //collect external disks into a list
             externallyProvisionedDisks.add(provisionedDisk.documentSelfLink);
 

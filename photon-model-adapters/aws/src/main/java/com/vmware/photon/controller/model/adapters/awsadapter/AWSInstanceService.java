@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -63,6 +64,8 @@ import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
+import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
+import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.EbsBlockDevice;
 import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Instance;
@@ -813,7 +816,8 @@ public class AWSInstanceService extends StatelessService {
 
                     updateAndTagDisks(this.context.bootDisk, this.context.imageDisks,
                             this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings(),
-                            regionId, computeHostLink, sourceTaskLink, this.context.parent.tenantLinks);
+                            regionId, computeHostLink, sourceTaskLink,
+                            this.context.parent.tenantLinks, this.context.amazonEC2Client);
 
                     DeferredResult<ComputeState> dr = new DeferredResult<>();
                     if (this.context.imageDisks != null && !this.context.imageDisks.isEmpty()) {
@@ -1060,17 +1064,18 @@ public class AWSInstanceService extends StatelessService {
         }
 
         /**
-         * updates status, Id and name of the disk. Also tags the corresponding AWS volume with its name.
+         * Update status, Id, name, creationTime of the disk. Also tag it with its name.
          */
         private void updateAndTagDisks(DiskState bootDisk, List<DiskState> imageDisks,
-                List<DiskState> additionalDisks,
-                List<InstanceBlockDeviceMapping> blockDeviceMappings, String regionId,
-                String computeHostLink, String sourceTaskLink, List<String> tenantLinks) {
+                List<DiskState> additionalDisks, List<InstanceBlockDeviceMapping> blockDeviceMappings,
+                String regionId, String computeHostLink, String sourceTaskLink,
+                List<String> tenantLinks, AmazonEC2AsyncClient client) {
             List<DiskState> diskStateList = new ArrayList<>();
             diskStateList.add(bootDisk);
             diskStateList.addAll(imageDisks);
             diskStateList.addAll(additionalDisks);
 
+            Map<String, DiskState> ebsDiskMapById = new HashMap<>();
             for (DiskState diskState : diskStateList) {
                 diskState.status = DiskService.DiskStatus.ATTACHED;
                 diskState.regionId = regionId;
@@ -1084,6 +1089,7 @@ public class AWSInstanceService extends StatelessService {
                     for (InstanceBlockDeviceMapping blockDeviceMapping : blockDeviceMappings) {
                         if (blockDeviceMapping.getDeviceName().equals(deviceName)) {
                             diskState.id = blockDeviceMapping.getEbs().getVolumeId();
+                            ebsDiskMapById.put(diskState.id, diskState);
                             if (diskState.name == null) {
                                 diskState.name = diskState.id;
                             } else {
@@ -1096,8 +1102,22 @@ public class AWSInstanceService extends StatelessService {
                     diskState.id = String.format("%s_%s", AWSStorageType.INSTANCE_STORE.getName(),
                             UUID.randomUUID().toString());
                     diskState.name = diskState.id;
+                    diskState.creationTimeMicros = diskState.documentUpdateTimeMicros;
                 }
             }
+
+            DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
+                    .withVolumeIds(ebsDiskMapById.keySet());
+            DescribeVolumesResult volumesResult = client.describeVolumes(describeVolumesRequest);
+            volumesResult.getVolumes().stream()
+                    .filter(volume -> volume.getCreateTime() != null)
+                    .map(volume -> {
+                        DiskState diskState = ebsDiskMapById.get(volume.getVolumeId());
+                        diskState.creationTimeMicros = TimeUnit.MILLISECONDS
+                                .toMicros(volume.getCreateTime().getTime());
+
+                        return diskState;
+                    }).collect(Collectors.toList());
         }
 
         private List<Operation> createPatchNICStatesOperations(List<AWSNicContext> nics,

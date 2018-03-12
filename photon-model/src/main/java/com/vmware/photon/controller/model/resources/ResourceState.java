@@ -141,6 +141,7 @@ public class ResourceState extends ServiceDocument {
      * Resource creation time in micros since epoch.
      */
     @UsageOption(option = PropertyUsageOption.OPTIONAL)
+    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_17)
     @PropertyOptions(indexing = { PropertyIndexingOption.SORT })
     public Long creationTimeMicros;
