@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -63,19 +62,16 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioning
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
-import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
@@ -237,60 +233,11 @@ public class AzureLoadBalancerService extends StatelessService {
      */
     private DeferredResult<AzureLoadBalancerContext> getTargetStates(
             AzureLoadBalancerContext context) {
-        if (context.networkInterfaceStates == null) {
-            context.networkInterfaceStates = new HashSet<>();
-        }
-        if (context.computeStates == null) {
-            context.computeStates = new HashSet<>();
-        }
-        if (context.loadBalancerStateExpanded.targetLinks != null) {
-            List<DeferredResult<Operation>> operations = getTargetDRs(context);
-            return DeferredResult.allOf(operations)
-                    .thenApply(operationsList -> {
-                        operationsList.forEach(operation -> {
-                            String servicePath = operation.getUri().getPath();
-                            if (UriUtils.isChildPath(servicePath, ComputeService.FACTORY_LINK)) {
-                                context.computeStates.add(operation.getBody(ComputeState.class));
-                            } else if (UriUtils.isChildPath(servicePath,
-                                    NetworkInterfaceService.FACTORY_LINK)) {
-                                context.networkInterfaceStates
-                                        .add(operation.getBody(NetworkInterfaceState.class));
-                            } else {
-                                throw new IllegalArgumentException(
-                                        "Invalid target type specified. Target link: "
-                                                + servicePath);
-                            }
-                        });
-                        return context;
-                    });
-        } else if (context.loadBalancerStateExpanded.computes != null) {
-            context.computeStates = context.loadBalancerStateExpanded.computes;
-        }
+        context.networkInterfaceStates = context.loadBalancerStateExpanded
+                .getTargetsOfType(NetworkInterfaceState.class);
+        context.computeStates = context.loadBalancerStateExpanded
+                .getTargetsOfType(ComputeState.class);
         return DeferredResult.completed(context);
-    }
-
-    /**
-     * Get List of deferred result to fetch states for target links
-     *
-     * @param context Azure load balancer context
-     * @return List of DeferredResult
-     */
-    private List<DeferredResult<Operation>> getTargetDRs(AzureLoadBalancerContext context) {
-        return context.loadBalancerStateExpanded.targetLinks
-                .stream().map(targetLink ->
-                        sendWithDeferredResult(
-                                Operation.createGet(context.service.getHost(), targetLink))
-                                .exceptionally(ex -> {
-                                    if (ex != null) {
-                                        if (ex instanceof ServiceNotFoundException) {
-                                            throw new IllegalArgumentException(
-                                                    "Invalid target type specified");
-                                        } else {
-                                            throw new CompletionException(ex);
-                                        }
-                                    }
-                                    return null;
-                                })).collect(Collectors.toList());
     }
 
     /**
@@ -303,9 +250,11 @@ public class AzureLoadBalancerService extends StatelessService {
      */
     private DeferredResult<AzureLoadBalancerContext> getNetworkInterfaceStates(
             AzureLoadBalancerContext context) {
-        if (context.computeStates == null || context.computeStates.isEmpty()) {
+        if (CollectionUtils.isEmpty(context.computeStates)) {
             return DeferredResult.completed(context);
         }
+        context.networkInterfaceStates = context.networkInterfaceStates == null ?
+                new HashSet<>(context.computeStates.size()) : context.networkInterfaceStates;
         return DeferredResult.allOf(context.computeStates
                 .stream().map(computeState ->
                         getNetworkInterfaceStatesForLinks(context,

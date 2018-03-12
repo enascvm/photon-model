@@ -36,6 +36,7 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
@@ -165,7 +166,6 @@ public class LoadBalancerService extends StatefulService {
             }
         }
     }
-
     /**
      * Load balancer state with all links expanded.
      */
@@ -173,10 +173,21 @@ public class LoadBalancerService extends StatefulService {
         public LoadBalancerDescription description;
         public EndpointState endpointState;
         public Set<ComputeState> computes;
+        public Set<ResourceState> targets;
         public Set<SubnetState> subnets;
 
         public static URI buildUri(URI loadBalancerStateUri) {
             return UriUtils.buildExpandLinksQueryUri(loadBalancerStateUri);
+        }
+
+        public <T> Set<T> getTargetsOfType(Class<T> type) {
+            if (this.targets != null) {
+                return this.targets.stream()
+                        .filter(ts -> ts != null && ts.getClass().equals(type))
+                        .map(ts -> type.cast(ts))
+                        .collect(Collectors.toSet());
+            }
+            return null;
         }
     }
 
@@ -213,6 +224,11 @@ public class LoadBalancerService extends StatefulService {
                                     logWarning("Error retrieving compute states: %s", e.toString());
                                     return new HashSet<>();
                                 }).thenAccept(computes -> expanded.computes = computes),
+                        getTargetStates(currentState.targetLinks)
+                                .exceptionally(e -> {
+                                    logWarning("Error retrieving target states: %s", e.toString());
+                                    return new HashSet<>();
+                                }).thenAccept(targetStates -> expanded.targets = targetStates),
                         getDr(currentState.subnetLinks, SubnetState.class, HashSet::new)
                                 .thenAccept(subnets -> expanded.subnets = subnets))
                 .whenComplete((ignore, e) -> {
@@ -348,4 +364,43 @@ public class LoadBalancerService extends StatefulService {
                 .thenApply(items -> items.stream()
                         .collect(Collectors.toCollection(collectionFactory)));
     }
+
+    /**
+     * Fetch targetLinks into network interface states or compute states
+     */
+    private DeferredResult<Set<ResourceState>> getTargetStates(Collection<String> links) {
+        if (links == null) {
+            return DeferredResult.completed(null);
+        }
+
+        return DeferredResult
+                .allOf(links.stream().map(link -> getDr(link)).collect(Collectors.toList()))
+                .thenApply(operations -> operations.stream()
+                        .map(operation -> {
+                            if (operation != null) {
+                                String servicePath = operation.getUri().getPath();
+                                if (UriUtils
+                                        .isChildPath(servicePath, ComputeService.FACTORY_LINK)) {
+                                    return operation.getBody(ComputeState.class);
+                                } else if (UriUtils.isChildPath(servicePath,
+                                        NetworkInterfaceService.FACTORY_LINK)) {
+                                    return operation.getBody(NetworkInterfaceState.class);
+                                } else {
+                                    logWarning("Unrecognized type of target state with path: %s",
+                                            servicePath);
+                                    return operation.getBody(ResourceState.class);
+                                }
+                            }
+                            return null;
+                        })
+                        .collect(Collectors.toSet()));
+    }
+
+    private DeferredResult<Operation> getDr(String link) {
+        if (link == null) {
+            return DeferredResult.completed(null);
+        }
+        return sendWithDeferredResult(Operation.createGet(this, link));
+    }
+
 }
