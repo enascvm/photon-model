@@ -19,6 +19,9 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DISK_LINK;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
@@ -28,10 +31,12 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -228,13 +233,8 @@ public class VSphereComputeDiskManagementService extends StatelessService {
                 .put(PROVIDER_DISK_UNIQUE_ID, (String) null);
         ctx.diskState.id = UriUtils.getLastPathSegment(ctx.diskState.documentSelfLink);
 
-        // Remove the link from the compute state. Safety null check
-        if (ctx.computeDesc.diskLinks != null) {
-            ctx.computeDesc.diskLinks.remove(ctx.diskState.documentSelfLink);
-        }
-
         OperationSequence.create(createDiskPut(ctx.diskState))
-                .next(createComputePut(ctx))
+                .next(updateComputeDiskLinks(ctx))
                 .next(ctx.mgr.createTaskPatch(TaskState.TaskStage.FINISHED))
                 .setCompletion(ctx.failTaskOnError())
                 .sendWith(this);
@@ -326,9 +326,17 @@ public class VSphereComputeDiskManagementService extends StatelessService {
     /**
      * Invoke PUT operation on compute to remove the disk link from the links.
      */
-    private Operation createComputePut(VSphereVMDiskContext ctx) {
-        return Operation.createPut(PhotonModelUriUtils.createInventoryUri(getHost(), ctx
-                .computeDesc.documentSelfLink))
-                .setBody(ctx.computeDesc);
+    private Operation updateComputeDiskLinks(VSphereVMDiskContext ctx) {
+
+        Map<String, Collection<Object>> collectionToRemove = Collections
+                .singletonMap(ComputeService.ComputeState.FIELD_NAME_DISK_LINKS,
+                        Collections.singletonList(ctx.diskState.documentSelfLink));
+
+        ServiceStateCollectionUpdateRequest updateDiskLinksRequest = ServiceStateCollectionUpdateRequest
+                .create(null, collectionToRemove);
+
+        return Operation.createPatch(PhotonModelUriUtils
+                .createInventoryUri(this.getHost(), ctx.computeDesc.documentSelfLink))
+                .setBody(updateDiskLinksRequest);
     }
 }

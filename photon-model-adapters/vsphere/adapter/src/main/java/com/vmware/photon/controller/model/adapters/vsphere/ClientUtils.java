@@ -69,10 +69,8 @@ import com.vmware.vim25.FileFaultFaultMsg;
 import com.vmware.vim25.FileNotFoundFaultMsg;
 import com.vmware.vim25.InvalidDatastoreFaultMsg;
 import com.vmware.vim25.InvalidDatastorePathFaultMsg;
-import com.vmware.vim25.InvalidDeviceSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
-import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.SharesInfo;
 import com.vmware.vim25.SharesLevel;
@@ -782,18 +780,7 @@ public class ClientUtils {
         ManagedObjectReference reconfigureTask = vimPort.reconfigVMTask(vm, spec);
         TaskInfo info = VimUtils.waitTaskEnd(connection, reconfigureTask);
         if (info.getState() == TaskInfoState.ERROR) {
-            MethodFault fault = info.getError().getFault();
-            if (fault instanceof InvalidDeviceSpec) {
-                // try here will null operation once. Even then it fails give up
-                deviceConfigSpec.setOperation(null);
-                reconfigureTask = vimPort.reconfigVMTask(vm, spec);
-                info = VimUtils.waitTaskEnd(connection, reconfigureTask);
-                if (info.getState() == TaskInfoState.ERROR) {
-                    VimUtils.rethrow(info.getError());
-                }
-            } else {
-                VimUtils.rethrow(info.getError());
-            }
+            VimUtils.rethrow(info.getError());
         }
 
         if (!insertCdRom && diskState.type != DiskService.DiskType.HDD) {
