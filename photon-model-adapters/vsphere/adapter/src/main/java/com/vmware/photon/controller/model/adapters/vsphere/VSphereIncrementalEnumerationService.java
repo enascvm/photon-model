@@ -232,6 +232,8 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                             .handleDatastoreChanges(this, segregatedOverlays.datastores, enumerationProgress);
                                     VSphereHostSystemEnumerationHelper
                                             .handleHostSystemChanges(this, segregatedOverlays.hosts, enumerationProgress);
+                                    VSphereResourcePoolEnumerationHelper
+                                            .handleResourcePoolChanges(this, segregatedOverlays.resourcePools, enumerationProgress);
                                 }
                             }
                             mgr.patchTask(TaskStage.FINISHED);
@@ -248,12 +250,6 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                         }
                     }, mgr).setReferer(this.getHost().getUri()).sendWith(this);
         });
-    }
-
-    @Override
-    public void handleDelete(Operation delete) {
-        cleanupConnection();
-        super.handleDelete(delete);
     }
 
     private void selfDeleteService() {

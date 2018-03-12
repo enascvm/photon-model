@@ -59,4 +59,8 @@ public class ResourcePoolOverlay extends AbstractOverlay {
         }
         return getName();
     }
+
+    public String getNameOrNull() {
+        return (String) getOrDefault(VimNames.PROPERTY_NAME, null);
+    }
 }

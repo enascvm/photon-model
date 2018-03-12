@@ -13,12 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.convertOnlyResultToDocument;
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.util.Collections;
+import java.util.List;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -27,18 +31,20 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.ObjectUpdateKind;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.services.common.QueryTask;
 
 public class VSphereResourcePoolEnumerationHelper {
-    static String buildStableResourcePoolLink(ManagedObjectReference ref, String adapterManagementReference) {
+    private static String buildStableResourcePoolLink(ManagedObjectReference ref, String adapterManagementReference) {
         return ComputeService.FACTORY_LINK + "/"
                 + VimUtils.buildStableManagedObjectId(ref, adapterManagementReference);
     }
 
-    static ComputeState makeResourcePoolFromResults(
+    private static ComputeState makeResourcePoolFromResults(
             EnumerationProgress enumerationProgress, ResourcePoolOverlay rp, String selfLink) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
 
@@ -73,8 +79,19 @@ public class VSphereResourcePoolEnumerationHelper {
         return state;
     }
 
-    static ComputeDescription makeDescriptionForResourcePool(EnumerationProgress enumerationProgress,
-                                                             ResourcePoolOverlay rp, String rpSelfLink) {
+    private static ComputeDescription makeDescriptionFromChanges(
+            ResourcePoolOverlay rp, String selfLink, String ownerName) {
+        ComputeDescription res = new ComputeDescription();
+        res.name = rp.getNameOrNull();
+        res.documentSelfLink =
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UriUtils.getLastPathSegment(selfLink));
+
+        res.totalMemoryBytes = rp.getMemoryReservationBytes();
+        return res;
+    }
+
+    private static ComputeDescription makeDescriptionForResourcePool(EnumerationProgress enumerationProgress,
+                                                                     ResourcePoolOverlay rp, String rpSelfLink) {
         ComputeDescription res = new ComputeDescription();
         res.name = rp.getName();
         res.documentSelfLink =
@@ -98,7 +115,7 @@ public class VSphereResourcePoolEnumerationHelper {
         return res;
     }
 
-    static CompletionHandler trackResourcePool(EnumerationProgress enumerationProgress, ResourcePoolOverlay rp) {
+    private static CompletionHandler trackResourcePool(EnumerationProgress enumerationProgress, ResourcePoolOverlay rp) {
         return (o, e) -> {
             enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
             if (e == null) {
@@ -110,15 +127,22 @@ public class VSphereResourcePoolEnumerationHelper {
         };
     }
 
-    static void updateResourcePool(VSphereIncrementalEnumerationService service,
-                                   EnumerationProgress enumerationProgress, String ownerName, String selfLink,
-                                   ResourcePoolOverlay rp) {
-        ComputeState state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink);
-        state.name = rp.makeUserFriendlyName(ownerName);
-        state.tenantLinks = enumerationProgress.getTenantLinks();
-        state.resourcePoolLink = null;
+    private static void updateResourcePool(VSphereIncrementalEnumerationService service,
+                                           EnumerationProgress enumerationProgress, String ownerName, String selfLink,
+                                           ResourcePoolOverlay rp, boolean fullUpdate) {
+        ComputeState state;
+        ComputeDescription desc;
+        if (fullUpdate) {
+            state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink);
+            state.name = rp.makeUserFriendlyName(ownerName);
+            state.tenantLinks = enumerationProgress.getTenantLinks();
+            state.resourcePoolLink = null;
+            desc = makeDescriptionForResourcePool(enumerationProgress, rp, selfLink);
+        } else {
+            state = makeResourcePoolFromChanges(rp, selfLink, ownerName);
+            desc = makeDescriptionFromChanges(rp, selfLink, ownerName);
+        }
 
-        ComputeDescription desc = makeDescriptionForResourcePool(enumerationProgress, rp, selfLink);
         state.descriptionLink = desc.documentSelfLink;
 
         service.logFine(() -> String.format("Refreshed ResourcePool %s", state.name));
@@ -132,9 +156,21 @@ public class VSphereResourcePoolEnumerationHelper {
                 .sendWith(service);
     }
 
-    static void createNewResourcePool(VSphereIncrementalEnumerationService service,
-                                      EnumerationProgress enumerationProgress, String ownerName, String selfLink,
-                                      ResourcePoolOverlay rp) {
+    private static ComputeState makeResourcePoolFromChanges(
+            ResourcePoolOverlay rp, String selfLink, String ownerName) {
+        ComputeState state = new ComputeState();
+        state.documentSelfLink = selfLink;
+        state.totalMemoryBytes = rp.getMemoryReservationBytes();
+
+        if (null != rp.getNameOrNull()) {
+            state.name = rp.makeUserFriendlyName(ownerName);
+        }
+        return state;
+    }
+
+    private static void createNewResourcePool(VSphereIncrementalEnumerationService service,
+                                              EnumerationProgress enumerationProgress, String ownerName, String selfLink,
+                                              ResourcePoolOverlay rp) {
         ComputeState state = makeResourcePoolFromResults(enumerationProgress, rp, selfLink);
         state.name = rp.makeUserFriendlyName(ownerName);
         state.tenantLinks = enumerationProgress.getTenantLinks();
@@ -155,16 +191,16 @@ public class VSphereResourcePoolEnumerationHelper {
                 .sendWith(service);
     }
 
-    static void processFoundResourcePool(VSphereIncrementalEnumerationService service,
-                                         EnumerationProgress enumerationProgress, ResourcePoolOverlay rp,
-                                         String ownerName) {
+    public static void processFoundResourcePool(VSphereIncrementalEnumerationService service,
+                                                EnumerationProgress enumerationProgress, ResourcePoolOverlay rp,
+                                                String ownerName) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         String selfLink = buildStableResourcePoolLink(rp.getId(), request.endpointLink);
 
         Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), selfLink))
                 .setCompletion((o, e) -> {
                     if (e == null) {
-                        updateResourcePool(service, enumerationProgress, ownerName, selfLink, rp);
+                        updateResourcePool(service, enumerationProgress, ownerName, selfLink, rp, true);
                     } else if (e instanceof ServiceNotFoundException
                             || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
                         createNewResourcePool(service, enumerationProgress, ownerName, selfLink, rp);
@@ -173,5 +209,84 @@ public class VSphereResourcePoolEnumerationHelper {
                     }
                 })
                 .sendWith(service);
+    }
+
+    public static void handleResourcePoolChanges(
+            VSphereIncrementalEnumerationService service, List<ResourcePoolOverlay> resourcePools,
+            EnumerationProgress enumerationProgress) {
+        ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+        enumerationProgress.expectResourcePoolCount(resourcePools.size());
+
+        for (ResourcePoolOverlay resourcePool : resourcePools) {
+            // exclude all root resource pools
+            // no need to collect the root resource pool
+            if (ObjectUpdateKind.ENTER.equals(resourcePool.getObjectUpdateKind())
+                    && VimNames.TYPE_RESOURCE_POOL.equals(resourcePool.getParent().getType())) {
+
+                String ownerMoRefId = resourcePool.getOwner().getValue();
+
+                QueryTask task = queryForRPOwner(ownerMoRefId, enumerationProgress);
+                String selfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
+                withTaskResults(service, task, result -> {
+                    if (!result.documentLinks.isEmpty()) {
+                        ComputeService.ComputeState ownerDocument = convertOnlyResultToDocument(result, ComputeService.ComputeState.class);
+                        createNewResourcePool(service, enumerationProgress, ownerDocument.name, selfLink, resourcePool);
+                    } else {
+                        // This happens for the resource pools within Host. The owner is a ComputeResource and
+                        // is not currently enumerated in photon
+                        createNewResourcePool(service, enumerationProgress, null, selfLink, resourcePool);
+                    }
+                });
+            } else {
+                String rpSelfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
+                Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
+                        .setCompletion((o, e) -> {
+                            if (e == null) {
+                                ComputeService.ComputeState oldState = o.getBody(ComputeService.ComputeState.class);
+                                String existingOwnerName = getOwnerNameFromResourcePoolName(oldState.name);
+                                if (ObjectUpdateKind.MODIFY.equals(resourcePool.getObjectUpdateKind())) {
+                                    updateResourcePool(
+                                            service, enumerationProgress, existingOwnerName, oldState.documentSelfLink, resourcePool, false);
+                                } else {
+                                    Operation.createDelete(
+                                            PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
+                                            .setCompletion(trackResourcePool(enumerationProgress, resourcePool))
+                                            .sendWith(service);
+                                }
+                            } else {
+                                enumerationProgress.getResourcePoolTracker().track();
+                            }
+                        })
+                        .sendWith(service);
+            }
+        }
+
+        try {
+            enumerationProgress.getResourcePoolTracker().await();
+        } catch (InterruptedException e) {
+            service.logSevere("Interrupted during incremental enumeration for resource pools!", e);
+        }
+    }
+
+    private static String getOwnerNameFromResourcePoolName(String name) {
+        String owner = null;
+        int index = name.indexOf("/"); //this finds the first occurrence of "/"
+        if (index > 0) {
+            owner = name.substring(0, index - 1);
+        }
+        return owner;
+    }
+
+    private static QueryTask queryForRPOwner(String moRefId, EnumerationProgress ctx) {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeService.ComputeState.class)
+                .addFieldClause(ComputeService.ComputeState.FIELD_NAME_ID, moRefId);
+        QueryUtils.addEndpointLink(builder, ComputeService.ComputeState.class, ctx.getRequest().endpointLink);
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .build();
     }
 }

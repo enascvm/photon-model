@@ -71,12 +71,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        String eventBasedEnumerationServiceURI = UriUtils.buildUriPath(VSphereIncrementalEnumerationService.FACTORY_LINK, UriUtils.getLastPathSegment(UriUtils
-                .getLastPathSegment(request.endpointLink)));
+        String eventBasedEnumerationServiceURI = UriUtils.buildUriPath(VSphereIncrementalEnumerationService.FACTORY_LINK, UriUtils
+                .getLastPathSegment(request.endpointLink));
         URI uri = buildUri(this.getHost(), eventBasedEnumerationServiceURI);
         VSphereIncrementalEnumerationService.VSphereIncrementalEnumerationRequest enumerationRequest =
                 new VSphereIncrementalEnumerationService.VSphereIncrementalEnumerationRequest();
-        enumerationRequest.documentSelfLink = eventBasedEnumerationServiceURI;
+        enumerationRequest.documentSelfLink = UriUtils.getLastPathSegment(eventBasedEnumerationServiceURI);
         enumerationRequest.request = request;
         // if we receive START action, check if there is a stateless for endpoint,
         // if yes, patch it. If no, create new one via post to factory.
@@ -100,7 +100,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     .setReferer(this.getHost().getUri()).setCompletion((o, e) -> {
                         if (null != e) {
                             logWarning("Delete of enumeration service failed for endpoint "
-                                    + UriUtils.getLastPathSegment(request.endpointLink), e.getMessage());
+                                    + enumerationRequest.documentSelfLink + " Message: %s", e.getMessage());
                         }
                         // patch the task to finished if the enumeration action is STOP.
                         // The delete service call will take care of stopping any running enumeration.
