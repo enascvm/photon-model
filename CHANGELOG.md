@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## 0.6.51-SNAPSHOT
+* Improved scheduled task handling.
 
 ## 0.6.50
 * Introduction of self.uri parameter.
