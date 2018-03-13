@@ -149,6 +149,10 @@ public class VSphereNetworkEnumerationHelper {
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
         subnet.id = subnet.name = net.getName();
         subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
+        if (subnet.endpointLink != null) {
+            subnet.endpointLinks = new HashSet<>();
+            subnet.endpointLinks.add(subnet.endpointLink);
+        }
         subnet.networkLink = networkState.documentSelfLink;
         subnet.tenantLinks = enumerationProgress.getTenantLinks();
         subnet.regionId = networkState.regionId;
