@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.6.50-SNAPSHOT
+## 0.6.50
+* Introduction of self.uri parameter.
+* Azure managed disk enumeration adapter.
 
 ## 0.6.49
 * Populating azure managed disk links for Azure computes.
