@@ -20,9 +20,10 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.Map;
 
 import com.microsoft.azure.management.compute.DataDisk;
 import com.microsoft.azure.management.compute.Disk;
@@ -37,7 +38,6 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -46,6 +46,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -56,8 +57,6 @@ import com.vmware.xenon.common.Utils;
 public class AzureComputeDiskDay2Service extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_DISK_DAY2_ADAPTER;
-
-    private ExecutorService executorService;
 
     /**
      * Azure Disk request context.
@@ -95,8 +94,6 @@ public class AzureComputeDiskDay2Service extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-
         Operation.CompletionHandler completionHandler = (op, exc) -> {
             if (exc != null) {
                 startPost.fail(exc);
@@ -109,10 +106,8 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     }
 
     @Override
-    public void handleStop(Operation delete) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-        super.handleStop(delete);
+    public void handleStop(Operation op) {
+        super.handleStop(op);
     }
 
     @Override
@@ -403,27 +398,28 @@ public class AzureComputeDiskDay2Service extends StatelessService {
      * Update the diskLink of DiskState in ComputeState
      */
     private DeferredResult<Operation> updateComputeState(AzureComputeDiskDay2Context context) {
+        Map<String, Collection<Object>> collectionsToModify = Collections
+                .singletonMap(ComputeState.FIELD_NAME_DISK_LINKS,
+                        Collections.singletonList(context.diskState.documentSelfLink));
+
+        Map<String, Collection<Object>> collectionsToAdd = null;
+        Map<String, Collection<Object>> collectionsToRemove = null;
+
         ComputeState computeState = context.computeState;
-        Operation computeStateOp = null;
 
         if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
-            if (null == computeState.diskLinks) {
-                computeState.diskLinks = new ArrayList<>();
-            }
-            computeState.diskLinks.add(context.diskState.documentSelfLink);
-
-            computeStateOp = Operation.createPatch(UriUtils.buildUri(this.getHost(),
-                    computeState.documentSelfLink))
-                    .setBody(computeState)
-                    .setReferer(this.getUri());
+            collectionsToAdd = collectionsToModify;
         } else if (context.request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
-
-            computeState.diskLinks.remove(context.diskState.documentSelfLink);
-            computeStateOp = Operation.createPut(UriUtils.buildUri(this.getHost(),
-                    computeState.documentSelfLink))
-                    .setBody(computeState)
-                    .setReferer(this.getUri());
+            collectionsToRemove = collectionsToModify;
         }
+
+        ServiceStateCollectionUpdateRequest updateDiskLinksRequest = ServiceStateCollectionUpdateRequest
+                .create(collectionsToAdd, collectionsToRemove);
+
+        Operation computeStateOp = Operation.createPatch(UriUtils.buildUri(this.getHost(),
+                computeState.documentSelfLink))
+                .setBody(updateDiskLinksRequest)
+                .setReferer(this.getUri());
 
         return this.sendWithDeferredResult(computeStateOp);
     }
