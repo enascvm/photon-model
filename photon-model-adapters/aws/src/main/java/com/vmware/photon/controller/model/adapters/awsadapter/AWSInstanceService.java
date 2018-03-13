@@ -35,6 +35,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.va
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_SSH_KEY_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.UnsupportedEncodingException;
@@ -1157,8 +1158,8 @@ public class AWSInstanceService extends StatelessService {
                 List<DiskState> additionalDiskStates) {
             List<Operation> patchOperations = new ArrayList<>();
             for (DiskState diskState : additionalDiskStates) {
-                patchOperations.add(Operation.createPatch(this.service.getHost(),
-                        diskState.documentSelfLink)
+                patchOperations.add(Operation.createPatch(createInventoryUri(this.service.getHost(),
+                        diskState.documentSelfLink))
                         .setBody(diskState)
                         .setReferer(this.service.getHost().getUri())
                 );

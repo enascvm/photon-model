@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VOLUME_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -216,7 +217,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
      */
     private DeferredResult<DiskContext> setComputeState(DiskContext context) {
         return this.sendWithDeferredResult(
-                Operation.createGet(context.baseAdapterContext.resourceReference),
+                Operation.createGet(createInventoryUri(this.getHost(),
+                        context.baseAdapterContext.resourceReference)),
                 ComputeState.class)
                 .thenApply(computeState -> {
                     context.computeState = computeState;
@@ -228,8 +230,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
      * get the disk state and set it in context
      */
     private DeferredResult<DiskContext> setDiskState(DiskContext context) {
-        return this.sendWithDeferredResult(Operation.createGet(this.getHost(),
-                context.request.payload.get(PhotonModelConstants.DISK_LINK)), DiskState.class)
+        return this.sendWithDeferredResult(Operation.createGet(createInventoryUri(this.getHost(),
+                context.request.payload.get(PhotonModelConstants.DISK_LINK))), DiskState.class)
                 .thenApply(diskState -> {
                     context.diskState = diskState;
                     return context;

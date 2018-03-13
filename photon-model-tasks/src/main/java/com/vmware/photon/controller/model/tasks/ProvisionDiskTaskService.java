@@ -177,7 +177,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
 
     private void doSubStageValidateDiskState(ProvisionDiskTaskState updatedState) {
         sendRequest(Operation
-                .createGet(this, updatedState.diskLink)
+                .createGet(createInventoryUri(this.getHost(), updatedState.diskLink))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logWarning(() -> String.format("GET to %s failed: %s", o.getUri(),
@@ -205,7 +205,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
 
     private void doSubStageValidateDiskStateCleanup(ProvisionDiskTaskState updatedState) {
         sendRequest(Operation
-                .createGet(this, updatedState.diskLink)
+                .createGet(createInventoryUri(this.getHost(), updatedState.diskLink))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         // Disk state should have been deleted as part of the delete disk
@@ -241,7 +241,8 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
     }
 
     private void sendHostServiceRequest(Object body, URI adapterReference) {
-        sendRequest(Operation.createPatch(adapterReference).setBody(body)
+        sendRequest(Operation.createPatch(createInventoryUri(this.getHost(), adapterReference))
+                .setBody(body)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         failTask(e);
@@ -264,7 +265,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
         subTaskInitState.tenantLinks = currentState.tenantLinks;
         subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
         Operation startPost = Operation
-                .createPost(this, SubTaskService.FACTORY_LINK)
+                .createPost(createInventoryUri(this.getHost(), SubTaskService.FACTORY_LINK))
                 .setBody(subTaskInitState).setCompletion(c);
         sendRequest(startPost);
     }
@@ -337,7 +338,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
 
     private void validateDiskAndStart(ProvisionDiskTaskState state, Operation startPost) {
         URI diskUri = UriUtils.buildUri(getHost(), state.diskLink);
-        sendRequest(Operation.createGet(diskUri)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(), diskUri))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logWarning(() ->
@@ -383,7 +384,7 @@ public class ProvisionDiskTaskService extends TaskService<ProvisionDiskTaskState
             patchBody.taskInfo.failure = Utils.toServiceErrorResponse(ex);
         }
         Operation patch = Operation
-                .createPatch(getUri())
+                .createPatch(createInventoryUri(this.getHost(), getUri()))
                 .setBody(patchBody)
                 .setCompletion(
                         (o, e) -> {

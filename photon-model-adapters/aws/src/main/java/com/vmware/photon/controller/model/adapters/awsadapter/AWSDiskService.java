@@ -377,8 +377,8 @@ public class AWSDiskService extends StatelessService {
         diskState.zoneId = volume.getAvailabilityZone();
 
         sendRequest(
-                Operation.createPatch(this.getHost(),
-                        context.diskRequest.resourceLink())
+                Operation.createPatch(createInventoryUri(this.getHost(),
+                        context.diskRequest.resourceLink()))
                         .setBody(diskState)
                         .setCompletion((o, e) -> {
                             if (e != null) {
@@ -405,7 +405,8 @@ public class AWSDiskService extends StatelessService {
 
     private void getDiskState(AWSDiskContext context, AwsDiskStage next) {
 
-        sendRequest(Operation.createGet(context.diskRequest.resourceReference)
+        sendRequest(Operation.createGet(createInventoryUri(this.getHost(),
+                context.diskRequest.resourceReference))
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         handleStages(context, e);
