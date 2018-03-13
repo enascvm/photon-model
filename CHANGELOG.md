@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.49_2
+* Improved scheduled task handling.
+
 ## 0.6.49
 * Populating azure managed disk links for Azure computes.
 * Fixes related to azure bills.

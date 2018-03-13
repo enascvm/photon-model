@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model.tasks;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -141,6 +143,40 @@ public class ScheduledTaskServiceTest extends Suite {
             assertEquals(taskState.initialStateJson, returnState.initialStateJson);
             assertEquals(taskState.factoryLink, returnState.factoryLink);
             assertEquals(taskState.intervalMicros, returnState.intervalMicros);
+        }
+
+        @Test
+        public void testScheduleTaskUpdateNextMaintenanceTime() throws Throwable {
+            ScheduledTaskService.ScheduledTaskState taskState = buildValidStartState();
+            Long currentTimeMicros = Utils.getNowMicrosUtc();
+
+            taskState.intervalMicros = TimeUnit.SECONDS.toMicros(1);
+            ResourcePoolState inPool = new ResourcePoolState();
+            inPool.name = UUID.randomUUID().toString();
+            inPool.id = inPool.name;
+            inPool.minCpuCount = 1L;
+            inPool.minMemoryBytes = 1024L;
+            taskState.factoryLink = ResourcePoolService.FACTORY_LINK;
+            taskState.initialStateJson = Utils.toJson(inPool);
+
+            ScheduledTaskService.ScheduledTaskState returnState = this.postServiceSynchronously(
+                    ScheduledTaskService.FACTORY_LINK, taskState,
+                    ScheduledTaskService.ScheduledTaskState.class);
+            assertEquals(taskState.customProperties, returnState.customProperties);
+            assertEquals(taskState.initialStateJson, returnState.initialStateJson);
+            assertEquals(taskState.factoryLink, returnState.factoryLink);
+            assertEquals(taskState.intervalMicros, returnState.intervalMicros);
+
+            Thread.sleep(3000);
+
+            Operation getOp = Operation.createGet(UriUtils.buildUri(this.host.getUri(), returnState.documentSelfLink))
+                    .setReferer(this.host.getUri());
+            Operation response = this.host.waitForResponse(getOp);
+            assertTrue("Error retrieving state",
+                    response.getStatusCode() == 200);
+            ScheduledTaskState state = response.getBody(ScheduledTaskState.class);
+            assertNotNull(state.expectedNextMaintenanceTimeMicros);
+            assertTrue(currentTimeMicros < state.expectedNextMaintenanceTimeMicros);
         }
     }
 

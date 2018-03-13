@@ -94,6 +94,14 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_45)
         public Boolean noDelayOnInitialExecution;
+
+        /**
+         * Records the time for last successful execution for scheduled task.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_49_2)
+        public Long expectedNextMaintenanceTimeMicros;
     }
 
     public ScheduledTaskService() {
@@ -169,6 +177,12 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             ScheduledTaskState currentState = getState(patch);
             boolean hasStateChanged = Utils.mergeWithState(getStateDescription(),
                     currentState, patchBody);
+
+            if (patchBody.expectedNextMaintenanceTimeMicros != null) {
+                currentState.expectedNextMaintenanceTimeMicros = patchBody.expectedNextMaintenanceTimeMicros;
+                hasStateChanged = true;
+            }
+
             if (!hasStateChanged) {
                 patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
             } else {
@@ -184,6 +198,19 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         if (!state.enabled) {
             return;
         }
+        logInfo("Invoke request received for schedule task: %s", state.documentSelfLink);
+        if (state.expectedNextMaintenanceTimeMicros != null) {
+            // setting permissible time to be 1/10th of interval time.
+            Long permissibleInterval = state.intervalMicros / 10;
+            Long currentTimeMicros = Utils.getNowMicrosUtc();
+
+            if (state.expectedNextMaintenanceTimeMicros - permissibleInterval > currentTimeMicros) {
+                logWarning(() -> String
+                        .format("Recently finished previous run, will skip current run for scheduled task: %s",
+                                state.documentSelfLink));
+                return;
+            }
+        }
 
         // determine the delay
         final long delayMicros;
@@ -193,7 +220,24 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             delayMicros = state.delayMicros;
         }
 
+        // set the time for next schedule run
+        state.expectedNextMaintenanceTimeMicros = Utils.fromNowMicrosUtc(state.intervalMicros);
+        Operation.createPatch(this, state.documentSelfLink)
+                .setBody(state)
+                .setCompletion((operation, exception) -> {
+                    if (exception == null) {
+                        logInfo(() -> String
+                                .format("Scheduled task %s successfully updated with next maintenance time: %d",
+                                        state.documentSelfLink, state.expectedNextMaintenanceTimeMicros));
+                    } else {
+                        logWarning(
+                                () -> String.format("Scheduled task update"
+                                                + " failed: %s", exception.getMessage()));
+                    }
+                }).sendWith(this);
+
         getHost().schedule(() -> {
+            logInfo("Invoking schedule task: %s", state.documentSelfLink);
             Operation op = Operation.createPost(this, state.factoryLink);
 
             if (getHost().isAuthorizationEnabled()) {
