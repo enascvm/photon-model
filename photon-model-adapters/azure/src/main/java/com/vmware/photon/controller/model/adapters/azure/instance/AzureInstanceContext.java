@@ -316,7 +316,7 @@ public class AzureInstanceContext extends
 
                 .map(nicCtx -> AzureUtils.filterRGsByType(service().getHost(),
                         nicCtx.networkState.groupLinks, context.child.endpointLink,
-                        context.childAuth.tenantLinks)
+                        context.parent.tenantLinks)
                         .thenAccept(rgState -> nicCtx.networkRGState = rgState))
 
                 .collect(Collectors.toList());
@@ -353,7 +353,7 @@ public class AzureInstanceContext extends
 
                 .map(nicCtx -> AzureUtils.filterRGsByType(service().getHost(),
                         nicCtx.securityGroupState().groupLinks, context.child.endpointLink,
-                        context.childAuth.tenantLinks)
+                        context.parent.tenantLinks)
                         .thenAccept(rgState -> nicCtx.securityGroupRGState = rgState))
 
                 .collect(Collectors.toList());
