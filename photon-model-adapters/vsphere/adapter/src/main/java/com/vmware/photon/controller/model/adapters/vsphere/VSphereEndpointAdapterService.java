@@ -189,7 +189,7 @@ public class VSphereEndpointAdapterService extends StatelessService {
                 new GetMoRef(connection).entityProp(VimUtils.convertStringToMoRef(id), VimNames.PROPERTY_NAME);
             }
             callback.accept(null, null);
-        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
+        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg | IllegalArgumentException e) {
             ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
             r.statusCode = STATUS_CODE_BAD_REQUEST;
             r.message = String.format("Error looking for datacenter for id '%s'", id);
