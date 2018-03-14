@@ -13,9 +13,12 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS;
+import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -499,6 +502,19 @@ public class ComputeService extends StatefulService {
         }
 
         ComputeState currentState = getState(patch);
+
+        if (currentState.type != null && currentState.type.equals(ComputeType.ENDPOINT_HOST)
+                && (currentState.environmentName.equals(ENVIRONMENT_NAME_AWS)
+                || currentState.environmentName.equals(ENVIRONMENT_NAME_AZURE))) {
+            if (patchState.tenantLinks != null && !patchState.tenantLinks.isEmpty()) {
+                if (currentState.tenantLinks == null) {
+                    currentState.tenantLinks = new ArrayList<>();
+                }
+                patchState.tenantLinks.removeAll(currentState.tenantLinks);
+                currentState.tenantLinks.addAll(patchState.tenantLinks);
+            }
+        }
+
         Function<Operation, Boolean> customPatchHandler = t -> {
             boolean hasStateChanged = false;
             ComputeState patchBody = patch.getBody(ComputeState.class);

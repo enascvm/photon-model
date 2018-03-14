@@ -968,6 +968,10 @@ public class EndpointAllocationTaskService
                 cd.endpointLinks = new HashSet<>();
             }
             cd.endpointLinks.add(state.documentSelfLink);
+            if (cd.tenantLinks == null) {
+                cd.tenantLinks = new ArrayList<>();
+            }
+            cd.tenantLinks.addAll(currentState.tenantLinks);
             return cd;
         }
 
@@ -998,6 +1002,10 @@ public class EndpointAllocationTaskService
     private ComputeDescription configureDescriptionPatch(EndpointState state) {
         ComputeDescription cd = new ComputeDescription();
         cd.name = state.name;
+        if (cd.tenantLinks == null) {
+            cd.tenantLinks = new ArrayList<>();
+        }
+        cd.tenantLinks.addAll(state.tenantLinks);
         return cd;
     }
 
@@ -1011,6 +1019,10 @@ public class EndpointAllocationTaskService
                 computeHost.endpointLinks = new HashSet<>();
             }
             computeHost.endpointLinks.add(state.documentSelfLink);
+            if (computeHost.tenantLinks == null) {
+                computeHost.tenantLinks = new ArrayList<>();
+            }
+            computeHost.tenantLinks.addAll(currentState.tenantLinks);
             return computeHost;
         }
 
@@ -1043,7 +1055,10 @@ public class EndpointAllocationTaskService
                 ? endpointProperties.get(EndpointConfigRequest.REGION_KEY) : null;
         ComputeState computeHost = new ComputeState();
         computeHost.name = endpointRegionId != null ? endpointRegionId : state.name;
-
+        if (computeHost.tenantLinks == null) {
+            computeHost.tenantLinks = new ArrayList<>();
+        }
+        computeHost.tenantLinks.addAll(state.tenantLinks);
         computeHost.customProperties = new HashMap<>();
         if (state.customProperties != null) {
             computeHost.customProperties.putAll(state.customProperties);

@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS;
+import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -374,10 +377,23 @@ public class ComputeDescriptionService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patch) {
+        ComputeDescription patchBody = patch.getBody(ComputeDescription.class);
         ComputeDescription currentState = getState(patch);
+
+        if (patchBody.environmentName != null
+                && (patchBody.environmentName.equals(ENVIRONMENT_NAME_AWS)
+                || patchBody.environmentName.equals(ENVIRONMENT_NAME_AZURE))) {
+            if (patchBody.tenantLinks != null && !patchBody.tenantLinks.isEmpty()) {
+                if (currentState.tenantLinks == null) {
+                    currentState.tenantLinks = new ArrayList<>();
+                }
+                patchBody.tenantLinks.removeAll(currentState.tenantLinks);
+                currentState.tenantLinks.addAll(patchBody.tenantLinks);
+            }
+        }
+
         ResourceUtils.handlePatch(this, patch, currentState, getStateDescription(),
                 ComputeDescription.class, op -> {
-                    ComputeDescription patchBody = op.getBody(ComputeDescription.class);
                     boolean hasChanged = false;
 
                     if (patchBody.cpuCount != 0) {
