@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.commons.collections.CollectionUtils;
+
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.vim25.DynamicProperty;
@@ -273,6 +275,13 @@ public class Finder extends Recurser {
             InvalidPropertyFaultMsg,
             FinderException {
         List<Element> found = datastoreList(path);
+        if (CollectionUtils.isEmpty(found)) {
+            // Do next attempt here to get the details of the datastore from the datacenter
+            // rather then the datastore folder, because datastores within the cluster are not
+            // fetched otherwise.
+            found = find(this.fullPath(this.datacenter), false, new String[] {path});
+            found = acceptOnly(found, "Datastore");
+        }
         return uniqueResultOrFail(found);
     }
 

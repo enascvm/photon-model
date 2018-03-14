@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.vim25.DynamicProperty;
@@ -149,24 +150,35 @@ public class Lister extends BaseHelper {
                 "vmFolder",
                 "hostFolder",
                 "datastoreFolder",
-                "networkFolder" };
+                "networkFolder",
+                "datastore"};
 
         for (String f : fields) {
             TraversalSpec tspec = new TraversalSpec();
             tspec.setPath(f);
             tspec.setSkip(false);
-            tspec.setType("Datacenter");
+            tspec.setType(VimNames.TYPE_DATACENTER);
 
             ospec.getSelectSet().add(tspec);
         }
 
         PropertySpec pspec = new PropertySpec();
-        pspec.setType("Folder");
-        pspec.getPathSet().add("name");
+        pspec.setType(VimNames.TYPE_FOLDER);
+        pspec.getPathSet().add(VimNames.PROPERTY_NAME);
+
+        PropertySpec dcspec = new PropertySpec();
+        dcspec.setType(VimNames.TYPE_DATACENTER);
+        dcspec.getPathSet().add(VimNames.PROPERTY_NAME);
+
+        PropertySpec dsspec = new PropertySpec();
+        dsspec.setType(VimNames.TYPE_DATASTORE);
+        dsspec.getPathSet().add(VimNames.PROPERTY_NAME);
 
         PropertyFilterSpec spec = new PropertyFilterSpec();
         spec.getObjectSet().add(ospec);
         spec.getPropSet().add(pspec);
+        spec.getPropSet().add(dcspec);
+        spec.getPropSet().add(dsspec);
 
         return callPropertyCollectorAndConvert(spec);
     }

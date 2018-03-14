@@ -563,7 +563,7 @@ public class InstanceClient extends BaseHelper {
 
         List<DiskStateExpanded> persistDisks = disks.stream()
                 .filter(disk -> disk.type == DiskType.HDD)
-                .filter(disk -> disk.persistent)
+                .filter(disk -> disk.persistent != null && disk.persistent)
                 .collect(Collectors.toList());
 
         if (CollectionUtils.isEmpty(persistDisks)) {

@@ -102,7 +102,11 @@ public class Recurser extends BaseHelper {
     }
 
     private String basename(String path) {
-        return Paths.get(path).getFileName().toString();
+        try {
+            return Paths.get(path).getFileName().toString();
+        } catch (Exception e) {
+            return path.substring(path.lastIndexOf("/") + 1);
+        }
     }
 
     public boolean isTraverseLeafs() {

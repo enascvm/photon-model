@@ -39,6 +39,7 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
@@ -48,6 +49,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,10 +172,15 @@ public class ClientUtils {
         }
         List<VirtualMachineDefinedProfileSpec> profileSpecs = diskState.resourceGroupStates.stream()
                 .map(rg -> {
-                    VirtualMachineDefinedProfileSpec spbmProfile = new VirtualMachineDefinedProfileSpec();
-                    spbmProfile.setProfileId(rg.id);
-                    return spbmProfile;
-                }).collect(Collectors.toList());
+                    if (StringUtils.isNotEmpty(rg.id)) {
+                        VirtualMachineDefinedProfileSpec spbmProfile = new VirtualMachineDefinedProfileSpec();
+                        spbmProfile.setProfileId(rg.id);
+                        return spbmProfile;
+                    }
+                    return null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
         return profileSpecs;
     }
 
