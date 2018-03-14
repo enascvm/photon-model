@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.6.51-SNAPSHOT
+## 0.6.51
 * Improved scheduled task handling.
 
 ## 0.6.50
