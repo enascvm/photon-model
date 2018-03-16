@@ -180,7 +180,8 @@ public class CustomProperties {
     public static final String HS_CPU_PKG_COUNT = "cpuPkgCount";
     public static final String HS_MEMORY_IN_GB = "memoryGB";
     public static final String HS_CPU_DESC = "cpuDescription";
-    public static final String HS_NIC_COUNT = "nics";
+    public static final String HS_NIC_COUNT = "HOST__PNIC_COUNT";
+    public static final String HS_NICS_INFO = "nics";
     public static final String MANUFACTURER = "manufacturer";
     public static final String PROPERTY_NAME = "name";
     public static final String VENDOR = "vendor";

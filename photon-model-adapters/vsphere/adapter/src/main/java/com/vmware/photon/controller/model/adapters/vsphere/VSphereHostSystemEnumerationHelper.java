@@ -134,8 +134,9 @@ public class VSphereHostSystemEnumerationHelper {
                 .put(CustomProperties.HS_CPU_PKG_COUNT, hs.getNumCpuPkgs())
                 .put(CustomProperties.HS_MEMORY_IN_GB, hs.getTotalMemoryBytes() / (1024 * 1024 * 1024))
                 .put(CustomProperties.HS_NIC_COUNT, hs.getNumNics())
-                // TODO : Find the logic for setting these props
-                .put(CustomProperties.HS_CPU_DESC, "")
+                .put(CustomProperties.HS_NICS_INFO, hs.getConsolidatedNicInfo())
+                .put(CustomProperties.HS_CPU_DESC, hs.getCpuModel())
+                // TODO : Find the logic for setting this prop
                 .put(CustomProperties.IS_PHYSICAL, "");
 
         if (hs.isClusterHost()) {

@@ -14,19 +14,24 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
+import com.vmware.vim25.ArrayOfPhysicalNic;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectUpdate;
-import com.vmware.vim25.VsanHostConfigInfo;
+import com.vmware.vim25.PhysicalNic;
+import com.vmware.xenon.common.Utils;
 
 public class HostSystemOverlay extends AbstractOverlay {
     private boolean clusterHost;
     private ManagedObjectReference parentMoref;
-    private static final String HOST_SUMMARY_CONFIG_VSANCONFIG = "summary.config.vsanHostConfig";
+    // Adding the constants here as the VimPath file should not be modified
+    public static final String HOST_SUMMARY_CONFIG_NIC_INFO = "config.network.pnic";
 
     protected HostSystemOverlay(ObjectUpdate cont) {
         super(cont);
@@ -101,6 +106,10 @@ public class HostSystemOverlay extends AbstractOverlay {
         return (String) getOrDefault(VimPath.host_summary_hardware_model, null);
     }
 
+    public String getCpuModel() {
+        return (String) getOrDefault(VimPath.host_summary_hardware_cpuModel, null);
+    }
+
     public int getNumNics() {
         return (int) getOrDefault(VimPath.host_summary_hardware_numNics, 0);
     }
@@ -109,13 +118,28 @@ public class HostSystemOverlay extends AbstractOverlay {
         return (short) getOrDefault(VimPath.host_summary_hardware_numCpuPkgs, 0);
     }
 
-    // TODO: Check if this makes more sense processing it from Cluster info rather than host info as
-    // we already get VimPath.res_configurationEx for cluster
-    public VsanHostConfigInfo getVsanConfigInfo() {
-        return (VsanHostConfigInfo) getOrDefault(HOST_SUMMARY_CONFIG_VSANCONFIG, null);
-    }
-
     public String getNameOrNull() {
         return (String) getOrDefault(VimNames.PROPERTY_NAME, null);
+    }
+
+    private ArrayOfPhysicalNic getNicsInfo() {
+        return (ArrayOfPhysicalNic) getOrDefault(HOST_SUMMARY_CONFIG_NIC_INFO, null);
+    }
+
+    public String getConsolidatedNicInfo() {
+        ArrayOfPhysicalNic physicalNic = getNicsInfo();
+        Map<Integer, Integer> nicInfo = new HashMap<>();
+        if (null != physicalNic && !physicalNic.getPhysicalNic().isEmpty()) {
+            for (PhysicalNic pnic : physicalNic.getPhysicalNic()) {
+                if (null == pnic.getLinkSpeed()) {
+                    int count = nicInfo.getOrDefault(0, 0);
+                    nicInfo.put(0, count + 1);
+                } else {
+                    int count = nicInfo.getOrDefault(pnic.getLinkSpeed().getSpeedMb(), 0);
+                    nicInfo.put(pnic.getLinkSpeed().getSpeedMb(), count + 1);
+                }
+            }
+        }
+        return Utils.toJson(nicInfo);
     }
 }
