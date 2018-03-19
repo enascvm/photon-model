@@ -29,6 +29,7 @@ import com.amazonaws.services.ec2.model.DeleteNetworkAclRequest;
 import com.amazonaws.services.ec2.model.DeleteNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
+import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
 import com.amazonaws.services.ec2.model.DeleteVpcRequest;
 import com.amazonaws.services.ec2.model.DeleteVpnGatewayRequest;
 import com.amazonaws.services.ec2.model.DescribeAddressesRequest;
@@ -47,6 +48,7 @@ import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeSubnetsRequest;
 import com.amazonaws.services.ec2.model.DescribeSubnetsResult;
+import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.DescribeVpcsResult;
 import com.amazonaws.services.ec2.model.DescribeVpnGatewaysRequest;
 import com.amazonaws.services.ec2.model.DescribeVpnGatewaysResult;
@@ -60,6 +62,7 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
+import com.amazonaws.services.ec2.model.Volume;
 import com.amazonaws.services.ec2.model.Vpc;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.Bucket;
@@ -276,6 +279,28 @@ public class AWSRemoteCleanup extends BasicTestCase {
         }
 
         triggerEC2Deletion(instanceIdsToBeDeleted, usEastEc2Client);
+    }
+
+    @Test
+    public void deleteStaleAwsVolumes() {
+        AmazonEC2 usEastEc2Client = this.ec2Clients.get(US_EAST_1_TAG);
+        DescribeVolumesResult volumesResult = usEastEc2Client.describeVolumes();
+        List<Volume> volumeList = volumesResult.getVolumes();
+
+        for (Volume volume : volumeList) {
+            long volumeCreationTimeMicros = TimeUnit.MILLISECONDS
+                    .toMicros(volume.getCreateTime().getTime());
+            long timeDifference = Utils.getNowMicrosUtc() - volumeCreationTimeMicros;
+
+            if (timeDifference > TimeUnit.HOURS.toMicros(1) && volume.getState()
+                    .equalsIgnoreCase("available")) {
+                this.host.log("Terminating stale volume: %s",
+                        volume.getVolumeId());
+                DeleteVolumeRequest deleteVolumeRequest = new DeleteVolumeRequest()
+                        .withVolumeId(volume.getVolumeId());
+                usEastEc2Client.deleteVolume(deleteVolumeRequest);
+            }
+        }
     }
 
     private static boolean shouldDelete(Instance instance) {
