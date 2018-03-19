@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -55,6 +56,7 @@ public class VSphereResourcePoolEnumerationHelper {
         state.type = ComputeType.VM_HOST;
         state.powerState = PowerState.ON;
         state.endpointLink = request.endpointLink;
+        AdapterUtils.addToEndpointLinks(state, request.endpointLink);
         state.regionId = enumerationProgress.getRegionId();
         state.parentLink = enumerationProgress.getRequest().resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
@@ -102,6 +104,7 @@ public class VSphereResourcePoolEnumerationHelper {
         res.cpuCount = 0;
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
         res.endpointLink = enumerationProgress.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(res, enumerationProgress.getRequest().endpointLink);
         res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
         res.enumerationAdapterReference = enumerationProgress

@@ -17,10 +17,10 @@ import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumera
 import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
 
 import java.net.URI;
-import java.util.HashSet;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.MoRefKeyedMap;
@@ -82,10 +82,7 @@ public class VSphereNetworkEnumerationHelper {
                 service.getHost().nextUUID();
         state.id = state.name = net.getName();
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
-        if (state.endpointLink != null) {
-            state.endpointLinks = new HashSet<>();
-            state.endpointLinks.add(state.endpointLink);
-        }
+        AdapterUtils.addToEndpointLinks(state, enumerationProgress.getRequest().endpointLink);
         state.regionId = enumerationProgress.getRegionId();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
@@ -149,10 +146,7 @@ public class VSphereNetworkEnumerationHelper {
                 UriUtils.getLastPathSegment(networkState.documentSelfLink));
         subnet.id = subnet.name = net.getName();
         subnet.endpointLink = enumerationProgress.getRequest().endpointLink;
-        if (subnet.endpointLink != null) {
-            subnet.endpointLinks = new HashSet<>();
-            subnet.endpointLinks.add(subnet.endpointLink);
-        }
+        AdapterUtils.addToEndpointLinks(subnet, enumerationProgress.getRequest().endpointLink);
         subnet.networkLink = networkState.documentSelfLink;
         subnet.tenantLinks = enumerationProgress.getTenantLinks();
         subnet.regionId = networkState.regionId;
@@ -208,6 +202,7 @@ public class VSphereNetworkEnumerationHelper {
         res.id = net.getName();
         res.name = "Hosts connected to network '" + net.getName() + "'";
         res.endpointLink = ctx.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(res, ctx.getRequest().endpointLink);
         res.tenantLinks = ctx.getTenantLinks();
         CustomProperties.of(res)
                 .put(CustomProperties.MOREF, net.getId())
@@ -247,11 +242,7 @@ public class VSphereNetworkEnumerationHelper {
 
         state.id = state.name = net.getName();
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
-        if (state.endpointLink != null) {
-            state.endpointLinks = new HashSet<>();
-            state.endpointLinks.add(state.endpointLink);
-        }
-
+        AdapterUtils.addToEndpointLinks(state, enumerationProgress.getRequest().endpointLink);
         ManagedObjectReference parentSwitch = net.getParentSwitch();
         state.networkLink = buildStableDvsLink(parentSwitch, request.endpointLink);
 

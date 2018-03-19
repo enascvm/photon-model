@@ -37,6 +37,7 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -555,6 +556,7 @@ public class TestVSphereComputeDiskDay2Service extends TestVSphereCloneTaskBase 
             throws Throwable {
         diskState.authCredentialsLink = this.auth.documentSelfLink;
         diskState.endpointLink = this.endpointState.documentSelfLink;
+        AdapterUtils.addToEndpointLinks(diskState, this.endpointState.documentSelfLink);
         diskState.regionId = this.datacenterId;
         diskState.tenantLinks = this.computeHost.tenantLinks;
         diskState.diskAdapterReference = UriUtils.buildUri(host, VSphereDiskService.SELF_LINK);

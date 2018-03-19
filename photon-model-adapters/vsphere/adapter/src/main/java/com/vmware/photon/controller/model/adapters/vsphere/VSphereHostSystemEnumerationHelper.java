@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -72,6 +73,7 @@ public class VSphereHostSystemEnumerationHelper {
                 buildUriPath(ComputeDescriptionService.FACTORY_LINK, service.getHost().nextUUID());
         res.cpuCount = hs.getCoreCount();
         res.endpointLink = enumerationProgress.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(res, enumerationProgress.getRequest().endpointLink);
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
@@ -110,6 +112,7 @@ public class VSphereHostSystemEnumerationHelper {
         state.type = hs.isClusterHost() ? ComputeType.CLUSTER_HOST : ComputeType.VM_HOST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(state, enumerationProgress.getRequest().endpointLink);
         state.regionId = enumerationProgress.getRegionId();
         state.id = hs.getId().getValue();
         state.adapterManagementReference = enumerationProgress

@@ -53,8 +53,8 @@ public class VsphereDatacenterEnumerationHelper {
         ResourceGroupService.ResourceGroupState state = new ResourceGroupService.ResourceGroupState();
         state.name = dcName;
         state.endpointLink = request.endpointLink;
-        state.tenantLinks = ctx.getTenantLinks();
         AdapterUtils.addToEndpointLinks(state, request.endpointLink);
+        state.tenantLinks = ctx.getTenantLinks();
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, moref)

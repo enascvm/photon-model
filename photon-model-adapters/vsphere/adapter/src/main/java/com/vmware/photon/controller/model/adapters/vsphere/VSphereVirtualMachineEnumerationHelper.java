@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.collections.CollectionUtils;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIncrementalEnumerationService.InterfaceStateMode;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
@@ -101,6 +102,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         ComputeDescription res = new ComputeDescription();
         res.name = vm.getName();
         res.endpointLink = enumerationProgress.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(res, enumerationProgress.getRequest().endpointLink);
         res.documentSelfLink =
                 buildUriPath(ComputeDescriptionService.FACTORY_LINK, service.getHost().nextUUID());
         res.instanceAdapterReference = enumerationProgress
@@ -132,6 +134,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         state.type = ComputeType.VM_GUEST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         state.endpointLink = request.endpointLink;
+        AdapterUtils.addToEndpointLinks(state, request.endpointLink);
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;

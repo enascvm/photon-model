@@ -91,6 +91,7 @@ public class VsphereComputeResourceEnumerationHelper {
         state.id = cr.getId().getValue();
         state.type = cr.isDrsEnabled() ? ComputeType.ZONE : ComputeType.VM_HOST;
         state.endpointLink = enumerationProgress.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(state, enumerationProgress.getRequest().endpointLink);
         state.regionId = enumerationProgress.getRegionId();
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         state.adapterManagementReference = enumerationProgress
@@ -137,6 +138,7 @@ public class VsphereComputeResourceEnumerationHelper {
         res.totalMemoryBytes = cr.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
         res.endpointLink = enumerationProgress.getRequest().endpointLink;
+        AdapterUtils.addToEndpointLinks(res, enumerationProgress.getRequest().endpointLink);
         res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
         res.enumerationAdapterReference = enumerationProgress

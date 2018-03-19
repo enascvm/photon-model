@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -307,6 +308,7 @@ public class TestVSphereDiskService extends BaseVSphereAdapterTest {
     private DiskState postDiskStateWithDetails(DiskState diskState) throws Throwable {
         diskState.authCredentialsLink = this.auth.documentSelfLink;
         diskState.endpointLink = this.endpointState.documentSelfLink;
+        AdapterUtils.addToEndpointLinks(diskState, this.endpointState.documentSelfLink);
         diskState.regionId = this.datacenterId;
         diskState.tenantLinks = this.computeHost.tenantLinks;
         diskState.diskAdapterReference = UriUtils.buildUri(host, VSphereDiskService.SELF_LINK);
