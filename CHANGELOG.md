@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.6.52-SNAPSHOT
+## 0.6.52
+* Modify logic for adding new endpoints under same compute host.
+* Incremental change handling for Resource pools
+* [AWS]Use createInventoryUri in storage code.
 
 ## 0.6.51
 * Improved scheduled task handling.
