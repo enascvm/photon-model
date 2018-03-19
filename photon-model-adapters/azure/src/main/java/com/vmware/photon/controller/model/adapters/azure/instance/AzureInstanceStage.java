@@ -64,6 +64,11 @@ public enum AzureInstanceStage {
     INIT_RES_GROUP,
 
     /**
+     * Stage where availability set is initialized.
+     */
+    INIT_AVAILABILITY_SET,
+
+    /**
      * Stage where storage account is initialized.
      */
     INIT_STORAGE,

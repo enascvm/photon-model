@@ -707,7 +707,7 @@ public class AzureTestUtil {
             AzureNicSpecs nicSpecs) throws Throwable {
 
         return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
-                null /* networkRGLink */, 0);
+                null /* networkRGLink */, 0, null, null);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
@@ -716,19 +716,20 @@ public class AzureTestUtil {
 
         return createDefaultVMResource(host, azureVMName, computeHost, endpointState,
                 DEFAULT_NIC_SPEC,
-                null, numberOfDisks);
+                null, numberOfDisks, null, null);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
             ComputeState computeHost, EndpointState endpointState,
             AzureNicSpecs nicSpecs, String networkRGLink) throws Throwable {
         return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
-                networkRGLink, 0);
+                networkRGLink, 0, null, null);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
             ComputeState computeHost, EndpointState endpointState,
-            AzureNicSpecs nicSpecs, String networkRGLink, int numberOfAdditionalDisks)
+            AzureNicSpecs nicSpecs, String networkRGLink, int numberOfAdditionalDisks,
+            ComputeDescription azureVMDesc, String azureRgName)
             throws Throwable {
 
         final ImageSource imageSource;
@@ -746,7 +747,7 @@ public class AzureTestUtil {
         }
 
         return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs,
-                networkRGLink, imageSource, numberOfAdditionalDisks);
+                networkRGLink, imageSource, numberOfAdditionalDisks, azureVMDesc, azureRgName);
     }
 
     /**
@@ -969,7 +970,8 @@ public class AzureTestUtil {
 
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
-                spec.host, spec.computeHost, spec.endpointState, networkRGLinks, sgRGLinks, spec.nicSpecs)
+                spec.host, spec.computeHost, spec.endpointState, networkRGLinks, sgRGLinks, spec
+                        .nicSpecs, spec.azureVmName)
                 .stream()
                 .map(nic -> nic.documentSelfLink)
                 .collect(Collectors.toList());
@@ -1002,13 +1004,16 @@ public class AzureTestUtil {
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
             ComputeState computeHost, EndpointState endpointState,
-            AzureNicSpecs nicSpecs, String networkRGLink, ImageSource imageSource, int numberOfAdditionalDisks)
+            AzureNicSpecs nicSpecs, String networkRGLink, ImageSource imageSource, int
+            numberOfAdditionalDisks, ComputeDescription azureVMDesc, String azureRgName)
             throws Throwable {
 
-        final String defaultVmRGName = azureVMName;
+        if (azureRgName == null) {
+            azureRgName = azureVMName;
+        }
 
         final ResourceGroupState defaultVmRG = createDefaultResourceGroupState(
-                host, defaultVmRGName, computeHost, endpointState,
+                host, azureRgName, computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
 
         final String defaultVmRGLink = defaultVmRG.documentSelfLink;
@@ -1033,37 +1038,9 @@ public class AzureTestUtil {
         sgRGLinks.add(sgRGLink);
         sgRGLinks.add(azureStorageContainerRG.documentSelfLink);
 
-        AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
-        azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
-        azureVMAuth.privateKey = AZURE_ADMIN_PASSWORD;
-        azureVMAuth = TestUtils.doPost(host, azureVMAuth, AuthCredentialsServiceState.class,
-                UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
-
-        // Create a VM desc
-        ComputeDescription azureVMDesc = new ComputeDescription();
-        azureVMDesc.id = UUID.randomUUID().toString();
-        azureVMDesc.documentSelfLink = azureVMDesc.id;
-        azureVMDesc.name = azureVMDesc.id;
-        azureVMDesc.regionId = AZURE_RESOURCE_GROUP_LOCATION;
-        azureVMDesc.authCredentialsLink = azureVMAuth.documentSelfLink;
-        azureVMDesc.tenantLinks = endpointState.tenantLinks;
-        azureVMDesc.endpointLink = endpointState.documentSelfLink;
-        azureVMDesc.endpointLinks = new HashSet<>();
-        azureVMDesc.endpointLinks.add(endpointState.documentSelfLink);
-        azureVMDesc.computeHostLink = computeHost.documentSelfLink;
-        azureVMDesc.instanceType = AZURE_VM_SIZE;
-        azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-        azureVMDesc.customProperties = new HashMap<>();
-
-        // set the create service to the azure instance service
-        azureVMDesc.instanceAdapterReference = UriUtils.buildUri(host,
-                AzureUriPaths.AZURE_INSTANCE_ADAPTER);
-
-        azureVMDesc.powerAdapterReference = UriUtils.buildUri(host,
-                AzureUriPaths.AZURE_POWER_ADAPTER);
-
-        azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
-                UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
+        if (azureVMDesc == null) {
+            azureVMDesc = buildComputeDescription(host, computeHost, endpointState, null);
+        }
 
         List<String> vmDisks = new ArrayList<>();
 
@@ -1098,7 +1075,7 @@ public class AzureTestUtil {
                 (azureVMName + "sa").replaceAll("[_-]", "").toLowerCase());
         rootDisk.customProperties.put(
                 AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
-                defaultVmRGName);
+                azureRgName);
         rootDisk.customProperties.put(
                 AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
@@ -1113,7 +1090,7 @@ public class AzureTestUtil {
                 numberOfAdditionalDisks, VMResourceSpec.PersistentDisks.NONE ,  false));
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
-                host, computeHost, endpointState, networkRGLinks, sgRGLinks, nicSpecs)
+                host, computeHost, endpointState, networkRGLinks, sgRGLinks, nicSpecs, azureVMName)
                         .stream()
                         .map(nic -> nic.documentSelfLink)
                         .collect(Collectors.toList());
@@ -1129,7 +1106,7 @@ public class AzureTestUtil {
         computeState.resourcePoolLink = computeHost.resourcePoolLink;
         computeState.diskLinks = vmDisks;
         computeState.networkInterfaceLinks = nicLinks;
-        computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, defaultVmRGName);
+        computeState.customProperties = Collections.singletonMap(RESOURCE_GROUP_NAME, azureRgName);
         computeState.groupLinks = Collections.singleton(defaultVmRGLink);
         computeState.endpointLink = endpointState.documentSelfLink;
         computeState.endpointLinks = new HashSet<>();
@@ -1143,6 +1120,44 @@ public class AzureTestUtil {
 
         return TestUtils.doPost(host, computeState, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
+    }
+
+    public static ComputeDescription buildComputeDescription(VerificationHost host,
+            ComputeState computeHost, EndpointState endpointState, AuthCredentialsServiceState azureVMAuth)
+            throws Throwable {
+
+        if (azureVMAuth == null) {
+            azureVMAuth = new AuthCredentialsServiceState();
+            azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
+            azureVMAuth.privateKey = AZURE_ADMIN_PASSWORD;
+            azureVMAuth = TestUtils.doPost(host, azureVMAuth, AuthCredentialsServiceState.class,
+                    UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
+        }
+        ComputeDescription azureVMDesc = new ComputeDescription();
+        azureVMDesc.id = UUID.randomUUID().toString();
+        azureVMDesc.documentSelfLink = azureVMDesc.id;
+        azureVMDesc.name = azureVMDesc.id;
+        azureVMDesc.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+        azureVMDesc.authCredentialsLink = azureVMAuth.documentSelfLink;
+        azureVMDesc.tenantLinks = endpointState.tenantLinks;
+        azureVMDesc.endpointLink = endpointState.documentSelfLink;
+        azureVMDesc.endpointLinks = new HashSet<>();
+        azureVMDesc.endpointLinks.add(endpointState.documentSelfLink);
+        azureVMDesc.computeHostLink = computeHost.documentSelfLink;
+        azureVMDesc.instanceType = AZURE_VM_SIZE;
+        azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+        azureVMDesc.customProperties = new HashMap<>();
+
+        // set the create service to the azure instance service
+        azureVMDesc.instanceAdapterReference = UriUtils.buildUri(host,
+                AzureUriPaths.AZURE_INSTANCE_ADAPTER);
+
+        azureVMDesc.powerAdapterReference = UriUtils.buildUri(host,
+                AzureUriPaths.AZURE_POWER_ADAPTER);
+
+        azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
+                UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
+        return azureVMDesc;
     }
 
     public static TagState getTagState(List<String> tenantLinks, String key, String value) {
@@ -1364,7 +1379,8 @@ public class AzureTestUtil {
             ComputeState computeHost, EndpointState endpointState,
             Set<String> networkRGLinks,
             Set<String> sgRGLinks,
-            AzureNicSpecs azureNicSpecs) throws Throwable {
+            AzureNicSpecs azureNicSpecs,
+            String azureVMName) throws Throwable {
 
         // Create network state.
         NetworkState networkState;
@@ -1426,7 +1442,7 @@ public class AzureTestUtil {
             SecurityGroupState securityGroupState;
             {
                 securityGroupState = new SecurityGroupState();
-                securityGroupState.name = AZURE_SECURITY_GROUP_NAME;
+                securityGroupState.name = AZURE_SECURITY_GROUP_NAME + "-" + azureVMName;
                 securityGroupState.authCredentialsLink = endpointState.authCredentialsLink;
                 securityGroupState.endpointLink = endpointState.documentSelfLink;
                 securityGroupState.endpointLinks = new HashSet<>();
@@ -1470,7 +1486,7 @@ public class AzureTestUtil {
                 nicDescription = new NetworkInterfaceDescription();
 
                 nicDescription.id = "nicDesc" + i;
-                nicDescription.name = "nicDesc" + i;
+                nicDescription.name = generateName("nicDesc" + i);
                 nicDescription.deviceIndex = i;
                 nicDescription.assignPublicIpAddress = azureNicSpecs.assignPublicIpAddress;
                 nicDescription.tenantLinks = endpointState.tenantLinks;
@@ -1491,7 +1507,7 @@ public class AzureTestUtil {
             NetworkInterfaceState nicState = new NetworkInterfaceState();
 
             nicState.id = "nic" + i;
-            nicState.name = "nic" + i;
+            nicState.name = generateName("nic" + i);
             nicState.deviceIndex = nicDescription.deviceIndex;
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
             nicState.subnetLink = subnetState.documentSelfLink;

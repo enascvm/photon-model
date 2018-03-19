@@ -19,8 +19,11 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_ADMIN_PASSWORD;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_ADMIN_USERNAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NO_PUBLIC_IP_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.buildComputeDescription;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
@@ -32,9 +35,12 @@ import static com.vmware.photon.controller.model.tasks.ProvisionLoadBalancerTask
 import static com.vmware.photon.controller.model.tasks.ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -59,6 +65,8 @@ import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.Insta
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.base.AzureBaseTest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
@@ -74,6 +82,7 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService;
@@ -85,6 +94,8 @@ import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.test.VerificationHost;
+import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * Tests for {@link AzureLoadBalancerService}.
@@ -107,7 +118,9 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     private static EndpointState endpointState;
     private static NetworkState networkState;
     private static SecurityGroupState securityGroupState;
-    private static ComputeState vmState;
+
+    private static final int poolSize = 4;
+    private static List<ComputeState> vmStates;
     private static SubnetState subnetState;
 
     private ResourceGroupsInner rgOpsClient;
@@ -130,12 +143,28 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                     endpointState);
         }
 
+        AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
+        azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
+        azureVMAuth.privateKey = AZURE_ADMIN_PASSWORD;
+        azureVMAuth = TestUtils.doPost(host, azureVMAuth, AuthCredentialsServiceState.class,
+                UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
+
+        ComputeDescription compDesc = buildComputeDescription(host, computeHost, endpointState, azureVMAuth);
+
+        this.rgName = AzureUtils.DEFAULT_GROUP_PREFIX + compDesc.documentCreationTimeMicros /
+                1000;
+
         ResourceGroupState rgState = createDefaultResourceGroupState(
                 this.host, this.rgName, computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
         networkState = createNetworkState(rgState.documentSelfLink);
-        vmState = createDefaultVMResource(getHost(), this.rgName,
-                computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC, null, 0);
+        vmStates = new ArrayList<>();
+
+        for (int i = 0; i < poolSize; i++) {
+            ComputeState vmState = createDefaultVMResource(getHost(), this.rgName + "VM" + i,
+                    computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC, null,0, compDesc, this.rgName);
+            vmStates.add(vmState);
+        }
         subnetState = createSubnetState(this.subnetName);
 
         if (!this.isMock) {
@@ -290,7 +319,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
         // verify load balancer state was deleted
         try {
             getLoadBalancerState(this.host, loadBalancerState.documentSelfLink);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             assertTrue(e instanceof ServiceHost.ServiceNotFoundException);
         }
 
@@ -336,7 +365,8 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                 loadBalancerTargetType);
         startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.CREATE,
                 loadBalancerState, stage);
-        return getServiceSynchronously(loadBalancerState.documentSelfLink, LoadBalancerState.class);
+        return getHost().getServiceState(null, LoadBalancerState.class, UriUtils.buildUri(getHost(),
+                loadBalancerState.documentSelfLink));
     }
 
     private RouteConfiguration createRouteConfiguration() {
@@ -378,22 +408,35 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
         loadBalancerState.routes = Stream.of(route)
                 .collect(Collectors.toList());
 
-        loadBalancerState.computeLinks = Stream.of(vmState.documentSelfLink)
+        loadBalancerState.computeLinks = vmStates.stream()
+                .map(cs -> cs.documentSelfLink)
                 .collect(Collectors.toSet());
 
         if (loadBalancerTargetType != null) {
             switch (loadBalancerTargetType) {
             case COMPUTE:
-                loadBalancerState.targetLinks = Stream.of(vmState.documentSelfLink)
+                loadBalancerState.targetLinks = vmStates.stream()
+                        .map(cs -> cs.documentSelfLink)
                         .collect(Collectors.toSet());
                 break;
             case NIC:
-                loadBalancerState.targetLinks = new HashSet<>(vmState.networkInterfaceLinks);
+                loadBalancerState.targetLinks = vmStates.stream()
+                        .map(cs -> cs.networkInterfaceLinks.stream().findFirst().get())
+                        .collect(Collectors.toSet());
                 break;
             case BOTH:
-                loadBalancerState.targetLinks = Stream.of(vmState.documentSelfLink)
+                // use boolean to toggle between compute link and NIC link
+                AtomicBoolean typeToggle = new AtomicBoolean(true);
+                loadBalancerState.targetLinks = vmStates.stream()
+                        .map(cs -> {
+                            typeToggle.set(!typeToggle.get());
+                            if (typeToggle.get()) {
+                                return cs.documentSelfLink;
+                            } else {
+                                return cs.networkInterfaceLinks.stream().findFirst().get();
+                            }
+                        })
                         .collect(Collectors.toSet());
-                loadBalancerState.targetLinks.add(vmState.networkInterfaceLinks.get(1));
                 break;
             case INVALID:
                 loadBalancerState.targetLinks = new HashSet<>();
@@ -505,26 +548,28 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     }
 
     // kick off a provision task to do the actual VM creation
-    private void kickOffComputeProvision() throws Throwable {
+    private void kickOffComputeProvision() {
 
-        ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
+        this.vmStates = vmStates.parallelStream().map(computeState -> {
+            ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
 
-        provisionTask.computeLink = vmState.documentSelfLink;
-        provisionTask.isMockRequest = this.isMock;
-        provisionTask.taskSubStage = ProvisionComputeTaskState.SubStage.CREATING_HOST;
+            provisionTask.computeLink = computeState.documentSelfLink;
+            provisionTask.isMockRequest = this.isMock;
+            provisionTask.taskSubStage = SubStage.CREATING_HOST;
 
-        provisionTask = TestUtils.doPost(getHost(),
-                provisionTask,
-                ProvisionComputeTaskState.class,
-                UriUtils.buildUri(getHost(), ProvisionComputeTaskService.FACTORY_LINK));
-
-        getHost().waitForFinishedTask(
-                ProvisionComputeTaskState.class,
-                provisionTask.documentSelfLink);
-
-        vmState = getHost().getServiceState(null,
-                ComputeState.class,
-                UriUtils.buildUri(getHost(), vmState.documentSelfLink));
+            try {
+                provisionTask = postServiceSynchronously(ProvisionComputeTaskService
+                        .FACTORY_LINK, provisionTask, ProvisionComputeTaskState.class);
+            } catch (Throwable e) {
+                throw new RuntimeException(e);
+            }
+            getHost().waitForFinishedTask(
+                    ProvisionComputeTaskState.class,
+                    provisionTask.documentSelfLink);
+            return getHost().getServiceState(null,
+                    ComputeState.class,
+                    UriUtils.buildUri(getHost(), computeState.documentSelfLink));
+        }).collect(Collectors.toList());
     }
 
     private ProvisionSecurityGroupTaskState kickOffSecurityGroupProvision(

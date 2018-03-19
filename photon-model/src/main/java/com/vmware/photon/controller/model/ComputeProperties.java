@@ -31,6 +31,11 @@ public class ComputeProperties {
     public static final String RESOURCE_GROUP_NAME = "resourceGroupName";
 
     /**
+     * The availability set name to assign to machines.
+     */
+    public static final String AVAILABILITY_SET_NAME = "availabilitySetName";
+
+    /**
      * Custom property to hold the link to the endpoint.
      */
     public static final String ENDPOINT_LINK_PROP_NAME = "__endpointLink";

@@ -152,7 +152,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertVmNetworksConfiguration(DEFAULT_NIC_SPEC);
+        assertVmNetworksConfiguration(DEFAULT_NIC_SPEC, vmResourceSpec.azureVmName);
 
         assertConfigurationOfDisks(0,0);
 
@@ -344,7 +344,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertVmNetworksConfiguration(NO_PUBLIC_IP_NIC_SPEC);
+        assertVmNetworksConfiguration(NO_PUBLIC_IP_NIC_SPEC, azureVMName);
     }
 
     /**
@@ -398,7 +398,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertVmNetworksConfiguration(DEFAULT_NIC_SPEC);
+        assertVmNetworksConfiguration(DEFAULT_NIC_SPEC, vmName);
     }
 
     /**
@@ -415,7 +415,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         kickOffProvisionTask();
 
-        assertVmNetworksConfiguration(PRIVATE_IP_NIC_SPEC);
+        assertVmNetworksConfiguration(PRIVATE_IP_NIC_SPEC, azureVMName);
     }
 
     // kick off a provision task to do the actual VM creation
@@ -484,7 +484,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 .setReferer(getHost().getUri()));
     }
 
-    private void assertVmNetworksConfiguration(AzureNicSpecs azureNicSpec) throws Throwable {
+    private void assertVmNetworksConfiguration(AzureNicSpecs azureNicSpec, String vmName) throws
+            Throwable {
 
         // This assert is only suitable for real (non-mocking env).
         if (this.isMock) {
@@ -547,12 +548,13 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 + AzureTestUtil.AZURE_NETWORK_NAME + "' is not found.",
                 provisionedNetwork);
 
+        final String sgName = AzureTestUtil.AZURE_SECURITY_GROUP_NAME + "-" + vmName;
+
         NetworkSecurityGroupInner provisionedSG = AzureTestUtil.getAzureSecurityGroup(
-                networkClient, vmRGName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME);
+                networkClient, vmRGName, sgName);
 
         assertNotNull("Azure security group object '" + vmRGName + "/"
-                + AzureTestUtil.AZURE_SECURITY_GROUP_NAME + "' is not found.",
-                provisionedSG);
+                + sgName + "' is not found.", provisionedSG);
     }
 
     private void assertConfigurationOfDisks(int numberOfAdditionalDisks, int

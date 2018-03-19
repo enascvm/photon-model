@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.ComputeProperties.AVAILABILITY_SET_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_EA_BASE_URI;
@@ -615,7 +616,7 @@ public class AzureUtils {
                 .thenApply(rgStates -> rgStates.stream().findFirst().orElse(null));
     }
 
-    private static final String DEFAULT_GROUP_PREFIX = "group";
+    public static final String DEFAULT_GROUP_PREFIX = "group";
 
     public static String getResourceGroupName(BaseAdapterContext<?> ctx) {
 
@@ -630,10 +631,35 @@ public class AzureUtils {
         }
 
         if (resourceGroupName == null || resourceGroupName.isEmpty()) {
-            resourceGroupName = DEFAULT_GROUP_PREFIX + String.valueOf(System.currentTimeMillis());
+            resourceGroupName = generateClusterCommonName(DEFAULT_GROUP_PREFIX, ctx);
         }
 
         return resourceGroupName;
+    }
+
+    public static final String DEFAULT_AVAILABILITY_SET_PREFIX = "availability-set";
+
+    public static String getAvailabilitySetName(BaseAdapterContext<?> ctx) {
+
+        String availabilitySetName = null;
+
+        if (ctx.child.customProperties != null) {
+            availabilitySetName = ctx.child.customProperties.get(AVAILABILITY_SET_NAME);
+        }
+
+        if (availabilitySetName == null && ctx.child.description.customProperties != null) {
+            availabilitySetName = ctx.child.description.customProperties.get(AVAILABILITY_SET_NAME);
+        }
+
+        if (availabilitySetName == null || availabilitySetName.isEmpty()) {
+            availabilitySetName = generateClusterCommonName(DEFAULT_AVAILABILITY_SET_PREFIX, ctx);
+        }
+
+        return availabilitySetName;
+    }
+
+    public static String generateClusterCommonName(String prefix, BaseAdapterContext<?> ctx) {
+        return prefix + String.valueOf(ctx.child.description.documentCreationTimeMicros / 1000);
     }
 
     public static String canonizeId(String id) {

@@ -63,6 +63,8 @@ import com.microsoft.azure.CloudError;
 import com.microsoft.azure.CloudException;
 import com.microsoft.azure.SubResource;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
+import com.microsoft.azure.management.compute.AvailabilitySet;
+import com.microsoft.azure.management.compute.AvailabilitySetSkuTypes;
 import com.microsoft.azure.management.compute.CachingTypes;
 import com.microsoft.azure.management.compute.DataDisk;
 import com.microsoft.azure.management.compute.Disk;
@@ -126,7 +128,9 @@ import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.Azure
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallbackWithRetry;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallbackWithRetry;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
@@ -332,7 +336,10 @@ public class AzureInstanceService extends StatelessService {
                 getVMDisks(ctx, AzureInstanceStage.INIT_RES_GROUP);
                 break;
             case INIT_RES_GROUP:
-                createResourceGroup(ctx, AzureInstanceStage.GET_IMAGE);
+                createResourceGroup(ctx, AzureInstanceStage.INIT_AVAILABILITY_SET);
+                break;
+            case INIT_AVAILABILITY_SET:
+                createAvailabilitySet(ctx, AzureInstanceStage.GET_IMAGE);
                 break;
             case GET_IMAGE:
                 getImageSource(ctx)
@@ -555,6 +562,44 @@ public class AzureInstanceService extends StatelessService {
                         return CompletableFuture.completedFuture(rg);
                     }
                 });
+    }
+
+    private void createAvailabilitySet(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
+        String availabilitySetName = AzureUtils.getAvailabilitySetName(ctx);
+
+        String msg = "Creating Azure Availability Set [" + availabilitySetName + "] for [" + ctx.vmName + "] VM";
+
+        AvailabilitySet.DefinitionStages.WithCreate availabilitySetDefinition = ctx.azureSdkClients
+                .getComputeManager()
+                .availabilitySets()
+                .define(availabilitySetName)
+                .withRegion(ctx.child.description.regionId)
+                .withExistingResourceGroup(ctx.resourceGroup.name())
+                .withSku(AvailabilitySetSkuTypes.UNMANAGED);
+
+        AzureDeferredResultServiceCallbackWithRetry<AvailabilitySet> callback = new
+                AzureDeferredResultServiceCallbackWithRetry<AvailabilitySet>(this, msg) {
+                    @Override
+                    protected DeferredResult<AvailabilitySet> consumeSuccess(AvailabilitySet
+                            availabilitySet) {
+                        logInfo("Successfully created AvailabilitySet: " + availabilitySet.name());
+                        ctx.availabilitySet = availabilitySet;
+                        return DeferredResult.completed(availabilitySet);
+                    }
+
+                    @Override
+                    protected Runnable retryServiceCall(ServiceCallback<AvailabilitySet>
+                            retryCallback) {
+                        return () -> availabilitySetDefinition.createAsync(retryCallback);
+                    }
+                };
+
+        availabilitySetDefinition.createAsync(callback);
+
+        callback.toDeferredResult()
+                .thenApply(ignore -> ctx)
+                .whenComplete(thenAllocation(ctx, nextStage, NETWORK_NAMESPACE));
     }
 
     private void createPersistentDisks(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -851,7 +896,8 @@ public class AzureInstanceService extends StatelessService {
                 + "] for ["
                 + ctx.vmName + "] VM";
 
-        AzureProvisioningCallback<VirtualNetworkInner> handler = new AzureProvisioningCallback<VirtualNetworkInner>(
+        AzureProvisioningCallbackWithRetry<VirtualNetworkInner> handler = new
+                AzureProvisioningCallbackWithRetry<VirtualNetworkInner>(
                 this, msg) {
 
             @Override
@@ -882,8 +928,8 @@ public class AzureInstanceService extends StatelessService {
                         // Otherwise consider all are Succeeded
                         .orElse(PROVISIONING_STATE_SUCCEEDED);
 
-                if (PROVISIONING_STATE_SUCCEEDED.equals(vNet.provisioningState())
-                        && PROVISIONING_STATE_SUCCEEDED.equals(subnetPS)) {
+                if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(vNet.provisioningState())
+                        && PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(subnetPS)) {
 
                     return PROVISIONING_STATE_SUCCEEDED;
                 }
@@ -898,6 +944,13 @@ public class AzureInstanceService extends StatelessService {
                         vNetName,
                         null /* expand */,
                         checkProvisioningStateCallback);
+            }
+
+            @Override
+            protected Runnable retryServiceCall(
+                    ServiceCallback<VirtualNetworkInner> retryCallback) {
+                return () -> azureClient
+                        .createOrUpdateAsync(vNetRGName, vNetName, vNetToCreate, retryCallback);
             }
         };
 
@@ -1143,7 +1196,7 @@ public class AzureInstanceService extends StatelessService {
         NetworkInterfaceDescription description = nicCtx.nicStateWithDesc.description;
 
         NetworkInterfaceIPConfigurationInner ipConfig = new NetworkInterfaceIPConfigurationInner();
-        ipConfig.withName(generateName(NICCONFIG_NAME_PREFIX));
+        ipConfig.withName(AzureUtils.generateClusterCommonName(NICCONFIG_NAME_PREFIX, ctx));
         ipConfig.withSubnet(nicCtx.subnet);
 
         if (nicCtx.publicIP != null) {
@@ -1197,6 +1250,10 @@ public class AzureInstanceService extends StatelessService {
 
         VirtualMachineInner request = new VirtualMachineInner();
         request.withLocation(ctx.resourceGroup.location());
+
+        SubResource availabilitySetSubResource = new SubResource()
+                .withId(ctx.availabilitySet.id());
+        request.withAvailabilitySet(availabilitySetSubResource);
 
         // Set OS profile.
         OSProfile osProfile = new OSProfile();

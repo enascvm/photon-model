@@ -670,7 +670,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         // tag Security Group
         {
             NetworkSecurityGroupInner sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
-                    azureVMName, AZURE_SECURITY_GROUP_NAME);
+                    azureVMName, AZURE_SECURITY_GROUP_NAME + "-" + azureVMName);
 
             sgUpdate.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
             sgUpdate.withTags(Collections.singletonMap(

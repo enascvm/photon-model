@@ -59,6 +59,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterC
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallbackWithRetry;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -951,8 +952,8 @@ public class AzureLoadBalancerService extends StatelessService {
         NetworkInterfacesInner azureNetworkInterfaceClient = context.azureSdkClients
                 .getNetworkManagementClientImpl().networkInterfaces();
 
-        AzureProvisioningCallback<NetworkInterfaceInner> handler =
-                new AzureProvisioningCallback<NetworkInterfaceInner>(this, msg) {
+        AzureProvisioningCallbackWithRetry<NetworkInterfaceInner> handler =
+                new AzureProvisioningCallbackWithRetry<NetworkInterfaceInner>(this, msg) {
                     @Override
                     protected DeferredResult<NetworkInterfaceInner> consumeProvisioningSuccess(
                             NetworkInterfaceInner networkInterfaceInner) {
@@ -972,6 +973,13 @@ public class AzureLoadBalancerService extends StatelessService {
                     @Override
                     protected String getProvisioningState(NetworkInterfaceInner body) {
                         return body.provisioningState();
+                    }
+
+                    @Override
+                    protected Runnable retryServiceCall(ServiceCallback<NetworkInterfaceInner> retryCallback) {
+                        return () -> azureNetworkInterfaceClient
+                                .createOrUpdateAsync(networkInterfaceResGrp, networkInterfaceInner.name(),
+                                        networkInterfaceInner, retryCallback);
                     }
                 };
 

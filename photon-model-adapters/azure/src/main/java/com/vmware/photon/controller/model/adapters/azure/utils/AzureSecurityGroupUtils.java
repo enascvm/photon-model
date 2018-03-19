@@ -75,8 +75,8 @@ public class AzureSecurityGroupUtils {
 
         service.logInfo(() -> msg);
 
-        AzureProvisioningCallback<NetworkSecurityGroupInner> handler =
-                new AzureProvisioningCallback<NetworkSecurityGroupInner>(service, msg) {
+        AzureProvisioningCallbackWithRetry<NetworkSecurityGroupInner> handler =
+                new AzureProvisioningCallbackWithRetry<NetworkSecurityGroupInner>(service, msg) {
                     @Override
                     protected DeferredResult<NetworkSecurityGroupInner> consumeProvisioningSuccess(
                             NetworkSecurityGroupInner securityGroup) {
@@ -97,6 +97,13 @@ public class AzureSecurityGroupUtils {
                     @Override
                     protected String getProvisioningState(NetworkSecurityGroupInner body) {
                         return body.provisioningState();
+                    }
+
+                    @Override
+                    protected Runnable retryServiceCall(ServiceCallback<NetworkSecurityGroupInner>
+                            retryCallback) {
+                        return () -> azureClient.createOrUpdateAsync(resourceGroupName, sgName,
+                                securityGroup, retryCallback);
                     }
                 };
 
