@@ -396,7 +396,8 @@ public class AWSComputeDiskDay2Service extends StatelessService {
     /**
      * start the instance and on success updates the disk and compute state to reflect the detach information.
      */
-    private void startInstance(AmazonEC2AsyncClient client, DiskContext c, DeferredResult<DiskContext> dr) {
+    private void startInstance(AmazonEC2AsyncClient client, DiskContext c,
+            DeferredResult<DiskContext> dr, OperationContext opCtx) {
         StartInstancesRequest startRequest  = new StartInstancesRequest();
         startRequest.withInstanceIds(c.baseAdapterContext.child.id);
         client.startInstancesAsync(startRequest,
@@ -407,6 +408,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                         service.logSevere(() -> String.format(
                                 "[AWSComputeDiskDay2Service] Failed to start the instance %s. %s",
                                 c.baseAdapterContext.child.id, Utils.toString(e)));
+                        OperationContext.restoreOperationContext(opCtx);
                         c.error = e;
                         dr.complete(c);
                     }
@@ -421,6 +423,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                                                 "[AWSComputeDiskDay2Service] Instance %s failed to reach "
                                                         + "running state. %s",c.baseAdapterContext.child.id,
                                                 Utils.toString(e)));
+                                        OperationContext.restoreOperationContext(opCtx);
                                         c.error = e;
                                         dr.complete(c);
                                         return;
@@ -430,7 +433,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                                             "[AWSComputeDiskDay2Service] Successfully started the "
                                                     + "instance %s",
                                             result.getStartingInstances().get(0).getInstanceId()));
-                                    updateComputeAndDiskState(dr, c, this.opContext);
+                                    updateComputeAndDiskState(dr, c, opCtx);
                                 });
                     }
                 });
@@ -482,7 +485,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                                 this.context.request.taskLink()));
                 if (this.performNextInstanceOp) {
                     //Instance will be started only if the disk is succesfully detached from the instance
-                    startInstance(this.context.amazonEC2Client, this.context, this.dr);
+                    startInstance(this.context.amazonEC2Client, this.context, this.dr, this.opContext);
                 } else {
                     updateComputeAndDiskState(this.dr, this.context, this.opContext);
                 }
@@ -562,6 +565,7 @@ public class AWSComputeDiskDay2Service extends StatelessService {
                             "[AWSComputeDiskDay2Service] Update deleteOnTerminate for "
                                     + "diskState %s FAILED. %s",
                             this.context.diskState.documentSelfLink, Utils.toString(exc)));
+                    OperationContext.restoreOperationContext(this.opContext);
                     this.context.error = exc;
                     this.dr.complete(this.context);
                     return;
