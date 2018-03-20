@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.54-SNAPSHOT
+
 ## 0.6.53
 * [vSphere] Update Photon Model vSphere Adapters for enumeration to use the endpointLinks in lieu
             of the current endpointLink string.
