@@ -251,6 +251,7 @@ public class ResourceState extends ServiceDocument {
         target.tenantLinks = this.tenantLinks;
         target.groupLinks = this.groupLinks;
         target.tagLinks = this.tagLinks;
+        target.expandedTags = this.expandedTags;
         target.creationTimeMicros = this.creationTimeMicros;
         target.regionId = this.regionId;
         target.endpointLinks = this.endpointLinks;
