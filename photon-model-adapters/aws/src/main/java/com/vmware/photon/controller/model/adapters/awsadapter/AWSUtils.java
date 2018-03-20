@@ -49,6 +49,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -1396,10 +1397,16 @@ public class AWSUtils {
                 .map(diskLink -> service.sendWithDeferredResult(
                         Operation.createGet(createInventoryUri(service.getHost(), diskLink))
                                 .setReferer(service.getHost().getUri()))
+                        .exceptionally( exc -> {
+                            Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(), Level.WARNING,
+                                    "Exception occured while getting disk state for link '%s' : %s", diskLink, Utils.toString(exc));
+                            return null;
+                        })
                 ).collect(Collectors.toList());
 
+        //As this method is only called in delete operation, we should not fail if we can't find a disk.
         return DeferredResult.allOf(getDiskStatesOp)
-                .thenApply(ops -> ops.stream()
+                .thenApply(ops -> ops.stream().filter(Objects::nonNull)
                         .map(op -> op.getBody(DiskService.DiskState.class))
                         .filter(diskState -> diskState.persistent != null && diskState.persistent)
                         .map(diskState -> updateDiskAsAvailable(diskState, service))
