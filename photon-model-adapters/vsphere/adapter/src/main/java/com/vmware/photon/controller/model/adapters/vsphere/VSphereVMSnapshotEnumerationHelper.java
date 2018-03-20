@@ -191,7 +191,7 @@ public class VSphereVMSnapshotEnumerationHelper {
 
                 QueryTask task = VSphereVirtualMachineEnumerationHelper
                         .queryForVm(enumerationProgress, request.resourceLink(),
-                                vm.getInstanceUuid());
+                                vm.getInstanceUuid(), null);
 
                 VsphereEnumerationHelper.withTaskResults(service, task, result -> {
                     ComputeState computeState = VsphereEnumerationHelper.convertOnlyResultToDocument(result,

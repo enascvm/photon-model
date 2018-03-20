@@ -240,6 +240,9 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                     VSphereResourcePoolEnumerationHelper
                                             .handleResourcePoolChanges(this, segregatedOverlays.resourcePools, enumerationProgress, client);
                                 }
+                                if (!vmUpdates.isEmpty()) {
+                                    VSphereVirtualMachineEnumerationHelper.handleVMChanges(this, vmUpdates, enumerationProgress, client);
+                                }
                             }
                             mgr.patchTask(TaskStage.FINISHED);
                         } catch (Exception exception) {

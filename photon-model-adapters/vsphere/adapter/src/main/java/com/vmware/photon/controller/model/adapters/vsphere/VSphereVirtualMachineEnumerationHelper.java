@@ -50,6 +50,9 @@ import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotStat
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.ObjectUpdate;
+import com.vmware.vim25.ObjectUpdateKind;
 import com.vmware.vim25.VirtualCdrom;
 import com.vmware.vim25.VirtualDevice;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
@@ -79,15 +82,19 @@ public class VSphereVirtualMachineEnumerationHelper {
     /**
      * Builds a query for finding a ComputeState by instanceUuid from vsphere and parent compute
      * link.
-     *
      */
     static QueryTask queryForVm(EnumerationProgress ctx, String parentComputeLink,
-                                String instanceUuid) {
+                                String instanceUuid, ManagedObjectReference moref) {
         Builder builder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink);
-
+        if (null != instanceUuid) {
+            builder.addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid);
+        } else {
+            builder.addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.MOREF,
+                    VimUtils.convertMoRefToString(moref), QueryTask.Query.Occurance.MUST_OCCUR);
+        }
         QueryUtils.addEndpointLink(builder, ComputeState.class, ctx.getRequest().endpointLink);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
 
@@ -123,9 +130,22 @@ public class VSphereVirtualMachineEnumerationHelper {
         return res;
     }
 
+    private static ComputeState makeVmFromChanges(EnumerationProgress enumerationProgress, VmOverlay vm) {
+        ComputeState state = new ComputeState();
+
+        // CPU count can be changed
+        state.cpuCount = (long) vm.getNumCpu();
+        // Memory can be changed
+        state.totalMemoryBytes = vm.getMemoryBytes();
+        // Power state can be changed
+        state.powerState = vm.getPowerState();
+        // Name can be changed
+        state.name = vm.getName();
+        return state;
+    }
+
     /**
      * Make a ComputeState from the request and a vm found in vsphere.
-     *
      */
     static ComputeState makeVmFromResults(EnumerationProgress enumerationProgress, VmOverlay vm) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
@@ -351,8 +371,13 @@ public class VSphereVirtualMachineEnumerationHelper {
 
     static void updateVm(VSphereIncrementalEnumerationService service,
                          ComputeState oldDocument, EnumerationProgress enumerationProgress,
-                         VmOverlay vm) {
-        ComputeState state = makeVmFromResults(enumerationProgress, vm);
+                         VmOverlay vm, boolean fullUpdate) {
+        ComputeState state;
+        if (fullUpdate) {
+            state = makeVmFromResults(enumerationProgress, vm);
+        } else {
+            state = makeVmFromChanges(enumerationProgress, vm);
+        }
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
         state.lifecycleState = LifecycleState.READY;
@@ -507,9 +532,8 @@ public class VSphereVirtualMachineEnumerationHelper {
         long latestAcceptableModification = System.currentTimeMillis()
                 - VM_FERMENTATION_PERIOD_MILLIS;
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-        QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), vm.getInstanceUuid());
+        QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), vm.getInstanceUuid(), vm.getId());
         VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-            String vmSelfLink = null;
             if (result.documentLinks.isEmpty()) {
                 if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
                     // If vm is not settled down don't create a new resource
@@ -520,8 +544,7 @@ public class VSphereVirtualMachineEnumerationHelper {
             } else {
                 // always update state of a vm even if modified recently
                 ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
-                updateVm(service, oldDocument, enumerationProgress, vm);
-                vmSelfLink = oldDocument.documentSelfLink;
+                updateVm(service, oldDocument, enumerationProgress, vm, true);
             }
         });
     }
@@ -533,5 +556,53 @@ public class VSphereVirtualMachineEnumerationHelper {
                 .setBody(snapshot);
 
         return service.sendWithDeferredResult(opCreateSnapshot, SnapshotState.class);
+    }
+
+    public static void handleVMChanges(
+            VSphereIncrementalEnumerationService service, List<ObjectUpdate> resourcesUpdates,
+            EnumerationProgress enumerationProgress, EnumerationClient client) {
+
+        List<VmOverlay> vmOverlays = new ArrayList<>();
+        for (ObjectUpdate objectUpdate : resourcesUpdates) {
+            if (VimUtils.isVirtualMachine(objectUpdate.getObj())) {
+                VmOverlay vm = new VmOverlay(objectUpdate);
+
+                if (vm.getInstanceUuid() != null || !objectUpdate.getKind().equals(ObjectUpdateKind.ENTER)) {
+                    vmOverlays.add(vm);
+                }
+            }
+        }
+        for (VmOverlay vmOverlay : vmOverlays) {
+            if (ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
+                createNewVm(service, enumerationProgress, vmOverlay);
+            } else {
+                ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+                QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), null, vmOverlay.getId());
+                VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                    if (!result.documentLinks.isEmpty()) {
+                        ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
+                        if (ObjectUpdateKind.MODIFY == vmOverlay.getObjectUpdateKind()) {
+                            updateVm(service, oldDocument, enumerationProgress, vmOverlay, false);
+                        } else {
+                            deleteVM(enumerationProgress, vmOverlay, service, oldDocument);
+                        }
+                        // TODO: Implement VM modify here
+                        // ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
+                        //  updateVm(service, oldDocument, enumerationProgress, vmOverlay);
+                    } else {
+                        enumerationProgress.getVmTracker().arrive();
+                    }
+                });
+            }
+        }
+    }
+
+    private static void deleteVM(EnumerationProgress enumerationProgress, VmOverlay vmOverlay,
+                                 VSphereIncrementalEnumerationService service, ServiceDocument oldDocument) {
+        Operation.createDelete(
+                PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                .setCompletion((o, e) -> {
+                    trackVm(enumerationProgress).handle(o, e);
+                }).sendWith(service);
     }
 }
