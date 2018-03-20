@@ -62,6 +62,7 @@ import com.microsoft.azure.management.compute.InstanceViewStatus;
 import com.microsoft.azure.management.compute.InstanceViewTypes;
 import com.microsoft.azure.management.compute.OSDisk;
 import com.microsoft.azure.management.compute.OperatingSystemTypes;
+import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
@@ -1419,11 +1420,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         if (diskToUpdate == null) {
             diskToUpdate = createOSDiskState(virtualMachine, ctx);
             updateDiskCustomProperties(virtualMachine, ctx, diskToUpdate);
-            diskToUpdateOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
+            diskToUpdateOp = Operation.createPost(createInventoryUri(getHost(), DiskService.FACTORY_LINK))
                     .setBody(diskToUpdate);
         } else {
             updateDiskCustomProperties(virtualMachine, ctx, diskToUpdate);
-            diskToUpdateOp = Operation.createPatch(getHost(), diskToUpdate.documentSelfLink)
+            diskToUpdateOp = Operation.createPatch(createInventoryUri(getHost(), diskToUpdate.documentSelfLink))
                     .setBody(diskToUpdate);
         }
         opCollection.add(diskToUpdateOp);
@@ -1454,8 +1455,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (isManaged) {
             diskState.id = dataDisk.managedDisk().id();
-            diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
-                    dataDisk.managedDisk().storageAccountType().toString());
+            if (dataDisk.managedDisk().storageAccountType() != null) {
+                diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
+                        dataDisk.managedDisk().storageAccountType().toString());
+            } else {
+                // set to Standard_LRS default
+                diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
+                        StorageAccountTypes.STANDARD_LRS.toString());
+            }
         } else {
             diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
         }
@@ -1480,11 +1487,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 Operation diskToUpdateOp = null;
                 if (null == diskToUpdate) {
                     diskToUpdate = createDataDiskState(ctx, dataDisk, AzureUtils.isDiskManaged(vm));
+                    diskToUpdate.regionId = vm.location();
                     diskToUpdateOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
                             .setBody(diskToUpdate);
                 } else {
                     // case where a lying disk in Azure (also in local store) is attached to VM
                     diskToUpdate.status = DiskService.DiskStatus.ATTACHED;
+                    diskToUpdate.regionId = vm.location();
                     diskToUpdateOp = Operation.createPatch(getHost(), diskToUpdate.documentSelfLink)
                             .setBody(diskToUpdate);
                 }

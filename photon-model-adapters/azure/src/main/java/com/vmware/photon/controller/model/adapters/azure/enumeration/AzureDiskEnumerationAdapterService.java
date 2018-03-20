@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.getDeletionState;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -415,11 +416,11 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
                         }
                         diskState.tagLinks.addAll(ctx.internalTagLinks);
                         diskState.regionId = entry.getValue().location;
-                        diskOp = Operation.createPatch(getHost(), diskState.documentSelfLink)
+                        diskOp = Operation.createPatch(createInventoryUri(getHost(), diskState.documentSelfLink))
                                 .setBody(diskState);
                     } else {
                         diskState = createLocalDiskState(ctx, entry.getValue());
-                        diskOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
+                        diskOp = Operation.createPost(createInventoryUri(getHost(), DiskService.FACTORY_LINK))
                                 .setBody(diskState);
                     }
                     ctx.localDiskStates.put(diskState.id, diskState);

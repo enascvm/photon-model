@@ -560,8 +560,8 @@ public class AzureInstanceService extends StatelessService {
     private void createPersistentDisks(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
 
         // In case of No Persistent disks return and move on.
-        if (ctx.dataDiskStates.stream().filter(diskStateExpanded -> diskStateExpanded.persistent
-                        == true).count() == 0) {
+        if (ctx.dataDiskStates.stream().filter(diskStateExpanded ->
+                diskStateExpanded.persistent).count() == 0) {
             handleAllocation(ctx, nextStage);
             return;
         }
@@ -1653,6 +1653,7 @@ public class AzureInstanceService extends StatelessService {
             final DiskState diskStateToUpdate = new DiskState();
             diskStateToUpdate.documentSelfLink = ctx.bootDiskState.documentSelfLink;
             diskStateToUpdate.persistent = ctx.bootDiskState.persistent;
+            diskStateToUpdate.regionId = ctx.provisionedVm.location();
             // The actual value being updated
             if (ctx.useManagedDisks()) {
                 diskStateToUpdate.id = azureOsDisk.managedDisk().id();
@@ -1706,12 +1707,17 @@ public class AzureInstanceService extends StatelessService {
                 DiskState diskStateToCreate = new DiskState();
                 diskStateToCreate.id = azureDataDisk.managedDisk().id();
                 diskStateToCreate.name = azureDataDisk.name();
+                diskStateToCreate.regionId = ctx.provisionedVm.location();
                 diskStateToCreate.customProperties = new HashMap<>();
                 diskStateToCreate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf
                         (azureDataDisk.lun()));
                 if (azureDataDisk.managedDisk().storageAccountType() != null) {
                     diskStateToCreate.customProperties.put(AZURE_MANAGED_DISK_TYPE, azureDataDisk
                             .managedDisk().storageAccountType().toString());
+                } else {
+                    // set to Standard_LRS default
+                    diskStateToCreate.customProperties.put(AZURE_MANAGED_DISK_TYPE,
+                            StorageAccountTypes.STANDARD_LRS.toString());
                 }
                 diskStateToCreate.customProperties.put(AZURE_DATA_DISK_CACHING, azureDataDisk
                         .caching().toString());
@@ -1786,9 +1792,10 @@ public class AzureInstanceService extends StatelessService {
         diskStateToUpdate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
 
         diskStateToUpdate.status = DiskService.DiskStatus.ATTACHED;
+        diskStateToUpdate.regionId = ctx.provisionedVm.location();
 
         Operation updateDiskState = Operation
-                .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
+                .createPatch(createInventoryUri(getHost(), diskStateToUpdate.documentSelfLink))
                 .setBody(diskStateToUpdate);
 
         DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)

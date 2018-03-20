@@ -188,7 +188,8 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     private DeferredResult<AzureComputeDiskDay2Context> getComputeState(
             AzureComputeDiskDay2Context context) {
         return this.sendWithDeferredResult(
-                Operation.createGet(context.request.resourceReference),
+                Operation.createGet(
+                        createInventoryUri(this.getHost(), context.request.resourceReference)),
                 ComputeState.class)
                 .thenApply(computeState -> {
                     context.computeState = computeState;
@@ -202,8 +203,9 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     private DeferredResult<AzureComputeDiskDay2Context> getDiskState(
             AzureComputeDiskDay2Context context) {
         return this.sendWithDeferredResult(
-                Operation.createGet(this.getHost(),
-                        context.request.payload.get(PhotonModelConstants.DISK_LINK)),
+                Operation.createGet(
+                        createInventoryUri(this.getHost(),
+                        context.request.payload.get(PhotonModelConstants.DISK_LINK))),
                 DiskState.class)
                 .thenApply(diskState -> {
                     context.diskState = diskState;
@@ -416,7 +418,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
         ServiceStateCollectionUpdateRequest updateDiskLinksRequest = ServiceStateCollectionUpdateRequest
                 .create(collectionsToAdd, collectionsToRemove);
 
-        Operation computeStateOp = Operation.createPatch(UriUtils.buildUri(this.getHost(),
+        Operation computeStateOp = Operation.createPatch(createInventoryUri(this.getHost(),
                 computeState.documentSelfLink))
                 .setBody(updateDiskLinksRequest)
                 .setReferer(this.getUri());
@@ -457,12 +459,12 @@ public class AzureComputeDiskDay2Service extends StatelessService {
 
         if (context.request.operation.equals(ResourceOperation.ATTACH_DISK.operation)) {
             diskPatchOp = Operation
-                    .createPatch(UriUtils.buildUri(this.getHost(), diskState.documentSelfLink))
+                    .createPatch(createInventoryUri(this.getHost(), diskState.documentSelfLink))
                     .setBody(diskState)
                     .setReferer(this.getUri());
         } else if (context.request.operation.equals(ResourceOperation.DETACH_DISK.operation)) {
             diskPatchOp = Operation
-                    .createPut(UriUtils.buildUri(this.getHost(), diskState.documentSelfLink))
+                    .createPut(createInventoryUri(this.getHost(), diskState.documentSelfLink))
                     .setBody(diskState)
                     .setReferer(this.getUri());
         }
@@ -518,7 +520,7 @@ public class AzureComputeDiskDay2Service extends StatelessService {
     private ResourceOperationSpecService.ResourceOperationSpec createResourceOperationSpec(
             ResourceOperation operationType) {
         ResourceOperationSpecService.ResourceOperationSpec spec = new ResourceOperationSpecService.ResourceOperationSpec();
-        spec.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
+        spec.adapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(), SELF_LINK);
         spec.endpointType = PhotonModelConstants.EndpointType.azure.name();
         spec.resourceType = ResourceOperationSpecService.ResourceType.COMPUTE;
         spec.operation = operationType.operation;
