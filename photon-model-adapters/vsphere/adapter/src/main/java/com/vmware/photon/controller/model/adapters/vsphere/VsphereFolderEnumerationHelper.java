@@ -109,10 +109,10 @@ public class VsphereFolderEnumerationHelper  {
         Builder builder = QueryTask.Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
                 .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        CustomProperties.MOREF, moref)
-                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.ENDPOINT_LINK_PROP_NAME, ctx.getRequest().endpointLink);
+                        CustomProperties.MOREF, moref);
 
+        QueryUtils.addEndpointLink(builder, ResourceGroupService.ResourceGroupState.class,
+                ctx.getRequest().endpointLink);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
 
         return QueryTask.Builder.createDirectTask()

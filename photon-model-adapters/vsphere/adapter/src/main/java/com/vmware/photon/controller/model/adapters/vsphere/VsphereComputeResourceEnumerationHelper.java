@@ -297,9 +297,9 @@ public class VsphereComputeResourceEnumerationHelper {
                 .addKindFieldClause(DiskService.DiskState.class)
                 .addFieldClause(ResourceState.FIELD_NAME_NAME, serverDisk.getDisplayName())
                 .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        CustomProperties.TYPE, TYPE_SERVER_DISK)
-                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.ENDPOINT_LINK_PROP_NAME, ctx.getRequest().endpointLink);
+                        CustomProperties.TYPE, TYPE_SERVER_DISK);
+        QueryUtils.addEndpointLink(builder, DiskService.DiskState.class,
+                ctx.getRequest().endpointLink);
 
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
         return QueryTask.Builder.createDirectTask()
