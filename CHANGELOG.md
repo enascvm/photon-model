@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.6.53
+* [vSphere] Update Photon Model vSphere Adapters for enumeration to use the endpointLinks in lieu
+            of the current endpointLink string.
+* [Azure] Use createInventoryUri() in storage code.
+
 ## 0.6.52
 * Modify logic for adding new endpoints under same compute host.
 * Incremental change handling for Resource pools
