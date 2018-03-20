@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_managed_disk;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_net_interface;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_subnet;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AzureResourceType.azure_vnet;
@@ -543,6 +544,21 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                     assertTrue(String.format("NetworkInterfaceState doesn't contain tagLink: %s",
                             expectedNicInternalTypeTag.documentSelfLink),
                             c.tagLinks.contains(expectedNicInternalTypeTag.documentSelfLink));
+                });
+
+        // validate internal tags for disks
+        ServiceDocumentQueryResult diskResults = ProvisioningUtils
+                .queryAllFactoryResources(this.host, DiskService.FACTORY_LINK);
+        TagService.TagState expectedManagedDiskInternalTypeTag = newTagState(TAG_KEY_TYPE,
+                azure_managed_disk.toString(), false, endpointState.tenantLinks);
+        diskResults.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), DiskState.class))
+                .filter(d -> d.customProperties != null
+                        && d.customProperties.containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE))
+                .forEach(c -> {
+                    assertNotNull("tagLinks is null for disk", c.tagLinks);
+                    assertTrue("disk doesn't contain correct internal tagLink",
+                            c.tagLinks.contains(expectedManagedDiskInternalTypeTag.documentSelfLink));
                 });
 
         // validate environment name field for enumerated VMs

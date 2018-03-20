@@ -1906,18 +1906,31 @@ public class AzureTestUtil {
         ServiceDocumentQueryResult result = host.getExpandedFactoryState(
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
-        List<String> tenantLinks = Collections.singletonList( EndpointType.azure.name() + "-tenant");
+        List<String> tenantLinks = Collections.singletonList(EndpointType.azure.name() + "-tenant");
+
+        String managedDiskTagLink = getTagState(tenantLinks, TAG_KEY_TYPE,
+                AzureResourceType.azure_managed_disk.name()).documentSelfLink;
+        String vhdTagLink = getTagState(tenantLinks, TAG_KEY_TYPE,
+                AzureResourceType.azure_vhd.name()).documentSelfLink;
+        String blobTagLink = getTagState(tenantLinks, TAG_KEY_TYPE,
+                AzureResourceType.azure_blob.name()).documentSelfLink;
+
         for (Object document : result.documents.values()) {
             DiskState state = Utils.fromJson(document, DiskState.class);
             if (state.storageType != null) {
                 switch (state.storageType) {
                 case AZURE_STORAGE_DISKS:
-                    assertTrue(state.tagLinks.contains(getTagState(tenantLinks, TAG_KEY_TYPE,
-                            AzureResourceType.azure_vhd.name()).documentSelfLink));
+                    if (state.customProperties != null &&
+                            state.customProperties.containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE)) {
+                        // check tagLink for managed disks
+                        assertTrue(state.tagLinks.contains(managedDiskTagLink));
+                    } else {
+                        // check tagLink for vhds
+                        assertTrue(state.tagLinks.contains(vhdTagLink));
+                    }
                     break;
                 case AZURE_STORAGE_BLOBS:
-                    assertTrue(state.tagLinks.contains(getTagState(tenantLinks, TAG_KEY_TYPE,
-                            AzureResourceType.azure_blob.name()).documentSelfLink));
+                    assertTrue(state.tagLinks.contains(blobTagLink));
                     break;
                 default:
                     break;

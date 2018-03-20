@@ -89,6 +89,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -157,6 +158,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         public Operation operation;
         // maintains internal tagLinks, for example: link for tagState for type=azure_vm
         public Set<String> internalTagLinks = new HashSet<>();
+        String managedDiskInternalTagLink;
+        String vhdInternalTagLink;
+
         ComputeEnumerateResourceRequest request;
         ComputeStateWithDescription parentCompute;
         EnumerationStages stage;
@@ -221,6 +225,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         GET_COMPUTE_STATES,
         CREATE_COMPUTE_EXTERNAL_TAG_STATES,
         CREATE_COMPUTE_INTERNAL_TYPE_TAG,
+        CREATE_DISK_INTERNAL_TYPE_TAG,
         UPDATE_COMPUTE_STATES,
         UPDATE_REGIONS,
         UPDATE_COMPUTE_DESCRIPTIONS,
@@ -382,6 +387,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             break;
         case CREATE_COMPUTE_INTERNAL_TYPE_TAG:
             createInternalTypeTag(ctx,
+                    ComputeEnumerationSubStages.CREATE_DISK_INTERNAL_TYPE_TAG);
+            break;
+        case CREATE_DISK_INTERNAL_TYPE_TAG:
+            createDiskInternalTypeTags(ctx,
                     ComputeEnumerationSubStages.CREATE_COMPUTE_EXTERNAL_TAG_STATES);
             break;
         case CREATE_COMPUTE_EXTERNAL_TAG_STATES:
@@ -566,6 +575,41 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         sendRequest(Operation.createPost(this, TagService.FACTORY_LINK)
                 .setBody(typeTag)
                 .setCompletion(handler));
+    }
+
+    private void createDiskInternalTypeTags(EnumerationContext context, ComputeEnumerationSubStages next) {
+        // create internal tag for azure managed disk and vhd
+        TagService.TagState managedDiskTypeTag = TagsUtil.newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+                AzureConstants.AzureResourceType.azure_managed_disk.toString(),
+                false, context.parentCompute.tenantLinks);
+        TagService.TagState vhdTypeTag = TagsUtil.newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+                AzureResourceType.azure_vhd.toString(),
+                false, context.parentCompute.tenantLinks);
+
+        List<Operation> tagCreationOps = new ArrayList<>();
+        Operation mdOp = Operation.createPost(this, TagService.FACTORY_LINK)
+                .setBody(managedDiskTypeTag)
+                .setReferer(this.getUri());
+        Operation vhdOp = Operation.createPost(this, TagService.FACTORY_LINK)
+                .setBody(vhdTypeTag)
+                .setReferer(this.getUri());
+        tagCreationOps.add(mdOp);
+        tagCreationOps.add(vhdOp);
+
+        OperationJoin.create(tagCreationOps)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        // log the error and continue with enumeration
+                        exs.values().forEach(ex -> logWarning(
+                                () -> String.format("Error creating internal tag: %s", ex.getMessage())));
+                    } else {
+                        context.vhdInternalTagLink = vhdTypeTag.documentSelfLink;
+                        context.managedDiskInternalTagLink = managedDiskTypeTag.documentSelfLink;
+                    }
+                }).sendWith(this);
+
+        context.subStage = next;
+        handleSubStage(context);
     }
 
     /**
@@ -1392,15 +1436,31 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private DiskState createOSDiskState(VirtualMachineInner vm, EnumerationContext ctx) {
         DiskState diskState = new DiskState();
         diskState.id = getVhdUri(vm);
+        if (diskState.tagLinks == null) {
+            diskState.tagLinks = new HashSet<>();
+        }
+
         if (vm.storageProfile() != null
                 && vm.storageProfile().osDisk() != null
                 && vm.storageProfile().osDisk().diskSizeGB() != null) {
             OSDisk osDisk = vm.storageProfile().osDisk();
+
+            if (osDisk.managedDisk() != null &&
+                    osDisk.managedDisk().id() != null) {
+                // tag as managed disk
+                diskState.tagLinks.add(ctx.managedDiskInternalTagLink);
+            } else {
+                // otherwise tag as vhd, as that is the default type
+                diskState.tagLinks.add(ctx.vhdInternalTagLink);
+            }
+
             if (osDisk.diskSizeGB() != null) {
                 diskState.capacityMBytes = osDisk.diskSizeGB() * 1024;
             }
             diskState.name = osDisk.name();
         }
+
+        diskState.regionId = vm.location();
         diskState.computeHostLink = ctx.parentCompute.documentSelfLink;
         diskState.resourcePoolLink = ctx.request.resourcePoolLink;
         diskState.tenantLinks = ctx.parentCompute.tenantLinks;
@@ -1475,6 +1535,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         diskState.customProperties.put(AZURE_DATA_DISK_CACHING, dataDisk.caching().name());
         diskState.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(dataDisk.lun()));
 
+        if (diskState.tagLinks == null) {
+            diskState.tagLinks = new HashSet<>();
+        }
         if (isManaged) {
             diskState.id = dataDisk.managedDisk().id();
             if (dataDisk.managedDisk().storageAccountType() != null) {
@@ -1485,8 +1548,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 diskState.customProperties.put(AZURE_MANAGED_DISK_TYPE,
                         StorageAccountTypes.STANDARD_LRS.toString());
             }
+            diskState.tagLinks.add(ctx.managedDiskInternalTagLink);
         } else {
             diskState.id = AzureUtils.canonizeId(dataDisk.vhd().uri());
+            diskState.tagLinks.add(ctx.vhdInternalTagLink);
         }
 
         return diskState;
