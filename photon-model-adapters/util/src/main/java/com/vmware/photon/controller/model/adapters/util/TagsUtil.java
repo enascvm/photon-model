@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.resources.TagService.TagState.T
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
 import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.createOriginTagQuery;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -105,7 +106,7 @@ public class TagsUtil {
                 .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(), true,
                         localState.tenantLinks))
                 .map(tagState -> Operation
-                        .createPost(service, TagService.FACTORY_LINK)
+                        .createPost(createInventoryUri(service.getHost(), TagService.FACTORY_LINK))
                         .setBody(tagState))
                 .map(tagOp -> service.sendWithDeferredResult(tagOp, TagState.class))
                 .collect(Collectors.toList());
@@ -195,7 +196,8 @@ public class TagsUtil {
             List<DeferredResult<TagState>> localTagStatesDRs = tagLinksToAdd.stream()
                     .map(tagLinkObj -> remoteTagStates.get(tagLinkObj))
                     .map(tagState -> Operation
-                            .createPost(service, TagService.FACTORY_LINK)
+                            .createPost(createInventoryUri(service.getHost(),
+                                    TagService.FACTORY_LINK))
                             .setBody(tagState))
                     .map(tagOperation -> service.sendWithDeferredResult(
                             tagOperation,
@@ -362,7 +364,8 @@ public class TagsUtil {
         ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
                 .create(collectionsToAddMap, collectionsToRemoveMap);
 
-        Operation updatePatch = Operation.createPatch(service, currentStateSelfLink)
+        Operation updatePatch = Operation.createPatch(createInventoryUri(service.getHost(),
+                currentStateSelfLink))
                 .setBody(updateTagLinksRequest)
                 .setReferer(service.getUri());
 

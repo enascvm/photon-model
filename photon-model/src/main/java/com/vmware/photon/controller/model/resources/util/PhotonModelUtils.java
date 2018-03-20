@@ -17,6 +17,7 @@ import static java.util.Collections.singletonMap;
 
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DEFAULT_PARTITION_ID_HEADER;
+import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -66,7 +67,6 @@ import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.StatefulService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
@@ -233,7 +233,7 @@ public class PhotonModelUtils {
                 .create(null, endpointsToRemoveMap);
 
         return Operation
-                .createPatch(UriUtils.buildUri(service.getHost(), resource.documentSelfLink))
+                .createPatch(createInventoryUri(service.getHost(), resource.documentSelfLink))
                 .setReferer(service.getUri())
                 .setBody(serviceStateCollectionUpdateRequest)
                 .setCompletion((updateOp, exception) -> {
@@ -298,7 +298,7 @@ public class PhotonModelUtils {
 
     private static void handleResourceStateEndpointLinkUpdate(Service service, String selfLink,
             Object endpointLinkPatchReq) {
-        Operation.createPatch(UriUtils.buildUri(service.getHost(), selfLink))
+        Operation.createPatch(createInventoryUri(service.getHost(), selfLink))
                 .setReferer(service.getUri())
                 .setBody(endpointLinkPatchReq)
                 .setCompletion(

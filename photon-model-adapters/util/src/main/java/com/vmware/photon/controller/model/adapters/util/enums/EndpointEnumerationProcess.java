@@ -617,7 +617,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
             }
             localState.computeHostLink = this.computeHostLink;
 
-            localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
+            localStateOp = Operation.createPost(createInventoryUri(this.service.getHost(),
+                    this.localStateServiceFactoryLink));
         } else {
             // Update case
             if (isApplyInfraFields()) {
@@ -626,7 +627,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 updateEndpointLinks(localState, this.endpointState.documentSelfLink);
             }
 
-            localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
+            localStateOp = Operation.createPatch(createInventoryUri(this.service.getHost(),
+                    currentState.documentSelfLink));
         }
 
         DeferredResult<Set<String>> tagLinksDR = TagsUtil.createOrUpdateTagStates(
