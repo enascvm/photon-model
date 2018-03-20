@@ -13,17 +13,24 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
 
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 /**
@@ -75,6 +82,49 @@ public class ResourceState extends ServiceDocument {
          */
         @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE })
         public String tag;
+    }
+
+    /**
+     * Deserialize a ResourceState type, using documentKind as a hint to instantiate the resulting
+     * object as derived class (i.e. deserialize a type with a field of type ResourceState will
+     * instantiate an object of the derived type instead of ResourceState).
+     */
+    static final class ResourceStateDeserializer implements JsonDeserializer<ResourceState> {
+        @Override
+        public ResourceState deserialize(JsonElement json, Type typeOfT,
+                JsonDeserializationContext context) throws JsonParseException {
+            JsonElement documentKind = json.getAsJsonObject().get("documentKind");
+            if (documentKind == null) {
+                // deserialize as ResourceState if documentKink is not available
+                Utils.log(ResourceStateDeserializer.class, "deserialize", Level.WARNING,
+                        "Json document of type %s does not have a documentKind field",
+                        typeOfT.getTypeName());
+                return Utils.fromJson(json, typeOfT);
+            }
+
+            Class<?> clazz = Utils.getTypeFromKind(documentKind.getAsString());
+            if (clazz != null) {
+                return context.deserialize(json, clazz);
+            } else {
+                // deserialize as ResourceState if type is not registered
+                Utils.log(ResourceStateDeserializer.class, "deserialize", Level.WARNING,
+                        "Json document of type %s and kind %s does not declare derived deserializer",
+                        typeOfT, documentKind.getAsString());
+                return Utils.fromJson(json, typeOfT);
+            }
+        }
+    }
+
+    /**
+     * Deserialize a ResourceState type as a derived type. The resulting object is an object
+     * of the derived class (i.e. ComputeState).
+     */
+    static final class DerivedResourceStateDeserializer implements JsonDeserializer<ResourceState> {
+        @Override
+        public ResourceState deserialize(JsonElement json, Type typeOfT,
+                JsonDeserializationContext context) throws JsonParseException {
+            return Utils.fromJson(json, typeOfT);
+        }
     }
 
     /**

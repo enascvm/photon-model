@@ -47,6 +47,7 @@ import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.serialization.JsonMapper;
 
 /**
  * Represents the actual state of a load balancer.
@@ -188,6 +189,21 @@ public class LoadBalancerService extends StatefulService {
                         .collect(Collectors.toSet());
             }
             return null;
+        }
+
+        public static void registerCustomDeserializer() {
+            // Register types that are used with polymorphism
+            Utils.registerKind(ComputeState.class, Utils.toDocumentKind(ComputeState.class));
+            Utils.registerKind(NetworkInterfaceState.class,
+                    Utils.toDocumentKind(NetworkInterfaceState.class));
+
+            // Register custom mapper to handle polymorphic fields
+            Utils.registerCustomJsonMapper(LoadBalancerStateExpanded.class, new JsonMapper((b) -> {
+                b.registerTypeAdapter(ResourceState.class, new ResourceStateDeserializer());
+                b.registerTypeAdapter(ComputeState.class, new DerivedResourceStateDeserializer());
+                b.registerTypeAdapter(NetworkInterfaceState.class,
+                        new DerivedResourceStateDeserializer());
+            }));
         }
     }
 
