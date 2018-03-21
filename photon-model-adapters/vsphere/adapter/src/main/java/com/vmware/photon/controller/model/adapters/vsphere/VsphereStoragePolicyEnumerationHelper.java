@@ -14,8 +14,11 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -32,6 +35,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
@@ -114,14 +118,16 @@ public class VsphereStoragePolicyEnumerationHelper {
         // In this case, we need to update the datastore by removing the policy group link
         if (!originalLinks.isEmpty()) {
             originalLinks.stream().forEach(link -> {
-                StorageDescription storageDescription = Utils
-                        .fromJson(result.documents.get(link), StorageDescription.class);
-                if (storageDescription.groupLinks != null) {
-                    storageDescription.groupLinks.remove(spSelfLink);
-                }
-                patchOps.add(Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(),
-                        storageDescription.documentSelfLink))
-                        .setBody(storageDescription));
+                Map<String, Collection<Object>> collectionsToRemove = Collections
+                        .singletonMap(ResourceState.FIELD_NAME_GROUP_LINKS,
+                                Collections.singletonList(spSelfLink));
+
+                ServiceStateCollectionUpdateRequest updateGroupLinksRequest = ServiceStateCollectionUpdateRequest
+                        .create(null, collectionsToRemove);
+
+                patchOps.add(Operation.createPatch(
+                        PhotonModelUriUtils.createInventoryUri(service.getHost(), link))
+                        .setBody(updateGroupLinksRequest));
             });
         }
 
@@ -161,7 +167,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                             VsphereEnumerationHelper.withTaskResults(service, task, result -> {
                                 // Call patch on all to update the group links
                                 updateStorageDescription(service, ops.values().stream(), selfLink, result);
-                            });
+                            }, 0);
                         }
                     }).sendWith(service);
         }
