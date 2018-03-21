@@ -155,35 +155,16 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
 
     @Test
     public void testGetByEndpointType() {
-        getByEndpointXXX("testGetByEndpointType", null);
+        getByEndpointXXX("testGetByEndpointType");
     }
 
-    @Test
-    public void testGetByEndpointLink() throws Throwable {
-        EndpointState endpoint = registerEndpoint(this.endpointType);
-        getByEndpointXXX("testGetByEndpointLink", endpoint.documentSelfLink);
-    }
-
-    private void getByEndpointXXX(String operation, String endpointLink) {
+    private void getByEndpointXXX(String operation) {
         ResourceOperationSpec[] states = registerResourceOperation(
                 this.endpointType, ResourceType.COMPUTE, operation);
         ResourceOperationSpec requestedState = states[0];
         ResourceOperationSpec persistedState = states[1];
 
-        DeferredResult<ResourceOperationSpec> dr;
-        if (endpointLink != null) {
-            dr = ResourceOperationUtils
-                    .lookUpByEndpointLink(
-                            super.host,
-                            super.host.getReferer(),
-                            endpointLink,
-                            requestedState.resourceType,
-                            requestedState.operation,
-                            null,
-                            null
-                    );
-        } else {
-            dr = ResourceOperationUtils
+        DeferredResult<ResourceOperationSpec> dr = ResourceOperationUtils
                     .lookUpByEndpointType(
                             super.host,
                             super.host.getReferer(),
@@ -193,7 +174,6 @@ public class ResourceOperationSpecServiceTest extends BaseResourceOperationTest 
                             null,
                             null
                     );
-        }
         ResourceOperationSpec found = join(dr);
         Assert.assertNotNull(found);
         this.logger.info("Lookup: " + found);

@@ -111,43 +111,6 @@ public class ResourceOperationUtils {
     }
 
     /**
-     * Lookup for {@link ResourceOperationSpec} by given {@code endpointLink},
-     * {@code resourceType} and {@code operation}
-     * @param host
-     *         host to use to create operation
-     * @param refererURI
-     *         the referer to use when send the operation
-     * @param endpointLink
-     *         the endpoint link of the resource
-     * @param resourceType
-     *         the resource type
-     * @param operation
-     *         the operation
-     * @param queryTaskTenantLinks
-     *         tenant links used for the QueryTask
-     * @param authorizationContext
-     *         authorization context that will be used for operations (if set to null the context
-     *         will not be changed)
-     * @return
-     */
-    public static DeferredResult<ResourceOperationSpec> lookUpByEndpointLink(
-            ServiceHost host,
-            URI refererURI,
-            String endpointLink,
-            ResourceType resourceType,
-            String operation,
-            List<String> queryTaskTenantLinks,
-            AuthorizationContext authorizationContext) {
-
-        return host.sendWithDeferredResult(Operation.createGet(host, endpointLink)
-                .setReferer(refererURI))
-                .thenCompose(o -> lookUpByEndpointType(host, refererURI,
-                        (o.getBody(EndpointState.class)).endpointType,
-                        resourceType, operation, queryTaskTenantLinks, authorizationContext)
-                );
-    }
-
-    /**
      * Lookup for {@link ResourceOperationSpec} by given {@code resourceState} and {@code operation}
      * @param host
      *         host to use to create operation
@@ -169,21 +132,27 @@ public class ResourceOperationUtils {
             String operation,
             AuthorizationContext authorizationContext) {
         AssertUtil.assertNotNull(resourceState, "'resourceState' must be set.");
-        String endpointLink;
+
+        String endpointLink = null;
+        // All endpoint links have to be of the same type, so it's enough to get the first one
+        if (resourceState.endpointLinks != null && !resourceState.endpointLinks.isEmpty()) {
+            endpointLink = resourceState.endpointLinks.iterator().next();
+        }
+
         ResourceType resourceType;
         if (resourceState instanceof ComputeState) {
             ComputeState compute = (ComputeState) resourceState;
-            endpointLink = compute.endpointLink;
+            endpointLink = endpointLink == null ? compute.endpointLink : endpointLink;
             resourceType = ResourceType.COMPUTE;
         } else if (resourceState instanceof NetworkState) {
             NetworkState network = (NetworkState) resourceState;
-            endpointLink = network.endpointLink;
+            endpointLink = endpointLink == null ? network.endpointLink : endpointLink;
             resourceType = ResourceType.NETWORK;
         } else {
             throw new IllegalArgumentException("Unsupported resource state: "
                     + resourceState.getClass().getName());
         }
-        AssertUtil.assertNotNull(endpointLink, "'endpointLink' must be set.");
+        AssertUtil.assertNotNull(endpointLink, " must be set.");
 
         return host.sendWithDeferredResult(
                 Operation.createGet(host, endpointLink).setReferer(refererURI),
