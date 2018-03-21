@@ -116,6 +116,7 @@ public final class VimPathGenerator {
         this.roots.put("host:parent", "ManagedObjectReference");
         this.roots.put("host:datastore", "ArrayOfManagedObjectReference");
         this.roots.put("host:network", "ArrayOfManagedObjectReference");
+        this.roots.put("host:config.network.pnic", "ArrayOfPhysicalNicConfig");
 
         this.roots.put("task:info", "TaskInfo");
 
@@ -201,7 +202,7 @@ public final class VimPathGenerator {
     }
 
     private void emitConstant(String prefix, String dottedPath, String type, boolean isArray,
-            Map<String, FieldType> fields)
+                              Map<String, FieldType> fields)
             throws IOException {
         javadoc(type, isArray);
         print("public static final String %s = %s;\n", prefix + normalize(dottedPath),

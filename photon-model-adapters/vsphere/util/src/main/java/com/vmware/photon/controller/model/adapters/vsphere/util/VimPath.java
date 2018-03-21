@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2018 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -444,6 +444,9 @@ public class VimPath {
     /** PropertyType: <code>boolean</code> */
     public static final String vm_config_bootOptions_bootRetryEnabled = "config.bootOptions.bootRetryEnabled";
 
+    /** PropertyType: <code>boolean</code> */
+    public static final String vm_config_bootOptions_efiSecureBootEnabled = "config.bootOptions.efiSecureBootEnabled";
+
     /** PropertyType: <code>string</code> */
     public static final String vm_config_bootOptions_networkBootProtocol = "config.bootOptions.networkBootProtocol";
 
@@ -506,6 +509,12 @@ public class VimPath {
 
     /** PropertyType: <code>string</code> */
     public static final String vm_config_swapPlacement = "config.swapPlacement";
+
+    /** PropertyType: <code>VirtualMachineGuestIntegrityInfo</code> */
+    public static final String vm_config_guestIntegrityInfo = "config.guestIntegrityInfo";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String vm_config_guestIntegrityInfo_enabled = "config.guestIntegrityInfo.enabled";
 
     /** PropertyType: <code>string</code> */
     public static final String vm_config_guestId = "config.guestId";
@@ -577,6 +586,9 @@ public class VimPath {
     public static final String vm_config_memoryAllocation_expandableReservation = "config.memoryAllocation.expandableReservation";
 
     /** PropertyType: <code>string</code> */
+    public static final String vm_config_migrateEncryption = "config.migrateEncryption";
+
+    /** PropertyType: <code>string</code> */
     public static final String vm_config_name = "config.name";
 
     /** PropertyType: <code>boolean</code> */
@@ -622,6 +634,9 @@ public class VimPath {
     public static final String vm_config_flags_snapshotPowerOffBehavior = "config.flags.snapshotPowerOffBehavior";
 
     /** PropertyType: <code>boolean</code> */
+    public static final String vm_config_flags_cbrcCacheEnabled = "config.flags.cbrcCacheEnabled";
+
+    /** PropertyType: <code>boolean</code> */
     public static final String vm_config_flags_useToe = "config.flags.useToe";
 
     /** PropertyType: <code>boolean</code> */
@@ -657,6 +672,18 @@ public class VimPath {
     /** PropertyType: <code>boolean</code> */
     public static final String vm_config_flags_disableAcceleration = "config.flags.disableAcceleration";
 
+    /** PropertyType: <code>CryptoKeyId</code> */
+    public static final String vm_config_keyId = "config.keyId";
+
+    /** PropertyType: <code>KeyProviderId</code> */
+    public static final String vm_config_keyId_providerId = "config.keyId.providerId";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_config_keyId_providerId_id = "config.keyId.providerId.id";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_config_keyId_keyId = "config.keyId.keyId";
+
     /** PropertyType: <code>string</code> */
     public static final String vm_config_swapStorageObjectId = "config.swapStorageObjectId";
 
@@ -690,6 +717,9 @@ public class VimPath {
     /** PropertyType: <code>boolean</code> */
     public static final String vm_config_tools_afterPowerOn = "config.tools.afterPowerOn";
 
+    /** PropertyType: <code>string</code> */
+    public static final String vm_config_tools_toolsInstallType = "config.tools.toolsInstallType";
+
     /** PropertyType: <code>ToolsConfigInfoToolsLastInstallInfo</code> */
     public static final String vm_config_tools_lastInstallInfo = "config.tools.lastInstallInfo";
 
@@ -698,6 +728,18 @@ public class VimPath {
 
     /** PropertyType: <code>int</code> */
     public static final String vm_config_tools_lastInstallInfo_counter = "config.tools.lastInstallInfo.counter";
+
+    /** PropertyType: <code>CryptoKeyId</code> */
+    public static final String vm_config_tools_customizationKeyId = "config.tools.customizationKeyId";
+
+    /** PropertyType: <code>KeyProviderId</code> */
+    public static final String vm_config_tools_customizationKeyId_providerId = "config.tools.customizationKeyId.providerId";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_config_tools_customizationKeyId_providerId_id = "config.tools.customizationKeyId.providerId.id";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_config_tools_customizationKeyId_keyId = "config.tools.customizationKeyId.keyId";
 
     /** PropertyType: <code>LatencySensitivity</code> */
     public static final String vm_config_latencySensitivity = "config.latencySensitivity";
@@ -716,6 +758,9 @@ public class VimPath {
 
     /** PropertyType: <code>string</code> */
     public static final String vm_config_forkConfigInfo_childType = "config.forkConfigInfo.childType";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_config_forkConfigInfo_parentForkGroupId = "config.forkConfigInfo.parentForkGroupId";
 
     /** PropertyType: <code>boolean</code> */
     public static final String vm_config_forkConfigInfo_parentEnabled = "config.forkConfigInfo.parentEnabled";
@@ -1048,6 +1093,9 @@ public class VimPath {
     public static final String vm_guest_net = "guest.net";
 
     /** PropertyType: <code>string</code> */
+    public static final String vm_guest_toolsInstallType = "guest.toolsInstallType";
+
+    /** PropertyType: <code>string</code> */
     public static final String vm_guest_guestId = "guest.guestId";
 
     /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
@@ -1110,9 +1158,6 @@ public class VimPath {
     /** PropertyType: <code>ManagedObjectReference</code> */
     public static final String host_summary_runtime_dasHostState_stateReporter = "summary.runtime.dasHostState.stateReporter";
 
-    /** PropertyType: <code>HostSystemPowerState</code> */
-    public static final String host_summary_runtime_powerState = "summary.runtime.powerState";
-
     /** PropertyType: <code>HostVFlashManagerVFlashResourceRunTimeInfo</code> */
     public static final String host_summary_runtime_vFlashResourceRuntimeInfo = "summary.runtime.vFlashResourceRuntimeInfo";
 
@@ -1152,14 +1197,35 @@ public class VimPath {
     /** PropertyType: <code>ArrayOfHostPnicNetworkResourceInfo</code> */
     public static final String host_summary_runtime_networkRuntimeInfo_networkResourceRuntime_pnicResourceInfo = "summary.runtime.networkRuntimeInfo.networkResourceRuntime.pnicResourceInfo";
 
+    /** PropertyType: <code>ArrayOfHostTpmDigestInfo</code> */
+    public static final String host_summary_runtime_tpmPcrValues = "summary.runtime.tpmPcrValues";
+
+    /** PropertyType: <code>HostSystemPowerState</code> */
+    public static final String host_summary_runtime_powerState = "summary.runtime.powerState";
+
+    /** PropertyType: <code>string</code> */
+    public static final String host_summary_runtime_cryptoState = "summary.runtime.cryptoState";
+
+    /** PropertyType: <code>CryptoKeyId</code> */
+    public static final String host_summary_runtime_cryptoKeyId = "summary.runtime.cryptoKeyId";
+
+    /** PropertyType: <code>KeyProviderId</code> */
+    public static final String host_summary_runtime_cryptoKeyId_providerId = "summary.runtime.cryptoKeyId.providerId";
+
+    /** PropertyType: <code>string</code> */
+    public static final String host_summary_runtime_cryptoKeyId_providerId_id = "summary.runtime.cryptoKeyId.providerId.id";
+
+    /** PropertyType: <code>string</code> */
+    public static final String host_summary_runtime_cryptoKeyId_keyId = "summary.runtime.cryptoKeyId.keyId";
+
     /** PropertyType: <code>long</code> */
     public static final String host_summary_runtime_hostMaxVirtualDiskCapacity = "summary.runtime.hostMaxVirtualDiskCapacity";
 
     /** PropertyType: <code>string</code> */
     public static final String host_summary_runtime_standbyMode = "summary.runtime.standbyMode";
 
-    /** PropertyType: <code>ArrayOfHostTpmDigestInfo</code> */
-    public static final String host_summary_runtime_tpmPcrValues = "summary.runtime.tpmPcrValues";
+    /** PropertyType: <code>boolean</code> */
+    public static final String host_summary_runtime_inQuarantineMode = "summary.runtime.inQuarantineMode";
 
     /** PropertyType: <code>VsanHostRuntimeInfo</code> */
     public static final String host_summary_runtime_vsanRuntimeInfo = "summary.runtime.vsanRuntimeInfo";
@@ -1328,6 +1394,9 @@ public class VimPath {
 
     /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
     public static final String host_network = "network";
+
+    /** PropertyType: <code>ArrayOfPhysicalNicConfig</code> */
+    public static final String host_config_network_pnic = "config.network.pnic";
 
     /** PropertyType: <code>TaskInfo</code> */
     public static final String task_info = "info";
@@ -1835,6 +1904,9 @@ public class VimPath {
 
     /** PropertyType: <code>ManagedObjectReference</code> */
     public static final String pg_config_distributedVirtualSwitch = "config.distributedVirtualSwitch";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_uplink = "config.uplink";
 
     /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
     public static final String pg_config_scope = "config.scope";

@@ -349,9 +349,7 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.host_summary_hardware_vendor,
                 VimPath.host_summary_hardware_model,
                 VimPath.host_summary_hardware_cpuModel,
-                // Since VimPath is read only and cannot be modified, this property is defined in the Overlay file
-                // TODO: Remove this once the VimPath is updated and get the property from VimPath
-                HostSystemOverlay.HOST_SUMMARY_CONFIG_NIC_INFO
+                VimPath.host_config_network_pnic
         ));
 
         PropertySpec rpSpec = new PropertySpec();

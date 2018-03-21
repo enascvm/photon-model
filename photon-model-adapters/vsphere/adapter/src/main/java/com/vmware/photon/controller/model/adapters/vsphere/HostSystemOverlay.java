@@ -30,8 +30,6 @@ import com.vmware.xenon.common.Utils;
 public class HostSystemOverlay extends AbstractOverlay {
     private boolean clusterHost;
     private ManagedObjectReference parentMoref;
-    // Adding the constants here as the VimPath file should not be modified
-    public static final String HOST_SUMMARY_CONFIG_NIC_INFO = "config.network.pnic";
 
     protected HostSystemOverlay(ObjectUpdate cont) {
         super(cont);
@@ -123,7 +121,7 @@ public class HostSystemOverlay extends AbstractOverlay {
     }
 
     private ArrayOfPhysicalNic getNicsInfo() {
-        return (ArrayOfPhysicalNic) getOrDefault(HOST_SUMMARY_CONFIG_NIC_INFO, null);
+        return (ArrayOfPhysicalNic) getOrDefault(VimPath.host_config_network_pnic, null);
     }
 
     public String getConsolidatedNicInfo() {
