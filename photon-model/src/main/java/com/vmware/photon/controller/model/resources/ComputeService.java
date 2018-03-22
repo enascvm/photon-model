@@ -503,15 +503,17 @@ public class ComputeService extends StatefulService {
 
         ComputeState currentState = getState(patch);
 
-        if (currentState.type != null && currentState.type.equals(ComputeType.ENDPOINT_HOST)
-                && (currentState.environmentName.equals(ENVIRONMENT_NAME_AWS)
-                || currentState.environmentName.equals(ENVIRONMENT_NAME_AZURE))) {
-            if (patchState.tenantLinks != null && !patchState.tenantLinks.isEmpty()) {
-                if (currentState.tenantLinks == null) {
-                    currentState.tenantLinks = new ArrayList<>();
+        if (currentState.type != null && currentState.type.equals(ComputeType.ENDPOINT_HOST)) {
+            if (currentState.environmentName != null
+                    && (currentState.environmentName.equals(ENVIRONMENT_NAME_AWS)
+                            || currentState.environmentName.equals(ENVIRONMENT_NAME_AZURE))) {
+                if (patchState.tenantLinks != null && !patchState.tenantLinks.isEmpty()) {
+                    if (currentState.tenantLinks == null) {
+                        currentState.tenantLinks = new ArrayList<>();
+                    }
+                    patchState.tenantLinks.removeAll(currentState.tenantLinks);
+                    currentState.tenantLinks.addAll(patchState.tenantLinks);
                 }
-                patchState.tenantLinks.removeAll(currentState.tenantLinks);
-                currentState.tenantLinks.addAll(patchState.tenantLinks);
             }
         }
 
