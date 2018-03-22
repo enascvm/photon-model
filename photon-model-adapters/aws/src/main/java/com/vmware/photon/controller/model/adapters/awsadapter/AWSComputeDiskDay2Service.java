@@ -547,12 +547,11 @@ public class AWSComputeDiskDay2Service extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
-            this.service.logWarning(
-                    () -> String.format("[AWSComputeDiskDay2Service] Attaching "
-                                    + "volume %s to instance %s FAILED for task reference :%s",
-                            this.context.diskState.id,
-                            this.context.computeState.id,
-                            this.context.request.taskLink()));
+            logSevere(() -> String.format("[AWSComputeDiskDay2Service] Attaching "
+                            + "volume %s to instance %s FAILED for task reference :%s",
+                    this.context.diskState.id,
+                    this.context.computeState.id,
+                    this.context.request.taskLink()));
             OperationContext.restoreOperationContext(this.opContext);
             this.context.error = exception;
             this.dr.complete(this.context);

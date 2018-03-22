@@ -1479,7 +1479,9 @@ public class AWSInstanceService extends StatelessService {
             bootDisk.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
             bootDisk.customProperties.put(DEVICE_NAME, rootDeviceMapping.getDeviceName());
             bootDisk.customProperties.put(VOLUME_TYPE, ebs.getVolumeType());
-            bootDisk.customProperties.put(DISK_IOPS, String.valueOf(ebs.getIops()));
+            if (ebs.getIops() != null) {
+                bootDisk.customProperties.put(DISK_IOPS, String.valueOf(ebs.getIops()));
+            }
         } else {
             if (aws.instanceTypeInfo.dataDiskSizeInMB != null) {
                 this.logInfo(
