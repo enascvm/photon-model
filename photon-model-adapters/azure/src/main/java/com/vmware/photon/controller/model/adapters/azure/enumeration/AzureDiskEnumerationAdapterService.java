@@ -400,7 +400,7 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
                     Operation diskOp = null;
 
                     if (diskState != null) {
-                        diskState.status = DiskStatus.DETACHED;
+                        diskState.status = DiskStatus.AVAILABLE;
                         if (diskState.endpointLinks != null && !diskState.endpointLinks.contains(ctx.request.endpointLink)) {
                             AdapterUtils.addToEndpointLinks(diskState, ctx.request.endpointLink);
                         }
@@ -455,7 +455,7 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
-                .addFieldClause(DiskState.FIELD_NAME_STATUS, DiskStatus.DETACHED)
+                .addFieldClause(DiskState.FIELD_NAME_STATUS, DiskStatus.AVAILABLE)
                 .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange.createLessThanRange(ctx.enumerationStartTimeInMicros));
 
@@ -511,7 +511,7 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
         diskState.name = disk.name;
         diskState.id = disk.id;
         diskState.capacityMBytes = (long) disk.properties.diskSizeGB * 1024;
-        diskState.status = DiskStatus.DETACHED;
+        diskState.status = DiskStatus.AVAILABLE;
         diskState.tenantLinks = ctx.parentCompute.tenantLinks;
         diskState.resourcePoolLink = ctx.request.resourcePoolLink;
         diskState.computeHostLink = ctx.parentCompute.documentSelfLink;

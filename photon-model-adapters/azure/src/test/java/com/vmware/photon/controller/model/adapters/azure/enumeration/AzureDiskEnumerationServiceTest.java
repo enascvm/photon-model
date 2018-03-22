@@ -139,6 +139,7 @@ public class AzureDiskEnumerationServiceTest extends AzureBaseTest {
                 assertTrue("Endpoint links in DiskState must be empty", diskState.endpointLinks.isEmpty());
             }
         });
+
     }
 
     @Test
@@ -186,14 +187,16 @@ public class AzureDiskEnumerationServiceTest extends AzureBaseTest {
                 .withoutDataDisk(dataDisk.lun()).apply();
         // Run Disk enumeration
         patchServiceSynchronously(AzureDiskEnumerationAdapterService.SELF_LINK, request);
-        // Verify if the status of disk state is updated to Detached state or not
+        // Verify if the status of disk state is updated to Available state or not
         diskStateMap = ProvisioningUtils
                 .getResourceStates(getHost(), DiskService.FACTORY_LINK, DiskState.class);
         diskStateMap.values().forEach(diskState -> {
             if (diskState.name.equalsIgnoreCase(dataDisk.name())) {
-                assertTrue("Status of disk state should be Detached", diskState.status.equals(DiskService.DiskStatus.DETACHED));
+                assertTrue("Status of disk state should be Available",
+                        diskState.status.equals(DiskService.DiskStatus.AVAILABLE));
             }
         });
+
     }
 
     @After

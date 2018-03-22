@@ -1565,6 +1565,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             CloudBlob blobItem = (CloudBlob) blob;
             bLength = blobItem.getProperties().getLength();
         }
+        diskState.status = DiskService.DiskStatus.AVAILABLE;
         diskState.capacityMBytes = bLength / B_TO_MB_FACTOR;
         diskState.customProperties = new HashMap<>();
         String storageType = isDisk(diskState.name) ? AZURE_STORAGE_DISKS : AZURE_STORAGE_BLOBS;

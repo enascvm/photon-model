@@ -570,13 +570,16 @@ public class AzureInstanceService extends StatelessService {
 
         String msg = "Creating Azure Availability Set [" + availabilitySetName + "] for [" + ctx.vmName + "] VM";
 
+        AvailabilitySetSkuTypes skuType = ctx.useManagedDisks() ?
+                AvailabilitySetSkuTypes.MANAGED : AvailabilitySetSkuTypes.UNMANAGED;
+
         AvailabilitySet.DefinitionStages.WithCreate availabilitySetDefinition = ctx.azureSdkClients
                 .getComputeManager()
                 .availabilitySets()
                 .define(availabilitySetName)
                 .withRegion(ctx.child.description.regionId)
                 .withExistingResourceGroup(ctx.resourceGroup.name())
-                .withSku(AvailabilitySetSkuTypes.UNMANAGED);
+                .withSku(skuType);
 
         AzureDeferredResultServiceCallbackWithRetry<AvailabilitySet> callback = new
                 AzureDeferredResultServiceCallbackWithRetry<AvailabilitySet>(this, msg) {
