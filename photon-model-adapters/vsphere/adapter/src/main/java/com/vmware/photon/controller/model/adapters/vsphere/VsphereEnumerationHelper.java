@@ -277,4 +277,23 @@ public class VsphereEnumerationHelper {
         }
         return res;
     }
+
+    // The below methods will populate the custom properties required for identifying the resource using
+    // functional key - orgId:vcUuid:moid
+
+    static void populateResourceStateWithAdditionalProps(ResourceState state, String vcUuid) {
+        populateResourceStateWithAdditionalProps(state, vcUuid, null);
+    }
+
+    // moid is already populated in "__moref" property in the respective make*Object*FromResults() methods
+    // The moref parameter will be null in such cases. See VSphereHostSystemEnumerationHelper.makeDescriptionForHost
+    static void populateResourceStateWithAdditionalProps(ResourceState state, String vcUuid,
+                                                         ManagedObjectReference moref) {
+        if (null != moref) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.MOREF, moref);
+        }
+        CustomProperties.of(state)
+                .put(CustomProperties.VC_UUID, vcUuid);
+    }
 }

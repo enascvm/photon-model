@@ -73,7 +73,7 @@ public class VsphereFolderEnumerationHelper  {
                 .put(CustomProperties.PARENT_ID, parentId[0])
                 .put(CustomProperties.VC_VIEW, folder.getView())
                 .put(CustomProperties.FOLDER_TYPE, folder.getFolderType());
-
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, ctx.getVcUuid());
         return state;
     }
 

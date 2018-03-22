@@ -197,6 +197,7 @@ public class CustomProperties {
     public static final String SERVER = "server";
     public static final String CAPACITY_IN_GB = "capacityInGB";
     public static final String SERVER_DISK_TYPE = "scsiDiskType";
+    public static final String VC_UUID = "vcUuid";
 
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;

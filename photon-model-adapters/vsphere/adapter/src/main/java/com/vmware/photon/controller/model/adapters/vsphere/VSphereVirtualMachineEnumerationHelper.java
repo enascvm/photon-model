@@ -185,6 +185,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                 .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS())
                 .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid());
         return state;
     }
 
@@ -332,7 +333,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         if (device instanceof VirtualDisk) {
             return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
                     (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service,
-                    vm, enumerationProgress.getDcLink());
+                    vm, enumerationProgress.getDcLink(), enumerationProgress);
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.CDROM, device,

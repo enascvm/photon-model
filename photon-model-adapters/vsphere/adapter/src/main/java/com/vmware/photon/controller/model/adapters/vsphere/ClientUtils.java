@@ -843,7 +843,7 @@ public class ClientUtils {
      */
     public static Operation handleVirtualDiskUpdate(String endpointLink,
             DiskService.DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
-            String regionId, Service service, String vm, String dcLink) {
+            String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -896,6 +896,11 @@ public class ClientUtils {
                 .put(CustomProperties.DISK_PROVISION_IN_GB, disk.getCapacityInKB() / (1024 * 1024))
                 .put(CustomProperties.DATACENTER_SELF_LINK, dcLink)
                 .put(CustomProperties.DISK_PARENT_VM, vm);
+        // Disk needs the VMs MoRef for the functional Key
+        if (ctx != null) {
+            VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(ds, ctx.getVcUuid(),
+                    VimUtils.convertStringToMoRef(vm));
+        }
         operation = (matchedDs == null) ? createDisk(ds, service) : createDiskPatch(ds, service);
 
         return operation;

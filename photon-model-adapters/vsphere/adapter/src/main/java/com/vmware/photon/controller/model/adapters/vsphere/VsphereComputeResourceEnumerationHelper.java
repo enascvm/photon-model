@@ -90,6 +90,7 @@ public class VsphereComputeResourceEnumerationHelper {
                 .put(CustomProperties.CR_VSAN_CONFIG_ID, cr.getVsanConfigId())
                 .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid());
         return state;
     }
 

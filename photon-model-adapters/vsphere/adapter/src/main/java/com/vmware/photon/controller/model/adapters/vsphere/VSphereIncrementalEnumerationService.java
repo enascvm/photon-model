@@ -207,12 +207,15 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                             return;
                         }
                         try {
+                            // Get instanceUuid of the vCenter
+                            AboutInfo vCenter = this.connection.getServiceContent().getAbout();
                             for (CollectorDetails collectorDetails : this.collectors) {
                                 logInfo("Retrieving  resources incremental data for data center: %s",
                                         collectorDetails.datacenter);
 
-                                EnumerationProgress enumerationProgress = new EnumerationProgress(
-                                        new HashSet<>(), request, computeStateWithDesc, vapiConnection, collectorDetails.datacenter);
+                                EnumerationProgress enumerationProgress = new EnumerationProgress(new HashSet<>(), request,
+                                        computeStateWithDesc, vapiConnection, collectorDetails.datacenter,
+                                        vCenter.getInstanceUuid());
 
                                 EnumerationClient client = new EnumerationClient(this.connection, computeStateWithDesc,
                                         VimUtils.convertStringToMoRef(collectorDetails.datacenter));
@@ -401,14 +404,10 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             return;
         }
 
-        // Get instanceUuid of the vCenter
-        // TODO: vcUuid is required by CI to form the Functional Key. For now just logging it
-        AboutInfo about = connection.getServiceContent().getAbout();
-        this.vcUuid = about.getInstanceUuid();
-        logInfo("vcUuid %s", this.vcUuid);
-
         DatacenterLister lister = new DatacenterLister(connection);
         try {
+            // Get instanceUuid of the vCenter
+            AboutInfo vCenter = this.connection.getServiceContent().getAbout();
             for (Element element : lister.listAllDatacenters()) {
                 ManagedObjectReference datacenter = element.object;
                 log(Level.INFO, "Processing datacenter %s (%s)", element.path,
@@ -417,7 +416,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                 EnumerationClient client = new EnumerationClient(connection, parent, datacenter);
 
                 EnumerationProgress enumerationProgress = new EnumerationProgress(resourceLinks, request,
-                        parent, vapiConnection, VimUtils.convertMoRefToString(datacenter));
+                        parent, vapiConnection, VimUtils.convertMoRefToString(datacenter), vCenter.getInstanceUuid());
                 enumerationProgress.expectDatacenterCount(1); //since we are processing DC sequentially one at a time
                 VsphereDatacenterEnumerationHelper.processDatacenterInfo(this, element, enumerationProgress);
                 enumerationProgress.getDcTracker().await();

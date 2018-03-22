@@ -63,7 +63,7 @@ public class VsphereDatacenterEnumerationHelper {
                 .put(CustomProperties.MOREF, moref)
                 .put(CustomProperties.TYPE, type)
                 .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, request.endpointLink);
-
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, ctx.getVcUuid());
         return state;
     }
 

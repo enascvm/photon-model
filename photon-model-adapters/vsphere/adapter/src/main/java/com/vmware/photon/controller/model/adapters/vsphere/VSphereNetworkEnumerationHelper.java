@@ -109,7 +109,7 @@ public class VSphereNetworkEnumerationHelper {
 
             custProp.put(DvsProperties.DVS_UUID, net.getDvsUuid());
         }
-
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid());
         return state;
     }
 

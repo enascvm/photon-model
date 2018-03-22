@@ -495,7 +495,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 handleVirtualDiskUpdate(ctx.child.endpointLink, matchedDs, (VirtualDisk) disk,
                         diskLinks, ctx.parent.description.regionId, this, CustomProperties.of(state)
                                 .getString(CustomProperties.MOREF), CustomProperties.of(state)
-                                .getString(CustomProperties.DATACENTER_SELF_LINK))
+                                .getString(CustomProperties.DATACENTER_SELF_LINK), null)
                         .sendWith(this);
             } else if (disk instanceof VirtualCdrom) {
                 handleVirtualDeviceUpdate(ctx.child.endpointLink, matchedDs, DiskType.CDROM, disk,

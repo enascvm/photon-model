@@ -88,7 +88,8 @@ public class VSphereHostSystemEnumerationHelper {
         res.diskAdapterReference = enumerationProgress
                 .getParent().description.diskAdapterReference;
         res.regionId = enumerationProgress.getRegionId();
-
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(res, enumerationProgress.getVcUuid(),
+                hs.getId());
         return res;
     }
 
@@ -152,6 +153,8 @@ public class VSphereHostSystemEnumerationHelper {
                     .put(CustomProperties.CLUSTER_LINK, enumerationProgress
                             .getComputeResourceTracker().getSelfLink(hs.getParentMoref()));
         }
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid(),
+                hs.getId());
         return state;
     }
 

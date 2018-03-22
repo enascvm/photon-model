@@ -81,7 +81,8 @@ public class VsphereDatastoreEnumerationHelper {
     }
 
     private static StorageDescription makeStorageFromResults(ComputeEnumerateResourceRequest request,
-                                                             DatastoreOverlay ds, String regionId, String dcLink) {
+                                                             DatastoreOverlay ds, String regionId,
+                                                             EnumerationProgress ctx) {
         StorageDescription res = new StorageDescription();
         res.id = res.name = ds.getName();
         res.type = ds.getType();
@@ -98,9 +99,9 @@ public class VsphereDatastoreEnumerationHelper {
                 .put(CUSTOM_PROP_STORAGE_SHARED, ds.isMultipleHostAccess())
                 .put(CustomProperties.TYPE, ds.getType())
                 .put(CustomProperties.DS_PATH, ds.getPath())
-                .put(CustomProperties.DATACENTER_SELF_LINK, dcLink)
+                .put(CustomProperties.DATACENTER_SELF_LINK, ctx.getDcLink())
                 .put(CustomProperties.PROPERTY_NAME, ds.getName());
-
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(res, ctx.getVcUuid());
         return res;
     }
 
@@ -131,13 +132,12 @@ public class VsphereDatastoreEnumerationHelper {
         res.documentSelfLink = VsphereEnumerationHelper.computeGroupStableLink(ds.getId(),
                 VSphereIncrementalEnumerationService.PREFIX_DATASTORE, ctx.getRequest()
                         .endpointLink);
-
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(res, ctx.getVcUuid());
         return res;
     }
 
-    private static void updateStorageStats(VSphereIncrementalEnumerationService
-                                                   vSphereIncrementalEnumerationService, DatastoreOverlay
-                                                   ds, String selfLink) {
+    private static void updateStorageStats(VSphereIncrementalEnumerationService service, DatastoreOverlay ds,
+                                           String selfLink) {
         // update stats only if capacity is greater than zero
         if (ds.getCapacityBytesOrZero() > 0) {
             ResourceMetrics metrics = new ResourceMetrics();
@@ -155,11 +155,11 @@ public class VsphereDatastoreEnumerationHelper {
                     .put(ResourceMetrics.PROPERTY_RESOURCE_LINK, selfLink);
 
             Operation.createPost(UriUtils.buildUri(
-                    ClusterUtil.getClusterUri(vSphereIncrementalEnumerationService.getHost(),
+                    ClusterUtil.getClusterUri(service.getHost(),
                             ServiceTypeCluster.METRIC_SERVICE),
                     ResourceMetricsService.FACTORY_LINK))
                     .setBodyNoCloning(metrics)
-                    .sendWith(vSphereIncrementalEnumerationService);
+                    .sendWith(service);
         }
     }
 
@@ -169,7 +169,7 @@ public class VsphereDatastoreEnumerationHelper {
 
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         String regionId = enumerationProgress.getRegionId();
-        StorageDescription desc = makeStorageFromResults(request, ds, regionId, enumerationProgress.getDcLink());
+        StorageDescription desc = makeStorageFromResults(request, ds, regionId, enumerationProgress);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         service.logFine(() -> String.format("Found new Datastore %s", ds.getName()));
 
@@ -194,7 +194,7 @@ public class VsphereDatastoreEnumerationHelper {
         });
     }
 
-    private static void updateStorageDescription(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService,
+    private static void updateStorageDescription(VSphereIncrementalEnumerationService service,
                                                  StorageDescription oldDocument,
                                                  EnumerationProgress enumerationProgress,
                                                  DatastoreOverlay ds, boolean fullUpdate) {
@@ -202,7 +202,7 @@ public class VsphereDatastoreEnumerationHelper {
         String regionId = enumerationProgress.getRegionId();
         StorageDescription desc;
         if (fullUpdate) {
-            desc = makeStorageFromResults(request, ds, regionId, enumerationProgress.getDcLink());
+            desc = makeStorageFromResults(request, ds, regionId,  enumerationProgress);
         } else {
             desc = makeStorageFromChanges(ds, oldDocument);
         }
@@ -214,24 +214,24 @@ public class VsphereDatastoreEnumerationHelper {
             desc.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
-        vSphereIncrementalEnumerationService.logFine(() -> String.format("Syncing Storage %s", ds
+        service.logFine(() -> String.format("Syncing Storage %s", ds
                 .getName()));
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri
-                (vSphereIncrementalEnumerationService.getHost(), desc.documentSelfLink))
+                (service.getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .setCompletion((o, e) -> {
                     trackDatastore(enumerationProgress, ds).handle(o, e);
                     if (e == null) {
                         VsphereEnumerationHelper.submitWorkToVSpherePool(
-                                vSphereIncrementalEnumerationService, () -> {
+                                service, () -> {
                                     VsphereEnumerationHelper.updateLocalTags(
-                                            vSphereIncrementalEnumerationService, enumerationProgress,
+                                            service, enumerationProgress,
                                             ds, o.getBody(ResourceState.class));
-                                    updateStorageStats(vSphereIncrementalEnumerationService, ds, o
+                                    updateStorageStats(service, ds, o
                                             .getBody(ServiceDocument.class).documentSelfLink);
                                 });
                     }
-                }).sendWith(vSphereIncrementalEnumerationService);
+                }).sendWith(service);
     }
 
     private static StorageDescription makeStorageFromChanges(
@@ -256,21 +256,21 @@ public class VsphereDatastoreEnumerationHelper {
         return storageDescription;
     }
 
-    public static void processFoundDatastore(VSphereIncrementalEnumerationService vSphereIncrementalEnumerationService,
+    public static void processFoundDatastore(VSphereIncrementalEnumerationService service,
                                              EnumerationProgress enumerationProgress, DatastoreOverlay ds) {
         QueryTask task = queryForStorage(
                 enumerationProgress, ds.getName(), VimUtils.convertMoRefToString(ds.getId()), null);
 
-        withTaskResults(vSphereIncrementalEnumerationService, task,
+        withTaskResults(service, task,
                 result -> {
                     if (result.documentLinks.isEmpty()) {
-                        createNewStorageDescription(vSphereIncrementalEnumerationService,
+                        createNewStorageDescription(service,
                                 enumerationProgress, ds);
                     } else {
                         StorageDescription oldDocument =
                                 convertOnlyResultToDocument(result,
                                         StorageDescription.class);
-                        updateStorageDescription(vSphereIncrementalEnumerationService, oldDocument,
+                        updateStorageDescription(service, oldDocument,
                                 enumerationProgress, ds, true);
                     }
                 });
@@ -285,7 +285,8 @@ public class VsphereDatastoreEnumerationHelper {
      * @param enumerationProgress the context of enumeration
      */
     public static void handleDatastoreChanges(VSphereIncrementalEnumerationService service,
-                                              List<DatastoreOverlay> datastores, EnumerationProgress enumerationProgress) {
+                                              List<DatastoreOverlay> datastores,
+                                              EnumerationProgress enumerationProgress) {
 
         enumerationProgress.expectDatastoreCount(datastores.size());
 

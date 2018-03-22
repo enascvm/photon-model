@@ -75,6 +75,7 @@ public class VSphereVMSnapshotEnumerationHelper {
                 .put(CustomProperties.MOREF, VimUtils.convertMoRefToString(current.getSnapshot()))
                 .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.TYPE, current.getSnapshot().getType());
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(snapshot, enumerationProgress.getVcUuid());
         return snapshot;
     }
 
