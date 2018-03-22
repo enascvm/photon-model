@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.55-SNAPSHOT
+
 ## 0.6.54
 * [vSphere] Incremental change handling for virtual machines.
 * Upgrading xenon to 1.6.4.2
