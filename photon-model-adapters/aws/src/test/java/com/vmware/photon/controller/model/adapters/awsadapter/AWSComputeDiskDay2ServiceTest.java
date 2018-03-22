@@ -143,6 +143,7 @@ public class AWSComputeDiskDay2ServiceTest {
     private TestAWSSetupUtils.AwsNicSpecs singleNicSpec;
 
     private String zoneId = TestAWSSetupUtils.regionId + avalabilityZoneIdentifier;
+    private String diskZoneId = TestAWSSetupUtils.regionId + "b";
 
     public static class DiskTaskService
             extends TaskService<DiskTaskService.DiskTaskState> {
@@ -236,6 +237,7 @@ public class AWSComputeDiskDay2ServiceTest {
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+            initResourcePoolAndComputeHost(this.zoneId);
         } catch (Throwable e) {
             throw new Exception(e);
         }
@@ -289,6 +291,46 @@ public class AWSComputeDiskDay2ServiceTest {
 
     /**
      * This test performs the following steps in sequence.
+     * 1. provision a VM with one bootdisk in us-east-1a.
+     * 2. Create an independent disk in us-east-1b and then attach it to the VM in us-east-1a.
+     * 3. Attach operation should fail when run in real mode because aws throws an error. In mock mode
+     *  attach should be successful because there is no validation in DiskDay2 service that checks the
+     *  zone mismatch.
+     */
+    @Test
+    public void tesDiskOperationsNegativeScenarios() throws Throwable {
+
+        //provisioning a vm
+        provisionVM(this.zoneId);
+
+        DiskState diskspec = createAWSDiskState(this.host, this.endpointState,
+                this.currentTestName.getMethodName() + "_disk1",
+                Boolean.TRUE, this.diskZoneId, regionId);
+
+        //create a disk
+        provisionSingleDisk(diskspec);
+
+        DiskTaskService.DiskTaskState.SubStage expectedTerminalState =
+                DiskTaskService.DiskTaskState.SubStage.FINISHED;
+
+        if (!this.isMock) {
+            //attaching a disk in us-east-1b to a vm in us-east-1a should fail.
+            expectedTerminalState = DiskTaskService.DiskTaskState.SubStage.FAILED;
+        }
+
+        performDiskOperationAndVerify(this.vmState.documentSelfLink,
+                Arrays.asList(diskspec.documentSelfLink),
+                ResourceOperation.ATTACH_DISK.operation,
+                expectedTerminalState);
+
+        this.disksToCleanUp.add(diskspec.documentSelfLink);
+
+        //VM has only boot disk.
+        deleteVMAndVerifyDisks(this.vmState.documentSelfLink, this.vmState.diskLinks);
+    }
+
+    /**
+     * This test performs the following steps in sequence.
      * 1. provision a VM with one bootdisk, two new inline disks and one existing disk.
      * 2. Create three independent disks and then explicitly attach all of them to the VM
      * 3. Detach the first two disks that are explicitly attached.
@@ -297,7 +339,6 @@ public class AWSComputeDiskDay2ServiceTest {
     @Test
     public void testDiskOperations() throws Throwable {
         Gson gson = new Gson();
-        initResourcePoolAndComputeHost(this.zoneId);
 
         DiskState diskspec1 = createAWSDiskState(this.host, this.endpointState,
                 this.currentTestName.getMethodName() + "_disk1",
@@ -309,7 +350,7 @@ public class AWSComputeDiskDay2ServiceTest {
         assertEquals(1, diskspec1.endpointLinks.size());
 
         //attach a disk while provisioning the vm
-        provisionVMAndAttachDisk(this.zoneId, diskspec1.documentSelfLink);
+        provisionVMAndAttachDisk(this.zoneId, diskspec1.documentSelfLink, true);
 
         // check that the VM has been created
         ServiceDocumentQueryResult computeQueryResult = ProvisioningUtils
@@ -369,6 +410,8 @@ public class AWSComputeDiskDay2ServiceTest {
 
         assertEquals(5, vmStateAfterExplicitDetach.diskLinks.size());
 
+        //On VM delete, two inline(Test_Volume_1 and Test_Volume_2), one non-inline external(*_disk1),
+        // one external-disk should be deleted. Only one of the attached disks should be persisted.
         deleteVMAndVerifyDisks(vmStateAfterExplicitDetach.documentSelfLink,
                 vmStateAfterExplicitDetach.diskLinks);
     }
@@ -405,9 +448,10 @@ public class AWSComputeDiskDay2ServiceTest {
             externallyProvisionedDisks.add(provisionedDisk.documentSelfLink);
 
             //attach disk to the vm.
-            performDiskOperation(vmStateBeforeAttach.documentSelfLink,
+            performDiskOperationAndVerify(vmStateBeforeAttach.documentSelfLink,
                     Arrays.asList(externallyProvisionedDisks.get(i - 2)),
-                    ResourceOperation.ATTACH_DISK.operation);
+                    ResourceOperation.ATTACH_DISK.operation,
+                    DiskTaskService.DiskTaskState.SubStage.FINISHED);
 
             ComputeState vmStateAfterAttach = this.host.getServiceState(null, ComputeState.class,
                     UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
@@ -454,8 +498,9 @@ public class AWSComputeDiskDay2ServiceTest {
     private ComputeState detachDiskAndVerify(ComputeState vmStateAfterAttach,
             List<String> detachedDiskLinks, List<String> availableDiskLinks) throws Throwable {
 
-        performDiskOperation(vmStateAfterAttach.documentSelfLink, detachedDiskLinks,
-                ResourceOperation.DETACH_DISK.operation);
+        performDiskOperationAndVerify(vmStateAfterAttach.documentSelfLink, detachedDiskLinks,
+                ResourceOperation.DETACH_DISK.operation,
+                DiskTaskService.DiskTaskState.SubStage.FINISHED);
 
         ComputeState vmStateAfterDetach = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
@@ -475,8 +520,8 @@ public class AWSComputeDiskDay2ServiceTest {
         return vmStateAfterDetach;
     }
 
-    private void performDiskOperation(String computeStateLink, List<String> diskLinks,
-            String requestType) throws Throwable {
+    private void performDiskOperationAndVerify(String computeStateLink, List<String> diskLinks,
+            String requestType, DiskTaskService.DiskTaskState.SubStage expectedTerminalState) throws Throwable {
         List<String> taskServiceLinks = new ArrayList<>();
 
         diskLinks.forEach(diskLink -> {
@@ -519,8 +564,14 @@ public class AWSComputeDiskDay2ServiceTest {
                                 UriUtils.buildUri(this.host, taskServiceLink));
 
                 // Check if the disk operation is successful or not.
-                return diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FINISHED
-                        || diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FAILED;
+                if (diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FINISHED
+                        || diskTaskState.taskSubStage == DiskTaskService.DiskTaskState.SubStage.FAILED) {
+                    assertEquals("diskOperation Task did not terminate as expected.",
+                            expectedTerminalState, diskTaskState.taskSubStage);
+                    return true;
+                } else {
+                    return false;
+                }
             });
         });
     }
@@ -605,13 +656,18 @@ public class AWSComputeDiskDay2ServiceTest {
         }
     }
 
-    private void provisionVMAndAttachDisk(String zoneId, String existingDiskLink) throws Throwable {
+    private void provisionVM(String zoneId) throws Throwable {
+        provisionVMAndAttachDisk(zoneId, null, false);
+    }
+
+    private void provisionVMAndAttachDisk(String zoneId, String existingDiskLink,
+            boolean withAdditionalDisks) throws Throwable {
         // create a AWS VM compute resource
         boolean addNonExistingSecurityGroup = true;
         this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
                 this.getClass(), this.currentTestName.getMethodName() + "_vm1", zoneId,
                 regionId, null, this.singleNicSpec, addNonExistingSecurityGroup,
-                this.awsTestContext, true);
+                this.awsTestContext, true, withAdditionalDisks);
 
         // set placement link
         if (this.vmState.customProperties == null) {
@@ -619,10 +675,14 @@ public class AWSComputeDiskDay2ServiceTest {
         }
 
         this.vmState.customProperties.put(PLACEMENT_LINK, this.computeHost.documentSelfLink);
-        this.vmState.diskLinks.add(existingDiskLink);
-        TestUtils
-                .doPatch(this.host, this.vmState, ComputeState.class, UriUtils.buildUri(this.host,
-                        this.vmState.documentSelfLink));
+
+        if (existingDiskLink != null) {
+            this.vmState.diskLinks.add(existingDiskLink);
+            TestUtils
+                    .doPatch(this.host, this.vmState, ComputeState.class,
+                            UriUtils.buildUri(this.host,
+                                    this.vmState.documentSelfLink));
+        }
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskService.ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -705,8 +765,6 @@ public class AWSComputeDiskDay2ServiceTest {
         //verify the properties of persisted disk.
         verifyPersistedDisks(this.isMock, persistedDisks);
 
-        //On VM delete, two inline(Test_Volume_1 and Test_Volume_2), one non-inline external(*_disk1),
-        // one external-disk should be deleted. Only one of the attached disks should be persisted.
         assertEquals(totalAttachedDisks.size() - deletedDisks.size(), persistedDisks.size());
     }
 

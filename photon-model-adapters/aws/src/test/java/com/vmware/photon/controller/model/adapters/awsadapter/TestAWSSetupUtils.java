@@ -1094,7 +1094,7 @@ public class TestAWSSetupUtils {
             boolean addNewSecurityGroup, Map<String, Object> awsTestContext)
             throws Throwable {
         return createAWSVMResource(host, computeHost, endpointState, clazz, vmName, zoneId,
-                regionId, tagLinks, nicSpecs, addNewSecurityGroup, awsTestContext, false);
+                regionId, tagLinks, nicSpecs, addNewSecurityGroup, awsTestContext, false, true);
     }
 
     /**
@@ -1108,7 +1108,8 @@ public class TestAWSSetupUtils {
             AwsNicSpecs nicSpecs,
             boolean addNewSecurityGroup,
             Map<String, Object> awsTestContext,
-            boolean persistDiskOnVmDelete)
+            boolean persistDiskOnVmDelete,
+            boolean withAdditionalDisks)
             throws Throwable {
 
         // Step 1: Create an auth credential to login to the VM
@@ -1203,10 +1204,13 @@ public class TestAWSSetupUtils {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
         vmDisks.add(rootDisk.documentSelfLink);
-        List<DiskState> additionalDisks = getAdditionalDiskConfiguration(host, endpointState,
-                computeHost, persistDiskOnVmDelete);
-        for (DiskState additionalDisk : additionalDisks) {
-            vmDisks.add(additionalDisk.documentSelfLink);
+
+        if (withAdditionalDisks) {
+            List<DiskState> additionalDisks = getAdditionalDiskConfiguration(host, endpointState,
+                    computeHost, persistDiskOnVmDelete);
+            for (DiskState additionalDisk : additionalDisks) {
+                vmDisks.add(additionalDisk.documentSelfLink);
+            }
         }
 
         // Create NIC States
