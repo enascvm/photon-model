@@ -1,6 +1,11 @@
 # CHANGELOG
 
-## 0.6.54-SNAPSHOT
+## 0.6.54
+* [vSphere] Incremental change handling for virtual machines.
+* Upgrading xenon to 1.6.4.2
+* Register resource operations using ServiceLocator.
+* Populate DC link as custom property in various types in vSphere needed for CI.
+* Handle expandedTags in ResourceState.copyTo()
 
 ## 0.6.53
 * [vSphere] Update Photon Model vSphere Adapters for enumeration to use the endpointLinks in lieu
