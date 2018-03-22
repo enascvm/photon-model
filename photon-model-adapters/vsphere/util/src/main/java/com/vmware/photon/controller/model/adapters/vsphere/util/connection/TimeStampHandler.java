@@ -97,14 +97,13 @@ public class TimeStampHandler extends AbstractHeaderHandler {
                         createTimestamp()).getDocumentElement();
                 securityNode.appendChild(securityNode.getOwnerDocument()
                         .importNode(timeStampNode, true));
+                SamlUtils.addTimestampUuid(smc);
             } catch (DOMException e) {
                 throw new RuntimeException(e);
             } catch (SOAPException e) {
                 throw new RuntimeException(e);
             }
         }
-
         return true;
-
     }
 }

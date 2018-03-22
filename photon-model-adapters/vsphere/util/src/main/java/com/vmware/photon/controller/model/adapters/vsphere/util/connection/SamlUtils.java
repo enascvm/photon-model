@@ -15,9 +15,11 @@ package com.vmware.photon.controller.model.adapters.vsphere.util.connection;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.UUID;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
+import javax.xml.namespace.QName;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -31,6 +33,7 @@ import org.apache.cxf.ws.security.sts.provider.model.secext.ObjectFactory;
 import org.apache.cxf.ws.security.sts.provider.model.secext.SecurityHeaderType;
 import org.apache.cxf.ws.security.sts.provider.model.utility.TimestampType;
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
@@ -52,6 +55,13 @@ public class SamlUtils {
 
     public static final String WSS_NS = "http://docs.oasis-open" +
             ".org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd";
+    public static final String WSU_ID_LOCAL_NAME = "Id";
+
+    public static final String WSU_NAMESPACE = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd";
+
+    public static final String WSU_PREFIX = "wsu";
+
+    public static final String WSU_TIMESTAMP_LOCAL_NAME = "Timestamp";
 
     public static final String XML_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
@@ -139,6 +149,38 @@ public class SamlUtils {
         }
 
         return result;
+    }
+
+    public static String addTimestampUuid(SOAPMessageContext smc)
+            throws SOAPException {
+        NodeList timestampList = smc
+                .getMessage()
+                .getSOAPHeader()
+                .getOwnerDocument()
+                .getElementsByTagNameNS(WSU_NAMESPACE,
+                        WSU_TIMESTAMP_LOCAL_NAME);
+
+        assert timestampList.getLength() <= 1;
+
+        if (timestampList.getLength() == 1) {
+            assert timestampList.item(0).getNodeType() == Node.ELEMENT_NODE;
+
+            Element timestamp = (Element) timestampList.item(0);
+            String timestampId = "_" + UUID.randomUUID().toString();
+            timestamp.setAttributeNS(WSU_NAMESPACE,
+                    timestamp.getPrefix() + ":" + WSU_ID_LOCAL_NAME,
+                    timestampId);
+            return timestampId;
+        }
+        return null;
+    }
+
+    public static String addSoapBodyUuid(SOAPMessageContext smc)
+            throws SOAPException {
+        String id = "_" + UUID.randomUUID().toString();
+        smc.getMessage().getSOAPBody().addAttribute(
+                new QName(WSU_NAMESPACE, WSU_ID_LOCAL_NAME, WSU_PREFIX), id);
+        return id;
     }
 
 }

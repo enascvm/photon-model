@@ -44,6 +44,7 @@ public class SamlTokenHandler extends AbstractHeaderHandler {
                         .getOrCreateSOAPHeader(smc));
                 securityNode.appendChild(securityNode.getOwnerDocument()
                         .importNode(this.token, true));
+                SamlUtils.addSoapBodyUuid(smc);
             } catch (DOMException e) {
                 throw new RuntimeException(e);
             } catch (SOAPException e) {
@@ -51,6 +52,5 @@ public class SamlTokenHandler extends AbstractHeaderHandler {
             }
         }
         return true;
-
     }
 }

@@ -23,6 +23,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
@@ -123,7 +125,7 @@ public class VSphereIOThreadPool {
             connection.setTrustManager(ServerX509TrustManager.getInstance());
         }
 
-        if (UriPaths.IAAS_API_ENABLED) {
+        if (UriPaths.IAAS_API_ENABLED && !StringUtils.equalsIgnoreCase(auth.type, "Username")) {
             connection.setToken(EncryptionUtils.decrypt(auth.privateKey));
         } else {
             connection.setUsername(auth.privateKeyId);

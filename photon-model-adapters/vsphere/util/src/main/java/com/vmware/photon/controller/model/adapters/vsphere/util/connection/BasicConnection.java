@@ -224,32 +224,44 @@ public class BasicConnection implements Connection {
             throws RuntimeFaultFaultMsg, InvalidLocaleFaultMsg, InvalidLoginFaultMsg,
             com.vmware.pbm.RuntimeFaultFaultMsg {
 
-        this.vimPort = getVimService().getVimPort();
-        updateBindingProvider(getBindingsProvider(), this.uri.toString());
-        this.serviceContent = this.vimPort
-                .retrieveServiceContent(this.getServiceInstanceReference());
         if (this.token != null) {
-            HandlerResolver defaultResolver = getVimService().getHandlerResolver();
-            HeaderHandlerResolver handlerResolver = new HeaderHandlerResolver();
-            handlerResolver.addHandler(new TimeStampHandler());
-            handlerResolver.addHandler(new SamlTokenExtractionHandler());
+            /* This lock exists because header handlers are set per VimService.
+            LoginByToken and normal login with username and password are using different sets of
+            header handlers. If the correct handlers are not set, the connection will fail */
+            synchronized (BasicConnection.class) {
+                HandlerResolver defaultResolver = getVimService().getHandlerResolver();
+                HeaderHandlerResolver handlerResolver = new HeaderHandlerResolver();
+                handlerResolver.addHandler(new TimeStampHandler());
+                handlerResolver.addHandler(new SamlTokenExtractionHandler());
 
-            try {
-                handlerResolver.addHandler(new SamlTokenHandler(SamlUtils.createSamlDocument
-                        (this.token).getDocumentElement()));
-            } catch (ParserConfigurationException | SAXException | IOException e) {
-                throw new RuntimeFaultFaultMsg("Unable to authenticate", e);
+                try {
+                    handlerResolver.addHandler(new SamlTokenHandler(SamlUtils.createSamlDocument
+                            (this.token).getDocumentElement()));
+                    getVimService().setHandlerResolver(handlerResolver);
+                } catch (ParserConfigurationException | SAXException | IOException e) {
+                    throw new RuntimeFaultFaultMsg("Unable to authenticate", e);
+                }
+
+                this.vimPort = getVimService().getVimPort();
+                updateBindingProvider(getBindingsProvider(), this.uri.toString());
+                this.serviceContent = this.vimPort
+                        .retrieveServiceContent(this.getServiceInstanceReference());
+
+                try {
+                    this.userSession = this.vimPort.loginByToken(
+                            this.serviceContent.getSessionManager(),
+                            null);
+                } finally {
+                    getVimService().setHandlerResolver(defaultResolver);
+                }
             }
 
-            try {
-                getVimService().setHandlerResolver(handlerResolver);
-                this.userSession = this.vimPort
-                        .loginByToken(this.serviceContent.getSessionManager(),
-                                null);
-            } finally {
-                getVimService().setHandlerResolver(defaultResolver);
-            }
         } else {
+            this.vimPort = getVimService().getVimPort();
+            updateBindingProvider(getBindingsProvider(), this.uri.toString());
+            this.serviceContent = this.vimPort
+                    .retrieveServiceContent(this.getServiceInstanceReference());
+
             this.userSession = this.vimPort.login(
                     this.serviceContent.getSessionManager(),
                     this.username,
