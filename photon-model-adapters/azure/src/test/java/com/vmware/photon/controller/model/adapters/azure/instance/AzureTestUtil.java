@@ -190,7 +190,7 @@ public class AzureTestUtil {
 
     public static final String AZURE_RESOURCE_GROUP_LOCATION = "westus";
 
-    public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_LRS";
+    public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
 
     /*
      * VERY IMPORTANT: Do NOT change the vNet-subnet name to something random/unique per test run.
@@ -765,8 +765,6 @@ public class AzureTestUtil {
         public int numberOfAdditionalDisks;
         public List<String> externalDiskLinks;
         public boolean isManagedDisk;
-        public String storageAccountName;
-        public String resourceGroupForStorageAccount;
 
         public enum PersistentDisks {
             NONE,
@@ -811,12 +809,6 @@ public class AzureTestUtil {
 
         public VMResourceSpec withPersistentDisks(PersistentDisks persist) {
             this.persistentDisks = persist;
-            return this;
-        }
-
-        public VMResourceSpec withExistingStorageAccount(String storageAccountName, String resourceGroupName) {
-            this.storageAccountName = storageAccountName;
-            this.resourceGroupForStorageAccount = resourceGroupName;
             return this;
         }
     }
@@ -943,22 +935,12 @@ public class AzureTestUtil {
                 rootDisk.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE, SkuName.STANDARD_LRS.toString());
             } else {
                 rootDisk.imageLink = spec.imageSource.asImageState().documentSelfLink;
-                if (spec.storageAccountName == null || spec.resourceGroupForStorageAccount == null) {
-                    rootDisk.customProperties.put(
-                            AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
-                            (spec.azureVmName + "sa").replaceAll("[_-]", "").toLowerCase());
-                    rootDisk.customProperties.put(
-                            AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
-                            defaultVmRGName);
-                } else {
-                    rootDisk.customProperties.put(
-                            AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
-                            spec.storageAccountName);
-                    rootDisk.customProperties.put(
-                            AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
-                            spec.resourceGroupForStorageAccount);
-                }
-
+                rootDisk.customProperties.put(
+                        AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
+                        (spec.azureVmName + "sa").replaceAll("[_-]", "").toLowerCase());
+                rootDisk.customProperties.put(
+                        AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                        defaultVmRGName);
                 rootDisk.customProperties.put(
                         AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                         AZURE_STORAGE_ACCOUNT_TYPE);
@@ -1219,7 +1201,6 @@ public class AzureTestUtil {
             dataDisk.storageType = AZURE_STORAGE_DISKS;
             dataDisk.customProperties = new HashMap<>();
             dataDisk.customProperties.put(AZURE_DATA_DISK_CACHING, DEFAULT_DATA_DISK_CACHING.toString());
-            dataDisk.persistent = false;
 
             //Conditionally set persistence flag on additional disks
             if (persist == VMResourceSpec.PersistentDisks.ALL) {
@@ -1231,7 +1212,6 @@ public class AzureTestUtil {
             }
 
             if (!isManagedDisk) {
-
                 dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
                         (azureVMName + "sa").replace("-", "").toLowerCase());
                 dataDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
