@@ -89,6 +89,7 @@ public class AzureConstants {
     public static final String AZURE_VM_POWER_STATE_STOPPED = "PowerState/stopped";
     public static final String AZURE_VM_PROVISIONING_STATE_SUCCEEDED = "ProvisioningState/succeeded";
     public static final String PROVISIONING_STATE_SUCCEEDED = "Succeeded";
+    public static final String PROVISIONING_STATE_FAILED_NO_SUBNET = "NoSubnetFound";
     public static final String PROVIDER_REGISTRED_STATE = "REGISTERED";
     public static final String AZURE_URN_VERSION_LATEST = "latest";
     public static final String ORDER_BY_VM_IMAGE_RESOURCE_NAME_DESC = "name desc";

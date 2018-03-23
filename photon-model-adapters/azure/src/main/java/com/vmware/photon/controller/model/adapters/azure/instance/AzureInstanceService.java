@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.MISSING_SUBSCRIPTION_CODE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_FAILED_NO_SUBNET;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
@@ -78,11 +79,13 @@ import com.microsoft.azure.management.compute.StorageProfile;
 import com.microsoft.azure.management.compute.VirtualHardDisk;
 import com.microsoft.azure.management.compute.VirtualMachine;
 import com.microsoft.azure.management.compute.VirtualMachineSizeTypes;
+import com.microsoft.azure.management.compute.implementation.AvailabilitySetInner;
 import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.implementation.ComputeManager;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.ManagedDiskParametersInner;
 import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
+import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineImageResourceInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.AddressSpace;
@@ -386,7 +389,7 @@ public class AzureInstanceService extends StatelessService {
                 getStorageKeys(ctx, AzureInstanceStage.FINISHED);
                 break;
             case DELETE:
-                deleteVM(ctx);
+                deleteVM(ctx, AzureInstanceStage.FINISHED);
                 break;
             case FINISHED:
                 // This is the ultimate exit point with success of the state machine
@@ -438,9 +441,9 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private void deleteVM(AzureInstanceContext ctx) {
+    private void deleteVM(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
         if (ctx.computeRequest.isMockRequest) {
-            handleAllocation(ctx, AzureInstanceStage.FINISHED);
+            handleAllocation(ctx, nextStage);
             return;
         }
 
@@ -449,19 +452,87 @@ public class AzureInstanceService extends StatelessService {
         if (rgName == null || rgName.isEmpty()) {
             throw new IllegalArgumentException("Resource group name is required");
         }
+        ctx.resourceGroupName = rgName;
 
-        ResourceGroupsInner azureClient = getResourceManagementClientImpl(ctx)
-                .resourceGroups();
+        DeferredResult.completed(ctx)
+                .thenCompose(this::deleteVirtualMachine)
+                .thenCompose(this::getAvailabilitySets)
+                .thenCompose(this::deleteResourceGroup)
+                .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
+    }
 
-        String msg = "Deleting resource group [" + rgName + "] for [" + ctx.vmName + "] VM";
+    private DeferredResult<AzureInstanceContext> getAvailabilitySets(AzureInstanceContext ctx) {
+        String msg = "Getting availability sets. ResourceGroup [" + ctx.resourceGroupName + "]";
 
-        AzureDeferredResultServiceCallback<Void> callback = new Default<>(this, msg);
+        ComputeManagementClientImpl computeManager = getComputeManagementClientImpl(ctx);
 
-        azureClient.deleteAsync(rgName, callback);
+        AzureDeferredResultServiceCallbackWithRetry<List<AvailabilitySetInner>>
+                getAvailabilitySetsCallback = new AzureDeferredResultServiceCallbackWithRetry
+                <List<AvailabilitySetInner>>
+                (this, msg) {
+                    protected DeferredResult<List<AvailabilitySetInner>> consumeSuccess(
+                            List<AvailabilitySetInner> result) {
+                        ctx.availabilitySetInners = result;
+                        return DeferredResult.completed(result);
+                    }
 
-        callback.toDeferredResult()
-                .thenApply(ignore -> ctx)
-                .whenComplete(thenAllocation(ctx, AzureInstanceStage.FINISHED));
+                    protected Runnable retryServiceCall(
+                            ServiceCallback<List<AvailabilitySetInner>> retryCallback) {
+                        return () -> computeManager.availabilitySets()
+                                .listByResourceGroupAsync(ctx.resourceGroupName, retryCallback);
+                    }
+                };
+
+        computeManager.availabilitySets()
+                .listByResourceGroupAsync(ctx.resourceGroupName, getAvailabilitySetsCallback);
+
+        return getAvailabilitySetsCallback.toDeferredResult().thenApply(result -> ctx);
+    }
+
+    private DeferredResult<AzureInstanceContext> deleteVirtualMachine(AzureInstanceContext ctx) {
+        String msg = "Deleting virtual machine [" + ctx.vmName + "]";
+        ComputeManagementClientImpl computeManager = getComputeManagementClientImpl(ctx);
+
+        AzureDeferredResultServiceCallback<OperationStatusResponseInner>
+                deleteVirtualMachineCallback =
+                    new AzureDeferredResultServiceCallback<OperationStatusResponseInner>(this, msg) {
+                    protected DeferredResult<OperationStatusResponseInner> consumeSuccess(
+                            OperationStatusResponseInner result) {
+                        logInfo("Successfully deleted VM: " + ctx.vmName);
+                        return DeferredResult.completed(result);
+                    }
+                };
+
+        computeManager.virtualMachines()
+                .deleteAsync(ctx.resourceGroupName, ctx.vmName, deleteVirtualMachineCallback);
+
+        return deleteVirtualMachineCallback.toDeferredResult().thenApply(result -> ctx);
+    }
+
+    private DeferredResult<AzureInstanceContext> deleteResourceGroup(AzureInstanceContext ctx) {
+        String msg = "Deleting resource group [" + ctx.resourceGroupName + "]";
+
+        if (ctx.availabilitySetInners == null ||
+                ctx.availabilitySetInners.size() == 0 ||
+                ctx.availabilitySetInners.get(0).virtualMachines() == null ||
+                ctx.availabilitySetInners.get(0).virtualMachines().size() == 0) {
+            // there are no other machine in this cluster,  delete the resource group
+            ResourceGroupsInner resourceGoups = getResourceManagementClientImpl(ctx)
+                    .resourceGroups();
+            AzureDeferredResultServiceCallback<Void> deleteResourceGroupCallback =
+                    new AzureDeferredResultServiceCallback<Void>(this, msg) {
+                        protected DeferredResult<Void> consumeSuccess(Void result) {
+                            logInfo("Successfully deleted resource group: "
+                                    + ctx.resourceGroupName);
+                            return DeferredResult.completed(result);
+                        }
+                    };
+            resourceGoups.deleteAsync(ctx.resourceGroupName, deleteResourceGroupCallback);
+
+            return deleteResourceGroupCallback.toDeferredResult().thenApply(result -> ctx);
+        }
+
+        return DeferredResult.completed(ctx);
     }
 
     /**
@@ -922,6 +993,9 @@ public class AzureInstanceService extends StatelessService {
             protected String getProvisioningState(VirtualNetworkInner vNet) {
                 // Return first NOT Succeeded state,
                 // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
+                if (vNet.subnets().size() == 0) {
+                    return PROVISIONING_STATE_FAILED_NO_SUBNET;
+                }
                 String subnetPS = vNet.subnets().stream()
                         .map(SubnetInner::provisioningState)
                         // Get if any is NOT Succeeded...

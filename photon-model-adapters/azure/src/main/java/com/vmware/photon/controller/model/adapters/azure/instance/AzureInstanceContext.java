@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import com.microsoft.azure.management.compute.AvailabilitySet;
 import com.microsoft.azure.management.compute.Disk;
 import com.microsoft.azure.management.compute.VirtualMachine;
+import com.microsoft.azure.management.compute.implementation.AvailabilitySetInner;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
@@ -125,8 +126,10 @@ public class AzureInstanceContext extends
 
     // The RG the VM provisioning lands
     public ResourceGroupInner resourceGroup;
+    public String resourceGroupName;
 
     public AvailabilitySet availabilitySet;
+    public List<AvailabilitySetInner> availabilitySetInners;
 
     public String storageAccountName;
     public String storageAccountRGName;

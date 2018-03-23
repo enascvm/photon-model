@@ -87,15 +87,19 @@ import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskServic
 import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
+import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
+import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 /**
  * Tests for {@link AzureLoadBalancerService}.
@@ -208,6 +212,10 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
             return;
         }
 
+        // delete VMs
+        deleteVirtualMachines();
+
+        // delete load balancer
         this.rgOpsClient.deleteAsync(this.rgName, new AzureAsyncCallback<Void>() {
             @Override
             protected void onError(Throwable e) {
@@ -218,6 +226,45 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
             @Override
             protected void onSuccess(Void result) {
                 // Do nothing.
+            }
+        });
+    }
+
+    private void deleteVirtualMachines() {
+        List<ResourceRemovalTaskState> removeTaskStates = this.vmStates.stream()
+                .map(vmState -> {
+                    getHost().log(Level.INFO, "%s: Deleting [%s] VM",
+                            this.currentTestName.getMethodName(), vmState.name);
+
+                    try {
+                        QuerySpecification resourceQuerySpec = new QuerySpecification();
+                        resourceQuerySpec.query
+                                .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
+                                .setTermMatchValue(vmState.documentSelfLink);
+
+                        ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
+                        deletionState.resourceQuerySpec = resourceQuerySpec;
+                        deletionState.isMockRequest = isMock;
+
+                        // Post/Start the ResourceRemovalTaskState...
+                        deletionState = TestUtils
+                                .doPost(host, deletionState, ResourceRemovalTaskState.class,
+                                        UriUtils.buildUri(host, ResourceRemovalTaskService.FACTORY_LINK));
+                        return deletionState;
+                    } catch (Throwable deleteExc) {
+                        // just log and move on
+                        getHost().log(Level.WARNING, "%s: Deleting [%s] VM: FAILED. Details: %s",
+                                this.currentTestName.getMethodName(), vmState.name,
+                                deleteExc.getMessage());
+                        return null;
+                    }
+                })
+                .collect(Collectors.toList());
+
+        removeTaskStates.forEach(deletionState -> {
+            if (deletionState != null) {
+                getHost().waitForFinishedTask(
+                        ResourceRemovalTaskState.class, deletionState.documentSelfLink);
             }
         });
     }
