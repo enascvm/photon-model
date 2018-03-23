@@ -815,6 +815,13 @@ public class AWSInstanceService extends StatelessService {
                     patchOperations.addAll(createPatchNICStatesOperations(this.context.nics,
                             ((Instance) instance)));
 
+                    //update the devicename for bootdisk
+                    if (((Instance) instance).getRootDeviceType()
+                            .equals(AWSStorageType.EBS.getName())) {
+                        this.context.bootDisk.customProperties
+                                .put(DEVICE_NAME, ((Instance) instance).getRootDeviceName());
+                    }
+
                     updateAndTagDisks(this.context.bootDisk, this.context.imageDisks,
                             this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings(),
                             regionId, computeHostLink, sourceTaskLink,
@@ -1477,7 +1484,6 @@ public class AWSInstanceService extends StatelessService {
             updateDeviceMapping(rootDeviceType, requestedType, rootDeviceMapping.getDeviceName(),
                     ebs, bootDisk);
             bootDisk.customProperties.put(DEVICE_TYPE, AWSStorageType.EBS.getName());
-            bootDisk.customProperties.put(DEVICE_NAME, rootDeviceMapping.getDeviceName());
             bootDisk.customProperties.put(VOLUME_TYPE, ebs.getVolumeType());
             if (ebs.getIops() != null) {
                 bootDisk.customProperties.put(DISK_IOPS, String.valueOf(ebs.getIops()));
