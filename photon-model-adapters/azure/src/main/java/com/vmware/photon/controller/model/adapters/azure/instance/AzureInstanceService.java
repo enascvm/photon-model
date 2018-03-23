@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_MANAGED_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTER_NAME;
@@ -31,6 +32,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_FAILED_NO_SUBNET;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getStorageAccountKeyName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
@@ -40,6 +42,8 @@ import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.security.InvalidKeyException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -64,6 +68,7 @@ import com.microsoft.azure.CloudError;
 import com.microsoft.azure.CloudException;
 import com.microsoft.azure.SubResource;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
+import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.AvailabilitySet;
 import com.microsoft.azure.management.compute.AvailabilitySetSkuTypes;
 import com.microsoft.azure.management.compute.CachingTypes;
@@ -119,6 +124,11 @@ import com.microsoft.azure.management.storage.implementation.StorageAccountCreat
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
 import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
 import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
+import com.microsoft.azure.storage.CloudStorageAccount;
+import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.blob.CloudBlobClient;
+import com.microsoft.azure.storage.blob.CloudBlobContainer;
+import com.microsoft.azure.storage.blob.CloudPageBlob;
 import com.microsoft.rest.ServiceCallback;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -159,6 +169,7 @@ import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
@@ -458,6 +469,7 @@ public class AzureInstanceService extends StatelessService {
                 .thenCompose(this::deleteVirtualMachine)
                 .thenCompose(this::getAvailabilitySets)
                 .thenCompose(this::deleteResourceGroup)
+                .thenCompose(this::deleteVHDBlobsForUnmangedDisks)
                 .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
     }
 
@@ -533,6 +545,162 @@ public class AzureInstanceService extends StatelessService {
         }
 
         return DeferredResult.completed(ctx);
+    }
+
+
+    private DeferredResult<AzureInstanceContext> deleteVHDBlobsForUnmangedDisks(
+            AzureInstanceContext ctx) {
+
+        return fetchDiskStatesToDelete(ctx)
+                .thenCompose(this::getStorageAccountKeysForUnManagedDisks)
+                .thenCompose(this::deleteVHDBlobsInAzure)
+                .thenApply(ignore -> ctx);
+    }
+
+
+    private DeferredResult<AzureInstanceContext> getStorageAccountKeysForUnManagedDisks(
+            AzureInstanceContext ctx) {
+
+        //short circuit for managed disks
+        if (isManagedDisk().test(ctx.bootDiskState)) {
+            return DeferredResult.completed(ctx);
+        }
+
+        DeferredResult<AzureInstanceContext> dr = new DeferredResult<>();
+        List<Operation> fetchAuthCredsForStorageAccount = new ArrayList<>();
+
+        fetchAuthCredsForStorageAccount.add(
+                Operation.createGet(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
+                        ctx.bootDiskState.storageDescription.authCredentialsLink))).setReferer(getUri()));
+
+        for (DiskService.DiskStateExpanded disk: ctx.dataDiskStates) {
+            //add null check as all disk will not have it
+            if (disk.storageDescription != null && disk.storageDescription.authCredentialsLink != null) {
+                fetchAuthCredsForStorageAccount.add(
+                        Operation.createGet(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
+                                disk.storageDescription.authCredentialsLink))).setReferer(getUri()));
+            }
+        }
+
+        OperationJoin.create(fetchAuthCredsForStorageAccount).setCompletion((ops, exc) -> {
+            if (exc == null || exc.size() == 0) {
+                ctx.storageAccountKeysForDisks = new HashMap<>();
+                for (Operation authGet: ops.values()) {
+                    AuthCredentialsServiceState auth = authGet.getBody(AuthCredentialsServiceState.class);
+                    ctx.storageAccountKeysForDisks.put(auth.documentSelfLink, auth.customProperties.get(AZURE_STORAGE_ACCOUNT_KEY1));
+                }
+                dr.complete(ctx);
+
+            } else {
+                dr.fail(new Throwable("unable to get storage account keys for disks"));
+            }
+        }).sendWith(getHost());
+
+        return dr;
+    }
+
+    private DeferredResult<Void> deleteVHDBlobsInAzure(AzureInstanceContext ctx) {
+
+        //Create DR
+        DeferredResult<Void> dr = new DeferredResult();
+
+        if (isManagedDisk().test(ctx.bootDiskState)) {
+            return DeferredResult.completed(null);
+        }
+
+        String defaultSAName = ctx.bootDiskState.storageDescription.name;
+        String defaultSAKey =  ctx.storageAccountKeysForDisks.get(ctx.bootDiskState.storageDescription.authCredentialsLink);
+
+        List<DiskService.DiskStateExpanded> diskStatesToDelete = ctx.dataDiskStates.stream()
+                .filter(disk -> disk.persistent == false)
+                .collect(Collectors.toList());
+
+        if (ctx.bootDiskState.persistent == false) {
+            diskStatesToDelete.add(ctx.bootDiskState);
+        }
+
+        OperationContext opCtx = OperationContext.getOperationContext();
+
+        CompletableFuture.runAsync(() -> {
+            diskStatesToDelete.forEach(disk -> {
+                try {
+                    CloudStorageAccount storageAccountOfVHDBlob;
+                    if (disk.storageDescription == null) {
+                        storageAccountOfVHDBlob = CloudStorageAccount.parse(
+                                String.format(STORAGE_CONNECTION_STRING, defaultSAName, defaultSAKey));
+
+                    } else {
+                        String key = ctx.storageAccountKeysForDisks.get(disk.storageDescription.authCredentialsLink);
+                        storageAccountOfVHDBlob = CloudStorageAccount.parse(
+                                String.format(STORAGE_CONNECTION_STRING,
+                                        disk.storageDescription.name, key));
+                    }
+
+                    CloudBlobClient client = storageAccountOfVHDBlob.createCloudBlobClient();
+                    CloudBlobContainer container = client.getContainerReference("vhds");
+                    String vhdBlobName = disk.id.substring(disk.id.lastIndexOf("/") + 1);
+                    CloudPageBlob blob = container.getPageBlobReference(vhdBlobName);
+                    blob.deleteIfExists();
+                } catch (URISyntaxException | InvalidKeyException | StorageException e) {
+                    logSevere("Unable to delete VHD file for disk [%s] because of %s ", disk.name, e.toString());
+                }
+            });
+
+        }, getHost().allocateExecutor(this)).whenComplete((obj, throwable) -> {
+            OperationContext.restoreOperationContext(opCtx);
+            dr.complete(obj);
+        });
+
+        return dr;
+    }
+
+    private DeferredResult<AzureInstanceContext> fetchDiskStatesToDelete(AzureInstanceContext ctx) {
+
+        //fetch ComputeState and Get disk states
+
+        DeferredResult<AzureInstanceContext> dr = new DeferredResult<>();
+
+        Operation op = Operation.createGet(ctx.computeRequest.resourceReference);
+        op.setCompletion((o, e) -> {
+
+            if (e != null) {
+                dr.fail(new Throwable("Unable to fetch compute state for deleted VM. " + e.getMessage()));
+                return;
+            }
+
+            ComputeState cs = o.getBody(ComputeState.class);
+            List<Operation> fetchAllVMDisks = new ArrayList<>();
+            for (String diskLink: cs.diskLinks) {
+                fetchAllVMDisks.add(Operation.createGet(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
+                        diskLink))).setReferer(getUri()));
+
+            }
+            OperationJoin.create(fetchAllVMDisks).setCompletion((ops, exc) -> {
+                        List<DiskService.DiskStateExpanded> diskStates = new ArrayList<>();
+                        if (exc == null || exc.size() == 0) {
+                            //assign boot disk and data disk to context
+                            ctx.dataDiskStates = new ArrayList<>();
+                            for (Operation diskGet: ops.values()) {
+                                DiskService.DiskStateExpanded disk = diskGet.getBody(
+                                        DiskService.DiskStateExpanded.class);
+                                if (disk.bootOrder != null && disk.bootOrder == 1) {
+                                    ctx.bootDiskState = disk;
+                                } else {
+                                    ctx.dataDiskStates.add(disk);
+                                }
+                            }
+                            dr.complete(ctx);
+                        } else {
+                            String stacktrace = Utils.toString(exc);
+                            dr.fail(new Throwable("unable to fetch disks to delete for " + cs.name + "Error = " + stacktrace));
+                            return;
+                        }
+                    }
+            ).sendWith(getHost());
+        });
+        sendRequest(op);
+
+        return dr;
     }
 
     /**
@@ -677,6 +845,12 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private void createPersistentDisks(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
+        // This flow is not applicable for un-managed disk so move to next stage
+        if (!ctx.useManagedDisks()) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
 
         // In case of No Persistent disks return and move on.
         if (ctx.dataDiskStates.stream().filter(diskStateExpanded ->
@@ -1587,7 +1761,7 @@ public class AzureInstanceService extends StatelessService {
 
         for (DiskService.DiskStateExpanded diskState : ctx.dataDiskStates) {
 
-            if (diskState.persistent == true) {
+            if (diskState.persistent == true && ctx.useManagedDisks()) {
                 continue;
             }
             final DataDisk dataDisk = new DataDisk();
@@ -2201,6 +2375,10 @@ public class AzureInstanceService extends StatelessService {
 
     private ComputeManagementClientImpl getComputeManagementClientImpl(AzureInstanceContext ctx) {
         return ctx.azureSdkClients.getComputeManagementClientImpl();
+    }
+
+    private Azure getAzureClient(AzureInstanceContext ctx) {
+        return ctx.azureSdkClients.getAzureClient();
     }
 
     private ComputeManager getComputeManager(AzureInstanceContext ctx) {

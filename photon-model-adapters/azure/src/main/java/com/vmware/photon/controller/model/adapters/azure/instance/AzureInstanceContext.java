@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -109,6 +110,7 @@ public class AzureInstanceContext extends
     public List<DiskService.DiskStateExpanded> externalDataDisks;
     public List<Disk> persistentDisks;
     public String rgNameForPersistentDisks;
+    public Map<String, String> storageAccountKeysForDisks;
 
     public String vmName;
     public String vmId;
