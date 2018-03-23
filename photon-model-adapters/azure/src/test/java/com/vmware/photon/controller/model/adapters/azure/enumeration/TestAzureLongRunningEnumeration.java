@@ -855,7 +855,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
             // tag Security Group
             NetworkSecurityGroupInner sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
-                    azureVMNames.get(i), AZURE_SECURITY_GROUP_NAME);
+                    azureVMNames.get(i), AZURE_SECURITY_GROUP_NAME + "-" + azureVMNames.get(i));
 
             Map<String, String> sgTags = new HashMap<>();
             sgTags.put(SG_TAG_KEY_PREFIX + azureVMNames.get(i), SG_TAG_VALUE);
