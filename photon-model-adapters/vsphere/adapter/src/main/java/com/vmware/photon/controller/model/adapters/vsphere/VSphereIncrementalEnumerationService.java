@@ -28,7 +28,6 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.vmware.pbm.PbmProfile;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -228,21 +227,30 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                 if (!resourcesUpdates.isEmpty()) {
                                     SegregatedOverlays segregatedOverlays =
                                             segregateObjectUpdates(enumerationProgress, resourcesUpdates);
-
+                                    this.logInfo("Processing incremental changes for networks for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereNetworkEnumerationHelper
                                             .handleNetworkChanges(this, segregatedOverlays.networks, enumerationProgress, client);
+                                    this.logInfo("Processing incremental changes for Datastores for datacenter [%s]!", collectorDetails.datacenter);
                                     VsphereDatastoreEnumerationHelper
                                             .handleDatastoreChanges(this, segregatedOverlays.datastores, enumerationProgress);
+                                    this.logInfo("Processing incremental changes for compute resource for datacenter [%s]!", collectorDetails.datacenter);
                                     VsphereComputeResourceEnumerationHelper
                                             .handleComputeResourceChanges(this, segregatedOverlays.clusters, enumerationProgress, client);
+                                    this.logInfo("Processing incremental changes for host system for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereHostSystemEnumerationHelper
                                             .handleHostSystemChanges(this, segregatedOverlays.hosts, enumerationProgress, client);
+                                    this.logInfo("Processing incremental changes for resource pool for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereResourcePoolEnumerationHelper
                                             .handleResourcePoolChanges(this, segregatedOverlays.resourcePools, enumerationProgress, client);
                                 }
                                 if (!vmUpdates.isEmpty()) {
+                                    this.logInfo("Processing incremental changes for virtual machines for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereVirtualMachineEnumerationHelper.handleVMChanges(this, vmUpdates, enumerationProgress, client);
                                 }
+
+                                //sync storage profiles
+                                this.logInfo("Syncing storage profiles for datacenter [%s]!", collectorDetails.datacenter);
+                                VsphereStoragePolicyEnumerationHelper.syncStorageProfiles(this, client, enumerationProgress);
                             }
                             mgr.patchTask(TaskStage.FINISHED);
                         } catch (Exception exception) {
@@ -543,22 +551,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             logWarning(() -> "Error processing datastore host mount information" + ": " + e.toString());
         }
 
-        try {
-            List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
-            if (!pbmProfiles.isEmpty()) {
-                for (PbmProfile profile : pbmProfiles) {
-                    List<String> datastoreNames = client.getDatastores(profile.getProfileId());
-                    StoragePolicyOverlay spOverlay = new StoragePolicyOverlay(profile, datastoreNames);
-                    storagePolicies.add(spOverlay);
-                }
-            }
-        } catch (Exception e) {
-            // vSphere throws exception even if there are no storage policies found on the server.
-            // Hence we can just log the message and continue, as with the datastore selection
-            // still provisioning can proceed. Not marking the task to failure here.
-            String msg = "Error processing Storage policy ";
-            logWarning(() -> msg + ": " + e.toString());
-        }
+        storagePolicies = VsphereStoragePolicyEnumerationHelper.createStorageProfileOverlays(this, client);
 
         // process results in topological order
         ctx.expectNetworkCount(segregatedOverlays.networks.size());

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import com.vmware.pbm.PbmProfile;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -237,5 +238,46 @@ public class VsphereStoragePolicyEnumerationHelper {
                 updateStoragePolicy(service, oldDocument, enumerationProgress, sp);
             }
         });
+    }
+
+    static List<StoragePolicyOverlay> createStorageProfileOverlays(VSphereIncrementalEnumerationService service, EnumerationClient client) {
+        List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
+        try {
+            List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
+            if (!pbmProfiles.isEmpty()) {
+                for (PbmProfile profile : pbmProfiles) {
+                    List<String> datastoreNames = client.getDatastores(profile.getProfileId());
+                    StoragePolicyOverlay spOverlay = new StoragePolicyOverlay(profile, datastoreNames);
+                    storagePolicies.add(spOverlay);
+                }
+            }
+        } catch (Exception e) {
+            // vSphere throws exception even if there are no storage policies found on the server.
+            // Hence we can just log the message and continue, as with the datastore selection
+            // still provisioning can proceed. Not marking the task to failure here.
+            String msg = "Error processing Storage policy ";
+            service.logWarning(() -> msg + ": " + e.toString());
+        }
+        return storagePolicies;
+    }
+
+    public static void syncStorageProfiles(VSphereIncrementalEnumerationService service, EnumerationClient client, EnumerationProgress ctx) {
+        List<StoragePolicyOverlay> storagePolicies;
+
+        storagePolicies = createStorageProfileOverlays(service, client);
+        if (storagePolicies.size() > 0) {
+            ctx.expectStoragePolicyCount(storagePolicies.size());
+            for (StoragePolicyOverlay sp : storagePolicies) {
+                processFoundStoragePolicy(service, ctx, sp);
+            }
+
+            // checkpoint for storage policy
+            try {
+                ctx.getStoragePolicyTracker().await();
+            } catch (InterruptedException e) {
+                service.logSevere("Error while syncing storage profiles!");
+                return;
+            }
+        }
     }
 }
