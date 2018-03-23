@@ -1090,6 +1090,7 @@ public class AWSInstanceService extends StatelessService {
                 diskState.computeHostLink = computeHostLink;
                 diskState.customProperties.put(SOURCE_TASK_LINK, sourceTaskLink);
                 diskState.tenantLinks = tenantLinks;
+                diskState.origin = DiskService.DiskOrigin.DEPLOYED;
 
                 String deviceType = diskState.customProperties.get(DEVICE_TYPE);
                 if (deviceType.equals(AWSStorageType.EBS.getName())) {

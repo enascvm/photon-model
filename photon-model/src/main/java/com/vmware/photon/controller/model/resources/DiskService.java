@@ -55,6 +55,10 @@ public class DiskService extends StatefulService {
         DETACHED, ATTACHED, AVAILABLE
     }
 
+    public static enum DiskOrigin {
+        DEPLOYED, COLLECTED
+    }
+
     /**
      * Types of disk.
      */
@@ -140,6 +144,12 @@ public class DiskService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public DiskStatus status;
+
+        /**
+         * Origin of this disk.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public DiskOrigin origin;
 
         /**
          * Capacity (in MB) of this disk service instance.

@@ -359,6 +359,7 @@ public class AWSDiskService extends StatelessService {
         }
 
         diskState.status = DiskService.DiskStatus.AVAILABLE;
+        diskState.origin = DiskService.DiskOrigin.DEPLOYED;
 
         diskState.encrypted = volume.getEncrypted();
 

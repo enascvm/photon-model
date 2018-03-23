@@ -789,6 +789,7 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                     // Add internal type tag with for all EBS Disk States.
                     diskState.tagLinks.add(this.context.internalTypeTagSelfLink);
                 }
+                diskState.origin = DiskService.DiskOrigin.COLLECTED;
             }
 
             mapAttachmentState(diskState, volume);
