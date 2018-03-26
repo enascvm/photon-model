@@ -385,8 +385,15 @@ public class EndpointAllocationTaskService
                     this.getHost().nextUUID());
         }
 
+        // merge endpoint and task tenant links
         if (es.tenantLinks == null || es.tenantLinks.isEmpty()) {
             es.tenantLinks = currentState.tenantLinks;
+        } else if (currentState.tenantLinks != null) {
+            currentState.tenantLinks.forEach(tl -> {
+                if (!es.tenantLinks.contains(tl)) {
+                    es.tenantLinks.add(tl);
+                }
+            });
         }
 
         Operation endpointOp = Operation.createPost(this, EndpointService.FACTORY_LINK);
