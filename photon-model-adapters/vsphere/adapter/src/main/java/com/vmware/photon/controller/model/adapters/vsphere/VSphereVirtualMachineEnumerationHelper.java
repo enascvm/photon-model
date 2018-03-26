@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.collections.CollectionUtils;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIncrementalEnumerationService.InterfaceStateMode;
@@ -186,6 +187,12 @@ public class VSphereVirtualMachineEnumerationHelper {
                 .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
         VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid());
+        String selfLink = enumerationProgress.getHostSystemTracker().getSelfLink(vm.getHost());
+        if (null != selfLink) {
+            CustomProperties.of(state)
+                    .put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+                            selfLink);
+        }
         return state;
     }
 

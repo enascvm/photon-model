@@ -13,7 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.convertOnlyResultToDocument;
 import static com.vmware.photon.controller.model.adapters.vsphere.VsphereEnumerationHelper.withTaskResults;
+import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_SERVER_DISK;
 
 import java.io.IOException;
 import java.net.URI;
@@ -45,6 +47,7 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -160,6 +163,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                      ComputeService.ComputeStateWithDescription parent, TaskManager mgr) {
         collectAllEndpointResources(request, parent.documentSelfLink).thenAccept(resourceLinks -> {
             VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
+            this.logInfo("Submitting enumeration job to thread pool for endpoint %s", request.endpointLink);
             pool.submit(this, parent.adapterManagementReference,
                     parent.description.authCredentialsLink,
                     (connection, e) -> {
@@ -420,7 +424,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                 enumerationProgress.expectDatacenterCount(1); //since we are processing DC sequentially one at a time
                 VsphereDatacenterEnumerationHelper.processDatacenterInfo(this, element, enumerationProgress);
                 enumerationProgress.getDcTracker().await();
-                logInfo("Proceeding to refresh resources on datacenter: " + enumerationProgress.getDcLink());
+                logInfo("Proceeding to refresh resources on datacenter: %s", enumerationProgress.getDcLink());
                 refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
             }
         } catch (Exception e) {
@@ -489,7 +493,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         CollectorDetails collectorDetails = new CollectorDetails();
         EnumerationClient.ObjectUpdateIterator resourcesIterator;
         SegregatedOverlays segregatedOverlays;
-        logInfo("Processing resources on datacenter: " + ctx.getDcLink());
+        logInfo("Processing resources on datacenter: %s", ctx.getDcLink());
         try {
             ManagedObjectReference resourcesPropertyCollector = client.createPropertyCollectorWithFilter(spec);
             // remove getObjectIterator API
@@ -525,7 +529,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         List<FolderOverlay> trueFolders = folderMap.get(Boolean.FALSE);
         List<FolderOverlay> rootFolders = folderMap.get(Boolean.TRUE);
         ctx.expectFolderCount(trueFolders.size());
-        logInfo("Processing folders on datacenter: " + ctx.getDcLink());
+        logInfo("Processing folders on datacenter: %s", ctx.getDcLink());
         for (FolderOverlay folder : trueFolders) {
             try {
                 // The parent list will be passed along. This is to achieve the below
@@ -534,7 +538,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                 // should have the datacenter as its parent.
                 VsphereFolderEnumerationHelper.processFoundFolder(this, ctx, folder, rootFolders);
             } catch (Exception e) {
-                logWarning(() -> "Error processing folder information" + ": " + e.toString());
+                logWarning(() -> "Error processing folder information : " + e.toString());
             }
         }
 
@@ -547,21 +551,21 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         } catch (Exception e) {
             // We can continue as we will not know whether the datastore is local or shared which
             // is ok to proceed.
-            logWarning(() -> "Error processing datastore host mount information" + ": " + e.toString());
+            logWarning(() -> "Error processing datastore host mount information : " + e.toString());
         }
 
         storagePolicies = VsphereStoragePolicyEnumerationHelper.createStorageProfileOverlays(this, client);
 
         // process results in topological order
         ctx.expectNetworkCount(segregatedOverlays.networks.size());
-        logInfo("Processing network on datacenter: " + ctx.getDcLink());
+        logInfo("Processing network on datacenter: %s", ctx.getDcLink());
         for (NetworkOverlay net : segregatedOverlays.networks.values()) {
             VSphereNetworkEnumerationHelper
                     .processFoundNetwork(this, ctx, net, segregatedOverlays.networks);
         }
 
         ctx.expectDatastoreCount(segregatedOverlays.datastores.size());
-        logInfo("Processing datastore on datacenter: " + ctx.getDcLink());
+        logInfo("Processing datastore on datacenter: %s", ctx.getDcLink());
         for (DatastoreOverlay ds : segregatedOverlays.datastores) {
             ds.setMultipleHostAccess(sharedDatastores.contains(ds.getName()));
             VsphereDatastoreEnumerationHelper
@@ -612,7 +616,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
         // process clustered as well as non-clustered hosts
         ctx.expectHostSystemCount(segregatedOverlays.hosts.size());
-        logInfo("Processing hosts on datacenter: " + ctx.getDcLink());
+        logInfo("Processing hosts on datacenter: %s", ctx.getDcLink());
         for (HostSystemOverlay hs : segregatedOverlays.hosts) {
             ctx.track(hs);
             VSphereHostSystemEnumerationHelper.processFoundHostSystem(this, ctx, hs, client);
@@ -624,7 +628,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
         MoRefKeyedMap<String> computeResourceNamesByMoref = collectComputeNames(segregatedOverlays.hosts, segregatedOverlays.clusters);
         ctx.expectResourcePoolCount(segregatedOverlays.resourcePools.size());
-        logInfo("Processing resource pools on datacenter: " + ctx.getDcLink());
+        logInfo("Processing resource pools on datacenter: %s", ctx.getDcLink());
         for (ResourcePoolOverlay rp : segregatedOverlays.resourcePools) {
             String ownerName = computeResourceNamesByMoref.get(rp.getOwner());
             VSphereResourcePoolEnumerationHelper.processFoundResourcePool(this, ctx, rp, ownerName, client);
@@ -639,7 +643,14 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             return;
         }
 
-        logInfo("Processing VMs on datacenter: " + ctx.getDcLink());
+        logInfo("Updating server disks on datacenter: %s", ctx.getDcLink());
+        //update server disks with selfLinks of HostSystem
+        for (HostSystemOverlay hostSystemOverlay : segregatedOverlays.hosts) {
+            updateServerDisks(ctx, hostSystemOverlay);
+        }
+
+
+        logInfo("Processing VMs on datacenter: %s", ctx.getDcLink());
         spec = client.createVmFilterSpec(client.getDatacenter());
         List<VmOverlay> vmOverlayList = new ArrayList<>();
         EnumerationClient.ObjectUpdateIterator vmIterator;
@@ -700,6 +711,47 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             collectorDetails.datacenter = ctx.getRegionId();
             this.collectors.add(collectorDetails);
         }
+    }
+
+    private void updateServerDisks(EnumerationProgress ctx, HostSystemOverlay hostSystemOverlay) {
+        QueryTask queryTask = queryForServerDisks(ctx, hostSystemOverlay);
+        withTaskResults(this, queryTask, serviceDocumentQueryResult -> {
+            if (!serviceDocumentQueryResult.documentLinks.isEmpty()) {
+                DiskService.DiskState oldDocument = convertOnlyResultToDocument(serviceDocumentQueryResult, DiskService.DiskState.class);
+                updateDiskState(ctx, oldDocument, hostSystemOverlay);
+            }
+        });
+    }
+
+    private void updateDiskState(EnumerationProgress ctx, DiskState oldDocument, HostSystemOverlay hostSystemOverlay) {
+        CustomProperties.of(oldDocument)
+                .put(CustomProperties.SERVER, ctx.getHostSystemTracker().getSelfLink(hostSystemOverlay.getId()));
+        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(this.getHost(), oldDocument.documentSelfLink))
+                .setBody(oldDocument)
+                .sendWith(this);
+    }
+
+    /**
+     * Queries the server disk states which have give host as server.
+     *
+     * @param ctx               the enumeration context
+     * @param hostSystemOverlay the host system whose server disks need to be queried
+     * @return query task object.
+     */
+    private static QueryTask queryForServerDisks(EnumerationProgress ctx, HostSystemOverlay hostSystemOverlay) {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(DiskService.DiskState.class)
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.TYPE, TYPE_SERVER_DISK)
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.PARENT_ID, VimUtils.convertMoRefToString(hostSystemOverlay.getId()));
+        QueryUtils.addEndpointLink(builder, DiskService.DiskState.class,
+                ctx.getRequest().endpointLink);
+
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
     }
 
     private SegregatedOverlays segregateObjectUpdates(

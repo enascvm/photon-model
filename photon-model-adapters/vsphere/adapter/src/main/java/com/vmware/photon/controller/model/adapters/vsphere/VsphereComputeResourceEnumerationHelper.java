@@ -40,6 +40,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.HostScsiDisk;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectUpdateKind;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.VsanHostConfigInfo;
@@ -243,10 +244,10 @@ public class VsphereComputeResourceEnumerationHelper {
                 QueryTask task = queryForServerDisks(ctx, disk);
                 withTaskResults(service, task, result -> {
                     if (result.documentLinks.isEmpty()) {
-                        createServerDisk(service, disk, ctx, config.getHostSystem().getValue());
+                        createServerDisk(service, disk, ctx, config.getHostSystem());
                     } else {
                         DiskService.DiskState oldDocument = convertOnlyResultToDocument(result, DiskService.DiskState.class);
-                        updateServerDisk(service, disk, oldDocument, ctx, config.getHostSystem().getValue());
+                        updateServerDisk(service, disk, oldDocument, ctx, config.getHostSystem());
                     }
                 });
             });
@@ -254,7 +255,7 @@ public class VsphereComputeResourceEnumerationHelper {
     }
 
     private static void createServerDisk(VSphereIncrementalEnumerationService service, HostScsiDisk serverDisk,
-                                         EnumerationProgress ctx, String server) {
+                                         EnumerationProgress ctx, ManagedObjectReference server) {
         DiskService.DiskState ds = makeServerDisksFromResults(serverDisk, ctx, server);
         Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(), DiskService.FACTORY_LINK))
                 .setBody(ds)
@@ -264,7 +265,7 @@ public class VsphereComputeResourceEnumerationHelper {
 
     private static void updateServerDisk(VSphereIncrementalEnumerationService service, HostScsiDisk serverDisk,
                                          DiskService.DiskState oldDocument,
-                                         EnumerationProgress ctx, String server) {
+                                         EnumerationProgress ctx, ManagedObjectReference server) {
         DiskService.DiskState ds = makeServerDisksFromResults(serverDisk, ctx, server);
         ds.documentSelfLink = oldDocument.documentSelfLink;
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
@@ -274,7 +275,7 @@ public class VsphereComputeResourceEnumerationHelper {
     }
 
     private static DiskService.DiskState makeServerDisksFromResults(HostScsiDisk serverDisk, EnumerationProgress ctx,
-                                                                    String server) {
+                                                                    ManagedObjectReference server) {
         DiskService.DiskState ds = new DiskService.DiskState();
         ds.name = serverDisk.getDisplayName();
         // block size is in Bytes - converting to GigaBytes
@@ -288,7 +289,8 @@ public class VsphereComputeResourceEnumerationHelper {
                 .put(CustomProperties.MODEL, serverDisk.getModel())
                 .put(CustomProperties.VENDOR, serverDisk.getVendor())
                 .put(CustomProperties.CAPACITY_IN_GB, capacityInGB)
-                .put(CustomProperties.SERVER, server)
+                .put(CustomProperties.SERVER, VimUtils.convertMoRefToString(server))
+                .put(CustomProperties.PARENT_ID, server)
                 .put(CustomProperties.SERVER_DISK_TYPE, serverDisk.getScsiDiskType());
         return ds;
     }
