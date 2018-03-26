@@ -65,10 +65,13 @@
       <version>2.0.8</version>
     </dependency>
 
-    <dependency>
+    <!-- Align the version of cxf-rt-ws-security with PSC auth adapter.
+    There are changes in SAML Assertion in later versions which are incompatible with the PSC
+    adapter that is responsible for acquiring SAML tokens. -->
+  <dependency>
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-ws-security</artifactId>
-      <version>3.2.1</version>
+      <version>2.7.18</version>
     </dependency>
   </dependencies>
 </project>
