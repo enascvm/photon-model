@@ -1788,6 +1788,10 @@ public class AzureInstanceService extends StatelessService {
             diskStateToUpdate.documentSelfLink = ctx.bootDiskState.documentSelfLink;
             diskStateToUpdate.persistent = ctx.bootDiskState.persistent;
             diskStateToUpdate.regionId = ctx.provisionedVm.location();
+
+            diskStateToUpdate.endpointLink = ctx.endpoint.documentSelfLink;
+            AdapterUtils.addToEndpointLinks(diskStateToUpdate, ctx.endpoint.documentSelfLink);
+
             // The actual value being updated
             if (ctx.useManagedDisks()) {
                 diskStateToUpdate.id = azureOsDisk.managedDisk().id();
@@ -1859,8 +1863,9 @@ public class AzureInstanceService extends StatelessService {
                     diskStateToCreate.capacityMBytes = azureDataDisk.diskSizeGB() * 1024;
                 }
                 diskStateToCreate.status = DiskService.DiskStatus.ATTACHED;
-                diskStateToCreate.endpointLink = ctx.endpoint.documentSelfLink;
                 diskStateToCreate.persistent = ctx.bootDiskState.persistent;
+
+                diskStateToCreate.endpointLink = ctx.endpoint.documentSelfLink;
                 AdapterUtils.addToEndpointLinks(diskStateToCreate, ctx.endpoint.documentSelfLink);
 
                 Operation createDiskState = Operation
@@ -1927,6 +1932,9 @@ public class AzureInstanceService extends StatelessService {
 
         diskStateToUpdate.status = DiskService.DiskStatus.ATTACHED;
         diskStateToUpdate.regionId = ctx.provisionedVm.location();
+
+        diskStateToUpdate.endpointLink = ctx.endpoint.documentSelfLink;
+        AdapterUtils.addToEndpointLinks(diskStateToUpdate, ctx.endpoint.documentSelfLink);
 
         Operation updateDiskState = Operation
                 .createPatch(createInventoryUri(getHost(), diskStateToUpdate.documentSelfLink))

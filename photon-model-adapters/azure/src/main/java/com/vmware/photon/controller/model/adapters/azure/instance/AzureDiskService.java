@@ -36,6 +36,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -248,6 +249,8 @@ public class AzureDiskService extends StatelessService {
         }
         context.diskState.customProperties
                 .put(AzureConstants.AZURE_RESOURCE_GROUP_NAME, context.resourceGroupName);
+
+        AdapterUtils.addToEndpointLinks(context.diskState, context.diskState.endpointLink);
 
         return this.sendWithDeferredResult(
                 Operation.createPatch(this, context.diskState.documentSelfLink)
