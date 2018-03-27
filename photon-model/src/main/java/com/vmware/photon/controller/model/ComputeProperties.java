@@ -64,7 +64,7 @@ public class ComputeProperties {
     /**
      * A key for the custom properties property which value stores the parent compute host link.
      */
-    public static final String COMPUTE_HOST_LINK_PROP_NAME = "computeHostLink";
+    public static final String COMPUTE_HOST_LINK_PROP_NAME = "__computeHostLink";
 
     /**
      * A key for the custom properties property which value stores compute that has created the
