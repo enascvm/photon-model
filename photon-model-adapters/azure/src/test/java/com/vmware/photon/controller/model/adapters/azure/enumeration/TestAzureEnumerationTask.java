@@ -709,7 +709,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK, azureVMName, true);
 
         assertResourceExists(this.host, SecurityGroupService.FACTORY_LINK,
-                AZURE_SECURITY_GROUP_NAME, true);
+                AZURE_SECURITY_GROUP_NAME + "-" + azureVMName, true);
 
         assertResourceExists(this.host, StorageDescriptionService.FACTORY_LINK, (azureVMName +
                 "sa").replace("-", ""), true);
