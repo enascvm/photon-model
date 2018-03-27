@@ -145,9 +145,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private void validate(ComputeEnumerateResourceRequest request) {
         // assume all request are REFRESH requests
-        // TODO: change it to START once incremental change handling is implemented.
         if (request.enumerationAction == null) {
-            request.enumerationAction = EnumerationAction.REFRESH;
+            request.enumerationAction = EnumerationAction.START;
         }
     }
 }
