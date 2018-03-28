@@ -42,6 +42,7 @@ import com.microsoft.azure.management.network.implementation.LoadBalancingRuleIn
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
 import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
 import com.microsoft.azure.management.network.implementation.ProbeInner;
@@ -98,7 +99,7 @@ public class AzureLoadBalancerService extends StatelessService {
         List<NetworkInterfaceInner> networkInterfaceInners;
         List<SecurityGroupState> securityGroupStates;
         List<NetworkSecurityGroupInner> securityGroupInners;
-        String publicIPAddressInnerId;
+        PublicIPAddressInner publicIPAddressInner;
         LoadBalancerInner loadBalancerAzure;
 
         AzureLoadBalancerContext(
@@ -202,11 +203,12 @@ public class AzureLoadBalancerService extends StatelessService {
                         .thenCompose(this::getNetworkSecurityGroupInners)
                         .thenCompose(this::createPublicIP)
                         .thenCompose(this::createLoadBalancer)
-                        .thenCompose(this::updateLoadBalancerState)
                         .thenCompose(this::addHealthProbes)
                         .thenCompose(this::addLoadBalancingRules)
                         .thenCompose(this::addBackendPoolMembers)
-                        .thenCompose(this::updateSecurityGroupRules);
+                        .thenCompose(this::updateSecurityGroupRules)
+                        .thenCompose(this::getPublicIPAddress)
+                        .thenCompose(this::updateLoadBalancerState);
             }
         case DELETE:
             if (context.loadBalancerRequest.isMockRequest) {
@@ -458,8 +460,7 @@ public class AzureLoadBalancerService extends StatelessService {
             @Override
             protected DeferredResult<PublicIPAddressInner> consumeProvisioningSuccess(
                     PublicIPAddressInner publicIPAddress) {
-                // Populate the Public IP id with Azure Public IP ID
-                context.publicIPAddressInnerId = publicIPAddress.id();
+                context.publicIPAddressInner = publicIPAddress;
                 return DeferredResult.completed(publicIPAddress);
             }
 
@@ -543,7 +544,7 @@ public class AzureLoadBalancerService extends StatelessService {
                     .withName(String.format("%s-public-frontend",
                             context.loadBalancerStateExpanded.name));
             frontendIPConfiguration
-                    .withPublicIPAddress(new SubResource().withId(context.publicIPAddressInnerId));
+                    .withPublicIPAddress(new SubResource().withId(context.publicIPAddressInner.id()));
             frontendIPConfigurationInners.add(frontendIPConfiguration);
         } else {
             context.loadBalancerStateExpanded.subnets.forEach(subnet -> {
@@ -839,6 +840,39 @@ public class AzureLoadBalancerService extends StatelessService {
                 .collect(Collectors.toList());
 
         return DeferredResult.allOf(networkSecurityGroupInnerList).thenApply(ignored -> context);
+    }
+
+    /**
+     * Fetch public IP address after an address has been assigned
+     */
+    private DeferredResult<AzureLoadBalancerContext> getPublicIPAddress(AzureLoadBalancerContext ctx) {
+        if (ctx.publicIPAddressInner == null) {
+            // No public IP address created -> do nothing.
+            return DeferredResult.completed(ctx);
+        }
+
+        NetworkManagementClientImpl client = ctx.azureSdkClients.getNetworkManagementClientImpl();
+
+        String msg = "Get public IP address for resource group [" + ctx.resourceGroupName
+                + "] and name [" + ctx.publicIPAddressInner.name() + "].";
+
+        AzureDeferredResultServiceCallback<PublicIPAddressInner> callback = new AzureDeferredResultServiceCallback<PublicIPAddressInner>(
+                ctx.service, msg) {
+            @Override
+            protected DeferredResult<PublicIPAddressInner> consumeSuccess(
+                    PublicIPAddressInner result) {
+                ctx.publicIPAddressInner = result;
+                ctx.loadBalancerStateExpanded.address = result.ipAddress();
+                return DeferredResult.completed(result);
+            }
+        };
+
+        client.publicIPAddresses().getByResourceGroupAsync(
+                ctx.resourceGroupName,
+                ctx.publicIPAddressInner.name(),
+                null, callback);
+
+        return callback.toDeferredResult().thenApply(ignored -> ctx);
     }
 
     /**

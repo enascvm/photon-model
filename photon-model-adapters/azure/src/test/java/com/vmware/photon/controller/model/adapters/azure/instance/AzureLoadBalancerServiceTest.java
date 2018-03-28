@@ -290,6 +290,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
 
             assertEquals(this.loadBalancerName, lbResponse.name());
             assertEquals(loadBalancerState.id, lbResponse.id());
+            assertNotNull(loadBalancerState.address);
 
             // delete the load balancer
             startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.DELETE,
