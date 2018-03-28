@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.56-SNAPSHOT
+
 ## 0.6.55
 * [vSphere] Added functional key custom properties to all enumerated resources
 * Bug fixes and improvements
