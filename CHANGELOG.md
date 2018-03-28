@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.6.55-SNAPSHOT
+## 0.6.55
+* [vSphere] Added functional key custom properties to all enumerated resources
+* Bug fixes and improvements
 
 ## 0.6.54
 * [vSphere] Incremental change handling for virtual machines.
