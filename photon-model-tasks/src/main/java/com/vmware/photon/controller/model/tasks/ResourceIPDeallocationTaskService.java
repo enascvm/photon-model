@@ -326,7 +326,10 @@ public class ResourceIPDeallocationTaskService
 
         return DeferredResult.allOf(ctx.computeResource.networkInterfaceLinks.stream()
                 .map(nisLink -> sendWithDeferredResult(Operation.createGet(this, nisLink),
-                        NetworkInterfaceState.class))
+                        NetworkInterfaceState.class).exceptionally( ex -> {
+                            logWarning("Error getting '%s' network: %s", nisLink, Utils.toString(ex));
+                            return null;
+                        }))
                 .collect((Collectors.toList())))
                 .thenApply(networkInterfaceStates -> {
                     for (NetworkInterfaceState nis : networkInterfaceStates) {
