@@ -137,8 +137,107 @@ public class AzureInstanceContext extends
     public String storageAccountRGName;
     public StorageAccountInner storageAccount;
 
-    public ImageSource imageSource;
-    public ImageReferenceInner imageReference;
+    /**
+     * Azure specification of {@link ImageSource} providing conversion to Azure native
+     * {@link ImageReferenceInner}.
+     */
+    public static class AzureImageSource extends ImageSource {
+
+        /**
+         * Factory method to create from {@link ImageSource}. The returned instance type is ALWAYS
+         * either {@link Type#PRIVATE_IMAGE} or {@link Type#PUBLIC_IMAGE}.
+         */
+        public static AzureImageSource of(ImageSource imageSource) {
+
+            if (imageSource == null) {
+                return null;
+            }
+
+            if (imageSource.type != Type.IMAGE_REFERENCE) {
+                // If NOT IMAGE_REFERENCE then just wrap into AzureImageSource
+                return new AzureImageSource(imageSource.type, imageSource.source);
+            }
+
+            final String imgRef = imageSource.asRef();
+
+            // Otherwise extract/parse to ImageReferenceInner
+            final ImageReferenceInner azureImageReference = toImageReferenceInner(imgRef);
+
+            if (azureImageReference == null) {
+                return null;
+            }
+
+            if (azureImageReference.id() != null) {
+                // If IMAGE_REFERENCE is parsed to single String then it's Private image
+                return new AzureImageSource(Type.PRIVATE_IMAGE, imgRef);
+            }
+
+            // If IMAGE_REFERENCE is parsed to 'publisher:offer:...' then it's Public image
+            if (azureImageReference.publisher() != null) {
+                return new AzureImageSource(Type.PUBLIC_IMAGE, imgRef);
+            }
+
+            return null;
+        }
+
+        private final ImageReferenceInner imageReferenceInner;
+
+        private AzureImageSource(Type type, Object source) {
+            super(type, source);
+
+            this.imageReferenceInner = toImageReferenceInner(this.asNativeId());
+        }
+
+        /**
+         * The singleton ImageReferenceInner instance, which might be updated, for example to
+         * resolve 'latest' version to specific version.
+         */
+        public ImageReferenceInner asImageReferenceInner() {
+            return this.imageReferenceInner;
+        }
+
+        /**
+         * Convert this ImageSource to Azure native {@link ImageReferenceInner}.
+         */
+        private static ImageReferenceInner toImageReferenceInner(String nativeId) {
+
+            if (nativeId == null) {
+                return null;
+            }
+
+            final String[] imageIdParts = nativeId.split(":");
+
+            ImageReferenceInner imageReferenceInner = new ImageReferenceInner();
+
+            if (imageIdParts.length == 4) {
+
+                // PUBLIC '<publisher>:<offer>:<sku>:<version>' ID
+
+                imageReferenceInner.withPublisher(imageIdParts[0]);
+                imageReferenceInner.withOffer(imageIdParts[1]);
+                imageReferenceInner.withSku(imageIdParts[2]);
+                imageReferenceInner.withVersion(imageIdParts[3]);
+
+            } else if (imageIdParts.length == 1) {
+
+                // PRIVATE
+                // '/subscriptions/<subscription>/resourceGroups/<resource-group>/providers/Microsoft.Compute/images/<image-name>'
+                // ID
+
+                imageReferenceInner.withId(imageIdParts[0]);
+
+            } else {
+                throw new IllegalArgumentException("Azure image ID format should be either"
+                        + " '<publisher>:<offer>:<sku>:<version>' for public image"
+                        + " or"
+                        + " '/subscriptions/<subscription>/resourceGroups/<resource-group>/providers/Microsoft.Compute/images/<image-name>' for private image");
+            }
+
+            return imageReferenceInner;
+        }
+    }
+
+    public AzureImageSource imageSource;
     // }}
 
     @Override
@@ -165,7 +264,9 @@ public class AzureInstanceContext extends
                     ctx.vmName = ctx.child.name != null ? ctx.child.name : ctx.child.id;
                     if (ctx.vmName.contains("_")) {
                         ctx.vmName = ctx.vmName.replace('_', '-');
-                        this.service().log(Level.WARNING, "Virtual machine name changed to [%s] due to invalid characters", ctx.vmName);
+                        this.service().log(Level.WARNING,
+                                "Virtual machine name changed to [%s] due to invalid characters",
+                                ctx.vmName);
                     }
 
                     return ctx;
@@ -399,13 +500,12 @@ public class AzureInstanceContext extends
     }
 
     /**
-     * Convenience method to know if we are reusing existing azure storage accounts or creating
-     * new ones
+     * Convenience method to know if we are reusing existing azure storage accounts or creating new
+     * ones
      */
     public boolean reuseExistingStorageAccount() {
         return this.bootDiskState.storageDescription != null;
     }
-
 
     /**
      * Method to know if provisioning is using azure managed disks
@@ -414,6 +514,5 @@ public class AzureInstanceContext extends
         return this.bootDiskState.customProperties != null && this.bootDiskState.customProperties
                 .containsKey(AzureConstants.AZURE_MANAGED_DISK_TYPE);
     }
-
 
 }

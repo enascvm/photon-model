@@ -105,8 +105,8 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     public String placement;
 
     /**
-     * A set of TagStates, which are used to tag this instance with.
-     * The instance will be tagged in AWS, Azure and anywhere else if needed.
+     * A set of TagStates, which are used to tag this instance with. The instance will be tagged in
+     * AWS, Azure and anywhere else if needed.
      */
     public Set<TagState> tagStates = new HashSet<>();
 
@@ -341,10 +341,12 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     }
 
     /**
-     * Populate all <code>child.tagLinks</code> as {@link TagState} objects into {@link #tagStates} field.
+     * Populate all <code>child.tagLinks</code> as {@link TagState} objects into {@link #tagStates}
+     * field.
      *
-     * @param context The context object to populate TagStates into.
-     * @return        The same context object with populated TagStates.
+     * @param context
+     *            The context object to populate TagStates into.
+     * @return The same context object with populated TagStates.
      */
     private DeferredResult<T> getTagStates(T context) {
         if (context.child.tagLinks == null || context.child.tagLinks.isEmpty()) {
@@ -463,20 +465,14 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
          * Cast image source to actual ImageState.
          */
         public ImageState asImageState() {
-            if (this.type == Type.PUBLIC_IMAGE || this.type == Type.PRIVATE_IMAGE) {
-                return (ImageState) this.source;
-            }
-            return null;
+            return this.source instanceof ImageState ? (ImageState) this.source : null;
         }
 
         /**
          * Cast image source to actual image reference.
          */
         public String asRef() {
-            if (this.type == Type.IMAGE_REFERENCE) {
-                return (String) this.source;
-            }
-            return null;
+            return this.source instanceof String ? (String) this.source : null;
         }
 
         /**

@@ -52,7 +52,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -68,7 +67,6 @@ import com.microsoft.azure.CloudError;
 import com.microsoft.azure.CloudException;
 import com.microsoft.azure.SubResource;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.compute.AvailabilitySet;
 import com.microsoft.azure.management.compute.AvailabilitySetSkuTypes;
 import com.microsoft.azure.management.compute.CachingTypes;
@@ -136,6 +134,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.Inst
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext.AzureImageSource;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext.AzureNicContext;
 import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.AzureDiagnosticSettings;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
@@ -324,7 +323,7 @@ public class AzureInstanceService extends StatelessService {
             switch (ctx.stage) {
             case CLIENT:
                 if (ctx.azureSdkClients == null) {
-                    ctx.azureSdkClients = new AzureSdkClients(ctx.parentAuth);
+                    ctx.azureSdkClients = new AzureSdkClients(ctx.endpointAuth);
                 }
                 switch (ctx.computeRequest.requestType) {
                 case CREATE:
@@ -433,7 +432,7 @@ public class AzureInstanceService extends StatelessService {
                 ctx.azureSdkClients.credentials);
 
         subscriptionClient.subscriptions().getAsync(
-                ctx.parentAuth.userLink, new ServiceCallback<SubscriptionInner>() {
+                ctx.endpointAuth.userLink, new ServiceCallback<SubscriptionInner>() {
                     @Override
                     public void failure(Throwable e) {
                         // Azure doesn't send us any meaningful status code to work with
@@ -482,12 +481,14 @@ public class AzureInstanceService extends StatelessService {
                 getAvailabilitySetsCallback = new AzureDeferredResultServiceCallbackWithRetry
                 <List<AvailabilitySetInner>>
                 (this, msg) {
+                    @Override
                     protected DeferredResult<List<AvailabilitySetInner>> consumeSuccess(
                             List<AvailabilitySetInner> result) {
                         ctx.availabilitySetInners = result;
                         return DeferredResult.completed(result);
                     }
 
+                    @Override
                     protected Runnable retryServiceCall(
                             ServiceCallback<List<AvailabilitySetInner>> retryCallback) {
                         return () -> computeManager.availabilitySets()
@@ -508,6 +509,7 @@ public class AzureInstanceService extends StatelessService {
         AzureDeferredResultServiceCallback<OperationStatusResponseInner>
                 deleteVirtualMachineCallback =
                     new AzureDeferredResultServiceCallback<OperationStatusResponseInner>(this, msg) {
+                    @Override
                     protected DeferredResult<OperationStatusResponseInner> consumeSuccess(
                             OperationStatusResponseInner result) {
                         logInfo("Successfully deleted VM: " + ctx.vmName);
@@ -533,6 +535,7 @@ public class AzureInstanceService extends StatelessService {
                     .resourceGroups();
             AzureDeferredResultServiceCallback<Void> deleteResourceGroupCallback =
                     new AzureDeferredResultServiceCallback<Void>(this, msg) {
+                        @Override
                         protected DeferredResult<Void> consumeSuccess(Void result) {
                             logInfo("Successfully deleted resource group: "
                                     + ctx.resourceGroupName);
@@ -601,9 +604,6 @@ public class AzureInstanceService extends StatelessService {
 
     private DeferredResult<Void> deleteVHDBlobsInAzure(AzureInstanceContext ctx) {
 
-        //Create DR
-        DeferredResult<Void> dr = new DeferredResult();
-
         if (isManagedDisk().test(ctx.bootDiskState)) {
             return DeferredResult.completed(null);
         }
@@ -620,6 +620,9 @@ public class AzureInstanceService extends StatelessService {
         }
 
         OperationContext opCtx = OperationContext.getOperationContext();
+
+        // Create DR
+        DeferredResult<Void> dr = new DeferredResult<>();
 
         CompletableFuture.runAsync(() -> {
             diskStatesToDelete.forEach(disk -> {
@@ -676,7 +679,6 @@ public class AzureInstanceService extends StatelessService {
 
             }
             OperationJoin.create(fetchAllVMDisks).setCompletion((ops, exc) -> {
-                        List<DiskService.DiskStateExpanded> diskStates = new ArrayList<>();
                         if (exc == null || exc.size() == 0) {
                             //assign boot disk and data disk to context
                             ctx.dataDiskStates = new ArrayList<>();
@@ -1426,7 +1428,7 @@ public class AzureInstanceService extends StatelessService {
         // creating a new ComputeState, effectively duplicating the ComputeStates related to the
         // same VM resource.
         cs.id = AzureUtils.getVirtualMachineId(
-                ctx.parentAuth.userLink,
+                ctx.endpointAuth.userLink,
                 ctx.resourceGroup.name(),
                 ctx.vmName);
 
@@ -1543,30 +1545,24 @@ public class AzureInstanceService extends StatelessService {
         List<DataDisk> dataDisks = new ArrayList<>();
         List<Integer> LUNsOnImage = new ArrayList<>();
 
-        // Apply Public/Private images specifics
-        if (ctx.imageSource.type == ImageSource.Type.PUBLIC_IMAGE
-                || ctx.imageSource.type == ImageSource.Type.IMAGE_REFERENCE) {
+        storageProfile.withImageReference(ctx.imageSource.asImageReferenceInner());
 
-            storageProfile.withImageReference(ctx.imageReference);
-
-        } else if (ctx.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
-
-            final ImageState privateImage = ctx.imageSource.asImageState();
-            ImageReferenceInner img = new ImageReferenceInner();
-            img.withId(privateImage.id);
-            storageProfile.withImageReference(img);
+        if (ctx.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
 
             // set LUNs of data disks present on the custom image.
-            for (DiskConfiguration diskConfig: privateImage.diskConfigs) {
-                if (diskConfig.properties != null && diskConfig.properties.containsKey
-                        (AzureConstants.AZURE_DISK_LUN)) {
-                    DataDisk imageDataDisk = new DataDisk();
-                    int lun = Integer.parseInt(diskConfig.properties.get(AzureConstants
-                            .AZURE_DISK_LUN));
-                    LUNsOnImage.add(lun);
-                    imageDataDisk.withLun(lun);
-                    imageDataDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
-                    dataDisks.add(imageDataDisk);
+            final ImageState imageState = ctx.imageSource.asImageState();
+            if (imageState != null && imageState.diskConfigs != null) {
+                for (DiskConfiguration diskConfig: imageState.diskConfigs) {
+                    if (diskConfig.properties != null && diskConfig.properties.containsKey
+                            (AzureConstants.AZURE_DISK_LUN)) {
+                        DataDisk imageDataDisk = new DataDisk();
+                        int lun = Integer.parseInt(diskConfig.properties.get(AzureConstants
+                                .AZURE_DISK_LUN));
+                        LUNsOnImage.add(lun);
+                        imageDataDisk.withLun(lun);
+                        imageDataDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
+                        dataDisks.add(imageDataDisk);
+                    }
                 }
             }
 
@@ -2213,22 +2209,6 @@ public class AzureInstanceService extends StatelessService {
                 String.format(VHD_URI_FORMAT, storageAccountName, vhdName));
     }
 
-    private ImageReferenceInner getImageReference(String imageId) {
-        String[] imageIdParts = imageId.split(":");
-        if (imageIdParts.length != 4) {
-            throw new IllegalArgumentException("Azure image ID should be of the format "
-                    + "<publisher>:<offer>:<sku>:<version>");
-        }
-
-        ImageReferenceInner imageReference = new ImageReferenceInner();
-        imageReference.withPublisher(imageIdParts[0]);
-        imageReference.withOffer(imageIdParts[1]);
-        imageReference.withSku(imageIdParts[2]);
-        imageReference.withVersion(imageIdParts[3]);
-
-        return imageReference;
-    }
-
     /**
      * This method tries to detect specific CloudErrors by their code and apply some additional
      * handling. In case a subscription registration error is detected the method register
@@ -2348,19 +2328,6 @@ public class AzureInstanceService extends StatelessService {
         return (t) -> handleError(ctx, t);
     }
 
-    private String generateName(String prefix) {
-        return prefix + randomString(5);
-    }
-
-    private String randomString(int length) {
-        Random random = new Random();
-        StringBuilder stringBuilder = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            stringBuilder.append((char) ('a' + random.nextInt(26)));
-        }
-        return stringBuilder.toString();
-    }
-
     private ResourceManagementClientImpl getResourceManagementClientImpl(AzureInstanceContext ctx) {
         return ctx.azureSdkClients.getResourceManagementClientImpl();
     }
@@ -2375,10 +2342,6 @@ public class AzureInstanceService extends StatelessService {
 
     private ComputeManagementClientImpl getComputeManagementClientImpl(AzureInstanceContext ctx) {
         return ctx.azureSdkClients.getComputeManagementClientImpl();
-    }
-
-    private Azure getAzureClient(AzureInstanceContext ctx) {
-        return ctx.azureSdkClients.getAzureClient();
     }
 
     private ComputeManager getComputeManager(AzureInstanceContext ctx) {
@@ -2512,73 +2475,63 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * Differentiate between Windows and Linux Images
+     * Load {@code ctx.imageSource} from {@code ctx.bootDiskState}.
      */
     private DeferredResult<AzureInstanceContext> getImageSource(AzureInstanceContext ctx) {
 
         return ctx.getImageSource(ctx.bootDiskState)
 
+                // Load AzureImageSource
                 .thenApply(imageSource -> {
-                    ctx.imageSource = imageSource;
+                    ctx.imageSource = AzureImageSource.of(imageSource);
+
                     return ctx;
                 })
 
+                // In case of '<publisher>:<offer>:<sku>:LATEST' resolve version
+                .thenCompose(this::resolveLatestVirtualMachineImage)
+
+                // Do some customization logic
                 .thenCompose(context -> {
+                    // AzureImageSource.of ALWAYS return PUBLIC_IMAGE or PRIVATE_IMAGE
                     if (context.imageSource.type == ImageSource.Type.PUBLIC_IMAGE) {
-                        return handlePublicImage(context);
+                        return getImageSource_Public(context);
                     }
                     if (context.imageSource.type == ImageSource.Type.PRIVATE_IMAGE) {
-                        return handlePrivateImage(context);
+                        return getImageSource_Private(context);
                     }
-                    if (context.imageSource.type == ImageSource.Type.IMAGE_REFERENCE) {
-                        return handleImageRef(context);
-                    }
-                    return DeferredResult.failed(
-                            new IllegalStateException(
-                                    "Unexpected ImageSource.Type: " + context.imageSource.type));
+                    return DeferredResult.failed(new IllegalStateException(
+                            "Unexpected AzureImageSource.Type: " + context.imageSource.type));
                 });
     }
 
-    private DeferredResult<AzureInstanceContext> handlePublicImage(AzureInstanceContext ctx) {
-
-        return DeferredResult.completed(ctx)
-                .thenApply(context -> {
-                    // Convert Azure 'ImageState.id' string to ImageReferenceInner object
-                    context.imageReference = getImageReference(context.imageSource.asNativeId());
-                    return context;
-                })
-                .thenCompose(this::resolveLatestVirtualMachineImage);
+    // Integral part of getImageSource method
+    private DeferredResult<AzureInstanceContext> getImageSource_Public(AzureInstanceContext ctx) {
+        // Leave as placeholder method, although empty
+        return DeferredResult.completed(ctx);
     }
 
-    private DeferredResult<AzureInstanceContext> handlePrivateImage(AzureInstanceContext ctx) {
+    // Integral part of getImageSource method
+    private DeferredResult<AzureInstanceContext> getImageSource_Private(AzureInstanceContext ctx) {
 
         // In-case type of disk is not specified for the boot disk then we set it to managed one
         // because custom/private images only work with managed disk. This is specially
         // needed for cadenza use case where storage profile is unavailable.
         if (!AzureUtils.isTypeOfDiskSpecified(ctx.bootDiskState)) {
-            ctx.bootDiskState.customProperties.put(AzureConstants.AZURE_MANAGED_DISK_TYPE,
+            ctx.bootDiskState.customProperties.put(
+                    AzureConstants.AZURE_MANAGED_DISK_TYPE,
                     StorageAccountTypes.STANDARD_LRS.toString());
-            //patch boot disk states with the new custom property that makes it managed disk/
+            // patch boot disk states with the new custom property that makes it managed disk
             URI uri = ctx.computeRequest.buildUri(ctx.bootDiskState.documentSelfLink);
 
             Operation patchBootDiskOp = Operation
                     .createPatch(uri)
                     .setBody(ctx.bootDiskState);
-            return this.sendWithDeferredResult(patchBootDiskOp)
-                    .thenCompose(op -> DeferredResult.completed(ctx));
+
+            return sendWithDeferredResult(patchBootDiskOp).thenApply(op -> ctx);
         }
+
         return DeferredResult.completed(ctx);
-    }
-
-    private DeferredResult<AzureInstanceContext> handleImageRef(AzureInstanceContext ctx) {
-
-        return DeferredResult.completed(ctx)
-                .thenApply(context -> {
-                    // Convert Azure 'source image reference' string to ImageReferenceInner object
-                    context.imageReference = getImageReference(context.imageSource.asNativeId());
-                    return context;
-                })
-                .thenCompose(this::resolveLatestVirtualMachineImage);
     }
 
     /**
@@ -2587,40 +2540,45 @@ public class AzureInstanceService extends StatelessService {
     private DeferredResult<AzureInstanceContext> resolveLatestVirtualMachineImage(
             AzureInstanceContext ctx) {
 
-        if (AzureConstants.AZURE_URN_VERSION_LATEST
-                .equalsIgnoreCase(ctx.imageReference.version())) {
+        ImageReferenceInner imageReference = ctx.imageSource.asImageReferenceInner();
+
+        if (AzureConstants.AZURE_URN_VERSION_LATEST.equalsIgnoreCase(imageReference.version())) {
 
             String msg = String.format("Getting latest Azure image by %s:%s:%s",
-                    ctx.imageReference.publisher(),
-                    ctx.imageReference.offer(),
-                    ctx.imageReference.sku());
+                    imageReference.publisher(),
+                    imageReference.offer(),
+                    imageReference.sku());
 
             AzureDeferredResultServiceCallback<List<VirtualMachineImageResourceInner>> callback =
                     new Default<>(ctx.service, msg);
 
             getComputeManagementClientImpl(ctx).virtualMachineImages().listAsync(
                     ctx.resourceGroup.location(),
-                    ctx.imageReference.publisher(),
-                    ctx.imageReference.offer(),
-                    ctx.imageReference.sku(),
+                    imageReference.publisher(),
+                    imageReference.offer(),
+                    imageReference.sku(),
                     null,
                     1,
                     AzureConstants.ORDER_BY_VM_IMAGE_RESOURCE_NAME_DESC,
                     callback);
 
-            return callback.toDeferredResult().thenCompose(imageResources -> {
+            return callback.toDeferredResult().thenApply(imageResources -> {
 
                 if (imageResources == null
                         || imageResources.isEmpty()
                         || imageResources.get(0) == null) {
-                    return DeferredResult
-                            .failed(new IllegalStateException("No latest version found"));
+
+                    throw new IllegalStateException(
+                            String.format("No latest Azure image found by %s:%s:%s",
+                                    imageReference.publisher(),
+                                    imageReference.offer(),
+                                    imageReference.sku()));
                 }
 
                 // Update 'latest'-version with actual version
-                ctx.imageReference.withVersion(imageResources.get(0).name());
+                imageReference.withVersion(imageResources.get(0).name());
 
-                return DeferredResult.completed(ctx);
+                return ctx;
             });
         }
 
