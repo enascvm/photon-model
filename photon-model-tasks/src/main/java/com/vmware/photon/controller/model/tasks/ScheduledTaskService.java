@@ -161,6 +161,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
 
     @Override
     public void handlePeriodicMaintenance(Operation maintenanceOp) {
+        logInfo("Periodic maintenance triggered for ScheduledTaskService %s ", getUri());
         if (getProcessingStage() != ProcessingStage.AVAILABLE) {
             logFine(() -> String.format("Skipping maintenance since service is not available: %s ",
                     getUri()));
@@ -244,6 +245,9 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                                                 + " failed: %s", exception.getMessage()));
                     }
                 }).sendWith(this);
+
+        logInfo("Scheduling task: %s with delay(micros) %d and next maintenance time %d  ",
+                state.documentSelfLink, delayMicros, state.expectedNextMaintenanceTimeMicros);
 
         getHost().schedule(() -> {
             logInfo("Invoking schedule task: %s", state.documentSelfLink);
