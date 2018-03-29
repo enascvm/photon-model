@@ -96,7 +96,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <xenon.version>1.6.4.2</xenon.version>
+    <xenon.version>1.6.5</xenon.version>
     <xenon-utils.version>0.0.1</xenon-utils.version>
     <jacoco.version>0.7.9</jacoco.version>
     <!-- Bouncy Castle -->
