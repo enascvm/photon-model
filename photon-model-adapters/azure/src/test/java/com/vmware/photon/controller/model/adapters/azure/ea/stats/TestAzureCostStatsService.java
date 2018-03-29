@@ -61,8 +61,6 @@ public class TestAzureCostStatsService extends BaseModelTest {
     private String clientId = System.getProperty(AZURE_CLIENT_ID);
     private String clientSecret = System.getProperty(AZURE_CLIENT_SECRET);
 
-    private static final int NO_OF_MONTHS_COST_REQUIRED = 12;
-
     public String enrollmentNumber;
     public String usageApiKey;
 
@@ -74,7 +72,7 @@ public class TestAzureCostStatsService extends BaseModelTest {
         PhotonModelAdaptersRegistryAdapters.startServices(this.host);
         AzureAdaptersTestUtils.startServicesSynchronouslyEaAzure(this.host);
         this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-        this.host.setTimeoutSeconds(900);
+        this.host.setTimeoutSeconds(2700);
     }
 
     @Test
@@ -117,19 +115,16 @@ public class TestAzureCostStatsService extends BaseModelTest {
                         state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
                                 .ordinal());
 
-        System.setProperty(AzureCostConstants.BILLS_BACK_IN_TIME_MONTHS_KEY,
-                Integer.toString(NO_OF_MONTHS_COST_REQUIRED - 1));
+        Integer months = Integer.getInteger(AzureCostConstants.BILLS_BACK_IN_TIME_MONTHS_KEY);
 
         triggerStatsCollection(resourcePool);
-        verifyPersistedStats(completeState,
-                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, NO_OF_MONTHS_COST_REQUIRED);
+        verifyPersistedStats(completeState, PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, months + 1);
 
         // Check if second iteration of adapter succeeds: no stats should be posted in
         // the immediate next run since the optimization will prevent bill download
         // and last sync time would remain the same.
         triggerStatsCollection(resourcePool);
-        verifyPersistedStats(completeState,
-                PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, NO_OF_MONTHS_COST_REQUIRED);
+        verifyPersistedStats(completeState, PhotonModelConstants.CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS, months + 1);
 
         System.clearProperty(AzureCostConstants.BILLS_BACK_IN_TIME_MONTHS_KEY);
     }
