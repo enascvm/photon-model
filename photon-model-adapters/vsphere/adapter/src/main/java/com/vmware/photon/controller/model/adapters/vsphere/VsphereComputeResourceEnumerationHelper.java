@@ -46,6 +46,7 @@ import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.VsanHostConfigInfo;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
@@ -334,15 +335,18 @@ public class VsphereComputeResourceEnumerationHelper {
             VSphereIncrementalEnumerationService service, List<ComputeResourceOverlay> computeResourceOverlays,
             EnumerationProgress ctx, EnumerationClient client) {
 
+        service.logInfo("Handling compute resource changes %s", Utils.toJson(computeResourceOverlays));
         ctx.expectComputeResourceCount(computeResourceOverlays.size());
         //process compute resource changes
         for (ComputeResourceOverlay cluster : computeResourceOverlays) {
             try {
+                service.logInfo("Handling compute resource change %s", Utils.toJson(cluster));
                 // check if its a new compute resource
                 //TODO If a host is part of cluster then the host needs to be populated with cluster link.
                 if (ObjectUpdateKind.ENTER == cluster.getObjectUpdateKind()) {
                     // create a cluster object only for DRS enabled clusters
                     if (cluster.isDrsEnabled()) {
+                        service.logInfo("Creating new cluster for %s", Utils.toJson(cluster));
                         createNewComputeResource(service, ctx, cluster, client);
                     }
                 } else {
@@ -351,22 +355,27 @@ public class VsphereComputeResourceEnumerationHelper {
                     QueryTask task = queryForCluster(ctx, request.resourceLink(), cluster.getId().getValue());
 
                     withTaskResults(service, task, result -> {
+                        service.logInfo("Queried for existing clusters for %s", Utils.toJson(cluster));
                         try {
                             if (!result.documentLinks.isEmpty()) {
                                 ComputeState oldDocument = convertOnlyResultToDocument(
                                         result, ComputeState.class);
                                 // check if the compute resource is modified.
                                 if (ObjectUpdateKind.MODIFY.equals(cluster.getObjectUpdateKind())) {
+                                    service.logInfo("Updating existing cluster for %s", Utils.toJson(cluster));
                                     updateCluster(service, oldDocument, ctx, cluster, client, false);
                                 } else {
                                     // Compute resource has been removed. remove the compute resource from photon model here
                                     // Delete only compute state document as compute description can be shared among compute resources.
+                                    service.logInfo("Deleting existing cluster for %s", Utils.toJson(cluster));
                                     Operation.createDelete(
                                             PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
                                             .setCompletion((o, e) -> {
                                                 trackComputeResource(ctx, cluster).handle(o, e);
                                             }).sendWith(service);
                                 }
+                            } else {
+                                ctx.getComputeResourceTracker().track();
                             }
                         } catch (Exception ex) {
                             service.logSevere("Error occurred while processing update of compute resource!", ex);

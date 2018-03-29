@@ -271,7 +271,7 @@ public class VsphereEnumerationHelper {
                 res.add(computeGroupStableLink(parentSwitch,
                         VSphereIncrementalEnumerationService.PREFIX_NETWORK, ctx.getRequest().endpointLink));
             } else {
-                res.add(computeGroupStableLink(ov.getId(),
+                res.add(computeGroupStableLink(ref,
                         VSphereIncrementalEnumerationService.PREFIX_NETWORK, ctx.getRequest().endpointLink));
             }
         }

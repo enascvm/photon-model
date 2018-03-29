@@ -33,11 +33,11 @@ public class StoragePolicyOverlay {
     private PbmCapabilityProfile pbmProfile;
     private Map<String, String> capabilities = new HashMap<>();
     private StringJoiner tags = new StringJoiner(",");
-    private List<String> datastoreNames;
+    private List<String> datastoreIds;
 
-    protected StoragePolicyOverlay(PbmProfile pbmProfile, List<String> dataStoreNames) {
+    protected StoragePolicyOverlay(PbmProfile pbmProfile, List<String> datastoreIds) {
         this.pbmProfile = (PbmCapabilityProfile) pbmProfile;
-        this.datastoreNames = dataStoreNames;
+        this.datastoreIds = datastoreIds;
         populateConstraints();
     }
 
@@ -65,8 +65,8 @@ public class StoragePolicyOverlay {
         return this.tags.toString();
     }
 
-    public List<String> getDatastoreNames() {
-        return this.datastoreNames;
+    public List<String> getDatastoreIds() {
+        return this.datastoreIds;
     }
 
     private void populateConstraints() {

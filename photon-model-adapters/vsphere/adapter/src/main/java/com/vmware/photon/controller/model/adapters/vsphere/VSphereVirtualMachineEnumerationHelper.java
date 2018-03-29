@@ -90,7 +90,6 @@ public class VSphereVirtualMachineEnumerationHelper {
                                 String instanceUuid, ManagedObjectReference moref) {
         Builder builder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink);
         if (null != instanceUuid) {
             builder.addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid);

@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -147,15 +148,38 @@ public class VsphereStoragePolicyEnumerationHelper {
             VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
             StoragePolicyOverlay sp, String selfLink) {
         List<Operation> getOps = new ArrayList<>();
-        sp.getDatastoreNames().stream().forEach(name -> {
-            String dataStoreLink = ctx.getDatastoreTracker()
-                    .getSelfLink(name, VimNames.TYPE_DATASTORE);
-            if (dataStoreLink != null && !ResourceTracker.ERROR.equals(dataStoreLink)) {
-                getOps.add(Operation.createGet(
-                        PhotonModelUriUtils.createInventoryUri(service.getHost(), dataStoreLink)));
+        sp.getDatastoreIds().stream().forEach(id -> {
+            if (null != ctx.getDatastoreTracker()) {
+                String dataStoreLink = ctx.getDatastoreTracker()
+                        .getSelfLink(id, VimNames.TYPE_DATASTORE);
+                if (dataStoreLink != null && !ResourceTracker.ERROR.equals(dataStoreLink)) {
+                    getOps.add(Operation.createGet(
+                            PhotonModelUriUtils.createInventoryUri(service.getHost(), dataStoreLink)));
+                }
+            } else {
+                ManagedObjectReference dataStoreMoref = new ManagedObjectReference();
+                dataStoreMoref.setType(VimNames.TYPE_DATASTORE);
+                dataStoreMoref.setValue(id);
+                QueryTask task = VsphereDatastoreEnumerationHelper.queryForStorage(
+                        ctx, null, VimUtils.convertMoRefToString(dataStoreMoref), selfLink);
+
+                VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                    List<Operation> getOperations = new ArrayList<>();
+                    if (result.documentLinks.size() > 0) {
+                        for (String documentSelfLink : result.documentLinks) {
+                            getOperations.add(Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), documentSelfLink)));
+                        }
+                        //TODO : Refactor this to avoid extra call to fetch datastores
+                        updateDS(service, ctx, selfLink, getOperations);
+                    }
+                }, 0);
             }
         });
 
+        updateDS(service, ctx, selfLink, getOps);
+    }
+
+    private static void updateDS(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, String selfLink, List<Operation> getOps) {
         if (!getOps.isEmpty()) {
             OperationJoin.create(getOps)
                     .setCompletion((ops, exs) -> {
@@ -173,6 +197,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                     }).sendWith(service);
         }
     }
+
 
     static void updateStoragePolicy(VSphereIncrementalEnumerationService service, ResourceGroupState oldDocument,
                                     EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
@@ -246,8 +271,8 @@ public class VsphereStoragePolicyEnumerationHelper {
             List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
             if (!pbmProfiles.isEmpty()) {
                 for (PbmProfile profile : pbmProfiles) {
-                    List<String> datastoreNames = client.getDatastores(profile.getProfileId());
-                    StoragePolicyOverlay spOverlay = new StoragePolicyOverlay(profile, datastoreNames);
+                    List<String> datastoreIds = client.getDatastores(profile.getProfileId());
+                    StoragePolicyOverlay spOverlay = new StoragePolicyOverlay(profile, datastoreIds);
                     storagePolicies.add(spOverlay);
                 }
             }
