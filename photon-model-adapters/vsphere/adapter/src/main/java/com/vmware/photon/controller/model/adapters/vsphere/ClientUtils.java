@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperti
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.PROVISION_TYPE;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.SHARES_LEVEL;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.VIRTUAL_MACHINE_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.INSERT_CDROM;
 import static com.vmware.vim25.VirtualDiskMode.PERSISTENT;
 
@@ -63,7 +64,10 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
+import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -842,8 +846,9 @@ public class ClientUtils {
      * Process VirtualDisk and update the details in the diskLinks of the provisioned compute
      */
     public static Operation handleVirtualDiskUpdate(String endpointLink,
-            DiskService.DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
-            String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx) {
+                                                    DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
+                                                    String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx,
+                                                    ComputeState oldDocument) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -875,6 +880,12 @@ public class ClientUtils {
                         .put(SHARES, storageInfo.getShares().getShares())
                         .put(LIMIT_IOPS, storageInfo.getLimit())
                         .put(SHARES_LEVEL, storageInfo.getShares().getLevel().value());
+            }
+
+            if (null != oldDocument) {
+                // we have vm state document, populate vm self link in disk state
+                CustomProperties.of(ds)
+                        .put(VIRTUAL_MACHINE_LINK, oldDocument.documentSelfLink);
             }
 
             fillInControllerUnitNumber(ds, disk.getUnitNumber());
@@ -910,9 +921,9 @@ public class ClientUtils {
      * Process VirtualCdRom and update the details in the diskLinks of the provisioned compute
      */
     public static Operation handleVirtualDeviceUpdate(String endpointLink,
-            DiskService.DiskStateExpanded matchedDs,
-            DiskService.DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
-            Service service, boolean isBacking, String dcLink) {
+                                                      DiskStateExpanded matchedDs,
+                                                      DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
+                                                      Service service, boolean isBacking, String dcLink) {
         Operation operation;
         if (matchedDs == null) {
             DiskService.DiskState ds = createNewDiskState(type, disk, regionId, service);

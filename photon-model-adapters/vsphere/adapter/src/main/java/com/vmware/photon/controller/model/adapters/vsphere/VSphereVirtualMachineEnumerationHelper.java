@@ -42,6 +42,8 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -335,12 +337,12 @@ public class VSphereVirtualMachineEnumerationHelper {
     }
 
     static Operation processVirtualDevice(
-            VSphereIncrementalEnumerationService service, DiskService.DiskStateExpanded matchedDs,
-            VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks, String vm) {
+            VSphereIncrementalEnumerationService service, DiskStateExpanded matchedDs,
+            VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks, String vm, ComputeState oldDocument) {
         if (device instanceof VirtualDisk) {
             return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
                     (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service,
-                    vm, enumerationProgress.getDcLink(), enumerationProgress);
+                    vm, enumerationProgress.getDcLink(), enumerationProgress, oldDocument);
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.CDROM, device,
@@ -355,6 +357,22 @@ public class VSphereVirtualMachineEnumerationHelper {
 
     static CompletionHandler trackVm(EnumerationProgress enumerationProgress) {
         return (o, e) -> {
+            enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
+            enumerationProgress.getVmTracker().arrive();
+        };
+    }
+
+    static CompletionHandler updateVirtualDisksAndTrackVm(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress, Map<Long, Operation> operationMap) {
+        return (o, e) -> {
+            // for each disk created, populate the vm selfLink as a custom property
+            for (Operation operation : operationMap.values()) {
+                if (VsphereEnumerationHelper.getSelfLinkFromOperation(operation).startsWith(DiskService.FACTORY_LINK)) {
+                    DiskState diskState = operation.getBody(DiskState.class);
+                    CustomProperties.of(diskState)
+                            .put(CustomProperties.VIRTUAL_MACHINE_LINK, VsphereEnumerationHelper.getSelfLinkFromOperation(o));
+                    Operation.createPatch(service,diskState.documentSelfLink).setBody(diskState).sendWith(service);
+                }
+            }
             enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
             enumerationProgress.getVmTracker().arrive();
         };
@@ -422,7 +440,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                                 currentDisks);
 
                         Operation vdOp = processVirtualDevice(service, matchedDs, device,
-                                enumerationProgress, state.diskLinks, VimUtils.convertMoRefToString(vm.getId()));
+                                enumerationProgress, state.diskLinks, VimUtils.convertMoRefToString(vm.getId()), oldDocument);
                         if (vdOp != null) {
                             diskUpdateOps.add(vdOp);
                         }
@@ -510,7 +528,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                 state.diskLinks = new ArrayList<>(disks.size());
                 for (VirtualDevice device : disks) {
                     Operation vdOp = processVirtualDevice(service, null, device, enumerationProgress, state
-                            .diskLinks, VimUtils.convertMoRefToString(vm.getId()));
+                            .diskLinks, VimUtils.convertMoRefToString(vm.getId()), null);
                     if (vdOp != null) {
                         operations.add(vdOp);
                     }
@@ -528,7 +546,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                     Operation.createPost(PhotonModelUriUtils
                             .createInventoryUri(service.getHost(), ComputeService.FACTORY_LINK))
                             .setBody(state)
-                            .setCompletion(trackVm(enumerationProgress))
+                            .setCompletion(updateVirtualDisksAndTrackVm(service, enumerationProgress, operationMap))
                             .sendWith(service);
                 }).sendWith(service);
             }

@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -725,7 +726,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
     private void updateDiskState(EnumerationProgress ctx, DiskState oldDocument, HostSystemOverlay hostSystemOverlay) {
         CustomProperties.of(oldDocument)
-                .put(CustomProperties.SERVER, ctx.getHostSystemTracker().getSelfLink(hostSystemOverlay.getId()));
+                .put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME, ctx.getHostSystemTracker().getSelfLink(hostSystemOverlay.getId()));
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(this.getHost(), oldDocument.documentSelfLink))
                 .setBody(oldDocument)
                 .sendWith(this);
