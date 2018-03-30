@@ -284,16 +284,23 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         handleEnumeration(ctx);
     }
 
+    /**
+     * Safe version of {@link #handleEnumerationImpl(EnumerationContext)} which catches exception and
+     * forward to {@link #handleError(EnumerationContext, Throwable)}.
+     */
     private void handleEnumeration(EnumerationContext ctx) {
+        try {
+            handleEnumerationImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    private void handleEnumerationImpl(EnumerationContext ctx) {
         switch (ctx.stage) {
         case CLIENT:
             if (ctx.azureSdkClients == null) {
-                try {
-                    ctx.azureSdkClients = new AzureSdkClients(ctx.endpointAuth);
-                } catch (Throwable e) {
-                    handleError(ctx, e);
-                    return;
-                }
+                ctx.azureSdkClients = new AzureSdkClients(ctx.endpointAuth);
             }
             ctx.stage = EnumerationStages.ENUMERATE;
             handleEnumeration(ctx);
@@ -346,17 +353,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Handle enumeration substages for VM data collection.
+     * Safe version of {@link #handleSubStageImpl(EnumerationContext)} which catches exception and
+     * forward to {@link #handleError(EnumerationContext, Throwable)}.
      */
     private void handleSubStage(EnumerationContext ctx) {
         try {
-            doHandleSubStage(ctx);
+            handleSubStageImpl(ctx);
         } catch (Throwable e) {
             handleError(ctx, e);
         }
     }
 
-    private void doHandleSubStage(EnumerationContext ctx) {
+    private void handleSubStageImpl(EnumerationContext ctx) {
         logInfo(() -> String.format(
                 "Handle substage %s for [endpointLink:%s]", ctx.subStage, ctx.request.endpointLink));
         switch (ctx.subStage) {
@@ -433,6 +441,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         DeferredResult<EndpointState> getEndpointDR = sendWithDeferredResult(getEndpoint,
                 EndpointState.class);
+
         getEndpointDR
                 .thenCompose(endpoint -> {
                     Operation getRegions = Operation
@@ -440,7 +449,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             .setBody(endpoint);
 
                     return sendWithDeferredResult(getRegions, RegionEnumerationResponse.class);
-                }).whenComplete((regionsResponse, e) -> {
+                })
+                .whenComplete((regionsResponse, e) -> {
                     if (e != null) {
                         logWarning("Resource enumeration failed at stage %s with exception %s",
                                 ctx.stage, Utils.toString(e));
@@ -902,7 +912,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // tags, so filter them out
         List<DeferredResult<Operation>> operations = context.virtualMachines
                 .values()
-                .stream().filter(vm -> vm.getTags() != null && !vm.getTags().isEmpty())
+                .stream()
+                .filter(vm -> vm.getTags() != null && !vm.getTags().isEmpty())
                 .flatMap(vm -> vm.getTags().entrySet().stream())
                 .map(entry -> newTagState(entry.getKey(), entry.getValue(), true,
                         context.parentCompute.tenantLinks))
@@ -915,7 +926,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             context.subStage = next;
             handleSubStage(context);
         } else {
-            DeferredResult.allOf(operations).whenComplete(thenHandleSubStage(context, next));
+            DeferredResult.allOf(operations)
+                .whenComplete(thenHandleSubStage(context, next));
         }
     }
 
@@ -930,10 +942,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        DeferredResult.allOf(ctx.computeStates.values().stream().map(c -> {
-            VirtualMachineInner virtualMachine = ctx.virtualMachines.remove(c.id);
-            return Pair.of(c, virtualMachine);
-        })
+        List<DeferredResult<Set<String>>> collect = ctx.computeStates
+                .values()
+                .stream()
+                .map(c -> {
+                    VirtualMachineInner virtualMachine = ctx.virtualMachines.remove(c.id);
+                    return Pair.of(c, virtualMachine);
+                })
                 .filter(p -> p != null && p.getLeft() != null && p.getRight() != null)
                 .map(p -> {
                     ComputeState cs = p.getLeft();
@@ -985,7 +1000,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     ctx.computeStatesForPatching.put(cs.id, cs);
                     return result;
                 })
-                .collect(Collectors.toList())).whenComplete(thenHandleSubStage(ctx, next));
+                .collect(Collectors.toList());
+
+        DeferredResult.allOf(collect).whenComplete(thenHandleSubStage(ctx, next));
     }
 
     private void updateRegions(EnumerationContext ctx, ComputeEnumerationSubStages next) {
@@ -1004,8 +1021,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         ctx.regions.keySet().removeAll(existingRegionIds.keySet());
         ctx.computeStates.keySet().removeAll(existingRegionIds.keySet());
 
-        List<DeferredResult<Operation>> updateRegionComputeStates = existingRegionIds.values().stream().map(
-                compute -> {
+        List<DeferredResult<Operation>> updateRegionComputeStates = existingRegionIds.values()
+                .stream()
+                .map(compute -> {
                     Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
                             (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
                                     Collections.singletonList(ctx.request.endpointLink));
@@ -1013,14 +1031,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
                             .create(collectionsToAddMap, null);
 
-                    return this.sendWithDeferredResult(
-                            Operation.createPatch(this.getHost(), compute.documentSelfLink)
-                                    .setReferer(this.getHost().getUri())
+                    return sendWithDeferredResult(
+                            Operation.createPatch(getHost(), compute.documentSelfLink)
+                                    .setReferer(getHost().getUri())
                                     .setBody(updateEndpointLinksRequest));
-                }).collect(Collectors.toList());
+                })
+                .collect(Collectors.toList());
 
-        List<DeferredResult<Operation>> updateRegionComputeDescs = existingRegionIds.values().stream().map(
-                compute -> {
+        List<DeferredResult<Operation>> updateRegionComputeDescs = existingRegionIds.values()
+                .stream()
+                .map(compute -> {
                     Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
                             (ResourceState.FIELD_NAME_ENDPOINT_LINKS,
                                     Collections.singletonList(ctx.request.endpointLink));
@@ -1028,11 +1048,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
                             .create(collectionsToAddMap, null);
 
-                    return this.sendWithDeferredResult(
-                            Operation.createPatch(this.getHost(), compute.descriptionLink)
-                                    .setReferer(this.getHost().getUri())
+                    return sendWithDeferredResult(
+                            Operation.createPatch(getHost(), compute.descriptionLink)
+                                    .setReferer(getHost().getUri())
                                     .setBody(updateEndpointLinksRequest));
-                }).collect(Collectors.toList());
+                })
+                .collect(Collectors.toList());
 
         ArrayList<DeferredResult<Operation>> updates = new ArrayList<>();
         updates.addAll(updateRegionComputeStates);
@@ -1059,8 +1080,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
                                     .create(collectionsToAddMap, null);
 
-                            return this.sendWithDeferredResult(Operation.createPatch(this.getHost(), entry.descriptionLink)
-                                    .setReferer(this.getHost().getUri())
+                            return sendWithDeferredResult(Operation.createPatch(getHost(), entry.descriptionLink)
+                                    .setReferer(getHost().getUri())
                                     .setBody(updateEndpointLinksRequest));
                         }).collect(Collectors.toList()))
                 .whenComplete(thenHandleSubStage(ctx, next));
@@ -1296,7 +1317,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     logFine(() -> "Continue on to updating disks.");
                     ctx.subStage = next;
                     handleSubStage(ctx);
-                }).sendWith(this);
+                })
+                .sendWith(this);
     }
 
     /**
@@ -1363,8 +1385,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     logFine(() -> "Continue on to create network interfaces.");
                     ctx.subStage = next;
                     handleSubStage(ctx);
-
-                }).sendWith(this);
+                })
+                .sendWith(this);
     }
 
     private DiskState createOSDiskState(VirtualMachineInner vm, EnumerationContext ctx) {
@@ -1524,7 +1546,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
                     ctx.subStage = next;
                     handleSubStage(ctx);
-                }).sendWith(this);
+                })
+                .sendWith(this);
     }
 
     /**
@@ -1622,6 +1645,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .forEach(pair -> remoteNicIds.add(pair.getLeft().id()));
 
         disassociateNicHelper(remoteNicIds, ctx);
+
         return DeferredResult.allOf(ops);
     }
 
@@ -1665,9 +1689,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         CompletionHandler completionHandler = upOp.getCompletion();
                         upOp.setCompletion(null);
 
-                        updateOps.add(sendWithDeferredResult(upOp).whenComplete((o, e) -> {
-                            completionHandler.handle(o, e);
-                        }));
+                        updateOps.add(sendWithDeferredResult(upOp).whenComplete(completionHandler::handle));
                     }
                 });
 
@@ -2049,22 +2071,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             VirtualMachinesInner vmOps = azureClient.virtualMachines().inner();
 
             DeferredResult.allOf(ctx.computeStatesForPatching
-                    .values().stream()
+                    .values()
+                    .stream()
                     .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
                     .map(dr -> dr.thenCompose(c -> sendWithDeferredResult(
-                            Operation.createPut(ctx.request.buildUri(c.documentSelfLink))
-                                    .setBody(c)
-                                    .setCompletion((o, e) -> {
-                                        if (e != null) {
-                                            logWarning(() -> String.format(
-                                                    "Error updating VM:[%s], reason: %s", c.name,
-                                                    e));
-                                        }
-                                    }))))
+                            Operation.createPut(ctx.request.buildUri(c.documentSelfLink)).setBody(c)))
+                    )
                     .collect(Collectors.toList()))
                     .whenComplete((all, e) -> {
                         if (e != null) {
-                            logWarning(() -> String.format("Error: %s", e));
+                            logWarning(() -> String.format("Error: %s", Utils.toString(e)));
                         }
                         ctx.subStage = next;
                         handleSubStage(ctx);

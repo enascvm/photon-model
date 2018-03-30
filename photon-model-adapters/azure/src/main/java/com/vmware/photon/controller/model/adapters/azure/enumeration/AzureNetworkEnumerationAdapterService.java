@@ -263,6 +263,18 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     }
 
     /**
+     * Safe version of {@link #handleEnumerationImpl(NetworkEnumContext)} which catches exception and
+     * forward to {@link #handleError(NetworkEnumContext, Throwable)}.
+     */
+    private void handleEnumeration(NetworkEnumContext ctx) {
+        try {
+            handleEnumerationImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    /**
      * Creates the network states in the local document store based on the networks received from
      * the remote endpoint.
      *
@@ -270,17 +282,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      *            The local service context that has all the information needed to create the
      *            additional description states in the local system.
      */
-    private void handleEnumeration(NetworkEnumContext context) {
+    private void handleEnumerationImpl(NetworkEnumContext context) {
         switch (context.stage) {
 
         case CLIENT:
             if (context.credentials == null) {
-                try {
-                    context.credentials = getAzureConfig(context.endpointAuth);
-                } catch (Throwable e) {
-                    handleError(context, e);
-                    return;
-                }
+                context.credentials = getAzureConfig(context.endpointAuth);
             }
             context.stage = EnumerationStages.ENUMERATE;
             handleEnumeration(context);
@@ -332,7 +339,19 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
     }
 
-    private void handleSubStage(NetworkEnumContext context) {
+    /**
+     * Safe version of {@link #handleSubStageImpl(NetworkEnumContext)} which catches exception and
+     * forward to {@link #handleError(NetworkEnumContext, Throwable)}.
+     */
+    private void handleSubStage(NetworkEnumContext ctx) {
+        try {
+            handleSubStageImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    private void handleSubStageImpl(NetworkEnumContext context) {
         switch (context.subStage) {
         case GET_VNETS:
             context.clearPageTempData();

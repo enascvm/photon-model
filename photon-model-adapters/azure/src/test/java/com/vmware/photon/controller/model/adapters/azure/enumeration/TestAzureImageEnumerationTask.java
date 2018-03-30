@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 
 import com.google.common.collect.Sets;
 import com.microsoft.azure.management.resources.fluentcore.arm.Region;
+
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -43,12 +44,12 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState.DiskConfiguration;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -101,7 +102,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
 
         AtomicInteger counter = new AtomicInteger(0);
 
-        QueryTemplate.waitToComplete(queryAll.queryLinks(imageLink -> {
+        PhotonModelUtils.waitToComplete(queryAll.queryLinks(imageLink -> {
             try {
                 deleteServiceSynchronously(imageLink);
                 counter.incrementAndGet();
@@ -148,7 +149,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 this.endpointState.tenantLinks,
                 this.endpointState.documentSelfLink);
 
-        List<ImageState> images = QueryByPages.waitToComplete(
+        List<ImageState> images = PhotonModelUtils.waitToComplete(
                 queryAll.collectDocuments(Collectors.toList()));
 
         Assert.assertTrue("Expected at least " + 1 + " private image, but found " + images.size(),
@@ -424,7 +425,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 ImageState.class,
                 task.tenantLinks);
 
-        Map<String, List<ImageState>> imagesByOsFamily = QueryByPages.waitToComplete(
+        Map<String, List<ImageState>> imagesByOsFamily = PhotonModelUtils.waitToComplete(
                 queryAll.collectDocuments(
                         Collectors.groupingBy(imageState -> imageState.osFamily)));
 
@@ -475,7 +476,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 task.tenantLinks);
         queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
 
-        Long imagesCount = QueryByPages.waitToComplete(
+        Long imagesCount = PhotonModelUtils.waitToComplete(
                 queryAll.collectLinks(Collectors.counting()));
 
         Assert.assertTrue("Expected at least " + 200 + " images, but found only " + imagesCount,
@@ -502,7 +503,7 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
                 task.tenantLinks);
         queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
 
-        Long imagesCount = QueryByPages.waitToComplete(
+        Long imagesCount = PhotonModelUtils.waitToComplete(
                 queryAll.collectLinks(Collectors.counting()));
 
         Assert.assertTrue("Expected at least " + 4_500 + " images, but found only " + imagesCount,

@@ -2316,11 +2316,11 @@ public class AzureInstanceService extends StatelessService {
 
         String childAuthLink = ctx.child.description.authCredentialsLink;
         Consumer<Operation> onSuccess = (op) -> {
-            ctx.childAuth = op.getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
+            ctx.childAuth = op.getBody(AuthCredentialsServiceState.class);
             handleAllocation(ctx, next);
         };
         AdapterUtils
-                .getServiceState(this, createInventoryUri(this.getHost(), childAuthLink), onSuccess,
+                .getServiceState(this, createInventoryUri(getHost(), childAuthLink), onSuccess,
                         getFailureConsumer(ctx));
     }
 

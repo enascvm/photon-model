@@ -171,6 +171,18 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
     }
 
     /**
+     * Safe version of {@link #handleEnumerationImpl(ResourceGroupEnumContext)} which catches exception and
+     * forward to {@link #handleError(ResourceGroupEnumContext, Throwable)}.
+     */
+    private void handleEnumeration(ResourceGroupEnumContext ctx) {
+        try {
+            handleEnumerationImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    /**
      * Creates the resource group states in the local document store based on the resource groups
      * received from the remote endpoint.
      *
@@ -178,17 +190,12 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
      *            The local service context that has all the information needed to create the
      *            additional description states in the local system.
      */
-    private void handleEnumeration(ResourceGroupEnumContext context) {
+    private void handleEnumerationImpl(ResourceGroupEnumContext context) {
         switch (context.stage) {
 
         case CLIENT:
             if (context.credentials == null) {
-                try {
-                    context.credentials = getAzureConfig(context.request.endpointAuth);
-                } catch (Throwable e) {
-                    handleError(context, e);
-                    return;
-                }
+                context.credentials = getAzureConfig(context.request.endpointAuth);
             }
             context.stage = EnumerationStages.ENUMERATE;
             handleEnumeration(context);

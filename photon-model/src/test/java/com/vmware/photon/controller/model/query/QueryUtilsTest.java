@@ -21,7 +21,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 
-import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.waitToComplete;
 
 import java.util.Arrays;
 import java.util.Collections;

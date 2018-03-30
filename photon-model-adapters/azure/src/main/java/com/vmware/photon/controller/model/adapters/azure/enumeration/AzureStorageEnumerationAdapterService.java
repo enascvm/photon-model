@@ -267,25 +267,29 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     }
 
     /**
+     * Safe version of {@link #handleEnumeration(StorageEnumContext)} which catches exception and
+     * forward to {@link #handleError(StorageEnumContext, Throwable)}.
+     */
+    private void handleEnumeration(StorageEnumContext ctx) {
+        try {
+            handleEnumerationImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    /**
      * Creates the storage description states in the local document store based on the storage
      * accounts received from the remote endpoint.
      *
      * @param context The local service context that has all the information needed to create the
      *                additional description states in the local system.
      */
-    private void handleEnumeration(StorageEnumContext context) {
+    private void handleEnumerationImpl(StorageEnumContext context) {
         switch (context.stage) {
         case CLIENT:
             if (context.azureSdkClients == null) {
-                try {
-                    context.azureSdkClients = new AzureSdkClients(context.endpointAuth);
-                } catch (Throwable e) {
-                    logSevere(e);
-                    context.error = e;
-                    context.stage = EnumerationStages.ERROR;
-                    handleEnumeration(context);
-                    return;
-                }
+                context.azureSdkClients = new AzureSdkClients(context.endpointAuth);
             }
             context.stage = EnumerationStages.ENUMERATE;
             handleEnumeration(context);
@@ -340,7 +344,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
     }
 
-    private void handleSubStage(StorageEnumContext context) {
+    /**
+     * Safe version of {@link #handleSubStageImpl(StorageEnumContext)} which catches exception and
+     * forward to {@link #handleError(StorageEnumContext, Throwable)}.
+     */
+    private void handleSubStage(StorageEnumContext ctx) {
+        try {
+            handleSubStageImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    private void handleSubStageImpl(StorageEnumContext context) {
         logInfo("Azure Storage enumeration at stage %s, for %s", context.subStage,
                 getEnumKey(context));
         switch (context.subStage) {

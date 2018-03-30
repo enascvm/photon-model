@@ -62,7 +62,6 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -80,7 +79,6 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  * Update local disk states matching the disk IDs.
  * Or create disk states for the disks which are independent and not in local.
  * Delete disk states from local store that are not present in Azure.
- *
  */
 public class AzureDiskEnumerationAdapterService extends StatelessService {
 
@@ -165,17 +163,24 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
         handleEnumeration(context);
     }
 
+    /**
+     * Safe version of {@link #handleEnumerationImpl(DiskEnumContext)} which catches exception and
+     * forward to {@link #handleError(DiskEnumContext, Throwable)}.
+     */
     private void handleEnumeration(DiskEnumContext ctx) {
+        try {
+            handleEnumerationImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    private void handleEnumerationImpl(DiskEnumContext ctx) {
         switch (ctx.stage) {
 
         case CLIENT:
             if (ctx.credentials == null) {
-                try {
-                    ctx.credentials = getAzureConfig(ctx.endpointAuth);
-                } catch (Exception e) {
-                    handleError(ctx, e);
-                    return;
-                }
+                ctx.credentials = getAzureConfig(ctx.endpointAuth);
             }
             ctx.stage = EnumerationStages.ENUMERATE;
             handleEnumeration(ctx);
@@ -227,7 +232,19 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
         }
     }
 
+    /**
+     * Safe version of {@link #handleSubStageImpl(EnumerationContext)} which catches exception and
+     * forward to {@link #handleError(EnumerationContext, Throwable)}.
+     */
     private void handleSubStage(DiskEnumContext ctx) {
+        try {
+            handleSubStageImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    private void handleSubStageImpl(DiskEnumContext ctx) {
         switch (ctx.subStage) {
 
         case CREATE_INTERNAL_TYPE_TAG:

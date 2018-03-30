@@ -311,6 +311,18 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
     }
 
     /**
+     * Safe version of {@link #handleEnumeration(ResourceGroupEnumContext)} which catches exception and
+     * forward to {@link #handleError(ResourceGroupEnumContext, Throwable)}.
+     */
+    private void handleEnumeration(SecurityGroupEnumContext ctx) {
+        try {
+            handleEnumerationImpl(ctx);
+        } catch (Throwable e) {
+            handleError(ctx, e);
+        }
+    }
+
+    /**
      * Creates the firewall states in the local document store based on the network security groups
      * received from the remote endpoint.
      *
@@ -318,17 +330,12 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
      *            The local service context that has all the information needed to create the
      *            additional description states in the local system.
      */
-    private void handleEnumeration(SecurityGroupEnumContext context) {
+    private void handleEnumerationImpl(SecurityGroupEnumContext context) {
         switch (context.stage) {
 
         case CLIENT:
             if (context.credentials == null) {
-                try {
-                    context.credentials = getAzureConfig(context.request.endpointAuth);
-                } catch (Throwable e) {
-                    handleError(context, e);
-                    return;
-                }
+                context.credentials = getAzureConfig(context.request.endpointAuth);
             }
             context.stage = EnumerationStages.ENUMERATE;
             handleEnumeration(context);

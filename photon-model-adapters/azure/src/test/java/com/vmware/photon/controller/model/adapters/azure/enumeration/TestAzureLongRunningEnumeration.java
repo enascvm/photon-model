@@ -51,11 +51,11 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.validateDiskInternalTag;
 import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.TAG_KEY_TYPE;
-import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
 import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.createOriginTagQuery;
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.waitToComplete;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 
 import java.net.URI;
@@ -133,7 +133,6 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;

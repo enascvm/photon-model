@@ -99,8 +99,6 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     if (t != null) {
                         context.error = t;
                         context.stage = AzureEnumerationStages.ERROR;
-                        handleEnumerationRequest(context);
-                        return;
                     }
                     handleEnumerationRequest(context);
                 });
@@ -216,9 +214,13 @@ public class AzureEnumerationAdapterService extends StatelessService {
             AzureEnumerationStages next) {
         Operation.CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
-                context.error = new IllegalStateException(String.format(
-                        "Error executing Azure enumeration adapter %s for %s: %s", adapterSelfLink,
-                        context.request.endpointLink, e.getMessage()), e);
+                final String msg = String.format(
+                        "Error executing Azure enumeration adapter '%s' for '%s': %s",
+                        adapterSelfLink,
+                        context.request.endpointLink,
+                        Utils.toString(e));
+
+                context.error = new IllegalStateException(msg, e);
 
                 context.taskManager.patchTaskToFailure(context.error);
 
@@ -227,8 +229,9 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            logInfo(() -> String.format("Completed Azure enumeration adapter %s for %s", adapterSelfLink,
-                            context.request.endpointLink));
+            logInfo(() -> String.format("Completed Azure enumeration adapter %s for %s",
+                    adapterSelfLink,
+                    context.request.endpointLink));
             context.stage = next;
             handleEnumerationRequest(context);
         };
