@@ -1398,6 +1398,18 @@ public class VimPath {
     /** PropertyType: <code>ArrayOfPhysicalNicConfig</code> */
     public static final String host_config_network_pnic = "config.network.pnic";
 
+    /** PropertyType: <code>HostHyperThreadScheduleInfo</code> */
+    public static final String host_config_hyperThread = "config.hyperThread";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String host_config_hyperThread_available = "config.hyperThread.available";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String host_config_hyperThread_active = "config.hyperThread.active";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String host_config_hyperThread_config = "config.hyperThread.config";
+
     /** PropertyType: <code>TaskInfo</code> */
     public static final String task_info = "info";
 

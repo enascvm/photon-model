@@ -141,7 +141,7 @@ public class VSphereHostSystemEnumerationHelper {
                 .put(CustomProperties.MANUFACTURER, hs.getVendor())
                 .put(CustomProperties.MODEL_NAME, hs.getModel())
                 .put(CustomProperties.HS_CPU_PKG_COUNT, hs.getNumCpuPkgs())
-                .put(CustomProperties.HS_MEMORY_IN_GB, hs.getTotalMemoryBytes() / (1024 * 1024 * 1024))
+                .put(CustomProperties.HS_MEMORY_IN_GB, AdapterUtils.convertBytesToGB(hs.getTotalMemoryBytes()))
                 .put(CustomProperties.HS_NIC_COUNT, hs.getNumNics())
                 .put(CustomProperties.HS_NICS_INFO, hs.getConsolidatedNicInfo())
                 .put(CustomProperties.HS_CPU_DESC, hs.getCpuModel())
@@ -153,6 +153,17 @@ public class VSphereHostSystemEnumerationHelper {
                     .put(CustomProperties.CLUSTER_LINK, enumerationProgress
                             .getComputeResourceTracker().getSelfLink(hs.getParentMoref()));
         }
+
+        if (null != hs.isHyperThreadAvailable()) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.HS_HYPERTHREAD_AVAILABLE, hs.isHyperThreadAvailable().booleanValue());
+        }
+
+        if (null != hs.isHyperThreadActive()) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.HS_HYPERTHREAD_ACTIVE, hs.isHyperThreadAvailable().booleanValue());
+        }
+
         VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid(),
                 hs.getId());
         return state;

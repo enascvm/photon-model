@@ -199,6 +199,10 @@ public class CustomProperties {
     public static final String SERVER_DISK_TYPE = "scsiDiskType";
     public static final String VC_UUID = "vcUuid";
     public static final String VIRTUAL_MACHINE_LINK = "__virtualMachineLink";
+    public static final String VM_MEMORY_IN_GB = "memoryGB";
+    public static final String DS_FREE_SPACE_IN_GB = "freeSizeGB";
+    public static final String HS_HYPERTHREAD_AVAILABLE = "hyperThreadAvailable";
+    public static final String HS_HYPERTHREAD_ACTIVE = "hyperThreadActive";
 
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;

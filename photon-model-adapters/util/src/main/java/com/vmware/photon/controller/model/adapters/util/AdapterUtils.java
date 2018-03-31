@@ -238,4 +238,8 @@ public class AdapterUtils {
         }
         resource.endpointLinks.add(endpointLink);
     }
+
+    public static long convertBytesToGB(long bytes) {
+        return bytes / (1024 * 1024 * 1024);
+    }
 }

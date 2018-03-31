@@ -244,6 +244,8 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                 if (!resourcesUpdates.isEmpty()) {
                                     SegregatedOverlays segregatedOverlays =
                                             segregateObjectUpdates(enumerationProgress, resourcesUpdates);
+                                    this.logInfo("Processing incremental changes for folders for datacenter [%s]!", collectorDetails.datacenter);
+                                    VsphereFolderEnumerationHelper.handleFolderChanges(this, segregatedOverlays.folders, enumerationProgress, client);
                                     logInfo("Processing incremental changes for networks for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereNetworkEnumerationHelper
                                             .handleNetworkChanges(this, segregatedOverlays.networks, enumerationProgress, client);
@@ -546,7 +548,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                 // Folder A is root folder and has datacenter as the parent.
                 // Folder Ac has parent as A. Since 'A' is not persisted anymore, 'Ac'
                 // should have the datacenter as its parent.
-                VsphereFolderEnumerationHelper.processFoundFolder(this, ctx, folder, rootFolders);
+                VsphereFolderEnumerationHelper.processFoundFolder(this, ctx, folder, rootFolders, client);
             } catch (Exception e) {
                 logWarning(() -> "Error processing folder information : " + e.toString());
             }

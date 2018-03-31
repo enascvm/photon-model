@@ -134,6 +134,11 @@ public class EnumerationClient extends BaseHelper {
         return parent;
     }
 
+    public ManagedObjectReference getParentOfFolder(ManagedObjectReference folderRef)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        return this.getMoRef.entityProp(folderRef, VimNames.PROPERTY_PARENT);
+    }
+
     public String getUUIDForDVS(NetworkOverlay net) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         String uuid = this.getMoRef.entityProp(net.getParentSwitch(), VimPath.dvs_uuid);
         return uuid;
@@ -349,7 +354,9 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.host_summary_hardware_vendor,
                 VimPath.host_summary_hardware_model,
                 VimPath.host_summary_hardware_cpuModel,
-                VimPath.host_config_network_pnic
+                VimPath.host_config_network_pnic,
+                VimPath.host_config_hyperThread_active,
+                VimPath.host_config_hyperThread_available
         ));
 
         PropertySpec rpSpec = new PropertySpec();

@@ -117,6 +117,7 @@ public final class VimPathGenerator {
         this.roots.put("host:datastore", "ArrayOfManagedObjectReference");
         this.roots.put("host:network", "ArrayOfManagedObjectReference");
         this.roots.put("host:config.network.pnic", "ArrayOfPhysicalNicConfig");
+        this.roots.put("host:config.hyperThread", "HostHyperThreadScheduleInfo");
 
         this.roots.put("task:info", "TaskInfo");
 

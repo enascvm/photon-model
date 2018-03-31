@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIncrementalEnumerationService.InterfaceStateMode;
+import com.vmware.photon.controller.model.adapters.vsphere.VsphereResourceCleanerService.ResourceCleanRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -132,17 +133,27 @@ public class VSphereVirtualMachineEnumerationHelper {
         return res;
     }
 
-    private static ComputeState makeVmFromChanges(EnumerationProgress enumerationProgress, VmOverlay vm) {
+    private static ComputeState makeVmFromChanges(VmOverlay vm) {
         ComputeState state = new ComputeState();
 
         // CPU count can be changed
         state.cpuCount = (long) vm.getNumCpu();
         // Memory can be changed
-        state.totalMemoryBytes = vm.getMemoryBytes();
+        if (vm.getMemoryBytes() != 0) {
+            state.totalMemoryBytes = vm.getMemoryBytes();
+            CustomProperties.of(state)
+                    .put(CustomProperties.VM_MEMORY_IN_GB, AdapterUtils.convertBytesToGB(vm.getMemoryBytes()));
+        }
         // Power state can be changed
         state.powerState = vm.getPowerState();
         // Name can be changed
         state.name = vm.getName();
+        // OS can be changed
+        if (null != vm.getOS()) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS());
+        }
+
         return state;
     }
 
@@ -186,7 +197,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM)
                 .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS())
                 .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
-                .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId());
+                .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId())
+                .put(CustomProperties.VM_MEMORY_IN_GB, AdapterUtils.convertBytesToGB(vm.getMemoryBytes()));
         VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid());
         String selfLink = enumerationProgress.getHostSystemTracker().getSelfLink(vm.getHost());
         if (null != selfLink) {
@@ -401,7 +413,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         if (fullUpdate) {
             state = makeVmFromResults(enumerationProgress, vm);
         } else {
-            state = makeVmFromChanges(enumerationProgress, vm);
+            state = makeVmFromChanges(vm);
         }
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
@@ -611,9 +623,6 @@ public class VSphereVirtualMachineEnumerationHelper {
                         } else {
                             deleteVM(enumerationProgress, vmOverlay, service, oldDocument);
                         }
-                        // TODO: Implement VM modify here
-                        // ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
-                        //  updateVm(service, oldDocument, enumerationProgress, vmOverlay);
                     } else {
                         enumerationProgress.getVmTracker().arrive();
                     }
@@ -624,10 +633,21 @@ public class VSphereVirtualMachineEnumerationHelper {
 
     private static void deleteVM(EnumerationProgress enumerationProgress, VmOverlay vmOverlay,
                                  VSphereIncrementalEnumerationService service, ServiceDocument oldDocument) {
-        Operation.createDelete(
-                PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
-                .setCompletion((o, e) -> {
-                    trackVm(enumerationProgress).handle(o, e);
-                }).sendWith(service);
+        if (!enumerationProgress.getRequest().preserveMissing) {
+            Operation.createDelete(
+                    PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                    .setCompletion((o, e) -> {
+                        trackVm(enumerationProgress).handle(o, e);
+                    })
+                    .sendWith(service);
+        } else {
+            ResourceCleanRequest patch = new ResourceCleanRequest();
+            patch.resourceLink = oldDocument.documentSelfLink;
+            Operation.createPatch(service, VSphereUriPaths.RESOURCE_CLEANER)
+                    .setBody(patch)
+                    .setCompletion((o, e) -> {
+                        trackVm(enumerationProgress).handle(o, e);
+                    }).sendWith(service);
+        }
     }
 }

@@ -27,8 +27,16 @@ public class FolderOverlay extends AbstractOverlay {
         return (String) getOrFail(VimNames.PROPERTY_NAME);
     }
 
+    public String getNameOrNull() {
+        return (String) getOrDefault(VimNames.PROPERTY_NAME, null);
+    }
+
     public ManagedObjectReference getParent() {
         return (ManagedObjectReference) getOrFail(VimNames.PROPERTY_PARENT);
+    }
+
+    public ManagedObjectReference getParentOrNull() {
+        return (ManagedObjectReference) getOrDefault(VimNames.PROPERTY_PARENT, null);
     }
 
     public String getView() {

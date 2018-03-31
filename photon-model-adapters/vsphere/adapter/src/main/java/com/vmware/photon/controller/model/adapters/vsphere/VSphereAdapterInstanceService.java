@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.fi
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.handleVirtualDeviceUpdate;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.handleVirtualDiskUpdate;
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DATACENTER_SELF_LINK;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.VC_UUID;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -227,9 +228,10 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         // Find the host link where the computed is provisioned and patch the
                         // compute state.
                         queryHostDocumentAndUpdateCompute(ctx, vmOverlay.getHost())
-                                .thenCompose(links -> {
-                                    ComputeState hostState = links.iterator().next();
+                                .thenCompose(computeState -> {
+                                    ComputeState hostState = computeState.iterator().next();
                                     CustomProperties.of(state)
+                                            .put(VC_UUID, CustomProperties.of(hostState).getString(VC_UUID))
                                             // set the datacenter delf link from host state
                                             .put(DATACENTER_SELF_LINK, CustomProperties.of(hostState).getString(DATACENTER_SELF_LINK))
                                             // set the host state self link

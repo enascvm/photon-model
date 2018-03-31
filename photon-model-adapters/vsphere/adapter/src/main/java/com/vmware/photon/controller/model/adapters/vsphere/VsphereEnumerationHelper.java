@@ -258,8 +258,6 @@ public class VsphereEnumerationHelper {
         }
 
         for (ManagedObjectReference ref : networks) {
-            NetworkOverlay ov = (NetworkOverlay) ctx.getOverlay(ref);
-            //The ctx.getOverlay can be null in incremental
             if (TYPE_PORTGROUP.equals(ref.getType())) {
                 NetworkOverlay ovly = (NetworkOverlay) ctx.getOverlay(ref);
                 ManagedObjectReference parentSwitch = null;

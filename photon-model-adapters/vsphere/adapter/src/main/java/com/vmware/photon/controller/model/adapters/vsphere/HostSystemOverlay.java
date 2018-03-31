@@ -140,4 +140,12 @@ public class HostSystemOverlay extends AbstractOverlay {
         }
         return Utils.toJson(nicInfo);
     }
+
+    public Boolean isHyperThreadAvailable() {
+        return (Boolean) getOrDefault(VimPath.host_config_hyperThread_available, null);
+    }
+
+    public Boolean isHyperThreadActive() {
+        return (boolean) getOrDefault(VimPath.host_config_hyperThread_active, null);
+    }
 }

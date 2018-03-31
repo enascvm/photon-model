@@ -100,7 +100,8 @@ public class VsphereDatastoreEnumerationHelper {
                 .put(CustomProperties.TYPE, ds.getType())
                 .put(CustomProperties.DS_PATH, ds.getPath())
                 .put(CustomProperties.DATACENTER_SELF_LINK, ctx.getDcLink())
-                .put(CustomProperties.PROPERTY_NAME, ds.getName());
+                .put(CustomProperties.PROPERTY_NAME, ds.getName())
+                .put(CustomProperties.DS_FREE_SPACE_IN_GB, AdapterUtils.convertBytesToGB(ds.getFreeSpaceBytes()));
         VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(res, ctx.getVcUuid());
         return res;
     }
@@ -202,7 +203,7 @@ public class VsphereDatastoreEnumerationHelper {
         String regionId = enumerationProgress.getRegionId();
         StorageDescription desc;
         if (fullUpdate) {
-            desc = makeStorageFromResults(request, ds, regionId,  enumerationProgress);
+            desc = makeStorageFromResults(request, ds, regionId, enumerationProgress);
         } else {
             desc = makeStorageFromChanges(ds, oldDocument);
         }
@@ -247,12 +248,19 @@ public class VsphereDatastoreEnumerationHelper {
             storageDescription.capacityBytes = datastore.getCapacityBytesOrZero();
             CustomProperties.of(storageDescription)
                     .put(STORAGE_USED_BYTES, datastore.getCapacityBytes() - datastore.getFreeSpaceBytes())
-                    .put(STORAGE_AVAILABLE_BYTES, datastore.getFreeSpaceBytes());
+                    .put(STORAGE_AVAILABLE_BYTES, datastore.getFreeSpaceBytes())
+                    .put(CustomProperties.DS_FREE_SPACE_IN_GB, AdapterUtils.convertBytesToGB(datastore.getFreeSpaceBytes()));
         } else if (datastore.getFreeSpaceBytes() > 0L) {
             CustomProperties.of(storageDescription)
                     .put(STORAGE_USED_BYTES, oldDocument.capacityBytes - datastore.getFreeSpaceBytes())
-                    .put(STORAGE_AVAILABLE_BYTES, datastore.getFreeSpaceBytes());
+                    .put(STORAGE_AVAILABLE_BYTES, datastore.getFreeSpaceBytes())
+                    .put(CustomProperties.DS_FREE_SPACE_IN_GB, AdapterUtils.convertBytesToGB(datastore.getFreeSpaceBytes()));
         }
+        if (null != datastore.getPath()) {
+            CustomProperties.of(storageDescription)
+                    .put(CustomProperties.DS_PATH, datastore.getPath());
+        }
+
         return storageDescription;
     }
 
