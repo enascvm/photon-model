@@ -106,6 +106,12 @@ public class AzureUtils {
     public static final String COMPUTES_NAME_FORMAT_WITH_PARENT_NAME_ENTITY_NAME =
             "%s" + COMPUTE_NAME_SEPARATOR + "%s";
 
+    // Private image pattern
+    public static final String PRIVATE_IMAGE_REGEX = "^/subscriptions/\\S+/resourceGroups/\\S+" +
+            "/providers/Microsoft.Compute/images/\\S+$";
+    // Public image pattern
+    public static final String PUBLIC_IMAGE_REGEX = "^\\S+:\\S+:\\S+:\\S+$";
+
     /**
      * Flag to use azure-mock, will be set in test files. Azure-mock is a tool for testing
      * Azure services in a mock environment.

@@ -160,6 +160,7 @@ public class AWSUtils {
     public static final String AWS_MOCK_LOAD_BALANCING_ENDPOINT = "/aws-mock/load-balancing-endpoint/";
     public static final String AWS_REGION_HEADER = "region";
 
+    public static final String AWS_IMAGE_REGEX = "^ami-\\S+";
     /**
      * -Dphoton-model.aws.masterAccount.accessKey
      * -Dphoton-model.aws.masterAccount.secretKey

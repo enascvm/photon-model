@@ -55,6 +55,10 @@ public final class VimUtils {
     public static final String EXCEPTION_SUFFIX = "FaultMsg";
     private static final byte[] HASH_DELIMITER = new byte[] { ':' };
 
+    // Patterns for vsphere images
+    public static final String OVA_REGEX = "^(https?|file)://\\S+(\\.ova|\\.ovf)$";
+    public static final String LIBRARY_ITEM_REGEX = "^.+/.+$";
+
     private VimUtils() {
 
     }
