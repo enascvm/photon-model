@@ -145,9 +145,13 @@ public class PhotonModelUtils {
             ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
                     .buildDescription(resourceClass);
 
-            return (String) ReflectionUtils.getPropertyValue(
-                    sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK),
-                    state);
+            if (sdDesc != null
+                    && sdDesc.propertyDescriptions != null
+                    && sdDesc.propertyDescriptions.containsKey(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK)) {
+                return (String) ReflectionUtils.getPropertyValue(
+                        sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK),
+                        state);
+            }
         }
         return null;
     }
