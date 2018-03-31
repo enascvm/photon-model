@@ -556,7 +556,7 @@ public class InstanceClient extends BaseHelper {
      * then disk will be detached before we delete the vm.
      */
     private void handleVirtualDiskCleanup(ServiceHost serviceHost, ManagedObjectReference vm,
-            ArrayOfVirtualDevice devices, List<DiskStateExpanded> disks) throws Exception {
+                                          ArrayOfVirtualDevice devices, List<DiskStateExpanded> disks) throws Exception {
         if (CollectionUtils.isEmpty(disks)) {
             return;
         }
@@ -869,7 +869,7 @@ public class InstanceClient extends BaseHelper {
     }
 
     private ManagedObjectReference awaitVM(String replicatedName, ManagedObjectReference vmFolder,
-            GetMoRef get)
+                                           GetMoRef get)
             throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException {
 
         Element element = this.finder.fullPath(vmFolder);
@@ -1355,8 +1355,8 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualMachineRelocateSpecDiskLocator setProvisioningType(VirtualDisk vDisk,
-            ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec)
-          throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
+                                                                      ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec)
+            throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
 
         if (vDisk == null) {
             return null;
@@ -1477,6 +1477,8 @@ public class InstanceClient extends BaseHelper {
         Map<String, Object> props = this.get.entityProps(this.vm,
                 VimPath.vm_config_instanceUuid,
                 VimPath.vm_config_name,
+                VimPath.vm_config_hardware_memoryMB,
+                VimPath.vm_summary_config_numCpu,
                 VimPath.vm_config_hardware_device,
                 VimPath.vm_runtime_powerState,
                 VimPath.vm_runtime_host,
@@ -1484,6 +1486,7 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_guest_net,
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName,
+                VimPath.vm_summary_config_guestFullName,
                 VimPath.vm_datastore);
 
         VmOverlay overlay = new VmOverlay(this.vm, props);
@@ -1492,12 +1495,18 @@ public class InstanceClient extends BaseHelper {
         state.powerState = overlay.getPowerState();
         state.address = overlay.guessPublicIpV4Address();
         state.name = overlay.getName();
+        state.cpuCount = (long) overlay.getNumCpu();
+        state.totalMemoryBytes = overlay.getMemoryBytes();
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, this.vm)
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM)
                 .put(STORAGE_REFERENCE, overlay.getDatastoreMorefsAsString());
 
+        if (null != overlay.getOS()) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.VM_SOFTWARE_NAME, overlay.getOS());
+        }
         return overlay;
     }
 

@@ -186,21 +186,25 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
     public void handlePatch(Operation patch) {
         // complete the patch immediately.
         patch.complete();
-        VsphereEnumerationHelper.submitWorkToVSpherePool(this, () -> {
-            VSphereIncrementalEnumerationRequest enumerationRequest = patch
-                    .getBody(VSphereIncrementalEnumerationRequest.class);
+        logInfo("Received PATCH for incremental enumeration!");
+        VSphereIncrementalEnumerationRequest enumerationRequest = patch
+                .getBody(VSphereIncrementalEnumerationRequest.class);
+        ComputeEnumerateResourceRequest request = enumerationRequest.request;
+        URI parentUri = ComputeService.ComputeStateWithDescription.buildUri(
+                PhotonModelUriUtils.createInventoryUri(getHost(), request.resourceReference));
+        logInfo("Creating task manager!");
+        TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
+        logInfo(" Requesting GET on compute state with description!.");
+        Operation.createGet(parentUri)
+                .setCompletion(o -> {
+                    logInfo("Submitting job to threadpool!");
+                    VsphereEnumerationHelper.submitWorkToVSpherePool(this, () -> {
+                        logInfo("Incremental enumeration job started for endpoint %s", enumerationRequest.request.endpointLink);
 
-            ComputeEnumerateResourceRequest request = enumerationRequest.request;
-            URI parentUri = ComputeService.ComputeStateWithDescription.buildUri(
-                    PhotonModelUriUtils.createInventoryUri(getHost(), request.resourceReference));
-
-            TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
-            Operation.createGet(parentUri)
-                    .setCompletion(o -> {
                         ComputeStateWithDescription computeStateWithDesc =
                                 o.getBody(ComputeStateWithDescription.class);
                         VapiConnection vapiConnection = VapiConnection.createFromVimConnection(this.connection);
-
+                        logInfo("Establishing VAPI connection for endpoint %s", enumerationRequest.request.endpointLink);
                         try {
                             vapiConnection.login();
                         } catch (IOException | RpcException rpce) {
@@ -230,34 +234,39 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                 List<ObjectUpdate> vmUpdates = collectVMData(collectorDetails);
                                 logInfo("Received resources updates for datacenter: %s : %s",
                                         collectorDetails.datacenter, resourcesUpdates.size());
+                                logInfo("Received vm updates for datacenter: %s : %s",
+                                        collectorDetails.datacenter, vmUpdates.size());
 
+                                logInfo("Resources Updates: %s", Utils.toJson(resourcesUpdates));
+
+                                logInfo("VM Updates: %s", Utils.toJson(vmUpdates));
 
                                 if (!resourcesUpdates.isEmpty()) {
                                     SegregatedOverlays segregatedOverlays =
                                             segregateObjectUpdates(enumerationProgress, resourcesUpdates);
-                                    this.logInfo("Processing incremental changes for networks for datacenter [%s]!", collectorDetails.datacenter);
+                                    logInfo("Processing incremental changes for networks for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereNetworkEnumerationHelper
                                             .handleNetworkChanges(this, segregatedOverlays.networks, enumerationProgress, client);
-                                    this.logInfo("Processing incremental changes for Datastores for datacenter [%s]!", collectorDetails.datacenter);
+                                    logInfo("Processing incremental changes for Datastores for datacenter [%s]!", collectorDetails.datacenter);
                                     VsphereDatastoreEnumerationHelper
                                             .handleDatastoreChanges(this, segregatedOverlays.datastores, enumerationProgress);
-                                    this.logInfo("Processing incremental changes for compute resource for datacenter [%s]!", collectorDetails.datacenter);
+                                    logInfo("Processing incremental changes for compute resource for datacenter [%s]!", collectorDetails.datacenter);
                                     VsphereComputeResourceEnumerationHelper
                                             .handleComputeResourceChanges(this, segregatedOverlays.clusters, enumerationProgress, client);
-                                    this.logInfo("Processing incremental changes for host system for datacenter [%s]!", collectorDetails.datacenter);
+                                    logInfo("Processing incremental changes for host system for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereHostSystemEnumerationHelper
                                             .handleHostSystemChanges(this, segregatedOverlays.hosts, enumerationProgress, client);
-                                    this.logInfo("Processing incremental changes for resource pool for datacenter [%s]!", collectorDetails.datacenter);
+                                    logInfo("Processing incremental changes for resource pool for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereResourcePoolEnumerationHelper
                                             .handleResourcePoolChanges(this, segregatedOverlays.resourcePools, enumerationProgress, client);
                                 }
                                 if (!vmUpdates.isEmpty()) {
-                                    this.logInfo("Processing incremental changes for virtual machines for datacenter [%s]!", collectorDetails.datacenter);
+                                    logInfo("Processing incremental changes for virtual machines for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereVirtualMachineEnumerationHelper.handleVMChanges(this, vmUpdates, enumerationProgress, client);
                                 }
 
                                 //sync storage profiles
-                                this.logInfo("Syncing storage profiles for datacenter [%s]!", collectorDetails.datacenter);
+                                logInfo("Syncing storage profiles for datacenter [%s]!", collectorDetails.datacenter);
                                 VsphereStoragePolicyEnumerationHelper.syncStorageProfiles(this, client, enumerationProgress);
                             }
                             mgr.patchTask(TaskStage.FINISHED);
@@ -272,12 +281,12 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                         } finally {
                             vapiConnection.close();
                         }
-                    }, mgr).setReferer(this.getHost().getUri()).sendWith(this);
-        });
+                    });
+                }, mgr).sendWith(this);
     }
 
     private void selfDeleteService() {
-        this.sendRequest(Operation.createDelete(this.getUri()).setReferer(this.getHost().getUri()));
+        this.sendRequest(Operation.createDelete(this.getUri()));
     }
 
     private void cleanupConnection() {

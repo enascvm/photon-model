@@ -81,15 +81,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         // if we receive START action, check if there is a stateless for endpoint,
         // if yes, patch it. If no, create new one via post to factory.
         if (EnumerationAction.START.equals(request.enumerationAction)) {
-            Operation.createGet(uri).setReferer(this.getHost().getUri()).setCompletion((o, e) -> {
+            Operation.createGet(uri).setCompletion((o, e) -> {
                 if (null != e || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
                     // service not found, create a new one
                     createNewEnumerationService(enumerationRequest, mgr);
                 } else {
+                    logInfo("Patching incremental service for incremental enumeration for %s",
+                            enumerationRequest.documentSelfLink);
                     Operation patchRequest = Operation
                             .createPatch(uri)
                             .setBody(enumerationRequest)
-                            .setReferer(this.getHost().getUri())
                             .setCompletion((operation, err) -> {
                                 if (err != null) {
                                     logSevere("Unable to send enumeration request to enumeration"
@@ -98,14 +99,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                                     mgr.patchTaskToFailure(err);
                                 }
                             });
-                    patchRequest.sendWith(this.getHost());
+                    patchRequest.sendWith(this);
                 }
-            }).sendWith(this.getHost());
+            }).sendWith(this);
         } else {
             // Stop any existing enumeration process when REFRESH is received.
             logFine("Deleting the incremental enumeration service.");
             Operation deleteRequest = Operation.createDelete(uri)
-                    .setReferer(this.getHost().getUri()).setCompletion((o, e) -> {
+                    .setCompletion((o, e) -> {
                         if (null != e) {
                             logWarning("Delete of enumeration service failed for endpoint "
                                     + enumerationRequest.documentSelfLink + " Message: %s", e.getMessage());
@@ -121,7 +122,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                             createNewEnumerationService(enumerationRequest, mgr);
                         }
                     });
-            deleteRequest.sendWith(this.getHost());
+            deleteRequest.sendWith(this);
         }
     }
 
@@ -131,7 +132,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .createPost(buildFactoryUri(this.getHost(),
                         VSphereIncrementalEnumerationService.class))
                 .setBody(Utils.toJson(enumerationRequest))
-                .setReferer(this.getHost().getUri())
                 .setCompletion((op, err) -> {
                     if (err != null) {
                         logSevere("Unable to start enumeration service for endpoint %s",
@@ -140,7 +140,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     }
                 });
         createRequest.addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE);
-        createRequest.sendWith(this.getHost());
+        createRequest.sendWith(this);
     }
 
     private void validate(ComputeEnumerateResourceRequest request) {

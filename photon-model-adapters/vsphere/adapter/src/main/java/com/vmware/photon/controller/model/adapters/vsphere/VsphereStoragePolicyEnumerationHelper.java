@@ -172,7 +172,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                         //TODO : Refactor this to avoid extra call to fetch datastores
                         updateDS(service, ctx, selfLink, getOperations);
                     }
-                }, 0);
+                });
             }
         });
 

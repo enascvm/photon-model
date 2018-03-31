@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findMatchingDiskState;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.handleVirtualDeviceUpdate;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.handleVirtualDiskUpdate;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DATACENTER_SELF_LINK;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -225,10 +226,14 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                         // Find the host link where the computed is provisioned and patch the
                         // compute state.
-                        queryHostLinkAndUpdateCompute(ctx, vmOverlay.getHost())
+                        queryHostDocumentAndUpdateCompute(ctx, vmOverlay.getHost())
                                 .thenCompose(links -> {
+                                    ComputeState hostState = links.iterator().next();
                                     CustomProperties.of(state)
-                                            .put(COMPUTE_HOST_LINK_PROP_NAME, links.iterator().next());
+                                            // set the datacenter delf link from host state
+                                            .put(DATACENTER_SELF_LINK, CustomProperties.of(hostState).getString(DATACENTER_SELF_LINK))
+                                            // set the host state self link
+                                            .put(COMPUTE_HOST_LINK_PROP_NAME, hostState.documentSelfLink);
                                     return createComputeResourcePatch(state, ctx.computeReference);
                                 }).whenComplete((o, e) -> {
                                     if (e != null) {
@@ -249,7 +254,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
      * Query with the MangedObjectReference of the compute host where the VM is provisioned to
      * get the self link of host ComputeState and update the VM ComputeState with the link.
      */
-    private DeferredResult<List<String>> queryHostLinkAndUpdateCompute(ProvisionContext ctx,
+    private DeferredResult<List<ComputeState>> queryHostDocumentAndUpdateCompute(ProvisionContext ctx,
             ManagedObjectReference hostMoref) {
         String moref = VimUtils.convertMoRefToString(hostMoref);
 
@@ -265,7 +270,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
         computeHostQuery.setMaxResultsLimit(1);
         computeHostQuery.setClusterType(ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE);
 
-        return computeHostQuery.collectLinks(Collectors.toList());
+        return computeHostQuery.collectDocuments(Collectors.toList());
     }
 
     private List<Operation> createUpdateIPOperationsForComputeAndNics(String computeLink,

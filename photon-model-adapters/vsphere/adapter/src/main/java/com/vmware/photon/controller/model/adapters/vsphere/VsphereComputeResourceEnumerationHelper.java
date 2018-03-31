@@ -179,15 +179,18 @@ public class VsphereComputeResourceEnumerationHelper {
             state.tenantLinks = enumerationProgress.getTenantLinks();
         }
 
-        service.logFine(() -> String.format("Syncing ComputeResource %s", oldDocument.documentSelfLink));
+        service.logInfo(() -> String.format("Syncing ComputeResource %s", oldDocument.documentSelfLink));
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     trackComputeResource(enumerationProgress, cr).handle(o, e);
                     if (e == null) {
                         submitWorkToVSpherePool(service, ()
-                                -> updateLocalTags(service,
-                                enumerationProgress, cr, o.getBody(ResourceState.class)));
+                                -> {
+                            service.logInfo("Syncing tags for cluster %s", oldDocument.documentSelfLink);
+                            updateLocalTags(service,
+                                    enumerationProgress, cr, o.getBody(ResourceState.class));
+                        });
                     }
                 })
                 .sendWith(service);
@@ -335,7 +338,6 @@ public class VsphereComputeResourceEnumerationHelper {
             VSphereIncrementalEnumerationService service, List<ComputeResourceOverlay> computeResourceOverlays,
             EnumerationProgress ctx, EnumerationClient client) {
 
-        service.logInfo("Handling compute resource changes %s", Utils.toJson(computeResourceOverlays));
         ctx.expectComputeResourceCount(computeResourceOverlays.size());
         //process compute resource changes
         for (ComputeResourceOverlay cluster : computeResourceOverlays) {
