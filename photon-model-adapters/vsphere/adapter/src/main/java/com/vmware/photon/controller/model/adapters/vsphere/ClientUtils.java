@@ -897,6 +897,7 @@ public class ClientUtils {
             if (matchedDs.persistent == null) {
                 matchedDs.persistent = Boolean.FALSE;
             }
+            ds.regionId = regionId;
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
             updateDiskStateFromBackingInfo(backing, ds);

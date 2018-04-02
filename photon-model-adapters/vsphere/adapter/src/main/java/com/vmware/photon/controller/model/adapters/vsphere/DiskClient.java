@@ -100,6 +100,7 @@ public class DiskClient extends BaseHelper {
                 .put(DISK_DATASTORE_NAME, dsName);
         this.diskState.status = DiskService.DiskStatus.AVAILABLE;
         this.diskState.id = diskName;
+        this.diskState.regionId = VimUtils.convertMoRefToString(this.diskContext.datacenterMoRef);
         AdapterUtils.addToEndpointLinks(this.diskState, this.diskState.endpointLink);
     }
 
