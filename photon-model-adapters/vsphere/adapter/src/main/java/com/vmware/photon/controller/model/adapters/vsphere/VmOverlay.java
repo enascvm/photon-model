@@ -102,12 +102,21 @@ public class VmOverlay extends AbstractOverlay {
                 (VirtualMachinePowerState) getOrFail(VimPath.vm_runtime_powerState));
     }
 
+    public PowerState getPowerStateOrNull() {
+        return VSphereToPhotonMapping.convertPowerState(
+                (VirtualMachinePowerState) getOrDefault(VimPath.vm_runtime_powerState, null));
+    }
+
     public String getInstanceUuid() {
         return (String) getOrDefault(VimPath.vm_config_instanceUuid, null);
     }
 
     public String getName() {
         return (String) getOrFail(VimPath.vm_config_name);
+    }
+
+    public String getNameOrNull() {
+        return (String) getOrDefault(VimPath.vm_config_name, null);
     }
 
     public ManagedObjectReference getResourcePool() {

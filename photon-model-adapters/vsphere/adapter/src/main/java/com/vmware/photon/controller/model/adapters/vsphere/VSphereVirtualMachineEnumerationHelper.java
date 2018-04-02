@@ -145,9 +145,9 @@ public class VSphereVirtualMachineEnumerationHelper {
                     .put(CustomProperties.VM_MEMORY_IN_GB, AdapterUtils.convertBytesToGB(vm.getMemoryBytes()));
         }
         // Power state can be changed
-        state.powerState = vm.getPowerState();
+        state.powerState = vm.getPowerStateOrNull();
         // Name can be changed
-        state.name = vm.getName();
+        state.name = vm.getNameOrNull();
         // OS can be changed
         if (null != vm.getOS()) {
             CustomProperties.of(state)
@@ -419,6 +419,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         state.resourcePoolLink = null;
         state.lifecycleState = LifecycleState.READY;
         state.networkInterfaceLinks = oldDocument.networkInterfaceLinks;
+        state.diskLinks = oldDocument.diskLinks;
 
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationProgress.getTenantLinks();
@@ -445,10 +446,19 @@ public class VSphereVirtualMachineEnumerationHelper {
                             .map(op -> op.getBody(DiskService.DiskStateExpanded.class))
                             .collect(Collectors.toList());
                     List<Operation> diskUpdateOps = new ArrayList<>(currentDisks.size());
+
+                    // Select all disks to delete
+                    List<String> disksToDelete = new ArrayList<>(state.diskLinks);
+
                     // Process the update of disks and then patch the compute
                     for (VirtualDevice device : vm.getDisks()) {
                         DiskService.DiskStateExpanded matchedDs = findMatchingDiskState(device,
                                 currentDisks);
+
+                        // remove the active disk links
+                        if (null != matchedDs) {
+                            disksToDelete.remove(matchedDs.documentSelfLink);
+                        }
 
                         Operation vdOp = processVirtualDevice(service, matchedDs, device,
                                 enumerationProgress, state.diskLinks, VimUtils.convertMoRefToString(vm.getId()), oldDocument);
@@ -456,11 +466,18 @@ public class VSphereVirtualMachineEnumerationHelper {
                             diskUpdateOps.add(vdOp);
                         }
                     }
+
+                    //  Delete disk states whose disks are deleted in vsphere.
+                    for (String diskToDelete : disksToDelete) {
+                        state.diskLinks.remove(diskToDelete);
+                        diskUpdateOps.add(Operation.createDelete(PhotonModelUriUtils.createInventoryUri(service.getHost(), diskToDelete)));
+                    }
+
                     OperationJoin.create(diskUpdateOps).setCompletion((operationMap, exception) -> {
                         patchOnComputeState(service, state, oldDocument, enumerationProgress, vm);
                     }).sendWith(service);
                 }
-            });
+            }).sendWith(service);
         } else {
             patchOnComputeState(service, state, oldDocument, enumerationProgress, vm);
         }
