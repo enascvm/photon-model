@@ -23,6 +23,7 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Assert;
@@ -51,6 +52,7 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.VerificationHost;
 
 /**
  * This class implements tests for the {@link ImageEnumerationTaskService} class.
@@ -58,7 +60,8 @@ import com.vmware.xenon.common.Utils;
 @RunWith(ImageEnumerationTaskServiceTest.class)
 @SuiteClasses({ ImageEnumerationTaskServiceTest.ConstructorTest.class,
         ImageEnumerationTaskServiceTest.HandleStartTest.class,
-        ImageEnumerationTaskServiceTest.EndToEndTest.class })
+        ImageEnumerationTaskServiceTest.EndToEndTest.class,
+        ImageEnumerationTaskServiceTest.HandleRetryTest.class })
 public class ImageEnumerationTaskServiceTest extends Suite {
 
     public ImageEnumerationTaskServiceTest(Class<?> klass, RunnerBuilder builder) throws Throwable {
@@ -139,6 +142,79 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             }
         }
 
+    }
+
+    public static class HandleRetryTest extends BaseModelTest {
+
+        EndpointType endpointType =  EndpointType.aws;
+        private EndpointState endpointState;
+
+        @Before
+        public void before() throws Throwable {
+            createEndpointState();
+            registerEndpointConfig();
+        }
+
+        private void createEndpointState() throws Throwable {
+
+            final EndpointState endpointToCreate = new EndpointState();
+
+            endpointToCreate.id = this.endpointType + "-id";
+            endpointToCreate.name = this.endpointType + "-name";
+            endpointToCreate.endpointType = this.endpointType.name();
+            endpointToCreate.tenantLinks = singletonList(this.endpointType + "-tenant");
+
+            this.endpointState = postServiceSynchronously(
+                    EndpointService.FACTORY_LINK,
+                    endpointToCreate,
+                    EndpointState.class);
+        }
+
+
+        private void registerEndpointConfig() throws Throwable {
+            PhotonModelAdapterConfig config = new PhotonModelAdapterConfig();
+
+            config.id = this.endpointType.name();
+            config.documentSelfLink = config.id;
+            config.name = this.endpointType.name();
+
+            // Register adapter only if presented
+            config.adapterEndpoints = singletonMap(
+                    AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key,
+                    UriUtils.buildUri(getHost(), MockFailureImageEnumerationAdapter.class).toString());
+
+            postServiceSynchronously(
+                    PhotonModelAdaptersRegistryService.FACTORY_LINK,
+                    config,
+                    PhotonModelAdapterConfig.class);
+        }
+
+        @Test
+        public void testRetryCount() throws Throwable {
+
+            System.setProperty(ImageEnumerationTaskService.IMAGE_ENUMERATION_RETRY_INTERVAL_SECONDS, "1");
+
+            int tasksCountBeforeRun = countImageEnumerationTaskDocuments(getHost());
+
+            ImageEnumerationTaskState adapterReq = new ImageEnumerationTaskState();
+            adapterReq.retryCount = 2;
+            adapterReq.regionId = this.endpointType.name();
+            adapterReq.endpointType = this.endpointType.name();
+            adapterReq.customProperties = new HashMap<>();
+            adapterReq.customProperties.put("retryTest", "retryTest");
+
+            postServiceSynchronously(
+                    ImageEnumerationTaskService.FACTORY_LINK,
+                    adapterReq,
+                    ImageEnumerationTaskState.class);
+
+
+            getHost().waitFor("Timeout waiting for retries",
+                    () -> tasksCountBeforeRun + 1 + adapterReq.retryCount
+                            == countImageEnumerationTaskDocuments(getHost()));
+
+            System.clearProperty(ImageEnumerationTaskService.IMAGE_ENUMERATION_RETRY_INTERVAL_SECONDS);
+        }
     }
 
     /**
@@ -238,7 +314,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             registerEndpointConfig();
 
             // Get BEFORE tasks count
-            this.tasksCountBeforeRun = countImageEnumerationTaskDocuments();
+            this.tasksCountBeforeRun = countImageEnumerationTaskDocuments(getHost());
         }
 
         private void createEndpointState() throws Throwable {
@@ -287,7 +363,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     PhotonModelAdapterConfig.class);
         }
 
-        private ImageEnumerationTaskState newImageEnumerationRequest() {
+        protected ImageEnumerationTaskState newImageEnumerationRequest() {
 
             final ImageEnumerationTaskState taskState = new ImageEnumerationTaskState();
 
@@ -351,7 +427,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     startedState.documentSelfLink,
                     liveState -> this.expectedCompletedStage == liveState.taskInfo.stage);
 
-            Assert.assertEquals(this.tasksCountBeforeRun + 1, countImageEnumerationTaskDocuments());
+            Assert.assertEquals(this.tasksCountBeforeRun + 1, countImageEnumerationTaskDocuments(getHost()));
         }
 
         @Test
@@ -366,13 +442,17 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     ImageEnumerationTaskState.class);
 
             getHost().waitFor("Timeout waiting for image enum task to self-delete",
-                    () -> this.tasksCountBeforeRun == countImageEnumerationTaskDocuments());
+                    () -> this.tasksCountBeforeRun == countImageEnumerationTaskDocuments(getHost()));
         }
 
-        private int countImageEnumerationTaskDocuments() {
-            URI uri = UriUtils.buildFactoryUri(getHost(), ImageEnumerationTaskService.class);
 
-            return getHost().getFactoryState(uri).documentLinks.size();
-        }
+
     }
+
+    protected static int countImageEnumerationTaskDocuments(VerificationHost host) {
+        URI uri = UriUtils.buildFactoryUri(host, ImageEnumerationTaskService.class);
+
+        return host.getFactoryState(uri).documentLinks.size();
+    }
+
 }

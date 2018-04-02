@@ -77,6 +77,9 @@ public class ImageEnumerationTaskService
 
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/image-enumeration-tasks";
 
+    public static final String IMAGE_ENUMERATION_RETRY_INTERVAL_SECONDS = UriPaths.PROPERTY_PREFIX + "image.enumeration.retry.interval.seconds";
+    public static final long DEFAULT_IMAGE_ENUMERATION_RETRY_INTERVAL_SECONDS = 120;
+
     public static FactoryService createFactory() {
         TaskFactoryService fs = new TaskFactoryService(ImageEnumerationTaskState.class) {
             @Override
@@ -142,6 +145,9 @@ public class ImageEnumerationTaskService
          */
         @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public String filter;
+
+        @PropertyOptions(usage = { OPTIONAL }, indexing = STORE_ONLY)
+        public Integer retryCount;
 
         /**
          * Setting {@code #endpointType} indicates Public images enumeration.
@@ -287,6 +293,8 @@ public class ImageEnumerationTaskService
                 handleTaskCompleted(currentState);
                 break;
             case FAILED:
+                handleTaskFailed(currentState);
+                break;
             case CANCELLED:
                 logSevere(() -> String.format("%s with [%s]",
                         currentState.taskInfo.stage,
@@ -342,6 +350,49 @@ public class ImageEnumerationTaskService
         }
 
         return ok;
+    }
+
+    /**
+     * Retry the task if retryCount is specified
+     */
+    private void handleTaskFailed(ImageEnumerationTaskState taskState) {
+        if (taskState.retryCount != null && taskState.retryCount > 0) {
+            ImageEnumerationTaskState retryRequest = new ImageEnumerationTaskState();
+            retryRequest.retryCount = taskState.retryCount - 1;
+            retryRequest.options = taskState.options;
+            retryRequest.endpointLink = taskState.endpointLink;
+            retryRequest.endpointType = taskState.endpointType;
+            retryRequest.tenantLinks = taskState.tenantLinks;
+            retryRequest.regionId = taskState.regionId;
+            retryRequest.filter = taskState.filter;
+            retryRequest.enumerationAction = taskState.enumerationAction;
+            retryRequest.customProperties = taskState.customProperties;
+
+            // Don't start it right away. Wait IMAGE_ENUMERATION_RETRY_INTERVAL_SECONDS
+            Long retryInterval = Long.getLong(IMAGE_ENUMERATION_RETRY_INTERVAL_SECONDS,
+                    DEFAULT_IMAGE_ENUMERATION_RETRY_INTERVAL_SECONDS);
+
+            logInfo("Scheduling retry for image enumeration task after %s seconds. "
+                            + "Retries left %s. endpointLink %s, endpointType %s, regionId %s",
+                    retryInterval, retryRequest.retryCount, retryRequest.endpointLink,
+                    retryRequest.endpointType, retryRequest.regionId);
+
+            getHost().schedule(() -> {
+                Operation operation = Operation
+                        .createPost(this, ImageEnumerationTaskService.FACTORY_LINK)
+                        .setBody(retryRequest);
+
+                logInfo("Retrying image enumeration task - endpointLink %s, endpointType %s, regionId %s",
+                        retryRequest.endpointLink, retryRequest.endpointType,
+                        retryRequest.regionId);
+                sendWithDeferredResult(operation);
+            }, retryInterval, TimeUnit.SECONDS);
+        }
+
+        logSevere(() -> String.format("%s with [%s]",
+                taskState.taskInfo.stage,
+                getFailureMessage(taskState)));
+        handleTaskCompleted(taskState);
     }
 
     /**
