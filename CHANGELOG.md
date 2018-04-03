@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.57-SNAPSHOT
+
 ## 0.6.56
 * [AWS] Provisioned disks can now be differentiated
         from the enumerated disks with Diskstate.origin field
