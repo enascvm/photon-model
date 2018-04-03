@@ -1035,11 +1035,12 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.amazonEC2Client = ec2Client;
 
                     OperationContext opContext = OperationContext.getOperationContext();
+
                     AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager,
-                            aws.endpointAuth, aws.request, aws.operation, this,
+                            aws.endpointAuth, aws.request, this,
                             describeAvailabilityZonesResult -> {
-                                aws.stage = next;
                                 OperationContext.restoreOperationContext(opContext);
+                                aws.stage = next;
                                 handleEnumerationRequest(aws);
                             },
                             t -> {
@@ -1047,6 +1048,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                 aws.error = t;
                                 aws.stage = AWSEnumerationCreationStages.ERROR;
                                 handleEnumerationRequest(aws);
+                            },
+                            // onUnaccessible: the region is not accessible so complete the enum Op
+                            () -> {
+                                OperationContext.restoreOperationContext(opContext);
+                                aws.operation.complete();
                             });
                 });
     }

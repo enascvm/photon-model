@@ -289,11 +289,12 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
     private void validateClient(EBSStorageEnumerationContext aws,
             AWSEBSStorageEnumerationStages next) {
         OperationContext opContext = OperationContext.getOperationContext();
+
         AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
-                aws.request, aws.operation, this,
+                aws.request, this,
                 (describeAvailabilityZonesResult) -> {
-                    aws.stage = next;
                     OperationContext.restoreOperationContext(opContext);
+                    aws.stage = next;
                     handleEnumerationRequest(aws);
                 },
                 t -> {
@@ -301,6 +302,11 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                     aws.error = t;
                     aws.stage = AWSEBSStorageEnumerationStages.ERROR;
                     handleEnumerationRequest(aws);
+                },
+                // onUnaccessible: the region is not accessible so complete the enum Op
+                () -> {
+                    OperationContext.restoreOperationContext(opContext);
+                    aws.operation.complete();
                 });
     }
 

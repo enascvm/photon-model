@@ -399,14 +399,17 @@ public class AWSUtils {
 
     public static void validateCredentials(AmazonEC2AsyncClient ec2Client,
             AWSClientManager clientManager, AuthCredentialsServiceState credentials,
-            ComputeEnumerateAdapterRequest context, Operation op, StatelessService service,
-            Consumer<DescribeAvailabilityZonesResult> onSuccess, Consumer<Throwable> onFail) {
+            ComputeEnumerateAdapterRequest context, StatelessService service,
+            Consumer<DescribeAvailabilityZonesResult> onSuccess,
+            Consumer<Throwable> onFail,
+            Runnable onUnaccessible) {
 
         if (clientManager.isEc2ClientInvalid(credentials, context.regionId)) {
-            op.complete();
+            onUnaccessible.run();
             return;
         }
 
+        // NOTE: If an access to Xenon is required DO USE AWSAsyncHandler which set OperationContext
         ec2Client.describeAvailabilityZonesAsync(new DescribeAvailabilityZonesRequest(),
                 new AsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult>() {
 
@@ -418,9 +421,11 @@ public class AWSUtils {
                                     ase.getStatusCode() == STATUS_CODE_FORBIDDEN) {
                                 clientManager.markEc2ClientInvalid(service, credentials,
                                         context.regionId);
-                                op.complete();
+                                // Signal passed creds does not have Access to this region
+                                onUnaccessible.run();
                                 return;
                             }
+                            // Signal the failure
                             onFail.accept(e);
                         }
                     }
@@ -428,6 +433,8 @@ public class AWSUtils {
                     @Override
                     public void onSuccess(DescribeAvailabilityZonesRequest request,
                             DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
+
+                        // Signal success
                         onSuccess.accept(describeAvailabilityZonesResult);
                     }
                 });

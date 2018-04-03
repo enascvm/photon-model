@@ -245,11 +245,12 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     private void validateClient(EnumerationDeletionContext aws,
             AWSEnumerationDeletionStages next) {
         OperationContext opContext = OperationContext.getOperationContext();
+
         AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.endpointAuth,
-                aws.request, aws.operation, this,
+                aws.request, this,
                 (describeAvailabilityZonesResult) -> {
-                    aws.stage = next;
                     OperationContext.restoreOperationContext(opContext);
+                    aws.stage = next;
                     handleEnumerationRequestForDeletion(aws);
                 },
                 t -> {
@@ -257,6 +258,11 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                     aws.error = t;
                     aws.stage = AWSEnumerationDeletionStages.ERROR;
                     handleEnumerationRequestForDeletion(aws);
+                },
+                // onUnaccessible: the region is not accessible so complete the enum Op
+                () -> {
+                    OperationContext.restoreOperationContext(opContext);
+                    aws.operation.complete();
                 });
     }
 
