@@ -2026,6 +2026,7 @@ public class AzureInstanceService extends StatelessService {
             diskStateToUpdate.documentSelfLink = ctx.bootDiskState.documentSelfLink;
             diskStateToUpdate.persistent = ctx.bootDiskState.persistent;
             diskStateToUpdate.regionId = ctx.provisionedVm.location();
+            diskStateToUpdate.origin = DiskService.DiskOrigin.DEPLOYED;
 
             diskStateToUpdate.endpointLink = ctx.endpoint.documentSelfLink;
             AdapterUtils.addToEndpointLinks(diskStateToUpdate, ctx.endpoint.documentSelfLink);
@@ -2085,6 +2086,7 @@ public class AzureInstanceService extends StatelessService {
                 diskStateToCreate.id = azureDataDisk.managedDisk().id();
                 diskStateToCreate.name = azureDataDisk.name();
                 diskStateToCreate.regionId = ctx.provisionedVm.location();
+                diskStateToCreate.origin = DiskService.DiskOrigin.DEPLOYED;
                 diskStateToCreate.customProperties = new HashMap<>();
                 diskStateToCreate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf
                         (azureDataDisk.lun()));
@@ -2179,6 +2181,7 @@ public class AzureInstanceService extends StatelessService {
 
         diskStateToUpdate.status = DiskService.DiskStatus.ATTACHED;
         diskStateToUpdate.regionId = ctx.provisionedVm.location();
+        diskStateToUpdate.origin = DiskService.DiskOrigin.DEPLOYED;
 
         diskStateToUpdate.endpointLink = ctx.endpoint.documentSelfLink;
         AdapterUtils.addToEndpointLinks(diskStateToUpdate, ctx.endpoint.documentSelfLink);

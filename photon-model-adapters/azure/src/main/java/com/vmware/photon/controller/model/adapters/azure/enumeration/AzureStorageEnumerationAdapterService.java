@@ -1479,6 +1479,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         if (oldDiskState != null) {
                             return updateDiskState(context, diskState);
                         } else {
+                            diskState.origin = DiskService.DiskOrigin.COLLECTED;
                             return createDiskState(context, diskState);
                         }
                     });

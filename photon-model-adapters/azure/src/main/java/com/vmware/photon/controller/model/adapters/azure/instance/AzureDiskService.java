@@ -243,6 +243,7 @@ public class AzureDiskService extends StatelessService {
     private DeferredResult<AzureDiskContext> updateDiskState(AzureDiskContext context) {
 
         context.diskState.status = DiskService.DiskStatus.AVAILABLE;
+        context.diskState.origin = DiskService.DiskOrigin.DEPLOYED;
 
         if (context.diskState.customProperties == null) {
             context.diskState.customProperties = new HashMap<>();

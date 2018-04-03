@@ -885,7 +885,7 @@ public class ClientUtils {
     public static Operation handleVirtualDiskUpdate(String endpointLink, List<String> tenantLinks,
             DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
             String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx,
-            ComputeState oldDocument, Map<String, String> morefToDSSelfLinkMap) {
+            ComputeState oldDocument, Map<String, String> morefToDSSelfLinkMap, boolean fromProvisioning) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -909,6 +909,8 @@ public class ClientUtils {
             ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
             ds.persistent = Boolean.FALSE;
             ds.tenantLinks = tenantLinks;
+            setDiskOrigin(ds, fromProvisioning);
+
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
             updateDiskStateFromBackingInfo(backing, ds);
@@ -937,6 +939,9 @@ public class ClientUtils {
             }
             ds.regionId = regionId;
             ds.tenantLinks = tenantLinks;
+            if (fromProvisioning) {
+                ds.origin = DiskService.DiskOrigin.DEPLOYED;
+            }
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
             updateDiskStateFromBackingInfo(backing, ds);
@@ -993,10 +998,11 @@ public class ClientUtils {
     public static Operation handleVirtualDeviceUpdate(String endpointLink, List<String> tenantLinks,
             DiskStateExpanded matchedDs,
             DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
-            Service service, boolean isBacking, String dcLink) {
+            Service service, boolean isBacking, String dcLink, boolean fromProvisioning) {
         Operation operation;
         if (matchedDs == null) {
             DiskService.DiskState ds = createNewDiskState(type, disk, regionId, service);
+            setDiskOrigin(ds, fromProvisioning);
             ds.tenantLinks = tenantLinks;
             addEndpointLinks(ds, endpointLink);
             if (isBacking) {
@@ -1008,6 +1014,9 @@ public class ClientUtils {
             diskLinks.add(ds.documentSelfLink);
         } else {
             updateDiskStateFromVirtualDevice(disk, matchedDs, null, dcLink);
+            if (fromProvisioning) {
+                matchedDs.origin = DiskService.DiskOrigin.DEPLOYED;
+            }
             if (matchedDs.persistent == null) {
                 matchedDs.persistent = Boolean.FALSE;
             }
@@ -1104,6 +1113,14 @@ public class ClientUtils {
             powerOffVM(connection, vimPort, vm);
         } catch (Exception e) {
             // Ignore the error message. Don't log. Attempt with the rest of the flow.
+        }
+    }
+
+    private static void setDiskOrigin(DiskService.DiskState ds, boolean fromProvisioning) {
+        if (fromProvisioning) {
+            ds.origin = DiskService.DiskOrigin.DEPLOYED;
+        } else {
+            ds.origin = DiskService.DiskOrigin.COLLECTED;
         }
     }
 

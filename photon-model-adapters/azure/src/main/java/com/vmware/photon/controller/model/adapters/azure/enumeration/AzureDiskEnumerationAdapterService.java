@@ -540,6 +540,7 @@ public class AzureDiskEnumerationAdapterService extends StatelessService {
         if (diskState.tagLinks == null) {
             diskState.tagLinks = new HashSet<>();
         }
+        diskState.origin = DiskService.DiskOrigin.COLLECTED;
         // add internal type tags
         diskState.tagLinks.addAll(ctx.internalTagLinks);
         diskState.customProperties = new HashMap<>();

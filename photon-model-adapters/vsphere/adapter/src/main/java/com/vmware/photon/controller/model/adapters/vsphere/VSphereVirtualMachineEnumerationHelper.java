@@ -372,17 +372,17 @@ public class VSphereVirtualMachineEnumerationHelper {
                     enumerationProgress.getTenantLinks(), matchedDs,
                     (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service,
                     vm, enumerationProgress.getDcLink(), enumerationProgress, oldDocument,
-                    Collections.emptyMap());
+                    Collections.emptyMap(), false);
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     enumerationProgress.getTenantLinks(), matchedDs, DiskService.DiskType.CDROM,
                     device, diskLinks, enumerationProgress.getRegionId(), service, false,
-                    enumerationProgress.getDcLink());
+                    enumerationProgress.getDcLink(), false);
         } else if (device instanceof VirtualFloppy) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     enumerationProgress.getTenantLinks(), matchedDs, DiskService.DiskType.FLOPPY,
                     device, diskLinks, enumerationProgress.getRegionId(), service, false,
-                    enumerationProgress.getDcLink());
+                    enumerationProgress.getDcLink(), false);
         }
         return null;
     }

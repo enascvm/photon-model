@@ -1550,6 +1550,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             diskState.capacityMBytes = dataDisk.diskSizeGB() * 1024;
         }
         diskState.status = DiskService.DiskStatus.ATTACHED;
+        diskState.origin = DiskService.DiskOrigin.COLLECTED;
         diskState.tenantLinks = ctx.parentCompute.tenantLinks;
         diskState.resourcePoolLink = ctx.request.resourcePoolLink;
         diskState.computeHostLink = ctx.parentCompute.documentSelfLink;
