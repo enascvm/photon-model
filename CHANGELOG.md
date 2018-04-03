@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## 0.6.56-SNAPSHOT
+## 0.6.56
+* [AWS] Provisioned disks can now be differentiated
+        from the enumerated disks with Diskstate.origin field
+* Upgraded to xenon version 1.6.5
+* [Azure] Change cache key calculation for Azure Rest Client Cache
 
 ## 0.6.55
 * [vSphere] Added functional key custom properties to all enumerated resources
