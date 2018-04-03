@@ -73,6 +73,8 @@ public class LoadBalancerServiceTest extends Suite {
         loadBalancerState.targetLinks.add(NetworkInterfaceService.FACTORY_LINK + "/a-nic");
         loadBalancerState.subnetLinks = new HashSet<>();
         loadBalancerState.subnetLinks.add(SubnetService.FACTORY_LINK + "/a-subnet");
+        loadBalancerState.securityGroupLinks = new ArrayList<>();
+        loadBalancerState.securityGroupLinks.add(SecurityGroupService.FACTORY_LINK + "/a-sg");
         loadBalancerState.regionId = "regionId";
         loadBalancerState.tenantLinks = new ArrayList<>();
         loadBalancerState.tenantLinks.add("tenant-linkA");
@@ -236,6 +238,9 @@ public class LoadBalancerServiceTest extends Suite {
             patchState.targetLinks.add(NetworkInterfaceService.FACTORY_LINK + "/b-nic");
             patchState.subnetLinks = new HashSet<>();
             patchState.subnetLinks.add(SubnetService.FACTORY_LINK + "/b-subnet");
+            patchState.securityGroupLinks = new ArrayList<>();
+            patchState.securityGroupLinks.add(SecurityGroupService.FACTORY_LINK + "/a-sg");
+            patchState.securityGroupLinks.add(SecurityGroupService.FACTORY_LINK + "/b-sg");
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("patchKey", "patchValue");
             patchState.tenantLinks = new ArrayList<String>();
@@ -257,6 +262,7 @@ public class LoadBalancerServiceTest extends Suite {
             assertThat(returnState.computeLinks.size(), is(2));
             assertThat(returnState.targetLinks.size(), is(4));
             assertThat(returnState.subnetLinks.size(), is(2));
+            assertThat(returnState.securityGroupLinks.size(), is(2));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));
             assertThat(returnState.tenantLinks.size(), is(2));

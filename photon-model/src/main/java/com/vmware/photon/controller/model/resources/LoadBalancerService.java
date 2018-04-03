@@ -26,6 +26,8 @@ import java.util.stream.Collectors;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
+import org.apache.commons.lang3.tuple.Pair;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -115,7 +117,7 @@ public class LoadBalancerService extends StatefulService {
          * created by the adapter.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_23)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(usage = PropertyUsageOption.LINKS)
         public List<String> securityGroupLinks;
 
         /**
@@ -309,19 +311,12 @@ public class LoadBalancerService extends StatefulService {
                         currentState.routes = patchBody.routes;
                     }
 
-                    if (patchBody.securityGroupLinks != null) {
-                        if (currentState.securityGroupLinks == null) {
-                            currentState.securityGroupLinks = patchBody.securityGroupLinks;
-                            hasChanged = true;
-                        } else {
-                            for (String link : patchBody.securityGroupLinks) {
-                                if (!currentState.securityGroupLinks.contains(link)) {
-                                    currentState.securityGroupLinks.add(link);
-                                    hasChanged = true;
-                                }
-                            }
-                        }
-                    }
+                    // make sure the securityGroupLinks are patched with new values only
+                    Pair<List<String>, Boolean> securityGroupLinksMergeResult =
+                            PhotonModelUtils.mergeLists(
+                                    currentState.securityGroupLinks, patchBody.securityGroupLinks);
+                    currentState.securityGroupLinks = securityGroupLinksMergeResult.getLeft();
+                    hasChanged = hasChanged || securityGroupLinksMergeResult.getRight();
 
                     return Boolean.valueOf(hasChanged);
                 });
