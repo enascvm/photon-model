@@ -573,8 +573,12 @@ public class AzureInstanceService extends StatelessService {
         List<Operation> fetchAuthCredsForStorageAccount = new ArrayList<>();
 
         fetchAuthCredsForStorageAccount.add(
-                Operation.createGet(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
-                        ctx.bootDiskState.storageDescription.authCredentialsLink))).setReferer(getUri()));
+                Operation.createGet(
+                        UriUtils.buildExpandLinksQueryUri(
+                                createInventoryUri(
+                                        getHost(),
+                                        ctx.bootDiskState.storageDescription.authCredentialsLink)))
+                        .setReferer(getUri()));
 
         for (DiskService.DiskStateExpanded disk: ctx.dataDiskStates) {
             //add null check as all disk will not have it
@@ -595,7 +599,9 @@ public class AzureInstanceService extends StatelessService {
                 dr.complete(ctx);
 
             } else {
-                dr.fail(new Throwable("unable to get storage account keys for disks"));
+                dr.fail(new Throwable(String.format(
+                        "Unable to get storage account keys for disks. FAILED with: %s",
+                        Utils.toString(exc))));
             }
         }).sendWith(getHost());
 
@@ -694,7 +700,10 @@ public class AzureInstanceService extends StatelessService {
                             dr.complete(ctx);
                         } else {
                             String stacktrace = Utils.toString(exc);
-                            dr.fail(new Throwable("unable to fetch disks to delete for " + cs.name + "Error = " + stacktrace));
+                            dr.fail(new Throwable(String.format(
+                                    "Unable to fetch disks to delete for %s. FAILED with: %s",
+                                    cs.name,
+                                    stacktrace)));
                             return;
                         }
                     }
