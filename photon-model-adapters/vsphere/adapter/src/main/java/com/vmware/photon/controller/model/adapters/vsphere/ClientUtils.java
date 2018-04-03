@@ -127,6 +127,9 @@ public class ClientUtils {
             .getTime().getTime();
     public static final String VM_PATH_FORMAT = "[%s] %s";
 
+    private static final String TENANTS_PREFIX = "/tenants";
+    private static final String GROUP_IDENTIFIER = "/groups";
+
     /**
      * Retrieves list of datastore names that are compatible with the storage policy.
      */
@@ -703,7 +706,7 @@ public class ClientUtils {
 
         QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
                 endpointLink);
-        QueryUtils.addTenantLinks(builder, tenantLinks);
+        QueryUtils.addTenantLinks(builder, getTenantLinks(tenantLinks));
 
         QueryTask task = QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
@@ -723,6 +726,22 @@ public class ClientUtils {
 
                     handler.accept(queryTask.results);
                 });
+    }
+
+    /**
+     * Get the tenantLinks from the list of tenantLinks which contains user, groups, projects etc.,
+     */
+    public static List<String> getTenantLinks(List<String> tenantLinks) {
+        if (tenantLinks == null || tenantLinks.isEmpty()) {
+            return tenantLinks;
+
+        } else {
+            return tenantLinks.stream()
+                    .filter(Objects::nonNull)
+                    .filter(tenantLink -> tenantLink.startsWith(TENANTS_PREFIX))
+                    .filter(tenantLink -> !tenantLink.contains(GROUP_IDENTIFIER))
+                    .collect(Collectors.toList());
+        }
     }
 
     public static String attachDiskToVM(ArrayOfVirtualDevice devices, ManagedObjectReference vm,
