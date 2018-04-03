@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -97,14 +99,16 @@ public class AzureSdkClients implements AutoCloseable {
         /**
          * Calculate cache key for given authentication.
          * <p>
-         * Note: In case of end-point validation the authentication passed is not persisted so we
-         * need to generated unique key. Even though the RestClient created is a one-shot instance
-         * we still store it in the cache for the sake of unification.
+         * Note: The cache key is calculated based on Azure's Subscription Id, Tenant Id,
+         * Application Id and Secret key.
          */
         default String cacheKey(AuthCredentialsServiceState auth) {
-            return auth.documentSelfLink != null && !auth.documentSelfLink.isEmpty()
-                    ? auth.documentSelfLink
-                    : String.valueOf(auth.hashCode());
+            return auth.userLink +
+                    auth.privateKeyId +
+                    auth.privateKey +
+                    (auth.customProperties != null ?
+                            auth.customProperties.getOrDefault(AZURE_TENANT_ID, "") : ""
+                    );
         }
     }
 

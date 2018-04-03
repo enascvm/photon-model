@@ -464,7 +464,7 @@ public class EndpointAdapterUtils {
                 host,
                 authQueryBuilder.build(),
                 AuthCredentialsServiceState.class,
-                null)
+                queryTaskTenantLinks)
                 .setQueryTaskTenantLinks(queryTaskTenantLinks);
         queryAuth.setClusterType(INVENTORY_SERVICE);
 
@@ -491,7 +491,7 @@ public class EndpointAdapterUtils {
                 host,
                 qBuilder.build(),
                 EndpointState.class,
-                null)
+                queryTaskTenantLinks)
                 .setQueryTaskTenantLinks(queryTaskTenantLinks)
                 .setMaxResultsLimit(1);
         queryEndpoints.setClusterType(INVENTORY_SERVICE);
