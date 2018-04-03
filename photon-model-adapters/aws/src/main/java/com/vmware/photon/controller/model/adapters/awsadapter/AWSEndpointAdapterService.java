@@ -80,6 +80,9 @@ public class AWSEndpointAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_ENDPOINT_CONFIG_ADAPTER;
 
+    public static final String UNABLE_TO_VALIDATE_CREDENTIALS_IN_ANY_AWS_REGION =
+            "Unable to validate credentials in any AWS region!";
+
     private AWSClientManager clientManager;
 
     @Override
@@ -177,8 +180,8 @@ public class AWSEndpointAdapterService extends StatelessService {
 
         if (index.get() >= regions.length) {
             //Unable to validate in any of the Regions.
-            deferredResult.fail(new LocalizableValidationException("Unable to validate " +
-                    "credentials in any AWS region!",
+            deferredResult.fail(new LocalizableValidationException(
+                    UNABLE_TO_VALIDATE_CREDENTIALS_IN_ANY_AWS_REGION,
                     PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE,
                     PHOTON_MODEL_ADAPTER_UNAUTHORIZED_MESSAGE_CODE));
             return;
