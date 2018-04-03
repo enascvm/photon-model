@@ -41,6 +41,7 @@ import com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceExcepti
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -59,38 +60,37 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  *Tests that the AWS client instances use a common executor pool for calling into AWS
  *and all the client caches and executor pools are cleaned up when the AWS adapters
  *are shutdown.
- *
  */
 public class TestAWSClientManagement extends BasicReusableHostTestCase {
-    public static final int count1 = 1;
-    public static final int count2 = 2;
-    public static final int count0 = 0;
-    public StatelessService instanceService;
-    public StatelessService statsService;
-    public AuthCredentialsServiceState creds;
+    private StatelessService instanceService;
+    private StatelessService statsService;
+    private AuthCredentialsServiceState creds;
+
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
-    public String awsMasterAccountAccessKey;
-    public String awsMasterAccountSecretKey;
     public String arn;
     public String externalId;
-    public AmazonEC2AsyncClient client;
+
+    private AmazonEC2AsyncClient client;
     boolean isMock = true;
 
     private int ec2ClientReferenceCount;
     private int cloudWatchClientReferenceCount;
     private int clientCacheCount;
 
+    @BeforeClass
+    public static void setSystemProperties() {
+        System.setProperty(AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY, String.valueOf(900));
+    }
+
     @Before
     public void setUp() throws Exception {
         CommandLineArgumentParser.parseFromProperties(this);
 
         // ignore if any of the required properties are missing
-        assumeTrue(TestUtils.isNull(this.awsMasterAccountAccessKey, this.awsMasterAccountSecretKey, this.arn,
+        assumeTrue(TestUtils.isNull(System.getProperty(AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY),
+                System.getProperty(AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY), this.arn,
                 this.externalId));
-        System.setProperty(AWS_MASTER_ACCOUNT_ACCESS_KEY_PROPERTY, this.awsMasterAccountAccessKey);
-        System.setProperty(AWS_MASTER_ACCOUNT_SECRET_KEY_PROPERTY, this.awsMasterAccountSecretKey);
-        System.setProperty(AWS_ARN_DEFAULT_SESSION_DURATION_SECONDS_PROPERTY, String.valueOf(900));
 
         List<String> serviceSelfLinks = new ArrayList<>();
         try {
@@ -132,7 +132,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         // Getting a reference to client managers in the test
         AWSClientManager ec2ClientManager = getClientManager(AwsClientType.EC2);
         ec2ClientManager.cleanUpArnCache();
-        assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.ec2ClientReferenceCount + 1, getClientReferenceCount(AwsClientType.EC2));
 
         this.creds = new AuthCredentialsServiceState();
         this.creds.customProperties = new HashMap<>();
@@ -184,7 +184,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         // Getting a reference to client managers in the test
         AWSClientManager ec2ClientManager = getClientManager(AwsClientType.EC2);
         ec2ClientManager.cleanUpArnCache();
-        assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.ec2ClientReferenceCount + 1, getClientReferenceCount(AwsClientType.EC2));
 
         this.creds = new AuthCredentialsServiceState();
         this.creds.customProperties = new HashMap<>();
@@ -236,7 +236,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         // Getting a reference to client managers in the test
         AWSClientManager ec2ClientManager = getClientManager(AwsClientType.EC2);
         ec2ClientManager.cleanUpArnCache();
-        assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.ec2ClientReferenceCount + 1, getClientReferenceCount(AwsClientType.EC2));
 
         this.creds = new AuthCredentialsServiceState();
         this.creds.customProperties = new HashMap<>();
@@ -268,7 +268,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         // Getting a reference to client managers in the test
         AWSClientManager ec2ClientManager = getClientManager(AwsClientType.EC2);
         ec2ClientManager.cleanUpArnCache();
-        assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.ec2ClientReferenceCount + 1, getClientReferenceCount(AwsClientType.EC2));
 
         this.creds = new AuthCredentialsServiceState();
         this.creds.customProperties = new HashMap<>();
@@ -305,8 +305,8 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         @SuppressWarnings("unused")
         AWSClientManager cloudWatchClientManager = getClientManager(AwsClientType.CLOUD_WATCH);
         cloudWatchClientManager.cleanUpArnCache();
-        assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
-        assertEquals(this.cloudWatchClientReferenceCount + count1, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
+        assertEquals(this.ec2ClientReferenceCount + 1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.cloudWatchClientReferenceCount + 1, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
 
         // Getting an AWSclient from the client manager
         this.creds = new AuthCredentialsServiceState();
@@ -355,7 +355,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
 
         // Returning the references from the test
         returnClientManager(ec2ClientManager, AwsClientType.EC2);
-        assertEquals(this.ec2ClientReferenceCount - count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.ec2ClientReferenceCount - 1, getClientReferenceCount(AwsClientType.EC2));
     }
 
     @Test
@@ -366,7 +366,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
 
         // Get a reference to the client manager in the test
         AWSClientManager s3ClientManager = getClientManager(AwsClientType.S3_TRANSFER_MANAGER);
-        assertEquals(count1, getClientReferenceCount(AwsClientType.S3_TRANSFER_MANAGER));
+        assertEquals(1, getClientReferenceCount(AwsClientType.S3_TRANSFER_MANAGER));
 
         AuthCredentialsServiceState testCreds = new AuthCredentialsServiceState();
         testCreds.privateKey = this.accessKey;
@@ -383,11 +383,11 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
                 })
                 .thenAccept(i -> waitContext.complete());
         waitContext.await();
-        assertEquals(count1, s3ClientManager.getCacheCount());
+        assertEquals(1, s3ClientManager.getCacheCount());
 
         // Return the references from the test
         returnClientManager(s3ClientManager, AwsClientType.S3_TRANSFER_MANAGER);
-        assertEquals(count0, getClientReferenceCount(AwsClientType.S3_TRANSFER_MANAGER));
+        assertEquals(0, getClientReferenceCount(AwsClientType.S3_TRANSFER_MANAGER));
     }
 
     /**
@@ -403,7 +403,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         // Getting a reference to client managers in the test
         AWSClientManager ec2ClientManager = getClientManager(AwsClientType.EC2);
         ec2ClientManager.cleanUpArnCache();
-        assertEquals(this.ec2ClientReferenceCount + count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(this.ec2ClientReferenceCount + 1, getClientReferenceCount(AwsClientType.EC2));
 
         this.creds = new AuthCredentialsServiceState();
         this.creds.customProperties = new HashMap<>();
