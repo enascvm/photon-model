@@ -49,6 +49,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
@@ -494,16 +495,20 @@ public class VSphereAdapterInstanceService extends StatelessService {
         // Fill in the disk links from the input to the ComputeState, as it may contain non hdd
         // disk as well. For ex, Floppy or CD-Rom
         ctx.disks.stream().forEach(ds -> diskLinks.add(ds.documentSelfLink));
-
+        long totalProvisionGB = 0L;
         // Handle all the HDD disk
         for (VirtualDevice disk : disks) {
             DiskStateExpanded matchedDs = findMatchingDiskState(disk, ctx.disks);
             if (disk instanceof VirtualDisk) {
-                handleVirtualDiskUpdate(ctx.child.endpointLink, matchedDs, (VirtualDisk) disk,
+                Operation diskOp = handleVirtualDiskUpdate(ctx.child.endpointLink, matchedDs, (VirtualDisk) disk,
                         diskLinks, ctx.parent.description.regionId, this, CustomProperties.of(state)
                                 .getString(CustomProperties.MOREF), CustomProperties.of(state)
-                                .getString(CustomProperties.DATACENTER_SELF_LINK), null, null)
-                        .sendWith(this);
+                                .getString(CustomProperties.DATACENTER_SELF_LINK), null, null);
+                DiskService.DiskState diskState = diskOp.getBody(DiskService.DiskState.class);
+                long diskProvisionGB = CustomProperties.of(diskState)
+                        .getLong(CustomProperties.DISK_PROVISION_IN_GB, 0L);
+                totalProvisionGB += diskProvisionGB;
+                diskOp.sendWith(this);
             } else if (disk instanceof VirtualCdrom) {
                 handleVirtualDeviceUpdate(ctx.child.endpointLink, matchedDs, DiskType.CDROM, disk,
                         diskLinks, ctx.parent.description.regionId, this, true, CustomProperties.of(state)
@@ -516,6 +521,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         .sendWith(this);
             }
         }
+        CustomProperties.of(state)
+                .put(CustomProperties.DISK_PROVISION_IN_GB, totalProvisionGB);
         state.diskLinks = diskLinks;
     }
 

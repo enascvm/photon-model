@@ -70,6 +70,7 @@ import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -474,6 +475,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                     }
 
                     OperationJoin.create(diskUpdateOps).setCompletion((operationMap, exception) -> {
+                        updateComputeStateWithProvisionGB(state, operationMap);
                         patchOnComputeState(service, state, oldDocument, enumerationProgress, vm);
                     }).sendWith(service);
                 }
@@ -571,6 +573,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                         .sendWith(service);
             } else {
                 OperationJoin.create(operations).setCompletion((operationMap, exception) -> {
+                    updateComputeStateWithProvisionGB(state, operationMap);
                     Operation.createPost(PhotonModelUriUtils
                             .createInventoryUri(service.getHost(), ComputeService.FACTORY_LINK))
                             .setBody(state)
@@ -579,6 +582,20 @@ public class VSphereVirtualMachineEnumerationHelper {
                 }).sendWith(service);
             }
         });
+    }
+
+    private static void updateComputeStateWithProvisionGB(ComputeState state, Map<Long, Operation> operationMap) {
+        long totalProvisionGB = 0;
+        for (Operation diskOperation : operationMap.values()) {
+            if (!Service.Action.DELETE.equals(diskOperation.getAction())) {
+                DiskState diskState = diskOperation.getBody(DiskState.class);
+                long diskProvisionGB = CustomProperties.of(diskState)
+                        .getLong(CustomProperties.DISK_PROVISION_IN_GB, 0L);
+                totalProvisionGB += diskProvisionGB;
+            }
+        }
+        CustomProperties.of(state)
+                .put(CustomProperties.DISK_PROVISION_IN_GB, totalProvisionGB);
     }
 
     static void processFoundVm(VSphereIncrementalEnumerationService service,
