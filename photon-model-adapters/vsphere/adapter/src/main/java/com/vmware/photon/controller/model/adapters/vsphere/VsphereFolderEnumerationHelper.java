@@ -190,7 +190,7 @@ public class VsphereFolderEnumerationHelper {
     public static void handleFolderChanges(
             VSphereIncrementalEnumerationService service, List<FolderOverlay> folderOverlays,
             EnumerationProgress enumerationProgress, EnumerationClient client) {
-
+        enumerationProgress.expectFolderCount(folderOverlays.size());
         for (FolderOverlay folderOverlay : folderOverlays) {
             try {
                 if (ObjectUpdateKind.ENTER == folderOverlay.getObjectUpdateKind()) {
