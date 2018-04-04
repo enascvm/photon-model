@@ -184,6 +184,7 @@ public class AWSTaskStatusChecker<T> {
                     AWSTaskStatusChecker.create(AWSTaskStatusChecker.this.amazonEC2Client,
                             AWSTaskStatusChecker.this.instanceId,
                             AWSTaskStatusChecker.this.desiredState,
+                            AWSTaskStatusChecker.this.failureStates,
                             AWSTaskStatusChecker.this.consumer,
                             AWSTaskStatusChecker.this.taskManager,
                             AWSTaskStatusChecker.this.service,
@@ -242,9 +243,10 @@ public class AWSTaskStatusChecker<T> {
                     return;
                 } else if (!status.equals(AWSTaskStatusChecker.this.desiredState)) {
                     AWSTaskStatusChecker.this.service.logInfo(
-                            "Instance %s not yet in desired state %s. Current state %s, waiting 5s",
+                            "Instance %s not yet in desired state %s. Current state %s, failure states %s, waiting 5s",
                             AWSTaskStatusChecker.this.instanceId,
-                            AWSTaskStatusChecker.this.desiredState, status);
+                            AWSTaskStatusChecker.this.desiredState, status,
+                            AWSTaskStatusChecker.this.failureStates);
 
                     // if the instance is not in the desired state, schedule thread
                     // to run again in 5 seconds
@@ -254,6 +256,7 @@ public class AWSTaskStatusChecker<T> {
                                         .create(AWSTaskStatusChecker.this.amazonEC2Client,
                                                 AWSTaskStatusChecker.this.instanceId,
                                                 AWSTaskStatusChecker.this.desiredState,
+                                                AWSTaskStatusChecker.this.failureStates,
                                                 AWSTaskStatusChecker.this.consumer,
                                                 AWSTaskStatusChecker.this.taskManager,
                                                 AWSTaskStatusChecker.this.service,
