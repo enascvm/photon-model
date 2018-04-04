@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 
 import java.net.URI;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.UUID;
 
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
@@ -25,13 +26,18 @@ import com.microsoft.azure.management.network.implementation.NetworkSecurityGrou
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -54,6 +60,7 @@ public class AzureSecurityGroupService extends StatelessService {
         final SecurityGroupInstanceRequest securityGroupRequest;
 
         SecurityGroupState securityGroupState;
+        ResourceGroupState resourceGroupState;
 
         // The RG the SG lands
         public ResourceGroupInner resourceGroup;
@@ -107,6 +114,7 @@ public class AzureSecurityGroupService extends StatelessService {
         return DeferredResult.completed(context)
                 // get security group from request.resourceReference
                 .thenCompose(this::getSecurityGroupState)
+                .thenCompose(this::getEndpointState)
                 // create the Azure clients
                 .thenCompose(this::getAzureClient);
     }
@@ -118,6 +126,23 @@ public class AzureSecurityGroupService extends StatelessService {
                 SecurityGroupState.class)
                 .thenApply(securityGroupState -> {
                     context.securityGroupState = securityGroupState;
+                    return context;
+                });
+    }
+
+    private DeferredResult<AzureSecurityGroupContext> getEndpointState(
+            AzureSecurityGroupContext context) {
+
+        String endpointLink = context.securityGroupState.endpointLink;
+        if (context.securityGroupState.endpointLinks != null && !context.securityGroupState
+                .endpointLinks.isEmpty()) {
+            endpointLink = context.securityGroupState.endpointLinks.iterator().next();
+        }
+
+        return this.sendWithDeferredResult(
+                Operation.createGet(this, endpointLink), EndpointState.class)
+                .thenApply(endpointState -> {
+                    context.endpoint = endpointState;
                     return context;
                 });
     }
@@ -142,6 +167,7 @@ public class AzureSecurityGroupService extends StatelessService {
             } else {
                 return execution
                         .thenCompose(this::createResourceGroup)
+                        .thenCompose(this::createResourceGroupState)
                         .thenCompose(this::createSecurityGroup)
                         .thenCompose(this::updateSecurityGroupState)
                         .thenCompose(this::updateRules);
@@ -257,6 +283,48 @@ public class AzureSecurityGroupService extends StatelessService {
                     }
                     context.securityGroupState.customProperties.put(RESOURCE_GROUP_NAME, context
                             .resourceGroup.name());
+                    return context;
+                });
+    }
+
+    /**
+     * Create a resource group state that represents the new Azure resource group.
+     * This state is added to the security group state's group links.
+     */
+    private DeferredResult<AzureSecurityGroupContext> createResourceGroupState(
+            AzureSecurityGroupContext context) {
+        ResourceGroupState resourceGroupState = new ResourceGroupState();
+
+        resourceGroupState.tenantLinks = context.securityGroupState.tenantLinks;
+        resourceGroupState.endpointLink = context.securityGroupState.endpointLink;
+        resourceGroupState.endpointLinks = context.securityGroupState.endpointLinks;
+
+        resourceGroupState.id = context.resourceGroup.id();
+        resourceGroupState.name = context.resourceGroup.name();
+
+        if (resourceGroupState.customProperties == null) {
+            resourceGroupState.customProperties = new HashMap<>(1);
+        }
+
+        resourceGroupState.customProperties.put(ComputeProperties.RESOURCE_TYPE_KEY,
+                ResourceGroupStateType.AzureResourceGroup.name());
+
+        resourceGroupState.computeHostLink = context.endpoint.computeLink;
+        resourceGroupState.customProperties.put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+                context.endpoint.computeLink);
+
+        return this.sendWithDeferredResult(Operation.createPost(this,
+                ResourceGroupService.FACTORY_LINK).setBody(resourceGroupState))
+                .thenApply(o -> {
+                    ResourceGroupState rgs = o.getBody(ResourceGroupState.class);
+                    context.resourceGroupState = rgs;
+
+                    // add group link to the created resource group state
+                    if (context.securityGroupState.groupLinks == null) {
+                        context.securityGroupState.groupLinks = new HashSet<>();
+                    }
+                    context.securityGroupState.groupLinks.add(rgs.documentSelfLink);
+
                     return context;
                 });
     }
