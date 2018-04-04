@@ -695,14 +695,22 @@ public class ClientUtils {
         return defaultDatastore;
     }
 
+    public static void getDataStoresForEndpoint(Service service, String endpointLink, List<String> tenantLinks,
+                                                Consumer<Throwable> failure, Consumer<ServiceDocumentQueryResult> handler) {
+        getDatastoresForProfile(service, null, endpointLink, tenantLinks, failure, handler);
+    }
+
     public static void getDatastoresForProfile(Service service, String storagePolicyLink,
             String endpointLink, List<String> tenantLinks, Consumer<Throwable> failure,
             Consumer<ServiceDocumentQueryResult> handler) {
         QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
                 .addKindFieldClause(StorageDescriptionService.StorageDescription.class);
-        builder.addCollectionItemClause(
-                StorageDescriptionService.StorageDescription.FIELD_NAME_GROUP_LINKS,
-                storagePolicyLink);
+
+        if (null != storagePolicyLink) {
+            builder.addCollectionItemClause(
+                    StorageDescriptionService.StorageDescription.FIELD_NAME_GROUP_LINKS,
+                    storagePolicyLink);
+        }
 
         QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
                 endpointLink);
@@ -867,7 +875,7 @@ public class ClientUtils {
     public static Operation handleVirtualDiskUpdate(String endpointLink,
                                                     DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
                                                     String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx,
-                                                    ComputeState oldDocument) {
+                                                    ComputeState oldDocument, Map<String, String> morefToDSSelfLinkMap) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -927,6 +935,19 @@ public class ClientUtils {
                 .put(CustomProperties.DISK_PROVISION_IN_GB, disk.getCapacityInKB() / (1024 * 1024))
                 .put(CustomProperties.DATACENTER_SELF_LINK, dcLink)
                 .put(CustomProperties.DISK_PARENT_VM, vm);
+
+        String dataStoreLink;
+        // check if the data store link is present in tracker
+        if (null != ctx && null != ctx.getDatastoreTracker()
+                && !ResourceTracker.ERROR.equals(ctx.getDatastoreTracker().getSelfLink(backing.getDatastore()))) {
+            //populate from tracker
+            dataStoreLink = ctx.getDatastoreTracker().getSelfLink(backing.getDatastore());
+        } else {
+            // else populate from pre-populated map
+            dataStoreLink = morefToDSSelfLinkMap.get(VimUtils.convertMoRefToString(backing.getDatastore()));
+        }
+
+        ds.storageDescriptionLink = dataStoreLink;
         // Disk needs the VMs MoRef for the functional Key
         if (ctx != null) {
             VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(ds, ctx.getVcUuid(),

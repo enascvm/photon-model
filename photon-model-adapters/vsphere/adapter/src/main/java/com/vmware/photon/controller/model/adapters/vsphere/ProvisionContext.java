@@ -19,7 +19,9 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -39,6 +41,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.SnapshotService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
@@ -72,6 +75,8 @@ public class ProvisionContext {
     public ManagedObjectReference referenceComputeMoRef;
 
     public List<DiskStateExpanded> disks;
+
+    public Map<String, String> morefToDSSelfLinkMap;
     public List<NetworkInterfaceStateWithDetails> nics;
     public AuthCredentialsServiceState vSphereCredentials;
 
@@ -424,6 +429,24 @@ public class ProvisionContext {
                     });
 
             join.sendWith(service);
+            return;
+        }
+
+        if (ctx.morefToDSSelfLinkMap == null) {
+            ctx.morefToDSSelfLinkMap = new HashMap<String, String>();
+            ClientUtils.getDataStoresForEndpoint(service, ctx.child.endpointLink, ctx.parent.tenantLinks, ctx.errorHandler,
+                    (result) -> {
+                        if (result.documents != null && result.documents.size() > 0) {
+                            for (Object storageDesc : result.documents.values()) {
+                                StorageDescription datastore = Utils.fromJson(storageDesc, StorageDescription.class);
+                                String moref = CustomProperties.of(datastore)
+                                        .getString(CustomProperties.MOREF);
+                                ctx.morefToDSSelfLinkMap.put(moref, datastore.documentSelfLink);
+                            }
+                        }
+                        populateContextThen(service, ctx, onSuccess);
+                    });
+
             return;
         }
 

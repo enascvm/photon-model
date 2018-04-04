@@ -22,6 +22,7 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -354,7 +355,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         if (device instanceof VirtualDisk) {
             return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
                     (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service,
-                    vm, enumerationProgress.getDcLink(), enumerationProgress, oldDocument);
+                    vm, enumerationProgress.getDcLink(), enumerationProgress, oldDocument, Collections.emptyMap());
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.CDROM, device,

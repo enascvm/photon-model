@@ -503,7 +503,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 Operation diskOp = handleVirtualDiskUpdate(ctx.child.endpointLink, matchedDs, (VirtualDisk) disk,
                         diskLinks, ctx.parent.description.regionId, this, CustomProperties.of(state)
                                 .getString(CustomProperties.MOREF), CustomProperties.of(state)
-                                .getString(CustomProperties.DATACENTER_SELF_LINK), null, null);
+                                .getString(CustomProperties.DATACENTER_SELF_LINK), null, null, ctx.morefToDSSelfLinkMap);
                 DiskService.DiskState diskState = diskOp.getBody(DiskService.DiskState.class);
                 long diskProvisionGB = CustomProperties.of(diskState)
                         .getLong(CustomProperties.DISK_PROVISION_IN_GB, 0L);
