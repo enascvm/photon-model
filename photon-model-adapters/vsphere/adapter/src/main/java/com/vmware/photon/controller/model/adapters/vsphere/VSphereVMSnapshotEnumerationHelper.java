@@ -117,36 +117,38 @@ public class VSphereVMSnapshotEnumerationHelper {
         QueryTask task = queryForSnapshot(enumerationProgress, current.getId().toString(),
                 vmSelfLink);
         VsphereEnumerationHelper.withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
-            SnapshotState snapshotState = constructSnapshot(service, current, parentLink,
-                    vmSelfLink, enumerationProgress, vm);
-            if (result.documentLinks.isEmpty()) {
-                VSphereVirtualMachineEnumerationHelper.createSnapshot(service, snapshotState)
-                        .thenCompose(createdSnapshotState ->
-                                trackAndProcessChildSnapshots(service, current, enumerationProgress, vm, vmSelfLink,
-                                        createdSnapshotState))
-                        .whenComplete((ss, e) -> {
-                            if (e != null) {
-                                service.log(Level.SEVERE, "Creation of snapshot with name {%s} failed.",
-                                        snapshotState.name);
-                            }
-                            enumerationProgress.getSnapshotTracker().arrive();
-                        });
-            } else {
-                SnapshotState oldState = VsphereEnumerationHelper.convertOnlyResultToDocument(result,
-                        SnapshotState.class);
-                updateSnapshot(service, enumerationProgress, vm, oldState, snapshotState,
-                        current.getId().toString())
-                        .thenCompose(updatedSnapshotState ->
-                                trackAndProcessChildSnapshots(service, current, enumerationProgress, vm,
-                                        vmSelfLink, updatedSnapshotState))
-                        .whenComplete((ss, e) -> {
-                            if (e != null) {
-                                service.logSevere("Updating of snapshot with name {%s}, selfLink {%s} failed",
-                                        snapshotState.name, oldState.documentSelfLink);
-                            }
-                            enumerationProgress.getSnapshotTracker().arrive();
-                        });
-            }
+            VsphereEnumerationHelper.submitWorkToVSpherePool(service, () -> {
+                SnapshotState snapshotState = constructSnapshot(service, current, parentLink,
+                        vmSelfLink, enumerationProgress, vm);
+                if (result.documentLinks.isEmpty()) {
+                    VSphereVirtualMachineEnumerationHelper.createSnapshot(service, snapshotState)
+                            .thenCompose(createdSnapshotState ->
+                                    trackAndProcessChildSnapshots(service, current, enumerationProgress, vm, vmSelfLink,
+                                            createdSnapshotState))
+                            .whenComplete((ss, e) -> {
+                                if (e != null) {
+                                    service.log(Level.SEVERE, "Creation of snapshot with name {%s} failed.",
+                                            snapshotState.name);
+                                }
+                                enumerationProgress.getSnapshotTracker().arrive();
+                            });
+                } else {
+                    SnapshotState oldState = VsphereEnumerationHelper.convertOnlyResultToDocument(result,
+                            SnapshotState.class);
+                    updateSnapshot(service, enumerationProgress, vm, oldState, snapshotState,
+                            current.getId().toString())
+                            .thenCompose(updatedSnapshotState ->
+                                    trackAndProcessChildSnapshots(service, current, enumerationProgress, vm,
+                                            vmSelfLink, updatedSnapshotState))
+                            .whenComplete((ss, e) -> {
+                                if (e != null) {
+                                    service.logSevere("Updating of snapshot with name {%s}, selfLink {%s} failed",
+                                            snapshotState.name, oldState.documentSelfLink);
+                                }
+                                enumerationProgress.getSnapshotTracker().arrive();
+                            });
+                }
+            });
         });
     }
 
