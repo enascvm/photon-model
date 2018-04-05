@@ -1110,7 +1110,9 @@ public class AWSInstanceService extends StatelessService {
                 } else {
                     diskState.id = String.format("%s_%s", AWSStorageType.INSTANCE_STORE.getName(),
                             UUID.randomUUID().toString());
-                    diskState.name = diskState.id;
+                    if (diskState.name == null) {
+                        diskState.name = diskState.id;
+                    }
                     diskState.creationTimeMicros = diskState.documentUpdateTimeMicros;
                 }
             }
@@ -1513,12 +1515,13 @@ public class AWSInstanceService extends StatelessService {
 
     private void assertAndResetPersistence(List<DiskState> instanceStoreDisks) {
         instanceStoreDisks.forEach(disk -> {
-            AssertUtil.assertTrue(
-                    Boolean.TRUE.equals(disk.persistent),
-                    String.format("disk %s is ephemeral and cannot be persisted.", disk.name));
-            disk.persistent = Boolean.FALSE;
+            if (disk.persistent != null) {
+                AssertUtil.assertFalse(disk.persistent,
+                        String.format("disk %s is ephemeral and cannot be persisted.", disk.name));
+            } else {
+                disk.persistent = Boolean.FALSE;
+            }
         });
-
     }
 
     private void validateImageAndInstanceTypeCompatibility(InstanceType type,
