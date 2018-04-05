@@ -440,7 +440,7 @@ public class AzureLoadBalancerService extends StatelessService {
      */
     private DeferredResult<AzureLoadBalancerContext> createPublicIP(
             AzureLoadBalancerContext context) {
-        if (!context.loadBalancerStateExpanded.internetFacing) {
+        if (!Boolean.TRUE.equals(context.loadBalancerStateExpanded.internetFacing)) {
             return DeferredResult.completed(context);
         }
         PublicIPAddressesInner azurePublicIPAddressClient = context.azureSdkClients
@@ -465,8 +465,8 @@ public class AzureLoadBalancerService extends StatelessService {
             }
 
             @Override
-            protected String getProvisioningState(PublicIPAddressInner loadBalancer) {
-                return loadBalancer.provisioningState();
+            protected String getProvisioningState(PublicIPAddressInner publicIPAddress) {
+                return publicIPAddress.provisioningState();
             }
 
             @Override
@@ -539,7 +539,7 @@ public class AzureLoadBalancerService extends StatelessService {
     private List<FrontendIPConfigurationInner> buildFrontendIPConfiguration(
             AzureLoadBalancerContext context) {
         List<FrontendIPConfigurationInner> frontendIPConfigurationInners = Lists.newArrayList();
-        if (context.loadBalancerStateExpanded.internetFacing) {
+        if (Boolean.TRUE.equals(context.loadBalancerStateExpanded.internetFacing)) {
             FrontendIPConfigurationInner frontendIPConfiguration = new FrontendIPConfigurationInner()
                     .withName(String.format("%s-public-frontend",
                             context.loadBalancerStateExpanded.name));
