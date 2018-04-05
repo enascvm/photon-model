@@ -618,8 +618,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         } else {
             OperationJoin.create(operations).setCompletion((ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
-                    this.logWarning("Failure creating external tags for network and subnets: %s",
-                            exs.get(0).getMessage());
+                    logWarning("Failure creating external tags for network and subnets: %s",
+                            Utils.toString(exs.values().iterator().next()));
                 }
 
                 ops.values().stream()
