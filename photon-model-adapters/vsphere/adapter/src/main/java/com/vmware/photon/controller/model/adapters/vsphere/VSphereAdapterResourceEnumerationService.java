@@ -104,7 +104,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             }).sendWith(this);
         } else {
             // Stop any existing enumeration process when REFRESH is received.
-            logFine("Deleting the incremental enumeration service.");
+            logInfo("Deleting the incremental enumeration service.");
             Operation deleteRequest = Operation.createDelete(uri)
                     .setCompletion((o, e) -> {
                         if (null != e) {

@@ -191,10 +191,16 @@ public class VSphereVMSnapshotEnumerationHelper {
             //process only those VMs that have snapshots attached.
             if (vm.getRootSnapshotList() != null) {
                 ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-
-                QueryTask task = VSphereVirtualMachineEnumerationHelper
-                        .queryForVm(enumerationProgress, request.resourceLink(),
-                                vm.getInstanceUuid(), null);
+                QueryTask task;
+                if (null != vm.getInstanceUuid()) {
+                    task = VSphereVirtualMachineEnumerationHelper
+                            .queryForVm(enumerationProgress, request.resourceLink(),
+                                    vm.getInstanceUuid(), null);
+                } else {
+                    task = VSphereVirtualMachineEnumerationHelper
+                            .queryForVm(enumerationProgress, request.resourceLink(),
+                                    null, vm.getId());
+                }
 
                 VsphereEnumerationHelper.withTaskResults(service, task, result -> {
                     ComputeState computeState = VsphereEnumerationHelper.convertOnlyResultToDocument(result,
@@ -205,4 +211,5 @@ public class VSphereVMSnapshotEnumerationHelper {
         });
         enumerationProgress.getSnapshotTracker().arriveAndDeregister();
     }
+
 }

@@ -475,10 +475,14 @@ public class VSphereVirtualMachineEnumerationHelper {
                         diskUpdateOps.add(Operation.createDelete(PhotonModelUriUtils.createInventoryUri(service.getHost(), diskToDelete)));
                     }
 
-                    OperationJoin.create(diskUpdateOps).setCompletion((operationMap, exception) -> {
-                        updateComputeStateWithProvisionGB(state, operationMap);
-                        patchOnComputeState(service, state, oldDocument, enumerationProgress, vm);
-                    }).sendWith(service);
+                    // when a host moves inside cluster, vm receive updates only on resourcelinks.
+                    // in such case, diskUpdateOps is empty.
+                    if (CollectionUtils.isNotEmpty(diskUpdateOps)) {
+                        OperationJoin.create(diskUpdateOps).setCompletion((operationMap, exception) -> {
+                            updateComputeStateWithProvisionGB(state, operationMap);
+                            patchOnComputeState(service, state, oldDocument, enumerationProgress, vm);
+                        }).sendWith(service);
+                    }
                 }
             }).sendWith(service);
         } else {
@@ -638,7 +642,10 @@ public class VSphereVirtualMachineEnumerationHelper {
         for (ObjectUpdate objectUpdate : resourcesUpdates) {
             if (VimUtils.isVirtualMachine(objectUpdate.getObj())) {
                 VmOverlay vm = new VmOverlay(objectUpdate);
-
+                if (vm.isTemplate()) {
+                    // templates are skipped, enumerated as "images" instead
+                    continue;
+                }
                 if (vm.getInstanceUuid() != null || !objectUpdate.getKind().equals(ObjectUpdateKind.ENTER)) {
                     vmOverlays.add(vm);
                 }
@@ -664,6 +671,9 @@ public class VSphereVirtualMachineEnumerationHelper {
                 });
             }
         }
+
+        // enumerate snapshots
+        VSphereVMSnapshotEnumerationHelper.enumerateSnapshots(service, enumerationProgress, vmOverlays);
     }
 
     private static void deleteVM(EnumerationProgress enumerationProgress, VmOverlay vmOverlay,
