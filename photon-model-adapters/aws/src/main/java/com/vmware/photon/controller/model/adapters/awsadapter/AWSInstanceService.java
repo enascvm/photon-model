@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedOS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSSupportedVirtualizationTypes;
@@ -93,6 +94,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDevic
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.Pair;
@@ -809,6 +811,8 @@ public class AWSInstanceService extends StatelessService {
                     cs.customProperties.put(SOURCE_TASK_LINK, sourceTaskLink);
                     cs.customProperties.put(AWSConstants.AWS_VPC_ID,
                             ((Instance) instance).getVpcId());
+                    cs.customProperties.put(CUSTOM_OS_TYPE,
+                            AWSEnumerationUtils.getNormalizedOSType((Instance) instance));
                     cs.lifecycleState = LifecycleState.READY;
                     cs.diskLinks = new ArrayList<>();
 

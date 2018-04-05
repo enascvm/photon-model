@@ -13,11 +13,11 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.ComputeProperties.PLACEMENT_LINK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
@@ -65,13 +65,13 @@ import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.Volume;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -79,6 +79,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSBlockDeviceNameMapper;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -111,7 +112,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * adapter to create the VM All public fields below can be specified via command line arguments If
  * the 'isMock' flag is set to true the test runs the adapter in mock mode and does not actually
  * create a VM. Minimally the accessKey and secretKey for AWS must be specified.
- *
  */
 public class TestAWSProvisionTask {
 
@@ -213,9 +213,12 @@ public class TestAWSProvisionTask {
         // Create a resource pool where the VM will be housed
         ResourcePoolState resourcePool = createAWSResourcePool(this.host);
 
-        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey, this.secretKey);
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey,
+                this.secretKey);
 
-        this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host, auth.documentSelfLink, resourcePool.documentSelfLink);
+        this.endpointState = TestAWSSetupUtils
+                .createAWSEndpointState(this.host, auth.documentSelfLink,
+                        resourcePool.documentSelfLink);
 
         // create a compute host for the AWS EC2 VM
         this.computeHost = createAWSComputeHost(this.host,
@@ -224,8 +227,6 @@ public class TestAWSProvisionTask {
                 this.isAwsClientMock,
                 this.awsMockEndpointReference, null /*tags*/);
     }
-
-
 
     // Creates a AWS instance via a provision task.
     @Test
@@ -241,7 +242,6 @@ public class TestAWSProvisionTask {
                 null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup,
                 this.awsTestContext);
 
-
         // set placement link
         String zoneId = TestAWSSetupUtils.zoneId + avalabilityZoneIdentifier;
         ComputeState zoneComputeState = createAWSComputeHost(this.host, this.endpointState,
@@ -251,8 +251,9 @@ public class TestAWSProvisionTask {
         zoneComputeState.id = zoneId;
 
         zoneComputeState = TestUtils
-                .doPatch(this.host, zoneComputeState, ComputeState.class, UriUtils.buildUri(this.host,
-                        zoneComputeState.documentSelfLink));
+                .doPatch(this.host, zoneComputeState, ComputeState.class,
+                        UriUtils.buildUri(this.host,
+                                zoneComputeState.documentSelfLink));
 
         if (this.vmState.customProperties == null) {
             this.vmState.customProperties = new HashMap<>();
@@ -301,6 +302,8 @@ public class TestAWSProvisionTask {
             assertStorageConfiguration(this.client, instance, compute);
 
             assertEquals(zoneId, instance.getPlacement().getAvailabilityZone());
+
+            assertOSType(compute, instance);
         }
 
         this.host.setTimeoutSeconds(600);
@@ -380,6 +383,14 @@ public class TestAWSProvisionTask {
         this.sgToCleanUp = null;
     }
 
+    private void assertOSType(ComputeState computeState, Instance awsInstance) {
+        assertNotNull(computeState.customProperties);
+
+        assertEquals(OSType.LINUX.toString(), computeState.customProperties.get(CUSTOM_OS_TYPE));
+
+        assertEquals(OSType.LINUX.toString(), AWSEnumerationUtils.getNormalizedOSType(awsInstance));
+    }
+
     private void assertVmNetworksConfiguration(Instance awsInstance) throws Throwable {
 
         // This assert is only suitable for real (non-mocking env).
@@ -440,21 +451,22 @@ public class TestAWSProvisionTask {
 
         // Get the SecurityGroupStates that were provided in the request ComputeState
         Collector<SecurityGroupState, ?, Map<String, SecurityGroupState>> convertToMap =
-                Collectors.<SecurityGroupState, String, SecurityGroupState> toMap(sg -> sg.name, sg -> sg);
+                Collectors.<SecurityGroupState, String, SecurityGroupState>toMap(sg -> sg.name,
+                        sg -> sg);
         Map<String, SecurityGroupState> currentSGNamesToStates = vm.networkInterfaceLinks.stream()
                 // collect all NIC states in a List
                 .map(nicLink -> this.host.getServiceState(null,
                         NetworkInterfaceState.class,
                         UriUtils.buildUri(this.host, nicLink)))
                 //collect all SecurityGroup States from all NIC states
-                .<SecurityGroupState> flatMap(nicState -> nicState.securityGroupLinks.stream()
-                                // obtain SecurityGroupState from each SG link
-                                .map(sgLink -> {
-                                    SecurityGroupState sgState = this.host.getServiceState(null,
-                                            SecurityGroupState.class,
-                                            UriUtils.buildUri(this.host, sgLink));
-                                    return sgState;
-                                }))
+                .<SecurityGroupState>flatMap(nicState -> nicState.securityGroupLinks.stream()
+                        // obtain SecurityGroupState from each SG link
+                        .map(sgLink -> {
+                            SecurityGroupState sgState = this.host.getServiceState(null,
+                                    SecurityGroupState.class,
+                                    UriUtils.buildUri(this.host, sgLink));
+                            return sgState;
+                        }))
                 // collect security group states in a map with key = SG name
                 .collect(convertToMap);
 
@@ -481,7 +493,8 @@ public class TestAWSProvisionTask {
 
                 this.sgToCleanUp = currentSGState.id;
 
-                SecurityGroup awsSecurityGroup = getSecurityGroupsIdUsingEC2Client(this.client, provisionedGroupIdentifier.getGroupId());
+                SecurityGroup awsSecurityGroup = getSecurityGroupsIdUsingEC2Client(this.client,
+                        provisionedGroupIdentifier.getGroupId());
 
                 assertNotNull(awsSecurityGroup);
                 // Validate rules are correctly created as requested
@@ -489,10 +502,16 @@ public class TestAWSProvisionTask {
                 IpPermission awsEgressRule = awsSecurityGroup.getIpPermissionsEgress().get(1);
                 assertNotNull(awsIngressRule);
                 assertNotNull(awsEgressRule);
-                assertEquals("Error in created ingress rule", awsIngressRule.getIpProtocol(), currentSGState.ingress.get(0).protocol);
-                assertEquals("Error in created ingress rule", awsIngressRule.getIpv4Ranges().get(0).getCidrIp(), currentSGState.ingress.get(0).ipRangeCidr);
-                assertEquals("Error in created egress rule", awsEgressRule.getIpProtocol(), currentSGState.egress.get(0).protocol);
-                assertEquals("Error in created egress rule", awsEgressRule.getIpv4Ranges().get(0).getCidrIp(), currentSGState.egress.get(0).ipRangeCidr);
+                assertEquals("Error in created ingress rule", awsIngressRule.getIpProtocol(),
+                        currentSGState.ingress.get(0).protocol);
+                assertEquals("Error in created ingress rule",
+                        awsIngressRule.getIpv4Ranges().get(0).getCidrIp(),
+                        currentSGState.ingress.get(0).ipRangeCidr);
+                assertEquals("Error in created egress rule", awsEgressRule.getIpProtocol(),
+                        currentSGState.egress.get(0).protocol);
+                assertEquals("Error in created egress rule",
+                        awsEgressRule.getIpv4Ranges().get(0).getCidrIp(),
+                        currentSGState.egress.get(0).ipRangeCidr);
             }
         }
     }
@@ -630,7 +649,8 @@ public class TestAWSProvisionTask {
         }
     }
 
-    private void assertStorageConfiguration(AmazonEC2AsyncClient client, Instance awsInstance, ComputeState compute)
+    private void assertStorageConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
+            ComputeState compute)
             throws Throwable {
         // This assert is only suitable for real (non-mock) environment.
         if (this.isMock) {
@@ -662,7 +682,6 @@ public class TestAWSProvisionTask {
         assertDataDiskConfiguration(client, awsInstance, additionalDiskLinks);
     }
 
-
     protected void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
             String diskLink) {
         DiskState diskState = getDiskState(diskLink);
@@ -683,7 +702,8 @@ public class TestAWSProvisionTask {
                 Integer.parseInt(diskState.customProperties.get("iops")),
                 bootVolume.getIops().intValue());
 
-        assertEquals("Boot disk attach status is not matching", DiskService.DiskStatus.ATTACHED, diskState.status);
+        assertEquals("Boot disk attach status is not matching", DiskService.DiskStatus.ATTACHED,
+                diskState.status);
     }
 
     protected void assertDataDiskConfiguration(AmazonEC2AsyncClient client,
@@ -697,11 +717,16 @@ public class TestAWSProvisionTask {
         }
     }
 
-    protected void assertDeviceName(Instance awsInstance, DiskState diskState, List<String> existingNames) {
+    protected void assertDeviceName(Instance awsInstance, DiskState diskState,
+            List<String> existingNames) {
         AWSConstants.AWSSupportedOS os = AWSConstants.AWSSupportedOS.get(awsInstance.getPlatform());
-        AWSConstants.AWSSupportedVirtualizationTypes virtualizationType = AWSConstants.AWSSupportedVirtualizationTypes.get(awsInstance.getVirtualizationType());
-        AWSConstants.AWSStorageType storageType = AWSConstants.AWSStorageType.get(diskState.customProperties.get(DEVICE_TYPE));
-        List<String> expectedNames = AWSBlockDeviceNameMapper.getAvailableNames(os, virtualizationType, storageType, awsInstance.getInstanceType(), existingNames);
+        AWSConstants.AWSSupportedVirtualizationTypes virtualizationType = AWSConstants.AWSSupportedVirtualizationTypes
+                .get(awsInstance.getVirtualizationType());
+        AWSConstants.AWSStorageType storageType = AWSConstants.AWSStorageType
+                .get(diskState.customProperties.get(DEVICE_TYPE));
+        List<String> expectedNames = AWSBlockDeviceNameMapper
+                .getAvailableNames(os, virtualizationType, storageType,
+                        awsInstance.getInstanceType(), existingNames);
         assertEquals(expectedNames.get(0), diskState.customProperties.get(DEVICE_NAME));
     }
 
@@ -748,7 +773,8 @@ public class TestAWSProvisionTask {
                 UriUtils.buildUri(this.host, diskLink));
     }
 
-    protected Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance, String deviceName) {
+    protected Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance,
+            String deviceName) {
         InstanceBlockDeviceMapping bootDiskMapping = awsInstance.getBlockDeviceMappings().stream()
                 .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName().equals(deviceName))
                 .findAny()

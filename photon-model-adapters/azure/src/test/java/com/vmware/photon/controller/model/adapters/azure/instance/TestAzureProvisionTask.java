@@ -51,7 +51,6 @@ import com.microsoft.azure.management.network.implementation.NetworkManagementCl
 import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
 import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
-
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Ignore;
@@ -154,9 +153,11 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         assertVmNetworksConfiguration(DEFAULT_NIC_SPEC, vmResourceSpec.azureVmName);
 
-        assertConfigurationOfDisks(0,0);
+        assertConfigurationOfDisks(0, 0);
 
         assertStorageDescription();
+
+        assertOSType();
 
         // Stats on individual VM is currently broken.
         if (!this.skipStats) {
@@ -220,7 +221,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
 
         // Run enumeration second time to verify disk states are not duplicated
         runEnumeration();
-        ServiceDocumentQueryResult result = ProvisioningUtils.queryAllFactoryResources(this.host, DiskService.FACTORY_LINK);
+        ServiceDocumentQueryResult result = ProvisioningUtils
+                .queryAllFactoryResources(this.host, DiskService.FACTORY_LINK);
 
         List<DiskState> diskList = result.documents.keySet()
                 .stream()
@@ -232,13 +234,15 @@ public class TestAzureProvisionTask extends AzureBaseTest {
             long nameCount = diskList.stream()
                     .filter(ds -> ds.name.equalsIgnoreCase(diskState.name))
                     .count();
-            String msg = String.format("Duplicate of DiskState %s must not be present. ", diskState.name);
+            String msg = String
+                    .format("Duplicate of DiskState %s must not be present. ", diskState.name);
             assertEquals(msg, 1, nameCount);
 
             long idCount = diskList.stream()
                     .filter(ds -> ds.id.equalsIgnoreCase(diskState.id))
                     .count();
-            String idMsg = String.format("Duplicate of DiskState ID %s must not be present. ", diskState.id);
+            String idMsg = String
+                    .format("Duplicate of DiskState ID %s must not be present. ", diskState.id);
             assertEquals(idMsg, 1, idCount);
         }
 
@@ -407,7 +411,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
     @Test
     @Ignore("This test does an additional VM provisioning that will cause the total preflight "
             + "time to exceed the limit and timeout the preflight. Only for manual execution.")
-    public void testProvisionWitPrivateIP() throws Throwable {
+    public void testProvisionWithPrivateIP() throws Throwable {
 
         // create a Azure VM compute resource.
         this.vmState = createDefaultVMResource(this.host, azureVMName,
@@ -545,7 +549,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 networkClient, vmRGName, AzureTestUtil.AZURE_NETWORK_NAME);
 
         assertNotNull("Azure virtual network object '" + vmRGName + "/"
-                + AzureTestUtil.AZURE_NETWORK_NAME + "' is not found.",
+                        + AzureTestUtil.AZURE_NETWORK_NAME + "' is not found.",
                 provisionedNetwork);
 
         final String sgName = AzureTestUtil.AZURE_SECURITY_GROUP_NAME + "-" + vmName;
@@ -571,7 +575,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         if (numberOfDataDisksOnImage == 0) {
             for (DiskState diskState : diskStates) {
                 if (diskState.bootOrder == 1) {
-                    assertEquals("OS Disk size does not match", AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
+                    assertEquals("OS Disk size does not match",
+                            AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
                             diskState.capacityMBytes);
                 } else {
 
@@ -582,7 +587,6 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 }
             }
         }
-
 
         if (this.isMock) { // return. Nothing to check on Azure.
             return;
@@ -624,7 +628,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                             AzureUtils.canonizeId(azureOsDisk.vhd().uri()), bootDiskState.id);
                 }
 
-                assertEquals("OS Disk size of the VM in azure does not match with the intended size",
+                assertEquals(
+                        "OS Disk size of the VM in azure does not match with the intended size",
                         AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE, azureOsDisk.diskSizeGB() * 1024);
             } else {
                 fail("Mismatch in boot disk name.");
@@ -655,13 +660,14 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                 // assert size of each of the attached disks only in case of public image
                 if (numberOfDataDisksOnImage == 0) {
                     assertEquals("Mismatch in intended size of data disks " + azureDataDisk.name(),
-                            AZURE_CUSTOM_DATA_DISK_SIZE, azureDataDisk.diskSizeGB().longValue() * 1024);
+                            AZURE_CUSTOM_DATA_DISK_SIZE,
+                            azureDataDisk.diskSizeGB().longValue() * 1024);
 
                 }
 
                 assertEquals("LUN of DiskState does not match Azure.dataDisk.lun",
                         String.valueOf(azureDataDisk.lun()), dataDiskState.customProperties.get(
-                        DISK_CONTROLLER_NUMBER));
+                                DISK_CONTROLLER_NUMBER));
 
             } else {
                 fail("Data Disks not found.");
@@ -669,7 +675,8 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         }
 
         assertEquals("Mismatch in number of data disks found on VM in azure",
-                numberOfAdditionalDisks + numberOfDataDisksOnImage, provisionedVM.storageProfile().dataDisks().size());
+                numberOfAdditionalDisks + numberOfDataDisksOnImage,
+                provisionedVM.storageProfile().dataDisks().size());
 
     }
 
@@ -691,7 +698,7 @@ public class TestAzureProvisionTask extends AzureBaseTest {
                     .get(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME);
             if (sharedSAName != null && !sharedSAName.isEmpty()) {
                 Map<String, StorageDescription> storageDescriptionsMap = ProvisioningUtils
-                        .<StorageDescription> getResourceStates(getHost(),
+                        .<StorageDescription>getResourceStates(getHost(),
                                 StorageDescriptionService.FACTORY_LINK, StorageDescription.class);
                 assertTrue(!storageDescriptionsMap.isEmpty());
                 List<StorageDescription> storageDescriptions = storageDescriptionsMap.values()
@@ -719,6 +726,17 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         }
     }
 
+    private void assertOSType() {
+        if (this.isMock) { // return. Nothing provisioned on Azure so nothing to check
+            return;
+        }
+
+        ComputeState vm = getHost().getServiceState(null,
+                ComputeState.class, UriUtils.buildUri(getHost(), this.vmState.documentSelfLink));
+        assertEquals(ComputeProperties.OSType.LINUX.toString(),
+                vm.customProperties.get(ComputeProperties.CUSTOM_OS_TYPE));
+    }
+
     private void runEnumeration() throws Throwable {
         ResourceEnumerationTaskService.ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
 
@@ -734,13 +752,15 @@ public class TestAzureProvisionTask extends AzureBaseTest {
         }
 
         ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask = TestUtils
-                .doPost(this.host, enumerationTaskState, ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
+                .doPost(this.host, enumerationTaskState,
+                        ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
                         UriUtils.buildUri(this.host, ResourceEnumerationTaskService.FACTORY_LINK));
 
         this.host.waitFor("Error waiting for enumeration task", () -> {
             try {
                 ResourceEnumerationTaskService.ResourceEnumerationTaskState state = this.host
-                        .waitForFinishedTask(ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
+                        .waitForFinishedTask(
+                                ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
                                 enumTask.documentSelfLink);
                 if (state != null) {
                     return true;

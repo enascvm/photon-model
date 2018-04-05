@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DATA_DISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_MANAGED_DISK_TYPE;
@@ -510,7 +511,7 @@ public class AzureInstanceService extends StatelessService {
 
         AzureDeferredResultServiceCallback<OperationStatusResponseInner>
                 deleteVirtualMachineCallback =
-                    new AzureDeferredResultServiceCallback<OperationStatusResponseInner>(this, msg) {
+                new AzureDeferredResultServiceCallback<OperationStatusResponseInner>(this, msg) {
                     @Override
                     protected DeferredResult<OperationStatusResponseInner> consumeSuccess(
                             OperationStatusResponseInner result) {
@@ -552,7 +553,6 @@ public class AzureInstanceService extends StatelessService {
         return DeferredResult.completed(ctx);
     }
 
-
     private DeferredResult<AzureInstanceContext> deleteVHDBlobsForUnmangedDisks(
             AzureInstanceContext ctx) {
 
@@ -561,7 +561,6 @@ public class AzureInstanceService extends StatelessService {
                 .thenCompose(this::deleteVHDBlobsInAzure)
                 .thenApply(ignore -> ctx);
     }
-
 
     private DeferredResult<AzureInstanceContext> getStorageAccountKeysForUnManagedDisks(
             AzureInstanceContext ctx) {
@@ -582,21 +581,26 @@ public class AzureInstanceService extends StatelessService {
                                         ctx.bootDiskState.storageDescription.authCredentialsLink)))
                         .setReferer(getUri()));
 
-        for (DiskService.DiskStateExpanded disk: ctx.dataDiskStates) {
+        for (DiskService.DiskStateExpanded disk : ctx.dataDiskStates) {
             //add null check as all disk will not have it
-            if (disk.storageDescription != null && disk.storageDescription.authCredentialsLink != null) {
+            if (disk.storageDescription != null
+                    && disk.storageDescription.authCredentialsLink != null) {
                 fetchAuthCredsForStorageAccount.add(
-                        Operation.createGet(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
-                                disk.storageDescription.authCredentialsLink))).setReferer(getUri()));
+                        Operation.createGet(
+                                UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
+                                        disk.storageDescription.authCredentialsLink)))
+                                .setReferer(getUri()));
             }
         }
 
         OperationJoin.create(fetchAuthCredsForStorageAccount).setCompletion((ops, exc) -> {
             if (exc == null || exc.size() == 0) {
                 ctx.storageAccountKeysForDisks = new HashMap<>();
-                for (Operation authGet: ops.values()) {
-                    AuthCredentialsServiceState auth = authGet.getBody(AuthCredentialsServiceState.class);
-                    ctx.storageAccountKeysForDisks.put(auth.documentSelfLink, auth.customProperties.get(AZURE_STORAGE_ACCOUNT_KEY1));
+                for (Operation authGet : ops.values()) {
+                    AuthCredentialsServiceState auth = authGet
+                            .getBody(AuthCredentialsServiceState.class);
+                    ctx.storageAccountKeysForDisks.put(auth.documentSelfLink,
+                            auth.customProperties.get(AZURE_STORAGE_ACCOUNT_KEY1));
                 }
                 dr.complete(ctx);
 
@@ -617,7 +621,8 @@ public class AzureInstanceService extends StatelessService {
         }
 
         String defaultSAName = ctx.bootDiskState.storageDescription.name;
-        String defaultSAKey =  ctx.storageAccountKeysForDisks.get(ctx.bootDiskState.storageDescription.authCredentialsLink);
+        String defaultSAKey = ctx.storageAccountKeysForDisks
+                .get(ctx.bootDiskState.storageDescription.authCredentialsLink);
 
         List<DiskService.DiskStateExpanded> diskStatesToDelete = ctx.dataDiskStates.stream()
                 .filter(disk -> disk.persistent == false)
@@ -638,10 +643,12 @@ public class AzureInstanceService extends StatelessService {
                     CloudStorageAccount storageAccountOfVHDBlob;
                     if (disk.storageDescription == null) {
                         storageAccountOfVHDBlob = CloudStorageAccount.parse(
-                                String.format(STORAGE_CONNECTION_STRING, defaultSAName, defaultSAKey));
+                                String.format(STORAGE_CONNECTION_STRING, defaultSAName,
+                                        defaultSAKey));
 
                     } else {
-                        String key = ctx.storageAccountKeysForDisks.get(disk.storageDescription.authCredentialsLink);
+                        String key = ctx.storageAccountKeysForDisks
+                                .get(disk.storageDescription.authCredentialsLink);
                         storageAccountOfVHDBlob = CloudStorageAccount.parse(
                                 String.format(STORAGE_CONNECTION_STRING,
                                         disk.storageDescription.name, key));
@@ -653,7 +660,8 @@ public class AzureInstanceService extends StatelessService {
                     CloudPageBlob blob = container.getPageBlobReference(vhdBlobName);
                     blob.deleteIfExists();
                 } catch (URISyntaxException | InvalidKeyException | StorageException e) {
-                    logSevere("Unable to delete VHD file for disk [%s] because of %s ", disk.name, e.toString());
+                    logSevere("Unable to delete VHD file for disk [%s] because of %s ", disk.name,
+                            e.toString());
                 }
             });
 
@@ -675,22 +683,24 @@ public class AzureInstanceService extends StatelessService {
         op.setCompletion((o, e) -> {
 
             if (e != null) {
-                dr.fail(new Throwable("Unable to fetch compute state for deleted VM. " + e.getMessage()));
+                dr.fail(new Throwable(
+                        "Unable to fetch compute state for deleted VM. " + e.getMessage()));
                 return;
             }
 
             ComputeState cs = o.getBody(ComputeState.class);
             List<Operation> fetchAllVMDisks = new ArrayList<>();
-            for (String diskLink: cs.diskLinks) {
-                fetchAllVMDisks.add(Operation.createGet(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
-                        diskLink))).setReferer(getUri()));
+            for (String diskLink : cs.diskLinks) {
+                fetchAllVMDisks.add(Operation
+                        .createGet(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
+                                diskLink))).setReferer(getUri()));
 
             }
             OperationJoin.create(fetchAllVMDisks).setCompletion((ops, exc) -> {
                         if (exc == null || exc.size() == 0) {
                             //assign boot disk and data disk to context
                             ctx.dataDiskStates = new ArrayList<>();
-                            for (Operation diskGet: ops.values()) {
+                            for (Operation diskGet : ops.values()) {
                                 DiskService.DiskStateExpanded disk = diskGet.getBody(
                                         DiskService.DiskStateExpanded.class);
                                 if (disk.bootOrder != null && disk.bootOrder == 1) {
@@ -820,7 +830,9 @@ public class AzureInstanceService extends StatelessService {
 
         String availabilitySetName = AzureUtils.getAvailabilitySetName(ctx);
 
-        String msg = "Creating Azure Availability Set [" + availabilitySetName + "] for [" + ctx.vmName + "] VM";
+        String msg =
+                "Creating Azure Availability Set [" + availabilitySetName + "] for [" + ctx.vmName
+                        + "] VM";
 
         AvailabilitySetSkuTypes skuType = ctx.useManagedDisks() ?
                 AvailabilitySetSkuTypes.MANAGED : AvailabilitySetSkuTypes.UNMANAGED;
@@ -911,7 +923,8 @@ public class AzureInstanceService extends StatelessService {
         List<Creatable<Disk>> disksToCreate = ctx.dataDiskStates.stream()
                 .filter(isManagedDisk())
                 .filter(diskStateExpanded -> diskStateExpanded.persistent)
-                .map(diskState -> defineDisk(diskState, getComputeManager(ctx), ctx.rgNameForPersistentDisks,
+                .map(diskState -> defineDisk(diskState, getComputeManager(ctx),
+                        ctx.rgNameForPersistentDisks,
                         Region.fromName(ctx.child.description.regionId)))
                 .collect(Collectors.toList());
 
@@ -919,7 +932,8 @@ public class AzureInstanceService extends StatelessService {
         ob.doOnNext(AzureUtils.injectOperationContext(resource -> {
             if (resource instanceof Disk) {
                 //Store the azure data disk in context. Need it to attach it to the VM later.
-                getHost().log(Level.INFO, "Created persistent disk [" + ((Disk)resource).name() + "]");
+                getHost().log(Level.INFO,
+                        "Created persistent disk [" + ((Disk) resource).name() + "]");
                 ctx.persistentDisks.add((Disk) resource);
             }
         })).doOnCompleted(AzureUtils.injectOperationContext(() -> {
@@ -940,14 +954,14 @@ public class AzureInstanceService extends StatelessService {
         DeferredResult<AzureInstanceContext> dr = new DeferredResult<>();
 
         VirtualMachine.Update updateVM = ctx.virtualMachine.update();
-        for (Disk disk: ctx.persistentDisks) {
+        for (Disk disk : ctx.persistentDisks) {
             updateVM = updateVM.withExistingDataDisk(disk);
         }
         rx.Observable observable = updateVM.applyAsync();
         observable.doOnNext(resource -> {
             if (resource instanceof VirtualMachine) {
                 //update both the inner VM and the VirtualMachine objects in context
-                ctx.virtualMachine = (VirtualMachine)resource;
+                ctx.virtualMachine = (VirtualMachine) resource;
                 ctx.provisionedVm = ((VirtualMachine) resource).inner();
             }
         }).doOnCompleted(AzureUtils.injectOperationContext(() -> {
@@ -1159,64 +1173,65 @@ public class AzureInstanceService extends StatelessService {
 
         AzureProvisioningCallbackWithRetry<VirtualNetworkInner> handler = new
                 AzureProvisioningCallbackWithRetry<VirtualNetworkInner>(
-                this, msg) {
+                        this, msg) {
 
-            @Override
-            protected DeferredResult<VirtualNetworkInner> consumeProvisioningSuccess(
-                    VirtualNetworkInner vNet) {
-                // Populate NICs with Azure Subnet
-                for (AzureNicContext nicCtx : ctx.nics) {
-                    if (nicCtx.subnet == null) {
-                        nicCtx.subnet = vNet.subnets().stream()
-                                .filter(subnet -> subnet.name()
-                                        .equals(nicCtx.subnetState.name))
-                                .findFirst().get();
+                    @Override
+                    protected DeferredResult<VirtualNetworkInner> consumeProvisioningSuccess(
+                            VirtualNetworkInner vNet) {
+                        // Populate NICs with Azure Subnet
+                        for (AzureNicContext nicCtx : ctx.nics) {
+                            if (nicCtx.subnet == null) {
+                                nicCtx.subnet = vNet.subnets().stream()
+                                        .filter(subnet -> subnet.name()
+                                                .equals(nicCtx.subnetState.name))
+                                        .findFirst().get();
+                            }
+                        }
+                        return DeferredResult.completed(vNet);
                     }
-                }
-                return DeferredResult.completed(vNet);
-            }
 
-            @Override
-            protected String getProvisioningState(VirtualNetworkInner vNet) {
-                // Return first NOT Succeeded state,
-                // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
-                if (vNet.subnets().size() == 0) {
-                    return PROVISIONING_STATE_FAILED_NO_SUBNET;
-                }
-                String subnetPS = vNet.subnets().stream()
-                        .map(SubnetInner::provisioningState)
-                        // Get if any is NOT Succeeded...
-                        .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
-                        // ...and return it.
-                        .findFirst()
-                        // Otherwise consider all are Succeeded
-                        .orElse(PROVISIONING_STATE_SUCCEEDED);
+                    @Override
+                    protected String getProvisioningState(VirtualNetworkInner vNet) {
+                        // Return first NOT Succeeded state,
+                        // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
+                        if (vNet.subnets().size() == 0) {
+                            return PROVISIONING_STATE_FAILED_NO_SUBNET;
+                        }
+                        String subnetPS = vNet.subnets().stream()
+                                .map(SubnetInner::provisioningState)
+                                // Get if any is NOT Succeeded...
+                                .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
+                                // ...and return it.
+                                .findFirst()
+                                // Otherwise consider all are Succeeded
+                                .orElse(PROVISIONING_STATE_SUCCEEDED);
 
-                if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(vNet.provisioningState())
-                        && PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(subnetPS)) {
+                        if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(vNet.provisioningState())
+                                && PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(subnetPS)) {
 
-                    return PROVISIONING_STATE_SUCCEEDED;
-                }
-                return vNet.provisioningState() + ":" + subnetPS;
-            }
+                            return PROVISIONING_STATE_SUCCEEDED;
+                        }
+                        return vNet.provisioningState() + ":" + subnetPS;
+                    }
 
-            @Override
-            protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<VirtualNetworkInner> checkProvisioningStateCallback) {
-                return () -> azureClient.getByResourceGroupAsync(
-                        vNetRGName,
-                        vNetName,
-                        null /* expand */,
-                        checkProvisioningStateCallback);
-            }
+                    @Override
+                    protected Runnable checkProvisioningStateCall(
+                            ServiceCallback<VirtualNetworkInner> checkProvisioningStateCallback) {
+                        return () -> azureClient.getByResourceGroupAsync(
+                                vNetRGName,
+                                vNetName,
+                                null /* expand */,
+                                checkProvisioningStateCallback);
+                    }
 
-            @Override
-            protected Runnable retryServiceCall(
-                    ServiceCallback<VirtualNetworkInner> retryCallback) {
-                return () -> azureClient
-                        .createOrUpdateAsync(vNetRGName, vNetName, vNetToCreate, retryCallback);
-            }
-        };
+                    @Override
+                    protected Runnable retryServiceCall(
+                            ServiceCallback<VirtualNetworkInner> retryCallback) {
+                        return () -> azureClient
+                                .createOrUpdateAsync(vNetRGName, vNetName, vNetToCreate,
+                                        retryCallback);
+                    }
+                };
 
         azureClient.createOrUpdateAsync(vNetRGName, vNetName, vNetToCreate, handler);
 
@@ -1563,7 +1578,7 @@ public class AzureInstanceService extends StatelessService {
             // set LUNs of data disks present on the custom image.
             final ImageState imageState = ctx.imageSource.asImageState();
             if (imageState != null && imageState.diskConfigs != null) {
-                for (DiskConfiguration diskConfig: imageState.diskConfigs) {
+                for (DiskConfiguration diskConfig : imageState.diskConfigs) {
                     if (diskConfig.properties != null && diskConfig.properties.containsKey
                             (AzureConstants.AZURE_DISK_LUN)) {
                         DataDisk imageDataDisk = new DataDisk();
@@ -1577,23 +1592,28 @@ public class AzureInstanceService extends StatelessService {
                 }
             }
 
-            String dataDiskCaching = ctx.bootDiskState.customProperties.get(AZURE_DATA_DISK_CACHING);
+            String dataDiskCaching = ctx.bootDiskState.customProperties
+                    .get(AZURE_DATA_DISK_CACHING);
             if (dataDiskCaching != null) {
                 dataDisks.stream().forEach(dataDisk -> dataDisk.withCaching(CachingTypes
                         .fromString(dataDiskCaching)));
             }
 
-            String diskType = ctx.bootDiskState.customProperties.get(AZURE_MANAGED_DISK_TYPE);
+            String diskType = ctx.bootDiskState.customProperties
+                    .get(AZURE_MANAGED_DISK_TYPE);
             if (diskType != null) {
                 ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
-                managedDiskParams.withStorageAccountType(StorageAccountTypes.fromString(diskType));
+                managedDiskParams
+                        .withStorageAccountType(StorageAccountTypes.fromString(diskType));
 
-                dataDisks.stream().forEach(dataDisk -> dataDisk.withManagedDisk(managedDiskParams));
+                dataDisks.stream()
+                        .forEach(dataDisk -> dataDisk.withManagedDisk(managedDiskParams));
             }
         }
 
         // choose LUN greater than the one specified in case of custom image. Else start from zero.
-        int LUNForAdditionalDisk = LUNsOnImage.size() == 0 ? 0 : Collections.max(LUNsOnImage) + 1;
+        int LUNForAdditionalDisk =
+                LUNsOnImage.size() == 0 ? 0 : Collections.max(LUNsOnImage) + 1;
 
         dataDisks.addAll(newAzureDataDisks(ctx, LUNForAdditionalDisk));
         storageProfile.withDataDisks(dataDisks);
@@ -1623,10 +1643,12 @@ public class AzureInstanceService extends StatelessService {
                 // Computer names for windows machines are restricted to 15 characters. Check the
                 // exception and try again with a shorter name
                 if (isIncorrectNameLength(e)) {
-                    request.osProfile().withComputerName(generateWindowsComputerName(ctx.vmName));
+                    request.osProfile()
+                            .withComputerName(generateWindowsComputerName(ctx.vmName));
 
-                    getComputeManagementClientImpl(ctx).virtualMachines().createOrUpdateAsync(
-                            ctx.resourceGroup.name(), ctx.vmName, request, this);
+                    getComputeManagementClientImpl(ctx).virtualMachines()
+                            .createOrUpdateAsync(
+                                    ctx.resourceGroup.name(), ctx.vmName, request, this);
                     return;
                 }
 
@@ -1645,7 +1667,8 @@ public class AzureInstanceService extends StatelessService {
                         String code = body.code();
                         String target = body.target();
 
-                        return INVALID_PARAMETER.equals(code) && COMPUTER_NAME.equals(target)
+                        return INVALID_PARAMETER.equals(code) && COMPUTER_NAME
+                                .equals(target)
                                 && request.osProfile().computerName().length()
                                 > WINDOWS_COMPUTER_NAME_MAX_LENGTH
                                 && body.message().toLowerCase().contains("windows");
@@ -1683,6 +1706,8 @@ public class AzureInstanceService extends StatelessService {
                     cs.customProperties = ctx.child.customProperties;
                 }
                 cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.name());
+                cs.customProperties.put(CUSTOM_OS_TYPE,
+                        AzureUtils.getNormalizedOSType(ctx.provisionedVm));
 
                 Operation.CompletionHandler completionHandler = (ox, exc) -> {
                     if (exc != null) {
@@ -1719,7 +1744,8 @@ public class AzureInstanceService extends StatelessService {
             ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
             String accountType = ctx.bootDiskState.customProperties.getOrDefault(AzureConstants
                     .AZURE_MANAGED_DISK_TYPE, StorageAccountTypes.STANDARD_LRS.toString());
-            managedDiskParams.withStorageAccountType(StorageAccountTypes.fromString(accountType));
+            managedDiskParams
+                    .withStorageAccountType(StorageAccountTypes.fromString(accountType));
             azureOsDisk.withManagedDisk(managedDiskParams);
         } else {
             azureOsDisk.withVhd(getVHDUriForOSDisk(ctx.vmName, ctx.storageAccountName));
@@ -1774,16 +1800,19 @@ public class AzureInstanceService extends StatelessService {
             final DataDisk dataDisk = new DataDisk();
             dataDisk.withName(diskState.name);
             if (ctx.reuseExistingStorageAccount()) {
-                dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
-                        lunIndex));
+                dataDisk.withVhd(
+                        getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
+                                lunIndex));
             } else if (ctx.useManagedDisks()) {
                 ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
                 String accountType = diskState.customProperties.getOrDefault(AzureConstants
                         .AZURE_MANAGED_DISK_TYPE, StorageAccountTypes.STANDARD_LRS.toString());
-                managedDiskParams.withStorageAccountType(StorageAccountTypes.fromString(accountType));
+                managedDiskParams
+                        .withStorageAccountType(StorageAccountTypes.fromString(accountType));
                 dataDisk.withManagedDisk(managedDiskParams);
             } else {
-                dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
+                dataDisk.withVhd(
+                        getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
             }
 
             dataDisk.withCreateOption(DiskCreateOptionTypes.EMPTY);
@@ -1805,14 +1834,16 @@ public class AzureInstanceService extends StatelessService {
                 final DataDisk dataDisk = new DataDisk();
 
                 if (ctx.reuseExistingStorageAccount()) {
-                    dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
-                            lunIndex));
+                    dataDisk.withVhd(
+                            getVHDUriForDataDisk(ctx.vmName, diskState.storageDescription.name,
+                                    lunIndex));
                 } else if (ctx.useManagedDisks()) {
                     ManagedDiskParametersInner managedDiskParams = new ManagedDiskParametersInner();
                     managedDiskParams.withId(diskState.id);
                     dataDisk.withManagedDisk(managedDiskParams);
                 } else {
-                    dataDisk.withVhd(getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
+                    dataDisk.withVhd(
+                            getVHDUriForDataDisk(ctx.vmName, ctx.storageAccountName, lunIndex));
                 }
 
                 dataDisk.withCreateOption(DiskCreateOptionTypes.ATTACH);
@@ -1840,7 +1871,8 @@ public class AzureInstanceService extends StatelessService {
      * <li>setting VHD URI to DiskState objects</li>
      * </ul>
      */
-    private void updateComputeStateDetails(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+    private void updateComputeStateDetails(AzureInstanceContext ctx, AzureInstanceStage
+            nextStage) {
 
         DeferredResult.completed(ctx)
                 .thenCompose(this::getPublicIPAddress)
@@ -1929,8 +1961,10 @@ public class AzureInstanceService extends StatelessService {
             nicStateToUpdate.id = nicCtx.nic.id();
             nicStateToUpdate.documentSelfLink = nicCtx.nicStateWithDesc.documentSelfLink;
 
-            if (nicCtx.nic.ipConfigurations() != null && !nicCtx.nic.ipConfigurations().isEmpty()) {
-                nicStateToUpdate.address = nicCtx.nic.ipConfigurations().get(0).privateIPAddress();
+            if (nicCtx.nic.ipConfigurations() != null && !nicCtx.nic.ipConfigurations()
+                    .isEmpty()) {
+                nicStateToUpdate.address = nicCtx.nic.ipConfigurations().get(0)
+                        .privateIPAddress();
             }
 
             Operation updateNicOp = Operation
@@ -1984,7 +2018,8 @@ public class AzureInstanceService extends StatelessService {
                     .createPatch(ctx.service, diskStateToUpdate.documentSelfLink)
                     .setBody(diskStateToUpdate);
 
-            DeferredResult<Operation> updateDR = ctx.service.sendWithDeferredResult(updateDiskState)
+            DeferredResult<Operation> updateDR = ctx.service
+                    .sendWithDeferredResult(updateDiskState)
                     .whenComplete((op, exc) -> {
                         if (exc != null) {
                             logSevere(() -> String.format(
@@ -2031,8 +2066,9 @@ public class AzureInstanceService extends StatelessService {
                 diskStateToCreate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf
                         (azureDataDisk.lun()));
                 if (azureDataDisk.managedDisk().storageAccountType() != null) {
-                    diskStateToCreate.customProperties.put(AZURE_MANAGED_DISK_TYPE, azureDataDisk
-                            .managedDisk().storageAccountType().toString());
+                    diskStateToCreate.customProperties
+                            .put(AZURE_MANAGED_DISK_TYPE, azureDataDisk
+                                    .managedDisk().storageAccountType().toString());
                 } else {
                     // set to Standard_LRS default
                     diskStateToCreate.customProperties.put(AZURE_MANAGED_DISK_TYPE,
@@ -2047,7 +2083,8 @@ public class AzureInstanceService extends StatelessService {
                 diskStateToCreate.persistent = ctx.bootDiskState.persistent;
 
                 diskStateToCreate.endpointLink = ctx.endpoint.documentSelfLink;
-                AdapterUtils.addToEndpointLinks(diskStateToCreate, ctx.endpoint.documentSelfLink);
+                AdapterUtils
+                        .addToEndpointLinks(diskStateToCreate, ctx.endpoint.documentSelfLink);
 
                 Operation createDiskState = Operation
                         .createPost(ctx.service, DiskService.FACTORY_LINK)
@@ -2064,7 +2101,8 @@ public class AzureInstanceService extends StatelessService {
                             } else {
                                 logFine(() -> String.format(
                                         "Creating data DiskState [%s] with disk id [%s]: SUCCESS",
-                                        azureDataDisk.name(), azureDataDisk.managedDisk().id()));
+                                        azureDataDisk.name(),
+                                        azureDataDisk.managedDisk().id()));
                                 //update compute state with data disks present on custom image
                                 ComputeState cs = new ComputeState();
                                 List<String> disksLinks = new ArrayList<>();
@@ -2077,7 +2115,10 @@ public class AzureInstanceService extends StatelessService {
                                         return;
                                     }
                                 };
-                                sendRequest(Operation.createPatch(ctx.computeRequest.resourceReference).setBody(cs).setCompletion(completionHandler));
+                                sendRequest(
+                                        Operation.createPatch(
+                                                ctx.computeRequest.resourceReference)
+                                                .setBody(cs).setCompletion(completionHandler));
                             }
                         });
                 diskStateDRs.add(createDR);
@@ -2091,8 +2132,9 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Creates and returns a new diskState object which is updated with id, LUN, status and documentSelfLink
      */
-    private DeferredResult<Operation> createDiskToUpdate(AzureInstanceContext ctx, Optional<DiskState> diskOpt,
-                                                         DataDisk azureDataDisk) {
+    private DeferredResult<Operation> createDiskToUpdate(AzureInstanceContext ctx,
+            Optional<DiskState> diskOpt,
+            DataDisk azureDataDisk) {
         // update VHD uri or disk id respectively for un-managed and managed disks
         DiskState diskState = diskOpt.get();
         final DiskState diskStateToUpdate = new DiskState();
@@ -2109,7 +2151,8 @@ public class AzureInstanceService extends StatelessService {
         if (diskStateToUpdate.customProperties == null) {
             diskStateToUpdate.customProperties = new HashMap<>();
         }
-        diskStateToUpdate.customProperties.put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
+        diskStateToUpdate.customProperties
+                .put(DISK_CONTROLLER_NUMBER, String.valueOf(azureDataDisk.lun()));
 
         diskStateToUpdate.status = DiskService.DiskStatus.ATTACHED;
         diskStateToUpdate.regionId = ctx.provisionedVm.location();
@@ -2144,7 +2187,7 @@ public class AzureInstanceService extends StatelessService {
     private void getStorageKeys(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
 
         if (ctx.reuseExistingStorageAccount() || ctx.useManagedDisks()) {
-              // no need to get keys as no new storage description was created
+            // no need to get keys as no new storage description was created
             handleAllocation(ctx, nextStage);
             return;
         }
@@ -2161,8 +2204,9 @@ public class AzureInstanceService extends StatelessService {
 
                     @Override
                     public void onSuccess(StorageAccountListKeysResultInner result) {
-                        logFine(() -> String.format("Retrieved the storage account keys for storage"
-                                + " account [%s]", ctx.storageAccountName));
+                        logFine(() -> String
+                                .format("Retrieved the storage account keys for storage"
+                                        + " account [%s]", ctx.storageAccountName));
 
                         AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
                         storageAuth.customProperties = new HashMap<>();
@@ -2211,7 +2255,8 @@ public class AzureInstanceService extends StatelessService {
                 String.format(VHD_URI_FORMAT, storageAccountName, vhdName));
     }
 
-    private static VirtualHardDisk getVHDUriForDataDisk(String vmName, String storageAccountName,
+    private static VirtualHardDisk getVHDUriForDataDisk(String vmName, String
+            storageAccountName,
             int num) {
 
         String vhdName = vmName + DATA_DISK_SUFFIX + "-" + num;
@@ -2237,7 +2282,8 @@ public class AzureInstanceService extends StatelessService {
                 if (MISSING_SUBSCRIPTION_CODE.equals(code)) {
                     registerSubscription(ctx, namespace);
                     return;
-                } else if (INVALID_PARAMETER.equals(code) || INVALID_RESOURCE_GROUP.equals(code)) {
+                } else if (INVALID_PARAMETER.equals(code) || INVALID_RESOURCE_GROUP
+                        .equals(code)) {
                     String invalidParameterMsg = String.format("%s Invalid parameter. %s",
                             msg, body.message());
 
@@ -2299,7 +2345,8 @@ public class AzureInstanceService extends StatelessService {
                             @Override
                             public void onSuccess(ProviderInner result) {
                                 String registrationState = result.registrationState();
-                                if (!PROVIDER_REGISTRED_STATE.equalsIgnoreCase(registrationState)) {
+                                if (!PROVIDER_REGISTRED_STATE
+                                        .equalsIgnoreCase(registrationState)) {
                                     logInfo(() -> String.format(
                                             "%s namespace registration in %s state",
                                             namespace, registrationState));
@@ -2339,7 +2386,8 @@ public class AzureInstanceService extends StatelessService {
         return (t) -> handleError(ctx, t);
     }
 
-    private ResourceManagementClientImpl getResourceManagementClientImpl(AzureInstanceContext ctx) {
+    private ResourceManagementClientImpl getResourceManagementClientImpl(AzureInstanceContext
+            ctx) {
         return ctx.azureSdkClients.getResourceManagementClientImpl();
     }
 
@@ -2426,8 +2474,9 @@ public class AzureInstanceService extends StatelessService {
                                 return;
                             }
                             if (!validateDiskStates(ctx)) {
-                                handleError(ctx, new IllegalStateException("Azure VMs can either "
-                                        + "have managed disk or un-managed disk. Not Both."));
+                                handleError(ctx,
+                                        new IllegalStateException("Azure VMs can either "
+                                                + "have managed disk or un-managed disk. Not Both."));
                                 return;
                             }
 
@@ -2435,7 +2484,6 @@ public class AzureInstanceService extends StatelessService {
                         });
         operationJoin.sendWith(this);
     }
-
 
     private boolean validateDiskStates(AzureInstanceContext ctx) {
 
@@ -2445,16 +2493,17 @@ public class AzureInstanceService extends StatelessService {
                     .filter(isManagedDisk())
                     .count()) &&
                     (ctx.externalDataDisks.size() == ctx.externalDataDisks.stream()
-                    .filter(isManagedDisk())
-                    .count());
-        } else if (ctx.reuseExistingStorageAccount() || ctx.bootDiskState.customProperties.containsKey(AZURE_STORAGE_ACCOUNT_NAME)) {
+                            .filter(isManagedDisk())
+                            .count());
+        } else if (ctx.reuseExistingStorageAccount() || ctx.bootDiskState.customProperties
+                .containsKey(AZURE_STORAGE_ACCOUNT_NAME)) {
             //check if all data disk and external existing disks are of un-managed type
             return (ctx.dataDiskStates.size() == ctx.dataDiskStates.stream()
                     .filter(isUnManagedDisk())
                     .count()) &&
                     (ctx.externalDataDisks.size() == ctx.externalDataDisks.stream()
-                    .filter(isUnManagedDisk())
-                    .count());
+                            .filter(isUnManagedDisk())
+                            .count());
         }
         return true;
     }
@@ -2523,7 +2572,8 @@ public class AzureInstanceService extends StatelessService {
     }
 
     // Integral part of getImageSource method
-    private DeferredResult<AzureInstanceContext> getImageSource_Private(AzureInstanceContext ctx) {
+    private DeferredResult<AzureInstanceContext> getImageSource_Private(AzureInstanceContext
+            ctx) {
 
         // In-case type of disk is not specified for the boot disk then we set it to managed one
         // because custom/private images only work with managed disk. This is specially
@@ -2553,7 +2603,8 @@ public class AzureInstanceService extends StatelessService {
 
         ImageReferenceInner imageReference = ctx.imageSource.asImageReferenceInner();
 
-        if (AzureConstants.AZURE_URN_VERSION_LATEST.equalsIgnoreCase(imageReference.version())) {
+        if (AzureConstants.AZURE_URN_VERSION_LATEST
+                .equalsIgnoreCase(imageReference.version())) {
 
             String msg = String.format("Getting latest Azure image by %s:%s:%s",
                     imageReference.publisher(),
@@ -2656,7 +2707,8 @@ public class AzureInstanceService extends StatelessService {
             sendRequest(operation);
         });
 
-        String fileUri = getClass().getResource(AzureConstants.DIAGNOSTIC_SETTINGS_JSON_FILE_NAME)
+        String fileUri = getClass()
+                .getResource(AzureConstants.DIAGNOSTIC_SETTINGS_JSON_FILE_NAME)
                 .getFile();
         File jsonPayloadFile = new File(fileUri);
         try {
@@ -2721,7 +2773,8 @@ public class AzureInstanceService extends StatelessService {
 
             getStorageManagementClientImpl(ctx)
                     .storageAccounts()
-                    .listKeysAsync(ctx.storageAccountRGName, ctx.storageAccount.name(), handler);
+                    .listKeysAsync(ctx.storageAccountRGName, ctx.storageAccount.name(),
+                            handler);
 
             return handler.toDeferredResult()
                     .thenCompose(keys -> {
@@ -2832,7 +2885,8 @@ public class AzureInstanceService extends StatelessService {
                             String.format("%s: FAILED. Details:", this.msg), this.ctx,
                             COMPUTE_NAMESPACE, e);
                 } else {
-                    e = new IllegalStateException(this.msg + ": FAILED. Details: " + e.getMessage(),
+                    e = new IllegalStateException(
+                            this.msg + ": FAILED. Details: " + e.getMessage(),
                             e);
                     // Any subsequent failure is just logged.
                     AzureInstanceService.this.logSevere(e);
@@ -2860,8 +2914,9 @@ public class AzureInstanceService extends StatelessService {
         public final void onSuccess(T result) {
 
             if (this.callCtx.hasAnyFailed.get()) {
-                AzureInstanceService.this.logFine(this.msg + ": SUCCESS. Still batch calls have "
-                        + "failed so SKIP this result.");
+                AzureInstanceService.this
+                        .logFine(this.msg + ": SUCCESS. Still batch calls have "
+                                + "failed so SKIP this result.");
                 return;
             }
 

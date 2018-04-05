@@ -61,7 +61,6 @@ import com.microsoft.azure.management.compute.DataDisk;
 import com.microsoft.azure.management.compute.InstanceViewStatus;
 import com.microsoft.azure.management.compute.InstanceViewTypes;
 import com.microsoft.azure.management.compute.OSDisk;
-import com.microsoft.azure.management.compute.OperatingSystemTypes;
 import com.microsoft.azure.management.compute.StorageAccountTypes;
 import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
 import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
@@ -75,7 +74,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import rx.functions.Action1;
 
-import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.RegionEnumerationResponse;
@@ -145,7 +143,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             "Deleting",
             "Deleted");
 
-    private static final String NETWORK_INTERFACE_TAG_TYPE_VALUE = AzureResourceType.azure_net_interface.toString();
+    private static final String NETWORK_INTERFACE_TAG_TYPE_VALUE = AzureResourceType.azure_net_interface
+            .toString();
 
     /**
      * The enumeration service context that holds all the information needed to determine the list
@@ -248,7 +247,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             Class<? extends ResourceState> stateClass,
             EnumerationContext ctx) {
         // Add parent compute host criteria
-        qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK, ctx.parentCompute.documentSelfLink);
+        qBuilder.addFieldClause(ResourceState.FIELD_NAME_COMPUTE_HOST_LINK,
+                ctx.parentCompute.documentSelfLink);
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
     }
@@ -371,7 +371,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private void handleSubStageImpl(EnumerationContext ctx) {
         logInfo(() -> String.format(
-                "Handle substage %s for [endpointLink:%s]", ctx.subStage, ctx.request.endpointLink));
+                "Handle substage %s for [endpointLink:%s]", ctx.subStage,
+                ctx.request.endpointLink));
         switch (ctx.subStage) {
         case COLLECT_REGIONS:
             collectRegions(ctx, ComputeEnumerationSubStages.LISTVMS);
@@ -474,13 +475,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 });
     }
 
-    private ComputeDescription createComputeDescriptionForRegion(EnumerationContext context, RegionInfo r) {
+    private ComputeDescription createComputeDescriptionForRegion(EnumerationContext context,
+            RegionInfo r) {
         ComputeDescriptionService.ComputeDescription cd = Utils
                 .clone(context.parentCompute.description);
         cd.supportedChildren = new ArrayList<>();
         cd.supportedChildren.add(ComputeType.VM_GUEST.toString());
         cd.id = r.regionId;
-        cd.documentSelfLink = generateRegionComputeDescriptionLinkId(r.regionId, context.request.endpointLink);
+        cd.documentSelfLink = generateRegionComputeDescriptionLinkId(r.regionId,
+                context.request.endpointLink);
         cd.name = r.name;
         cd.regionId = r.regionId;
         cd.endpointLink = context.request.endpointLink;
@@ -496,7 +499,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         return cd;
     }
 
-    private ComputeState createComputeInstanceForRegion(EnumerationContext context, RegionInfo regionInfo) {
+    private ComputeState createComputeInstanceForRegion(EnumerationContext context,
+            RegionInfo regionInfo) {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.name = regionInfo.name;
         computeState.id = regionInfo.regionId;
@@ -510,7 +514,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.endpointLink = context.request.endpointLink;
         AdapterUtils.addToEndpointLinks(computeState, context.request.endpointLink);
 
-        String descriptionLinkId = generateRegionComputeDescriptionLinkId(regionInfo.regionId, context.request.endpointLink);
+        String descriptionLinkId = generateRegionComputeDescriptionLinkId(regionInfo.regionId,
+                context.request.endpointLink);
         computeState.descriptionLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, descriptionLinkId);
         computeState.type = ComputeType.ZONE;
@@ -577,11 +582,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .setCompletion(handler));
     }
 
-    private void createDiskInternalTypeTags(EnumerationContext context, ComputeEnumerationSubStages next) {
+    private void createDiskInternalTypeTags(EnumerationContext context,
+            ComputeEnumerationSubStages next) {
         // create internal tag for azure managed disk and vhd
-        TagService.TagState managedDiskTypeTag = TagsUtil.newTagState(PhotonModelConstants.TAG_KEY_TYPE,
+        TagService.TagState managedDiskTypeTag = TagsUtil.newTagState(
+                PhotonModelConstants.TAG_KEY_TYPE,
                 AzureConstants.AzureResourceType.azure_managed_disk.toString(),
                 false, context.parentCompute.tenantLinks);
+
         TagService.TagState vhdTypeTag = TagsUtil.newTagState(PhotonModelConstants.TAG_KEY_TYPE,
                 AzureResourceType.azure_vhd.toString(),
                 false, context.parentCompute.tenantLinks);
@@ -590,6 +598,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Operation mdOp = Operation.createPost(this, TagService.FACTORY_LINK)
                 .setBody(managedDiskTypeTag)
                 .setReferer(this.getUri());
+
         Operation vhdOp = Operation.createPost(this, TagService.FACTORY_LINK)
                 .setBody(vhdTypeTag)
                 .setReferer(this.getUri());
@@ -601,7 +610,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     if (exs != null) {
                         // log the error and continue with enumeration
                         exs.values().forEach(ex -> logWarning(
-                                () -> String.format("Error creating internal tag: %s", ex.getMessage())));
+                                () -> String.format("Error creating internal tag: %s",
+                                        ex.getMessage())));
                     } else {
                         context.vhdInternalTagLink = vhdTypeTag.documentSelfLink;
                         context.managedDiskInternalTagLink = managedDiskTypeTag.documentSelfLink;
@@ -624,7 +634,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * <p>
      * The method paginates through list of resources for deletion.
      */
-    private void disassociateComputeStates(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+    private void disassociateComputeStates(EnumerationContext ctx,
+            ComputeEnumerationSubStages next) {
         Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
@@ -971,7 +982,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             handleSubStage(context);
         } else {
             DeferredResult.allOf(operations)
-                .whenComplete(thenHandleSubStage(context, next));
+                    .whenComplete(thenHandleSubStage(context, next));
         }
     }
 
@@ -1059,8 +1070,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         Map<String, ComputeState> existingRegionIds =
                 ctx.computeStates.entrySet().stream()
-                    .filter(entry -> ctx.regions.containsKey(entry.getKey()))
-                    .collect(Collectors.toMap(p -> p.getKey(), p -> p.getValue()));
+                        .filter(entry -> ctx.regions.containsKey(entry.getKey()))
+                        .collect(Collectors.toMap(p -> p.getKey(), p -> p.getValue()));
 
         ctx.regions.keySet().removeAll(existingRegionIds.keySet());
         ctx.computeStates.keySet().removeAll(existingRegionIds.keySet());
@@ -1106,7 +1117,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         DeferredResult.allOf().whenComplete(thenHandleSubStage(ctx, next));
     }
 
-    private void updateComputeDescriptions(EnumerationContext ctx, ComputeEnumerationSubStages next) {
+    private void updateComputeDescriptions(EnumerationContext ctx,
+            ComputeEnumerationSubStages next) {
         if (ctx.computeStatesForPatching.isEmpty()) {
             logFine(() -> "No compute descriptions needs to updated.");
             ctx.subStage = next;
@@ -1114,21 +1126,20 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        DeferredResult.allOf(
-                ctx.computeStatesForPatching.values().stream().map(
-                        entry -> {
-                            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap
-                                    (ComputeDescription.FIELD_NAME_ENDPOINT_LINKS,
-                                            Collections.singletonList(ctx.request.endpointLink));
+        DeferredResult.allOf(ctx.computeStatesForPatching.values().stream().map(entry -> {
+            Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap(
+                    ComputeDescription.FIELD_NAME_ENDPOINT_LINKS,
+                    Collections.singletonList(ctx.request.endpointLink));
 
-                            ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
-                                    .create(collectionsToAddMap, null);
+            ServiceStateCollectionUpdateRequest updateEndpointLinksRequest = ServiceStateCollectionUpdateRequest
+                    .create(collectionsToAddMap, null);
 
-                            return sendWithDeferredResult(Operation.createPatch(getHost(), entry.descriptionLink)
-                                    .setReferer(getHost().getUri())
-                                    .setBody(updateEndpointLinksRequest));
-                        }).collect(Collectors.toList()))
-                .whenComplete(thenHandleSubStage(ctx, next));
+            return sendWithDeferredResult(
+                    Operation.createPatch(getHost(), entry.descriptionLink)
+                            .setReferer(getHost().getUri())
+                            .setBody(updateEndpointLinksRequest));
+
+        }).collect(Collectors.toList())).whenComplete(thenHandleSubStage(ctx, next));
     }
 
     /**
@@ -1162,7 +1173,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             diskIdList.add(diskId);
 
-            List<String> dataDiskIDList = getDataDisksID(virtualMachine, AzureUtils.isDiskManaged(virtualMachine));
+            List<String> dataDiskIDList = getDataDisksID(virtualMachine,
+                    AzureUtils.isDiskManaged(virtualMachine));
             if (null != dataDiskIDList && dataDiskIDList.size() > 0) {
                 diskIdList.addAll(dataDiskIDList);
             }
@@ -1402,7 +1414,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             String osDiskUri = getVhdUri(virtualMachine);
             if (osDiskUri == null) {
-                logFine(() -> String.format("OS Disk URI not found for vm: %s", virtualMachine.id()));
+                logFine(() -> String.format("OS Disk URI not found for vm: %s",
+                        virtualMachine.id()));
                 continue;
             }
             updateOSDiskProperties(ctx, virtualMachine, osDiskUri, opCollection);
@@ -1474,7 +1487,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private void updateDiskCustomProperties(VirtualMachineInner vm, EnumerationContext ctx,
-                                            DiskState diskToUpdate) {
+            DiskState diskToUpdate) {
         ImageReferenceInner imageReference = vm.storageProfile()
                 .imageReference();
         diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
@@ -1495,25 +1508,30 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         AdapterUtils.addToEndpointLinks(diskToUpdate, ctx.request.endpointLink);
     }
 
-    private void updateOSDiskProperties(EnumerationContext ctx, VirtualMachineInner virtualMachine, String diskUri,
-                                        Collection<Operation> opCollection) {
+    private void updateOSDiskProperties(EnumerationContext ctx, VirtualMachineInner virtualMachine,
+            String diskUri,
+            Collection<Operation> opCollection) {
         DiskState diskToUpdate = ctx.diskStates.get(diskUri);
         Operation diskToUpdateOp = null;
         if (diskToUpdate == null) {
             diskToUpdate = createOSDiskState(virtualMachine, ctx);
             updateDiskCustomProperties(virtualMachine, ctx, diskToUpdate);
-            diskToUpdateOp = Operation.createPost(createInventoryUri(getHost(), DiskService.FACTORY_LINK))
+
+            diskToUpdateOp = Operation
+                    .createPost(createInventoryUri(getHost(), DiskService.FACTORY_LINK))
                     .setBody(diskToUpdate);
         } else {
             updateDiskCustomProperties(virtualMachine, ctx, diskToUpdate);
-            diskToUpdateOp = Operation.createPatch(createInventoryUri(getHost(), diskToUpdate.documentSelfLink))
+            diskToUpdateOp = Operation
+                    .createPatch(createInventoryUri(getHost(), diskToUpdate.documentSelfLink))
                     .setBody(diskToUpdate);
         }
         opCollection.add(diskToUpdateOp);
         ctx.diskStates.put(diskToUpdate.id, diskToUpdate);
     }
 
-    private DiskState createDataDiskState(EnumerationContext ctx, DataDisk dataDisk, boolean isManaged) {
+    private DiskState createDataDiskState(EnumerationContext ctx, DataDisk dataDisk,
+            boolean isManaged) {
 
         DiskState diskState = new DiskState();
 
@@ -1558,7 +1576,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private void updateDataDiskProperties(EnumerationContext ctx, VirtualMachineInner vm,
-                                          Collection<Operation> opCollection) {
+            Collection<Operation> opCollection) {
         if (vm.storageProfile() == null) {
             return;
         }
@@ -1741,7 +1759,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Deletes stale network interface states that are deleted from the remote.
      */
     private DeferredResult<List<Operation>> disassociateNics(
-            EnumerationContext ctx, List<String> remoteNicIds, List<NetworkInterfaceState> allLocalNics) {
+            EnumerationContext ctx, List<String> remoteNicIds,
+            List<NetworkInterfaceState> allLocalNics) {
 
         List<DeferredResult<Operation>> updateOps = new ArrayList<>();
 
@@ -1754,7 +1773,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         CompletionHandler completionHandler = upOp.getCompletion();
                         upOp.setCompletion(null);
 
-                        updateOps.add(sendWithDeferredResult(upOp).whenComplete(completionHandler::handle));
+                        updateOps.add(sendWithDeferredResult(upOp).whenComplete(
+                                completionHandler::handle));
                     }
                 });
 
@@ -1990,7 +2010,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         }))
                 .collect(java.util.stream.Collectors.toList());
 
-
         List<DeferredResult<ComputeState>> regionResults = ctx.regions.values()
                 .stream()
                 .map(regionInfo -> createComputeInstanceForRegion(ctx, regionInfo))
@@ -2035,7 +2054,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             }
 
             // add all data disk links of VM
-            List<String> dataDiskIDs = getDataDisksID(virtualMachine, AzureUtils.isDiskManaged(virtualMachine));
+            List<String> dataDiskIDs = getDataDisksID(virtualMachine,
+                    AzureUtils.isDiskManaged(virtualMachine));
 
             if (dataDiskIDs != null) {
                 dataDiskIDs.forEach(dataDiskID -> {
@@ -2073,7 +2093,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
 
         computeState.customProperties = new HashMap<>();
-        computeState.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
+        computeState.customProperties.put(CUSTOM_OS_TYPE,
+                AzureUtils.getNormalizedOSType(virtualMachine));
 
         String resourceGroupName = getResourceGroupName(virtualMachine.id());
         computeState.customProperties.put(AZURE_RESOURCE_GROUP_NAME, resourceGroupName);
@@ -2140,7 +2161,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     .stream()
                     .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
                     .map(dr -> dr.thenCompose(c -> sendWithDeferredResult(
-                            Operation.createPut(ctx.request.buildUri(c.documentSelfLink)).setBody(c)))
+                            Operation.createPut(ctx.request.buildUri(c.documentSelfLink))
+                                    .setBody(c)))
                     )
                     .collect(Collectors.toList()))
                     .whenComplete((all, e) -> {
@@ -2210,25 +2232,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private String imageReferenceToImageId(ImageReferenceInner imageReference) {
         return imageReference.publisher() + ":" + imageReference.offer() + ":"
                 + imageReference.sku() + ":" + imageReference.version();
-    }
-
-    /**
-     * Return Instance normalized OS Type.
-     */
-    private String getNormalizedOSType(VirtualMachineInner vm) {
-        if (vm.storageProfile() == null
-                || vm.storageProfile().osDisk() == null
-                || vm.storageProfile().osDisk().osType() == null) {
-            return null;
-        }
-        OperatingSystemTypes osType = vm.storageProfile().osDisk().osType();
-        if (OperatingSystemTypes.WINDOWS.equals(osType)) {
-            return OSType.WINDOWS.toString();
-        } else if (OperatingSystemTypes.LINUX.equals(osType)) {
-            return OSType.LINUX.toString();
-        } else {
-            return null;
-        }
     }
 
     private List<String> getDataDisksID(VirtualMachineInner vm, boolean isManaged) {

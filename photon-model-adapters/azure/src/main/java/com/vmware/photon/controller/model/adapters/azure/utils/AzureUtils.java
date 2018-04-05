@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
 import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.OSDisk;
+import com.microsoft.azure.management.compute.OperatingSystemTypes;
 import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 import com.microsoft.azure.management.storage.StorageAccountKey;
 import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
@@ -699,4 +700,22 @@ public class AzureUtils {
         return osDisk.vhd() == null || osDisk.vhd().uri() == null;
     }
 
+    /**
+     * Return Instance normalized OS Type.
+     */
+    public static String getNormalizedOSType(VirtualMachineInner vm) {
+        if (vm.storageProfile() == null
+                || vm.storageProfile().osDisk() == null
+                || vm.storageProfile().osDisk().osType() == null) {
+            return null;
+        }
+        OperatingSystemTypes osType = vm.storageProfile().osDisk().osType();
+        if (OperatingSystemTypes.WINDOWS.equals(osType)) {
+            return ComputeProperties.OSType.WINDOWS.toString();
+        } else if (OperatingSystemTypes.LINUX.equals(osType)) {
+            return ComputeProperties.OSType.LINUX.toString();
+        } else {
+            return null;
+        }
+    }
 }

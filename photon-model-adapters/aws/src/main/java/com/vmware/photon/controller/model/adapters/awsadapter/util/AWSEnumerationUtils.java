@@ -306,7 +306,7 @@ public class AWSEnumerationUtils {
     /**
      * Return Instance normalized OS Type.
      */
-    private static String getNormalizedOSType(Instance instance) {
+    public static String getNormalizedOSType(Instance instance) {
         if (WINDOWS_PLATFORM.equalsIgnoreCase(instance.getPlatform())) {
             return OSType.WINDOWS.toString();
         } else { // else assume Linux
