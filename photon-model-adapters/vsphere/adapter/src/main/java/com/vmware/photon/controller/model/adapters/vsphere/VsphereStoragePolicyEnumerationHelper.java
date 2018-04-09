@@ -48,13 +48,16 @@ public class VsphereStoragePolicyEnumerationHelper {
 
 
     static QueryTask queryForStoragePolicy(EnumerationProgress ctx, String id, String name) {
+        return queryForStoragePolicy(ctx.getTenantLinks(), id, name);
+    }
+
+    static QueryTask queryForStoragePolicy(List<String> tenantLinks, String id, String name) {
         Builder builder = Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ID, id)
                 .addKindFieldClause(ResourceGroupState.class)
                 .addCaseInsensitiveFieldClause(ResourceState.FIELD_NAME_NAME, name,
                         MatchType.TERM, Occurance.MUST_OCCUR);
-        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
-
+        QueryUtils.addTenantLinks(builder, tenantLinks);
         return QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
                 .build();
@@ -79,8 +82,27 @@ public class VsphereStoragePolicyEnumerationHelper {
 
     static CompletionHandler trackStoragePolicy(VSphereIncrementalEnumerationService service,
                                                 EnumerationProgress enumerationProgress,
-                                                StoragePolicyOverlay sp) {
+                                                StoragePolicyOverlay sp, EnumerationClient client) {
         return (o, e) -> {
+            try {
+                List<String> disksAssociatedWithSP = client.getAssociatedDisksForStoragePolicy(sp.getPbmProfile());
+                Map<String, List<String>> map = enumerationProgress.getDiskToStoragePolicyAssociationMap();
+                if (!map.isEmpty()) {
+                    ResourceGroupState resourceGroupState = o.getBody(ResourceGroupState.class);
+                    for (String disk : disksAssociatedWithSP) {
+                        if (null != map.get(disk)) {
+                            List<String> storagePolicies = map.get(disk);
+                            storagePolicies.add(resourceGroupState.documentSelfLink);
+                        } else {
+                            List<String> storagePolicy = new ArrayList<>();
+                            storagePolicy.add(resourceGroupState.documentSelfLink);
+                            map.put(disk, storagePolicy);
+                        }
+                    }
+                }
+            } catch (Exception exception) {
+                service.logSevere("Error while retrieving disks associated with storage policy %s", sp.getName());
+            }
             enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
             if (e != null) {
                 service.logFine(() -> String
@@ -200,7 +222,7 @@ public class VsphereStoragePolicyEnumerationHelper {
 
 
     static void updateStoragePolicy(VSphereIncrementalEnumerationService service, ResourceGroupState oldDocument,
-                                    EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
+                                    EnumerationProgress enumerationProgress, StoragePolicyOverlay sp, EnumerationClient client) {
 
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, enumerationProgress.getDcLink());
@@ -214,7 +236,7 @@ public class VsphereStoragePolicyEnumerationHelper {
         Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), rgState.documentSelfLink))
                 .setBody(rgState)
                 .setCompletion((o, e) -> {
-                    trackStoragePolicy(service, enumerationProgress, sp).handle(o, e);
+                    trackStoragePolicy(service, enumerationProgress, sp, client).handle(o, e);
                     if (e == null) {
                         // Update all compatible datastores group link with the self link of this
                         // storage policy
@@ -225,7 +247,7 @@ public class VsphereStoragePolicyEnumerationHelper {
     }
 
     static void createNewStoragePolicy(VSphereIncrementalEnumerationService service,
-                                       EnumerationProgress enumerationProgress, StoragePolicyOverlay sp) {
+                                       EnumerationProgress enumerationProgress, StoragePolicyOverlay sp, EnumerationClient client) {
 
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, enumerationProgress.getDcLink());
@@ -236,7 +258,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                 ResourceGroupService.FACTORY_LINK))
                 .setBody(rgState)
                 .setCompletion((o, e) -> {
-                    trackStoragePolicy(service, enumerationProgress, sp).handle(o, e);
+                    trackStoragePolicy(service, enumerationProgress, sp, client).handle(o, e);
                     // Update all compatible datastores group link with the self link of this
                     // storage policy
                     updateDataStoreWithStoragePolicyGroup(service, enumerationProgress, sp,
@@ -251,21 +273,22 @@ public class VsphereStoragePolicyEnumerationHelper {
      * datastores.
      */
     static void processFoundStoragePolicy(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
-                                          StoragePolicyOverlay sp) {
+                                          StoragePolicyOverlay sp, EnumerationClient client) {
         QueryTask task = queryForStoragePolicy(enumerationProgress, sp.getProfileId(), sp.getName());
 
         VsphereEnumerationHelper.withTaskResults(service, task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewStoragePolicy(service, enumerationProgress, sp);
+                createNewStoragePolicy(service, enumerationProgress, sp, client);
             } else {
                 ResourceGroupState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result,
                         ResourceGroupState.class);
-                updateStoragePolicy(service, oldDocument, enumerationProgress, sp);
+                updateStoragePolicy(service, oldDocument, enumerationProgress, sp, client);
             }
         });
     }
 
-    static List<StoragePolicyOverlay> createStorageProfileOverlays(VSphereIncrementalEnumerationService service, EnumerationClient client) {
+    static List<StoragePolicyOverlay> createStorageProfileOverlays(
+            VSphereIncrementalEnumerationService service, EnumerationClient client, EnumerationProgress ctx) {
         List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
         try {
             List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
@@ -289,11 +312,11 @@ public class VsphereStoragePolicyEnumerationHelper {
     public static void syncStorageProfiles(VSphereIncrementalEnumerationService service, EnumerationClient client, EnumerationProgress ctx) {
         List<StoragePolicyOverlay> storagePolicies;
 
-        storagePolicies = createStorageProfileOverlays(service, client);
+        storagePolicies = createStorageProfileOverlays(service, client, ctx);
         if (storagePolicies.size() > 0) {
             ctx.expectStoragePolicyCount(storagePolicies.size());
             for (StoragePolicyOverlay sp : storagePolicies) {
-                processFoundStoragePolicy(service, ctx, sp);
+                processFoundStoragePolicy(service, ctx, sp, client);
             }
 
             // checkpoint for storage policy

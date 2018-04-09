@@ -566,7 +566,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
             logWarning(() -> "Error processing datastore host mount information : " + e.toString());
         }
 
-        storagePolicies = VsphereStoragePolicyEnumerationHelper.createStorageProfileOverlays(this, client);
+        storagePolicies = VsphereStoragePolicyEnumerationHelper.createStorageProfileOverlays(this, client, ctx);
 
         // process results in topological order
         ctx.expectNetworkCount(segregatedOverlays.networks.size());
@@ -599,7 +599,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         if (storagePolicies.size() > 0) {
             ctx.expectStoragePolicyCount(storagePolicies.size());
             for (StoragePolicyOverlay sp : storagePolicies) {
-                VsphereStoragePolicyEnumerationHelper.processFoundStoragePolicy(this, ctx, sp);
+                VsphereStoragePolicyEnumerationHelper.processFoundStoragePolicy(this, ctx, sp, client);
             }
 
             // checkpoint for storage policy

@@ -53,6 +53,10 @@ public class StoragePolicyOverlay {
         return this.pbmProfile.getProfileId().getUniqueId();
     }
 
+    public PbmProfile getPbmProfile() {
+        return this.pbmProfile;
+    }
+
     public String getType() {
         return this.pbmProfile.getResourceType().getResourceType();
     }

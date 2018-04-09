@@ -32,6 +32,8 @@ import com.vmware.pbm.PbmProfile;
 import com.vmware.pbm.PbmProfileId;
 import com.vmware.pbm.PbmProfileResourceType;
 import com.vmware.pbm.PbmProfileResourceTypeEnum;
+import com.vmware.pbm.PbmServerObjectRef;
+import com.vmware.photon.controller.model.adapters.vsphere.constants.VSphereConstants;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
@@ -465,6 +467,65 @@ public class EnumerationClient extends BaseHelper {
         }
 
         return new ArrayList<>();
+    }
+
+    /**
+     * Retrieves the storage policies the given disk is associated with.
+     * The query to pbm service needs vm moref and disk key to get the storage policies.
+     * This method can be used when we have less number of disks whose storage policies
+     * needs to be retrieved.
+     *
+     * @param vmMoref the moref of the vm in which disk is present
+     * @param diskKey the integer disk key
+     * @return the list of pbmprofile objects or an empty list if there's no associated storage policy.
+     * @throws com.vmware.pbm.RuntimeFaultFaultMsg if there's any error while querying the policies.
+     * @throws PbmFaultFaultMsg if there's any error while querying the policies.
+     * @throws InvalidArgumentFaultMsg if there's any error while converting profile ids to profiles.
+     */
+    public List<PbmProfile> retrieveStoragePoliciesforDisk(ManagedObjectReference vmMoref, int diskKey)
+            throws com.vmware.pbm.RuntimeFaultFaultMsg, PbmFaultFaultMsg, InvalidArgumentFaultMsg {
+        List<PbmProfile> result = new ArrayList<>();
+        // 1 Get PBM Profile Manager
+        ManagedObjectReference profileMgr = this.connection.getPbmServiceInstanceContent()
+                .getProfileManager();
+        PbmServerObjectRef pbmServerObjectRef = new PbmServerObjectRef();
+        pbmServerObjectRef.setKey(ClientUtils.createVMDiskkey(vmMoref,diskKey));
+        pbmServerObjectRef.setObjectType(VSphereConstants.VSPHERE_VIRTUAL_DISK_ID);
+        List<PbmProfileId> profileIds = this.connection.getPbmPort().pbmQueryAssociatedProfile(profileMgr, pbmServerObjectRef);
+
+        if (CollectionUtils.isNotEmpty(profileIds)) {
+            result = this.connection.getPbmPort().pbmRetrieveContent(profileMgr, profileIds);
+        }
+        return result;
+    }
+
+    /**
+     * Retrieves the disks associated with a given storage policy.
+     * The retrieved disks follow a formet :vm-moref:disk-key. for ex, vm-1235:1200
+     * This method is useful when we are processing storage policies and need all disks
+     * associated to a storage policy.
+     *
+     * @param profile the storage policy object
+     * @return the list of disk keys as per the format given above or an empty list if there's no disk
+     * associated.
+     * @throws com.vmware.pbm.RuntimeFaultFaultMsg if there's any error while querying disks
+     * @throws PbmFaultFaultMsg if there's any error while querying disks
+     */
+    public List<String> getAssociatedDisksForStoragePolicy(PbmProfile profile)
+            throws com.vmware.pbm.RuntimeFaultFaultMsg, PbmFaultFaultMsg {
+        List<String> disks = new ArrayList<>();
+        // 1 Get PBM Profile Manager
+        ManagedObjectReference profileMgr = this.connection.getPbmServiceInstanceContent()
+                .getProfileManager();
+        // 2 Query associated virtual disks
+        List<PbmServerObjectRef> objects =
+                this.connection.getPbmPort().pbmQueryAssociatedEntity(profileMgr, profile.getProfileId(), VSphereConstants.VSPHERE_VIRTUAL_DISK_ID);
+        if (CollectionUtils.isNotEmpty(objects)) {
+            for (PbmServerObjectRef serverObjectRef : objects) {
+                disks.add(serverObjectRef.getKey());
+            }
+        }
+        return disks;
     }
 
     /**

@@ -13,7 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Phaser;
 
@@ -44,6 +46,8 @@ public class EnumerationProgress {
 
     private final MoRefKeyedMap<AbstractOverlay> overlays;
 
+    private Map<String, List<String>> disksToStoragePolicyMap;
+
     private Phaser vmTracker;
     private Phaser snapshotTracker;
     private String regionId;
@@ -63,6 +67,7 @@ public class EnumerationProgress {
         this.vmTracker = new Phaser(1);
         this.snapshotTracker = new Phaser(1);
         this.overlays = new MoRefKeyedMap<>();
+        this.disksToStoragePolicyMap = new HashMap<>();
         this.regionId = regionId;
         this.deleteDiskTracker = new ResourceTracker(1);
         this.vcUuid = vcUuid;
@@ -192,5 +197,9 @@ public class EnumerationProgress {
 
     public ResourceTracker getDeleteDiskTracker() {
         return this.deleteDiskTracker;
+    }
+
+    public Map<String, List<String>> getDiskToStoragePolicyAssociationMap() {
+        return this.disksToStoragePolicyMap;
     }
 }

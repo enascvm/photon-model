@@ -39,9 +39,11 @@ import java.util.Calendar;
 import java.util.EnumSet;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
@@ -957,6 +959,17 @@ public class ClientUtils {
                     .get(VimUtils.convertMoRefToString(backing.getDatastore()));
         }
 
+        ManagedObjectReference vmMoref = VimUtils.convertStringToMoRef(vm);
+        String diskKey = createVMDiskkey(vmMoref, disk.getKey());
+        if (null != ctx && null != ctx.getDiskToStoragePolicyAssociationMap().get(diskKey)) {
+            Set<String> spLink = new HashSet<>();
+            spLink.addAll(ctx.getDiskToStoragePolicyAssociationMap().get(diskKey));
+            if (null == ds.groupLinks) {
+                ds.groupLinks = spLink;
+            } else {
+                ds.groupLinks.addAll(spLink);
+            }
+        }
         ds.storageDescriptionLink = dataStoreLink;
         // Disk needs the VMs MoRef for the functional Key
         if (ctx != null) {
@@ -966,6 +979,10 @@ public class ClientUtils {
         operation = (matchedDs == null) ? createDisk(ds, service) : createDiskPatch(ds, service);
 
         return operation;
+    }
+
+    public static String createVMDiskkey(ManagedObjectReference vmMoref, int diskKey) {
+        return vmMoref.getValue() + ":" + diskKey;
     }
 
     /**

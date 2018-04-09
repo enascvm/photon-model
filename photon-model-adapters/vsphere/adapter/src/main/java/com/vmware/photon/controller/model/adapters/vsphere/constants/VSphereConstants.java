@@ -28,6 +28,8 @@ public class VSphereConstants {
     public static final String VSPHERE_SNAPSHOT_REQUEST_TYPE = "requestType";
     public static final String VSPHERE_SNAPSHOT_DOCUMENT_LINK = "snapshotLink";
 
+    public static final String VSPHERE_VIRTUAL_DISK_ID = "virtualDiskId";
+
     public static enum VSphereResourceType {
         vsphere_vm("vsphere_vm"),
         vsphere_server("vsphere_server"),
