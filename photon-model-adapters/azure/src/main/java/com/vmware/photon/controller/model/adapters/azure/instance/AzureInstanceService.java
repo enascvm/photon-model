@@ -477,10 +477,11 @@ public class AzureInstanceService extends StatelessService {
 
         ComputeManagementClientImpl computeManager = getComputeManagementClientImpl(ctx);
 
-        AzureDeferredResultServiceCallbackWithRetry<List<AvailabilitySetInner>>
-                getAvailabilitySetsCallback = new AzureDeferredResultServiceCallbackWithRetry
-                <List<AvailabilitySetInner>>
-                (this, msg) {
+        // Note that this get operation can throw NullPointerException from the Azure library.
+        // Ignore and handle this as a VM delete only. (VCOM-4303)
+        AzureDeferredResultServiceCallback<List<AvailabilitySetInner>>
+                getAvailabilitySetsCallback = new AzureDeferredResultServiceCallback
+                <List<AvailabilitySetInner>>(this, msg) {
                     @Override
                     protected DeferredResult<List<AvailabilitySetInner>> consumeSuccess(
                             List<AvailabilitySetInner> result) {
@@ -489,10 +490,11 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    protected Runnable retryServiceCall(
-                            ServiceCallback<List<AvailabilitySetInner>> retryCallback) {
-                        return () -> computeManager.availabilitySets()
-                                .listByResourceGroupAsync(ctx.resourceGroupName, retryCallback);
+                    protected Throwable consumeError(Throwable exc) {
+                        logWarning("Exception thrown while fetching availabilitySets for delete "
+                                + "operation. Resuming delete as a single VM delete.: " + exc
+                                .getMessage());
+                        return RECOVERED;
                     }
                 };
 

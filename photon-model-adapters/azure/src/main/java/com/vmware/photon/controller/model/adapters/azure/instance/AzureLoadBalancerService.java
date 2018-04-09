@@ -455,7 +455,8 @@ public class AzureLoadBalancerService extends StatelessService {
                         + context.loadBalancerStateExpanded.name + "].";
         logInfo(() -> msg);
 
-        AzureProvisioningCallback<PublicIPAddressInner> handler = new AzureProvisioningCallback<PublicIPAddressInner>(
+        AzureProvisioningCallbackWithRetry<PublicIPAddressInner> handler = new
+                AzureProvisioningCallbackWithRetry<PublicIPAddressInner>(
                 this, msg) {
             @Override
             protected DeferredResult<PublicIPAddressInner> consumeProvisioningSuccess(
@@ -477,6 +478,13 @@ public class AzureLoadBalancerService extends StatelessService {
                         publicIPName,
                         null /* expand */,
                         checkProvisioningStateCallback);
+            }
+
+            @Override
+            protected Runnable retryServiceCall(ServiceCallback<PublicIPAddressInner>
+                    retryCallback) {
+                return () -> azurePublicIPAddressClient.createOrUpdateAsync(context
+                                .resourceGroupName, publicIPName, publicIPAddress, retryCallback);
             }
         };
 
