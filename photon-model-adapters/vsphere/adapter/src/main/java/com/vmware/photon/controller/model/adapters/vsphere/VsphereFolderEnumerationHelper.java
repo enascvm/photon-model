@@ -154,7 +154,7 @@ public class VsphereFolderEnumerationHelper {
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     trackFolder(ctx, folder).handle(o, e);
-                    service.logInfo("updating document for folder: %s  ", folder.getName());
+                    service.logInfo("updating document for folder: %s  ", folder.getId());
                 })
                 .sendWith(service);
     }

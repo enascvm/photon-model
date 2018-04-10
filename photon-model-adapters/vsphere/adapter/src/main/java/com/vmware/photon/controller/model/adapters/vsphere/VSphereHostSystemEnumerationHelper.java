@@ -107,6 +107,13 @@ public class VSphereHostSystemEnumerationHelper {
         state.groupLinks = VsphereEnumerationHelper.getConnectedDatastoresAndNetworks(
                 enumerationProgress, hs.getDatastore(), hs.getNetwork(), client);
 
+        state.type = hs.isClusterHost() ? ComputeType.CLUSTER_HOST : ComputeType.VM_HOST;
+        if (hs.isClusterHost()) {
+            CustomProperties.of(state)
+                    .put(CustomProperties.CLUSTER_LINK, enumerationProgress
+                            .getComputeResourceTracker().getSelfLink(hs.getParentMoref()));
+        }
+
         return state;
     }
 

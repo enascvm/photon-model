@@ -505,23 +505,6 @@ public class ComputeServiceTest extends Suite {
             assertThat(returnState.documentCreationTimeMicros, is(originalCreationTime));
         }
 
-        @Test(expected = IllegalArgumentException.class)
-        public void testPatchFailOnTypeChange() throws Throwable {
-            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
-                    .createComputeDescription(this);
-            ComputeService.ComputeState startState = buildValidStartState(cd, false);
-
-            ComputeService.ComputeState returnState = postServiceSynchronously(
-                    ComputeService.FACTORY_LINK,
-                    startState, ComputeService.ComputeState.class);
-            assertNotNull(returnState);
-
-            ComputeService.ComputeState patchBody = new ComputeService.ComputeState();
-            patchBody.type = ComputeType.DOCKER_CONTAINER;
-            patchServiceSynchronously(returnState.documentSelfLink,
-                    patchBody);
-        }
-
         @Test
         public void testPatchNoChange() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest

@@ -336,7 +336,7 @@ public class VsphereComputeResourceEnumerationHelper {
 
     public static void handleComputeResourceChanges(
             VSphereIncrementalEnumerationService service, List<ComputeResourceOverlay> computeResourceOverlays,
-            EnumerationProgress ctx, EnumerationClient client) {
+            EnumerationProgress ctx, EnumerationClient client, List<HostSystemOverlay> hosts) {
 
         ctx.expectComputeResourceCount(computeResourceOverlays.size());
         //process compute resource changes
@@ -344,7 +344,8 @@ public class VsphereComputeResourceEnumerationHelper {
             try {
                 service.logInfo("Handling compute resource change %s", Utils.toJson(cluster));
                 // check if its a new compute resource
-                //TODO If a host is part of cluster then the host needs to be populated with cluster link.
+                cluster.markHostAsClustered(hosts);
+
                 if (ObjectUpdateKind.ENTER == cluster.getObjectUpdateKind()) {
                     // create a cluster object only for DRS enabled clusters
                     if (cluster.isDrsEnabled()) {

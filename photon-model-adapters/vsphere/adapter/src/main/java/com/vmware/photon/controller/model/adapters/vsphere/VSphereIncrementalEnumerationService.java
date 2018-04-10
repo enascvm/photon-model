@@ -254,7 +254,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                                             .handleDatastoreChanges(this, segregatedOverlays.datastores, enumerationProgress);
                                     logInfo("Processing incremental changes for compute resource for datacenter [%s]!", collectorDetails.datacenter);
                                     VsphereComputeResourceEnumerationHelper
-                                            .handleComputeResourceChanges(this, segregatedOverlays.clusters, enumerationProgress, client);
+                                            .handleComputeResourceChanges(this, segregatedOverlays.clusters, enumerationProgress, client, segregatedOverlays.hosts);
                                     logInfo("Processing incremental changes for host system for datacenter [%s]!", collectorDetails.datacenter);
                                     VSphereHostSystemEnumerationHelper
                                             .handleHostSystemChanges(this, segregatedOverlays.hosts, enumerationProgress, client);

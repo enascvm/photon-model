@@ -526,7 +526,7 @@ public class ComputeService extends StatefulService {
                     currentState.type = patchBody.type;
                     hasStateChanged = true;
                 } else if (patchBody.type != currentState.type) {
-                    throw new IllegalArgumentException("Compute type can not be changed");
+                    currentState.type = patchBody.type;
                 }
             }
 
