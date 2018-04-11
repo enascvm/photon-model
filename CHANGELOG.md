@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.6.57-SNAPSHOT
+## 0.6.57
+* Populate datastore links to disks in vsphere 
+* NPE fixes and other bug fixes
 
 ## 0.6.56
 * [AWS] Provisioned disks can now be differentiated
