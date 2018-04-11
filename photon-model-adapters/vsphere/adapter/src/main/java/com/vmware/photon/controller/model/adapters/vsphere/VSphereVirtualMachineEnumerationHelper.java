@@ -428,7 +428,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         }
 
         service.logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
-        if (CollectionUtils.isNotEmpty(state.diskLinks)) {
+        if (CollectionUtils.isNotEmpty(state.diskLinks) && CollectionUtils.isNotEmpty(vm.getDisks())) {
             // Now check how many disks are added / deleted / needs to be updated.
             List<Operation> ops = state.diskLinks.stream()
                     .map(link -> {
