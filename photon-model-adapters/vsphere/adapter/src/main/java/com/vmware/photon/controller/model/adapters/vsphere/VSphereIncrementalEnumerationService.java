@@ -49,6 +49,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -123,6 +124,11 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
     private Connection connection;
 
     /**
+     *  compute host
+     */
+    private ComputeStateWithDescription parent;
+
+    /**
      * Stores property collector and version information for each data center in this endpoint.
      */
     private final List<CollectorDetails> collectors = new ArrayList<>();
@@ -150,36 +156,37 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
         TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
 
-        URI parentUri = ComputeService.ComputeStateWithDescription.buildUri(PhotonModelUriUtils.createInventoryUri(getHost(),
-                request.resourceReference));
-
-        Operation.createGet(parentUri)
+        Operation.createGet(PhotonModelUriUtils.createInventoryUri(getHost(), request.endpointLink))
                 .setCompletion(o -> {
-                    thenWithParentState(request, o.getBody(ComputeService.ComputeStateWithDescription.class), mgr);
+                    thenWithParentState(request, o.getBody(EndpointState.class), mgr);
                 }, mgr)
                 .sendWith(this);
+
     }
 
-    private void thenWithParentState(ComputeEnumerateResourceRequest request,
-                                     ComputeService.ComputeStateWithDescription parent, TaskManager mgr) {
-        collectAllEndpointResources(request, parent.documentSelfLink).thenAccept(resourceLinks -> {
-            VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
-            this.logInfo("Submitting enumeration job to thread pool for endpoint %s", request.endpointLink);
-            pool.submit(this, parent.adapterManagementReference,
-                    parent.description.authCredentialsLink,
-                    (connection, e) -> {
-                        if (e != null) {
-                            String msg = String.format("Cannot establish connection to %s",
-                                    parent.adapterManagementReference);
-                            logWarning(msg);
-                            mgr.patchTaskToFailure(msg, e);
-                        } else {
-                            // create an un-managed connection and set it to instance variable.
-                            this.connection = connection.createUnmanagedCopy();
-                            refreshResourcesOnce(resourceLinks, request, this.connection, parent, mgr);
-                        }
-                    });
-        });
+    private void thenWithParentState(ComputeEnumerateResourceRequest request, EndpointState endpoint, TaskManager mgr) {
+
+        VsphereEnumerationHelper.getComputeStateDescription(getHost(), request.resourceReference)
+                .thenCompose(computeState -> {
+                    this.parent = computeState;
+                    return collectAllEndpointResources(request, computeState.documentSelfLink);
+                })
+                .thenAccept(resourceLinks -> {
+                    VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
+                    this.logInfo("Submitting enumeration job to thread pool for endpoint %s", request.endpointLink);
+                    pool.submit(this, this.parent.adapterManagementReference, endpoint.authCredentialsLink,
+                            (connection, e) -> {
+                                if (e != null) {
+                                    String msg = String.format("Cannot establish connection to %s", this.parent.adapterManagementReference);
+                                    logWarning(msg);
+                                    mgr.patchTaskToFailure(msg, e);
+                                } else {
+                                    // create an un-managed connection and set it to instance variable.
+                                    this.connection = connection.createUnmanagedCopy();
+                                    refreshResourcesOnce(resourceLinks, request, this.connection, this.parent, mgr);
+                                }
+                            });
+                });
     }
 
     @Override
