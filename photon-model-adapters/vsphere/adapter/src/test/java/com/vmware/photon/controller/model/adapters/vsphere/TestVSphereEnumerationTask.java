@@ -258,6 +258,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private void verifyCIGapForComputeResourcesAndVMs() throws Throwable {
         ComputeState cd = findRandomVm();
         assertNotNull(cd.customProperties.get(CustomProperties.VM_SOFTWARE_NAME));
+        assertNotNull(cd.customProperties.get(ComputeProperties.CUSTOM_OS_TYPE));
         assertNotNull(cd.customProperties.get(CustomProperties.DATACENTER_SELF_LINK));
         ComputeState host = findRandomHost();
         assertNotNull(host.customProperties.get(CustomProperties.MODEL_NAME));

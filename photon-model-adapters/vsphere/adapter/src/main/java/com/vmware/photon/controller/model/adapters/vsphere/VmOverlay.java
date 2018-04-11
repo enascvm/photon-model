@@ -128,9 +128,11 @@ public class VmOverlay extends AbstractOverlay {
                 VimPath.vm_datastore, null);
         if (morefs != null && morefs.getManagedObjectReference() != null && !morefs
                 .getManagedObjectReference().isEmpty()) {
-            return String.join(DATASTORE_MOREF_DELIMITER,
-                    morefs.getManagedObjectReference().stream().map(moref -> VimUtils
-                            .convertMoRefToString(moref)).collect(Collectors.toList()));
+
+            return String.join(DATASTORE_MOREF_DELIMITER, morefs.getManagedObjectReference()
+                    .stream()
+                    .map(VimUtils::convertMoRefToString)
+                    .collect(Collectors.toList()));
         }
         return null;
     }
@@ -246,7 +248,6 @@ public class VmOverlay extends AbstractOverlay {
         return deviceKey;
     }
 
-
     /**
      * If there is a nic with assignPublicIpAddress use the ip associated with that nic
      * otherwise rely on previous logic where it tries to guess the "public" IP of a VM. IPv6
@@ -260,7 +261,8 @@ public class VmOverlay extends AbstractOverlay {
         if (nics != null) {
             boolean assignPublicIpAddress = false;
             NetworkInterfaceStateWithDetails networkInterfaceStateWithDetails = nics.stream()
-                    .filter(nic -> nic.description != null && nic.description.assignPublicIpAddress != null &&
+                    .filter(nic -> nic.description != null
+                            && nic.description.assignPublicIpAddress != null &&
                             nic.description.assignPublicIpAddress == true)
                     .findFirst().orElse(null);
             if (networkInterfaceStateWithDetails != null) {
@@ -322,5 +324,9 @@ public class VmOverlay extends AbstractOverlay {
 
     public String getOS() {
         return (String) getOrDefault(VimPath.vm_summary_config_guestFullName, null);
+    }
+
+    public String getOSId() {
+        return (String) getOrDefault(VimPath.vm_summary_config_guestId, null);
     }
 }

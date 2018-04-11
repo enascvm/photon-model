@@ -90,14 +90,15 @@ public class VSphereVirtualMachineEnumerationHelper {
      * link.
      */
     static QueryTask queryForVm(EnumerationProgress ctx, String parentComputeLink,
-                                String instanceUuid, ManagedObjectReference moref) {
+            String instanceUuid, ManagedObjectReference moref) {
         Builder builder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink);
         if (null != instanceUuid) {
             builder.addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid);
         } else {
-            builder.addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.MOREF,
+            builder.addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                    CustomProperties.MOREF,
                     VimUtils.convertMoRefToString(moref), QueryTask.Query.Occurance.MUST_OCCUR);
         }
         QueryUtils.addEndpointLink(builder, ComputeState.class, ctx.getRequest().endpointLink);
@@ -109,8 +110,8 @@ public class VSphereVirtualMachineEnumerationHelper {
     }
 
     static ComputeDescription makeDescriptionForVm(VSphereIncrementalEnumerationService service,
-                                                   EnumerationProgress enumerationProgress,
-                                                   VmOverlay vm) {
+            EnumerationProgress enumerationProgress,
+            VmOverlay vm) {
         ComputeDescription res = new ComputeDescription();
         res.name = vm.getName();
         res.endpointLink = enumerationProgress.getRequest().endpointLink;
@@ -144,17 +145,18 @@ public class VSphereVirtualMachineEnumerationHelper {
         if (vm.getMemoryBytes() != 0) {
             state.totalMemoryBytes = vm.getMemoryBytes();
             CustomProperties.of(state)
-                    .put(CustomProperties.VM_MEMORY_IN_GB, AdapterUtils.convertBytesToGB(vm.getMemoryBytes()));
+                    .put(CustomProperties.VM_MEMORY_IN_GB,
+                            AdapterUtils.convertBytesToGB(vm.getMemoryBytes()));
         }
         // Power state can be changed
         state.powerState = vm.getPowerStateOrNull();
         // Name can be changed
         state.name = vm.getNameOrNull();
+
         // OS can be changed
-        if (null != vm.getOS()) {
-            CustomProperties.of(state)
-                    .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS());
-        }
+        CustomProperties.of(state)
+                .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS())
+                .put(ComputeProperties.CUSTOM_OS_TYPE, ClientUtils.getNormalizedOSType(vm));
 
         return state;
     }
@@ -194,20 +196,23 @@ public class VSphereVirtualMachineEnumerationHelper {
         state.id = vm.getInstanceUuid();
         state.name = vm.getName();
 
+        String selfLink = enumerationProgress.getHostSystemTracker().getSelfLink(vm.getHost());
+
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM)
                 .put(CustomProperties.VM_SOFTWARE_NAME, vm.getOS())
+                .put(ComputeProperties.CUSTOM_OS_TYPE, ClientUtils.getNormalizedOSType(vm))
                 .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink())
                 .put(CustomProperties.DATACENTER, enumerationProgress.getRegionId())
-                .put(CustomProperties.VM_MEMORY_IN_GB, AdapterUtils.convertBytesToGB(vm.getMemoryBytes()));
-        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state, enumerationProgress.getVcUuid());
-        String selfLink = enumerationProgress.getHostSystemTracker().getSelfLink(vm.getHost());
-        if (null != selfLink) {
-            CustomProperties.of(state)
-                    .put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
-                            selfLink);
-        }
+                .put(CustomProperties.VM_MEMORY_IN_GB,
+                        AdapterUtils.convertBytesToGB(vm.getMemoryBytes()))
+                .put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME, selfLink);
+
+        VsphereEnumerationHelper.populateResourceStateWithAdditionalProps(state,
+                enumerationProgress.getVcUuid());
+
+
         return state;
     }
 
@@ -263,12 +268,14 @@ public class VSphereVirtualMachineEnumerationHelper {
      * @param subnetworkLink The subnetwork link
      * @return The network interface state
      */
-    static NetworkInterfaceState createNewInterfaceState(VSphereIncrementalEnumerationService service,
-                                                         String id, String networkLink, String
-                                                                 subnetworkLink, String ipAddress) {
+    static NetworkInterfaceState createNewInterfaceState(
+            VSphereIncrementalEnumerationService service,
+            String id, String networkLink, String
+            subnetworkLink, String ipAddress) {
         NetworkInterfaceState iface = new NetworkInterfaceState();
         iface.name = id;
-        iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK, service.getHost().nextUUID());
+        iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
+                service.getHost().nextUUID());
         iface.networkLink = networkLink;
         iface.subnetLink = subnetworkLink;
         iface.address = ipAddress;
@@ -322,13 +329,16 @@ public class VSphereVirtualMachineEnumerationHelper {
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         service.logWarning(() ->
-                                String.format("Error processing queryByPortGroupIdOrByOpaqueNetworkId for id: [%s]," +
-                                        "error: [%s]", fieldValue, e.toString()));
+                                String.format(
+                                        "Error processing queryByPortGroupIdOrByOpaqueNetworkId for id: [%s],"
+                                                +
+                                                "error: [%s]", fieldValue, e.toString()));
                         return;
                     }
                     QueryTask task = o.getBody(QueryTask.class);
                     if (task.results != null && !task.results.documentLinks.isEmpty()) {
-                        T netState = VsphereEnumerationHelper.convertOnlyResultToDocument(task.results, type);
+                        T netState = VsphereEnumerationHelper
+                                .convertOnlyResultToDocument(task.results, type);
                         NetworkInterfaceState iface = null;
                         if (netState instanceof SubnetState) {
                             SubnetState subnetState = (SubnetState) netState;
@@ -343,7 +353,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                             state.networkInterfaceLinks.add(iface.documentSelfLink);
                         }
                     } else {
-                        service.logFine(() -> String.format("Will not add nic with id: [%s]", fieldValue));
+                        service.logFine(
+                                () -> String.format("Will not add nic with id: [%s]", fieldValue));
                     }
                 });
         return operation;
@@ -351,19 +362,23 @@ public class VSphereVirtualMachineEnumerationHelper {
 
     static Operation processVirtualDevice(
             VSphereIncrementalEnumerationService service, DiskStateExpanded matchedDs,
-            VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks, String vm, ComputeState oldDocument) {
+            VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks,
+            String vm, ComputeState oldDocument) {
         if (device instanceof VirtualDisk) {
             return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
                     (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service,
-                    vm, enumerationProgress.getDcLink(), enumerationProgress, oldDocument, Collections.emptyMap());
+                    vm, enumerationProgress.getDcLink(), enumerationProgress, oldDocument,
+                    Collections.emptyMap());
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.CDROM, device,
-                    diskLinks, enumerationProgress.getRegionId(), service, false, enumerationProgress.getDcLink());
+                    diskLinks, enumerationProgress.getRegionId(), service, false,
+                    enumerationProgress.getDcLink());
         } else if (device instanceof VirtualFloppy) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
                     matchedDs, DiskService.DiskType.FLOPPY, device,
-                    diskLinks, enumerationProgress.getRegionId(), service, false, enumerationProgress.getDcLink());
+                    diskLinks, enumerationProgress.getRegionId(), service, false,
+                    enumerationProgress.getDcLink());
         }
         return null;
     }
@@ -375,15 +390,20 @@ public class VSphereVirtualMachineEnumerationHelper {
         };
     }
 
-    static CompletionHandler updateVirtualDisksAndTrackVm(VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress, Map<Long, Operation> operationMap) {
+    static CompletionHandler updateVirtualDisksAndTrackVm(
+            VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
+            Map<Long, Operation> operationMap) {
         return (o, e) -> {
             // for each disk created, populate the vm selfLink as a custom property
             for (Operation operation : operationMap.values()) {
-                if (VsphereEnumerationHelper.getSelfLinkFromOperation(operation).startsWith(DiskService.FACTORY_LINK)) {
+                if (VsphereEnumerationHelper.getSelfLinkFromOperation(operation)
+                        .startsWith(DiskService.FACTORY_LINK)) {
                     DiskState diskState = operation.getBody(DiskState.class);
                     CustomProperties.of(diskState)
-                            .put(CustomProperties.VIRTUAL_MACHINE_LINK, VsphereEnumerationHelper.getSelfLinkFromOperation(o));
-                    Operation.createPatch(service,diskState.documentSelfLink).setBody(diskState).sendWith(service);
+                            .put(CustomProperties.VIRTUAL_MACHINE_LINK,
+                                    VsphereEnumerationHelper.getSelfLinkFromOperation(o));
+                    Operation.createPatch(service, diskState.documentSelfLink).setBody(diskState)
+                            .sendWith(service);
                 }
             }
             enumerationProgress.touchResource(VsphereEnumerationHelper.getSelfLinkFromOperation(o));
@@ -395,22 +415,24 @@ public class VSphereVirtualMachineEnumerationHelper {
             VSphereIncrementalEnumerationService service, ComputeState newDocument,
             ComputeState oldDocument, EnumerationProgress enumerationProgress, VmOverlay vm) {
         Operation.createPatch(
-                PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                PhotonModelUriUtils
+                        .createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
                 .setBody(newDocument)
                 .setCompletion((o, e) -> {
                     trackVm(enumerationProgress).handle(o, e);
                     if (e == null) {
                         VsphereEnumerationHelper.submitWorkToVSpherePool(service, ()
-                                -> VsphereEnumerationHelper.updateLocalTags(service, enumerationProgress, vm,
-                                o.getBody(ResourceState.class)));
+                                -> VsphereEnumerationHelper
+                                .updateLocalTags(service, enumerationProgress, vm,
+                                        o.getBody(ResourceState.class)));
                     }
                 })
                 .sendWith(service);
     }
 
     static void updateVm(VSphereIncrementalEnumerationService service,
-                         ComputeState oldDocument, EnumerationProgress enumerationProgress,
-                         VmOverlay vm, boolean fullUpdate) {
+            ComputeState oldDocument, EnumerationProgress enumerationProgress,
+            VmOverlay vm, boolean fullUpdate) {
         ComputeState state;
         if (fullUpdate) {
             state = makeVmFromResults(enumerationProgress, vm);
@@ -463,7 +485,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                         }
 
                         Operation vdOp = processVirtualDevice(service, matchedDs, device,
-                                enumerationProgress, state.diskLinks, VimUtils.convertMoRefToString(vm.getId()), oldDocument);
+                                enumerationProgress, state.diskLinks,
+                                VimUtils.convertMoRefToString(vm.getId()), oldDocument);
                         if (vdOp != null) {
                             diskUpdateOps.add(vdOp);
                         }
@@ -472,7 +495,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                     //  Delete disk states whose disks are deleted in vsphere.
                     for (String diskToDelete : disksToDelete) {
                         state.diskLinks.remove(diskToDelete);
-                        diskUpdateOps.add(Operation.createDelete(PhotonModelUriUtils.createInventoryUri(service.getHost(), diskToDelete)));
+                        diskUpdateOps.add(Operation.createDelete(PhotonModelUriUtils
+                                .createInventoryUri(service.getHost(), diskToDelete)));
                     }
 
                     // when a host moves inside cluster, vm receive updates only on resourcelinks.
@@ -491,12 +515,13 @@ public class VSphereVirtualMachineEnumerationHelper {
     }
 
     static void createNewVm(VSphereIncrementalEnumerationService service,
-                            EnumerationProgress enumerationProgress, VmOverlay vm) {
+            EnumerationProgress enumerationProgress, VmOverlay vm) {
 
         ComputeDescription desc = makeDescriptionForVm(service, enumerationProgress, vm);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
         Operation.createPost(
-                PhotonModelUriUtils.createInventoryUri(service.getHost(), ComputeDescriptionService.FACTORY_LINK))
+                PhotonModelUriUtils.createInventoryUri(service.getHost(),
+                        ComputeDescriptionService.FACTORY_LINK))
                 .setBody(desc)
                 .sendWith(service);
 
@@ -522,7 +547,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                             service.getHost().nextUUID());
                     iface.address = getPrimaryIPv4Address(nic, nicToIPv4Addresses);
                     CustomProperties.of(iface)
-                            .put(CustomProperties.DATACENTER_SELF_LINK, enumerationProgress.getDcLink());
+                            .put(CustomProperties.DATACENTER_SELF_LINK,
+                                    enumerationProgress.getDcLink());
                     Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(),
                             NetworkInterfaceService.FACTORY_LINK))
                             .setBody(iface)
@@ -532,7 +558,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                     VirtualEthernetCardDistributedVirtualPortBackingInfo veth =
                             (VirtualEthernetCardDistributedVirtualPortBackingInfo) backing;
                     String portgroupKey = veth.getPort().getPortgroupKey();
-                    Operation op = addNewInterfaceState(service, enumerationProgress, state, portgroupKey,
+                    Operation op = addNewInterfaceState(service, enumerationProgress, state,
+                            portgroupKey,
                             InterfaceStateMode.INTERFACE_STATE_WITH_DISTRIBUTED_VIRTUAL_PORT,
                             SubnetState.class, SubnetState.class, getPrimaryIPv4Address(nic,
                                     nicToIPv4Addresses));
@@ -543,7 +570,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                     VirtualEthernetCardOpaqueNetworkBackingInfo veth =
                             (VirtualEthernetCardOpaqueNetworkBackingInfo) backing;
                     String opaqueNetworkId = veth.getOpaqueNetworkId();
-                    Operation op = addNewInterfaceState(service, enumerationProgress, state, opaqueNetworkId,
+                    Operation op = addNewInterfaceState(service, enumerationProgress, state,
+                            opaqueNetworkId,
                             InterfaceStateMode.INTERFACE_STATE_WITH_OPAQUE_NETWORK,
                             NetworkState.class, NetworkState.class, getPrimaryIPv4Address(nic,
                                     nicToIPv4Addresses));
@@ -562,8 +590,9 @@ public class VSphereVirtualMachineEnumerationHelper {
             if (CollectionUtils.isNotEmpty(disks)) {
                 state.diskLinks = new ArrayList<>(disks.size());
                 for (VirtualDevice device : disks) {
-                    Operation vdOp = processVirtualDevice(service, null, device, enumerationProgress, state
-                            .diskLinks, VimUtils.convertMoRefToString(vm.getId()), null);
+                    Operation vdOp = processVirtualDevice(service, null, device,
+                            enumerationProgress, state
+                                    .diskLinks, VimUtils.convertMoRefToString(vm.getId()), null);
                     if (vdOp != null) {
                         operations.add(vdOp);
                     }
@@ -572,7 +601,8 @@ public class VSphereVirtualMachineEnumerationHelper {
 
             service.logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
             if (operations.isEmpty()) {
-                Operation.createPost(PhotonModelUriUtils.createInventoryUri(service.getHost(), ComputeService.FACTORY_LINK))
+                Operation.createPost(PhotonModelUriUtils
+                        .createInventoryUri(service.getHost(), ComputeService.FACTORY_LINK))
                         .setBody(state)
                         .setCompletion(trackVm(enumerationProgress))
                         .sendWith(service);
@@ -582,14 +612,17 @@ public class VSphereVirtualMachineEnumerationHelper {
                     Operation.createPost(PhotonModelUriUtils
                             .createInventoryUri(service.getHost(), ComputeService.FACTORY_LINK))
                             .setBody(state)
-                            .setCompletion(updateVirtualDisksAndTrackVm(service, enumerationProgress, operationMap))
+                            .setCompletion(
+                                    updateVirtualDisksAndTrackVm(service, enumerationProgress,
+                                            operationMap))
                             .sendWith(service);
                 }).sendWith(service);
             }
         });
     }
 
-    private static void updateComputeStateWithProvisionGB(ComputeState state, Map<Long, Operation> operationMap) {
+    private static void updateComputeStateWithProvisionGB(ComputeState state,
+            Map<Long, Operation> operationMap) {
         long totalProvisionGB = 0;
         for (Operation diskOperation : operationMap.values()) {
             if (!Service.Action.DELETE.equals(diskOperation.getAction())) {
@@ -604,11 +637,12 @@ public class VSphereVirtualMachineEnumerationHelper {
     }
 
     static void processFoundVm(VSphereIncrementalEnumerationService service,
-                               EnumerationProgress enumerationProgress, VmOverlay vm) {
+            EnumerationProgress enumerationProgress, VmOverlay vm) {
         long latestAcceptableModification = System.currentTimeMillis()
                 - VM_FERMENTATION_PERIOD_MILLIS;
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-        QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), vm.getInstanceUuid(), vm.getId());
+        QueryTask task = queryForVm(enumerationProgress, request.resourceLink(),
+                vm.getInstanceUuid(), vm.getId());
         VsphereEnumerationHelper.withTaskResults(service, task, result -> {
             if (result.documentLinks.isEmpty()) {
                 if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
@@ -619,14 +653,16 @@ public class VSphereVirtualMachineEnumerationHelper {
                 }
             } else {
                 // always update state of a vm even if modified recently
-                ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
+                ComputeState oldDocument = VsphereEnumerationHelper
+                        .convertOnlyResultToDocument(result, ComputeState.class);
                 updateVm(service, oldDocument, enumerationProgress, vm, true);
             }
         });
     }
 
-    static DeferredResult<SnapshotState> createSnapshot(VSphereIncrementalEnumerationService service,
-                                                        SnapshotState snapshot) {
+    static DeferredResult<SnapshotState> createSnapshot(
+            VSphereIncrementalEnumerationService service,
+            SnapshotState snapshot) {
         service.logFine(() -> String.format("Creating new snapshot %s", snapshot.name));
         Operation opCreateSnapshot = Operation.createPost(service, SnapshotService.FACTORY_LINK)
                 .setBody(snapshot);
@@ -656,10 +692,12 @@ public class VSphereVirtualMachineEnumerationHelper {
                 createNewVm(service, enumerationProgress, vmOverlay);
             } else {
                 ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-                QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), null, vmOverlay.getId());
+                QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), null,
+                        vmOverlay.getId());
                 VsphereEnumerationHelper.withTaskResults(service, task, result -> {
                     if (!result.documentLinks.isEmpty()) {
-                        ComputeState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result, ComputeState.class);
+                        ComputeState oldDocument = VsphereEnumerationHelper
+                                .convertOnlyResultToDocument(result, ComputeState.class);
                         if (ObjectUpdateKind.MODIFY == vmOverlay.getObjectUpdateKind()) {
                             updateVm(service, oldDocument, enumerationProgress, vmOverlay, false);
                         } else {
@@ -677,10 +715,11 @@ public class VSphereVirtualMachineEnumerationHelper {
     }
 
     private static void deleteVM(EnumerationProgress enumerationProgress, VmOverlay vmOverlay,
-                                 VSphereIncrementalEnumerationService service, ServiceDocument oldDocument) {
+            VSphereIncrementalEnumerationService service, ServiceDocument oldDocument) {
         if (!enumerationProgress.getRequest().preserveMissing) {
             Operation.createDelete(
-                    PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                    PhotonModelUriUtils
+                            .createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
                     .setCompletion((o, e) -> {
                         trackVm(enumerationProgress).handle(o, e);
                     })

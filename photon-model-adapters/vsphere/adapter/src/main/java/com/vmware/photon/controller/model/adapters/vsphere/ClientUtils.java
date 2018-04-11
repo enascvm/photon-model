@@ -34,6 +34,7 @@ import java.nio.file.Paths;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.EnumSet;
 import java.util.GregorianCalendar;
@@ -57,6 +58,7 @@ import org.slf4j.LoggerFactory;
 import com.vmware.pbm.PbmFaultFaultMsg;
 import com.vmware.pbm.PbmPlacementHub;
 import com.vmware.pbm.PbmProfileId;
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
@@ -105,6 +107,7 @@ import com.vmware.vim25.VirtualFloppyImageBackingInfo;
 import com.vmware.vim25.VirtualIDEController;
 import com.vmware.vim25.VirtualMachineConfigSpec;
 import com.vmware.vim25.VirtualMachineDefinedProfileSpec;
+import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSIOController;
 import com.vmware.xenon.common.Operation;
@@ -129,6 +132,13 @@ public class ClientUtils {
 
     private static final String TENANTS_PREFIX = "/tenants";
     private static final String GROUP_IDENTIFIER = "/groups";
+
+    /**
+     * A list of the possible prefixes of the enum names for Windows OS in
+     * {@link VirtualMachineGuestOsIdentifier}.
+     */
+    private static final List<String> WINDOWS_OS_ENUM_PREFIXES = Arrays.asList("WIN_", "WINDOWS_",
+            "DOS_");
 
     /**
      * Retrieves list of datastore names that are compatible with the storage policy.
@@ -253,8 +263,10 @@ public class ClientUtils {
             return PERSISTENT.value();
         }
 
-        boolean isIndependent = Boolean.valueOf(diskState.customProperties.get(DISK_MODE_INDEPENDENT));
-        boolean isPersistent = Boolean.valueOf(diskState.customProperties.get(DISK_MODE_PERSISTENT));
+        boolean isIndependent = Boolean
+                .valueOf(diskState.customProperties.get(DISK_MODE_INDEPENDENT));
+        boolean isPersistent = Boolean
+                .valueOf(diskState.customProperties.get(DISK_MODE_PERSISTENT));
 
         return isIndependent ?
                 (isPersistent ?
@@ -482,8 +494,7 @@ public class ClientUtils {
      * Changes to backing of the cdrom to an iso-backed one.
      *
      * @param cdrom
-     * @param imagePath
-     *            path to iso on disk, sth. like "[datastore] /images/ubuntu-16.04-amd64.iso"
+     * @param imagePath path to iso on disk, sth. like "[datastore] /images/ubuntu-16.04-amd64.iso"
      */
     public static void insertCdrom(VirtualCdrom cdrom, String imagePath) {
         VirtualCdromIsoBackingInfo backing = new VirtualCdromIsoBackingInfo();
@@ -492,7 +503,8 @@ public class ClientUtils {
         cdrom.setBacking(backing);
     }
 
-    public static VirtualDeviceConfigSpec createFloppy(VirtualDevice sioController, int unitNumber) {
+    public static VirtualDeviceConfigSpec createFloppy(VirtualDevice sioController,
+            int unitNumber) {
         VirtualFloppy floppy = new VirtualFloppy();
 
         floppy.setControllerKey(sioController.getKey());
@@ -545,7 +557,6 @@ public class ClientUtils {
         CustomProperties.of(disk)
                 .put(PROVIDER_DISK_UNIQUE_ID, vd.getDeviceInfo().getLabel());
     }
-
 
     /**
      * Capture virtual cdrom attributes in the disk state for reference.
@@ -608,7 +619,6 @@ public class ClientUtils {
         return uniqueName;
     }
 
-
     /**
      * Create a directory at the specified path.
      */
@@ -633,7 +643,7 @@ public class ClientUtils {
     /**
      * Create a external client
      */
-    public static ServiceClient getCustomServiceClient (TrustManager[] trustManagers,
+    public static ServiceClient getCustomServiceClient(TrustManager[] trustManagers,
             ServiceHost host, URI uri,
             String userAgent) {
         SSLContext clientContext;
@@ -656,7 +666,8 @@ public class ClientUtils {
             if (e.getMessage() != null) {
                 host.log(Level.SEVERE, e.getMessage());
             } else {
-                host.log(Level.SEVERE, "Could not create custom service client. Returning default host client.");
+                host.log(Level.SEVERE,
+                        "Could not create custom service client. Returning default host client.");
             }
             return host.getClient();
         }
@@ -695,8 +706,9 @@ public class ClientUtils {
         return defaultDatastore;
     }
 
-    public static void getDataStoresForEndpoint(Service service, String endpointLink, List<String> tenantLinks,
-                                                Consumer<Throwable> failure, Consumer<ServiceDocumentQueryResult> handler) {
+    public static void getDataStoresForEndpoint(Service service, String endpointLink,
+            List<String> tenantLinks,
+            Consumer<Throwable> failure, Consumer<ServiceDocumentQueryResult> handler) {
         getDatastoresForProfile(service, null, endpointLink, tenantLinks, failure, handler);
     }
 
@@ -846,9 +858,11 @@ public class ClientUtils {
                 .filter(ds -> {
                     if (vd instanceof VirtualDisk && ds.type == DiskService.DiskType.HDD) {
                         return true;
-                    } else if (vd instanceof VirtualCdrom && ds.type == DiskService.DiskType.CDROM) {
+                    } else if (vd instanceof VirtualCdrom
+                            && ds.type == DiskService.DiskType.CDROM) {
                         return true;
-                    } else if (vd instanceof VirtualFloppy && ds.type == DiskService.DiskType.FLOPPY) {
+                    } else if (vd instanceof VirtualFloppy
+                            && ds.type == DiskService.DiskType.FLOPPY) {
                         return true;
                     }
                     return false;
@@ -873,9 +887,9 @@ public class ClientUtils {
      * Process VirtualDisk and update the details in the diskLinks of the provisioned compute
      */
     public static Operation handleVirtualDiskUpdate(String endpointLink,
-                                                    DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
-                                                    String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx,
-                                                    ComputeState oldDocument, Map<String, String> morefToDSSelfLinkMap) {
+            DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
+            String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx,
+            ComputeState oldDocument, Map<String, String> morefToDSSelfLinkMap) {
 
         if (disk.getBacking() == null || !(disk.getBacking() instanceof
                 VirtualDeviceFileBackingInfo)) {
@@ -939,12 +953,14 @@ public class ClientUtils {
         String dataStoreLink;
         // check if the data store link is present in tracker
         if (null != ctx && null != ctx.getDatastoreTracker()
-                && !ResourceTracker.ERROR.equals(ctx.getDatastoreTracker().getSelfLink(backing.getDatastore()))) {
+                && !ResourceTracker.ERROR
+                .equals(ctx.getDatastoreTracker().getSelfLink(backing.getDatastore()))) {
             //populate from tracker
             dataStoreLink = ctx.getDatastoreTracker().getSelfLink(backing.getDatastore());
         } else {
             // else populate from pre-populated map
-            dataStoreLink = morefToDSSelfLinkMap.get(VimUtils.convertMoRefToString(backing.getDatastore()));
+            dataStoreLink = morefToDSSelfLinkMap
+                    .get(VimUtils.convertMoRefToString(backing.getDatastore()));
         }
 
         ds.storageDescriptionLink = dataStoreLink;
@@ -962,9 +978,9 @@ public class ClientUtils {
      * Process VirtualCdRom and update the details in the diskLinks of the provisioned compute
      */
     public static Operation handleVirtualDeviceUpdate(String endpointLink,
-                                                      DiskStateExpanded matchedDs,
-                                                      DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
-                                                      Service service, boolean isBacking, String dcLink) {
+            DiskStateExpanded matchedDs,
+            DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
+            Service service, boolean isBacking, String dcLink) {
         Operation operation;
         if (matchedDs == null) {
             DiskService.DiskState ds = createNewDiskState(type, disk, regionId, service);
@@ -1011,7 +1027,8 @@ public class ClientUtils {
         }
     }
 
-    private static void updateDiskModeInDiskState(VirtualDiskMode diskMode, DiskService.DiskState ds) {
+    private static void updateDiskModeInDiskState(VirtualDiskMode diskMode,
+            DiskService.DiskState ds) {
         boolean isIndependent;
         boolean isPersistent;
         switch (diskMode) {
@@ -1062,7 +1079,7 @@ public class ClientUtils {
 
     private static Operation createDiskPatch(DiskService.DiskState ds, Service service) {
         return Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(), ds
-                        .documentSelfLink))
+                .documentSelfLink))
                 .setBody(ds);
     }
 
@@ -1122,5 +1139,34 @@ public class ClientUtils {
                 .filter(d -> d.getUnitNumber() == getDiskControllerUnitNumber(diskState))
                 .findFirst()
                 .orElse(null);
+    }
+
+    public static ComputeProperties.OSType getOSTypeFromOSId(String guestOSId) {
+        VirtualMachineGuestOsIdentifier guestOsIdentifier;
+
+        try {
+            guestOsIdentifier = VirtualMachineGuestOsIdentifier.fromValue(guestOSId);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+
+        for (String windowsPrefix : WINDOWS_OS_ENUM_PREFIXES) {
+            if (guestOsIdentifier.name().startsWith(windowsPrefix)) {
+                // guestOsIdentifier enum name starts with one of the windows prefixes
+                return ComputeProperties.OSType.WINDOWS;
+            }
+        }
+
+        // guestOsIdentifier enum name doesn't start with a windows prefix
+        return ComputeProperties.OSType.LINUX;
+    }
+
+    public static String getNormalizedOSType(VmOverlay vmOverlay) {
+        ComputeProperties.OSType vmOSType = ClientUtils.getOSTypeFromOSId(vmOverlay.getOSId());
+        if (vmOSType == null) {
+            return null;
+        }
+
+        return vmOSType.toString();
     }
 }

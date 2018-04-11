@@ -62,12 +62,12 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import org.apache.commons.collections.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NetworkDeviceBackingFactory;
@@ -240,7 +240,7 @@ public class InstanceClient extends BaseHelper {
         String message = "";
         if (this.ctx.snapshotMoRef == null) {
             message = String.format("No MoRef found for the specified snapshot %s",
-                  this.ctx.child.documentSelfLink);
+                    this.ctx.child.documentSelfLink);
 
             logger.error(message);
 
@@ -249,8 +249,9 @@ public class InstanceClient extends BaseHelper {
 
         if (this.ctx.referenceComputeMoRef == null) {
             if (this.ctx.snapshotMoRef == null) {
-                message = String.format("No MoRef found for the reference compute for linkedclone creation for %s.",
-                      this.ctx.child.documentSelfLink);
+                message = String
+                        .format("No MoRef found for the reference compute for linkedclone creation for %s.",
+                                this.ctx.child.documentSelfLink);
 
                 logger.error(message);
 
@@ -298,7 +299,7 @@ public class InstanceClient extends BaseHelper {
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
-              .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
+                .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
 
         return state;
     }
@@ -358,7 +359,8 @@ public class InstanceClient extends BaseHelper {
         }
 
         // set the maximum snapshot limit if specified
-        final String snapshotLimit = CustomProperties.of(this.ctx.child).getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
+        final String snapshotLimit = CustomProperties.of(this.ctx.child)
+                .getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
         recordSnapshotLimit(spec.getExtraConfig(), snapshotLimit);
 
         ManagedObjectReference task = getVimPort().reconfigVMTask(this.vm, spec);
@@ -410,7 +412,8 @@ public class InstanceClient extends BaseHelper {
         // Filter the disk state that matches the virtual disk scsi number. If not then default
         // it to the properties of the boot disk
         return diskStates.stream().filter(ds -> ds.bootOrder != null &&
-                (ds.bootOrder - 1) == virtualDisk.getUnitNumber()).findFirst().orElse(this.bootDisk);
+                (ds.bootOrder - 1) == virtualDisk.getUnitNumber()).findFirst()
+                .orElse(this.bootDisk);
     }
 
     /**
@@ -450,7 +453,8 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
         ManagedObjectReference resourcePool = getResourcePool();
 
-        Map<String, Object> props = this.get.entityProps(template, VimPath.vm_config_hardware_device);
+        Map<String, Object> props = this.get
+                .entityProps(template, VimPath.vm_config_hardware_device);
 
         ArrayOfVirtualDevice devices = (ArrayOfVirtualDevice) props
                 .get(VimPath.vm_config_hardware_device);
@@ -474,7 +478,8 @@ public class InstanceClient extends BaseHelper {
         cloneSpec.setLocation(relocSpec);
 
         //Set the provisioning type of the parent disk.
-        VirtualMachineRelocateSpecDiskLocator diskProvisionTypeLocator = setProvisioningType(vd, datastore,
+        VirtualMachineRelocateSpecDiskLocator diskProvisionTypeLocator = setProvisioningType(vd,
+                datastore,
                 pbmSpec);
         if (diskProvisionTypeLocator != null) {
             cloneSpec.getLocation().getDisk().add(diskProvisionTypeLocator);
@@ -504,14 +509,16 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualMachineRelocateDiskMoveOptions computeDiskMoveType() {
-        String strategy = CustomProperties.of(this.ctx.child).getString(CustomProperties.CLONE_STRATEGY);
+        String strategy = CustomProperties.of(this.ctx.child)
+                .getString(CustomProperties.CLONE_STRATEGY);
 
         if (CLONE_STRATEGY_FULL.equals(strategy)) {
             return VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING;
         } else if (CLONE_STRATEGY_LINKED.equals(strategy)) {
             return VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
         } else {
-            logger.warn("Unknown clone strategy {}, defaulting to MOVE_CHILD_MOST_DISK_BACKING", strategy);
+            logger.warn("Unknown clone strategy {}, defaulting to MOVE_CHILD_MOST_DISK_BACKING",
+                    strategy);
             return VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
         }
     }
@@ -556,7 +563,7 @@ public class InstanceClient extends BaseHelper {
      * then disk will be detached before we delete the vm.
      */
     private void handleVirtualDiskCleanup(ServiceHost serviceHost, ManagedObjectReference vm,
-                                          ArrayOfVirtualDevice devices, List<DiskStateExpanded> disks) throws Exception {
+            ArrayOfVirtualDevice devices, List<DiskStateExpanded> disks) throws Exception {
         if (CollectionUtils.isEmpty(disks)) {
             return;
         }
@@ -570,7 +577,7 @@ public class InstanceClient extends BaseHelper {
             return;
         }
         List<Operation> diskUpdateOps = new ArrayList<>(persistDisks.size());
-        for (DiskStateExpanded ds: persistDisks) {
+        for (DiskStateExpanded ds : persistDisks) {
             VirtualDisk vd = (VirtualDisk) findMatchingVirtualDevice(getListOfVirtualDisk
                     (devices), ds);
             if (vd != null) {
@@ -618,7 +625,7 @@ public class InstanceClient extends BaseHelper {
             return;
         }
 
-        for (DiskStateExpanded ds: cdRomDisks) {
+        for (DiskStateExpanded ds : cdRomDisks) {
             String path = CustomProperties.of(ds).getString(DISK_PARENT_DIRECTORY);
             ClientUtils.deleteFolder(this.connection, this.ctx.datacenterMoRef, path);
         }
@@ -869,7 +876,7 @@ public class InstanceClient extends BaseHelper {
     }
 
     private ManagedObjectReference awaitVM(String replicatedName, ManagedObjectReference vmFolder,
-                                           GetMoRef get)
+            GetMoRef get)
             throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException {
 
         Element element = this.finder.fullPath(vmFolder);
@@ -971,7 +978,8 @@ public class InstanceClient extends BaseHelper {
                 String datastoreName = this.get.entityProp(datastore, VimPath.ds_summary_name);
                 String path = makePathToVmdkFile("ephemeral_disk", vmName);
                 String diskName = String.format(VM_PATH_FORMAT, datastoreName, path);
-                VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(), scsiUnit[0], this.bootDisk,
+                VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(), scsiUnit[0],
+                        this.bootDisk,
                         diskName, datastore, pbmSpec);
                 newDisks.add(hdd);
             } else {
@@ -982,8 +990,10 @@ public class InstanceClient extends BaseHelper {
                             .filter(d -> d instanceof VirtualDisk)
                             .map(d -> (VirtualDisk) d)
                             .filter(d -> {
-                                DiskStateExpanded ds = findMatchingImageDiskState(d, this.imageDisks);
-                                return toKb(ds.capacityMBytes) > d.getCapacityInKB() || ds.customProperties != null;
+                                DiskStateExpanded ds = findMatchingImageDiskState(d,
+                                        this.imageDisks);
+                                return toKb(ds.capacityMBytes) > d.getCapacityInKB()
+                                        || ds.customProperties != null;
                             }).collect(Collectors.toList());
                     if (vDisks.size() > 0) {
                         diskMoveOption = VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING;
@@ -1030,7 +1040,8 @@ public class InstanceClient extends BaseHelper {
         populateCloudConfig(spec, infos);
         recordTimestamp(spec.getExtraConfig());
         // set the maximum snapshot limit if specified
-        final String snapshotLimit = CustomProperties.of(this.ctx.child).getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
+        final String snapshotLimit = CustomProperties.of(this.ctx.child)
+                .getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
         recordSnapshotLimit(spec.getExtraConfig(), snapshotLimit);
         // add disks one at a time
         for (VirtualDeviceConfigSpec newDisk : newDisks) {
@@ -1086,7 +1097,8 @@ public class InstanceClient extends BaseHelper {
         if (customizeImageDisk) {
             ArrayOfVirtualDevice virtualDevices = this.get.entityProp(vmMoref, VimPath
                     .vm_config_hardware_device);
-            reconfigureBootDisk(vmMoref, getCustomizationConfigSpecs(virtualDevices, this.imageDisks));
+            reconfigureBootDisk(vmMoref,
+                    getCustomizationConfigSpecs(virtualDevices, this.imageDisks));
         }
 
         return vmMoref;
@@ -1120,10 +1132,11 @@ public class InstanceClient extends BaseHelper {
             throw new IllegalStateException("Cannot attach diskStates if VM is not created");
         }
 
-        for (DiskStateExpanded diskState: this.externalDisks) {
+        for (DiskStateExpanded diskState : this.externalDisks) {
             ArrayOfVirtualDevice devices = this.get
                     .entityProp(this.vm, VimPath.vm_config_hardware_device);
-            String diskDatastoreName = CustomProperties.of(diskState).getString(DISK_DATASTORE_NAME);
+            String diskDatastoreName = CustomProperties.of(diskState)
+                    .getString(DISK_DATASTORE_NAME);
 
             ClientUtils.attachDiskToVM(devices, this.vm, diskState,
                     this.finder.datastore(diskDatastoreName).object, this.connection,
@@ -1276,7 +1289,8 @@ public class InstanceClient extends BaseHelper {
      * Construct VM config spec for boot disk size customization, if the user defined value is
      * greater then the existing size of the disk
      */
-    private VirtualDeviceConfigSpec getBootDiskCustomizeConfigSpec(DiskStateExpanded disk, VirtualDisk virtualDisk)
+    private VirtualDeviceConfigSpec getBootDiskCustomizeConfigSpec(DiskStateExpanded disk,
+            VirtualDisk virtualDisk)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, FinderException {
         if (disk != null && virtualDisk != null) {
             // Resize happens if the new size is more than the existing disk size, other storage
@@ -1292,7 +1306,8 @@ public class InstanceClient extends BaseHelper {
         return VimUtils.waitTaskEnd(this.connection, task);
     }
 
-    private VirtualDeviceConfigSpec createFullCloneAndAttach(String sourcePath, DiskStateExpanded ds,
+    private VirtualDeviceConfigSpec createFullCloneAndAttach(String sourcePath,
+            DiskStateExpanded ds,
             String dir, VirtualDevice scsiController, int unitNumber,
             List<VirtualMachineDefinedProfileSpec> pbmSpec)
             throws Exception {
@@ -1355,7 +1370,7 @@ public class InstanceClient extends BaseHelper {
     }
 
     private VirtualMachineRelocateSpecDiskLocator setProvisioningType(VirtualDisk vDisk,
-                                                                      ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec)
+            ManagedObjectReference datastore, List<VirtualMachineDefinedProfileSpec> pbmSpec)
             throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
 
         if (vDisk == null) {
@@ -1370,7 +1385,8 @@ public class InstanceClient extends BaseHelper {
             datastore = dsFromSp == null ? getDatastore() : dsFromSp;
         }
 
-        VirtualDiskFlatVer2BackingInfo flatBacking = (VirtualDiskFlatVer2BackingInfo) vDisk.getBacking();
+        VirtualDiskFlatVer2BackingInfo flatBacking = (VirtualDiskFlatVer2BackingInfo) vDisk
+                .getBacking();
 
         VirtualDiskType provisioningType = getDiskProvisioningType(this.bootDisk);
 
@@ -1393,7 +1409,8 @@ public class InstanceClient extends BaseHelper {
 
         //If there is a change from thin to thick or vice-versa then we need to change the DiskMoveType
         //to MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING
-        if (wasThinProvision != flatBacking.isThinProvisioned() || !wasEagerScrubbed.equals(isEagerScrub)) {
+        if (wasThinProvision != flatBacking.isThinProvisioned() || !wasEagerScrubbed
+                .equals(isEagerScrub)) {
             diskLocator.setDiskMoveType(VirtualMachineRelocateDiskMoveOptions
                     .MOVE_ALL_DISK_BACKINGS_AND_DISALLOW_SHARING.value());
         }
@@ -1487,6 +1504,7 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName,
                 VimPath.vm_summary_config_guestFullName,
+                VimPath.vm_summary_config_guestId,
                 VimPath.vm_datastore);
 
         VmOverlay overlay = new VmOverlay(this.vm, props);
@@ -1501,12 +1519,10 @@ public class InstanceClient extends BaseHelper {
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, this.vm)
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM)
-                .put(STORAGE_REFERENCE, overlay.getDatastoreMorefsAsString());
+                .put(STORAGE_REFERENCE, overlay.getDatastoreMorefsAsString())
+                .put(CustomProperties.VM_SOFTWARE_NAME, overlay.getOS())
+                .put(ComputeProperties.CUSTOM_OS_TYPE, ClientUtils.getNormalizedOSType(overlay));
 
-        if (null != overlay.getOS()) {
-            CustomProperties.of(state)
-                    .put(CustomProperties.VM_SOFTWARE_NAME, overlay.getOS());
-        }
         return overlay;
     }
 
@@ -1551,7 +1567,8 @@ public class InstanceClient extends BaseHelper {
         populateCloudConfig(spec, null);
         recordTimestamp(spec.getExtraConfig());
         // set the maximum snapshot limit if specified
-        final String snapshotLimit = CustomProperties.of(this.ctx.child).getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
+        final String snapshotLimit = CustomProperties.of(this.ctx.child)
+                .getString(CustomProperties.SNAPSHOT_MAXIMUM_LIMIT);
         recordSnapshotLimit(spec.getExtraConfig(), snapshotLimit);
 
         ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool,
@@ -1815,7 +1832,8 @@ public class InstanceClient extends BaseHelper {
         }
     }
 
-    private ManagedObjectReference getExistingOrCreateNewFolder(Element folderElement, String folderPath) throws
+    private ManagedObjectReference getExistingOrCreateNewFolder(Element folderElement,
+            String folderPath) throws
             InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, FinderException {
         try {
             folderElement = this.finder.folder(folderPath);
@@ -1823,7 +1841,9 @@ public class InstanceClient extends BaseHelper {
             try {
                 return this.get.createFolder(folderElement, folderPath);
             } catch (InvalidNameFaultMsg | DuplicateNameFaultMsg faultMsg) {
-                throw new FinderException(String.format("Unable to create folder in the path: '%s'", folderPath), faultMsg.getCause());
+                throw new FinderException(
+                        String.format("Unable to create folder in the path: '%s'", folderPath),
+                        faultMsg.getCause());
             }
         }
         return folderElement.object;
@@ -2038,9 +2058,12 @@ public class InstanceClient extends BaseHelper {
             ManagedObjectReference datastore = getDataStoreForDisk(this.bootDisk, pbmSpec);
 
             Map<String, String> mapping = new HashMap<>();
-            ObjectNode result = client.deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
-                    datastore, pbmSpec != null && !pbmSpec.isEmpty() ? pbmSpec.iterator().next() : null,
-                    getResourcePool(), mapping, getDiskProvisioningType(this.bootDisk));
+            ObjectNode result = client
+                    .deployOvfLibItem(image.id, this.ctx.child.name, getVmFolder(),
+                            datastore, pbmSpec != null && !pbmSpec.isEmpty() ?
+                                    pbmSpec.iterator().next() :
+                                    null,
+                            getResourcePool(), mapping, getDiskProvisioningType(this.bootDisk));
 
             if (!result.get("succeeded").asBoolean()) {
                 // Log here to understand why deploy from library fails.
@@ -2063,7 +2086,8 @@ public class InstanceClient extends BaseHelper {
 
             ComputeState state = new ComputeState();
             state.resourcePoolLink = VimUtils
-                    .firstNonNull(this.ctx.child.resourcePoolLink, this.ctx.parent.resourcePoolLink);
+                    .firstNonNull(this.ctx.child.resourcePoolLink,
+                            this.ctx.parent.resourcePoolLink);
 
             return state;
         } finally {

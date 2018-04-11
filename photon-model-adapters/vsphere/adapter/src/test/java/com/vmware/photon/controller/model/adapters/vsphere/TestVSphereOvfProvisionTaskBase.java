@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.DISK_MODE_PERSISTENT;
@@ -187,6 +188,11 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
         vm = getComputeState(vm);
 
         snapshotFactoryState("ovf", ComputeService.class);
+
+        if (!this.isMock()) {
+            assertNotNull(vm.customProperties.get(ComputeProperties.CUSTOM_OS_TYPE));
+        }
+
         if (!isMock() && withAdditionalDisks || customProperties.get(PROVISION_TYPE) != null) {
             BasicConnection connection = createConnection();
             GetMoRef get = new GetMoRef(connection);

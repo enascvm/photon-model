@@ -320,7 +320,8 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.vm_summary_guest_hostName,
                 VimPath.vm_snapshot_rootSnapshotList,
                 VimPath.res_resourcePool,
-                VimPath.vm_summary_config_guestFullName
+                VimPath.vm_summary_config_guestFullName,
+                VimPath.vm_summary_config_guestId
         ));
 
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
