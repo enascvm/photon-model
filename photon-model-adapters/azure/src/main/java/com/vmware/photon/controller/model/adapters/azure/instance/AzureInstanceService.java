@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -195,9 +196,10 @@ public class AzureInstanceService extends StatelessService {
 
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
     private static final int RETRY_INTERVAL_SECONDS = 30;
-    private static final long AZURE_MAXIMUM_OS_DISK_SIZE_MB = 1023 * 1024; // Maximum allowed OS
+    private static final long AZURE_MAXIMUM_OS_DISK_SIZE_MB = 1023 * 1024; // Maximum allowed OS disk size on Azure is 1023 GB
     public static final int WINDOWS_COMPUTER_NAME_MAX_LENGTH = 15;
-    // disk size on Azure is 1023 GB
+
+    private ExecutorService executor;
 
     /**
      * The class represents the context of async calls(either single or batch) to Azure cloud.
@@ -231,6 +233,19 @@ public class AzureInstanceService extends StatelessService {
         static AzureCallContext newBatchCallContext(int numberOfCalls) {
             return new AzureCallContext(numberOfCalls);
         }
+    }
+
+    @Override
+    public void handleStart(Operation start) {
+        this.executor = getHost().allocateExecutor(this);
+        super.handleStart(start);
+    }
+
+    @Override
+    public void handleStop(Operation delete) {
+        this.executor.shutdown();
+        AdapterUtils.awaitTermination(this.executor);
+        super.handleStop(delete);
     }
 
     @Override
@@ -665,7 +680,7 @@ public class AzureInstanceService extends StatelessService {
                 }
             });
 
-        }, getHost().allocateExecutor(this)).whenComplete((obj, throwable) -> {
+        }, this.executor).whenComplete((obj, throwable) -> {
             OperationContext.restoreOperationContext(opCtx);
             dr.complete(obj);
         });
