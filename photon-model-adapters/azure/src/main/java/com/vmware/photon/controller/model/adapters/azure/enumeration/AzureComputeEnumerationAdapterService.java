@@ -1014,31 +1014,39 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     if (!cs.diskLinks.isEmpty()) {
                         cs.diskLinks.clear();
                     }
-                    // Add OS disk link first
-                    OSDisk osDisk = vm.storageProfile().osDisk();
-                    String osDiskId;
 
-                    if (isDiskManaged(vm)) {
-                        osDiskId = osDisk.managedDisk().id();
-                    } else {
-                        osDiskId = AzureUtils.canonizeId(osDisk.vhd().uri());
-                    }
-                    if (ctx.diskStates.get(osDiskId) != null) {
-                        String osDiskLink = ctx.diskStates.get(osDiskId).documentSelfLink;
-                        cs.diskLinks.add(osDiskLink);
-                    }
-                    vm.storageProfile().dataDisks().forEach(dataDisk -> {
-                        String dataDiskId;
-                        if (isDiskManaged(vm)) {
-                            dataDiskId = dataDisk.managedDisk().id();
-                        } else {
-                            dataDiskId = AzureUtils.canonizeId(dataDisk.vhd().uri());
+                    if (vm.storageProfile() != null) {
+                        // Add OS disk link first
+                        if (vm.storageProfile().osDisk() != null) {
+                            OSDisk osDisk = vm.storageProfile().osDisk();
+                            String osDiskId;
+                            if (isDiskManaged(vm)) {
+                                osDiskId = osDisk.managedDisk().id();
+                            } else {
+                                osDiskId = AzureUtils.canonizeId(osDisk.vhd().uri());
+                            }
+                            if (ctx.diskStates.get(osDiskId) != null) {
+                                String osDiskLink = ctx.diskStates.get(osDiskId).documentSelfLink;
+                                cs.diskLinks.add(osDiskLink);
+                            }
                         }
-                        if (ctx.diskStates.get(dataDiskId) != null) {
-                            String diskStateLink = ctx.diskStates.get(dataDiskId).documentSelfLink;
-                            cs.diskLinks.add(diskStateLink);
+
+                        // Add data disk link
+                        if (vm.storageProfile().dataDisks() != null) {
+                            vm.storageProfile().dataDisks().forEach(dataDisk -> {
+                                String dataDiskId;
+                                if (isDiskManaged(vm)) {
+                                    dataDiskId = dataDisk.managedDisk().id();
+                                } else {
+                                    dataDiskId = AzureUtils.canonizeId(dataDisk.vhd().uri());
+                                }
+                                if (ctx.diskStates.get(dataDiskId) != null) {
+                                    String diskStateLink = ctx.diskStates.get(dataDiskId).documentSelfLink;
+                                    cs.diskLinks.add(diskStateLink);
+                                }
+                            });
                         }
-                    });
+                    }
 
                     Map<String, String> tags = p.getRight().getTags();
                     DeferredResult<Set<String>> result = DeferredResult.completed(null);
