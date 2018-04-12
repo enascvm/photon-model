@@ -292,7 +292,7 @@ public class VSphereResourcePoolEnumerationHelper {
         }
     }
 
-    private static String getOwnerNameFromResourcePoolName(String name) {
+    public static String getOwnerNameFromResourcePoolName(String name) {
         String owner = null;
         int index = name.indexOf("/"); //this finds the first occurrence of "/"
         if (index > 0) {

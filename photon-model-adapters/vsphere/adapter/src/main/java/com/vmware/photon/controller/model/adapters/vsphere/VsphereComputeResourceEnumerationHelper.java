@@ -170,7 +170,7 @@ public class VsphereComputeResourceEnumerationHelper {
         if (fullUpdate) {
             state = makeComputeResourceFromResults(enumerationProgress, cr, client);
         } else {
-            state = makeComputeResourceFromChanges(enumerationProgress, cr, client);
+            state = makeComputeResourceFromChanges(enumerationProgress, cr, client, service, oldDocument);
         }
         state.documentSelfLink = oldDocument.documentSelfLink;
         state.resourcePoolLink = null;
@@ -325,10 +325,34 @@ public class VsphereComputeResourceEnumerationHelper {
     }
 
     private static ComputeState makeComputeResourceFromChanges(
-            EnumerationProgress enumerationProgress, ComputeResourceOverlay cr, EnumerationClient client)
+            EnumerationProgress enumerationProgress, ComputeResourceOverlay cr, EnumerationClient client,
+            VSphereIncrementalEnumerationService service, ComputeState oldDocument)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ComputeService.ComputeState state = new ComputeState();
         state.name = cr.getNameOrNull();
+
+        if (null != state.name) {
+            QueryTask.Query.Builder builder = QueryTask.Query.Builder.create(QueryTask.Query.Occurance.MUST_OCCUR)
+                    .addKindFieldClause(ComputeService.ComputeState.class)
+                    .addFieldClause(ComputeState.FIELD_NAME_NAME, oldDocument.name + " /", QueryTask.QueryTerm.MatchType.PREFIX, QueryTask.Query.Occurance.MUST_OCCUR)
+                    .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST.toString(), QueryTask.QueryTerm.MatchType.TERM, QueryTask.Query.Occurance.MUST_OCCUR);
+            QueryUtils.addEndpointLink(builder, ComputeService.ComputeState.class, enumerationProgress.getRequest().endpointLink);
+            QueryUtils.addTenantLinks(builder, enumerationProgress.getTenantLinks());
+            QueryTask queryResourcePools = QueryTask.Builder.createDirectTask().setQuery(builder.build())
+                    .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                    .build();
+            withTaskResults(service, queryResourcePools, (result) -> {
+                // if there are resource pools present in this cluster
+                if (!result.documentLinks.isEmpty()) {
+                    for (Object resourcePool : result.documents.values()) {
+                        ComputeState resourcePoolState = Utils.fromJson(resourcePool,ComputeState.class);
+                        String existingOwner = VSphereResourcePoolEnumerationHelper.getOwnerNameFromResourcePoolName(resourcePoolState.name);
+                        resourcePoolState.name = resourcePoolState.name.replace(existingOwner, state.name);
+                        Operation.createPatch(service, resourcePoolState.documentSelfLink).setBody(resourcePoolState).sendWith(service);
+                    }
+                }
+            });
+        }
         // connected network or datastore membership changes
         state.groupLinks = getConnectedDatastoresAndNetworks(enumerationProgress, cr.getDatastore(), cr.getNetwork(), client);
         return state;
