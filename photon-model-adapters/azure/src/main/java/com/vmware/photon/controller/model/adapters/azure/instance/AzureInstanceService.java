@@ -787,6 +787,10 @@ public class AzureInstanceService extends StatelessService {
                 String rollbackError = String.format(msg + ": FAILED. Details: %s",
                         Utils.toString(e));
 
+                if (ctx.error != null) {
+                    rollbackError = rollbackError + " : Original Provisioning Error : " + Utils.toString(ctx.error);
+                }
+
                 // Wrap original ctx.error with rollback error details.
                 ctx.error = new IllegalStateException(rollbackError, ctx.error);
 
