@@ -91,6 +91,7 @@
     <module>photon-model-adapters/azure</module>
     <module>photon-model-adapters/gcp</module>
     <module>photon-model-adapters/vsphere</module>
+    <module>photon-model-cloud-accounts</module>
   </modules>
 
   <properties>
@@ -99,10 +100,35 @@
     <xenon.version>1.6.5</xenon.version>
     <xenon-utils.version>0.0.1</xenon-utils.version>
     <jacoco.version>0.7.9</jacoco.version>
+    <aws.sdk.version>1.11.170</aws.sdk.version>
     <!-- Bouncy Castle -->
     <bouncycastle.version>1.57</bouncycastle.version>
     <apache.commons.lang.version>3.4</apache.commons.lang.version>
   </properties>
+
+  <repositories>
+    <repository>
+      <id>maven-central</id>
+      <url>https://oss.sonatype.org/content/repositories/releases/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>symphony-maven-local</id>
+      <name>build-artifactory-releases</name>
+      <url>https://build-artifactory.eng.vmware.com/artifactory/symphony-maven-local/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
 
   <distributionManagement>
     <snapshotRepository>
