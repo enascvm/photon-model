@@ -12,10 +12,6 @@
 
     <artifactId>photon-aws-adapter</artifactId>
 
-    <properties>
-        <aws.sdk.version>1.11.170</aws.sdk.version>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>com.vmware.xenon</groupId>
