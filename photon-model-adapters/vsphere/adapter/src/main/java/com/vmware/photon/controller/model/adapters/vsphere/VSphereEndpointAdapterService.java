@@ -164,14 +164,11 @@ public class VSphereEndpointAdapterService extends StatelessService {
             Boolean endpointUniqueness, String host, List<String> queryTaskTenantLinks) {
         if (Boolean.TRUE.equals(endpointUniqueness)) {
 
-            Query authQuery = Builder.create()
-                    .addFieldClause(PRIVATE_KEYID_KEY, credentials.privateKeyId).build();
-
             Query endpointQuery = Builder.create()
                     .addCompositeFieldClause(EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
                             HOST_NAME_KEY, host).build();
 
-            return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), authQuery,
+            return EndpointAdapterUtils.validateEndpointUniqueness(this.getHost(), null,
                     endpointQuery, EndpointType.vsphere.name(), queryTaskTenantLinks);
         }
         return DeferredResult.completed(null);
