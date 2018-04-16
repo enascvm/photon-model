@@ -62,6 +62,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.apache.commons.collections.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -531,22 +532,37 @@ public class InstanceClient extends BaseHelper {
             return;
         }
 
-        ArrayOfVirtualDevice devices = this.get
-                .entityProp(vm, VimPath.vm_config_hardware_device);
+        try {
+            ArrayOfVirtualDevice devices = this.get
+                    .entityProp(vm, VimPath.vm_config_hardware_device);
 
-        // Handle disks of the VM during VM deletion based on its persistent flag.
-        handleVirtualDiskCleanup(serviceHost, vm, devices, this.ctx.disks);
+            // Handle disks of the VM during VM deletion based on its persistent flag.
+            handleVirtualDiskCleanup(serviceHost, vm, devices, this.ctx.disks);
+        } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg | javax.xml.ws.WebServiceException e) {
+            logger.warn(String.format("Ignore error handling devices of vm %s during VM deletion. "
+                    + "ERROR: %s ", VimUtils.convertMoRefToString(vm), e.getMessage()));
+        }
 
         TaskInfo info;
         // power off
-        ManagedObjectReference task = getVimPort().powerOffVMTask(vm);
-        info = waitTaskEnd(task);
-        ignoreError("Ignore error powering off VM", info);
+        try {
+            ManagedObjectReference task = getVimPort().powerOffVMTask(vm);
+            info = waitTaskEnd(task);
+            ignoreError("Ignore error powering off VM", info);
+        } catch (javax.xml.ws.WebServiceException e) {
+            logger.warn(String.format("Ignore error powering off vm %s during VM deletion. ERROR: %s ", VimUtils.convertMoRefToString(vm),
+                    e.getMessage()));
+        }
 
         // delete vm
-        task = getVimPort().destroyTask(vm);
-        info = waitTaskEnd(task);
-        ignoreError("Ignore error deleting VM", info);
+        try {
+            ManagedObjectReference task = getVimPort().destroyTask(vm);
+            info = waitTaskEnd(task);
+            ignoreError("Ignore error deleting VM", info);
+        } catch (javax.xml.ws.WebServiceException e) {
+            logger.warn(String.format("Ignore error deleting vm %s. ERROR: %s ", VimUtils.convertMoRefToString(vm),
+                    e.getMessage()));
+        }
 
         // Handle CD ROM folder clean up.
         handleVirtualCDRomCleanup(this.ctx.disks);
