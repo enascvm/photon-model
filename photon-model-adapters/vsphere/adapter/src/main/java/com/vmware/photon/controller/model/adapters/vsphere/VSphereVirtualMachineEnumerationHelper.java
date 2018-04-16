@@ -688,26 +688,24 @@ public class VSphereVirtualMachineEnumerationHelper {
             }
         }
         for (VmOverlay vmOverlay : vmOverlays) {
-            if (ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
-                createNewVm(service, enumerationProgress, vmOverlay);
-            } else {
-                ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-                QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), null,
-                        vmOverlay.getId());
-                VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-                    if (!result.documentLinks.isEmpty()) {
-                        ComputeState oldDocument = VsphereEnumerationHelper
-                                .convertOnlyResultToDocument(result, ComputeState.class);
-                        if (ObjectUpdateKind.MODIFY == vmOverlay.getObjectUpdateKind()) {
-                            updateVm(service, oldDocument, enumerationProgress, vmOverlay, false);
-                        } else {
-                            deleteVM(enumerationProgress, vmOverlay, service, oldDocument);
-                        }
-                    } else {
-                        enumerationProgress.getVmTracker().arrive();
+            ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
+            QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), null,
+                    vmOverlay.getId());
+            VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                if (result.documentLinks.isEmpty()
+                        && ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
+                    createNewVm(service, enumerationProgress, vmOverlay);
+                } else {
+                    ComputeState oldDocument = VsphereEnumerationHelper
+                            .convertOnlyResultToDocument(result, ComputeState.class);
+                    if (ObjectUpdateKind.MODIFY == vmOverlay.getObjectUpdateKind()
+                            || ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
+                        updateVm(service, oldDocument, enumerationProgress, vmOverlay, false);
+                    } else if (ObjectUpdateKind.LEAVE == vmOverlay.getObjectUpdateKind()) {
+                        deleteVM(enumerationProgress, vmOverlay, service, oldDocument);
                     }
-                });
-            }
+                }
+            });
         }
 
         // enumerate snapshots

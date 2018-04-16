@@ -225,6 +225,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         updateDiskLinksAfterProvisionSuccess(state, vmOverlay.getDisks(), ctx);
 
                         state.lifecycleState = LifecycleState.READY;
+                        state.id = vmOverlay.getInstanceUuid();
 
                         // Find the host link where the computed is provisioned and patch the
                         // compute state.
