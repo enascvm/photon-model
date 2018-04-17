@@ -71,6 +71,17 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
      */
     public static final String EP_CP_ENUMERATION_TASK_MESSAGE_ID = "enumerationTaskMessageId";
 
+    /**
+     * Key for recording the last enumeration timestamp
+     */
+    public static final String EP_CP_LAST_ENUMERATION_TIMESTAMP_MICRO = "lastEnumerationTimestampMicro";
+
+    /**
+     * Key for recording the last successful enumeration timestamp
+     */
+    public static final String EP_CP_LAST_SUCCESSFUL_ENUMERATION_TIMESTAMP_MICRO =
+            "lastSuccessfulEnumerationTimestampMicro";
+
     public static FactoryService createFactory() {
         TaskFactoryService fs =  new TaskFactoryService(ResourceEnumerationTaskState.class) {
             @Override
@@ -231,15 +242,30 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             ResourceEnumerationTaskState currentState) {
         TaskStage taskStage = currentState.taskInfo.stage;
         String stageName = taskStage.name();
+
+        Map<Object, Object> cpToAdd = new HashMap<>();
+        Collection<String> cpToRemove = new LinkedList<>();
+
+        switch (taskStage) {
+        case FINISHED:
+            cpToAdd.put(EP_CP_LAST_ENUMERATION_TIMESTAMP_MICRO, String.valueOf(Utils.getNowMicrosUtc()));
+            cpToAdd.put(EP_CP_LAST_SUCCESSFUL_ENUMERATION_TIMESTAMP_MICRO, String.valueOf(Utils.getNowMicrosUtc()));
+            break;
+        case FAILED:
+        case CANCELLED:
+            cpToAdd.put(EP_CP_LAST_ENUMERATION_TIMESTAMP_MICRO, String.valueOf(Utils.getNowMicrosUtc()));
+            break;
+        default:
+            break;
+        }
+
         String message = null;
         String messageId = null;
         if (currentState.taskInfo.failure != null) {
             message = currentState.taskInfo.failure.message;
             messageId = currentState.taskInfo.failure.messageId;
         }
-        Map<Object, Object> cpToAdd = new HashMap<>();
         cpToAdd.put(EP_CP_ENUMERATION_TASK_STATE, stageName);
-        Collection<String> cpToRemove = new LinkedList<>();
         if (message != null && message.length() > 0) {
             cpToAdd.put(EP_CP_ENUMERATION_TASK_MESSAGE, message);
         } else {
