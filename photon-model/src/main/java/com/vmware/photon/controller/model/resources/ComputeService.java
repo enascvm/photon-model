@@ -174,6 +174,7 @@ public class ComputeService extends StatefulService {
         /**
          * Actual number of CPU cores in this compute. {@code 0} when not applicable.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
         public Long cpuCount;
@@ -181,6 +182,7 @@ public class ComputeService extends StatefulService {
         /**
          * Actual clock speed (in MHz) per CPU core. {@code 0} when not applicable.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
         public Long cpuMhzPerCore;
@@ -188,6 +190,7 @@ public class ComputeService extends StatefulService {
         /**
          * Actual number of GPU cores in this compute. {@code 0} when not applicable.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
         public Long gpuCount;
@@ -196,6 +199,7 @@ public class ComputeService extends StatefulService {
          * Actual total amount of memory (in bytes) available on this compute. {@code 0} when not
          * applicable.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
         public Long totalMemoryBytes;

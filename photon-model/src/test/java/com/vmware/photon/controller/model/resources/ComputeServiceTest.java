@@ -404,6 +404,10 @@ public class ComputeServiceTest extends Suite {
             ComputeService.ComputeState patchBody = new ComputeService.ComputeState();
             patchBody.id = UUID.randomUUID().toString();
             patchBody.address = "10.0.0.2";
+            patchBody.cpuCount = returnState.cpuCount + 2;
+            patchBody.cpuMhzPerCore = returnState.cpuMhzPerCore + 1000;
+            patchBody.gpuCount = returnState.gpuCount + 1;
+            patchBody.totalMemoryBytes = returnState.totalMemoryBytes - 1024;
             patchBody.powerState = ComputeService.PowerState.OFF;
             patchBody.primaryMAC = "ba:98:76:54:32:10";
             patchBody.resourcePoolLink = "http://newResourcePool";
@@ -423,6 +427,10 @@ public class ComputeServiceTest extends Suite {
 
             assertThat(getState.id, is(patchBody.id));
             assertThat(getState.address, is(patchBody.address));
+            assertThat(getState.cpuCount, is(patchBody.cpuCount));
+            assertThat(getState.cpuMhzPerCore, is(patchBody.cpuMhzPerCore));
+            assertThat(getState.gpuCount, is(patchBody.gpuCount));
+            assertThat(getState.totalMemoryBytes, is(patchBody.totalMemoryBytes));
             assertThat(getState.powerState, is(patchBody.powerState));
             assertThat(getState.primaryMAC, is(patchBody.primaryMAC));
             assertThat(getState.resourcePoolLink,

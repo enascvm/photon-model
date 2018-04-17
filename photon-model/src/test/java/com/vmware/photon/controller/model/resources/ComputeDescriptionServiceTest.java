@@ -249,7 +249,6 @@ public class ComputeDescriptionServiceTest extends Suite {
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink,
                     ComputeDescriptionService.ComputeDescription.class);
-
             assertEquals(returnState.tenantLinks, patchState.tenantLinks);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
             assertEquals(2, returnState.constraints.get("placement").conditions.size());
