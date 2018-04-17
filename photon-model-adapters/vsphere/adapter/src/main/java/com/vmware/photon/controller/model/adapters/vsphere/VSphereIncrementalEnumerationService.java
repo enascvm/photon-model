@@ -442,6 +442,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         } catch (Exception e) {
             logWarning(String.format("Error during enumeration: %s", Utils.toString(e)));
             mgr.patchTaskToFailure(e);
+            return;
         }
 
         try {
@@ -496,7 +497,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
     }
 
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,
-                                              TaskManager mgr) {
+                                              TaskManager mgr) throws Exception {
         Set<String> sharedDatastores = new HashSet<>();
         List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
 
@@ -523,8 +524,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
             logWarning(() -> msg + ": " + e.toString());
-            mgr.patchTaskToFailure(msg, e);
-            return;
+            throw new Exception(e);
         }
 
         // This will split the folders into two lists. Default folders (vm, host, network, datastore) have parent as datacenter
@@ -699,10 +699,9 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                 }
             }
         } catch (Exception e) {
-            String msg = "Error processing PropertyCollector results";
+            String msg = "Error processing PropertyCollector results during vm enumeration!";
             logWarning(() -> msg + ": " + e.toString());
-            mgr.patchTaskToFailure(msg, e);
-            return;
+            throw new Exception(e);
         }
 
         // Sync disks deleted in vSphere

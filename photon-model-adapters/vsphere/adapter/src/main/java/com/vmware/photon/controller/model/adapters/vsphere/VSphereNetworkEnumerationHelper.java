@@ -26,13 +26,11 @@ import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties
 import com.vmware.photon.controller.model.adapters.vsphere.util.MoRefKeyedMap;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.query.QueryUtils;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
-import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
@@ -122,7 +120,7 @@ public class VSphereNetworkEnumerationHelper {
                         adapterManagementReference.toString())
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId)
-                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.MOREF,
+                .addCompositeFieldClause(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.MOREF,
                         VimUtils.convertMoRefToString(net.getId()), Occurance.MUST_OCCUR);
 
         QueryUtils.addEndpointLink(builder, NetworkState.class, ctx.getRequest().endpointLink);
@@ -219,14 +217,14 @@ public class VSphereNetworkEnumerationHelper {
 
         Builder builder = Builder.create()
                 .addKindFieldClause(SubnetState.class)
-                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                .addCompositeFieldClause(SubnetState.FIELD_NAME_CUSTOM_PROPERTIES,
                         CustomProperties.MOREF, moref);
         if (parent != null) {
             String dvsLink = buildStableDvsLink(parent, ctx.getRequest().endpointLink);
             builder.addFieldClause(SubnetState.FIELD_NAME_NETWORK_LINK, dvsLink);
         }
 
-        QueryUtils.addEndpointLink(builder, NetworkState.class, ctx.getRequest().endpointLink);
+        QueryUtils.addEndpointLink(builder, SubnetState.class, ctx.getRequest().endpointLink);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
 
         return QueryTask.Builder.createDirectTask()
