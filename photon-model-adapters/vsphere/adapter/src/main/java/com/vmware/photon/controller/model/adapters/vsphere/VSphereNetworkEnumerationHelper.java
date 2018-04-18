@@ -44,6 +44,7 @@ import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
@@ -346,6 +347,7 @@ public class VSphereNetworkEnumerationHelper {
             QueryTask task = queryForSubnet(enumerationProgress, net, net.getParentSwitch());
             withTaskResults(service, task,
                     (ServiceDocumentQueryResult result) -> {
+                    try {
                         if (result.documentLinks.isEmpty()) {
                             createNewSubnet(service, enumerationProgress, net,
                                     allNetworks.get(net.getParentSwitch()).getDvsUuid());
@@ -354,17 +356,26 @@ public class VSphereNetworkEnumerationHelper {
                                     result, SubnetState.class);
                             updateSubnet(service, oldDocument, enumerationProgress, net, true);
                         }
-                    });
+                    } catch (Exception e) {
+                        service.logSevere("Error while processing sub-network: %s", Utils.toString(e));
+                        enumerationProgress.getNetworkTracker().track(net.getId(), ResourceTracker.ERROR);
+                    }
+                });
         } else {
             // DVS or opaque network
             QueryTask task = queryForNetwork(enumerationProgress, net);
             withTaskResults(service, task, result -> {
-                if (result.documentLinks.isEmpty()) {
-                    createNewNetwork(service, enumerationProgress, net);
-                } else {
-                    NetworkState oldDocument = convertOnlyResultToDocument(
-                            result, NetworkState.class);
-                    updateNetwork(service, oldDocument, enumerationProgress, net);
+                try {
+                    if (result.documentLinks.isEmpty()) {
+                        createNewNetwork(service, enumerationProgress, net);
+                    } else {
+                        NetworkState oldDocument = convertOnlyResultToDocument(
+                                result, NetworkState.class);
+                        updateNetwork(service, oldDocument, enumerationProgress, net);
+                    }
+                } catch (Exception e) {
+                    service.logSevere("Error while processing network: %s", Utils.toString(e));
+                    enumerationProgress.getNetworkTracker().track(net.getId(), ResourceTracker.ERROR);
                 }
             });
         }
@@ -414,15 +425,20 @@ public class VSphereNetworkEnumerationHelper {
                     }
                     QueryTask task = queryForSubnet(enumerationProgress, netOverlay, parentSwitch);
                     withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
-                        if (!result.documentLinks.isEmpty()) {
-                            SubnetState oldDocument = convertOnlyResultToDocument(result, SubnetState.class);
-                            if (ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
-                                updateSubnet(service, oldDocument, enumerationProgress, netOverlay, false);
+                        try {
+                            if (!result.documentLinks.isEmpty()) {
+                                SubnetState oldDocument = convertOnlyResultToDocument(result, SubnetState.class);
+                                if (ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
+                                    updateSubnet(service, oldDocument, enumerationProgress, netOverlay, false);
+                                } else {
+                                    // DV port group has been removed. Remove the subnet state document.
+                                    deleteNetwork(service, enumerationProgress, netOverlay, oldDocument);
+                                }
                             } else {
-                                // DV port group has been removed. Remove the subnet state document.
-                                deleteNetwork(service, enumerationProgress, netOverlay, oldDocument);
+                                enumerationProgress.getNetworkTracker().track();
                             }
-                        } else {
+                        } catch (Exception e) {
+                            service.logSevere("Error occurred while processing incremental sub-network changes: %s", Utils.toString(e));
                             enumerationProgress.getNetworkTracker().track();
                         }
                     });
@@ -430,14 +446,19 @@ public class VSphereNetworkEnumerationHelper {
                     // DVS or Opaque network.
                     QueryTask task = queryForNetwork(enumerationProgress, netOverlay);
                     VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-                        if (!result.documentLinks.isEmpty()) {
-                            NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);
-                            if (ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
-                                updateNetwork(service, oldDocument, enumerationProgress, netOverlay);
+                        try {
+                            if (!result.documentLinks.isEmpty()) {
+                                NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);
+                                if (ObjectUpdateKind.MODIFY.equals(netOverlay.getObjectUpdateKind())) {
+                                    updateNetwork(service, oldDocument, enumerationProgress, netOverlay);
+                                } else {
+                                    deleteNetwork(service, enumerationProgress, netOverlay, oldDocument);
+                                }
                             } else {
-                                deleteNetwork(service, enumerationProgress, netOverlay, oldDocument);
+                                enumerationProgress.getNetworkTracker().track();
                             }
-                        } else {
+                        } catch (Exception e) {
+                            service.logSevere("Error occurred while processing incremental network changes: %s", Utils.toString(e));
                             enumerationProgress.getNetworkTracker().track();
                         }
                     });
@@ -448,7 +469,7 @@ public class VSphereNetworkEnumerationHelper {
         try {
             enumerationProgress.getNetworkTracker().await();
         } catch (InterruptedException e) {
-            service.logSevere("Interrupted during incremental enumeration for networks!", e);
+            service.logSevere("Interrupted during incremental enumeration for networks: %s", Utils.toString(e));
         }
     }
 

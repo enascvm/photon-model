@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 
 public class VsphereDatacenterEnumerationHelper {
@@ -37,12 +38,17 @@ public class VsphereDatacenterEnumerationHelper {
                                       Element element, EnumerationProgress ctx) {
         QueryTask task = queryForDatacenter(ctx, element.object.getValue());
         withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
-            if (result.documentLinks.isEmpty()) {
-                createDatacenter(service, ctx, element);
-            } else {
-                ResourceGroupService.ResourceGroupState oldDocument =
-                        convertOnlyResultToDocument(result, ResourceGroupService.ResourceGroupState.class);
-                updateDatacenter(service, ctx, element, oldDocument);
+            try {
+                if (result.documentLinks.isEmpty()) {
+                    createDatacenter(service, ctx, element);
+                } else {
+                    ResourceGroupService.ResourceGroupState oldDocument =
+                            convertOnlyResultToDocument(result, ResourceGroupService.ResourceGroupState.class);
+                    updateDatacenter(service, ctx, element, oldDocument);
+                }
+            } catch (Exception e) {
+                service.logSevere("Error while processing datacenter: %s", Utils.toString(e));
+                ctx.getDcTracker().track();
             }
         });
     }

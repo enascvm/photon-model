@@ -39,6 +39,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 
 public class VSphereResourcePoolEnumerationHelper {
@@ -219,6 +220,7 @@ public class VSphereResourcePoolEnumerationHelper {
                             enumerationProgress.getResourcePoolTracker().track();
                         }
                     } catch (Exception ex) {
+                        service.logSevere("Error occurred while processing update of resource pool: %s", Utils.toString(e));
                         enumerationProgress.getResourcePoolTracker().track(rp.getId(), ResourceTracker.ERROR);
                     }
                 })
@@ -234,61 +236,67 @@ public class VSphereResourcePoolEnumerationHelper {
         for (ResourcePoolOverlay resourcePool : resourcePools) {
             // exclude all root resource pools
             // no need to collect the root resource pool
-            if (ObjectUpdateKind.ENTER.equals(resourcePool.getObjectUpdateKind())
-                    && VimNames.TYPE_RESOURCE_POOL.equals(resourcePool.getParent().getType())) {
+            try {
+                if (ObjectUpdateKind.ENTER.equals(resourcePool.getObjectUpdateKind())
+                        && VimNames.TYPE_RESOURCE_POOL.equals(resourcePool.getParent().getType())) {
 
-                String ownerMoRefId = resourcePool.getOwner().getValue();
+                    String ownerMoRefId = resourcePool.getOwner().getValue();
 
-                QueryTask task = queryForRPOwner(ownerMoRefId, enumerationProgress);
-                String selfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
-                withTaskResults(service, task, result -> {
-                    try {
-                        if (!result.documentLinks.isEmpty()) {
-                            ComputeState ownerDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                            createNewResourcePool(
-                                    service, enumerationProgress, ownerDocument.name, selfLink, resourcePool, client);
-                        } else {
-                            // This happens for the resource pools within Host. The owner is a ComputeResource and
-                            // is not currently enumerated in photon
-                            createNewResourcePool(
-                                    service, enumerationProgress, null, selfLink, resourcePool, client);
+                    QueryTask task = queryForRPOwner(ownerMoRefId, enumerationProgress);
+                    String selfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
+                    withTaskResults(service, task, result -> {
+                        try {
+                            if (!result.documentLinks.isEmpty()) {
+                                ComputeState ownerDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                                createNewResourcePool(
+                                        service, enumerationProgress, ownerDocument.name, selfLink, resourcePool, client);
+                            } else {
+                                // This happens for the resource pools within Host. The owner is a ComputeResource and
+                                // is not currently enumerated in photon
+                                createNewResourcePool(
+                                        service, enumerationProgress, null, selfLink, resourcePool, client);
+                            }
+                        } catch (Exception e) {
+                            service.logSevere("Error occurred while processing update of resource pool: %s", Utils.toString(e));
+                            enumerationProgress.getResourcePoolTracker().track();
                         }
-                    } catch (Exception e) {
-                        enumerationProgress.getResourcePoolTracker().track();
-                    }
-                });
-            } else {
-                String rpSelfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
-                Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
-                        .setCompletion((o, e) -> {
-                            try {
-                                if (e == null) {
-                                    ComputeState oldState = o.getBody(ComputeState.class);
-                                    String existingOwnerName = getOwnerNameFromResourcePoolName(oldState.name);
-                                    if (ObjectUpdateKind.MODIFY.equals(resourcePool.getObjectUpdateKind())) {
-                                        updateResourcePool(
-                                                service, enumerationProgress, existingOwnerName, oldState.documentSelfLink, resourcePool, false, client);
+                    });
+                } else {
+                    String rpSelfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
+                    Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
+                            .setCompletion((o, e) -> {
+                                try {
+                                    if (e == null) {
+                                        ComputeState oldState = o.getBody(ComputeState.class);
+                                        String existingOwnerName = getOwnerNameFromResourcePoolName(oldState.name);
+                                        if (ObjectUpdateKind.MODIFY.equals(resourcePool.getObjectUpdateKind())) {
+                                            updateResourcePool(
+                                                    service, enumerationProgress, existingOwnerName, oldState.documentSelfLink, resourcePool, false, client);
+                                        } else {
+                                            Operation.createDelete(
+                                                    PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
+                                                    .setCompletion(trackResourcePool(enumerationProgress, resourcePool))
+                                                    .sendWith(service);
+                                        }
                                     } else {
-                                        Operation.createDelete(
-                                                PhotonModelUriUtils.createInventoryUri(service.getHost(), rpSelfLink))
-                                                .setCompletion(trackResourcePool(enumerationProgress, resourcePool))
-                                                .sendWith(service);
+                                        enumerationProgress.getResourcePoolTracker().track();
                                     }
-                                } else {
+                                } catch (Exception ex) {
                                     enumerationProgress.getResourcePoolTracker().track();
                                 }
-                            } catch (Exception ex) {
-                                enumerationProgress.getResourcePoolTracker().track();
-                            }
-                        })
-                        .sendWith(service);
+                            })
+                            .sendWith(service);
+                }
+            } catch (Exception e) {
+                service.logSevere("Error occurred while processing incremental update of resource pool: %s", Utils.toString(e));
+                enumerationProgress.getResourcePoolTracker().track(resourcePool.getId(), ResourceTracker.ERROR);
             }
         }
 
         try {
             enumerationProgress.getResourcePoolTracker().await();
         } catch (InterruptedException e) {
-            service.logSevere("Interrupted during incremental enumeration for resource pools!", e);
+            service.logSevere("Interrupted during incremental enumeration for resource pools: %s", Utils.toString(e));
         }
     }
 

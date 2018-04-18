@@ -664,18 +664,23 @@ public class VSphereVirtualMachineEnumerationHelper {
         QueryTask task = queryForVm(enumerationProgress, request.resourceLink(),
                 vm.getInstanceUuid(), vm.getId());
         VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-            if (result.documentLinks.isEmpty()) {
-                if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
-                    // If vm is not settled down don't create a new resource
-                    createNewVm(service, enumerationProgress, vm);
+            try {
+                if (result.documentLinks.isEmpty()) {
+                    if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
+                        // If vm is not settled down don't create a new resource
+                        createNewVm(service, enumerationProgress, vm);
+                    } else {
+                        enumerationProgress.getVmTracker().arrive();
+                    }
                 } else {
-                    enumerationProgress.getVmTracker().arrive();
+                    // always update state of a vm even if modified recently
+                    ComputeState oldDocument = VsphereEnumerationHelper
+                            .convertOnlyResultToDocument(result, ComputeState.class);
+                    updateVm(service, oldDocument, enumerationProgress, vm, true);
                 }
-            } else {
-                // always update state of a vm even if modified recently
-                ComputeState oldDocument = VsphereEnumerationHelper
-                        .convertOnlyResultToDocument(result, ComputeState.class);
-                updateVm(service, oldDocument, enumerationProgress, vm, true);
+            } catch (Exception e) {
+                service.logSevere("Error occurred while processing virtual machine: %s", Utils.toString(e));
+                enumerationProgress.getVmTracker().arrive();
             }
         });
     }
@@ -711,23 +716,29 @@ public class VSphereVirtualMachineEnumerationHelper {
             ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
             QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), null,
                     vmOverlay.getId());
+            enumerationProgress.getVmTracker().register();
             VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-                if (result.documentLinks.isEmpty()
-                        && ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
-                    createNewVm(service, enumerationProgress, vmOverlay);
-                } else {
-                    ComputeState oldDocument = VsphereEnumerationHelper
-                            .convertOnlyResultToDocument(result, ComputeState.class);
-                    if (ObjectUpdateKind.MODIFY == vmOverlay.getObjectUpdateKind()
-                            || ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
-                        updateVm(service, oldDocument, enumerationProgress, vmOverlay, false);
-                    } else if (ObjectUpdateKind.LEAVE == vmOverlay.getObjectUpdateKind()) {
-                        deleteVM(enumerationProgress, vmOverlay, service, oldDocument);
+                try {
+                    if (result.documentLinks.isEmpty()
+                            && ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
+                        createNewVm(service, enumerationProgress, vmOverlay);
+                    } else {
+                        ComputeState oldDocument = VsphereEnumerationHelper
+                                .convertOnlyResultToDocument(result, ComputeState.class);
+                        if (ObjectUpdateKind.MODIFY == vmOverlay.getObjectUpdateKind()
+                                || ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
+                            updateVm(service, oldDocument, enumerationProgress, vmOverlay, false);
+                        } else if (ObjectUpdateKind.LEAVE == vmOverlay.getObjectUpdateKind()) {
+                            deleteVM(enumerationProgress, vmOverlay, service, oldDocument);
+                        }
                     }
+                } catch (Exception e) {
+                    service.logSevere("Error occurred while processing virtual machine: %s", Utils.toString(e));
+                    enumerationProgress.getVmTracker().arrive();
                 }
             });
         }
-
+        enumerationProgress.getVmTracker().arriveAndAwaitAdvance();
         // enumerate snapshots
         VSphereVMSnapshotEnumerationHelper.enumerateSnapshots(service, enumerationProgress, vmOverlays);
     }

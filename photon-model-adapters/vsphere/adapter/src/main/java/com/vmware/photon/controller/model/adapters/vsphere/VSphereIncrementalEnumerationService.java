@@ -435,7 +435,12 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
                         parent, vapiConnection, VimUtils.convertMoRefToString(datacenter), vCenter.getInstanceUuid());
                 enumerationProgress.expectDatacenterCount(1); //since we are processing DC sequentially one at a time
                 VsphereDatacenterEnumerationHelper.processDatacenterInfo(this, element, enumerationProgress);
-                enumerationProgress.getDcTracker().await();
+                try {
+                    enumerationProgress.getDcTracker().await();
+                } catch (InterruptedException e) {
+                    threadInterrupted(mgr, e);
+                    return;
+                }
                 logInfo("Proceeding to refresh resources on datacenter: %s", enumerationProgress.getDcLink());
                 refreshResourcesOnDatacenter(client, enumerationProgress, mgr);
             }
@@ -499,7 +504,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationProgress ctx,
                                               TaskManager mgr) throws Exception {
         Set<String> sharedDatastores = new HashSet<>();
-        List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
+        List<StoragePolicyOverlay> storagePolicies;
 
         // put results in different buckets by type
         PropertyFilterSpec spec = client.createResourcesFilterSpec();

@@ -90,8 +90,8 @@ public class VsphereEnumerationHelper {
         QueryUtils.startInventoryQueryTask(service, task)
                 .whenComplete((o, e) -> {
                     if (e != null) {
-                        service.logWarning(() -> String.format("Error processing task %s",
-                                task.documentSelfLink));
+                        service.logWarning(() -> String.format("Error processing task %s Exception: %s",
+                                Utils.toJson(task), Utils.toString(e)));
                         return;
                     }
 

@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.create
 import java.net.URI;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -86,6 +87,8 @@ public class VSphereIOThreadPool {
      */
     public void submit(Service sender, URI adapterReference, String authLink,
             ConnectionCallback callback) {
+        this.host.log(Level.INFO, "Active thread count before submitting full enumeration job: " + ((ThreadPoolExecutor)this.executorService).getActiveCount());
+        this.host.log(Level.INFO, "Current pool size: " + ((ThreadPoolExecutor)this.executorService).getPoolSize());
         URI authUri = createInventoryUri(this.host, authLink);
 
         Operation op = Operation.createGet(authUri)
@@ -111,6 +114,8 @@ public class VSphereIOThreadPool {
      * @param task
      */
     public void submit(Runnable task) {
+        this.host.log(Level.INFO, "Active thread count before submitting job: " + ((ThreadPoolExecutor)this.executorService).getActiveCount());
+        this.host.log(Level.INFO, "Current pool size: " + ((ThreadPoolExecutor)this.executorService).getPoolSize());
         this.executorService.submit(task);
     }
 

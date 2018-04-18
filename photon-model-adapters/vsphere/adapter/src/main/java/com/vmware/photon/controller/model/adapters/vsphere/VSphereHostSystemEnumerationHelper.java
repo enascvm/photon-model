@@ -36,6 +36,7 @@ import com.vmware.vim25.ObjectUpdateKind;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
@@ -275,7 +276,7 @@ public class VSphereHostSystemEnumerationHelper {
                     updateHostSystem(service, oldDocument, enumerationProgress, hs, true, client);
                 }
             } catch (Exception e) {
-                service.logSevere("Error occurred while processing host system!", e);
+                service.logSevere("Error occurred while processing host system: %s", Utils.toString(e));
                 enumerationProgress.getHostSystemTracker().track();
             }
         });
@@ -293,25 +294,30 @@ public class VSphereHostSystemEnumerationHelper {
                     ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
                     QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
                     withTaskResults(service, task, result -> {
-                        if (!result.documentLinks.isEmpty()) {
-                            try {
-                                ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                                if (ObjectUpdateKind.MODIFY.equals(hs.getObjectUpdateKind())) {
-                                    updateHostSystem(service, oldDocument, enumerationProgress, hs, false, client);
-                                } else {
-                                    deleteHostSystem(service, enumerationProgress, hs, oldDocument);
+                        try {
+                            if (!result.documentLinks.isEmpty()) {
+                                try {
+                                    ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                                    if (ObjectUpdateKind.MODIFY.equals(hs.getObjectUpdateKind())) {
+                                        updateHostSystem(service, oldDocument, enumerationProgress, hs, false, client);
+                                    } else {
+                                        deleteHostSystem(service, enumerationProgress, hs, oldDocument);
+                                    }
+                                } catch (Exception ex) {
+                                    service.logSevere("Error occurred while processing host system: %s", Utils.toString(ex));
+                                    enumerationProgress.getHostSystemTracker().track();
                                 }
-                            } catch (Exception ex) {
-                                service.logSevere("Error occurred while processing host system!", ex);
+                            } else {
                                 enumerationProgress.getHostSystemTracker().track();
                             }
-                        } else {
+                        } catch (Exception e) {
+                            service.logSevere("Error occurred while processing host system: %s", Utils.toString(e));
                             enumerationProgress.getHostSystemTracker().track();
                         }
                     });
                 }
             } catch (Exception ex) {
-                service.logSevere("Error occurred while processing host system!", ex);
+                service.logSevere("Error occurred while processing host system: %s", Utils.toString(ex));
                 enumerationProgress.getHostSystemTracker().track();
             }
         }

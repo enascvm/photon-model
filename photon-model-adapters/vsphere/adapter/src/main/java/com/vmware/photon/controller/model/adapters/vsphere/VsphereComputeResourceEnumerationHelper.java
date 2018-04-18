@@ -229,7 +229,7 @@ public class VsphereComputeResourceEnumerationHelper {
                 }
             } catch (Exception e) {
                 // if there's an error while processing compute resource
-                service.logSevere("Error occurred while processing update of compute resource!", e);
+                service.logSevere("Error occurred while processing update of compute resource: %s", Utils.toString(e));
                 enumerationProgress.getComputeResourceTracker().track(cr.getId(), ResourceTracker.ERROR);
             }
         });
@@ -405,13 +405,13 @@ public class VsphereComputeResourceEnumerationHelper {
                                 ctx.getComputeResourceTracker().track();
                             }
                         } catch (Exception ex) {
-                            service.logSevere("Error occurred while processing update of compute resource!", ex);
+                            service.logSevere("Error occurred while processing update of compute resource: %s", Utils.toString(ex));
                             ctx.getComputeResourceTracker().track(cluster.getId(), ResourceTracker.ERROR);
                         }
                     });
                 }
             } catch (Exception e) {
-                service.logSevere("Error occurred while processing update of compute resource!", e);
+                service.logSevere("Error occurred while processing update of compute resource: %s", Utils.toString(e));
                 ctx.getComputeResourceTracker().track(cluster.getId(), ResourceTracker.ERROR);
             }
         }
@@ -420,7 +420,7 @@ public class VsphereComputeResourceEnumerationHelper {
         try {
             ctx.getComputeResourceTracker().await();
         } catch (InterruptedException e) {
-            service.logSevere("Interrupted during incremental enumeration for networks!", e);
+            service.logSevere("Interrupted during incremental enumeration for networks: %s", Utils.toString(e));
         }
     }
 }

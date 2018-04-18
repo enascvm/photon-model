@@ -277,12 +277,17 @@ public class VsphereStoragePolicyEnumerationHelper {
         QueryTask task = queryForStoragePolicy(enumerationProgress, sp.getProfileId(), sp.getName());
 
         VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-            if (result.documentLinks.isEmpty()) {
-                createNewStoragePolicy(service, enumerationProgress, sp, client);
-            } else {
-                ResourceGroupState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result,
-                        ResourceGroupState.class);
-                updateStoragePolicy(service, oldDocument, enumerationProgress, sp, client);
+            try {
+                if (result.documentLinks.isEmpty()) {
+                    createNewStoragePolicy(service, enumerationProgress, sp, client);
+                } else {
+                    ResourceGroupState oldDocument = VsphereEnumerationHelper.convertOnlyResultToDocument(result,
+                            ResourceGroupState.class);
+                    updateStoragePolicy(service, oldDocument, enumerationProgress, sp, client);
+                }
+            } catch (Exception e) {
+                service.logSevere("Error while processing storage policy: %s", Utils.toString(e));
+                enumerationProgress.getStoragePolicyTracker().track();
             }
         });
     }
@@ -323,7 +328,7 @@ public class VsphereStoragePolicyEnumerationHelper {
             try {
                 ctx.getStoragePolicyTracker().await();
             } catch (InterruptedException e) {
-                service.logSevere("Error while syncing storage profiles!");
+                service.logSevere("Error while syncing storage profiles: %s", Utils.toString(e));
                 return;
             }
         }

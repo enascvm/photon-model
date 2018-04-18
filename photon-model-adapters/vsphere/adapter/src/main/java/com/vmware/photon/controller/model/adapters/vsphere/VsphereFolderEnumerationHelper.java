@@ -35,6 +35,7 @@ import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
@@ -52,7 +53,7 @@ public class VsphereFolderEnumerationHelper {
                     updateFolder(service, ctx, folder, oldDocument, rootFolders, client, true);
                 }
             } catch (Exception e) {
-                service.logSevere("Error occurred while processing folder!", e);
+                service.logSevere("Error occurred while processing folder!", Utils.toString(e));
                 ctx.getFolderTracker().track(folder.getId(), ResourceTracker.ERROR);
             }
         });
@@ -199,32 +200,43 @@ public class VsphereFolderEnumerationHelper {
                 } else {
                     QueryTask task = queryForFolder(enumerationProgress, folderOverlay);
                     withTaskResults(service, task, result -> {
-                        if (!result.documentLinks.isEmpty()) {
-                            ResourceGroupState oldDocument = convertOnlyResultToDocument(result, ResourceGroupState.class);
-                            if (ObjectUpdateKind.MODIFY.equals(folderOverlay.getObjectUpdateKind())) {
-                                try {
-                                    updateFolder(
-                                            service, enumerationProgress, folderOverlay, oldDocument, Collections.emptyList(), client, false);
-                                } catch (Exception e) {
-                                    service.logSevere("Error occurred while processing folder!", e);
-                                    enumerationProgress.getFolderTracker().track(folderOverlay.getId(), ResourceTracker.ERROR);
+                        try {
+                            if (!result.documentLinks.isEmpty()) {
+                                ResourceGroupState oldDocument = convertOnlyResultToDocument(result, ResourceGroupState.class);
+                                if (ObjectUpdateKind.MODIFY.equals(folderOverlay.getObjectUpdateKind())) {
+                                    try {
+                                        updateFolder(
+                                                service, enumerationProgress, folderOverlay, oldDocument, Collections.emptyList(), client, false);
+                                    } catch (Exception e) {
+                                        service.logSevere("Error occurred while processing folder: %s", Utils.toString(e));
+                                        enumerationProgress.getFolderTracker().track(folderOverlay.getId(), ResourceTracker.ERROR);
+                                    }
+                                } else {
+                                    Operation.createDelete(
+                                            PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                                            .setCompletion((o, e) -> {
+                                                enumerationProgress.getFolderTracker().track();
+                                            }).sendWith(service);
                                 }
                             } else {
-                                Operation.createDelete(
-                                        PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
-                                        .setCompletion((o, e) -> {
-                                            enumerationProgress.getFolderTracker().track();
-                                        }).sendWith(service);
+                                enumerationProgress.getFolderTracker().track();
                             }
-                        } else {
-                            enumerationProgress.getFolderTracker().track();
+                        } catch (Exception e) {
+                            service.logSevere("Error occurred while processing folder: %s", Utils.toString(e));
+                            enumerationProgress.getFolderTracker().track(folderOverlay.getId(), ResourceTracker.ERROR);
                         }
                     });
                 }
             } catch (Exception e) {
-                service.logSevere("Error occurred while processing folder!", e);
+                service.logSevere("Error occurred while creating folder: %s", Utils.toString(e));
                 enumerationProgress.getFolderTracker().track(folderOverlay.getId(), ResourceTracker.ERROR);
             }
+        }
+
+        try {
+            enumerationProgress.getFolderTracker().await();
+        } catch (InterruptedException e) {
+            service.logSevere("Interrupted during incremental enumeration for folders: %s", Utils.toString(e));
         }
     }
 }

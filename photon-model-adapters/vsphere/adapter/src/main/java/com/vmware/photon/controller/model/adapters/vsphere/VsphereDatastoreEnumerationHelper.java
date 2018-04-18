@@ -271,15 +271,20 @@ public class VsphereDatastoreEnumerationHelper {
 
         withTaskResults(service, task,
                 result -> {
-                    if (result.documentLinks.isEmpty()) {
-                        createNewStorageDescription(service,
-                                enumerationProgress, ds);
-                    } else {
-                        StorageDescription oldDocument =
-                                convertOnlyResultToDocument(result,
-                                        StorageDescription.class);
-                        updateStorageDescription(service, oldDocument,
-                                enumerationProgress, ds, true);
+                    try {
+                        if (result.documentLinks.isEmpty()) {
+                            createNewStorageDescription(service,
+                                    enumerationProgress, ds);
+                        } else {
+                            StorageDescription oldDocument =
+                                    convertOnlyResultToDocument(result,
+                                            StorageDescription.class);
+                            updateStorageDescription(service, oldDocument,
+                                    enumerationProgress, ds, true);
+                        }
+                    } catch (Exception e) {
+                        service.logSevere("Error while processing datastore: %s", Utils.toString(e));
+                        enumerationProgress.getDatastoreTracker().track(ds.getId(), ResourceTracker.ERROR);
                     }
                 });
     }
@@ -307,25 +312,30 @@ public class VsphereDatastoreEnumerationHelper {
                 // "name" may not necessarily present in the object update. so passed as "null"
                 QueryTask task = queryForStorage(enumerationProgress, null, VimUtils.convertMoRefToString(datastore.getId()), null);
                 withTaskResults(service, task, result -> {
-                    if (!result.documentLinks.isEmpty()) {
-                        // Object is either modified or deleted
-                        StorageDescriptionService.StorageDescription oldDocument = convertOnlyResultToDocument(
-                                result, StorageDescriptionService.StorageDescription.class);
-                        // if the data store is modified
-                        if (ObjectUpdateKind.MODIFY == datastore.getObjectUpdateKind()) {
-                            // Handle the property changes here
-                            updateStorageDescription(service, oldDocument, enumerationProgress, datastore, false);
+                    try {
+                        if (!result.documentLinks.isEmpty()) {
+                            // Object is either modified or deleted
+                            StorageDescriptionService.StorageDescription oldDocument = convertOnlyResultToDocument(
+                                    result, StorageDescriptionService.StorageDescription.class);
+                            // if the data store is modified
+                            if (ObjectUpdateKind.MODIFY == datastore.getObjectUpdateKind()) {
+                                // Handle the property changes here
+                                updateStorageDescription(service, oldDocument, enumerationProgress, datastore, false);
+                            } else {
+                                // if it's not modified, it should've been deleted in the vCenter.
+                                // So, delete the document from photon store
+                                Operation.createDelete(
+                                        PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                                        .setCompletion((o, e) -> {
+                                            enumerationProgress.getDatastoreTracker().track();
+                                        })
+                                        .sendWith(service);
+                            }
                         } else {
-                            // if it's not modified, it should've been deleted in the vCenter.
-                            // So, delete the document from photon store
-                            Operation.createDelete(
-                                    PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
-                                    .setCompletion((o, e) -> {
-                                        enumerationProgress.getDatastoreTracker().track();
-                                    })
-                                    .sendWith(service);
+                            enumerationProgress.getDatastoreTracker().track();
                         }
-                    } else {
+                    } catch (Exception e) {
+                        service.logSevere("Error occurred while processing incremental datastore changes: %s", Utils.toString(e));
                         enumerationProgress.getDatastoreTracker().track();
                     }
                 });
@@ -334,7 +344,7 @@ public class VsphereDatastoreEnumerationHelper {
         try {
             enumerationProgress.getDatastoreTracker().await();
         } catch (InterruptedException e) {
-            service.logSevere("Interrupted during incremental enumeration for networks!", e);
+            service.logSevere("Interrupted during incremental enumeration for networks: %s", Utils.toString(e));
         }
     }
 }
