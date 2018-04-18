@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.6.58
+* Enumerate snapshots in incremental cycle.
+* Add OSType to custom properties in vSphere.
+* Upgrading to xenon 1.6.6
+
 ## 0.6.57
 * Populate datastore links to disks in vsphere 
 * NPE fixes and other bug fixes
