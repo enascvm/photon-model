@@ -20,10 +20,10 @@ import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.cr
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.createHdd;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.detachDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.fillInControllerUnitNumber;
+import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findBootDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findFreeScsiUnit;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findFreeUnit;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.findMatchingVirtualDevice;
-import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDatastoreFromStoragePolicy;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDatastorePathForDisk;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDiskMode;
 import static com.vmware.photon.controller.model.adapters.vsphere.ClientUtils.getDiskProvisioningType;
@@ -209,7 +209,7 @@ public class InstanceClient extends BaseHelper {
                     }
                 }
             });
-            this.bootDisk = findBootDisk();
+            this.bootDisk = findBootDisk(this.ctx.disks);
         }
 
         this.finder = new Finder(connection, this.ctx.datacenterMoRef);
@@ -1121,22 +1121,6 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
-     * The first HDD disk is considered the boot disk.
-     *
-     * @return
-     */
-    private DiskStateExpanded findBootDisk() {
-        if (this.ctx.disks == null || this.ctx.disks.isEmpty()) {
-            return null;
-        }
-
-        return this.ctx.disks.stream()
-                .filter(d -> d.type == DiskType.HDD && d.bootOrder != null && d.bootOrder == 1)
-                .findFirst()
-                .orElse(null);
-    }
-
-    /**
      * Attach any externally created disks to the VM if any.
      */
     public void attachExternalDisks() throws Exception {
@@ -1393,14 +1377,6 @@ public class InstanceClient extends BaseHelper {
             return null;
         }
 
-        // If datastore for disk is null, if storage policy is configured pick the compatible
-        // datastore from that.
-        if (datastore == null) {
-            ManagedObjectReference dsFromSp = getDatastoreFromStoragePolicy(this.connection,
-                    pbmSpec);
-            datastore = dsFromSp == null ? getDatastore() : dsFromSp;
-        }
-
         VirtualDiskFlatVer2BackingInfo flatBacking = (VirtualDiskFlatVer2BackingInfo) vDisk
                 .getBacking();
 
@@ -1418,7 +1394,16 @@ public class InstanceClient extends BaseHelper {
         VirtualMachineRelocateSpecDiskLocator diskLocator = new VirtualMachineRelocateSpecDiskLocator();
         diskLocator.setDiskId(vDisk.getKey());
         diskLocator.setDiskBackingInfo(flatBacking);
+        if (datastore == null) { // Will be null only if pbmspec is not null / query has not returned any data
+            datastore = this.ctx.bootDiskMatchingDatastores.isEmpty() ? getDatastore() : this.ctx
+                    .bootDiskMatchingDatastores.iterator().next();
+        }
         diskLocator.setDatastore(datastore);
+        if (pbmSpec != null) {
+            pbmSpec.stream().forEach(spec -> {
+                diskLocator.getProfile().add(spec);
+            });
+        }
 
         Boolean isEagerScrub = flatBacking.isEagerlyScrub() != null ?
                 flatBacking.isEagerlyScrub() : false;
@@ -1561,9 +1546,8 @@ public class InstanceClient extends BaseHelper {
         // If datastore for disk is null, if storage policy is configured pick the compatible
         // datastore from that.
         if (datastore == null) {
-            ManagedObjectReference dsFromSp = getDatastoreFromStoragePolicy(this.connection,
-                    pbmSpec);
-            datastore = dsFromSp == null ? getDatastore() : dsFromSp;
+            datastore = this.ctx.bootDiskMatchingDatastores.isEmpty() ? getDatastore() : this.ctx
+                    .bootDiskMatchingDatastores.iterator().next();
         }
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);

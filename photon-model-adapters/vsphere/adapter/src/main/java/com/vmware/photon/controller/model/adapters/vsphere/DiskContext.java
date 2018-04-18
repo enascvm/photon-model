@@ -113,7 +113,8 @@ public class DiskContext {
                 // There will always be only one resource group state existing for a disk
                 ResourceGroupState resource = ctx.diskState.resourceGroupStates.iterator().next();
                 ClientUtils.getDatastoresForProfile(service, resource.documentSelfLink, ctx
-                                .diskState.endpointLink, ctx.diskState.tenantLinks, ctx.errorHandler,
+                                .diskState.endpointLink, ctx.diskState.tenantLinks, ctx.diskState.regionId,
+                        ctx.errorHandler,
                         (result) -> {
                             if (result.documents != null && result.documents.size() > 0) {
                                 // pick the first datastore and proceed.

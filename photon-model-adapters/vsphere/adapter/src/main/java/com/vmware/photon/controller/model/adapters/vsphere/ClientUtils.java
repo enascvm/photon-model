@@ -70,6 +70,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -179,6 +180,22 @@ public class ClientUtils {
     }
 
     /**
+     * The first HDD disk is considered the boot disk.
+     *
+     * @return
+     */
+    public static DiskStateExpanded findBootDisk(List<DiskStateExpanded> disks) {
+        if (disks == null || disks.isEmpty()) {
+            return null;
+        }
+
+        return disks.stream()
+                .filter(d -> d.type == DiskType.HDD && d.bootOrder != null && d.bootOrder == 1)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
      * Construct storage policy profile spec for a profile Id
      */
     public static List<VirtualMachineDefinedProfileSpec> getPbmProfileSpec(
@@ -210,34 +227,6 @@ public class ClientUtils {
             diskName += ".vmdk";
         }
         return diskName;
-    }
-
-    /**
-     * Get one of the datastore compatible with storage policy
-     */
-    public static ManagedObjectReference getDatastoreFromStoragePolicy(final Connection connection,
-            List<VirtualMachineDefinedProfileSpec> pbmSpec)
-            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        if (pbmSpec != null) {
-            for (VirtualMachineDefinedProfileSpec sp : pbmSpec) {
-                try {
-                    PbmProfileId pbmProfileId = new PbmProfileId();
-                    pbmProfileId.setUniqueId(sp.getProfileId());
-                    List<String> datastoreNames = ClientUtils.getDatastores(connection,
-                            pbmProfileId);
-                    String dsName = datastoreNames.stream().findFirst().orElse(null);
-                    if (dsName != null) {
-                        ManagedObjectReference dsFromSp = new ManagedObjectReference();
-                        dsFromSp.setType(VimNames.TYPE_DATASTORE);
-                        dsFromSp.setValue(dsName);
-                        return dsFromSp;
-                    }
-                } catch (Exception runtimeFaultFaultMsg) {
-                    // Just ignore. No need to log, as there are alternative paths.
-                }
-            }
-        }
-        return null;
     }
 
     /**
@@ -550,6 +539,7 @@ public class ClientUtils {
      */
     public static void updateDiskStateFromVirtualDisk(VirtualDisk vd, DiskService.DiskState disk) {
         disk.status = DiskService.DiskStatus.ATTACHED;
+        disk.capacityMBytes = vd.getCapacityInKB() / 1024;
         if (disk.persistent == null) {
             disk.persistent = Boolean.FALSE;
         }
@@ -709,12 +699,13 @@ public class ClientUtils {
     public static void getDataStoresForEndpoint(Service service, String endpointLink,
             List<String> tenantLinks,
             Consumer<Throwable> failure, Consumer<ServiceDocumentQueryResult> handler) {
-        getDatastoresForProfile(service, null, endpointLink, tenantLinks, failure, handler);
+        getDatastoresForProfile(service, null, endpointLink, tenantLinks, null, failure,
+                handler);
     }
 
     public static void getDatastoresForProfile(Service service, String storagePolicyLink,
-            String endpointLink, List<String> tenantLinks, Consumer<Throwable> failure,
-            Consumer<ServiceDocumentQueryResult> handler) {
+            String endpointLink, List<String> tenantLinks, String regionId, Consumer<Throwable>
+            failure, Consumer<ServiceDocumentQueryResult> handler) {
         QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
                 .addKindFieldClause(StorageDescriptionService.StorageDescription.class);
 
@@ -722,6 +713,9 @@ public class ClientUtils {
             builder.addCollectionItemClause(
                     StorageDescriptionService.StorageDescription.FIELD_NAME_GROUP_LINKS,
                     storagePolicyLink);
+        }
+        if (regionId != null) {
+            builder.addFieldClause(ResourceState.FIELD_NAME_REGION_ID, regionId);
         }
 
         QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,

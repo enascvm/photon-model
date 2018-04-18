@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.UriPaths.IAAS_API_ENABLED;
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -25,6 +26,9 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
+
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
@@ -35,12 +39,12 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService
-        .NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.SnapshotService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.ManagedObjectReference;
@@ -76,6 +80,7 @@ public class ProvisionContext {
 
     public List<DiskStateExpanded> disks;
 
+    public List<ManagedObjectReference> bootDiskMatchingDatastores;
     public Map<String, String> morefToDSSelfLinkMap;
     public List<NetworkInterfaceStateWithDetails> nics;
     public AuthCredentialsServiceState vSphereCredentials;
@@ -155,7 +160,7 @@ public class ProvisionContext {
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
                 ImageState body = op.getBody(ImageState.class);
-                ctx.templateMoRef = CustomProperties.of(body).getMoRef(CustomProperties.MOREF);
+                ctx.templateMoRef = CustomProperties.of(body).getMoRef(MOREF);
                 if (ctx.templateMoRef == null) {
                     String msg = String
                             .format("The linked template %s does not contain a MoRef in its custom properties",
@@ -178,7 +183,7 @@ public class ProvisionContext {
                 AdapterUtils.getServiceState(service, snapshotUri, op -> {
                     SnapshotService.SnapshotState snapshotState = op.getBody(SnapshotService.SnapshotState.class);
 
-                    ctx.snapshotMoRef = CustomProperties.of(snapshotState).getMoRef(CustomProperties.MOREF);
+                    ctx.snapshotMoRef = CustomProperties.of(snapshotState).getMoRef(MOREF);
 
                     if (ctx.snapshotMoRef == null) {
                         String msg = String
@@ -195,7 +200,8 @@ public class ProvisionContext {
                             AdapterUtils.getServiceState(service, refComputeUri, opCompute -> {
                                 ComputeStateWithDescription refComputeState = opCompute.getBody(ComputeStateWithDescription.class);
 
-                                ctx.referenceComputeMoRef = CustomProperties.of(refComputeState).getMoRef(CustomProperties.MOREF);
+                                ctx.referenceComputeMoRef = CustomProperties.of(refComputeState).getMoRef(
+                                        MOREF);
 
                                 if (ctx.referenceComputeMoRef == null) {
                                     String msg = String
@@ -365,12 +371,12 @@ public class ProvisionContext {
                 // extract the target resource pool for the placement
                 CustomProperties hostCustomProperties = CustomProperties.of(host);
 
-                ctx.computeMoRef = hostCustomProperties.getMoRef(CustomProperties.MOREF);
+                ctx.computeMoRef = hostCustomProperties.getMoRef(MOREF);
                 if (ctx.computeMoRef == null) {
                     Exception error = new IllegalStateException(String.format(
                             "Compute @ %s does not contain a %s custom property",
                             placementLink,
-                            CustomProperties.MOREF));
+                            MOREF));
                     ctx.fail(error);
                     return;
                 }
@@ -432,15 +438,45 @@ public class ProvisionContext {
             return;
         }
 
+        if (ctx.bootDiskMatchingDatastores == null) {
+            DiskStateExpanded bootDisk = ClientUtils.findBootDisk(ctx.disks);
+            if (bootDisk == null || bootDisk.storageDescriptionLink != null || CollectionUtils
+                    .isEmpty(bootDisk.groupLinks)) {
+                ctx.bootDiskMatchingDatastores = Collections.emptyList();
+                populateContextThen(service, ctx, onSuccess);
+                return;
+            }
+
+            ClientUtils.getDatastoresForProfile(service, bootDisk.groupLinks.iterator().next(),
+                    ctx.parent.endpointLink, bootDisk.tenantLinks,
+                    VimUtils.convertMoRefToString(ctx.datacenterMoRef), ctx.errorHandler,
+                    (result) -> {
+                        if (MapUtils.isNotEmpty(result.documents)) {
+                            StorageDescriptionService.StorageDescription sd = Utils
+                                    .fromJson(result.documents.values().iterator().next(),
+                                            StorageDescriptionService.StorageDescription.class);
+                            ctx.bootDiskMatchingDatastores = new ArrayList<>();
+                            ctx.bootDiskMatchingDatastores.add(VimUtils.convertStringToMoRef(
+                                    CustomProperties.of(sd).getString(MOREF)));
+                        } else {
+                            ctx.bootDiskMatchingDatastores = Collections.emptyList();
+                        }
+                        populateContextThen(service, ctx, onSuccess);
+                    });
+            return;
+        }
+
+
         if (ctx.morefToDSSelfLinkMap == null) {
-            ctx.morefToDSSelfLinkMap = new HashMap<String, String>();
-            ClientUtils.getDataStoresForEndpoint(service, ctx.child.endpointLink, ctx.parent.tenantLinks, ctx.errorHandler,
+            ctx.morefToDSSelfLinkMap = new HashMap<>();
+            ClientUtils.getDataStoresForEndpoint(service, ctx.child.endpointLink, ctx.parent
+                    .tenantLinks, ctx.errorHandler,
                     (result) -> {
                         if (result.documents != null && result.documents.size() > 0) {
                             for (Object storageDesc : result.documents.values()) {
                                 StorageDescription datastore = Utils.fromJson(storageDesc, StorageDescription.class);
                                 String moref = CustomProperties.of(datastore)
-                                        .getString(CustomProperties.MOREF);
+                                        .getString(MOREF);
                                 ctx.morefToDSSelfLinkMap.put(moref, datastore.documentSelfLink);
                             }
                         }
