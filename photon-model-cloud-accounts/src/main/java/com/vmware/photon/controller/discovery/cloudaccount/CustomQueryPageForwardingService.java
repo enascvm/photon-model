@@ -17,59 +17,58 @@ import static com.vmware.photon.controller.model.UriPaths.CUSTOM_QUERY_PAGE_FORW
 
 import java.lang.reflect.Field;
 import java.net.URI;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.vmware.photon.controller.discovery.cloudusage.CloudUsagePageService;
-import com.vmware.photon.controller.discovery.cloudusage.metrics.CloudMetricsQueryPageService;
-import com.vmware.photon.controller.discovery.group.GroupQueryPageService;
-import com.vmware.photon.controller.discovery.resource.ResourcesQueryPageServiceV3;
-import com.vmware.photon.controller.discovery.resource.ResourcesQueryPageServiceV4;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
+/**
+ * CustomQueryPageForwardingService is a wrapper to handle forwarding page requests for a custom set
+ * of factories that may need to utilize paging. It forwards each page request to a specific node
+ * before returning that node's response back.
+ */
 public class CustomQueryPageForwardingService extends StatelessService {
+
     public static final String SELF_LINK = CUSTOM_QUERY_PAGE_FORWARDING_SERVICE;
 
     private static final String FIELD_SELF_LINK_PREFIX = "SELF_LINK_PREFIX";
 
-    /** A collection of *QueryPageService that are allowed to use this custom forwarding service. */
-    public static final Collection<Class> SUPPORTED_PAGE_CLASSES = Collections.unmodifiableCollection(Arrays.asList(
-            CloudAccountQueryPageService.class,
-            CloudMetricsQueryPageService.class,
-            CloudUsagePageService.class,
-            GroupQueryPageService.class,
-            ResourcesQueryPageServiceV3.class,
-            ResourcesQueryPageServiceV4.class
-    ));
+    /**
+     * Stores service URI paths that are authorized to utilize this custom paging service
+     */
+    private Collection<String> supportedFactories;
 
-    /** Stores service URI paths associated with {@link #SUPPORTED_PAGE_CLASSES} */
-    private static final Collection<String> SUPPORTED_FACTORIES;
+    /**
+     * Link to the node that should service page forward requests.
+     */
+    private String nodeSelectorLink;
 
-    static {
-        Collection<String> factories = SUPPORTED_PAGE_CLASSES.stream()
+    /**
+     * Constructor for the {@link CustomQueryPageForwardingService}.
+     *
+     * @param nodeSelectorLink     The link to specify the node that should handle page requests.
+     * @param supportedPageClasses A collection of classes that are allowed to use this custom
+     *                             forwarding service.
+     */
+    public CustomQueryPageForwardingService(String nodeSelectorLink,
+            Collection<Class> supportedPageClasses) {
+        super();
+        this.nodeSelectorLink = nodeSelectorLink;
+        this.supportedFactories = Collections.unmodifiableCollection(supportedPageClasses.stream()
                 .map(pageClass -> {
                     try {
                         Field selfLinkPrefixField = pageClass.getDeclaredField(FIELD_SELF_LINK_PREFIX);
-                        String servicePath = selfLinkPrefixField.get(pageClass).toString();
-                        return servicePath;
+                        return selfLinkPrefixField.get(pageClass).toString();
                     } catch (Exception e) {
-                        throw new IllegalStateException(pageClass + ": doesn't not have a field: " + FIELD_SELF_LINK_PREFIX);
+                        throw new IllegalStateException(pageClass + ": doesn't not have a field: " +
+                                FIELD_SELF_LINK_PREFIX);
                     }
                 })
-                .collect(Collectors.toList());
-        SUPPORTED_FACTORIES = Collections.unmodifiableCollection(factories);
-    }
-
-    private String nodeSelectorLink;
-
-    public CustomQueryPageForwardingService(String nodeSelectorLink) {
-        super();
-        this.nodeSelectorLink = nodeSelectorLink;
+                .collect(Collectors.toList()));
     }
 
     @Override
@@ -92,7 +91,7 @@ public class CustomQueryPageForwardingService extends StatelessService {
 
         String path = params.get(UriUtils.FORWARDING_URI_PARAM_NAME_PATH);
         String parentPath = UriUtils.getParentPath(path);
-        if (!SUPPORTED_FACTORIES.contains(parentPath)) {
+        if (!this.supportedFactories.contains(parentPath)) {
             op.fail(new IllegalArgumentException(
                     String.format("[path=%s] uri parameter is not supported", path)));
             return;
@@ -101,14 +100,12 @@ public class CustomQueryPageForwardingService extends StatelessService {
         URI targetService = UriUtils.buildUri(getHost(), path);
         URI forwardURI = UriUtils.buildForwardToPeerUri(targetService, peer, this.nodeSelectorLink, null);
 
-        Operation forwardedOp = new Operation();
-        forwardedOp.setUri(forwardURI);
-        forwardedOp.setAction(op.getAction());
-        forwardedOp.setReferer(op.getUri());
+        Operation forwardedOp = new Operation()
+                .setUri(forwardURI)
+                .setAction(op.getAction())
+                .setReferer(op.getUri());
         sendWithDeferredResult(forwardedOp)
-                .thenAccept(operation -> {
-                    op.setBody(operation.getBodyRaw());
-                })
+                .thenAccept(operation -> op.setBody(operation.getBodyRaw()))
                 .whenCompleteNotify(op);
     }
 }
