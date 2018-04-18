@@ -66,7 +66,7 @@ public class TestVSphereLinkedCloneProvisionTask extends TestVSphereLibraryProvi
                 return;
             }
 
-            createSnapshotAndWait(vm, false);
+            createSnapshotAndWait(this.endpoint.documentSelfLink, vm, false);
             SnapshotService.SnapshotState snapshot = getSnapshots(vm);
 
             if (snapshot == null) {
@@ -195,7 +195,7 @@ public class TestVSphereLinkedCloneProvisionTask extends TestVSphereLibraryProvi
         this.endpoint = TestUtils.doPost(this.host, ep, EndpointService.EndpointState.class,
                 UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
 
-        enumerateComputes(this.computeHost);
+        enumerateComputes(this.computeHost, this.endpoint);
         doRefresh();
         snapshotFactoryState("libDeploy", ImageService.class);
 

@@ -107,10 +107,11 @@ public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryP
             if (vm == null) {
                 return;
             }
-            createSnapshotAndWait(vm, false);
-            createSnapshotAndWait(vm, true); // this will create a child to the snapshot created in above statement
-            revertToSnapshotAndWait(vm);
-            deleteSnapshotAndWait(vm);
+            createSnapshotAndWait(this.endpoint.documentSelfLink, vm, false);
+            createSnapshotAndWait(this.endpoint.documentSelfLink, vm, true);
+            // this will create a child to the snapshot created in above statement
+            revertToSnapshotAndWait(this.endpoint.documentSelfLink, vm);
+            deleteSnapshotAndWait(this.endpoint.documentSelfLink, vm);
         } finally {
             if (vm != null) {
                 deleteVmAndWait(vm);
@@ -142,9 +143,9 @@ public class TestVSphereLibraryProvisionTaskWithDay2 extends TestVSphereLibraryP
                 return;
             }
             // Creating two snapshots
-            createSnapshotAndWait(vm, false);
-            createSnapshotAndWait(vm, true); // this will create a child to the snapshot created in
-                                             // above statement
+            createSnapshotAndWait(this.endpoint.documentSelfLink, vm, false);
+            createSnapshotAndWait(this.endpoint.documentSelfLink, vm, true);
+            // this will create a child to the snapshot created in above statement
             verifySnapshotCleanUpAfterVmDelete(vm);
 
         } catch (Exception e) {

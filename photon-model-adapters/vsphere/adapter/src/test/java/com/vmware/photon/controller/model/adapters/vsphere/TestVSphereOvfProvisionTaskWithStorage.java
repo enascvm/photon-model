@@ -22,8 +22,11 @@ import com.vmware.photon.controller.model.adapters.vsphere.ovf.ImportOvfRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
+import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * OVF provision test cases with disks.
@@ -72,7 +75,12 @@ public class TestVSphereOvfProvisionTaskWithStorage extends TestVSphereOvfProvis
 
             snapshotFactoryState("ovf", ComputeDescriptionService.class);
 
-            enumerateComputes(this.computeHost);
+            EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+            EndpointService.EndpointState endpoint = TestUtils.doPost(this.host, ep, EndpointService
+                            .EndpointState.class,
+                    UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
+
+            enumerateComputes(this.computeHost, endpoint);
 
             String descriptionLink = findFirstOvfDescriptionLink();
 

@@ -27,6 +27,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.MoRefKeyedMap;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
@@ -71,7 +72,7 @@ public class VSphereNetworkEnumerationHelper {
 
     private static NetworkState makeNetworkStateFromResults(
             VSphereIncrementalEnumerationService service, EnumerationProgress enumerationProgress,
-            NetworkOverlay net) {
+            NetworkOverlay net, EndpointState endpointState) {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         ComputeStateWithDescription parent = enumerationProgress.getParent();
 
@@ -85,7 +86,7 @@ public class VSphereNetworkEnumerationHelper {
         state.regionId = enumerationProgress.getRegionId();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
-        state.authCredentialsLink = parent.description.authCredentialsLink;
+        state.authCredentialsLink = endpointState.authCredentialsLink;
 
         URI ref = parent.description.instanceAdapterReference;
         state.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(ref.getPort(),
@@ -169,31 +170,36 @@ public class VSphereNetworkEnumerationHelper {
 
     private static void updateNetwork(VSphereIncrementalEnumerationService service, NetworkState oldDocument,
                                       EnumerationProgress enumerationProgress, NetworkOverlay net) {
-        NetworkState networkState = makeNetworkStateFromResults(service, enumerationProgress, net);
-        //restore original selfLink
-        networkState.documentSelfLink = oldDocument.documentSelfLink;
-        networkState.resourcePoolLink = null;
+        VsphereEnumerationHelper.getEndpoint(service.getHost(), enumerationProgress.getRequest().endpointLinkReference)
+                .thenAccept(endpointState -> {
+                    NetworkState networkState = makeNetworkStateFromResults(service,
+                            enumerationProgress, net, endpointState);
+                    //restore original selfLink
+                    networkState.documentSelfLink = oldDocument.documentSelfLink;
+                    networkState.resourcePoolLink = null;
 
-        if (oldDocument.tenantLinks == null) {
-            networkState.tenantLinks = enumerationProgress.getTenantLinks();
-        }
+                    if (oldDocument.tenantLinks == null) {
+                        networkState.tenantLinks = enumerationProgress.getTenantLinks();
+                    }
 
-        service.logFine(() -> String.format("Syncing Network %s", net.getName()));
-        Operation.createPatch(
-                PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
-                .setBody(networkState)
-                .setCompletion(trackNetwork(enumerationProgress, net))
-                .sendWith(service);
+                    service.logFine(() -> String.format("Syncing Network %s", net.getName()));
+                    Operation.createPatch(
+                            PhotonModelUriUtils.createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                            .setBody(networkState)
+                            .setCompletion(trackNetwork(enumerationProgress, net))
+                            .sendWith(service);
 
-        // represent a Network also as a subnet
-        SubnetState subnet = createSubnetStateForNetwork(networkState, enumerationProgress, net);
+                    // represent a Network also as a subnet
+                    SubnetState subnet = createSubnetStateForNetwork(networkState, enumerationProgress, net);
 
-        if (subnet != null) {
-            Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(),
-                    subnet.documentSelfLink))
-                    .setBody(subnet)
-                    .sendWith(service);
-        }
+                    if (subnet != null) {
+                        Operation.createPatch(PhotonModelUriUtils.createInventoryUri(service.getHost(),
+                                subnet.documentSelfLink))
+                                .setBody(subnet)
+                                .sendWith(service);
+                    }
+                });
+
     }
 
     private static ResourceGroupState makeNetworkGroup(NetworkOverlay net, EnumerationProgress ctx) {
@@ -270,51 +276,57 @@ public class VSphereNetworkEnumerationHelper {
 
     private static void createNewNetwork(VSphereIncrementalEnumerationService service,
                                          EnumerationProgress enumerationProgress, NetworkOverlay net) {
-        NetworkState networkState = makeNetworkStateFromResults(
-                service, enumerationProgress, net);
-        networkState.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(
-                PhotonModelUriUtils.createInventoryUri(service.getHost(),
-                        NetworkService.FACTORY_LINK))
-                .setBody(networkState)
-                .setCompletion((o, e) -> {
-                    trackNetwork(enumerationProgress, net).handle(o, e);
-                    Operation.createPost(PhotonModelUriUtils.createInventoryUri(
-                            service.getHost(),
-                            ResourceGroupService.FACTORY_LINK))
-                            .setBody(makeNetworkGroup(net, enumerationProgress))
+        VsphereEnumerationHelper.getEndpoint(service.getHost(), enumerationProgress.getRequest().endpointLinkReference)
+                .thenAccept(endpointState -> {
+                    NetworkState networkState = makeNetworkStateFromResults(
+                            service, enumerationProgress, net, endpointState);
+                    networkState.tenantLinks = enumerationProgress.getTenantLinks();
+                    Operation.createPost(
+                            PhotonModelUriUtils.createInventoryUri(service.getHost(),
+                                    NetworkService.FACTORY_LINK))
+                            .setBody(networkState)
+                            .setCompletion((o, e) -> {
+                                trackNetwork(enumerationProgress, net).handle(o, e);
+                                Operation.createPost(PhotonModelUriUtils.createInventoryUri(
+                                        service.getHost(),
+                                        ResourceGroupService.FACTORY_LINK))
+                                        .setBody(makeNetworkGroup(net, enumerationProgress))
+                                        .sendWith(service);
+                            })
                             .sendWith(service);
-                })
-                .sendWith(service);
 
-        service.logFine(() -> String.format("Found new Network %s", net.getName()));
+                    service.logFine(() -> String.format("Found new Network %s", net.getName()));
 
-        SubnetState subnet = createSubnetStateForNetwork(networkState, enumerationProgress, net);
+                    SubnetState subnet = createSubnetStateForNetwork(networkState, enumerationProgress, net);
 
-        if (subnet != null) {
-            Operation.createPost(
-                    PhotonModelUriUtils.createInventoryUri(service.getHost(),
-                            SubnetService.FACTORY_LINK))
-                    .setBody(subnet)
-                    .sendWith(service);
-        }
+                    if (subnet != null) {
+                        Operation.createPost(
+                                PhotonModelUriUtils.createInventoryUri(service.getHost(),
+                                        SubnetService.FACTORY_LINK))
+                                .setBody(subnet)
+                                .sendWith(service);
+                    }
+                });
     }
 
     private static void createNewSubnet(VSphereIncrementalEnumerationService service,
                                         EnumerationProgress enumerationProgress, NetworkOverlay net,
                                         String dvsUuid) {
-        SubnetState state = makeSubnetStateFromResults(enumerationProgress, net);
-        state.customProperties.put(DvsProperties.DVS_UUID, dvsUuid);
+        VsphereEnumerationHelper.getEndpoint(service.getHost(), enumerationProgress.getRequest().endpointLinkReference)
+                .thenAccept(endpointState -> {
+                    SubnetState state = makeSubnetStateFromResults(enumerationProgress, net);
+                    state.customProperties.put(DvsProperties.DVS_UUID, dvsUuid);
 
-        state.tenantLinks = enumerationProgress.getTenantLinks();
-        Operation.createPost(PhotonModelUriUtils.createInventoryUri(
-                service.getHost(), SubnetService.FACTORY_LINK))
-                .setBody(state)
-                .setCompletion(trackNetwork(enumerationProgress, net))
-                .sendWith(service);
+                    state.tenantLinks = enumerationProgress.getTenantLinks();
+                    Operation.createPost(PhotonModelUriUtils.createInventoryUri(
+                            service.getHost(), SubnetService.FACTORY_LINK))
+                            .setBody(state)
+                            .setCompletion(trackNetwork(enumerationProgress, net))
+                            .sendWith(service);
 
-        service.logFine(() -> String.format("Found new Subnet(Portgroup) %s",
-                net.getName()));
+                    service.logFine(() -> String.format("Found new Subnet(Portgroup) %s",
+                                net.getName()));
+                });
     }
 
     private static void updateSubnet(VSphereIncrementalEnumerationService service, SubnetState oldDocument,

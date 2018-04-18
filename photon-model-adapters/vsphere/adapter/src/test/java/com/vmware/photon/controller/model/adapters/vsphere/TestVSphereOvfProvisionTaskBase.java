@@ -44,6 +44,7 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
@@ -117,8 +118,14 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
             if (vm == null) {
                 return;
             }
-            createSnapshotAndWait(vm, false); // 1st snapshot will succeed
-            createSnapshotAndWaitFailure(vm); // 2nd snapshot will fail, since snapshot limit is set to "1"
+            EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+            EndpointService.EndpointState endpoint = TestUtils.doPost(this.host, ep, EndpointService.EndpointState
+                            .class,
+                    UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
+            createSnapshotAndWait(endpoint.documentSelfLink, vm, false); // 1st snapshot will succeed
+            createSnapshotAndWaitFailure(endpoint.documentSelfLink, vm); // 2nd snapshot will
+            // fail, since snapshot
+            // limit is set to "1"
         } finally {
             deleteVmAndWait(vm);
         }
@@ -155,6 +162,11 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
 
+        EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+        EndpointService.EndpointState endpoint = TestUtils.doPost(this.host, ep, EndpointService
+                        .EndpointState.class,
+                UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
+
         ComputeDescriptionService.ComputeDescription computeDesc = createTemplate();
 
         ImportOvfRequest req = new ImportOvfRequest();
@@ -172,7 +184,7 @@ public class TestVSphereOvfProvisionTaskBase extends BaseVSphereAdapterTest {
 
         snapshotFactoryState("ovf", ComputeDescriptionService.class);
 
-        enumerateComputes(this.computeHost);
+        enumerateComputes(this.computeHost, endpoint);
 
         String descriptionLink = findFirstOvfDescriptionLink();
 

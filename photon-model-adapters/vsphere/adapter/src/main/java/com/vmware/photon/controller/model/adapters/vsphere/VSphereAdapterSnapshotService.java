@@ -40,6 +40,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.SessionUtil;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotRequestType;
@@ -109,6 +110,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         SnapshotState existingSnapshotState;
         Collection<Operation> snapshotOperations = new ArrayList<>();
         Operation operation;
+        EndpointState endpoint;
 
         SnapshotContext(SnapshotState snapshotState, TaskManager mgr,
                 SnapshotService.SnapshotRequestType requestType, Operation op) {
@@ -165,6 +167,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
         }
 
         String computeLink = request.resourceLink();
+        URI endpointLinkReference = request.endpointLinkReference;
         String snapshotLink = request.payload.get(VSphereConstants.VSPHERE_SNAPSHOT_DOCUMENT_LINK);
         if ((SnapshotRequestType.DELETE.equals(requestType) || SnapshotRequestType.REVERT.equals(requestType))
                 && (StringUtils.isBlank(snapshotLink))) {
@@ -177,6 +180,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
             SnapshotContext createSnapshotContext = new SnapshotContext(populateAndGetSnapshotState(request), mgr, requestType, op);
             createSnapshotContext.snapshotMemory = Boolean.valueOf(request.payload.get(VSphereConstants.VSPHERE_SNAPSHOT_MEMORY));
             DeferredResult.completed(createSnapshotContext)
+                    .thenCompose(snapshotContext -> getEndpointState(snapshotContext, endpointLinkReference))
                     .thenCompose(this::thenSetComputeDescription)
                     .thenCompose(this::thenSetParentComputeDescription)
                     .thenCompose(this::querySnapshotStates)
@@ -203,6 +207,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                             return;
                         }
                         DeferredResult.completed(deleteSnapshotContext)
+                                .thenCompose(snapshotContext -> getEndpointState(snapshotContext, endpointLinkReference))
                                 .thenCompose(this::thenSetComputeDescription)
                                 .thenCompose(this::thenSetParentComputeDescription)
                                 .thenCompose(this::performSnapshotOperation)
@@ -229,6 +234,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                             return;
                         }
                         DeferredResult.completed(revertSnapshotContext)
+                                .thenCompose(snapshotContext -> getEndpointState(snapshotContext, endpointLinkReference))
                                 .thenCompose(this::thenSetComputeDescription)
                                 .thenCompose(this::thenSetParentComputeDescription)
                                 .thenCompose(this::querySnapshotStates)
@@ -247,6 +253,14 @@ public class VSphereAdapterSnapshotService extends StatelessService {
                     requestType)));
             break;
         }
+    }
+
+    private DeferredResult<SnapshotContext> getEndpointState(SnapshotContext ctx, URI endpointReference) {
+        return VsphereEnumerationHelper.getEndpoint(getHost(), endpointReference)
+                .thenApply(endpointState -> {
+                    ctx.endpoint = endpointState;
+                    return ctx;
+                });
     }
 
     private SnapshotState populateAndGetSnapshotState(ResourceOperationRequest request) {
@@ -329,8 +343,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
             credentials = SessionUtil.retrieveExternalToken(this, context.operation
                     .getAuthorizationContext());
         } else {
-            URI authUri = createInventoryUri(this.getHost(), context.parentComputeDescription
-                    .description.authCredentialsLink);
+            URI authUri = createInventoryUri(this.getHost(), context.endpoint.authCredentialsLink);
             Operation op = Operation.createGet(authUri);
             credentials = this.sendWithDeferredResult(op, AuthCredentialsService
                     .AuthCredentialsServiceState.class);

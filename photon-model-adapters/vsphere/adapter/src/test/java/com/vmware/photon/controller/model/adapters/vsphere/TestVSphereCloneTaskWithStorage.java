@@ -24,8 +24,10 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMo
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
+import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.UriUtils;
 
@@ -51,6 +53,10 @@ public class TestVSphereCloneTaskWithStorage extends TestVSphereCloneTaskBase {
             }
             this.computeHostDescription = createComputeDescription();
             this.computeHost = createComputeHost(this.computeHostDescription);
+
+            EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+            this.endpoint = TestUtils.doPost(this.host, ep, EndpointService.EndpointState.class,
+                    UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
 
             doRefresh();
 
@@ -102,6 +108,10 @@ public class TestVSphereCloneTaskWithStorage extends TestVSphereCloneTaskBase {
             }
             this.computeHostDescription = createComputeDescription();
             this.computeHost = createComputeHost(this.computeHostDescription);
+
+            EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+            this.endpoint = TestUtils.doPost(this.host, ep, EndpointService.EndpointState.class,
+                    UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
 
             doRefresh();
 

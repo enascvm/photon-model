@@ -37,6 +37,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
@@ -77,7 +79,12 @@ public class VSphereProvisioningTestSuite {
             this.computeHost = createComputeHost(this.computeHostDescription);
             this.network = createNetwork(networkId);
 
-            enumerateComputes(this.computeHost);
+            EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+            EndpointState endpoint = TestUtils.doPost(this.host, ep, EndpointService.EndpointState
+                            .class,
+                    UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
+
+            enumerateComputes(this.computeHost, endpoint);
 
             ComputeDescription vmDescription = createVmDescription();
             ComputeState vm = createVmState(vmDescription);

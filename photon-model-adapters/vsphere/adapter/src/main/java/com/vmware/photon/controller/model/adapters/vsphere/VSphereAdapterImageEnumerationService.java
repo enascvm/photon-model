@@ -82,11 +82,14 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             return;
         }
 
-        Operation.createGet(PhotonModelUriUtils.createInventoryUri(getHost(), request.resourceReference))
-                .setCompletion(
-                        o -> thenWithEndpointState(request, o.getBody(EndpointState.class), mgr),
-                        mgr)
-                .sendWith(this);
+        VsphereEnumerationHelper.getEndpoint(getHost(), request.resourceReference)
+                .whenComplete((endpointState, e) -> {
+                    if (e != null) {
+                        mgr.patchTaskToFailure(e);
+                    } else {
+                        thenWithEndpointState(request, endpointState, mgr);
+                    }
+                });
     }
 
     private void thenWithEndpointState(ImageEnumerateRequest request, EndpointState endpoint,
@@ -94,19 +97,19 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         URI parentUri = ComputeStateWithDescription
                 .buildUri(UriUtils.buildUri(getHost(), endpoint.computeLink));
         Operation.createGet(PhotonModelUriUtils.createInventoryUri(getHost(), parentUri))
-                .setCompletion(o -> thenWithParentState(request,
+                .setCompletion(o -> thenWithParentState(request, endpoint,
                         o.getBody(ComputeStateWithDescription.class), mgr),
                         mgr)
                 .sendWith(this);
     }
 
-    private void thenWithParentState(ImageEnumerateRequest request,
+    private void thenWithParentState(ImageEnumerateRequest request, EndpointState endpoint,
             ComputeStateWithDescription parent, TaskManager mgr) {
 
         collectAllEndpointImages(request).thenAccept(oldImages -> {
             VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
             pool.submit(this, parent.adapterManagementReference,
-                    parent.description.authCredentialsLink, (connection, e) -> {
+                    endpoint.authCredentialsLink, (connection, e) -> {
                         if (e != null) {
                             String msg = String.format("Cannot establish connection to %s",
                                     parent.adapterManagementReference);

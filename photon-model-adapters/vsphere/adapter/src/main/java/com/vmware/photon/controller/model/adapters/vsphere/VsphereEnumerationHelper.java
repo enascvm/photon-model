@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static com.vmware.photon.controller.model.adapters.vsphere.util.VimNames.TYPE_PORTGROUP;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -37,18 +38,24 @@ import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.TaggingClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -293,5 +300,19 @@ public class VsphereEnumerationHelper {
         }
         CustomProperties.of(state)
                 .put(CustomProperties.VC_UUID, vcUuid);
+    }
+
+    static DeferredResult<EndpointState> getEndpoint(ServiceHost host, URI endpointLinkReference) {
+        Operation getEndpointOp = Operation.createGet(PhotonModelUriUtils.createInventoryUri
+                (host, endpointLinkReference));
+        getEndpointOp.setReferer(host.getUri());
+        return host.sendWithDeferredResult(getEndpointOp, EndpointState.class);
+    }
+
+    static DeferredResult<ComputeStateWithDescription> getComputeStateDescription(ServiceHost host, URI parentUri) {
+        Operation getComputeStateOp = Operation.createGet(ComputeService.ComputeStateWithDescription
+                .buildUri(PhotonModelUriUtils.createInventoryUri(host, parentUri)));
+        getComputeStateOp.setReferer(host.getUri());
+        return host.sendWithDeferredResult(getComputeStateOp, ComputeService.ComputeStateWithDescription.class);
     }
 }

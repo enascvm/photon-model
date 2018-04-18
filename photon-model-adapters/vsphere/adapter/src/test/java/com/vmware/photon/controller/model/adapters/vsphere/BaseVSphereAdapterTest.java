@@ -118,6 +118,7 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.Resou
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
@@ -687,12 +688,14 @@ public class BaseVSphereAdapterTest {
         assertEquals(ComputeService.PowerState.ON, cState[0].powerState);
     }
 
-    protected void createSnapshotAndWait(ComputeState vm, Boolean isSnapshottedAgain) throws Throwable {
+    protected void createSnapshotAndWait(String endpointLink, ComputeState vm, Boolean
+            isSnapshottedAgain) throws Throwable {
 
         String taskLink = UUID.randomUUID().toString();
 
+
         ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest(ResourceOperation.CREATE_SNAPSHOT.operation,
-                vm.documentSelfLink, taskLink);
+                vm.documentSelfLink, taskLink, endpointLink);
 
         Operation createSnapshotOp = Operation
                 .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
@@ -728,10 +731,11 @@ public class BaseVSphereAdapterTest {
         this.host.log("Create snapshot operation completed successfully");
     }
 
-    protected void createSnapshotAndWaitFailure(ComputeState vm) throws Throwable {
+    protected void createSnapshotAndWaitFailure(String endpointLink, ComputeState vm) throws
+            Throwable {
         String taskLink = UUID.randomUUID().toString();
         ResourceOperationRequest snapshotRequest = getCreateSnapshotRequest(ResourceOperation.CREATE_SNAPSHOT.operation,
-                vm.documentSelfLink, taskLink);
+                vm.documentSelfLink, taskLink, endpointLink);
 
         Operation createSnapshotOp = Operation
                 .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
@@ -760,7 +764,8 @@ public class BaseVSphereAdapterTest {
         return querySnapshotState(computeState.documentSelfLink, true);
     }
 
-    protected void deleteSnapshotAndWait(ComputeState computeState) throws Throwable {
+    protected void deleteSnapshotAndWait(String endpointLink, ComputeState computeState) throws
+            Throwable {
 
         // Get the snapshot associated with the compute
         SnapshotState snapshotState = querySnapshotState(computeState.documentSelfLink, true);
@@ -768,7 +773,8 @@ public class BaseVSphereAdapterTest {
         String taskLink = UUID.randomUUID().toString();
 
         ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(
-                ResourceOperation.DELETE_SNAPSHOT.operation, "DELETE", computeState.documentSelfLink, snapshotState.documentSelfLink, taskLink);
+                ResourceOperation.DELETE_SNAPSHOT.operation, "DELETE", endpointLink, computeState
+                        .documentSelfLink, snapshotState.documentSelfLink, taskLink);
 
         Operation deleteSnapshotOp = Operation
                 .createPatch(UriUtils.buildUri(this.host, VSphereAdapterSnapshotService.SELF_LINK))
@@ -799,7 +805,8 @@ public class BaseVSphereAdapterTest {
         this.host.log("Delete snapshot operation completed successfully");
     }
 
-    protected void revertToSnapshotAndWait(ComputeState computeState) throws Throwable {
+    protected void revertToSnapshotAndWait(String endpointLink, ComputeState computeState) throws
+            Throwable {
 
         // Get the snapshot to revert to
         SnapshotState snapshotStateToRevertTo = querySnapshotState(computeState.documentSelfLink, false);
@@ -807,7 +814,8 @@ public class BaseVSphereAdapterTest {
         String taskLink = UUID.randomUUID().toString();
 
         ResourceOperationRequest snapshotRequest = getDeleteOrRevertSnapshotRequest(
-                ResourceOperation.REVERT_SNAPSHOT.operation, "REVERT", computeState.documentSelfLink , snapshotStateToRevertTo.documentSelfLink,
+                ResourceOperation.REVERT_SNAPSHOT.operation, "REVERT", endpointLink, computeState
+                        .documentSelfLink , snapshotStateToRevertTo.documentSelfLink,
                 taskLink);
 
         Operation revertSnapshotOp = Operation
@@ -1003,6 +1011,8 @@ public class BaseVSphereAdapterTest {
         task.enumerationAction = EnumerationAction.REFRESH;
         task.parentComputeLink = computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;
+
+
         if (endpointState != null) {
             task.endpointLink = endpointState.documentSelfLink;
         } else {
@@ -1282,7 +1292,7 @@ public class BaseVSphereAdapterTest {
     }
 
     private ResourceOperationRequest getCreateSnapshotRequest(String operation, String documentSelfLink,
-            String taskLink) {
+            String taskLink, String endpointLink) {
         Map<String, String> payload = new HashMap<>();
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, "CREATE");
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_MEMORY, "false");
@@ -1290,6 +1300,8 @@ public class BaseVSphereAdapterTest {
         resourceOperationRequest.operation = operation;
         resourceOperationRequest.isMockRequest = isMock();
         resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, documentSelfLink);
+        resourceOperationRequest.endpointLinkReference = PhotonModelUriUtils
+                .createInventoryUri(this.host, endpointLink);
         resourceOperationRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
         resourceOperationRequest.payload = payload;
         return resourceOperationRequest;
@@ -1311,7 +1323,7 @@ public class BaseVSphereAdapterTest {
     }
 
     private ResourceOperationRequest getDeleteOrRevertSnapshotRequest(String operationId, String operationType,
-            String computeSelfLink, String snapshotSelfLink, String taskLink) {
+            String endpointLink, String computeSelfLink, String snapshotSelfLink, String taskLink) {
         Map<String, String> payload = new HashMap<>();
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_REQUEST_TYPE, operationType);
         payload.put(VSphereConstants.VSPHERE_SNAPSHOT_DOCUMENT_LINK, snapshotSelfLink);
@@ -1320,6 +1332,8 @@ public class BaseVSphereAdapterTest {
         resourceOperationRequest.isMockRequest = isMock();
         resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, computeSelfLink);
         resourceOperationRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
+        resourceOperationRequest.endpointLinkReference = PhotonModelUriUtils
+                .createInventoryUri(this.host, endpointLink);
         resourceOperationRequest.payload = payload;
         return resourceOperationRequest;
     }
