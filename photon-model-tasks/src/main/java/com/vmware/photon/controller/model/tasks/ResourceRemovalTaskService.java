@@ -159,6 +159,9 @@ public class ResourceRemovalTaskService
             if (!q.querySpec.options.contains(QueryOption.EXPAND_CONTENT)) {
                 q.querySpec.options.add(QueryOption.EXPAND_CONTENT);
             }
+            if (!q.querySpec.options.contains(QueryOption.INCLUDE_DELETED)) {
+                q.querySpec.options.add(QueryOption.INCLUDE_DELETED);
+            }
             if (q.querySpec.resultLimit == null) {
                 q.querySpec.resultLimit = QueryUtils.DEFAULT_RESULT_LIMIT;
             }

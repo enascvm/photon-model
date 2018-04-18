@@ -139,13 +139,10 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
 
     @Before
     public void setUpTests() throws Throwable {
-        if (computeHost == null) {
-            ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
-            endpointState = this.createEndpointState();
-            // create a compute host for the Azure
-            computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
-                    endpointState);
-        }
+        ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
+        endpointState = this.createEndpointState();
+        // create a compute host for the Azure
+        computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink, endpointState);
 
         AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
         azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;

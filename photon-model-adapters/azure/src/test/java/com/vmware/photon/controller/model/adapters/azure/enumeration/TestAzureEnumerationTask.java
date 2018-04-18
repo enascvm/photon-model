@@ -249,40 +249,38 @@ public class TestAzureEnumerationTask extends BaseModelTest {
              * NOTE: Ultimately this should go to @BeforeClass, BUT BasicReusableHostTestCase.HOST
              * is not accessible.
              */
-            if (computeHost == null) {
-                PhotonModelServices.startServices(this.host);
-                PhotonModelMetricServices.startServices(this.host);
-                PhotonModelTaskServices.startServices(this.host);
-                PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-                AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
+            PhotonModelServices.startServices(this.host);
+            PhotonModelMetricServices.startServices(this.host);
+            PhotonModelTaskServices.startServices(this.host);
+            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
+            AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
-                this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-                this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
 
-                // TODO: VSYM-992 - improve test/fix arbitrary timeout
-                this.host.setTimeoutSeconds(600);
+            // TODO: VSYM-992 - improve test/fix arbitrary timeout
+            this.host.setTimeoutSeconds(600);
 
-                // Create a resource pool where the VMs will be housed
-                ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
+            // Create a resource pool where the VMs will be housed
+            ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
 
-                AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
-                        this.host,
-                        this.clientID,
-                        this.clientKey,
-                        this.subscriptionId,
-                        this.tenantId);
+            AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
+                    this.host,
+                    this.clientID,
+                    this.clientKey,
+                    this.subscriptionId,
+                    this.tenantId);
 
-                endpointState = createDefaultEndpointState(
-                        this.host, authCredentials.documentSelfLink);
+            endpointState = createDefaultEndpointState(
+                    this.host, authCredentials.documentSelfLink);
 
-                // create a compute host for the Azure
-                computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
-                        endpointState);
+            // create a compute host for the Azure
+            computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
+                    endpointState);
 
-                endpointState.computeHostLink = computeHost.documentSelfLink;
-                this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
-                        .setBody(endpointState));
-            }
+            endpointState.computeHostLink = computeHost.documentSelfLink;
+            this.host.waitForResponse(Operation.createPatch(this.host, endpointState.documentSelfLink)
+                    .setBody(endpointState));
 
             azureVMName = azureVMName == null
                     ? generateName(azureVMNamePrefix)
@@ -481,7 +479,8 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         // validate type field for enumerated VMs
         result.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
-                .filter(c -> !c.documentSelfLink.equals(computeHost.documentSelfLink));
+                .filter(c -> !c.documentSelfLink.equals(computeHost.documentSelfLink))
+                .forEach(c -> assertTrue(ComputeType.VM_GUEST == c.type || ComputeType.ZONE == c.type));
 
         // validate internal tags for enumerated VMs
         TagService.TagState expectedInternalTypeTag = newTagState(TAG_KEY_TYPE,

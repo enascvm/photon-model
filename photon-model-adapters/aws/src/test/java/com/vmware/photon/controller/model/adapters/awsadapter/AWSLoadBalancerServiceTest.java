@@ -457,7 +457,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
                 taskState, ProvisionLoadBalancerTaskState.class);
 
         // Wait for the task to complete
-        taskState = waitForFinishedTask(ProvisionLoadBalancerTaskState.class,
+        taskState = this.host.waitForFinishedTask(ProvisionLoadBalancerTaskState.class,
                 taskState.documentSelfLink);
         assertEquals(expectedTaskState, taskState.taskInfo.stage);
         return taskState;

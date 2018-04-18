@@ -56,7 +56,6 @@ import static com.vmware.photon.controller.model.resources.TagService.TagState.T
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.USER_DEFINED;
 import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.createOriginTagQuery;
 import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.waitToComplete;
-import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -528,7 +527,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         result.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
                 .filter(c -> !c.documentSelfLink.equals(computeHost.documentSelfLink))
-                .forEach(c -> assertEquals(ComputeType.VM_GUEST, c.type));
+                .forEach(c -> assertTrue(ComputeType.VM_GUEST == c.type || ComputeType.ZONE == c.type));
 
         // validate internal tags for enumerated VMs
         TagService.TagState expectedInternalTypeTag = newTagState(TAG_KEY_TYPE,
@@ -679,25 +678,38 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
      * @return A map of ComputeStates with a prefix, with each VM name as the key.
      */
     private Map<String, ComputeState> getVMComputeStatesWithPrefix() {
-        URI queryUri = UriUtils.buildExpandLinksQueryUri(createServiceURI(host,
-                host.getUri(), ComputeService.FACTORY_LINK));
+        QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeState.class);
 
-        // add limit, otherwise the query will not return if there are too many docs or versions
-        queryUri = UriUtils.extendUriWithQuery(queryUri, UriUtils.URI_PARAM_ODATA_LIMIT,
-                String.valueOf(numOfVMsToTest * 100));
-        ServiceDocumentQueryResult res = host.getFactoryState(queryUri);
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QueryTask.QuerySpecification.QueryOption.TOP_RESULTS)
+                .setQuery(qBuilder.build())
+                .setResultLimit(10000)
+                .build();
 
-        // Add compute states with the prefix to map.
+        Operation queryDocuments = QueryUtils
+                .createQueryTaskOperation(this.host, queryTask,
+                        ClusterUtil.ServiceTypeCluster.INVENTORY_SERVICE).setReferer(this.host.getUri());
+        Operation queryResponse = this.host.waitForResponse(queryDocuments);
+
+        Assert.assertTrue("Error retrieving compute states",
+                queryResponse.getStatusCode() == 200);
+
         Map<String, ComputeService.ComputeState> filteredComputeStates = new HashMap<>();
-        for (String key : res.documents.keySet()) {
-            String json = Utils.toJson(res.documents.get(key));
-            ComputeService.ComputeState doc = Utils.fromJson(json,
-                    ComputeService.ComputeState.class);
-            if (azureVMNames.contains(doc.name)) {
-                filteredComputeStates.put(doc.name, doc);
+
+        QueryTask qt = queryResponse.getBody(QueryTask.class);
+
+        if (qt.results != null && qt.results.documentLinks != null
+                && qt.results.documentLinks.size() > 0) {
+            Map<String, Object> computeObjects = qt.results.documents;
+            for (Map.Entry<String, Object> objectEntry : computeObjects.entrySet()) {
+                ComputeState cs = Utils.fromJson(objectEntry.getValue(), ComputeState.class);
+                if (azureVMNames.contains(cs.name)) {
+                    filteredComputeStates.put(cs.name, cs);
+                }
             }
         }
-
         return filteredComputeStates;
     }
 

@@ -113,34 +113,32 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
 
-        if (computeHost == null) {
-            PhotonModelServices.startServices(this.host);
-            PhotonModelTaskServices.startServices(this.host);
-            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-            AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
+        PhotonModelServices.startServices(this.host);
+        PhotonModelTaskServices.startServices(this.host);
+        PhotonModelAdaptersRegistryAdapters.startServices(this.host);
+        AzureAdaptersTestUtils.startServicesSynchronouslyAzure(this.host);
 
-            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+        this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
+        this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
 
-            // TODO: VSYM-992 - improve test/fix arbitrary timeout
-            this.host.setTimeoutSeconds(600);
+        // TODO: VSYM-992 - improve test/fix arbitrary timeout
+        this.host.setTimeoutSeconds(600);
 
-            ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
+        ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
 
-            AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
-                    this.host,
-                    this.clientID,
-                    this.clientKey,
-                    this.subscriptionId,
-                    this.tenantId);
+        AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
+                this.host,
+                this.clientID,
+                this.clientKey,
+                this.subscriptionId,
+                this.tenantId);
 
-            endpointState = createDefaultEndpointState(
-                    this.host, authCredentials.documentSelfLink);
+        endpointState = createDefaultEndpointState(
+                this.host, authCredentials.documentSelfLink);
 
-            // create a compute host for the Azure
-            computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
-                    endpointState);
-        }
+        // create a compute host for the Azure
+        computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
+                endpointState);
 
         if (!this.isMock) {
             ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
