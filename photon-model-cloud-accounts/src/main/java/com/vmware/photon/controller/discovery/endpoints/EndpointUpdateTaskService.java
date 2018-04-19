@@ -19,7 +19,6 @@ import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountEr
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.ENDPOINT_NAME_REQUIRED;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.ENDPOINT_NOTHING_TO_UPDATE;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.ENDPOINT_TAG_NULL_EMPTY;
-import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.INVALID_COST_USAGE_PARAMS_ERROR;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.INVALID_USER_FOR_OWNERS_UPDATE;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.OWNERS_UPDATE_FAILED;
 import static com.vmware.photon.controller.discovery.cloudaccount.utils.ClusterUtils.createInventoryUri;
@@ -28,12 +27,9 @@ import static com.vmware.photon.controller.discovery.common.CloudAccountConstant
 import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.PROPERTY_NAME_TAG_UPDATES;
 import static com.vmware.photon.controller.discovery.common.utils.InventoryQueryUtils.startInventoryQueryTask;
 import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getOrgId;
-import static com.vmware.photon.controller.discovery.common.utils.StringUtil.isEmpty;
 import static com.vmware.photon.controller.discovery.endpoints.Credentials.AwsCredential.AuthType.ARN;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_AUTH_TYPE;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET;
-import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BUCKET_PREFIX;
-import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CREATEDBY_EMAIL;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_PREFIX_SERVICE_TAG;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_STATUS;
@@ -587,11 +583,12 @@ public class EndpointUpdateTaskService extends TaskService<EndpointUpdateTaskSta
             queryAuthCredentials(task, SubStage.VALIDATE_ENDPOINT);
             break;
         case VALIDATE_ENDPOINT:
-            validateEndpoint(task, SubStage.CREATE_COST_USAGE_REPORT);
+            validateEndpoint(task, SubStage.UPDATE_ENDPOINT);
             break;
-        case CREATE_COST_USAGE_REPORT:
-            createCostUsageReportUpdate(task, SubStage.UPDATE_ENDPOINT);
-            break;
+            // TODO: Create a CostUsage handler to pass in.
+//        case CREATE_COST_USAGE_REPORT:
+//            createCostUsageReportUpdate(task, SubStage.UPDATE_ENDPOINT);
+//            break;
         case UPDATE_ENDPOINT:
             updateEndpoint(task, SubStage.UPDATE_SERVICE_TAG);
             break;
@@ -1200,99 +1197,6 @@ public class EndpointUpdateTaskService extends TaskService<EndpointUpdateTaskSta
                     reconstructEndpointProperties(task.endpointState.endpointType, task.credentials,
                             task.endpointState.endpointProperties, task.endpointState.customProperties);
         }
-    }
-
-    private void createCostUsageReportUpdate(EndpointUpdateTaskService.EndpointUpdateTaskState task,
-                                             SubStage nextStage) {
-        if (task.isMock) {
-            task.subStage = nextStage;
-            sendSelfPatch(task);
-            return;
-        }
-
-        // if not AWS endpoint/account, move to next stage
-        if (!EndpointType.aws.name().equalsIgnoreCase(task.endpointState.endpointType)) {
-            task.subStage = nextStage;
-            sendSelfPatch(task);
-            return;
-        }
-
-        Map<String, String> customProperties = task.endpointState.customProperties;
-
-        // skip if there are no updates or if all 3 Cost report related properties are null or empty
-        // also, skip if s3bucketName is null or empty
-        if (task.customPropertyUpdates == null
-                || customProperties == null
-                || isEmpty(customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET))
-                || (!isEmpty(customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET))
-                && isEmpty(customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BUCKET_PREFIX))
-                && isEmpty(customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME)))) {
-
-            task.subStage = nextStage;
-            sendSelfPatch(task);
-            return;
-        }
-
-        String s3bucketName = customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET);
-        String bucketPrefix = customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BUCKET_PREFIX);
-        String costAndUsageReportName = customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME);
-
-        // if s3bucketName is present, but one of the other 2 properties is empty
-        // throw an error
-        if (!isEmpty(s3bucketName)
-                && (isEmpty(bucketPrefix) || isEmpty(costAndUsageReportName))) {
-
-            handleError(task, INVALID_COST_USAGE_PARAMS_ERROR.getMessage(), Operation
-                            .STATUS_CODE_BAD_REQUEST, INVALID_COST_USAGE_PARAMS_ERROR.getErrorCode());
-            return;
-        }
-
-        AwsCostUsageReportTaskService.AwsCostUsageReportTaskState awsCostUsageReportTaskState =
-                new AwsCostUsageReportTaskService.AwsCostUsageReportTaskState();
-
-        awsCostUsageReportTaskState.credentials = task.credentials;
-        awsCostUsageReportTaskState.s3bucketName = s3bucketName;
-        awsCostUsageReportTaskState.s3bucketPrefix = bucketPrefix;
-        awsCostUsageReportTaskState.costUsageReportName = costAndUsageReportName;
-        if (!task.isMock) {
-            awsCostUsageReportTaskState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
-        }
-        awsCostUsageReportTaskState.taskInfo = TaskState.createDirect();
-
-        Operation reportValidateOp = Operation
-                .createPost(this, AwsCostUsageReportTaskService.FACTORY_LINK)
-                .setBody(awsCostUsageReportTaskState).setReferer(getUri());
-
-        setAuthorizationContext(reportValidateOp, getSystemAuthorizationContext());
-        OperationContext origCtx = OperationContext.getOperationContext();
-
-        sendWithDeferredResult(reportValidateOp)
-                .whenComplete((o, e) -> {
-                    OperationContext.restoreOperationContext(origCtx);
-                    if (e != null) {
-                        logWarning(Utils.toString(e));
-                        handleError(task, e.getMessage(), o.getStatusCode());
-                        return;
-                    }
-
-                    AwsCostUsageReportTaskService.AwsCostUsageReportTaskState  body =
-                            o.getBody(AwsCostUsageReportTaskService.AwsCostUsageReportTaskState.class);
-                    if (body.taskInfo != null && body.taskInfo.stage == TaskStage.FAILED) {
-                        if (body.taskInfo.failure != null) {
-                            handleError(task, body.taskInfo.failure.message,
-                                    body.taskInfo.failure.statusCode,
-                                    body.taskInfo.failure.messageId != null ?
-                                            Integer.parseInt(body.taskInfo.failure.messageId) :
-                                            Integer.MIN_VALUE);
-                            return;
-                        }
-
-                        handleError(task, task.failureMessage, Operation.STATUS_CODE_INTERNAL_ERROR);
-                        return;
-                    }
-                    task.subStage = nextStage;
-                    sendSelfPatch(task);
-                });
     }
 
 
