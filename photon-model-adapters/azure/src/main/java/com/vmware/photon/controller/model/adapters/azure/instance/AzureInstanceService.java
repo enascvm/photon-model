@@ -30,7 +30,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.MISSING_SUBSCRIPTION_CODE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_FAILED_NO_SUBNET;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
@@ -142,9 +141,8 @@ import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.Azure
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallbackWithRetry;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallbackWithRetry;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureRetryHandler;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
@@ -495,50 +493,62 @@ public class AzureInstanceService extends StatelessService {
 
         // Note that this get operation can throw NullPointerException from the Azure library.
         // Ignore and handle this as a VM delete only. (VCOM-4303)
-        AzureDeferredResultServiceCallback<List<AvailabilitySetInner>>
-                getAvailabilitySetsCallback = new AzureDeferredResultServiceCallback
-                <List<AvailabilitySetInner>>(this, msg) {
+        AzureRetryHandler<List<AvailabilitySetInner>> getAvailabilitySetsCallback = new
+                AzureRetryHandler<List<AvailabilitySetInner>>(null, msg, this) {
                     @Override
-                    protected DeferredResult<List<AvailabilitySetInner>> consumeSuccess(
-                            List<AvailabilitySetInner> result) {
-                        ctx.availabilitySetInners = result;
-                        return DeferredResult.completed(result);
+                    protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                        return (callback) -> computeManager.availabilitySets()
+                                .listByResourceGroupAsync(ctx.resourceGroupName, callback);
                     }
 
                     @Override
-                    protected Throwable consumeError(Throwable exc) {
-                        logWarning("Exception thrown while fetching availabilitySets for delete "
-                                + "operation. Resuming delete as a single VM delete.: " + exc
-                                .getMessage());
-                        return RECOVERED;
+                    protected boolean isSuccess(List<AvailabilitySetInner> availabilitySetInners, Throwable
+                            exception) {
+                        if (exception != null) {
+                            logWarning("getAvailabilitySets caught an exception but ignoring"
+                                    + " as this is for delete VM. Exception: " + exception.getMessage());
+                        }
+                        return true;
                     }
                 };
 
-        computeManager.availabilitySets()
-                .listByResourceGroupAsync(ctx.resourceGroupName, getAvailabilitySetsCallback);
-
-        return getAvailabilitySetsCallback.toDeferredResult().thenApply(result -> ctx);
+        return getAvailabilitySetsCallback.execute().thenApply(availabilitySetInners -> {
+            ctx.availabilitySetInners = availabilitySetInners;
+            return ctx;
+        });
     }
 
     private DeferredResult<AzureInstanceContext> deleteVirtualMachine(AzureInstanceContext ctx) {
         String msg = "Deleting virtual machine [" + ctx.vmName + "]";
         ComputeManagementClientImpl computeManager = getComputeManagementClientImpl(ctx);
 
-        AzureDeferredResultServiceCallback<OperationStatusResponseInner>
-                deleteVirtualMachineCallback =
-                new AzureDeferredResultServiceCallback<OperationStatusResponseInner>(this, msg) {
+        AzureRetryHandler<OperationStatusResponseInner> deleteVirtualMachineCallback = new
+                AzureRetryHandler<OperationStatusResponseInner>(msg, this) {
                     @Override
-                    protected DeferredResult<OperationStatusResponseInner> consumeSuccess(
-                            OperationStatusResponseInner result) {
-                        logInfo("Successfully deleted VM: " + ctx.vmName);
-                        return DeferredResult.completed(result);
+                    protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                        return (callback) -> computeManager.virtualMachines()
+                                .deleteAsync(ctx.resourceGroupName, ctx.vmName, callback);
+                    }
+
+                    @Override
+                    protected boolean isSuccess(OperationStatusResponseInner object,
+                            Throwable exception) {
+                        if (exception != null && exception instanceof CloudException) {
+                            CloudError cloudError = ((CloudException) exception).body();
+                            if (cloudError != null && cloudError.code().contains("NotFound")) {
+                                logWarning(String.format("Delete VM failed as VM or resource "
+                                                + "[resource: %s] [vm: %s] was not found. "
+                                                + "Ignoring exception and carrying on. Exception:"
+                                                + " %s", ctx.resourceGroupName, ctx.vmName,
+                                        exception.getMessage()));
+                                return true;
+                            }
+                        }
+                        return super.isSuccess(object, exception);
                     }
                 };
 
-        computeManager.virtualMachines()
-                .deleteAsync(ctx.resourceGroupName, ctx.vmName, deleteVirtualMachineCallback);
-
-        return deleteVirtualMachineCallback.toDeferredResult().thenApply(result -> ctx);
+        return deleteVirtualMachineCallback.execute().thenApply(result -> ctx);
     }
 
     private DeferredResult<AzureInstanceContext> deleteResourceGroup(AzureInstanceContext ctx) {
@@ -549,20 +559,39 @@ public class AzureInstanceService extends StatelessService {
                 ctx.availabilitySetInners.get(0).virtualMachines() == null ||
                 ctx.availabilitySetInners.get(0).virtualMachines().size() == 0) {
             // there are no other machine in this cluster,  delete the resource group
-            ResourceGroupsInner resourceGoups = getResourceManagementClientImpl(ctx)
+            ResourceGroupsInner resourceGroups = getResourceManagementClientImpl(ctx)
                     .resourceGroups();
-            AzureDeferredResultServiceCallback<Void> deleteResourceGroupCallback =
-                    new AzureDeferredResultServiceCallback<Void>(this, msg) {
-                        @Override
-                        protected DeferredResult<Void> consumeSuccess(Void result) {
-                            logInfo("Successfully deleted resource group: "
-                                    + ctx.resourceGroupName);
-                            return DeferredResult.completed(result);
-                        }
-                    };
-            resourceGoups.deleteAsync(ctx.resourceGroupName, deleteResourceGroupCallback);
 
-            return deleteResourceGroupCallback.toDeferredResult().thenApply(result -> ctx);
+            AzureRetryHandler<Void> deleteResourceGroupCallback =
+                    new AzureRetryHandler<Void>(msg, this) {
+                        @Override
+                        protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                            return (callback) -> resourceGroups.deleteAsync(ctx.resourceGroupName, callback);
+                        }
+
+                        @Override
+                        protected boolean isSuccess(Void object, Throwable exception) {
+                            if (exception != null && exception instanceof CloudException) {
+                                CloudError cloudError = ((CloudException) exception).body();
+                                if (cloudError != null && cloudError.code().contains("NotFound")) {
+                                    logWarning(String.format("Delete resource group failed "
+                                            + "as resource [%s] was not found. "
+                                            + "Ignoring exception and carrying on. Exception: %s",
+                                            ctx.resourceGroupName, exception.getMessage()));
+                                    return true;
+                                }
+                            }
+                            return super.isSuccess(object, exception);
+                        }
+
+                    };
+
+            return deleteResourceGroupCallback.execute()
+                    .thenApply(result -> {
+                        logInfo("Successfully deleted resource group: "
+                                + ctx.resourceGroupName);
+                        return ctx;
+                    });
         }
 
         return DeferredResult.completed(ctx);
@@ -868,27 +897,20 @@ public class AzureInstanceService extends StatelessService {
                 .withExistingResourceGroup(ctx.resourceGroup.name())
                 .withSku(skuType);
 
-        AzureDeferredResultServiceCallbackWithRetry<AvailabilitySet> callback = new
-                AzureDeferredResultServiceCallbackWithRetry<AvailabilitySet>(this, msg) {
-                    @Override
-                    protected DeferredResult<AvailabilitySet> consumeSuccess(AvailabilitySet
-                            availabilitySet) {
-                        logInfo("Successfully created AvailabilitySet: " + availabilitySet.name());
-                        ctx.availabilitySet = availabilitySet;
-                        return DeferredResult.completed(availabilitySet);
-                    }
+        AzureRetryHandler<AvailabilitySet> callbackHandler = new
+                AzureRetryHandler<AvailabilitySet>(msg, this) {
+            @Override
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> availabilitySetDefinition.createAsync(callback);
+            }
+        };
 
-                    @Override
-                    protected Runnable retryServiceCall(ServiceCallback<AvailabilitySet>
-                            retryCallback) {
-                        return () -> availabilitySetDefinition.createAsync(retryCallback);
-                    }
-                };
-
-        availabilitySetDefinition.createAsync(callback);
-
-        callback.toDeferredResult()
-                .thenApply(ignore -> ctx)
+        callbackHandler.execute()
+                .thenApply(availabilitySet -> {
+                    logInfo("Successfully created AvailabilitySet: " + availabilitySet.name());
+                    ctx.availabilitySet = availabilitySet;
+                    return ctx;
+                })
                 .whenComplete(thenAllocation(ctx, nextStage, NETWORK_NAMESPACE));
     }
 
@@ -1132,16 +1154,89 @@ public class AzureInstanceService extends StatelessService {
         storageParameters.withSku(new SkuInner().withName(SkuName.STANDARD_LRS));
         storageParameters.withKind(Kind.STORAGE);
 
-        StorageAccountProvisioningCallback handler = new StorageAccountProvisioningCallback(ctx,
-                msg);
+        AzureRetryHandler<StorageAccountInner> createHandler = new
+                AzureRetryHandler<StorageAccountInner>(msg, this){
+                    @Override
+                    protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                        return (callback) -> getStorageManagementClientImpl(ctx).storageAccounts().createAsync(
+                                ctx.storageAccountRGName,
+                                ctx.storageAccountName,
+                                storageParameters,
+                                callback);
+                    }
 
-        getStorageManagementClientImpl(ctx).storageAccounts().createAsync(
-                ctx.storageAccountRGName,
-                ctx.storageAccountName,
-                storageParameters,
-                handler);
+                    @Override
+                    protected boolean isSuccess(StorageAccountInner object, Throwable exception) {
+                        if (exception != null) {
+                            String azureErrorCode = getAzureErrorCode(exception);
+                            if (azureErrorCode.equalsIgnoreCase(STORAGE_ACCOUNT_ALREADY_EXIST)) {
+                                return true;
+                            }
+                        }
+                        return super.isSuccess(object, exception);
+                    }
+                };
 
-        return handler.toDeferredResult().thenApply(ignore -> ctx);
+        AzureRetryHandler<StorageAccountInner> getHandler = new
+                AzureRetryHandler<StorageAccountInner>(msg, this){
+                    @Override
+                    protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                        return (callback) -> getStorageManagementClientImpl(ctx)
+                                .storageAccounts()
+                                .getByResourceGroupAsync(
+                                        ctx.storageAccountRGName,
+                                        ctx.storageAccountName,
+                                        callback);
+                    }
+
+                    @Override
+                    protected boolean isSuccess(StorageAccountInner storageAccountInner, Throwable exception) {
+                        if (!super.isSuccess(storageAccountInner, exception)) {
+                            return false;
+                        }
+
+                        ProvisioningState provisioningState = storageAccountInner.provisioningState();
+                        if (provisioningState == null) {
+                            return false;
+                        }
+
+                        if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(provisioningState.name())) {
+                            return true;
+                        }
+
+                        return false;
+                    }
+                };
+
+
+        return createHandler.execute()
+                .thenCompose(storageAccountInnerCreate -> {
+                    return getHandler.execute();
+                })
+                .thenCompose(storageAccountInnerGet -> {
+                    ctx.storageAccount = storageAccountInnerGet;
+
+                    return createStorageDescription(ctx)
+                            // Start next op, patch boot disk, in the sequence
+                            .thenCompose(woid -> {
+                                URI uri = ctx.computeRequest.buildUri(
+                                        ctx.bootDiskState.documentSelfLink);
+
+                                Operation patchBootDiskOp = Operation
+                                        .createPatch(uri)
+                                        .setBody(ctx.bootDiskState);
+
+                                return ctx.service.sendWithDeferredResult(patchBootDiskOp)
+                                        .thenRun(() -> ctx.service.logFine(
+                                                () -> String
+                                                        .format("Updating boot disk [%s]: SUCCESS",
+                                                                ctx.bootDiskState.name)));
+                            })
+                            // Return processed context with StorageAccount
+                            .thenApply(woid -> ctx.storageAccount);
+                })
+                // Return processed context with StorageAccount
+                .thenApply(ignore -> ctx);
     }
 
     private void createNetworkIfNotExist(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -1194,72 +1289,70 @@ public class AzureInstanceService extends StatelessService {
                 + "] for ["
                 + ctx.vmName + "] VM";
 
-        AzureProvisioningCallbackWithRetry<VirtualNetworkInner> handler = new
-                AzureProvisioningCallbackWithRetry<VirtualNetworkInner>(
-                        this, msg) {
+        AzureRetryHandler<VirtualNetworkInner> createCallbackHandler = new
+                AzureRetryHandler<VirtualNetworkInner>(msg, this) {
+            @Override
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> azureClient.createOrUpdateAsync(vNetRGName, vNetName,
+                        vNetToCreate, callback);
+            }
+        };
 
-                    @Override
-                    protected DeferredResult<VirtualNetworkInner> consumeProvisioningSuccess(
-                            VirtualNetworkInner vNet) {
-                        // Populate NICs with Azure Subnet
+        AzureRetryHandler<VirtualNetworkInner> getCallbackHandler = new
+                AzureRetryHandler<VirtualNetworkInner>(msg, this) {
+            @Override
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> azureClient.createOrUpdateAsync(vNetRGName, vNetName,
+                        vNetToCreate, callback);
+            }
+
+            @Override
+            protected boolean isSuccess(VirtualNetworkInner vNet, Throwable exception) {
+                if (!super.isSuccess(vNet, exception)) {
+                    return false;
+                }
+
+                // Return first NOT Succeeded state,
+                // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
+                if (vNet.subnets().size() == 0) {
+                    return false;
+                }
+                String subnetPS = vNet.subnets().stream()
+                        .map(SubnetInner::provisioningState)
+                        // Get if any is NOT Succeeded...
+                        .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
+                        // ...and return it.
+                        .findFirst()
+                        // Otherwise consider all are Succeeded
+                        .orElse(PROVISIONING_STATE_SUCCEEDED);
+
+                if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(vNet.provisioningState())
+                        && PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(subnetPS)) {
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        createCallbackHandler.execute()
+                .thenCompose(vNetCreate -> {
+                    return getCallbackHandler.execute().thenApply(vNetGet -> {
                         for (AzureNicContext nicCtx : ctx.nics) {
                             if (nicCtx.subnet == null) {
-                                nicCtx.subnet = vNet.subnets().stream()
+                                Optional<SubnetInner> firstFoundSubnet = vNetGet.subnets().stream()
                                         .filter(subnet -> subnet.name()
                                                 .equals(nicCtx.subnetState.name))
-                                        .findFirst().get();
+                                        .findFirst();
+                                if (firstFoundSubnet.isPresent()) {
+                                    nicCtx.subnet = firstFoundSubnet.get();
+                                } else {
+                                    continue;
+                                }
                             }
                         }
-                        return DeferredResult.completed(vNet);
-                    }
-
-                    @Override
-                    protected String getProvisioningState(VirtualNetworkInner vNet) {
-                        // Return first NOT Succeeded state,
-                        // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
-                        if (vNet.subnets().size() == 0) {
-                            return PROVISIONING_STATE_FAILED_NO_SUBNET;
-                        }
-                        String subnetPS = vNet.subnets().stream()
-                                .map(SubnetInner::provisioningState)
-                                // Get if any is NOT Succeeded...
-                                .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
-                                // ...and return it.
-                                .findFirst()
-                                // Otherwise consider all are Succeeded
-                                .orElse(PROVISIONING_STATE_SUCCEEDED);
-
-                        if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(vNet.provisioningState())
-                                && PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(subnetPS)) {
-
-                            return PROVISIONING_STATE_SUCCEEDED;
-                        }
-                        return vNet.provisioningState() + ":" + subnetPS;
-                    }
-
-                    @Override
-                    protected Runnable checkProvisioningStateCall(
-                            ServiceCallback<VirtualNetworkInner> checkProvisioningStateCallback) {
-                        return () -> azureClient.getByResourceGroupAsync(
-                                vNetRGName,
-                                vNetName,
-                                null /* expand */,
-                                checkProvisioningStateCallback);
-                    }
-
-                    @Override
-                    protected Runnable retryServiceCall(
-                            ServiceCallback<VirtualNetworkInner> retryCallback) {
-                        return () -> azureClient
-                                .createOrUpdateAsync(vNetRGName, vNetName, vNetToCreate,
-                                        retryCallback);
-                    }
-                };
-
-        azureClient.createOrUpdateAsync(vNetRGName, vNetName, vNetToCreate, handler);
-
-        handler.toDeferredResult()
-                .thenApply(ignore -> ctx)
+                        return ctx;
+                    });
+                })
                 .whenComplete(thenAllocation(ctx, nextStage, NETWORK_NAMESPACE));
     }
 
@@ -2744,105 +2837,43 @@ public class AzureInstanceService extends StatelessService {
         }
     }
 
-    private class StorageAccountProvisioningCallback
-            extends AzureProvisioningCallback<StorageAccountInner> {
+    /**
+     * Based on the queried result, in case no SA description exists for the given name, create
+     * a new one. For this purpose, StorageAccountKeys should be obtained, and with them
+     * AuthCredentialsServiceState is created, and a StorageDescription, pointing to that
+     * authentication description document.
+     */
+    private DeferredResult<StorageDescription> createStorageDescription(
+            AzureInstanceContext ctx) {
 
-        private final AzureInstanceContext ctx;
+        String msg = "Getting Azure StorageAccountKeys for [" + ctx.storageAccount.name()
+                + "] Storage Account";
 
-        StorageAccountProvisioningCallback(AzureInstanceContext ctx, String message) {
-            super(ctx.service, message);
+        AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler =
+                new Default<>(this, msg);
 
-            this.ctx = ctx;
+        getStorageManagementClientImpl(ctx)
+                .storageAccounts()
+                .listKeysAsync(ctx.storageAccountRGName, ctx.storageAccount.name(),
+                        handler);
 
-            addRecoverFromCloudError(STORAGE_ACCOUNT_ALREADY_EXIST);
-        }
+        return handler.toDeferredResult()
+                .thenCompose(keys -> {
+                    Operation createStorageDescOp = Operation
+                            .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
+                            .setBody(AzureUtils.constructStorageDescription(
+                                    getHost(), getSelfLink(),
+                                    ctx.storageAccount, ctx, keys))
+                            .setReferer(getUri());
+                    return sendWithDeferredResult(createStorageDescOp,
+                            StorageDescription.class);
+                })
+                .thenCompose(storageDescription -> {
+                    ctx.storageDescription = storageDescription;
+                    ctx.bootDiskState.storageDescriptionLink = storageDescription.documentSelfLink;
 
-        @Override
-        protected DeferredResult<StorageAccountInner> consumeProvisioningSuccess(
-                StorageAccountInner sa) {
-
-            this.ctx.storageAccount = sa;
-
-            return createStorageDescription(this.ctx)
-                    // Start next op, patch boot disk, in the sequence
-                    .thenCompose(woid -> {
-                        URI uri = this.ctx.computeRequest.buildUri(
-                                this.ctx.bootDiskState.documentSelfLink);
-
-                        Operation patchBootDiskOp = Operation
-                                .createPatch(uri)
-                                .setBody(this.ctx.bootDiskState);
-
-                        return this.ctx.service.sendWithDeferredResult(patchBootDiskOp)
-                                .thenRun(() -> this.ctx.service.logFine(
-                                        () -> String.format("Updating boot disk [%s]: SUCCESS",
-                                                this.ctx.bootDiskState.name)));
-                    })
-                    // Return processed context with StorageAccount
-                    .thenApply(woid -> this.ctx.storageAccount);
-        }
-
-        /**
-         * Based on the queried result, in case no SA description exists for the given name, create
-         * a new one. For this purpose, StorageAccountKeys should be obtained, and with them
-         * AuthCredentialsServiceState is created, and a StorageDescription, pointing to that
-         * authentication description document.
-         */
-        private DeferredResult<StorageDescription> createStorageDescription(
-                AzureInstanceContext ctx) {
-
-            String msg = "Getting Azure StorageAccountKeys for [" + ctx.storageAccount.name()
-                    + "] Storage Account";
-
-            AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler =
-                    new Default<>(this.service, msg);
-
-            getStorageManagementClientImpl(ctx)
-                    .storageAccounts()
-                    .listKeysAsync(ctx.storageAccountRGName, ctx.storageAccount.name(),
-                            handler);
-
-            return handler.toDeferredResult()
-                    .thenCompose(keys -> {
-                        Operation createStorageDescOp = Operation
-                                .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
-                                .setBody(AzureUtils.constructStorageDescription(
-                                        getHost(), getSelfLink(),
-                                        ctx.storageAccount, ctx, keys))
-                                .setReferer(getUri());
-                        return sendWithDeferredResult(createStorageDescOp,
-                                StorageDescription.class);
-                    })
-                    .thenCompose(storageDescription -> {
-                        ctx.storageDescription = storageDescription;
-                        ctx.bootDiskState.storageDescriptionLink = storageDescription.documentSelfLink;
-
-                        return DeferredResult.completed(ctx.storageDescription);
-                    });
-        }
-
-        @Override
-        protected String getProvisioningState(StorageAccountInner sa) {
-            ProvisioningState provisioningState = sa.provisioningState();
-
-            // For some reason SA.provisioningState is null, so consider it CREATING.
-            if (provisioningState == null) {
-                return ProvisioningState.CREATING.name();
-            }
-
-            return provisioningState.name();
-        }
-
-        @Override
-        protected Runnable checkProvisioningStateCall(
-                ServiceCallback<StorageAccountInner> checkProvisioningStateCallback) {
-            return () -> getStorageManagementClientImpl(this.ctx)
-                    .storageAccounts()
-                    .getByResourceGroupAsync(
-                            this.ctx.storageAccountRGName,
-                            this.ctx.storageAccountName,
-                            checkProvisioningStateCallback);
-        }
+                    return DeferredResult.completed(ctx.storageDescription);
+                });
     }
 
     /**

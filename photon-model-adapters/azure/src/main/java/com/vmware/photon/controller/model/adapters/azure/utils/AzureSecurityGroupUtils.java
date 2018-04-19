@@ -13,9 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import com.microsoft.azure.management.network.SecurityRuleAccess;
 import com.microsoft.azure.management.network.SecurityRuleDirection;
@@ -25,7 +28,6 @@ import com.microsoft.azure.management.network.implementation.NetworkSecurityGrou
 import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
 import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
-import com.microsoft.rest.ServiceCallback;
 
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
@@ -75,42 +77,46 @@ public class AzureSecurityGroupUtils {
 
         service.logInfo(() -> msg);
 
-        AzureProvisioningCallbackWithRetry<NetworkSecurityGroupInner> handler =
-                new AzureProvisioningCallbackWithRetry<NetworkSecurityGroupInner>(service, msg) {
+        AzureRetryHandler<NetworkSecurityGroupInner> createCallbackHandler = new
+                AzureRetryHandler<NetworkSecurityGroupInner>(msg, service) {
                     @Override
-                    protected DeferredResult<NetworkSecurityGroupInner> consumeProvisioningSuccess(
-                            NetworkSecurityGroupInner securityGroup) {
-
-                        return DeferredResult.completed(securityGroup);
-                    }
-
-                    @Override
-                    protected Runnable checkProvisioningStateCall(
-                            ServiceCallback<NetworkSecurityGroupInner> checkProvisioningStateCallback) {
-                        return () -> azureClient.getByResourceGroupAsync(
-                                resourceGroupName,
-                                sgName,
-                                null /* expand */,
-                                checkProvisioningStateCallback);
-                    }
-
-                    @Override
-                    protected String getProvisioningState(NetworkSecurityGroupInner body) {
-                        return body.provisioningState();
-                    }
-
-                    @Override
-                    protected Runnable retryServiceCall(ServiceCallback<NetworkSecurityGroupInner>
-                            retryCallback) {
-                        return () -> azureClient.createOrUpdateAsync(resourceGroupName, sgName,
-                                securityGroup, retryCallback);
+                    protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                        return (callback) -> azureClient.createOrUpdateAsync(resourceGroupName, sgName,
+                                securityGroup, callback);
                     }
                 };
 
-        azureClient.createOrUpdateAsync(resourceGroupName, sgName,
-                securityGroup, handler);
+        AzureRetryHandler<NetworkSecurityGroupInner> getCallbackHandler = new
+                AzureRetryHandler<NetworkSecurityGroupInner>(msg, service) {
+                    @Override
+                    protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                        return (callback) -> azureClient.getByResourceGroupAsync(
+                                resourceGroupName,
+                                sgName,
+                                null /* expand */,
+                                callback);
+                    }
 
-        return handler.toDeferredResult();
+                    @Override
+                    protected boolean isSuccess(NetworkSecurityGroupInner networkSecurityGroupInner,
+                            Throwable exception) {
+                        if (!super.isSuccess(networkSecurityGroupInner, exception)) {
+                            return false;
+                        }
+
+                        if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase
+                                (networkSecurityGroupInner.provisioningState())) {
+                            return true;
+                        }
+
+                        return false;
+                    }
+                };
+
+        return createCallbackHandler.execute()
+                .thenCompose(networkSecurityGroupInner -> {
+                    return getCallbackHandler.execute();
+                });
     }
 
     public static DeferredResult<NetworkSecurityGroupInner> getSecurityGroup(

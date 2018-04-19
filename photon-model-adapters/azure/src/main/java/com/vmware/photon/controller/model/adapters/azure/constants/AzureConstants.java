@@ -200,6 +200,15 @@ public class AzureConstants {
             + "subscriptions/{subscriptionId}/providers/{resourceProviderNamespace}";
     public static final String PROVIDER_PERMISSIONS_URI = PROVIDER_URI + "/permissions";
 
+    public static final String PROPERTY_NAME_AZURE_REST_API_RETRY = UriPaths.PROPERTY_PREFIX
+            + AzureConstants.class.getSimpleName() + ".";
+    // maximum duration over all retry attempts - default to 10 min.
+    public static final int AZURE_REST_API_RETRY_MAX_DURATION = Integer.getInteger
+            (PROPERTY_NAME_AZURE_REST_API_RETRY + "REST_API_MAX_DURATION",10);
+    // delay between each try attempt - default to 250 ms.
+    public static final int AZURE_REST_API_RETRY_DELAY = Integer.getInteger
+            (PROPERTY_NAME_AZURE_REST_API_RETRY + "REST_API_RETRY_DELAY",500);
+
     public static final String STATUS_SUBNET_NOT_VALID = "not valid";
     /**
      * The required name for any gateway subnet.

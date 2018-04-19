@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
 import static com.vmware.photon.controller.model.util.PhotonModelUriUtils.createInventoryUri;
 
 import java.net.URI;
@@ -24,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
@@ -60,7 +62,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureBaseAdapterC
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallbackWithRetry;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureRetryHandler;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSecurityGroupUtils;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -455,44 +457,49 @@ public class AzureLoadBalancerService extends StatelessService {
                         + context.loadBalancerStateExpanded.name + "].";
         logInfo(() -> msg);
 
-        AzureProvisioningCallbackWithRetry<PublicIPAddressInner> handler = new
-                AzureProvisioningCallbackWithRetry<PublicIPAddressInner>(
-                this, msg) {
+        AzureRetryHandler<PublicIPAddressInner> createCallbackHandler = new
+                AzureRetryHandler<PublicIPAddressInner>(msg, this) {
             @Override
-            protected DeferredResult<PublicIPAddressInner> consumeProvisioningSuccess(
-                    PublicIPAddressInner publicIPAddress) {
-                context.publicIPAddressInner = publicIPAddress;
-                return DeferredResult.completed(publicIPAddress);
-            }
-
-            @Override
-            protected String getProvisioningState(PublicIPAddressInner publicIPAddress) {
-                return publicIPAddress.provisioningState();
-            }
-
-            @Override
-            protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<PublicIPAddressInner> checkProvisioningStateCallback) {
-                return () -> azurePublicIPAddressClient.getByResourceGroupAsync(
-                        context.resourceGroupName,
-                        publicIPName,
-                        null /* expand */,
-                        checkProvisioningStateCallback);
-            }
-
-            @Override
-            protected Runnable retryServiceCall(ServiceCallback<PublicIPAddressInner>
-                    retryCallback) {
-                return () -> azurePublicIPAddressClient.createOrUpdateAsync(context
-                                .resourceGroupName, publicIPName, publicIPAddress, retryCallback);
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> azurePublicIPAddressClient.createOrUpdateAsync(context
+                                .resourceGroupName, publicIPName, publicIPAddress, callback);
             }
         };
 
-        azurePublicIPAddressClient
-                .createOrUpdateAsync(context.resourceGroupName, publicIPName, publicIPAddress,
-                        handler);
-        return handler.toDeferredResult()
-                .thenApply(ignore -> context);
+        AzureRetryHandler<PublicIPAddressInner> getCallbackHandler = new
+                AzureRetryHandler<PublicIPAddressInner>(msg, this) {
+            @Override
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> azurePublicIPAddressClient.getByResourceGroupAsync(
+                        context.resourceGroupName,
+                        publicIPName,
+                        null /* expand */,
+                        callback);
+            }
+
+            @Override
+            protected boolean isSuccess(PublicIPAddressInner publicIPAddress, Throwable exception) {
+                if (!super.isSuccess(publicIPAddress, exception)) {
+                    return false;
+                }
+
+                if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(publicIPAddress
+                        .provisioningState())) {
+                    return true;
+                }
+
+                return false;
+            }
+        };
+
+        return createCallbackHandler.execute()
+                .thenCompose(publicIPAddressCreate -> {
+                    return getCallbackHandler.execute()
+                            .thenApply(publicIPAddressGet -> {
+                                context.publicIPAddressInner = publicIPAddressGet;
+                                return context;
+                            });
+                });
     }
 
     /**
@@ -994,41 +1001,46 @@ public class AzureLoadBalancerService extends StatelessService {
         NetworkInterfacesInner azureNetworkInterfaceClient = context.azureSdkClients
                 .getNetworkManagementClientImpl().networkInterfaces();
 
-        AzureProvisioningCallbackWithRetry<NetworkInterfaceInner> handler =
-                new AzureProvisioningCallbackWithRetry<NetworkInterfaceInner>(this, msg) {
-                    @Override
-                    protected DeferredResult<NetworkInterfaceInner> consumeProvisioningSuccess(
-                            NetworkInterfaceInner networkInterfaceInner) {
-                        return DeferredResult.completed(networkInterfaceInner);
-                    }
+        AzureRetryHandler<NetworkInterfaceInner> createCallbackHandler = new
+                AzureRetryHandler<NetworkInterfaceInner>(msg, this) {
+            @Override
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> azureNetworkInterfaceClient
+                        .createOrUpdateAsync(networkInterfaceResGrp, networkInterfaceInner.name(),
+                                networkInterfaceInner, callback);
+            }
+        };
 
-                    @Override
-                    protected Runnable checkProvisioningStateCall(
-                            ServiceCallback<NetworkInterfaceInner> checkProvisioningStateCallback) {
-                        return () -> azureNetworkInterfaceClient.getByResourceGroupAsync(
-                                networkInterfaceResGrp,
-                                networkInterfaceInner.name(),
-                                null /* expand */,
-                                checkProvisioningStateCallback);
-                    }
+        AzureRetryHandler<NetworkInterfaceInner> getCallbackHandler = new
+                AzureRetryHandler<NetworkInterfaceInner>(msg, this) {
+            @Override
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> azureNetworkInterfaceClient.getByResourceGroupAsync(
+                        networkInterfaceResGrp,
+                        networkInterfaceInner.name(),
+                        null /* expand */,
+                        callback);
+            }
 
-                    @Override
-                    protected String getProvisioningState(NetworkInterfaceInner body) {
-                        return body.provisioningState();
-                    }
+            @Override
+            protected boolean isSuccess(NetworkInterfaceInner networkInterfaceInner, Throwable exception) {
+                if (!super.isSuccess(networkInterfaceInner, exception)) {
+                    return false;
+                }
 
-                    @Override
-                    protected Runnable retryServiceCall(ServiceCallback<NetworkInterfaceInner> retryCallback) {
-                        return () -> azureNetworkInterfaceClient
-                                .createOrUpdateAsync(networkInterfaceResGrp, networkInterfaceInner.name(),
-                                        networkInterfaceInner, retryCallback);
-                    }
-                };
+                if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(networkInterfaceInner
+                        .provisioningState())) {
+                    return true;
+                }
 
-        azureNetworkInterfaceClient
-                .createOrUpdateAsync(networkInterfaceResGrp, networkInterfaceInner.name(),
-                        networkInterfaceInner, handler);
-        return handler.toDeferredResult();
+                return false;
+            }
+        };
+
+        return createCallbackHandler.execute()
+                .thenCompose(networkInterfaceInnerCreate -> {
+                    return getCallbackHandler.execute();
+                });
     }
 
     /**
@@ -1050,9 +1062,14 @@ public class AzureLoadBalancerService extends StatelessService {
                 .format("Deleting Azure load balancer [%s] in resource group [%s].",
                         loadBalancerName, rgName);
 
-        AzureDeferredResultServiceCallback<Void> handler = createDeleteHandler(msg);
-        azureLoadBalancerClient.deleteAsync(rgName, loadBalancerName, handler);
-        return handler.toDeferredResult().thenApply(ignore -> context);
+        AzureRetryHandler<Void> handler = new AzureRetryHandler<Void>(msg, this) {
+            @Override
+            protected Consumer<AzureAsyncCallback> getAzureAsyncFunction() {
+                return (callback) -> azureLoadBalancerClient
+                        .deleteAsync(rgName, loadBalancerName, callback);
+            }
+        };
+        return handler.execute().thenApply(ignore -> context);
     }
 
     /**
