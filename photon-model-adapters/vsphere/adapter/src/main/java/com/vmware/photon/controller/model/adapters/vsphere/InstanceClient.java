@@ -94,6 +94,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.util.PhotonModelUriUtils;
+import com.vmware.vim25.ArrayOfDatastoreHostMount;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -101,6 +102,7 @@ import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.DuplicateName;
 import com.vmware.vim25.DuplicateNameFaultMsg;
 import com.vmware.vim25.FileAlreadyExists;
+import com.vmware.vim25.HostMountMode;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidNameFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -1976,17 +1978,46 @@ public class InstanceClient extends BaseHelper {
         String datastorePath = this.ctx.child.description.dataStoreId;
 
         if (datastorePath == null) {
-            ArrayOfManagedObjectReference datastores = findDatastoresForPlacement(
-                    this.ctx.computeMoRef);
+            ArrayOfManagedObjectReference datastores = findDatastoresForPlacement(this.ctx.computeMoRef);
+
             if (datastores == null || datastores.getManagedObjectReference().isEmpty()) {
                 this.datastore = this.finder.defaultDatastore().object;
             } else {
-                this.datastore = datastores.getManagedObjectReference().get(0);
+                this.datastore = findReadWriteDatastore(datastores);
             }
         } else {
             this.datastore = this.finder.datastore(datastorePath).object;
         }
+        return this.datastore;
+    }
 
+    /**
+     * Method to filter a datastore which is mounted with "readWrite" accessMode.
+     * If any read-write mode datastore is not found then system default datastore is returned.
+     */
+    private ManagedObjectReference findReadWriteDatastore(ArrayOfManagedObjectReference datastores)
+            throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException {
+
+        for (ManagedObjectReference dataStoreReference : datastores.getManagedObjectReference()) {
+            ArrayOfDatastoreHostMount dsHosts = this.get.entityProp(dataStoreReference, VimPath.res_host);
+
+            if (dsHosts != null && dsHosts.getDatastoreHostMount() != null &&
+                    CollectionUtils.isNotEmpty(dsHosts.getDatastoreHostMount())) {
+                boolean foundReadWriteHost = dsHosts.getDatastoreHostMount()
+                        .stream()
+                        .anyMatch(dsHostMount -> dsHostMount.getMountInfo() != null &&
+                                dsHostMount.getMountInfo().getAccessMode()
+                                        .equals(HostMountMode.READ_WRITE.value()));
+                if (foundReadWriteHost) {
+                    this.datastore = dataStoreReference;
+                    break;
+                }
+            }
+        }
+        // If datastore is not found then assign a system default one.
+        if (this.datastore == null) {
+            this.datastore = this.finder.defaultDatastore().object;
+        }
         return this.datastore;
     }
 
