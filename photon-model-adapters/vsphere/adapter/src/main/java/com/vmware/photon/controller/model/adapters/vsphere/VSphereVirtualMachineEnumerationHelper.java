@@ -22,6 +22,7 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,9 @@ import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
@@ -467,8 +470,8 @@ public class VSphereVirtualMachineEnumerationHelper {
                             .documentSelfLink));
                     patchOnComputeState(service, state, oldDocument, enumerationProgress, vm);
                 } else {
-                    List<DiskService.DiskStateExpanded> currentDisks = operations.values().stream()
-                            .map(op -> op.getBody(DiskService.DiskStateExpanded.class))
+                    List<DiskStateExpanded> currentDisks = operations.values().stream()
+                            .map(op -> op.getBody(DiskStateExpanded.class))
                             .collect(Collectors.toList());
                     List<Operation> diskUpdateOps = new ArrayList<>(currentDisks.size());
 
@@ -477,7 +480,7 @@ public class VSphereVirtualMachineEnumerationHelper {
 
                     // Process the update of disks and then patch the compute
                     for (VirtualDevice device : vm.getDisks()) {
-                        DiskService.DiskStateExpanded matchedDs = findMatchingDiskState(device,
+                        DiskStateExpanded matchedDs = findMatchingDiskState(device,
                                 currentDisks);
 
                         // remove the active disk links
@@ -504,6 +507,22 @@ public class VSphereVirtualMachineEnumerationHelper {
                     // in such case, diskUpdateOps is empty.
                     if (CollectionUtils.isNotEmpty(diskUpdateOps)) {
                         OperationJoin.create(diskUpdateOps).setCompletion((operationMap, exception) -> {
+                            //  Delete disk states whose disks are deleted in vsphere.
+                            if (CollectionUtils.isNotEmpty(disksToDelete)) {
+                                Map<String, Collection<Object>> collectionToRemove = Collections
+                                        .singletonMap(ComputeState.FIELD_NAME_DISK_LINKS,
+                                                new ArrayList<>(disksToDelete));
+                                ServiceStateCollectionUpdateRequest updateDiskLinksRequest = ServiceStateCollectionUpdateRequest
+                                        .create(null, collectionToRemove);
+                                Operation.createPatch(PhotonModelUriUtils
+                                        .createInventoryUri(service.getHost(), oldDocument.documentSelfLink))
+                                        .setBody(updateDiskLinksRequest).setCompletion((o, e) -> {
+                                            if (null != e) {
+                                                service.logSevere("Error while removing disks %s for vm %s", Utils.toJson(disksToDelete), oldDocument.documentSelfLink);
+                                            }
+                                        }).sendWith(service);
+                            }
+
                             updateComputeStateWithProvisionGB(state, operationMap);
                             patchOnComputeState(service, state, oldDocument, enumerationProgress, vm);
                         }).sendWith(service);
