@@ -179,6 +179,10 @@ public class LoadBalancerService extends StatefulService {
         public Set<ResourceState> targets;
         public Set<SubnetState> subnets;
 
+        static {
+            registerCustomDeserializer();
+        }
+
         public static URI buildUri(URI loadBalancerStateUri) {
             return UriUtils.buildExpandLinksQueryUri(loadBalancerStateUri);
         }
