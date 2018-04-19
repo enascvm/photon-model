@@ -19,7 +19,6 @@ import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountEr
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.ENDPOINT_OWNER_ADDITIONAL_FAILED;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.ENDPOINT_TAG_NULL_EMPTY;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.ENDPOINT_TYPE_REQUIRED;
-import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.INVALID_COST_USAGE_PARAMS_ERROR;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.INVALID_ENDPOINT_OWNER;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.INVALID_ENDPOINT_TYPE;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountErrorCode.INVALID_ORG_LINK;
@@ -27,11 +26,6 @@ import static com.vmware.photon.controller.discovery.cloudaccount.utils.ClusterU
 import static com.vmware.photon.controller.discovery.common.utils.InventoryQueryUtils.startInventoryQueryTask;
 import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.addReplicationQuorumHeader;
 import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getDefaultProjectSelfLink;
-import static com.vmware.photon.controller.discovery.common.utils.StringUtil.isEmpty;
-import static com.vmware.photon.controller.discovery.endpoints.CostUsageReportCreationUtils.deleteCostAndUsageConfiguration;
-import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET;
-import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BUCKET_PREFIX;
-import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.buildEndpointAdapterUri;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.buildEndpointAuthzArtifactSelfLink;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.buildTagsQuery;
@@ -494,11 +488,12 @@ public class EndpointCreationTaskService extends TaskService<EndpointCreationTas
             verifyOrgAccess(task, SubStage.VALIDATE_ENDPOINT);
             break;
         case VALIDATE_ENDPOINT:
-            validateEndpoint(task, SubStage.CREATE_COST_USAGE_REPORT);
+            validateEndpoint(task, SubStage.VALIDATE_OWNERS);
             break;
-        case CREATE_COST_USAGE_REPORT:
-            createCostUsageReport(task, SubStage.VALIDATE_OWNERS);
-            break;
+            // TODO: Create a CostUsage handler to pass in to handle this logic.
+//        case CREATE_COST_USAGE_REPORT:
+//            createCostUsageReport(task, SubStage.VALIDATE_OWNERS);
+//            break;
         case VALIDATE_OWNERS:
             validateEndpointOwners(task, SubStage.CREATE_PERMISSIONS);
             break;
@@ -953,101 +948,6 @@ public class EndpointCreationTaskService extends TaskService<EndpointCreationTas
     }
 
     /**
-     * Create a cost usage report
-     */
-    private void createCostUsageReport(EndpointCreationTaskState task, SubStage nextStage) {
-        if (task.isMock) {
-            task.subStage = nextStage;
-            sendSelfPatch(task);
-            return;
-        }
-
-        // if not AWS endpoint/account, move to next stage
-        if (!task.type.equals(EndpointType.aws.name()) || task.credentials.aws == null) {
-            task.subStage = nextStage;
-            sendSelfPatch(task);
-            return;
-        }
-
-        // skip this stage if s3 bucketName is empty
-        if (task.customProperties == null
-                || isEmpty(task.customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET))
-                // if s3bucketName is present, then we need other 2 properties to be set.
-                || (!isEmpty(task.customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET))
-                    && (isEmpty(task.customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BUCKET_PREFIX))
-                    && isEmpty(task.customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME))))) {
-
-            task.subStage = nextStage;
-            sendSelfPatch(task);
-            return;
-        }
-
-        String s3bucketName = task.customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET);
-        String bucketPrefix = task.customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BUCKET_PREFIX);
-        String costAndUsageReportName =
-                task.customProperties.get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME);
-
-        // if s3bucketName is present, but one of the other 2 properties is empty
-        // throw an error
-        if (!isEmpty(s3bucketName)
-                && (isEmpty(bucketPrefix) || isEmpty(costAndUsageReportName))) {
-
-            handleError(task, INVALID_COST_USAGE_PARAMS_ERROR.getMessage(),
-                    Operation.STATUS_CODE_BAD_REQUEST,
-                    INVALID_COST_USAGE_PARAMS_ERROR.getErrorCode());
-            return;
-        }
-
-        // all 3 properties are not null or empty
-        AwsCostUsageReportTaskService.AwsCostUsageReportTaskState awsCostUsageReportTaskState =
-                new AwsCostUsageReportTaskService.AwsCostUsageReportTaskState();
-
-        awsCostUsageReportTaskState.credentials = task.credentials;
-        awsCostUsageReportTaskState.s3bucketName = s3bucketName;
-        awsCostUsageReportTaskState.s3bucketPrefix = bucketPrefix;
-        awsCostUsageReportTaskState.costUsageReportName = costAndUsageReportName;
-
-        if (!task.isMock) {
-            awsCostUsageReportTaskState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
-        }
-        awsCostUsageReportTaskState.taskInfo = TaskState.createDirect();
-
-        Operation reportValidateOp = Operation
-                .createPost(this, AwsCostUsageReportTaskService.FACTORY_LINK)
-                .setBody(awsCostUsageReportTaskState).setReferer(getUri());
-
-        setAuthorizationContext(reportValidateOp, getSystemAuthorizationContext());
-        OperationContext origCtx = OperationContext.getOperationContext();
-
-        sendWithDeferredResult(reportValidateOp)
-                .whenComplete((o, e) -> {
-                    OperationContext.restoreOperationContext(origCtx);
-                    if (e != null) {
-                        logWarning(Utils.toString(e));
-                        handleError(task, e.getMessage(), o.getStatusCode());
-                        return;
-                    }
-
-                    AwsCostUsageReportTaskService.AwsCostUsageReportTaskState  body =
-                            o.getBody(AwsCostUsageReportTaskService.AwsCostUsageReportTaskState.class);
-                    if (body.taskInfo != null && body.taskInfo.stage == TaskStage.FAILED) {
-                        if (body.taskInfo.failure != null) {
-                            handleError(task, body.taskInfo.failure.message,
-                                    body.taskInfo.failure.statusCode,
-                                    body.taskInfo.failure.messageId != null ?
-                                            Integer.parseInt(body.taskInfo.failure.messageId) :
-                                            Integer.MIN_VALUE);
-                            return;
-                        }
-                        handleError(task, task.failureMessage, Operation.STATUS_CODE_INTERNAL_ERROR);
-                        return;
-                    }
-                    task.subStage = nextStage;
-                    sendSelfPatch(task);
-                });
-    }
-
-    /**
      * Creates the endpoint.
      */
     private void createEndpoint(EndpointCreationTaskState task, SubStage nextStage) {
@@ -1090,12 +990,13 @@ public class EndpointCreationTaskService extends TaskService<EndpointCreationTas
                 .whenComplete((o, e) -> {
                     if (e != null) {
                         logWarning(Utils.toString(e));
+                        // TODO: Create a CostUsage handler to pass in.
                         // Reverting the change done in CREATE_COST_USAGE_REPORT stage
-                        if (task.credentials != null && task.customProperties != null) {
-                            deleteCostAndUsageConfiguration(task.credentials,
-                                    task.customProperties
-                                            .get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME));
-                        }
+//                        if (task.credentials != null && task.customProperties != null) {
+//                            deleteCostAndUsageConfiguration(task.credentials,
+//                                    task.customProperties
+//                                            .get(ENDPOINT_CUSTOM_PROPERTY_NAME_CI_COSTUSAGE_REPORT_NAME));
+//                        }
 
                         handleError(task, e.getMessage(), o.getStatusCode());
                         return;
