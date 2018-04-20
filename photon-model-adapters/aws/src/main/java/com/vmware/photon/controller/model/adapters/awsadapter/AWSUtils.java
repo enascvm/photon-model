@@ -156,6 +156,8 @@ public class AWSUtils {
     public static final String NO_VALUE = "no-value";
     public static final String TILDA = "~";
     public static final String AWS_MOCK_EC2_ENDPOINT = "/aws-mock/ec2-endpoint/";
+    public static final String AWS_MOCK_ACCESSID = "aws-mock-accessid";
+    public static final String AWS_MOCK_SECRCTKEY = "aws-mock-secertkey";
     public static final String AWS_MOCK_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
     public static final String AWS_MOCK_LOAD_BALANCING_ENDPOINT = "/aws-mock/load-balancing-endpoint/";
     public static final String AWS_REGION_HEADER = "region";
@@ -291,9 +293,17 @@ public class AWSUtils {
         awsMockHost = mockHost;
     }
 
+    public static boolean isAwsClientMock(AuthCredentialsServiceState credentials) {
+        if (credentials.privateKeyId.startsWith(AWS_MOCK_ACCESSID) &&
+                credentials.privateKey.startsWith(AWS_MOCK_SECRCTKEY)) {
+            return System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY) == null ? IS_AWS_CLIENT_MOCK : true;
+        } else {
+            return false;
+        }
+    }
+
     public static boolean isAwsClientMock() {
-        return System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY) == null ? IS_AWS_CLIENT_MOCK
-                : true;
+        return System.getProperty(AWS_MOCK_HOST_SYSTEM_PROPERTY) == null ? IS_AWS_CLIENT_MOCK : true;
     }
 
     public static void setAwsClientMock(boolean isAwsClientMock) {
@@ -369,7 +379,7 @@ public class AWSUtils {
             region = Regions.DEFAULT_REGION.getName();
         }
 
-        if (isAwsClientMock()) {
+        if (isAwsClientMock(credentials)) {
             configuration.addHeader(AWS_REGION_HEADER, region);
             ec2AsyncClientBuilder.setClientConfiguration(configuration);
             AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
@@ -492,7 +502,7 @@ public class AWSUtils {
             region = Regions.DEFAULT_REGION.getName();
         }
 
-        if (isAwsClientMock()) {
+        if (isAwsClientMock(credentials)) {
             configuration.addHeader(AWS_REGION_HEADER, region);
             amazonCloudWatchAsyncClientBuilder.setClientConfiguration(configuration);
             AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
@@ -615,7 +625,7 @@ public class AWSUtils {
             region = Regions.DEFAULT_REGION.getName();
         }
 
-        if (isAwsClientMock()) {
+        if (isAwsClientMock(credentials)) {
             AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
                     getAWSMockHost() + AWS_MOCK_LOAD_BALANCING_ENDPOINT, region);
             amazonElasticLoadBalancingAsyncClientBuilder
@@ -670,7 +680,7 @@ public class AWSUtils {
                 .withCredentials(getAwsStaticCredentialsProvider(credentials))
                 .withRegion(regionId);
 
-        if (isAwsClientMock()) {
+        if (isAwsClientMock(credentials)) {
             throw new IllegalArgumentException("AWS Mock does not support S3 client");
         }
 
