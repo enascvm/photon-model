@@ -501,24 +501,26 @@ public class VSphereAdapterInstanceService extends StatelessService {
         for (VirtualDevice disk : disks) {
             DiskStateExpanded matchedDs = findMatchingDiskState(disk, ctx.disks);
             if (disk instanceof VirtualDisk) {
-                Operation diskOp = handleVirtualDiskUpdate(ctx.child.endpointLink, matchedDs, (VirtualDisk) disk,
+                Operation diskOp = handleVirtualDiskUpdate(ctx.child.endpointLink,
+                        ctx.child.tenantLinks, matchedDs, (VirtualDisk) disk,
                         diskLinks, ctx.parent.description.regionId, this, CustomProperties.of(state)
                                 .getString(CustomProperties.MOREF), CustomProperties.of(state)
-                                .getString(CustomProperties.DATACENTER_SELF_LINK), null, null, ctx.morefToDSSelfLinkMap);
+                                .getString(CustomProperties.DATACENTER_SELF_LINK), null, null,
+                        ctx.morefToDSSelfLinkMap);
                 DiskService.DiskState diskState = diskOp.getBody(DiskService.DiskState.class);
                 long diskProvisionGB = CustomProperties.of(diskState)
                         .getLong(CustomProperties.DISK_PROVISION_IN_GB, 0L);
                 totalProvisionGB += diskProvisionGB;
                 diskOp.sendWith(this);
             } else if (disk instanceof VirtualCdrom) {
-                handleVirtualDeviceUpdate(ctx.child.endpointLink, matchedDs, DiskType.CDROM, disk,
-                        diskLinks, ctx.parent.description.regionId, this, true, CustomProperties.of(state)
-                                .getString(CustomProperties.DATACENTER_SELF_LINK))
+                handleVirtualDeviceUpdate(ctx.child.endpointLink, ctx.child.tenantLinks,
+                        matchedDs, DiskType.CDROM, disk, diskLinks, ctx.parent.description.regionId,
+                        this, true, CustomProperties.of(state).getString(CustomProperties.DATACENTER_SELF_LINK))
                         .sendWith(this);
             } else if (disk instanceof VirtualFloppy) {
-                handleVirtualDeviceUpdate(ctx.child.endpointLink, matchedDs, DiskType.FLOPPY, disk,
-                        diskLinks, ctx.parent.description.regionId, this, true, CustomProperties.of(state)
-                                .getString(CustomProperties.DATACENTER_SELF_LINK))
+                handleVirtualDeviceUpdate(ctx.child.endpointLink, ctx.child.tenantLinks, matchedDs,
+                        DiskType.FLOPPY, disk, diskLinks, ctx.parent.description.regionId, this,
+                        true, CustomProperties.of(state).getString(CustomProperties.DATACENTER_SELF_LINK))
                         .sendWith(this);
             }
         }

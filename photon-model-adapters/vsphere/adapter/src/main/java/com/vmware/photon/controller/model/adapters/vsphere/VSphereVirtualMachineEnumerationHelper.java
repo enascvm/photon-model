@@ -365,19 +365,20 @@ public class VSphereVirtualMachineEnumerationHelper {
             VirtualDevice device, EnumerationProgress enumerationProgress, List<String> diskLinks,
             String vm, ComputeState oldDocument) {
         if (device instanceof VirtualDisk) {
-            return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink, matchedDs,
+            return handleVirtualDiskUpdate(enumerationProgress.getRequest().endpointLink,
+                    enumerationProgress.getTenantLinks(), matchedDs,
                     (VirtualDisk) device, diskLinks, enumerationProgress.getRegionId(), service,
                     vm, enumerationProgress.getDcLink(), enumerationProgress, oldDocument,
                     Collections.emptyMap());
         } else if (device instanceof VirtualCdrom) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
-                    matchedDs, DiskService.DiskType.CDROM, device,
-                    diskLinks, enumerationProgress.getRegionId(), service, false,
+                    enumerationProgress.getTenantLinks(), matchedDs, DiskService.DiskType.CDROM,
+                    device, diskLinks, enumerationProgress.getRegionId(), service, false,
                     enumerationProgress.getDcLink());
         } else if (device instanceof VirtualFloppy) {
             return handleVirtualDeviceUpdate(enumerationProgress.getRequest().endpointLink,
-                    matchedDs, DiskService.DiskType.FLOPPY, device,
-                    diskLinks, enumerationProgress.getRegionId(), service, false,
+                    enumerationProgress.getTenantLinks(), matchedDs, DiskService.DiskType.FLOPPY,
+                    device, diskLinks, enumerationProgress.getRegionId(), service, false,
                     enumerationProgress.getDcLink());
         }
         return null;

@@ -882,7 +882,7 @@ public class ClientUtils {
     /**
      * Process VirtualDisk and update the details in the diskLinks of the provisioned compute
      */
-    public static Operation handleVirtualDiskUpdate(String endpointLink,
+    public static Operation handleVirtualDiskUpdate(String endpointLink, List<String> tenantLinks,
             DiskStateExpanded matchedDs, VirtualDisk disk, List<String> diskLinks,
             String regionId, Service service, String vm, String dcLink, EnumerationProgress ctx,
             ComputeState oldDocument, Map<String, String> morefToDSSelfLinkMap) {
@@ -908,6 +908,7 @@ public class ClientUtils {
             ds.capacityMBytes = disk.getCapacityInKB() / 1024;
             ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
             ds.persistent = Boolean.FALSE;
+            ds.tenantLinks = tenantLinks;
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
             updateDiskStateFromBackingInfo(backing, ds);
@@ -935,6 +936,7 @@ public class ClientUtils {
                 matchedDs.persistent = Boolean.FALSE;
             }
             ds.regionId = regionId;
+            ds.tenantLinks = tenantLinks;
             addEndpointLinks(ds, endpointLink);
             updateDiskStateFromVirtualDisk(disk, ds);
             updateDiskStateFromBackingInfo(backing, ds);
@@ -988,13 +990,14 @@ public class ClientUtils {
     /**
      * Process VirtualCdRom and update the details in the diskLinks of the provisioned compute
      */
-    public static Operation handleVirtualDeviceUpdate(String endpointLink,
+    public static Operation handleVirtualDeviceUpdate(String endpointLink, List<String> tenantLinks,
             DiskStateExpanded matchedDs,
             DiskType type, VirtualDevice disk, List<String> diskLinks, String regionId,
             Service service, boolean isBacking, String dcLink) {
         Operation operation;
         if (matchedDs == null) {
             DiskService.DiskState ds = createNewDiskState(type, disk, regionId, service);
+            ds.tenantLinks = tenantLinks;
             addEndpointLinks(ds, endpointLink);
             if (isBacking) {
                 updateDiskStateFromVirtualDevice(disk, ds, disk.getBacking(), dcLink);
@@ -1008,6 +1011,7 @@ public class ClientUtils {
             if (matchedDs.persistent == null) {
                 matchedDs.persistent = Boolean.FALSE;
             }
+            matchedDs.tenantLinks = tenantLinks;
             addEndpointLinks(matchedDs, endpointLink);
             operation = createDiskPatch(matchedDs, service);
         }
