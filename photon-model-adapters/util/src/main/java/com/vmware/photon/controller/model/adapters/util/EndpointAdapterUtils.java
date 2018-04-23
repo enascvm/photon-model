@@ -110,7 +110,12 @@ public class EndpointAdapterUtils {
         host.registerForServiceAvailability((op, ex) -> {
 
             if (ex != null) {
-                String adapterPath = op.getUri().getPath();
+                //When xenon is in cluster the operation might be null if there is an exception
+                String adapterPath = Optional.ofNullable(op)
+                        .map(Operation::getUri)
+                        .map(URI::getPath)
+                        .orElse("");
+
                 host.log(Level.WARNING, "Starting '%s' adapter [%s]: FAILED - %s",
                         endpointType, adapterPath, Utils.toString(ex));
             } else {
