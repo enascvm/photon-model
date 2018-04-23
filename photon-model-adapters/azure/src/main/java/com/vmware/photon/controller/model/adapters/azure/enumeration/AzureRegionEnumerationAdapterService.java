@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResu
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback.Default;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -67,6 +68,7 @@ public class AzureRegionEnumerationAdapterService extends StatelessService {
 
         protected DeferredResult<Context> getAuthentication(Context context) {
 
+            // if credentials links is null get the credentials from the endpoint properties
             if (this.request.authCredentialsLink == null) {
                 AzureEndpointAdapterService.credentials().accept(
                         context.authentication = new AuthCredentialsServiceState(),
@@ -81,6 +83,13 @@ public class AzureRegionEnumerationAdapterService extends StatelessService {
 
             return context.service
                     .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
+                    .thenApply(auth -> {
+                        // During endpoint edit the credentials are not persisted thus merge them
+                        // with the credentials provided in endpoint properties
+                        Retriever endpointRetriever = Retriever.of(this.request.endpointProperties);
+                        AzureEndpointAdapterService.credentials().accept(auth, endpointRetriever);
+                        return auth;
+                    })
                     .thenApply(state -> {
                         context.authentication = state;
                         return context;
