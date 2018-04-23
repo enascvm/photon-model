@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.discovery.common.services;
 
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.SEPARATOR;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.SEPARATOR;
 import static com.vmware.photon.controller.model.UriPaths.USER_SERVICE;
 
 import java.util.Collections;
@@ -24,6 +24,7 @@ import java.util.Set;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocument.IndexingParameters;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -42,7 +43,7 @@ public class UserService extends StatefulService {
     /**
      * The {@link UserState} represents a single user's identity.
      */
-    @ServiceDocument.IndexingParameters(serializedStateSize = STATE_SIZE_LIMIT, versionRetention = VERSION_LIMIT)
+    @IndexingParameters(serializedStateSize = STATE_SIZE_LIMIT, versionRetention = VERSION_LIMIT)
     public static class UserState extends ServiceDocument {
         public static final String FIELD_NAME_EMAIL = "email";
         public static final String FIELD_NAME_USER_GROUP_LINKS = "userGroupLinks";

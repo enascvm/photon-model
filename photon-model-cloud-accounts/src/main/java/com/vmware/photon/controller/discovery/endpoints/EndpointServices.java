@@ -53,7 +53,6 @@ public class EndpointServices {
                 AwsEndpointS3ValidationTaskService::createFactory);
         host.startFactory(AwsCostUsageReportTaskService.class,
                 AwsCostUsageReportTaskService::createFactory);
-
         host.startService(new OptionalAdapterSchedulingService());
         addPrivilegedService.accept(OptionalAdapterSchedulingService.class);
     }

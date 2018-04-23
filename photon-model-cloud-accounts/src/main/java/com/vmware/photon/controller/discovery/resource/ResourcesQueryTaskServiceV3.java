@@ -37,7 +37,7 @@ import java.util.UUID;
 import com.vmware.photon.controller.discovery.cloudaccount.utils.FilterUtils;
 import com.vmware.photon.controller.discovery.cloudaccount.utils.QueryHelper;
 import com.vmware.photon.controller.discovery.common.TaskHelper;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.discovery.resource.ResourcesQueryPageServiceV3.ResourceViewState;
 import com.vmware.photon.controller.discovery.resource.ResourcesQueryTaskServiceV3.ResourceQueryTaskState;
 import com.vmware.photon.controller.model.UriPaths;

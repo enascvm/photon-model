@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.discovery.common.services;
+package com.vmware.photon.controller.discovery.common;
 
 import com.vmware.xenon.common.ServiceDocument.Documentation;
 

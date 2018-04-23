@@ -20,6 +20,7 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 
+import com.vmware.photon.controller.discovery.common.UtilizationThreshold;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;

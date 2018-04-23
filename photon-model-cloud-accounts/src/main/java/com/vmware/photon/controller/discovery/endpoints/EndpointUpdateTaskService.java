@@ -27,7 +27,6 @@ import static com.vmware.photon.controller.discovery.common.CloudAccountConstant
 import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.PROPERTY_NAME_PROP_UPDATE;
 import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.PROPERTY_NAME_TAG_UPDATES;
 import static com.vmware.photon.controller.discovery.common.utils.InventoryQueryUtils.startInventoryQueryTask;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getOrgId;
 import static com.vmware.photon.controller.discovery.common.utils.StringUtil.isEmpty;
 import static com.vmware.photon.controller.discovery.endpoints.Credentials.AwsCredential.AuthType.ARN;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_AUTH_TYPE;
@@ -43,6 +42,7 @@ import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.bui
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.failOperation;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.isPatchCredentialBodyValid;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.reconstructEndpointProperties;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.getOrgId;
 import static com.vmware.photon.controller.model.UriPaths.ENDPOINT_UPDATE_TASK_SERVICE;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
@@ -70,10 +70,10 @@ import com.vmware.photon.controller.discovery.common.TaskHelper;
 import com.vmware.photon.controller.discovery.common.services.OrganizationService;
 import com.vmware.photon.controller.discovery.common.services.UserService.UserState;
 import com.vmware.photon.controller.discovery.common.utils.ErrorUtil;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
 import com.vmware.photon.controller.discovery.endpoints.EndpointUpdateTaskService.EndpointUpdateTaskState;
 import com.vmware.photon.controller.discovery.endpoints.EndpointValidationTaskService.EndpointValidationTaskState;
 import com.vmware.photon.controller.discovery.endpoints.EndpointValidationTaskService.ValidationOption;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.discovery.vsphere.VsphereRDCSyncTaskService;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;

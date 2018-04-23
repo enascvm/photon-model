@@ -14,12 +14,12 @@
 package com.vmware.photon.controller.discovery.cloudaccount;
 
 import static com.vmware.photon.controller.discovery.common.utils.InventoryQueryUtils.getInventoryQueryPage;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.SERVICE_USER_LINK;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getOrgId;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getSystemOauthClientIdLinks;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.PROPERTIES_COPY_MAP;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.createServiceTagsFromCustomProperties;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.SERVICE_USER_LINK;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.getOrgId;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.getSystemOauthClientIdLinks;
 import static com.vmware.photon.controller.model.UriPaths.CLOUD_ACCOUNT_QUERY_PAGE_SERVICE;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
@@ -46,10 +46,10 @@ import com.vmware.photon.controller.discovery.common.services.OrganizationServic
 import com.vmware.photon.controller.discovery.common.services.OrganizationService.OrganizationState;
 import com.vmware.photon.controller.discovery.common.services.UserContextQueryService;
 import com.vmware.photon.controller.discovery.common.services.UserContextQueryService.UserContext;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
 import com.vmware.photon.controller.discovery.common.utils.StringUtil;
 import com.vmware.photon.controller.discovery.endpoints.Credentials;
 import com.vmware.photon.controller.discovery.endpoints.EndpointUtils;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.discovery.queries.EndpointQueries;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;

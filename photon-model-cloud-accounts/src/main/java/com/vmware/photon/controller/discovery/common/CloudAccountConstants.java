@@ -20,6 +20,7 @@ public class CloudAccountConstants {
 
     public static final String GROUP_DESCRIPTION = "description";
     public static final String GROUP_UPDATED_BY = "updatedBy";
+    public static final String SEPARATOR = "-";
     public static final String CREDENTIALS = "credentials";
     public static final String IS_USER_CREATED = "isUserCreated";
 
@@ -31,11 +32,31 @@ public class CloudAccountConstants {
     public static final String CCS_HOST = "ccsHost";
 
     /**
+     * Service user.
+     */
+    public static final String SERVICE_USER = "service-user";
+    public static final String SERVICE_USER_PREFIX = SERVICE_USER + "-";
+    public static final String SERVICE_USER_EMAIL = SERVICE_USER + "@vmware.com";
+    public static final String SERVICE_USER_RESOURCE_GROUP_NAME = SERVICE_USER_PREFIX + "resource-group";
+    public static final String SERVICE_USER_GROUP_NAME = SERVICE_USER_PREFIX + "group";
+    public static final String SERVICE_USER_ROLE_NAME = SERVICE_USER_PREFIX + "role";
+    public static final String SERVICE_USER_PASSWORD_PROPERTY =
+            UriPaths.PROPERTY_PREFIX + "ServiceUserSetupService.userPassword";
+    public static final String SERVICE_USER_DEFAULT_PASSWORD = "symphonyservice";
+
+    /**
      * Constants related to stats collection tasks.
      */
     public static final String PROPERTY_NAME_DISABLE_STATS_COLLECTION = UriPaths.PROPERTY_PREFIX +
             "disableStatsCollection";
     public static final boolean DISABLE_STATS_COLLECTION = Boolean.getBoolean(PROPERTY_NAME_DISABLE_STATS_COLLECTION);
+
+    /*
+     * ScheduledTask related constants
+     */
+    public static final String ENUMERATION_TASK_SUFFIX = "Enumeration";
+    public static final String STATS_COLLECTION_TASK_SUFFIX = "Collection";
+    public static final String GROOMER_TASK_SUFFIX = "Groomer";
 
     /**
      * CSP Constants
@@ -48,17 +69,15 @@ public class CloudAccountConstants {
     public static final String CSP_AUTHENTICATION_SCHEME_NAME = "#CSP#";
 
     /**
-     * Service user.
-     */
-    public static final String SERVICE_USER = "service-user";
-    public static final String SERVICE_USER_PREFIX = SERVICE_USER + "-";
-    public static final String SERVICE_USER_EMAIL = SERVICE_USER + "@vmware.com";
-
-    /**
-     * autoCloudMetricsQueryPageService user.
+     * automation user.
      */
     public static final String AUTOMATION_USER_EMAIL = "automation-user@vmware.com";
     public static final String AUTOMATION_USER = "automation-user";
+
+    private static final String PREFIX = "automation-user-";
+    public static final String AUTOMATION_USER_RESOURCE_GROUP_NAME = PREFIX + "resource-group";
+    public static final String AUTOMATION_USER_GROUP_NAME = PREFIX + "group";
+    public static final String AUTOMATION_USER_ROLE_NAME = PREFIX + "role";
 
     public static final String OAUTH_CLIENT_IDS = "clientIds";
     public static final String CLIENT_ID_EMAIL_SUFFIX = "@discovery-client.local";
@@ -70,6 +89,18 @@ public class CloudAccountConstants {
     public static final String QUOTE = "\"";
     public static final String COMMA = ",";
     public static final String EQUALS = "=";
+
+    /*
+     * Query result limit and operation batch size related constants.
+     */
+    public static final String PROPERTY_NAME_QUERY_RESULT_LIMIT = "symphony.queryResultLimit";
+    public static final int DEFAULT_QUERY_RESULT_LIMIT = 10000;
+    public static final int QUERY_RESULT_LIMIT = Integer.getInteger(PROPERTY_NAME_QUERY_RESULT_LIMIT,
+            DEFAULT_QUERY_RESULT_LIMIT);
+    public static final String PROPERTY_NAME_OPERATION_BATCH_SIZE = "symphony.operationBatchSize";
+    public static final int DEFAULT_OPERATION_BATCH_SIZE = 100;
+    public static final int OPERATION_BATCH_SIZE = Integer.getInteger(PROPERTY_NAME_OPERATION_BATCH_SIZE,
+            DEFAULT_OPERATION_BATCH_SIZE);
 
     /**
      * Types of Update Actions

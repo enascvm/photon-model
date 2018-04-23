@@ -21,8 +21,8 @@ import java.util.List;
 
 import com.vmware.photon.controller.discovery.common.TaskHelper;
 import com.vmware.photon.controller.discovery.common.services.UserService;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
 import com.vmware.photon.controller.discovery.endpoints.EndpointDeletionTaskService.EndpointDeletionTaskState;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;

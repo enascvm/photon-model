@@ -70,7 +70,8 @@ public enum CloudAccountErrorCode implements ErrorCode {
     TOO_MANY_FILES_UPLOADED(40205, "Too many files uploaded"),
     FILENAME_MUST_END_WITH_CSV(40210, "Filename must end with '.csv'"),
     MULTIPART_FORM_DATA_PARSING_ERROR(40215, "Error parsing multipart/form-data body: %s"),
-    REQUEST_BODY_TOO_LARGE(40220, "Request is too large. Request must not exceed %s bytes, but request was %s bytes.");
+    REQUEST_BODY_TOO_LARGE(40220, "Request is too large. Request must not exceed %s bytes, but request was %s bytes."),
+    ENDPOINT_NAME_NOT_UNIQUE(40230, "Endpoint with this name already exists %s");
 
     private int errorCode;
     private String message;

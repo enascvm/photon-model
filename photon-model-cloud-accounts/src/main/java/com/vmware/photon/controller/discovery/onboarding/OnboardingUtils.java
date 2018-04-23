@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.discovery.common.utils;
+package com.vmware.photon.controller.discovery.onboarding;
 
 import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.AUTOMATION_USER_EMAIL;
 import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.CLIENT_ID_EMAIL_SUFFIX;
@@ -24,6 +24,7 @@ import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -44,9 +45,14 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.xenon.common.Claims;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.AuthorizationContext;
+import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.Service.Action;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceSubscriptionState.ServiceSubscriber;
 import com.vmware.xenon.common.StatefulService;
@@ -504,6 +510,107 @@ public class OnboardingUtils {
     }
 
     /**
+     * Generate the update request body for userGroupLinks.
+     * @param groupLinksToAdd : groupLinks to added
+     * @param groupLinksToRemove : groupLinks to removed
+     * @return : request body
+     */
+    public static ServiceStateCollectionUpdateRequest generateGroupLinkUpdateRequestBody(Set<String> groupLinksToAdd,
+            Set<String> groupLinksToRemove) {
+        Map<String, Collection<Object>> itemsToAdd = null;
+        Map<String, Collection<Object>> itemsToRemove = null;
+        if (groupLinksToAdd != null) {
+            itemsToAdd = Collections
+                    .singletonMap(UserService.UserState.FIELD_NAME_USER_GROUP_LINKS,
+                            new HashSet<>(groupLinksToAdd));
+        }
+
+        if (groupLinksToRemove != null) {
+            itemsToRemove = Collections
+                    .singletonMap(UserService.UserState.FIELD_NAME_USER_GROUP_LINKS,
+                            new HashSet<>(groupLinksToRemove));
+        }
+
+        return ServiceStateCollectionUpdateRequest.create(itemsToAdd, itemsToRemove);
+    }
+
+    /**
+     * Util method to clone RoleState.
+     * @param originalState
+     * @return
+     */
+    public static RoleState cloneRoleState(RoleState originalState) {
+        return RoleState.Builder
+                .create()
+                .withPolicy(originalState.policy)
+                .withResourceGroupLink(originalState.resourceGroupLink)
+                .withVerbs(originalState.verbs)
+                .withUserGroupLink(originalState.userGroupLink)
+                .build();
+    }
+
+    /**
+     * Util method to clone ResourceGroupState.
+     * @param originalState
+     * @return
+     */
+    public static ResourceGroupState cloneResourceGroupState(ResourceGroupState originalState) {
+        return ResourceGroupState.Builder
+                .create()
+                .withQuery(originalState.query)
+                .build();
+    }
+
+    /**
+     * Util method to clone UserGroupState.
+     * @param originalState
+     * @return
+     */
+    public static UserGroupState cloneUserGroupState(UserGroupState originalState) {
+        return UserGroupState.Builder
+                .create()
+                .withQuery(originalState.query)
+                .build();
+    }
+
+    /**
+     * Util method to call set of operations and send results to joinCompletionHandler
+     */
+    public static void callOperations(Service service, Set<Operation> operationSet,
+            JoinedCompletionHandler jh) {
+        if (operationSet.isEmpty()) {
+            jh.handle(null, null);
+            return;
+        }
+        OperationContext opCtx = OperationContext.getOperationContext();
+        operationSet.forEach(op -> service.setAuthorizationContext(op, service.getSystemAuthorizationContext()));
+        OperationJoin.create(operationSet).setCompletion((ops, exc) -> {
+            OperationContext.restoreOperationContext(opCtx);
+            jh.handle(ops, exc);
+        }).sendWith(service);
+    }
+
+    /**
+     * Constructs a generic roll-back operation for a particular service. If a rollbackBody is
+     * specified, then a PATCH operation will be constructed against the service. Otherwise,
+     * a DELETE will be created.
+     * @param service : service to call
+     * @param documentLink : Service State documentSelfLink or Service SelfLink
+     * @param rollbackBody : roll back body
+     * @param cd : original Service document
+     * @return
+     */
+    public static Operation createRollBackOperation(Service service, String documentLink, Object
+            rollbackBody, ServiceDocument cd) {
+        if (rollbackBody == null) {
+            cd.documentExpirationTimeMicros = System.currentTimeMillis();
+            return Operation.createPut(service, documentLink).setBody(cd);
+        }
+
+        return Operation.createPatch(service, documentLink).setBody(rollbackBody);
+    }
+
+    /**
      * Unsubscribe notifications.
      *
      * @param host service host to invoke the operation
@@ -516,6 +623,31 @@ public class OnboardingUtils {
                 Operation.createDelete(host, publisherLink)
                         .setReferer(host.getUri()),
                 notificationTarget);
+    }
+
+    /**
+     * Util function to call `Patch` operation to UserService
+     * @param service : the service
+     * @param userLink : user link
+     * @param patchBody : request patch body
+     * @param patchUserConsumer : Consumer to handler the results
+     */
+    public static void patchUserService(Service service, String userLink, Object patchBody,
+            BiConsumer<Operation, Throwable> patchUserConsumer) {
+        OperationContext ctx = OperationContext.getOperationContext();
+        Operation userStateOp = Operation.createPatch(service, userLink)
+                .setBody(patchBody)
+                .setCompletion((userPatchOp, userPatchEx) -> {
+                    OperationContext.restoreOperationContext(ctx);
+                    if (userPatchEx != null) {
+                        patchUserConsumer.accept(null, userPatchEx);
+                        return;
+                    }
+                    patchUserConsumer.accept(userPatchOp, null);
+                });
+        service.setAuthorizationContext(OnboardingUtils.addReplicationQuorumHeader(userStateOp),
+                service.getSystemAuthorizationContext());
+        service.sendRequest(userStateOp);
     }
 
 }

@@ -42,6 +42,8 @@ public class CommonServices {
         host.startFactory(new ProjectService());
         addPrivilegedService.accept(UserContextQueryService.class);
         host.startService(new UserContextQueryService());
+        host.startService(new ResourceEnumerationService());
+        addPrivilegedService.accept(ResourceEnumerationService.class);
 
         host.startService(Operation.createPost(host,
                 ConfigurationRuleService.FACTORY_LINK),
