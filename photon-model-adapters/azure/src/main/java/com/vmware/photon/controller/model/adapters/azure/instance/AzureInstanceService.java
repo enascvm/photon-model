@@ -574,6 +574,10 @@ public class AzureInstanceService extends StatelessService {
         return fetchDiskStatesToDelete(ctx)
                 .thenCompose(this::getStorageAccountKeysForUnManagedDisks)
                 .thenCompose(this::deleteVHDBlobsInAzure)
+                .exceptionally(throwable -> {
+                    logWarning("Unable to delete VHD blobs for [%s]. Probably the Storage account does not exist or was not created.", ctx.vmName);
+                    return null;
+                })
                 .thenApply(ignore -> ctx);
     }
 
