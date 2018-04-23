@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.discovery.common.utils;
 
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.normalizeLink;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.normalizeLink;
 import static com.vmware.xenon.common.UriUtils.getLastPathSegment;
 
 import java.util.ArrayList;

@@ -18,9 +18,9 @@ import static com.vmware.photon.controller.discovery.cloudaccount.users.UserQuer
 import static com.vmware.photon.controller.discovery.cloudaccount.users.UserQueryTaskService.SubStage.GET_PAGE;
 import static com.vmware.photon.controller.discovery.cloudaccount.users.UserQueryTaskService.SubStage.SUCCESS;
 import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.PAGE_TOKEN;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.ADMIN_SUFFIX;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.USER_SUFFIX;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.SEPARATOR;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.ADMIN_SUFFIX;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.USER_SUFFIX;
 import static com.vmware.photon.controller.model.UriPaths.USERS_QUERY_TASK_SERVICE;
 
 import java.io.UnsupportedEncodingException;
@@ -42,7 +42,7 @@ import com.vmware.photon.controller.discovery.common.services.UserContextQuerySe
 import com.vmware.photon.controller.discovery.common.services.UserContextQueryService.UserContext;
 import com.vmware.photon.controller.discovery.common.services.UserService;
 import com.vmware.photon.controller.discovery.common.services.UserService.UserState;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;

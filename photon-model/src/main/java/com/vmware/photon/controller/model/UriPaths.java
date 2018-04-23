@@ -162,10 +162,11 @@ public class UriPaths {
     public static final String AWS_ENDPOINT_S3_VALIDATION_TASK_SERVICE = MGMT_PREFIX
             + "/endpoints/s3-validation-tasks";
 
-    public static final String GROUPS_API_SERVICE = API_PREFIX + "/resource-groups";
+    public static final String PROVISIONING_SERVICE_USER_SETUP_SERVICE = PROVISIONING_USER_SERVICE
+            + "/service-user-setup";
 
-    public static final String GROUP_QUERY_TASK_SERVICE = QUERY_PREFIX + "/resource-groups-tasks";
-    public static final String GROUP_QUERY_PAGE_SERVICE = QUERY_PREFIX + "/resource-groups-page";
+    public static final String PROVISIONING_SYSTEM_USER_SETUP_SERVICE = PROVISIONING_USER_SERVICE
+            + "/automation-user-setup";
 
     public static final String RESOURCE_PROPERTIES_SERVICE = QUERY_PREFIX + "/resource-properties";
     public static final String RESOURCE_PROPERTIES_SERVICE_V2 = QUERY_PREFIX + "/resource-properties-v2";
@@ -188,6 +189,12 @@ public class UriPaths {
 
     public static final String SERVICE_CONFIG_RULES = "/mgmt/config/rules";
 
+    public static final String RESOURCE_POOL_CONFIGURATION_SERVICE = MGMT_PREFIX
+            + "/resource-pool-config";
+
+    public static final String RESOURCE_ENUMERATION_SERVICE = MGMT_PREFIX
+            + "/resource-enumeration";
+
     /**
      * This is the CCS Service URI to validate VCenter Account
      */
@@ -198,6 +205,19 @@ public class UriPaths {
      */
     public static final String USERS_API_SERVICE = API_PREFIX + "/users";
     public static final String USERS_QUERY_TASK_SERVICE = QUERY_PREFIX + "/user-tasks";
+
+    public static final String AUTHN_PREFIX = "/authn";
+
+    public static final String BASIC_AUTHN_SERVICE = AUTHN_PREFIX + "/basic";
+
+    public static final String PROVISIONING_ORGANIZATION_SERVICE = MGMT_PREFIX
+            + "/organizations";
+
+    public static final String PROVISIONING_PROJECT_TASKS_PREFIX = MGMT_PREFIX
+            + "/projects";
+
+    public static final String PROVISIONING_STATELESS_SERVICE_ACCESS_SETUP_SERVICE = PROVISIONING_ORGANIZATION_SERVICE
+            + "/stateless-service-access-setup";
 
     /**
      * Le-Mans paths

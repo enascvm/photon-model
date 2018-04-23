@@ -55,8 +55,7 @@ import com.vmware.xenon.services.common.TaskService;
 /**
  * Task to validate S3 bucket access permissions for AWS credentials.
  */
-public class AwsEndpointS3ValidationTaskService extends
-        TaskService<S3ValidationTaskState> {
+public class AwsEndpointS3ValidationTaskService extends TaskService<S3ValidationTaskState> {
 
     public static final String FACTORY_LINK = AWS_ENDPOINT_S3_VALIDATION_TASK_SERVICE;
 

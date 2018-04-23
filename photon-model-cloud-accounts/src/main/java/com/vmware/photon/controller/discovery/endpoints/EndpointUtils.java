@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.discovery.endpoints;
 
-import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.CREDENTIALS;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getOrgId;
 import static com.vmware.photon.controller.discovery.endpoints.Credentials.AwsCredential.AuthType.ARN;
 import static com.vmware.photon.controller.discovery.endpoints.Credentials.AwsCredential.AuthType.KEYS;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointConstants.DISABLE_ENDPOINT_ADAPTER_URI;
@@ -34,6 +32,11 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType.azure;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType.azure_ea;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType.vsphere;
+import static com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.EP_CP_ENUMERATION_TASK_STATE;
+import static com.vmware.xenon.common.TaskState.TaskStage.CANCELLED;
+import static com.vmware.xenon.common.TaskState.TaskStage.FAILED;
+import static com.vmware.xenon.common.TaskState.TaskStage.FINISHED;
+import static com.vmware.xenon.common.TaskState.TaskStage.STARTED;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -51,16 +54,18 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.regions.Regions;
 
+import com.vmware.photon.controller.discovery.common.CloudAccountConstants;
 import com.vmware.photon.controller.discovery.common.CloudAccountConstants.UpdateAction;
 import com.vmware.photon.controller.discovery.common.CollectionStringFieldUpdate;
 import com.vmware.photon.controller.discovery.common.ErrorCode;
+import com.vmware.photon.controller.discovery.common.PhotonControllerCloudAccountUtils;
 import com.vmware.photon.controller.discovery.common.services.UserService.UserState;
 import com.vmware.photon.controller.discovery.common.utils.ErrorUtil;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
 import com.vmware.photon.controller.discovery.endpoints.Credentials.AwsCredential;
 import com.vmware.photon.controller.discovery.endpoints.DataInitializationTaskService.DataInitializationState;
 import com.vmware.photon.controller.discovery.endpoints.EndpointUpdateTaskService.EndpointUpdateTaskState;
 import com.vmware.photon.controller.discovery.endpoints.OptionalAdapterSchedulingService.OptionalAdapterSchedulingRequest;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.discovery.vsphere.VsphereOnPremEndpointAdapterService;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -74,7 +79,6 @@ import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.TaskState;
-import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -95,8 +99,11 @@ public class EndpointUtils {
     private static final String DOT = ".";
     public static final String VSPHERE_ON_PREM_ADAPTER = "vsphere-on-prem";
     public static final int MASK_ALL_BUT_LAST_N_DIGITS = 4;
+    public static final String SYNC_JOB_WAITING_STATUS = "WAITING";
 
-    /** Endpoint Custom Properties */
+    /**
+     * Endpoint Custom Properties
+     */
     public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_CREATEDBY_EMAIL = "createdByEmail";
     public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET = "cost_insight:s3bucketName";
     public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BUCKET_PREFIX = "cost_insight:s3bucketPrefix";
@@ -105,6 +112,7 @@ public class EndpointUtils {
     public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_LEGACY_ID = "legacyId";
     public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_STATUS = "status";
     public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_AUTH_TYPE = "authType";
+    public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_SYNC_JOB_STATUS = "syncJobStatus";
 
     public static final String ENDPOINT_COST_USAGE_SCHEMA_ELEMENTS = "RESOURCES";
     public static final String ENDPOINT_COST_USAGE_TIME_UNIT = "HOURLY";
@@ -115,9 +123,9 @@ public class EndpointUtils {
     public static final String ENDPOINT_CUSTOM_PROPERTY_NAME_PREFIX_SERVICE_TAG = "service_tag:";
     public static final String ENDPOINT_CUSTOM_PROPERTY_VALUE_SERVICE_TAG = "enabled";
 
-    public static final String ENDPOINT_PROPERTY_VSPHERE_USERNAME = CREDENTIALS + DOT + Credentials.FIELD_NAME_VSPHERE_CREDENTIAL
+    public static final String ENDPOINT_PROPERTY_VSPHERE_USERNAME = CloudAccountConstants.CREDENTIALS + DOT + Credentials.FIELD_NAME_VSPHERE_CREDENTIAL
             + DOT + Credentials.VsphereCredential.FIELD_NAME_USER_NAME;
-    public static final String ENDPOINT_PROPERTY_VSPHERE_PASSWORD = CREDENTIALS + DOT + Credentials.FIELD_NAME_VSPHERE_CREDENTIAL
+    public static final String ENDPOINT_PROPERTY_VSPHERE_PASSWORD = CloudAccountConstants.CREDENTIALS + DOT + Credentials.FIELD_NAME_VSPHERE_CREDENTIAL
             + DOT + Credentials.VsphereCredential.FIELD_NAME_PASSWORD;
 
     /* For building stale endpoint document deletion task selfLink */
@@ -128,16 +136,67 @@ public class EndpointUtils {
     public static final String EMPTY_STRING = "";
 
     // Map values from endpointProperties to customProperties, used in the GET and POST operation.
-    public static final Map<String, String> PROPERTIES_COPY_MAP = Collections.unmodifiableMap(new
-            HashMap<String, String>() {
-            {
-                put(AWS_BILLS_S3_BUCKET_NAME_KEY, ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET);
-                put(DC_ID_KEY, DC_ID_KEY);
-                put(DC_NAME_KEY, DC_NAME_KEY);
-                put(HOST_NAME_KEY, HOST_NAME_KEY);
-                put(PRIVATE_CLOUD_NAME_KEY, PRIVATE_CLOUD_NAME_KEY);
-            }
-    });
+    public static final Map<String, String> PROPERTIES_COPY_MAP =
+            Collections.unmodifiableMap(new HashMap<String, String>() {
+                {
+                    put(AWS_BILLS_S3_BUCKET_NAME_KEY, ENDPOINT_CUSTOM_PROPERTY_NAME_CI_BILLS_BUCKET);
+                    put(DC_ID_KEY, DC_ID_KEY);
+                    put(DC_NAME_KEY, DC_NAME_KEY);
+                    put(HOST_NAME_KEY, HOST_NAME_KEY);
+                    put(PRIVATE_CLOUD_NAME_KEY, PRIVATE_CLOUD_NAME_KEY);
+                }
+            });
+
+    public enum SyncJobStage {
+
+        /**
+         * Status when endpoint is created but not kick off enumeration
+         */
+        WAITING("0"),
+
+        /**
+         * Status when enumeration is kicked off
+         */
+        RUNNING("1"),
+
+        /**
+         * Status when enumeration reach the FAILED stage, specially when a critical problem happens
+         */
+        FAILED("2"),
+
+        /**
+         * Status when there is an noncritical problem happens in enumeration process. Not in use
+         */
+        WARNING("3"),
+
+        /**
+         * Status when enumeration succeed
+         */
+        DONE("4");
+
+        String statusCode;
+
+        public String getStatusCode() {
+            return this.statusCode;
+        }
+
+        SyncJobStage(String status) {
+            this.statusCode = status;
+        }
+    }
+
+    // Map values from 'enumerationTaskState' to 'syncJobStatus' for updating cloud account
+    // dynamic sync status.
+    public static final Map<String, String> MAP_ENUMERATION_STATE_TO_SYNC_JOB_STATUS =
+            Collections.unmodifiableMap(new HashMap<String, String>() {
+                {
+                    put(STARTED.name(), SyncJobStage.RUNNING.statusCode);
+                    put(FINISHED.name(), SyncJobStage.DONE.statusCode);
+                    put(CANCELLED.name(), SyncJobStage.FAILED.statusCode);
+                    put(FAILED.name(), SyncJobStage.FAILED.statusCode);
+                    put(SYNC_JOB_WAITING_STATUS, SyncJobStage.WAITING.statusCode);
+                }
+            });
 
     /**
      * Helper for {@link EndpointUtils.buildEndpointAuthzArtifactSelfLink}.
@@ -158,13 +217,13 @@ public class EndpointUtils {
     /**
      * Build a well known authz artifact self link. The method to build self link for user-group,
      * resource-group and role using orgLink and userLink.
-     *
+     * <p>
      * Format: /factoryLink/resources-endpoints-owners-<endpointId>
      */
     public static String buildEndpointAuthzArtifactSelfLink(String factoryLink, String endpointLink,
             List<String> tenantLinks) {
         String endpointId = getEndpointUniqueId(endpointLink);
-        String authzArtifactId = getOrgId(tenantLinks) + SEPARATOR
+        String authzArtifactId = PhotonControllerCloudAccountUtils.getOrgId(tenantLinks) + SEPARATOR
                 + RESOURCES_ENDPOINTS_AUTHZ_ARTIFACT_OWNERS_PREFIX + SEPARATOR + endpointId;
         String selfLink = UriUtils.buildUriPath(factoryLink, authzArtifactId);
         return selfLink;
@@ -236,7 +295,7 @@ public class EndpointUtils {
         TaskServiceState state = completedOp.getBody(ConcreteTaskServiceState.class);
         TaskState taskInfo = state.taskInfo;
 
-        if (taskInfo != null && taskInfo.stage == TaskStage.FAILED) {
+        if (taskInfo != null && taskInfo.stage == FAILED) {
             if (taskInfo.failure != null) {
                 parentOp.fail(taskInfo.failure.statusCode,
                         new Exception(taskInfo.failure.message), taskInfo.failure);
@@ -285,14 +344,14 @@ public class EndpointUtils {
      * Credentials may be specified through two objects - the endpointProperties map, or a credentials
      * object. If credentials are not seemingly sufficiently provided, then the operation should
      * fail.
-     *
+     * <p>
      * Note: This method extends the ability for backwards-compatibility, where formerly the APIs
      * would accept credentials to be passed via the endpointProperties instead of the more-recent
      * and favoured Credentials object.
      *
      * @param endpointProperties A mapping of properties related to a given endpoint.
-     * @param credentials A credentials object storing credentials pertinent to the type of account
-     *                    being added.
+     * @param credentials        A credentials object storing credentials pertinent to the type of account
+     *                           being added.
      * @return true if there is an indication the credentials have been passed through, else false.
      */
     public static boolean isOperationCredentialsSet(Map<String, String> endpointProperties,
@@ -306,7 +365,6 @@ public class EndpointUtils {
      * has been properly set for vsphere endpoint type.
      *
      * @param customProperties A mapping of properties related to a given endpoint.
-     *
      * @return true if there is an indication the hostname has been passed through, else false.
      */
     public static boolean isValidVsphereHostName(Map<String, String> customProperties) {
@@ -320,29 +378,28 @@ public class EndpointUtils {
      * has been properly set for vsphere endpoint type.
      *
      * @param customProperties A mapping of properties related to a given endpoint.
-     *
      * @return true if there is an indication the datacenter has been passed through, else false.
      */
     public static boolean isValidVsphereDcId(Map<String, String> customProperties) {
         return (customProperties != null && !customProperties.isEmpty() &&
                 customProperties.get(DC_ID_KEY) != null && !customProperties.get
-                        (DC_ID_KEY).isEmpty());
+                (DC_ID_KEY).isEmpty());
     }
 
     /**
      * Constructs a set of endpointProperties to be joined with the proper mapping of Credential
      * endpointProperties.
      *
-     * @param endpointType Endpoint type of the endpoint instance, e.g. aws, azure, ...
-     * @param credentials A credentials object storing credentials pertinent to the type of account
-     *                    being added.
+     * @param endpointType       Endpoint type of the endpoint instance, e.g. aws, azure, ...
+     * @param credentials        A credentials object storing credentials pertinent to the type of account
+     *                           being added.
      * @param endpointProperties A mapping of properties related to a given endpoint.
-     * @param customProperties A mapping of properties related to a given endpoint.
+     * @param customProperties   A mapping of properties related to a given endpoint.
      * @return A mapping of endpoint properties suitable for the Photon Model, joining the passed in
      * endpointProperties with newly-constructed properties for the passed in credentials.
      */
     public static Map<String, String> reconstructEndpointProperties(String endpointType,
-            Credentials credentials, Map<String, String> endpointProperties, Map<String, String>customProperties) {
+            Credentials credentials, Map<String, String> endpointProperties, Map<String, String> customProperties) {
         Map<String, String> reconstructedEndpointProperties = new HashMap<>();
 
         if (endpointProperties != null) {
@@ -363,10 +420,9 @@ public class EndpointUtils {
      * Get privateKeyId of the endpoint based on the endpointType
      *
      * @param endpointType Endpoint type of the endpoint instance, e.g. aws, azure, ...
-     * @param credentials A credentials object storing credentials pertinent to the type of account
-     *                    being added.
+     * @param credentials  A credentials object storing credentials pertinent to the type of account
+     *                     being added.
      * @return privateKeyId of credentials.
-     *
      */
     public static String getPrivateKeyIdFromCredentials(String endpointType, Credentials
             credentials) {
@@ -407,7 +463,7 @@ public class EndpointUtils {
             authCredentialState.privateKey = credentials.aws.secretAccessKey;
         } else {
             if (authCredentialState.customProperties == null) {
-                authCredentialState.customProperties = new HashMap<>();
+                authCredentialState.customProperties = new HashMap<String, String>();
             }
             authCredentialState.customProperties.put(ARN_KEY, credentials.aws.arn);
             authCredentialState.customProperties.put(EXTERNAL_ID_KEY, credentials.aws.externalId);
@@ -418,11 +474,12 @@ public class EndpointUtils {
     /**
      * This method is to copy the fields from customProperties to endpointProperties. The fields
      * needs to be copied are specified in the {@link PROPERTIES_COPY_MAP} .
+     *
      * @param targetMap
      * @param originMap
      */
     private static void copyProperties(Map<String, String> targetMap, Map<String, String> originMap) {
-        for (Entry<String,String> entry : PROPERTIES_COPY_MAP.entrySet()) {
+        for (Map.Entry<String, String> entry : PROPERTIES_COPY_MAP.entrySet()) {
             if (originMap.get(entry.getValue()) != null) {
                 targetMap.put(entry.getKey(), originMap.get(entry.getValue()));
             }
@@ -431,6 +488,7 @@ public class EndpointUtils {
 
     /**
      * Helper method to determine the AWS auth type.
+     *
      * @param awsCredential A set of AWS credentials.
      * @return The auth type string.
      */
@@ -447,8 +505,8 @@ public class EndpointUtils {
      * Photon Model expects.
      *
      * @param endpointType Endpoint type of the endpoint instance, e.g. aws, azure, ...
-     * @param credentials A credentials object storing credentials pertinent to the type of account
-     *                    being added.
+     * @param credentials  A credentials object storing credentials pertinent to the type of account
+     *                     being added.
      * @return A mapping of credentials to Photon-model expected endpointProperties relating to
      * account credentials. If no valid credentials are supplied, an empty map is returned.
      */
@@ -498,8 +556,8 @@ public class EndpointUtils {
     /**
      * Helper method to put a value in a map if that value is non-null.
      *
-     * @param map The map to place the key-value pair in.
-     * @param key The key to be associated with the value in the map.
+     * @param map   The map to place the key-value pair in.
+     * @param key   The key to be associated with the value in the map.
      * @param value The value associated with the key in the map.
      */
     public static void putIfValueNotNull(Map<String, String> map, String key, String value) {
@@ -526,9 +584,10 @@ public class EndpointUtils {
     /**
      * Construct a Map of custom properties combining existing properties and
      * enhancing with createBy user and service tags
+     *
      * @param customProperties Existing custom properties
-     * @param createdByUser The user creating the endpoint
-     * @param services The set of services using the endpoint (service tags)
+     * @param createdByUser    The user creating the endpoint
+     * @param services         The set of services using the endpoint (service tags)
      * @return The reconstructed map of custom properties
      */
     public static Map<String, String> reconstructCustomProperties(
@@ -559,6 +618,7 @@ public class EndpointUtils {
 
     /**
      * Given a Map of custom properties, parse and return the service tags if any
+     *
      * @param customProperties The custom properties to examine
      * @return A Set of services identified from the custom properties
      */
@@ -578,28 +638,35 @@ public class EndpointUtils {
 
     /**
      * Add any extra custom properties and return the custom properties
+     *
      * @param endpointState The endpoint to handle
      * @return The custom properties for the endpoint
      */
     public static Map<String, String> addExtraCustomProperties(EndpointState endpointState) {
+        if (endpointState.customProperties == null) {
+            endpointState.customProperties = new HashMap<>();
+        }
         // For a vsphere endpoint, if it was created used the old API, add the endpoint ID as a custom
         // property called "legacyId"
         if (EndpointUtils.VSPHERE_ON_PREM_ADAPTER.equals(endpointState.endpointType)) {
-            String orgId = getOrgId(endpointState);
+            String orgId = PhotonControllerCloudAccountUtils.getOrgId(endpointState);
             // For old style endpoint, endpointState.documentSelfLink will not have the org
             if (orgId == null) {
-                if (endpointState.customProperties == null) {
-                    endpointState.customProperties = new HashMap<>();
-                }
                 endpointState.customProperties
                         .put(ENDPOINT_CUSTOM_PROPERTY_NAME_LEGACY_ID, endpointState.id);
             }
         }
+
+        endpointState.customProperties.put(ENDPOINT_CUSTOM_PROPERTY_NAME_SYNC_JOB_STATUS,
+                MAP_ENUMERATION_STATE_TO_SYNC_JOB_STATUS.get(
+                        endpointState.customProperties.getOrDefault(EP_CP_ENUMERATION_TASK_STATE, SYNC_JOB_WAITING_STATUS)));
+
         return endpointState.customProperties;
     }
 
     /**
      * Check if the credential on patch request is valid.
+     *
      * @param state : EndpointUpdateTaskState
      * @return
      */
@@ -678,7 +745,7 @@ public class EndpointUtils {
         return "Invalid credentials";
     }
 
-    public static QueryTask buildTagsQuery (Map<String, TagState> tagsToFind,
+    public static QueryTask buildTagsQuery(Map<String, TagState> tagsToFind,
             Set<String> tenantLinks) {
         // todo calij add result limit
         QuerySpecification querySpec = new QuerySpecification();
@@ -703,11 +770,12 @@ public class EndpointUtils {
 
     /**
      * Validates whether a list of given users can be added as owners for an endpoint.
-     * @param orgLink Org selfLink.
-     * @param service Caller service.
+     *
+     * @param orgLink    Org selfLink.
+     * @param service    Caller service.
      * @param userEmails List of user emails.
-     * @param onSuccess Success handler.
-     * @param onError Failure handler.
+     * @param onSuccess  Success handler.
+     * @param onError    Failure handler.
      */
     public static void validateUsersForEndpointOwnership(String orgLink,
             Service service, Set<String> userEmails, Consumer<Operation> onSuccess,
@@ -778,12 +846,13 @@ public class EndpointUtils {
      * from the given endpoint and that the users belong to the same org as the endpoint.
      * User validation should be done before by calling
      * {@link EndpointUtils.validateUsersForEndpointOwnership}.
-     * @param endpointLink Endpoint selfLink.
-     * @param service Caller service.
+     *
+     * @param endpointLink                Endpoint selfLink.
+     * @param service                     Caller service.
      * @param updateActionByUserSelfLinks List of {@link CollectionStringFieldUpdate} (pair of User
-     *                              selfLink and UpdateAction).
-     * @param onSuccess Success handler.
-     * @param onError Failure handler.
+     *                                    selfLink and UpdateAction).
+     * @param onSuccess                   Success handler.
+     * @param onError                     Failure handler.
      */
     public static void updateOwnersForEndpoint(String endpointLink, List<String> tenantLinks, Service service,
             List<CollectionStringFieldUpdate> updateActionByUserSelfLinks,
@@ -843,10 +912,10 @@ public class EndpointUtils {
      * {@link #initializeDataInitializationTaskService(Service, EndpointState, Set, TaskState)},
      * setting the task state to `null` (asynchronous by default).
      *
-     * @param sender The service sending the request.
+     * @param sender        The service sending the request.
      * @param endpointState The endpoint to initialize the task on.
-     * @param tenantLinks The tenant links of the endpoint owner.
-     * @return The {@link DeferredResult < Operation >} of the {@link DataInitializationTaskService}
+     * @param tenantLinks   The tenant links of the endpoint owner.
+     * @return The {@link DeferredResult<Operation>} of the {@link DataInitializationTaskService}
      * response.
      */
     public static DeferredResult<Operation> initializeDataInitializationTaskService(Service sender,
@@ -857,12 +926,12 @@ public class EndpointUtils {
     /**
      * Helper method to initialize the {@link DataInitializationTaskService}.
      *
-     * @param sender The service sending the request.
+     * @param sender        The service sending the request.
      * @param endpointState The endpoint to initialize the task on.
-     * @param tenantLinks The tenant links of the endpoint owner.
-     * @param taskInfo Optional flag to allow consumers to decide how they want the task state to
-     *                 run (synchronous, asynchronous, etc.). Defaults to asynch (indirect).
-     * @return The {@link DeferredResult < Operation >} of the {@link DataInitializationTaskService}
+     * @param tenantLinks   The tenant links of the endpoint owner.
+     * @param taskInfo      Optional flag to allow consumers to decide how they want the task state to
+     *                      run (synchronous, asynchronous, etc.). Defaults to asynch (indirect).
+     * @return The {@link DeferredResult<Operation>} of the {@link DataInitializationTaskService}
      * response.
      */
     public static DeferredResult<Operation> initializeDataInitializationTaskService(Service sender,
@@ -897,9 +966,9 @@ public class EndpointUtils {
     /**
      * Helper method to initialize the {@link OptionalAdapterSchedulingService}.
      *
-     * @param sender The service sending the request.
+     * @param sender        The service sending the request.
      * @param endpointState The endpoint to initialize the request on.
-     * @return The {@link DeferredResult < Operation >} of the
+     * @return The {@link DeferredResult<Operation>} of the
      * {@link OptionalAdapterSchedulingService} response.
      */
     public static DeferredResult<Operation> triggerOptionalAdapterSchedulingService(Service sender,

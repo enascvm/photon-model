@@ -14,10 +14,6 @@
 package com.vmware.photon.controller.discovery.endpoints;
 
 import static com.vmware.photon.controller.discovery.common.CloudAccountConstants.DISABLE_STATS_COLLECTION;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getAutomationUserLink;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getOrgId;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.subscribeToNotifications;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.unsubscribeNotifications;
 import static com.vmware.photon.controller.discovery.endpoints.DataInitializationTaskService.SubStage.CHECK_CONCURRENT_ENUMERATION;
 import static com.vmware.photon.controller.discovery.endpoints.DataInitializationTaskService.SubStage.ENUMERATION;
 import static com.vmware.photon.controller.discovery.endpoints.DataInitializationTaskService.SubStage.GET_COMPUTE_HOST;
@@ -25,6 +21,10 @@ import static com.vmware.photon.controller.discovery.endpoints.DataInitializatio
 import static com.vmware.photon.controller.discovery.endpoints.DataInitializationTaskService.SubStage.STATS_COLLECTION;
 import static com.vmware.photon.controller.discovery.endpoints.DataInitializationTaskService.SubStage.SUCCESS;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.VSPHERE_ON_PREM_ADAPTER;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.getAutomationUserLink;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.getOrgId;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.subscribeToNotifications;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.unsubscribeNotifications;
 import static com.vmware.photon.controller.model.UriPaths.DATA_INIT_TASK_SERVICE;
 import static com.vmware.xenon.common.Service.Action.PATCH;
 import static com.vmware.xenon.common.TaskState.TaskStage.FAILED;
@@ -44,11 +44,12 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.discovery.common.utils.DataCollectionTaskUtil;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
+import com.vmware.photon.controller.discovery.endpoints.DataInitializationTaskService.DataInitializationState;
 import com.vmware.photon.controller.discovery.endpoints.OptionalAdapterSchedulingService.OptionalAdapterSchedulingRequest;
 import com.vmware.photon.controller.discovery.endpoints.OptionalAdapterSchedulingService.RequestType;
 import com.vmware.photon.controller.discovery.notification.NotificationUtils;
 import com.vmware.photon.controller.discovery.notification.event.EnumerationCompleteEvent;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -71,13 +72,12 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
-import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
  * Task to do initial data collection when a endpoint is added or update data when an enpdoint is
  * updated.
  */
-public class DataInitializationTaskService extends TaskService<DataInitializationTaskService.DataInitializationState> {
+public class DataInitializationTaskService extends TaskService<DataInitializationState> {
 
     // A stat key to track the amount of POSTs have occurred for individual documents.
     public static final String INVOCATION_COUNT = "invocationCount";
@@ -342,7 +342,7 @@ public class DataInitializationTaskService extends TaskService<DataInitializatio
     }
 
     /**
-     * Check the concurrent enumerations running any for the same compute host and delay the request, if required.
+     * Check the concurrent enumerations running any for the same compute host and delay the request, if required.z
      */
     private void checkConcurrentEnumeration(DataInitializationState state, SubStage nextStage) {
         // Enumerations run based on computeHost name.

@@ -14,9 +14,9 @@
 package com.vmware.photon.controller.discovery.endpoints;
 
 import static com.vmware.photon.controller.discovery.common.utils.DataCollectionTaskHelper.getOptionalStatsAdapterTaskQuery;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.assumeIdentity;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.getAutomationUserLink;
-import static com.vmware.photon.controller.discovery.common.utils.OnboardingUtils.subscribeToNotifications;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.assumeIdentity;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.getAutomationUserLink;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.subscribeToNotifications;
 import static com.vmware.photon.controller.model.UriPaths.OPTIONAL_ADAPTER_SCHEDULER;
 import static com.vmware.photon.controller.model.UriPaths.SERVICE_CONFIG_RULES;
 import static com.vmware.photon.controller.model.UriPaths.SERVICE_QUERY_CONFIG_RULES;

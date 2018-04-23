@@ -50,7 +50,7 @@ import com.vmware.photon.controller.discovery.common.ResourceProperty;
 import com.vmware.photon.controller.discovery.common.services.OrganizationService;
 import com.vmware.photon.controller.discovery.common.services.UserContextQueryService;
 import com.vmware.photon.controller.discovery.common.services.UserContextQueryService.UserContext;
-import com.vmware.photon.controller.discovery.common.utils.OnboardingUtils;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
