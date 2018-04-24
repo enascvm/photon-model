@@ -19,6 +19,7 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -211,13 +212,22 @@ public class VSphereResourcePoolEnumerationHelper {
         Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), selfLink))
                 .setCompletion((o, e) -> {
                     try {
-                        if (e == null) {
-                            updateResourcePool(service, enumerationProgress, ownerName, selfLink, rp, true, client);
-                        } else if (e instanceof ServiceNotFoundException
-                                || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
+                        // The first condition is just to check if there is a service not found or 404 response,
+                        // in case of which we will create a new resource pool.
+                        // The below logic is ordinal because with adapter running on vsphere agent host,
+                        // the exception object comes in as null. Tracked with VCOM-4539.
+                        if ((e != null && e instanceof ServiceNotFoundException) || o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
+                            // create
+                            Utils.log(VsphereEnumerationHelper.class, service.getUri().toString(), Level.INFO, "Document at [%s] was not found, a new resource pool will be created.", selfLink);
                             createNewResourcePool(service, enumerationProgress, ownerName, selfLink, rp, client);
-                        } else {
+                        } else if (e != null) {
+                            // track
+                            Utils.log(VsphereEnumerationHelper.class, service.getUri().toString(), Level.WARNING, "Could not create or update resource pool. Get operation to [%s] failed with exception [%s]", selfLink, Utils.toString(e));
                             enumerationProgress.getResourcePoolTracker().track();
+                        } else {
+                            // update
+                            Utils.log(VsphereEnumerationHelper.class, service.getUri().toString(), Level.FINE, "Found resource pool at [%s]. Updating resource pool...", selfLink);
+                            updateResourcePool(service, enumerationProgress, ownerName, selfLink, rp, true, client);
                         }
                     } catch (Exception ex) {
                         service.logSevere("Error occurred while processing update of resource pool: %s", Utils.toString(e));
