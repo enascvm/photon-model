@@ -717,8 +717,6 @@ public class AWSInstanceService extends StatelessService {
             diskState.capacityMBytes = instanceType.instanceTypeInfo.dataDiskSizeInMB;
             diskState.customProperties.put(DEVICE_TYPE, AWSStorageType.INSTANCE_STORE.getName());
         }
-        //add the endpointLinks
-        diskState.endpointLinks = instanceType.child.endpointLinks;
     }
 
     /**
@@ -828,8 +826,8 @@ public class AWSInstanceService extends StatelessService {
 
                     updateAndTagDisks(this.context.bootDisk, this.context.imageDisks,
                             this.context.dataDisks, ((Instance) instance).getBlockDeviceMappings(),
-                            regionId, computeHostLink, sourceTaskLink,
-                            this.context.parent.tenantLinks, this.context.amazonEC2Client);
+                            regionId, computeHostLink, sourceTaskLink, this.context.parent.tenantLinks,
+                            this.context.child.endpointLink, this.context.amazonEC2Client);
 
                     DeferredResult<ComputeState> dr = new DeferredResult<>();
                     if (this.context.imageDisks != null && !this.context.imageDisks.isEmpty()) {
@@ -1081,7 +1079,7 @@ public class AWSInstanceService extends StatelessService {
         private void updateAndTagDisks(DiskState bootDisk, List<DiskState> imageDisks,
                 List<DiskState> additionalDisks, List<InstanceBlockDeviceMapping> blockDeviceMappings,
                 String regionId, String computeHostLink, String sourceTaskLink,
-                List<String> tenantLinks, AmazonEC2AsyncClient client) {
+                List<String> tenantLinks, String endpointLink, AmazonEC2AsyncClient client) {
             List<DiskState> diskStateList = new ArrayList<>();
             diskStateList.add(bootDisk);
             diskStateList.addAll(imageDisks);
@@ -1094,6 +1092,8 @@ public class AWSInstanceService extends StatelessService {
                 diskState.computeHostLink = computeHostLink;
                 diskState.customProperties.put(SOURCE_TASK_LINK, sourceTaskLink);
                 diskState.tenantLinks = tenantLinks;
+                diskState.endpointLink = endpointLink;
+                AdapterUtils.addToEndpointLinks(diskState, endpointLink);
                 diskState.origin = DiskService.DiskOrigin.DEPLOYED;
 
                 String deviceType = diskState.customProperties.get(DEVICE_TYPE);
