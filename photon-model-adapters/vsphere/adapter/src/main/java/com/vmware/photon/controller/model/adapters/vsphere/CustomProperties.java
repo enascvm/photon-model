@@ -152,6 +152,11 @@ public class CustomProperties {
     public static final String SNAPSHOT_MAXIMUM_LIMIT = "__snapshotLimit"; // the specified limit of snapshots allowed
 
     /**
+     * Snapshot deterministic name - contains the VM name as well
+     */
+    public static final String SNAPSHOT_DETERMINISTIC_NAME = "__snapshotDeterministicName";
+
+    /**
      * Nic external id. Set when the nic is assigned to NSX-T logical switch
      */
     public static final String NIC_EXTERNAL_ID = "external_id";
