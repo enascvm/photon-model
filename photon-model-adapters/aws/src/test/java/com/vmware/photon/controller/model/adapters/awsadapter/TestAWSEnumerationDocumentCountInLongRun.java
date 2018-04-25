@@ -595,7 +595,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             Assert.assertTrue("Compute document count mismatch during enumeration",
                     this.instanceIds.size() == this.computeStateLinks.size());
             for (String computeLink : this.computeStateLinks) {
-                verifyEndpointLinksCount(computeLink, 1);
+                verifyEndpointLinksCount(computeLink, 2);
             }
 
             Assert.assertTrue("Resource pool document count mismatch during enumeration",

@@ -43,6 +43,8 @@ public class UriPaths {
             + "monitoring.uri.prefix";
     public static final String SESSION_SERVICE_BASE_URI_PREFIX_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
             + "session-service.uri.prefix";
+    public static final String RESOURCE_GROOMER_SCHEDULE_DELAY_SECONDS_PROPERTY_NAME = UriPaths.PROPERTY_PREFIX
+            + "resource.groomer.schedule.delay.micros";
 
     public static final Boolean IAAS_API_ENABLED = Boolean.getBoolean(IAAS_API_ENABLED_PROPERTY_NAME);
 
