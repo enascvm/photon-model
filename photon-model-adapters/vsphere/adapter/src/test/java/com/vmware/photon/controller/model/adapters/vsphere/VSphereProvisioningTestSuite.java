@@ -14,11 +14,20 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.NIC_MAC_ADDRESS;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -26,6 +35,7 @@ import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
@@ -39,6 +49,8 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
@@ -114,7 +126,7 @@ public class VSphereProvisioningTestSuite {
             }
         }
 
-        private ComputeState createVmState(ComputeDescription vmDescription) throws Throwable {
+        protected ComputeState createVmState(ComputeDescription vmDescription) throws Throwable {
             ComputeState computeState = new ComputeState();
             computeState.id = vmDescription.name;
             computeState.documentSelfLink = computeState.id;
@@ -170,7 +182,7 @@ public class VSphereProvisioningTestSuite {
                     UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
         }
 
-        private ComputeDescription createVmDescription() throws Throwable {
+        protected ComputeDescription createVmDescription() throws Throwable {
             ComputeDescription computeDesc = new ComputeDescription();
 
             computeDesc.id = nextName("vm");
@@ -255,6 +267,75 @@ public class VSphereProvisioningTestSuite {
                 assertNotNull(CustomProperties.of(stateAfterTaskComplete)
                         .getMoRef(CustomProperties.MOREF));
             }
+        }
+
+        @Test
+        public void createComputeWithIps() throws Throwable {
+            CountDownLatch countDownLatch = new CountDownLatch(2);
+            // Create a resource pool where the VM will be housed
+            this.resourcePool = createResourcePool();
+            this.auth = createAuth();
+
+            this.computeHostDescription = createComputeDescription();
+            this.computeHost = createComputeHost(this.computeHostDescription);
+            this.network = createNetwork(networkId);
+
+            EndpointService.EndpointState ep = createEndpointState(this.computeHost, this.computeHostDescription);
+            EndpointState endpoint = TestUtils.doPost(this.host, ep, EndpointService.EndpointState
+                            .class,
+                    UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
+
+            enumerateComputes(this.computeHost, endpoint);
+
+            ComputeDescription vmDescription = createVmDescription();
+            ComputeState vm = createVmState(vmDescription);
+
+            NetworkInterfaceStateWithDetails n1 = new NetworkInterfaceStateWithDetails();
+
+            String mac1Address = "00:50:56:8b:54:bd";
+            String ip1 = "10.10.10.10";
+            Map<String, List<String>> ipMaps = new HashMap<>();
+            List<String> ipList = new ArrayList();
+            ipList.add(ip1);
+            ipMaps.put(mac1Address, ipList);
+
+            List<NetworkInterfaceStateWithDetails> nics = new ArrayList();
+
+            n1.customProperties = new HashMap<>();
+            n1.customProperties.put(NIC_MAC_ADDRESS, mac1Address);
+
+            // test with assignPublicIpAddress
+            n1.description = new NetworkInterfaceDescription();
+            n1.description.assignPublicIpAddress = true;
+            n1.subnetLink = "/dummy/subnetLink";
+
+            NetworkInterfaceStateWithDetails networkInterfaceState1 = TestUtils.doPost(this.host,
+                    n1, NetworkInterfaceStateWithDetails.class,
+                    UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
+
+            nics.add(networkInterfaceState1);
+
+            VSphereAdapterInstanceUpdateIpHelper.updateIPForCompute(this.host,vm.documentSelfLink, ip1).thenApply(c -> {
+                this.host.log(Level.INFO, "Update compute IP [%s] for computeLink [%s] ", ip1, vm.documentSelfLink);
+                VSphereAdapterInstanceUpdateIpHelper.updateIPForNics(this.host, ipMaps, nics, () -> {
+                    return String.format("Update networkInterfaces IP [%s] for computeLink [%s]", ipList, vm.documentSelfLink);
+                }, () -> {
+                        return String.format("Error updating networkInterfaces IP [%s] for computeLink [%s]: ",
+                            ipList,
+                            vm.documentSelfLink);
+                    }, (s) -> countDownLatch.countDown());
+                countDownLatch.countDown();
+                return null;
+            })
+                    .exceptionally(e -> {
+                        if (e != null) {
+                            this.host.log(Level.SEVERE, String.format("Error updating compute IP [%s] for computeLink [%s]: %s", ip1, vm.documentSelfLink, e));
+                        }
+                        countDownLatch.countDown();
+                        assertTrue("Error updating compute IP", false);
+                        return null;
+                    });
+            countDownLatch.await(60, TimeUnit.SECONDS);
         }
 
         private SnapshotState createSnapshotState(ComputeState vm) throws Throwable {

@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -235,6 +236,12 @@ public class VmOverlayTest{
                 nic1IpsByMacAddress.get(0).equals("192.168.1.10"));
         Assert.assertTrue("ip is different from 192.168.1.11", nic1IpsByMacAddress.get(1).equals("192.168.1.11"));
         Assert.assertTrue("ip is different from 10.10.10.20", nic2IpsByMacAddress.get(0).equals("10.10.10.20"));
+
+        List<String> ips = mapNics.values().stream().distinct().flatMap(List::stream)
+                .collect(Collectors.toList());
+        Assert.assertTrue("ip is different from 192.168.1.10", ips.get(0).equals("192.168.1.10"));
+        Assert.assertTrue("ip is different from 192.168.1.11", ips.get(1).equals("192.168.1.11"));
+        Assert.assertTrue("ip is different from 10.10.10.20", ips.get(2).equals("10.10.10.20"));
     }
 
 }
