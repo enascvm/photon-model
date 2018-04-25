@@ -111,6 +111,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
     private static final String NETWORK_TAG_TYPE_VALUE = AzureResourceType.azure_vnet.toString();
     private static final String SUBNET_TAG_TYPE_VALUE = AzureResourceType.azure_subnet.toString();
+    private static final int TAG_CREATE_BATCH_SIZE = 50;
 
     /**
      * The local service context that is used to identify and create/update a representative set of
@@ -699,11 +700,13 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         } else {
             OperationJoin.create(operations).setCompletion((ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
-                    handleError(context, exs.values().iterator().next());
-                } else {
-                    handleSubStage(context, next);
+                    logSevere("Error creating external type tag for networks: %s",
+                            Utils.toString(exs));
                 }
-            }).sendWith(this);
+
+                handleSubStage(context, next);
+
+            }).sendWith(this, TAG_CREATE_BATCH_SIZE);
         }
     }
 
@@ -720,7 +723,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logSevere("Error creating internal type tag for networks %s",
-                                e.getMessage());
+                                Utils.toString(e));
                     } else {
                         context.networkInternalTagsMap.put(PhotonModelConstants.TAG_KEY_TYPE,
                                 NETWORK_TAG_TYPE_VALUE);
