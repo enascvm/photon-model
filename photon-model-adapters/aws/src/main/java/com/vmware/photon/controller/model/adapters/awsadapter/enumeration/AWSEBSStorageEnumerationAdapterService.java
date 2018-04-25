@@ -94,7 +94,7 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  */
 public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_EBS_STORAGE_ENUMERATION_ADAPTER_SERVICE;
-    public static final int GB_TO_MB_MULTIPLIER = 1000;
+    public static final int GB_TO_MB_MULTIPLIER = 1024;
     private AWSClientManager clientManager;
 
     public enum AWSEBSStorageEnumerationStages {
