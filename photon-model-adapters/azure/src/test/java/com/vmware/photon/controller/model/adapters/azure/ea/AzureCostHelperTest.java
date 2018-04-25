@@ -32,6 +32,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.xenon.common.Utils;
 
+@Ignore
 public class AzureCostHelperTest {
 
     @Test

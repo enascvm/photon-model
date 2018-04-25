@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -69,6 +70,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 
+@Ignore
 public class TestAWSCostAdapterService extends BaseModelTest {
 
     public static final String account1Id = "123456789";
