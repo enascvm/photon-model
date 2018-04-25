@@ -486,7 +486,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                     .addOption(QueryOption.TOP_RESULTS)
                     .setResultLimit(getQueryResultLimit())
                     .build();
-            queryTask.tenantLinks = this.context.parentCompute.tenantLinks;
 
             QueryUtils.startInventoryQueryTask(this.service, queryTask)
                     .whenComplete((qrt, e) -> {
@@ -892,7 +891,6 @@ public class AWSEBSStorageEnumerationAdapterService extends StatelessService {
                     .setQuery(qBuilder.build())
                     .setResultLimit(getQueryResultLimit())
                     .build();
-            q.tenantLinks = this.context.parentCompute.tenantLinks;
             q.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
             this.service.logFine(() -> "Querying disks for deletion");
             QueryUtils.startInventoryQueryTask(this.service, q)
