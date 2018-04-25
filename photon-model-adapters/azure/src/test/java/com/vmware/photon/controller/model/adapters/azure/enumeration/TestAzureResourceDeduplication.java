@@ -124,6 +124,7 @@ public class TestAzureResourceDeduplication extends AzureBaseTest {
         validateEndpointLinks("", this.computeHost.documentSelfLink);
 
         this.endpointState2 = createEndpointState();
+        this.computeHost = createComputeHostWithDescription();
         this.endpointState2.computeLink = this.computeHost.documentSelfLink;
         this.host.waitForResponse(Operation.createPatch(this.host, this.endpointState2.documentSelfLink)
                 .setBody(this.endpointState2));

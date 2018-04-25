@@ -350,20 +350,16 @@ public class TestAzureImageEnumerationTask extends AzureBaseTest {
             kickOffImageEnumeration(this.endpointState, PUBLIC, AZURE_SINGLE_IMAGE_FILTER);
 
             // Validate 1 image state is CREATED and the 2 vSphere and 2 diff region are UNtouched
-            final int postEnumCount = 1 + 2 + 2 + 1; // plus 1 because we are not deleting the
-            // resource, only disassociating it.
+            final int postEnumCount = 1 + 2 + 2;
             ServiceDocumentQueryResult imagesAfterEnum = queryDocumentsAndAssertExpectedCount(
                     getHost(),
                     postEnumCount,
                     ImageService.FACTORY_LINK,
                     EXACT_COUNT);
 
-            // Validate 1 stale image state is DISASSOCIATED
-            ImageState staleImage = Utils.fromJson(
-                    imagesAfterEnum.documents.get(staleImageState.documentSelfLink),
-                    ImageState.class);
-            Assert.assertTrue("Dummy image should have been disassociated.",
-                    staleImage.endpointLinks.isEmpty());
+            // Validate 1 stale image state is deleted
+            Assert.assertNull("Dummy image should have been deleted.",
+                    imagesAfterEnum.documents.get(staleImageState.documentSelfLink));
 
             // Validate vSphere images are untouched
             Assert.assertTrue("Private images from other endpoints should not have been deleted.",

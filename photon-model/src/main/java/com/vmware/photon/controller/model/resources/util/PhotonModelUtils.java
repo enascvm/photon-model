@@ -230,6 +230,25 @@ public class PhotonModelUtils {
             return null;
         }
 
+        // Delete resource if it belongs to current endpoint only.
+        if (resource.endpointLinks.size() == 1 && resource.endpointLinks.contains(endpointLink)) {
+            return Operation
+                    .createDelete(createInventoryUri(service.getHost(), resource.documentSelfLink))
+                    .setReferer(service.getUri())
+                    .setCompletion((deleteOp, failure) -> {
+                        if (failure != null) {
+                            service.getHost().log(Level.WARNING, () -> String.format("DELETE " +
+                                            "on resource %s for instance service %s, failed: %s",
+                                    resource.documentSelfLink, deleteOp.getUri(),
+                                    failure.toString()));
+                            return;
+                        }
+                        service.getHost().log(Level.FINE, () -> String.format("DELETE on " +
+                                        "resource %s for instance service %s finished successfully",
+                                resource.documentSelfLink, deleteOp.getUri()));
+                    });
+        }
+
         Map<String, Collection<Object>> endpointsToRemoveMap = Collections.singletonMap(
                 EndpointService.EndpointState.FIELD_NAME_ENDPOINT_LINKS,
                 Collections.singleton(endpointLink));

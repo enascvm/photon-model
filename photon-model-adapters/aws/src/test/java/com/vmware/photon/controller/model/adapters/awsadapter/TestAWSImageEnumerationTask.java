@@ -363,20 +363,15 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         // Validate 1 image state is CREATED and the 2 vSphere are UNtouched
         int postEnumCount = 1 + 2 + 2;
-        postEnumCount++; //since we are not deleting stale resource anymore, just disassociating
-        // them
         ServiceDocumentQueryResult imagesAfterEnum = queryDocumentsAndAssertExpectedCount(
                 getHost(),
                 postEnumCount,
                 ImageService.FACTORY_LINK,
                 EXACT_COUNT);
 
-        // Validate 1 stale image state is DISASSOCIATED
-        ImageState staleImage = Utils.fromJson(
-                imagesAfterEnum.documents.get(staleImageState.documentSelfLink),
-                ImageState.class);
-        Assert.assertTrue("Dummy image should have been disassociated.",
-                staleImage.endpointLinks.isEmpty());
+        // Validate 1 stale image state is deleted
+        Assert.assertNull("Dummy image should have been deleted.",
+                imagesAfterEnum.documents.get(staleImageState.documentSelfLink));
 
         // Validate vSphere images are untouched
         Assert.assertTrue("Private images from other endpoints should not have been deleted.",

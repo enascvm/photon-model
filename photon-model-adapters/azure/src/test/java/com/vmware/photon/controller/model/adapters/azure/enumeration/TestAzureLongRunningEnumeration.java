@@ -992,7 +992,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         // Security Groups
         for (int i = 0; i < STALE_SECURITY_GROUPS_COUNT; i++) {
             assertResourceDisassociated(this.host, SecurityGroupService.FACTORY_LINK,
-                    STALE_SG_NAME_PREFIX + i, false);
+                    STALE_SG_NAME_PREFIX + i, true);
         }
     }
 

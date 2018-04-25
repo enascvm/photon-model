@@ -1860,16 +1860,16 @@ public class AzureTestUtil {
      *            Factory link to the stateful service which states to check.
      * @param name
      *            name of the resource to assert if exists.
-     * @param isDisassociated
+     * @param isDeleted
      *            whether to assert if a resource exists or not.
      */
     public static void assertResourceDisassociated(
-            VerificationHost host, String factoryLink, String name, boolean isDisassociated) {
+            VerificationHost host, String factoryLink, String name, boolean isDeleted) {
 
         ServiceDocumentQueryResult result = host.getExpandedFactoryState(
                 UriUtils.buildUri(host, factoryLink));
 
-        boolean disassociated = false;
+        boolean deleted = true;
 
         for (Object document : result.documents.values()) {
             // Read doc as ServiceDocument to access its 'documentKind'
@@ -1889,14 +1889,14 @@ public class AzureTestUtil {
                     String endpointLink = PhotonModelUtils.getEndpointLink(resource);
 
                     if (endpointLink == null || endpointLink.isEmpty()) {
-                        disassociated = true;
+                        deleted = false;
                         break;
                     }
                 }
             }
         }
 
-        assertEquals("isDisassociated", isDisassociated, disassociated);
+        assertEquals("isDisassociated", isDeleted, deleted);
     }
     /**
      * Validate DiskStates are populated with the appropriate type tagLinks
