@@ -955,6 +955,11 @@ public class ResourceGroomerTaskService
                         state.endpointLink != null ? state.endpointLink : EMPTY_STRING);
             } else if (doc.documentKind.equals(IMAGE_STATE_KIND)) {
                 ImageState state = Utils.fromJson(document, ImageState.class);
+                if (state.isPublicImage()) {
+                    // public images should not be removed by the groomer as they are not related
+                    // to a particular endpoint (their endpoint links are always empty)
+                    continue;
+                }
                 if (state.endpointLinks != null) {
                     state.endpointLinks.remove(null);
                     endpointLinks.addAll(state.endpointLinks);
