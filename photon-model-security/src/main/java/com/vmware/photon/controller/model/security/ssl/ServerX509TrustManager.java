@@ -27,6 +27,7 @@ import java.util.logging.Level;
 
 import javax.net.ssl.X509TrustManager;
 
+import com.vmware.photon.controller.model.security.service.SslTrustCertificateNotificationService;
 import com.vmware.photon.controller.model.security.service.SslTrustCertificateService.SslTrustCertificateState;
 import com.vmware.photon.controller.model.security.util.CertificateUtil;
 import com.vmware.photon.controller.model.util.AssertUtil;
@@ -245,25 +246,40 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
     }
 
     private void certificateChanged(Operation operation) {
-        Utils.log(getClass(), getClass().getName(), Level.WARNING,
+        Utils.log(getClass(), getClass().getName(), Level.INFO,
                 "process certificate changed for operation %s", operation.toLogString());
         QueryTask queryTask = operation.getBody(QueryTask.class);
         if (queryTask.results != null && queryTask.results.documentLinks != null
                 && !queryTask.results.documentLinks.isEmpty()) {
 
             queryTask.results.documents.values().forEach(doc -> {
+                // with Lucene index this notification is received on all nodes; with Postgres
+                // only the owner receives the notification
+                // to avoid a Lucene vs. Postgres 'if' here, we explicitly check if we are the
+                // local owner, and only then broadcast the notification to the other nodes
                 SslTrustCertificateState cert = Utils.fromJson(doc, SslTrustCertificateState.class);
-                if (Action.DELETE.toString().equals(cert.documentUpdateAction)) {
-                    deleteCertificate(cert.getAlias());
-                } else {
-                    registerCertificate(cert);
-                }
+                SslTrustCertificateNotificationService.executeIfLocalOwner(
+                        this.host,
+                        cert.documentSelfLink,
+                        () -> SslTrustCertificateNotificationService
+                                .fireCertificateChangeNotification(this.host, cert));
             });
         } else {
             Utils.log(getClass(), getClass().getName(), Level.WARNING,
                     "No document links for operation %s", operation.toLogString());
         }
         operation.complete();
+    }
+
+    /**
+     * Called to handle a certificate change notification.
+     */
+    public void handleCertificateChange(SslTrustCertificateState cert) {
+        if (Action.DELETE.toString().equals(cert.documentUpdateAction)) {
+            deleteCertificate(cert.getAlias());
+        } else {
+            registerCertificate(cert);
+        }
     }
 
     public void registerCertificate(SslTrustCertificateState sslTrustCert) {
@@ -283,7 +299,6 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
         this.delegatingTrustManager.removeDelegate(alias);
         Utils.log(getClass(), "Self Signed Trust Store", Level.FINE,
                 "Certificate with alias %s removed", alias);
-
     }
 
 }

@@ -58,7 +58,8 @@ class SslTrustCertificateServiceUtils {
 
 
     /**
-     * Subscribes a consumer to the given continuous query.
+     * Subscribes a consumer to the given continuous query. Only the owner node of the changed
+     * certificate will receive the notification.
      */
     static void subscribe(ServiceHost host, Consumer<Operation> consumer) {
         QueryTask task = getQueryTask();
