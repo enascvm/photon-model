@@ -325,6 +325,7 @@ public class AWSDiskService extends StatelessService {
 
                 this.logInfo(() -> info);
                 iops = diskSize * MAX_IOPS_PER_GiB;
+                diskState.customProperties.put(DISK_IOPS, String.valueOf(iops));
             }
             req.withIops(iops);
         }
