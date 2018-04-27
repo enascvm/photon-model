@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.60-SNAPSHOT
+
 ## 0.6.59
 * Reverting xenon version to 1.6.6
 * [vSphere] Fixes related to data-stores and disks
