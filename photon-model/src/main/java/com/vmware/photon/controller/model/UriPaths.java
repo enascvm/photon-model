@@ -168,6 +168,9 @@ public class UriPaths {
     public static final String PROVISIONING_SYSTEM_USER_SETUP_SERVICE = PROVISIONING_USER_SERVICE
             + "/automation-user-setup";
 
+    public static final String PROVISIONING_CLIENT_CREDS_USER_SETUP_SERVICE = PROVISIONING_USER_SERVICE
+            + "/client-credentials-user-setup";
+
     public static final String RESOURCE_PROPERTIES_SERVICE = QUERY_PREFIX + "/resource-properties";
     public static final String RESOURCE_PROPERTIES_SERVICE_V2 = QUERY_PREFIX + "/resource-properties-v2";
 

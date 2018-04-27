@@ -36,6 +36,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.discovery.common.PhotonControllerCloudAccountUtils;
 import com.vmware.photon.controller.discovery.common.services.OrganizationService;
 import com.vmware.photon.controller.discovery.common.services.ProjectService;
 import com.vmware.photon.controller.discovery.common.services.UserContextQueryService;
@@ -233,13 +234,11 @@ public class OnboardingUtils {
      * Build the factory links for each client credential user in the system and return in a set.
      */
     public static Set<String> getSystemOauthClientIdLinks() {
-        Set<String> clientLinks = new HashSet<>();
-        for (String clientId : getSystemOauthClientIds()) {
-            String clientUserId = buildUserIdFromClientId(clientId);
-            clientLinks.add(normalizeLink(com.vmware.xenon.services.common.UserService.FACTORY_LINK,
-                    computeHashWithSHA256(clientUserId)));
-        }
-        return clientLinks;
+        return getSystemOauthClientIds().stream()
+                .map(OnboardingUtils::buildUserIdFromClientId)
+                .map(PhotonControllerCloudAccountUtils::computeHashWithSHA256)
+                .map(clientUserId -> normalizeLink(com.vmware.xenon.services.common.UserService.FACTORY_LINK, clientUserId))
+                .collect(Collectors.toSet());
     }
 
     /**

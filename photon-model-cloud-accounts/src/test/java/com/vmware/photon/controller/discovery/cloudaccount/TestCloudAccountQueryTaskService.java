@@ -54,10 +54,12 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.discovery.cloudaccount.CloudAccountApiService.CloudAccountViewState;
 import com.vmware.photon.controller.discovery.cloudaccount.CloudAccountQueryTaskService.CloudAccountQueryTaskState;
+import com.vmware.photon.controller.discovery.common.CloudAccountConstants;
 import com.vmware.photon.controller.discovery.common.PhotonControllerCloudAccountUtils;
 import com.vmware.photon.controller.discovery.common.TagViewState;
 import com.vmware.photon.controller.discovery.common.services.UserService;
 import com.vmware.photon.controller.discovery.onboarding.OnBoardingTestUtils;
+import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.Operation;
@@ -88,8 +90,7 @@ public class TestCloudAccountQueryTaskService {
     @Before
     public void setUp() throws Throwable {
         System.setProperty(PROPERTY_NAME_QUERY_RESULT_LIMIT, String.valueOf(this.pageSize));
-        // TODO: Handle Client Credentials
-//        System.setProperty(SymphonyConstants.OAUTH_CLIENT_IDS, "test");
+        System.setProperty(CloudAccountConstants.OAUTH_CLIENT_IDS, "test");
         this.accountTestHelper = CloudAccountTestHelper.create();
         this.accountTestHelper.createSecondUser();
         this.host = this.accountTestHelper.host;
@@ -690,37 +691,36 @@ public class TestCloudAccountQueryTaskService {
         assertThat(result.prevPageLink, nullValue());
     }
 
-    // TODO: Client Credentials
-//    @Test
-//    public void testSinglePageWithClientCredentialsUser() throws Throwable {
-//        int numEndpoints = this.pageSize - 1;
-//        this.host.assumeIdentity(UriUtils.buildUriPath(UserService.FACTORY_LINK,
-//                PhotonControllerCloudAccountUtils.computeHashWithSHA256(USER_1_ID)));
-//        this.host.log(Level.INFO, "USER_1 Link: %s", UriUtils.buildUriPath(UserService.FACTORY_LINK,
-//                PhotonControllerCloudAccountUtils.computeHashWithSHA256(USER_1_ID)));
-//        this.host.log(Level.INFO, OperationContext.getAuthorizationContext().getClaims().getSubject());
-//        List<String> endpointLinks = this.accountTestHelper.createMockAwsEndpoints(numEndpoints, null, null, null);
-//
-//        this.host.resetAuthorizationContext();
-//        Set<String> clientIdLinks = PhotonControllerCloudAccountUtils.getSystemOauthClientIdLinks();
-//
-//        String clientIdLink = (String) clientIdLinks.toArray()[0];
-//        this.host.assumeIdentity(clientIdLink);
-//        this.host.log(Level.INFO, "client id link: %s", clientIdLink);
-//        Operation.AuthorizationContext authorizationContext = OperationContext
-//                .getAuthorizationContext();
-//        this.host.log(Level.INFO, "claims subject: %s",
-//                authorizationContext.getClaims().getSubject());
-//        CloudAccountQueryTaskState response = sendQuery();
-//
-//        URI nextPageUri = UriUtils.buildUri(this.peerUri, response.results.nextPageLink);
-//        ServiceDocumentQueryResult result = this.host
-//                .getServiceState(null, ServiceDocumentQueryResult.class, nextPageUri);
-//        this.accountTestHelper.verifyEndpointsPage(endpointLinks, result);
-//
-//        assertThat(result.nextPageLink, nullValue());
-//        assertThat(result.prevPageLink, nullValue());
-//    }
+    @Test
+    public void testSinglePageWithClientCredentialsUser() throws Throwable {
+        int numEndpoints = this.pageSize - 1;
+        this.host.assumeIdentity(UriUtils.buildUriPath(UserService.FACTORY_LINK,
+                PhotonControllerCloudAccountUtils.computeHashWithSHA256(USER_1_ID)));
+        this.host.log(Level.INFO, "USER_1 Link: %s", UriUtils.buildUriPath(UserService.FACTORY_LINK,
+                PhotonControllerCloudAccountUtils.computeHashWithSHA256(USER_1_ID)));
+        this.host.log(Level.INFO, OperationContext.getAuthorizationContext().getClaims().getSubject());
+        List<String> endpointLinks = this.accountTestHelper.createMockAwsEndpoints(numEndpoints, null, null, null);
+
+        this.host.resetAuthorizationContext();
+        Set<String> clientIdLinks = OnboardingUtils.getSystemOauthClientIdLinks();
+
+        String clientIdLink = (String) clientIdLinks.toArray()[0];
+        this.host.assumeIdentity(clientIdLink);
+        this.host.log(Level.INFO, "client id link: %s", clientIdLink);
+        Operation.AuthorizationContext authorizationContext = OperationContext
+                .getAuthorizationContext();
+        this.host.log(Level.INFO, "claims subject: %s",
+                authorizationContext.getClaims().getSubject());
+        CloudAccountQueryTaskState response = sendQuery();
+
+        URI nextPageUri = UriUtils.buildUri(this.peerUri, response.results.nextPageLink);
+        ServiceDocumentQueryResult result = this.host
+                .getServiceState(null, ServiceDocumentQueryResult.class, nextPageUri);
+        this.accountTestHelper.verifyEndpointsPage(endpointLinks, result);
+
+        assertThat(result.nextPageLink, nullValue());
+        assertThat(result.prevPageLink, nullValue());
+    }
 
     @Test
     public void listSinglePageSortNameDefault() throws Throwable {

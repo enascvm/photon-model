@@ -25,11 +25,13 @@ import static org.junit.Assert.assertTrue;
 import static com.vmware.photon.controller.discovery.cloudaccount.CloudAccountQueryPageService.maskCredentials;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_NAME_CREATEDBY_EMAIL;
 import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.SERVICE_USER_LINK;
+import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.buildUserIdFromClientId;
 import static com.vmware.photon.controller.discovery.onboarding.OnboardingUtils.getDefaultProjectSelfLink;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
+import static com.vmware.xenon.services.common.ServiceUriPaths.CORE_AUTHZ_USERS;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,6 +50,7 @@ import com.vmware.photon.controller.discovery.cloudaccount.CloudAccountApiServic
 import com.vmware.photon.controller.discovery.cloudaccount.CloudAccountApiService.Permission;
 import com.vmware.photon.controller.discovery.cloudaccount.CloudAccountQueryPageService.Context;
 import com.vmware.photon.controller.discovery.cloudaccount.CloudAccountQueryPageService.Stages;
+import com.vmware.photon.controller.discovery.common.CloudAccountConstants;
 import com.vmware.photon.controller.discovery.common.PhotonControllerCloudAccountUtils;
 import com.vmware.photon.controller.discovery.common.services.OrganizationService.OrganizationState;
 import com.vmware.photon.controller.discovery.common.services.UserContextQueryService.UserContext;
@@ -81,8 +84,7 @@ public class TestCloudAccountQueryPageService {
 
     @Before
     public void setUp() {
-        // TODO: Handle Client Credentials
-//        System.setProperty(SymphonyConstants.OAUTH_CLIENT_IDS, TEST_CLIENT);
+        System.setProperty(CloudAccountConstants.OAUTH_CLIENT_IDS, TEST_CLIENT);
         this.context.inputOp = Operation.createGet(null);
         this.context.endpointStates = new ArrayList<>();
         this.context.credentialsMap = new LinkedHashMap<>();
@@ -284,19 +286,18 @@ public class TestCloudAccountQueryPageService {
 
         Assert.assertFalse(maskCredentials(serviceUserAuthContext));
 
-        // TODO: Client Credentials
-//        // Client Credential users should have unmasked credentials.
-//        Claims clientCredentialClaims = new Claims.Rfc7519Builder<>(Claims.class)
-//                .setSubject(UriUtils.buildUriPath(CORE_AUTHZ_USERS,
-//                        PhotonControllerCloudAccountUtils.computeHashWithSHA256(
-//                                buildUserIdFromClientId(TEST_CLIENT))))
-//                .getResult();
-//
-//        AuthorizationContext clientCredentialsAuthContext = AuthorizationContext.Builder
-//                .create()
-//                .setClaims(clientCredentialClaims)
-//                .getResult();
-//
-//        Assert.assertFalse(maskCredentials(clientCredentialsAuthContext));
+        // Client Credential users should have unmasked credentials.
+        Claims clientCredentialClaims = new Claims.Rfc7519Builder<>(Claims.class)
+                .setSubject(UriUtils.buildUriPath(CORE_AUTHZ_USERS,
+                        PhotonControllerCloudAccountUtils.computeHashWithSHA256(
+                                buildUserIdFromClientId(TEST_CLIENT))))
+                .getResult();
+
+        AuthorizationContext clientCredentialsAuthContext = AuthorizationContext.Builder
+                .create()
+                .setClaims(clientCredentialClaims)
+                .getResult();
+
+        Assert.assertFalse(maskCredentials(clientCredentialsAuthContext));
     }
 }
