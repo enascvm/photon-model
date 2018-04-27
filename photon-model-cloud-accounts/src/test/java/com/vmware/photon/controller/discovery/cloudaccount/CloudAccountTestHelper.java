@@ -73,6 +73,8 @@ import com.vmware.photon.controller.discovery.endpoints.Credentials;
 import com.vmware.photon.controller.discovery.endpoints.EndpointCreationTaskService;
 import com.vmware.photon.controller.discovery.endpoints.EndpointServices;
 import com.vmware.photon.controller.discovery.endpoints.EndpointUtils;
+import com.vmware.photon.controller.discovery.onboarding.ClientCredentialsUserSetupService;
+import com.vmware.photon.controller.discovery.onboarding.ClientCredentialsUserSetupService.ClientCredentialsUserSetupRequest;
 import com.vmware.photon.controller.discovery.onboarding.OnBoardingTestUtils;
 import com.vmware.photon.controller.discovery.onboarding.OnboardingServices;
 import com.vmware.photon.controller.discovery.onboarding.OnboardingUtils;
@@ -194,6 +196,14 @@ public class CloudAccountTestHelper {
                                 VsphereOnPremEndpointAdapterService.class)),
                         new VsphereOnPremEndpointAdapterService());
                 h.waitForServiceAvailable(VsphereOnPremEndpointAdapterService.SELF_LINK);
+                h.waitForServiceAvailable(ClientCredentialsUserSetupService.SELF_LINK);
+                ClientCredentialsUserSetupRequest req = new ClientCredentialsUserSetupRequest();
+                req.clientIds = OnboardingUtils.getSystemOauthClientIds();
+                if (!req.clientIds.isEmpty()) {
+                    h.sendAndWaitExpectSuccess(
+                            Operation.createPost(h, ClientCredentialsUserSetupService.SELF_LINK)
+                                    .setBody(req));
+                }
                 h.resetAuthorizationContext();
             }
 
@@ -978,10 +988,8 @@ public class CloudAccountTestHelper {
 
         endpointPrivateKeyId = viewState.endpointProperties.get(PRIVATE_KEYID_KEY);
 
-        // TODO: Fix for client credentials
-//        if (authorizationContext != null && (authorizationContext.getClaims().getSubject().equals(SERVICE_USER_LINK) ||
-//                PhotonControllerCloudAccountUtils.getSystemOauthClientIdLinks().contains(authorizationContext.getClaims().getSubject()))) {
-        if (authorizationContext != null && (authorizationContext.getClaims().getSubject().equals(SERVICE_USER_LINK))) {
+        if (authorizationContext != null && (authorizationContext.getClaims().getSubject().equals(SERVICE_USER_LINK) ||
+                OnboardingUtils.getSystemOauthClientIdLinks().contains(authorizationContext.getClaims().getSubject()))) {
             assertThat(privateKey, equalTo(modelAuth.privateKey));
 
             assertThat(viewState.endpointProperties.get(PRIVATE_KEYID_KEY), equalTo(modelState.endpointProperties.get(PRIVATE_KEYID_KEY)));

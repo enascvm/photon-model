@@ -83,8 +83,7 @@ public class PhotonControllerCloudAccountUtils {
                     }
                 });
         if (isSuperUser) {
-            service.setAuthorizationContext(getOp,
-                    service.getSystemAuthorizationContext());
+            service.setAuthorizationContext(getOp, service.getSystemAuthorizationContext());
         }
         service.sendRequest(getOp);
     }
@@ -213,5 +212,4 @@ public class PhotonControllerCloudAccountUtils {
         }
         return null;
     }
-
 }

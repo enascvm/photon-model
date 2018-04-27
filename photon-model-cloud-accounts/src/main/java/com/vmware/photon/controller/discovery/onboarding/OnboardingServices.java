@@ -83,6 +83,8 @@ public class OnboardingServices {
         host.startService(new ServiceUserSetupService());
         addPrivilegedService.accept(AutomationUserSetupService.class);
         host.startService(new AutomationUserSetupService());
+        addPrivilegedService.accept(ClientCredentialsUserSetupService.class);
+        host.startService(new ClientCredentialsUserSetupService());
         addPrivilegedService.accept(ProjectCreationTaskService.class);
         host.startFactory(ProjectCreationTaskService.class,
                 () -> TaskFactoryService.create(ProjectCreationTaskService.class));
