@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.6.59
+* Reverting xenon version to 1.6.6
+* [vSphere] Fixes related to data-stores and disks
+* Allowing AWS mock and real end points to be registered with photon-model/symphony
+* Added a property to differentiate between provisioned disk and discovered disk in AWS and Azure
+
 ## 0.6.58
 * Enumerate snapshots in incremental cycle.
 * Add OSType to custom properties in vSphere.
