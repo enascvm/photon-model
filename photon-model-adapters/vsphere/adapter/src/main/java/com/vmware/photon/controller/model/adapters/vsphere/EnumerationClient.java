@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import com.vmware.pbm.InvalidArgumentFaultMsg;
 import com.vmware.pbm.PbmFaultFaultMsg;
 import com.vmware.pbm.PbmProfile;
+import com.vmware.pbm.PbmProfileCategoryEnum;
 import com.vmware.pbm.PbmProfileId;
 import com.vmware.pbm.PbmProfileResourceType;
 import com.vmware.pbm.PbmProfileResourceTypeEnum;
@@ -79,12 +80,13 @@ public class EnumerationClient extends BaseHelper {
     public static final int DEFAULT_FETCH_PAGE_SIZE = 100;
     private static final String HOST_DS_MOUNT_INFO = "config.fileSystemVolume.mountInfo";
 
-    private final ManagedObjectReference datacenter;
-    private final GetMoRef getMoRef;
-    private final Finder finder;
+    private ManagedObjectReference datacenter;
+    private GetMoRef getMoRef;
+    private Finder finder;
 
-    public EnumerationClient(Connection connection, ComputeStateWithDescription parent) {
-        this(connection, parent, null);
+    public EnumerationClient(Connection connection) {
+        super(connection);
+        this.getMoRef = new GetMoRef(connection);
     }
 
     public EnumerationClient(Connection connection, ComputeStateWithDescription parent,
@@ -459,7 +461,7 @@ public class EnumerationClient extends BaseHelper {
         PbmProfileResourceType pbmProfileResourceType = new PbmProfileResourceType();
         pbmProfileResourceType.setResourceType(PbmProfileResourceTypeEnum.STORAGE.value());
         List<PbmProfileId> profileIds = this.connection.getPbmPort()
-                .pbmQueryProfile(profileMgr, pbmProfileResourceType, null);
+                .pbmQueryProfile(profileMgr, pbmProfileResourceType, PbmProfileCategoryEnum.REQUIREMENT.value());
 
         // 3 Retrieve the list of storage profiles.
         if (profileIds != null && !profileIds.isEmpty()) {

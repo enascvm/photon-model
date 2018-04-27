@@ -87,8 +87,8 @@ public class VSphereIOThreadPool {
      */
     public void submit(Service sender, URI adapterReference, String authLink,
             ConnectionCallback callback) {
-        this.host.log(Level.INFO, "Active thread count before submitting full enumeration job: " + ((ThreadPoolExecutor)this.executorService).getActiveCount());
-        this.host.log(Level.INFO, "Current pool size: " + ((ThreadPoolExecutor)this.executorService).getPoolSize());
+        this.host.log(Level.FINE, "Active thread count before submitting full enumeration job: " + ((ThreadPoolExecutor)this.executorService).getActiveCount());
+        this.host.log(Level.FINE, "Current pool size: " + ((ThreadPoolExecutor)this.executorService).getPoolSize());
         URI authUri = createInventoryUri(this.host, authLink);
 
         Operation op = Operation.createGet(authUri)
@@ -114,8 +114,8 @@ public class VSphereIOThreadPool {
      * @param task
      */
     public void submit(Runnable task) {
-        this.host.log(Level.INFO, "Active thread count before submitting job: " + ((ThreadPoolExecutor)this.executorService).getActiveCount());
-        this.host.log(Level.INFO, "Current pool size: " + ((ThreadPoolExecutor)this.executorService).getPoolSize());
+        this.host.log(Level.FINE, "Active thread count before submitting job: " + ((ThreadPoolExecutor)this.executorService).getActiveCount());
+        this.host.log(Level.FINE, "Current pool size: " + ((ThreadPoolExecutor)this.executorService).getPoolSize());
         this.executorService.submit(task);
     }
 

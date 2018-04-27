@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -49,14 +50,46 @@ import com.vmware.xenon.services.common.QueryTask;
 
 public class VsphereDatastoreEnumerationHelper {
 
-    public static QueryTask queryForStorage(
-            EnumerationProgress ctx, String name, String morefId, String groupLink) {
+    public static QueryTask queryForStorageWithDSMoref(
+            EnumerationProgress ctx, List<String> morefId) {
         QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
                 .addKindFieldClause(StorageDescriptionService.StorageDescription.class)
                 .addFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
-                        ctx.getRequest().adapterManagementReference.toString())
-                .addFieldClause(
-                        StorageDescriptionService.StorageDescription.FIELD_NAME_REGION_ID, ctx.getRegionId());
+                        ctx.getRequest().adapterManagementReference.toString());
+
+        QueryTask.Query.Builder morefBuilder = QueryTask.Query.Builder.create();
+        for (String morefIdValue: morefId) {
+            morefBuilder.addCompositeFieldClause(
+                    StorageDescriptionService.StorageDescription.FIELD_NAME_CUSTOM_PROPERTIES,
+                    CustomProperties.MOREF, morefIdValue, QueryTask.Query.Occurance.SHOULD_OCCUR);
+        }
+        builder.addClause(morefBuilder.build());
+
+        QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
+                ctx.getRequest().endpointLink);
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+    }
+
+    public static QueryTask queryForStorage(
+            EnumerationProgress ctx, String name, String morefId, String groupLink) {
+        return queryForStorage(ctx, name, morefId, ctx.getRegionId(), groupLink);
+    }
+
+    public static QueryTask queryForStorage(
+            EnumerationProgress ctx, String name, String morefId, String regionId, String groupLink) {
+        QueryTask.Query.Builder builder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(StorageDescriptionService.StorageDescription.class)
+                .addFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
+                        ctx.getRequest().adapterManagementReference.toString());
+
+        if (null != regionId) {
+            builder.addFieldClause(
+                    StorageDescriptionService.StorageDescription.FIELD_NAME_REGION_ID, ctx.getRegionId());
+        }
 
         if (name != null) {
             builder.addCaseInsensitiveFieldClause(
@@ -172,6 +205,12 @@ public class VsphereDatastoreEnumerationHelper {
         String regionId = enumerationProgress.getRegionId();
         StorageDescription desc = makeStorageFromResults(request, ds, regionId, enumerationProgress);
         desc.tenantLinks = enumerationProgress.getTenantLinks();
+
+        // if the data store is associated with storage policy, then populate it.
+        if (null != enumerationProgress.getDataStoresToStoragePolicyMap().get(ds.getId().getValue())) {
+            desc.groupLinks = new HashSet(enumerationProgress.getDataStoresToStoragePolicyMap().get(ds.getId().getValue()));
+        }
+
         service.logFine(() -> String.format("Found new Datastore %s", ds.getName()));
 
         VsphereEnumerationHelper.submitWorkToVSpherePool(service, () -> {

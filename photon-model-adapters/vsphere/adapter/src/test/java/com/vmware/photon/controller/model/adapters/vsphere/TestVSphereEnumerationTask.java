@@ -249,7 +249,6 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                     assertNotNull(rg.customProperties);
                     assertNotNull(rg.customProperties.get(RESOURCE_TYPE_KEY));
                     assertNotNull(rg.customProperties.get(ComputeProperties.ENDPOINT_LINK_PROP_NAME));
-                    assertNotNull(rg.customProperties.get(CustomProperties.DATACENTER_SELF_LINK));
                 }
             });
         }

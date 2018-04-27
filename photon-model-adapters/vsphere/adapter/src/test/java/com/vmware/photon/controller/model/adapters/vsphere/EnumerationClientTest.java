@@ -60,7 +60,7 @@ public class EnumerationClientTest {
         ComputeDescription desc = new ComputeDescription();
         parent.description = desc;
 
-        EnumerationClient client = new EnumerationClient(conn, parent);
+        EnumerationClient client = new EnumerationClient(conn);
 
         PropertyFilterSpec spec = client.createResourcesFilterSpec();
 

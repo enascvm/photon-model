@@ -19,7 +19,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import com.vmware.pbm.PbmProfile;
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -48,23 +47,26 @@ public class VsphereStoragePolicyEnumerationHelper {
 
 
     static QueryTask queryForStoragePolicy(EnumerationProgress ctx, String id, String name) {
-        return queryForStoragePolicy(ctx.getTenantLinks(), id, name);
+        return queryForStoragePolicy(ctx.getTenantLinks(), id, name, ctx.getRequest().endpointLink);
     }
 
-    static QueryTask queryForStoragePolicy(List<String> tenantLinks, String id, String name) {
+    static QueryTask queryForStoragePolicy(List<String> tenantLinks, String id, String name, String endpointLink) {
         Builder builder = Builder.create()
                 .addFieldClause(ResourceState.FIELD_NAME_ID, id)
                 .addKindFieldClause(ResourceGroupState.class)
                 .addCaseInsensitiveFieldClause(ResourceState.FIELD_NAME_NAME, name,
                         MatchType.TERM, Occurance.MUST_OCCUR);
         QueryUtils.addTenantLinks(builder, tenantLinks);
+        QueryUtils.addEndpointLink(builder, ResourceGroupState.class,
+                endpointLink);
+
         return QueryTask.Builder.createDirectTask()
                 .setQuery(builder.build())
                 .build();
     }
 
     static ResourceGroupState makeStoragePolicyFromResults(ComputeEnumerateResourceRequest request,
-                                                           StoragePolicyOverlay sp, final String dcLink) {
+                                                           StoragePolicyOverlay sp) {
         ResourceGroupState res = new ResourceGroupState();
         res.id = sp.getProfileId();
         res.name = sp.getName();
@@ -74,7 +76,6 @@ public class VsphereStoragePolicyEnumerationHelper {
         res.customProperties = sp.getCapabilities();
         CustomProperties.of(res)
                 .put(ComputeProperties.RESOURCE_TYPE_KEY, sp.getType())
-                .put(CustomProperties.DATACENTER_SELF_LINK, dcLink)
                 .put(ComputeProperties.ENDPOINT_LINK_PROP_NAME, request.endpointLink);
 
         return res;
@@ -87,19 +88,11 @@ public class VsphereStoragePolicyEnumerationHelper {
             try {
                 List<String> disksAssociatedWithSP = client.getAssociatedDisksForStoragePolicy(sp.getPbmProfile());
                 Map<String, List<String>> map = enumerationProgress.getDiskToStoragePolicyAssociationMap();
-                if (!map.isEmpty()) {
-                    ResourceGroupState resourceGroupState = o.getBody(ResourceGroupState.class);
-                    for (String disk : disksAssociatedWithSP) {
-                        if (null != map.get(disk)) {
-                            List<String> storagePolicies = map.get(disk);
-                            storagePolicies.add(resourceGroupState.documentSelfLink);
-                        } else {
-                            List<String> storagePolicy = new ArrayList<>();
-                            storagePolicy.add(resourceGroupState.documentSelfLink);
-                            map.put(disk, storagePolicy);
-                        }
-                    }
-                }
+                ResourceGroupState resourceGroupState = o.getBody(ResourceGroupState.class);
+                populateselfLinksMap(map, disksAssociatedWithSP, resourceGroupState.documentSelfLink);
+
+                Map<String, List<String>> dsMap = enumerationProgress.getDataStoresToStoragePolicyMap();
+                populateselfLinksMap(dsMap, sp.getDatastoreIds(), resourceGroupState.documentSelfLink);
             } catch (Exception exception) {
                 service.logSevere("Error while retrieving disks associated with storage policy %s", sp.getName());
             }
@@ -113,19 +106,40 @@ public class VsphereStoragePolicyEnumerationHelper {
         };
     }
 
-    static void updateStorageDescription(VSphereIncrementalEnumerationService service,
-                                         Stream<Operation> opStream, String spSelfLink,
-                                         ServiceDocumentQueryResult result) {
+    /**
+     * populates the given map in this way -
+     * iterates over idsToSearch list, for each id
+     * searches if the map already has a key as id, if yes, adds selfLinkToUpdate to the value of the map key
+     * else, creates a new key-value pair with key as id and value as list containing selfLinkToUpdate
+     *
+     * @param mapTobePopulated the map to be populated
+     * @param idsToSearch the list of ids which need to be populated
+     * @param selfLinkToUpdate the value with which map needs to be updated
+     */
+    static void populateselfLinksMap(Map<String, List<String>> mapTobePopulated, List<String> idsToSearch, String selfLinkToUpdate) {
+        for (String id : idsToSearch) {
+            if (null != mapTobePopulated.get(id)) {
+                List<String> storagePolicies = mapTobePopulated.get(id);
+                storagePolicies.add(selfLinkToUpdate);
+            } else {
+                List<String> storagePolicy = new ArrayList<>();
+                storagePolicy.add(selfLinkToUpdate);
+                mapTobePopulated.put(id, storagePolicy);
+            }
+        }
+    }
+
+    static void updateStorageDescription(
+            VSphereIncrementalEnumerationService service, String spSelfLink,
+            ServiceDocumentQueryResult resultFromPhM, List<StorageDescription> datastoresFromvSphereAPI) {
         List<Operation> patchOps = new ArrayList<>();
         List<String> originalLinks = new ArrayList<>();
-        if (result.documentLinks != null) {
-            originalLinks.addAll(result.documentLinks);
+        if (resultFromPhM.documentLinks != null) {
+            originalLinks.addAll(resultFromPhM.documentLinks);
         }
 
-        opStream.forEach(op -> {
-            StorageDescription storageDescription = op.getBody
-                    (StorageDescription.class);
-            if (result.documentLinks != null && result.documentLinks
+        for (StorageDescription storageDescription : datastoresFromvSphereAPI) {
+            if (resultFromPhM.documentLinks != null && resultFromPhM.documentLinks
                     .contains(storageDescription.documentSelfLink)) {
                 originalLinks.remove(storageDescription.documentSelfLink);
             } else {
@@ -137,7 +151,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                         storageDescription.documentSelfLink))
                         .setBody(storageDescription));
             }
-        });
+        }
 
         // In this case, we need to update the datastore by removing the policy group link
         if (!originalLinks.isEmpty()) {
@@ -169,63 +183,70 @@ public class VsphereStoragePolicyEnumerationHelper {
     static void updateDataStoreWithStoragePolicyGroup(
             VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
             StoragePolicyOverlay sp, String selfLink) {
-        List<Operation> getOps = new ArrayList<>();
-        sp.getDatastoreIds().stream().forEach(id -> {
-            if (null != ctx.getDatastoreTracker()) {
-                String dataStoreLink = ctx.getDatastoreTracker()
-                        .getSelfLink(id, VimNames.TYPE_DATASTORE);
-                if (dataStoreLink != null && !ResourceTracker.ERROR.equals(dataStoreLink)) {
-                    getOps.add(Operation.createGet(
-                            PhotonModelUriUtils.createInventoryUri(service.getHost(), dataStoreLink)));
-                }
-            } else {
-                ManagedObjectReference dataStoreMoref = new ManagedObjectReference();
-                dataStoreMoref.setType(VimNames.TYPE_DATASTORE);
-                dataStoreMoref.setValue(id);
-                QueryTask task = VsphereDatastoreEnumerationHelper.queryForStorage(
-                        ctx, null, VimUtils.convertMoRefToString(dataStoreMoref), selfLink);
-
-                VsphereEnumerationHelper.withTaskResults(service, task, null, result -> {
-                    List<Operation> getOperations = new ArrayList<>();
-                    if (result.documentLinks.size() > 0) {
-                        for (String documentSelfLink : result.documentLinks) {
-                            getOperations.add(Operation.createGet(PhotonModelUriUtils.createInventoryUri(service.getHost(), documentSelfLink)));
-                        }
-                        //TODO : Refactor this to avoid extra call to fetch datastores
-                        updateDS(service, ctx, selfLink, getOperations);
-                    }
-                });
-            }
-        });
-
-        updateDS(service, ctx, selfLink, getOps);
-    }
-
-    private static void updateDS(VSphereIncrementalEnumerationService service, EnumerationProgress ctx, String selfLink, List<Operation> getOps) {
-        if (!getOps.isEmpty()) {
-            OperationJoin.create(getOps)
-                    .setCompletion((ops, exs) -> {
-                        if (exs != null) {
-                            service.logFine(() -> String.format("Syncing Storage policy failed %s",
-                                    Utils.toString(exs)));
-                        } else {
-                            QueryTask task = VsphereDatastoreEnumerationHelper.queryForStorage(
-                                    ctx, null, null, selfLink);
-                            VsphereEnumerationHelper.withTaskResults(service, task, result -> {
-                                // Call patch on all to update the group links
-                                updateStorageDescription(service, ops.values().stream(), selfLink, result);
-                            }, 0);
-                        }
-                    }).sendWith(service);
+        List<String> morefs = new ArrayList<>();
+        for (String dataStoreID : sp.getDatastoreIds()) {
+            ManagedObjectReference dataStoreMoref = new ManagedObjectReference();
+            dataStoreMoref.setType(VimNames.TYPE_DATASTORE);
+            dataStoreMoref.setValue(dataStoreID);
+            morefs.add(VimUtils.convertMoRefToString(dataStoreMoref));
         }
-    }
 
+        // first query PhM to get datastores associated with storage policy
+        QueryTask queryTask = VsphereDatastoreEnumerationHelper.queryForStorage(
+                ctx, null, null, null,  selfLink);
+        VsphereEnumerationHelper.withTaskResults(service, queryTask, resultFromPhM -> {
+            // if there are no more datastores associated with storage policy
+            List<Operation> patchOps = new ArrayList<>();
+            if (morefs.isEmpty() && !resultFromPhM.documentLinks.isEmpty()) {
+                // update groupLinks for datastores and remove this SPs selfLink
+                for (Object document : resultFromPhM.documents.values()) {
+                    StorageDescription dataStore = Utils.fromJson(document, StorageDescription.class);
+                    Map<String, Collection<Object>> collectionToRemove = Collections
+                            .singletonMap(StorageDescription.FIELD_NAME_GROUP_LINKS,
+                                    Collections.singletonList(selfLink));
+                    ServiceStateCollectionUpdateRequest updateDiskLinksRequest = ServiceStateCollectionUpdateRequest
+                            .create(null, collectionToRemove);
+                    patchOps.add(Operation.createPatch(PhotonModelUriUtils
+                            .createInventoryUri(service.getHost(), dataStore.documentSelfLink))
+                            .setBody(updateDiskLinksRequest).setCompletion((o, e) -> {
+                                if (null != e) {
+                                    service.logSevere(
+                                            "Error while removing group links %s for datastore %s", selfLink, dataStore.documentSelfLink);
+                                }
+                            }));
+                }
+
+                if (!patchOps.isEmpty()) {
+                    OperationJoin.create(patchOps)
+                            .setCompletion((ops, exs) -> {
+                                if (exs != null) {
+                                    service.logFine(() -> String.format("Syncing Storage policy failed %s",
+                                            Utils.toString(exs)));
+                                }
+                            }).sendWith(service);
+                }
+            } else if (!morefs.isEmpty()) {
+                // now query the datastores from morefs obtained in vSphere API response
+                QueryTask task = VsphereDatastoreEnumerationHelper.queryForStorageWithDSMoref(ctx, morefs);
+                VsphereEnumerationHelper.withTaskResults(service, task, resultFromvSphereAPI -> {
+                    // if there are new datastores associated
+                    if (!resultFromvSphereAPI.documentLinks.isEmpty()) {
+                        List<StorageDescription> datastores = new ArrayList<>();
+                        for (Object document : resultFromvSphereAPI.documents.values()) {
+                            datastores.add(Utils.fromJson(document, StorageDescription.class));
+                        }
+                        updateStorageDescription(service, selfLink, resultFromPhM, datastores);
+                    }
+                }, 0);
+            }
+        }, 0);
+    }
 
     static void updateStoragePolicy(VSphereIncrementalEnumerationService service, ResourceGroupState oldDocument,
                                     EnumerationProgress enumerationProgress, StoragePolicyOverlay sp, EnumerationClient client) {
 
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, enumerationProgress.getDcLink());
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp);
         rgState.documentSelfLink = oldDocument.documentSelfLink;
 
         if (oldDocument.tenantLinks == null) {
@@ -250,7 +271,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                                        EnumerationProgress enumerationProgress, StoragePolicyOverlay sp, EnumerationClient client) {
 
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
-        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp, enumerationProgress.getDcLink());
+        ResourceGroupState rgState = makeStoragePolicyFromResults(request, sp);
         rgState.tenantLinks = enumerationProgress.getTenantLinks();
         service.logFine(() -> String.format("Found new Storage Policy %s", sp.getName()));
 
@@ -293,7 +314,7 @@ public class VsphereStoragePolicyEnumerationHelper {
     }
 
     static List<StoragePolicyOverlay> createStorageProfileOverlays(
-            VSphereIncrementalEnumerationService service, EnumerationClient client, EnumerationProgress ctx) {
+            VSphereIncrementalEnumerationService service, EnumerationClient client) {
         List<StoragePolicyOverlay> storagePolicies = new ArrayList<>();
         try {
             List<PbmProfile> pbmProfiles = client.retrieveStoragePolicies();
@@ -317,7 +338,7 @@ public class VsphereStoragePolicyEnumerationHelper {
     public static void syncStorageProfiles(VSphereIncrementalEnumerationService service, EnumerationClient client, EnumerationProgress ctx) {
         List<StoragePolicyOverlay> storagePolicies;
 
-        storagePolicies = createStorageProfileOverlays(service, client, ctx);
+        storagePolicies = createStorageProfileOverlays(service, client);
         if (storagePolicies.size() > 0) {
             ctx.expectStoragePolicyCount(storagePolicies.size());
             for (StoragePolicyOverlay sp : storagePolicies) {

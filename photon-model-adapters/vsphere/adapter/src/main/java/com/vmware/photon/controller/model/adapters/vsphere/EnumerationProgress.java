@@ -48,6 +48,8 @@ public class EnumerationProgress {
 
     private Map<String, List<String>> disksToStoragePolicyMap;
 
+    private Map<String, List<String>> dataStoresToStoragePolicyMap;
+
     private Phaser vmTracker;
     private Phaser snapshotTracker;
     private String regionId;
@@ -68,6 +70,7 @@ public class EnumerationProgress {
         this.snapshotTracker = new Phaser(1);
         this.overlays = new MoRefKeyedMap<>();
         this.disksToStoragePolicyMap = new HashMap<>();
+        this.dataStoresToStoragePolicyMap = new HashMap<>();
         this.regionId = regionId;
         this.deleteDiskTracker = new ResourceTracker(1);
         this.vcUuid = vcUuid;
@@ -202,4 +205,17 @@ public class EnumerationProgress {
     public Map<String, List<String>> getDiskToStoragePolicyAssociationMap() {
         return this.disksToStoragePolicyMap;
     }
+
+    public Map<String, List<String>> getDataStoresToStoragePolicyMap() {
+        return this.dataStoresToStoragePolicyMap;
+    }
+
+    public void setDataStoresToStoragePolicyMap(Map<String, List<String>> dataStoresToStoragePolicyMap) {
+        this.dataStoresToStoragePolicyMap = dataStoresToStoragePolicyMap;
+    }
+
+    public void setDisksToStoragePolicyMap(Map<String, List<String>> disksToStoragePolicyMap) {
+        this.disksToStoragePolicyMap = disksToStoragePolicyMap;
+    }
+
 }
