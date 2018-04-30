@@ -235,15 +235,17 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 }
 
                 rule.ports = ports;
-                try {
-                    if (!SecurityGroupService.ANY.equals(rule.ipRangeCidr)) {
-                        new SubnetUtils(rule.ipRangeCidr);
+                if (rule.ipRangeCidr != null) {
+                    try {
+                        if (!SecurityGroupService.ANY.equals(rule.ipRangeCidr)) {
+                            new SubnetUtils(rule.ipRangeCidr);
+                        }
+                        rulesList.add(rule);
+                    } catch (IllegalArgumentException e) {
+                        // Ignore this rule as not supported by the system.
+                        this.service.logWarning(() -> String.format("Network Security Rule is ignored."
+                                + " Rule ip range: %s.", rule.ipRangeCidr));
                     }
-                    rulesList.add(rule);
-                } catch (IllegalArgumentException e) {
-                    // Ignore this rule as not supported by the system.
-                    this.service.logWarning(() -> String.format("Network Security Rule is ignored."
-                            + " Rule ip range: %s.", rule.ipRangeCidr));
                 }
             });
 
