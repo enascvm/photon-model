@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletionException;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -64,6 +65,8 @@ import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionServi
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -95,6 +98,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
     public boolean isMock = true;
     private AmazonElasticLoadBalancingAsyncClient client;
     private AWSSecurityGroupClient securityGroupClient;
+
+    public String imageId = EC2_LINUX_AMI;
 
     private String lbName;
     private String sgId;
@@ -165,10 +170,10 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             String vm2 = "vm2";
 
             if (!this.isMock) {
-                vm1 = provisionAWSVMWithEC2Client(this.host, this.ec2client, EC2_LINUX_AMI,
+                vm1 = provisionAWSVMWithEC2Client(this.host, this.ec2client, this.imageId,
                         this.subnetId, null);
                 this.instancesToCleanUp.add(vm1);
-                vm2 = provisionAWSVMWithEC2Client(this.host, this.ec2client, EC2_LINUX_AMI,
+                vm2 = provisionAWSVMWithEC2Client(this.host, this.ec2client, this.imageId,
                         this.subnetId, null);
                 this.instancesToCleanUp.add(vm2);
             }
@@ -238,8 +243,9 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
 
         // Update load balancer from 1 machines to 2 to simulate scale-out
         if (!this.isMock) {
-            lb.computeLinks = new HashSet<>(
-                    Arrays.asList(this.cs1.documentSelfLink, this.cs2.documentSelfLink));
+            lb.targetLinks = new HashSet<>(
+                    Arrays.asList(this.cs1.documentSelfLink, this.cs2.networkInterfaceLinks.get
+                            (0)));
             putServiceSynchronously(lb.documentSelfLink, lb);
         }
 
@@ -253,7 +259,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             assertEquals(2, awsLoadBalancer.getInstances().size());
 
             // Update load balancer from 2 machines to 1 to simulate scale-in
-            lb.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
+            lb.targetLinks = Collections.singleton(this.cs1.documentSelfLink);
             putServiceSynchronously(lb.documentSelfLink, lb);
 
             kickOffLoadBalancerProvision(InstanceRequestType.UPDATE, lb.documentSelfLink,
@@ -390,7 +396,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         state.endpointLinks = new HashSet<String>();
         state.endpointLinks.add(this.endpointState.documentSelfLink);
         state.regionId = this.regionId;
-        state.computeLinks = Collections.singleton(this.cs1.documentSelfLink);
+        state.targetLinks = Collections.singleton(this.cs1.documentSelfLink);
         state.subnetLinks = new HashSet<>();
         state.subnetLinks.add(
                 createSubnetState(this.subnetId,
@@ -436,12 +442,37 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         computeDescription = postServiceSynchronously(ComputeDescriptionService.FACTORY_LINK,
                 computeDescription, ComputeDescription.class);
 
+        NetworkInterfaceState nicState = createNicState(this.endpointState);
+
         ComputeState computeState = new ComputeState();
         computeState.descriptionLink = computeDescription.documentSelfLink;
         computeState.id = id;
+        computeState.networkInterfaceLinks = new ArrayList<>();
+        computeState.networkInterfaceLinks.add(nicState.documentSelfLink);
+        computeState.tenantLinks = this.endpointState.tenantLinks;
 
         return postServiceSynchronously(ComputeService.FACTORY_LINK, computeState,
                 ComputeState.class);
+    }
+
+    public NetworkInterfaceState createNicState(EndpointState endpointState) throws Throwable {
+        String uniqueId = UUID.randomUUID().toString();
+
+        NetworkInterfaceState nicState = new NetworkInterfaceState();
+        nicState.id = uniqueId;
+        nicState.name = uniqueId;
+        nicState.deviceIndex = 0;
+        nicState.networkInterfaceDescriptionLink = "foo";
+        nicState.subnetLink = "foo";
+        nicState.networkLink = "foo";
+        nicState.tenantLinks = endpointState.tenantLinks;
+        nicState.endpointLink = endpointState.documentSelfLink;
+        nicState.endpointLinks = new HashSet<>();
+        nicState.endpointLinks.add(endpointState.documentSelfLink);
+        nicState.computeHostLink = endpointState.computeHostLink;
+
+        return postServiceSynchronously(NetworkInterfaceService.FACTORY_LINK, nicState,
+                NetworkInterfaceState.class);
     }
 
     private ProvisionLoadBalancerTaskState kickOffLoadBalancerProvision(

@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
@@ -52,10 +53,13 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.Protocol;
@@ -69,6 +73,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
 
 /**
  * Adapter for provisioning a load balancer on AWS.
@@ -86,6 +91,9 @@ public class AWSLoadBalancerService extends StatelessService {
 
         LoadBalancerStateExpanded loadBalancerStateExpanded;
         AuthCredentialsServiceState credentials;
+
+        // Requested compute states to register in the load balancer.
+        Set<ComputeState> computesToRegister;
 
         // Instances registered with the AWS load balancer
         List<Instance> registeredInstances;
@@ -165,6 +173,7 @@ public class AWSLoadBalancerService extends StatelessService {
     private DeferredResult<AWSLoadBalancerContext> populateContext(AWSLoadBalancerContext context) {
         return DeferredResult.completed(context)
                 .thenCompose(this::getLoadBalancerState)
+                .thenCompose(this::populateComputesToRegister)
                 .thenCompose(this::getCredentials)
                 .thenCompose(this::getAWSClient)
                 .thenCompose(this::getSecurityGroupState);
@@ -181,11 +190,46 @@ public class AWSLoadBalancerService extends StatelessService {
                     if (lbStateExpanded.computes == null) {
                         lbStateExpanded.computes = Collections.emptySet();
                     }
+                    if (lbStateExpanded.targets == null) {
+                        lbStateExpanded.targets = Collections.emptySet();
+                    }
                     return lbStateExpanded;
                 }).thenApply(state -> {
                     context.loadBalancerStateExpanded = state;
                     return context;
                 });
+    }
+
+    /**
+     * Map context.loadBalancerStateExpanded.targets to context.computesToRegister
+     * AWS load balancer only supports computes as instances - no NICs.
+     * Map NICs to compute states then merge the two sets to computesToRegister
+     */
+    private DeferredResult<AWSLoadBalancerContext> populateComputesToRegister(
+            AWSLoadBalancerContext context) {
+        // First, set compute states to context.computesToRegister
+        context.computesToRegister = new HashSet<ComputeState>();
+        Set<ComputeState> computes = context.loadBalancerStateExpanded
+                .getTargetsOfType(ComputeState.class);
+        if (computes != null && computes.size() > 0) {
+            context.computesToRegister.addAll(computes);
+        }
+
+        // Map from network interface states to compute states then add them to
+        // context.computesToRegister
+        Set<NetworkInterfaceState> nics = context.loadBalancerStateExpanded
+                .getTargetsOfType(NetworkInterfaceState.class);
+        if (nics != null && nics.size() > 0) {
+            List<DeferredResult<ComputeState>> getComputeStateDr = nics.stream()
+                    .map(this::getComputeState)
+                    .collect(Collectors.toList());
+            return DeferredResult.allOf(getComputeStateDr)
+                    .thenApply(computeStates -> {
+                        context.computesToRegister.addAll(computeStates);
+                        return context;
+                    });
+        }
+        return DeferredResult.completed(context);
     }
 
     private DeferredResult<AWSLoadBalancerContext> getCredentials(AWSLoadBalancerContext context) {
@@ -543,13 +587,13 @@ public class AWSLoadBalancerService extends StatelessService {
         // If the registered instances are null this is a newly provisioned load balancer
         // so add all instances from the load balancer state to the registration request
         if (context.registeredInstances == null) {
-            context.instanceIdsToRegister = context.loadBalancerStateExpanded.computes.stream()
+            context.instanceIdsToRegister = context.computesToRegister.stream()
                     .map(computeState -> computeState.id)
                     .collect(Collectors.toList());
 
             context.instanceIdsToDeregister = Collections.emptyList();
         } else {
-            context.instanceIdsToRegister = context.loadBalancerStateExpanded.computes.stream()
+            context.instanceIdsToRegister = context.computesToRegister.stream()
                     .map(computeState -> computeState.id)
                     .filter(csId -> context.registeredInstances.stream()
                             .noneMatch(i -> i.getInstanceId().equals(csId))
@@ -558,7 +602,7 @@ public class AWSLoadBalancerService extends StatelessService {
 
             context.instanceIdsToDeregister = context.registeredInstances.stream()
                     .map(Instance::getInstanceId)
-                    .filter(instanceId -> context.loadBalancerStateExpanded.computes.stream()
+                    .filter(instanceId -> context.computesToRegister.stream()
                             .noneMatch(computeState -> computeState.id.equals(instanceId))
                     )
                     .collect(Collectors.toList());
@@ -736,5 +780,43 @@ public class AWSLoadBalancerService extends StatelessService {
     private boolean isLBProvisionedSecurityGroup(ResourceState resource) {
         return resource.customProperties != null && Boolean.TRUE.toString().equals(
                 resource.customProperties.get(AWSConstants.AWS_LOAD_BALANCER_SECURITY_GROUP));
+    }
+
+    /**
+     * Returns the ComputeState that is attached to the given NetworkInterfaceState.
+     * @param networkInterfaceState the NetworkInterfaceState to use for searching
+     * @return DeferredResult for ComputeState
+     */
+    private DeferredResult<ComputeState> getComputeState(NetworkInterfaceState
+            networkInterfaceState) {
+
+        QueryTop<ComputeState> csqt = getComputeStateQueryOne(networkInterfaceState);
+
+        return csqt.collectDocuments(Collectors.toList())
+                .thenApply(computeStateList -> {
+                    if (computeStateList == null || computeStateList.isEmpty()) {
+                        throw new IllegalArgumentException("Did not find any compute "
+                                + "state with the following network interface: " +
+                                networkInterfaceState.documentSelfLink);
+                    }
+                    return computeStateList.get(0);
+                });
+    }
+
+    private QueryTop<ComputeState> getComputeStateQueryOne(
+            NetworkInterfaceState networkInterfaceState) {
+
+        QueryTask.Query cdq = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addCollectionItemClause(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS,
+                        networkInterfaceState.documentSelfLink)
+                .build();
+
+        return new QueryTop<>(
+                this.getHost(),
+                cdq,
+                ComputeState.class,
+                networkInterfaceState.tenantLinks)
+                .setMaxResultsLimit(1);
     }
 }
