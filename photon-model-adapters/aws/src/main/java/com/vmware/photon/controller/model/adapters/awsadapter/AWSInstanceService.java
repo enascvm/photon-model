@@ -20,7 +20,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DEPENDENCY_VIOLATION_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INVALID_INSTANCE_ID_ERROR_CODE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VIRTUAL_NAMES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
@@ -77,7 +76,6 @@ import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.ResourceType;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
-import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagSpecification;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
@@ -1106,7 +1104,8 @@ public class AWSInstanceService extends StatelessService {
                             if (diskState.name == null) {
                                 diskState.name = diskState.id;
                             } else {
-                                tagDisk(diskState.id, diskState.name);
+                                AWSUtils.tagResourcesWithName(this.context.amazonEC2Client,
+                                        diskState.name, diskState.id);
                             }
                             break;
                         }
@@ -1180,12 +1179,6 @@ public class AWSInstanceService extends StatelessService {
             }
 
             return patchOperations;
-        }
-
-        private void tagDisk(String diskId, String tagValue) {
-            List<Tag> tagsToCreate = new ArrayList<>();
-            tagsToCreate.add(new Tag().withKey(AWS_TAG_NAME).withValue(tagValue));
-            AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, diskId);
         }
 
         private void startInstanceStatusChecker(String instanceId, Consumer<Object> consumer) {

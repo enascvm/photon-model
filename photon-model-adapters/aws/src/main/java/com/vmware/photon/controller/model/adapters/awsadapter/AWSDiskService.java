@@ -38,6 +38,9 @@ import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
 import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
 import com.amazonaws.services.ec2.model.DeleteVolumeResult;
+import com.amazonaws.services.ec2.model.ResourceType;
+import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.ec2.model.TagSpecification;
 import com.amazonaws.services.ec2.model.Volume;
 
 import com.vmware.photon.controller.model.adapterapi.DiskInstanceRequest;
@@ -333,6 +336,13 @@ public class AWSDiskService extends StatelessService {
         AsyncHandler<CreateVolumeRequest, CreateVolumeResult> creationHandler =
                 new AWSDiskCreationHandler(this, context);
 
+        if (diskState.name != null) {
+            Tag awsNameTag = new Tag().withKey(AWS_TAG_NAME).withValue(diskState.name);
+            TagSpecification tagSpecification = new TagSpecification()
+                    .withResourceType(ResourceType.Volume)
+                    .withTags(awsNameTag);
+            req.withTagSpecifications().withTagSpecifications(tagSpecification);
+        }
         context.client.createVolume(req, creationHandler);
     }
 
@@ -364,16 +374,8 @@ public class AWSDiskService extends StatelessService {
 
         diskState.encrypted = volume.getEncrypted();
 
-        // calculate disk name, default to volume-id if 'Name' tag is not present
         if (diskState.name == null) {
-            if (volume.getTags() == null) {
-                diskState.name = volume.getVolumeId();
-            } else {
-                diskState.name = volume.getTags().stream()
-                        .filter(tag -> tag.getKey().equals(AWS_TAG_NAME))
-                        .map(tag -> tag.getValue()).findFirst()
-                        .orElse(volume.getVolumeId());
-            }
+            diskState.name = volume.getVolumeId();
         }
 
         diskState.zoneId = volume.getAvailabilityZone();
