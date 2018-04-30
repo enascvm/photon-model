@@ -246,14 +246,15 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         Map<Object, Object> cpToAdd = new HashMap<>();
         Collection<String> cpToRemove = new LinkedList<>();
 
+        String currentTimestamp = String.valueOf(Utils.getNowMicrosUtc());
         switch (taskStage) {
         case FINISHED:
-            cpToAdd.put(EP_CP_LAST_ENUMERATION_TIMESTAMP_MICRO, String.valueOf(Utils.getNowMicrosUtc()));
-            cpToAdd.put(EP_CP_LAST_SUCCESSFUL_ENUMERATION_TIMESTAMP_MICRO, String.valueOf(Utils.getNowMicrosUtc()));
+            cpToAdd.put(EP_CP_LAST_ENUMERATION_TIMESTAMP_MICRO, currentTimestamp);
+            cpToAdd.put(EP_CP_LAST_SUCCESSFUL_ENUMERATION_TIMESTAMP_MICRO, currentTimestamp);
             break;
         case FAILED:
         case CANCELLED:
-            cpToAdd.put(EP_CP_LAST_ENUMERATION_TIMESTAMP_MICRO, String.valueOf(Utils.getNowMicrosUtc()));
+            cpToAdd.put(EP_CP_LAST_ENUMERATION_TIMESTAMP_MICRO, currentTimestamp);
             break;
         default:
             break;
