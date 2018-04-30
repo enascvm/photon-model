@@ -41,13 +41,13 @@ public class CloudAccountConstants {
     public static final String SERVICE_USER_GROUP_NAME = SERVICE_USER_PREFIX + "group";
     public static final String SERVICE_USER_ROLE_NAME = SERVICE_USER_PREFIX + "role";
     public static final String SERVICE_USER_PASSWORD_PROPERTY =
-            UriPaths.PROPERTY_PREFIX + "ServiceUserSetupService.userPassword";
+            UriPaths.SYMPHONY_PROPERTY_PREFIX + "ServiceUserSetupService.userPassword";
     public static final String SERVICE_USER_DEFAULT_PASSWORD = "symphonyservice";
 
     /**
      * Constants related to stats collection tasks.
      */
-    public static final String PROPERTY_NAME_DISABLE_STATS_COLLECTION = UriPaths.PROPERTY_PREFIX +
+    public static final String PROPERTY_NAME_DISABLE_STATS_COLLECTION = UriPaths.SYMPHONY_PROPERTY_PREFIX +
             "disableStatsCollection";
     public static final boolean DISABLE_STATS_COLLECTION = Boolean.getBoolean(PROPERTY_NAME_DISABLE_STATS_COLLECTION);
 
@@ -117,7 +117,7 @@ public class CloudAccountConstants {
      * AWS Bulk Import Task Constants and Properties
      */
     private static final String CLOUD_ACCOUNT_AWS_BULK_IMPORT_DATA_MAX_REQUEST_SIZE_BYTES_PROPERTY =
-            UriPaths.PROPERTY_PREFIX + "cloudAccountApiService.awsBulkImport.maxRequestSizeBytes";
+            UriPaths.SYMPHONY_PROPERTY_PREFIX + "cloudAccountApiService.awsBulkImport.maxRequestSizeBytes";
 
     // Set the default to 1 MB.
     private static final Long CLOUD_ACCOUNT_AWS_BULK_IMPORT_DATA_DEFAULT_MAX_REQUEST_SIZE_BYTES =
@@ -131,9 +131,9 @@ public class CloudAccountConstants {
 
     // AWS Bulk Import Task system properties
     public static final String AWS_BULK_IMPORT_TASK_DATA_INITIALIZATION_BATCH_SIZE_PROP =
-            UriPaths.PROPERTY_PREFIX + "awsBulkImportTask.dataInitializationBatchSize";
+            UriPaths.SYMPHONY_PROPERTY_PREFIX + "awsBulkImportTask.dataInitializationBatchSize";
     public static final String AWS_BULK_IMPORT_TASK_EXPIRATION_MINUTES =
-            UriPaths.PROPERTY_PREFIX + "awsBulkImportTask.taskExpirationMinutes";
+            UriPaths.SYMPHONY_PROPERTY_PREFIX + "awsBulkImportTask.taskExpirationMinutes";
 
     /**
      * Constants related to service document fields and associated actions.

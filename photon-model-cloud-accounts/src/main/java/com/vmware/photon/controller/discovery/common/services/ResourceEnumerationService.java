@@ -46,12 +46,12 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 public class ResourceEnumerationService extends StatelessService {
     public static final String SELF_LINK = UriPaths.RESOURCE_ENUMERATION_SERVICE;
 
-    public static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
+    public static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT = UriPaths.SYMPHONY_PROPERTY_PREFIX
             + "ResourceEnumerationService.QUERY_RESULT_LIMIT";
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 100;
     private static final int QUERY_RESULT_LIMIT =
             Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, DEFAULT_QUERY_RESULT_LIMIT);
-    public static final String PROPERTY_NAME_NEXT_ENUMERATION_INTERVAL_SECS = UriPaths.PROPERTY_PREFIX
+    public static final String PROPERTY_NAME_NEXT_ENUMERATION_INTERVAL_SECS = UriPaths.SYMPHONY_PROPERTY_PREFIX
             + "ResourceEnumerationService.NEXT_ENUMERATION_INTERVAL_SECS";
     private static final int DEFAULT_NEXT_ENUMERATION_INTERVAL_SECS = 15;
     private static final int NEXT_ENUMERATION_INTERVAL_SECS = Integer.getInteger(

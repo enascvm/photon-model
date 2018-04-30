@@ -21,6 +21,7 @@ import com.vmware.xenon.common.UriUtils;
 public class UriPaths {
 
     public static final String PROPERTY_PREFIX = "photon-model.";
+    public static final String SYMPHONY_PROPERTY_PREFIX = "symphony.";
 
     public static final String IAAS_API_ENABLED_PROPERTY_NAME = "iaas.api.enabled";
 

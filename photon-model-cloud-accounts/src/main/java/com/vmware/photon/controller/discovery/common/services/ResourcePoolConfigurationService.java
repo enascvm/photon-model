@@ -54,10 +54,10 @@ import com.vmware.xenon.common.Utils;
 public class ResourcePoolConfigurationService extends StatelessService {
     public static final String SELF_LINK = UriPaths.RESOURCE_POOL_CONFIGURATION_SERVICE;
 
-    public static final String COLLECTION_INTERVAL_MILLIS = UriPaths.PROPERTY_PREFIX
+    public static final String COLLECTION_INTERVAL_MILLIS = UriPaths.SYMPHONY_PROPERTY_PREFIX
             + "ResourcePoolConfigurationService.collectionIntervalMillis";
     private static final long DEFAULT_COLLECTION_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(60);
-    public static final String ENUMERATION_INTERVAL_MILLIS = UriPaths.PROPERTY_PREFIX
+    public static final String ENUMERATION_INTERVAL_MILLIS = UriPaths.SYMPHONY_PROPERTY_PREFIX
             + "ResourcePoolConfigurationService.enumerationIntervalMillis";
     public static final long DEFAULT_ENUMERATION_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(10);
     public static final long DEFAULT_GROOMER_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(60);

@@ -36,7 +36,7 @@ public class EndpointConstants {
     /**
      * Property to disable discovery from setting endpoint adapter reference
      */
-    public static final String PROPERTY_NAME_DISABLE_ENDPOINT_ADAPTER = UriPaths.PROPERTY_PREFIX +
+    public static final String PROPERTY_NAME_DISABLE_ENDPOINT_ADAPTER = UriPaths.SYMPHONY_PROPERTY_PREFIX +
             "disableEndpointAdapterUri";
     public static final boolean DISABLE_ENDPOINT_ADAPTER_URI =
             Boolean.getBoolean(System.getProperty(PROPERTY_NAME_DISABLE_ENDPOINT_ADAPTER));
