@@ -20,15 +20,6 @@ import java.util.function.Consumer;
 
 import com.vmware.photon.controller.discovery.cloudaccount.users.UserQueryTaskService;
 import com.vmware.photon.controller.discovery.cloudaccount.users.UsersApiService;
-import com.vmware.photon.controller.discovery.resource.ResourcePropertiesQueryService;
-import com.vmware.photon.controller.discovery.resource.ResourcePropertiesQueryServiceV2;
-import com.vmware.photon.controller.discovery.resource.ResourcesApiService;
-import com.vmware.photon.controller.discovery.resource.ResourcesCountSummaryService;
-import com.vmware.photon.controller.discovery.resource.ResourcesCountSummaryServiceV2;
-import com.vmware.photon.controller.discovery.resource.ResourcesQueryPageServiceV3;
-import com.vmware.photon.controller.discovery.resource.ResourcesQueryPageServiceV4;
-import com.vmware.photon.controller.discovery.resource.ResourcesQueryTaskServiceV3;
-import com.vmware.photon.controller.discovery.resource.ResourcesQueryTaskServiceV4;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -50,9 +41,7 @@ public class CloudAccountServices {
     public static void startServices(ServiceHost host,
             Consumer<Class<? extends Service>> addPrivilegedService) {
         startServices(host, addPrivilegedService, Collections.unmodifiableCollection(Arrays.asList(
-                CloudAccountQueryPageService.class,
-                ResourcesQueryPageServiceV3.class,
-                ResourcesQueryPageServiceV4.class
+                CloudAccountQueryPageService.class
         )));
     }
 
@@ -68,14 +57,6 @@ public class CloudAccountServices {
     public static void startServices(ServiceHost host,
             Consumer<Class<? extends Service>> addPrivilegedService,
             Collection<Class> supportedCustomQueryPageClasses) {
-
-        addPrivilegedService.accept(ResourcesQueryTaskServiceV3.class);
-        host.startFactory(ResourcesQueryTaskServiceV3.class,
-                ResourcesQueryTaskServiceV3::createFactory);
-
-        addPrivilegedService.accept(ResourcesQueryTaskServiceV4.class);
-        host.startFactory(ResourcesQueryTaskServiceV4.class,
-                ResourcesQueryTaskServiceV4::createFactory);
 
         // The user services
         addPrivilegedService.accept(UserQueryTaskService.class);
@@ -101,21 +82,5 @@ public class CloudAccountServices {
         addPrivilegedService.accept(CloudAccountMaintenanceService.class);
         host.startFactory(CloudAccountMaintenanceService.class,
                 CloudAccountMaintenanceService::createFactory);
-
-        addPrivilegedService.accept(ResourcesApiService.class);
-        host.startService(new ResourcesApiService());
-
-        addPrivilegedService.accept(ResourcePropertiesQueryService.class);
-        host.startService(new ResourcePropertiesQueryService());
-
-        addPrivilegedService.accept(ResourcePropertiesQueryServiceV2.class);
-        host.startService(new ResourcePropertiesQueryServiceV2());
-
-        addPrivilegedService.accept(ResourcesCountSummaryService.class);
-        host.startService(new ResourcesCountSummaryService());
-
-        addPrivilegedService.accept(ResourcesCountSummaryServiceV2.class);
-        host.startService(new ResourcesCountSummaryServiceV2());
     }
-
 }
