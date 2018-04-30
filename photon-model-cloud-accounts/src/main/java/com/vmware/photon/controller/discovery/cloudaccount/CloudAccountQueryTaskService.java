@@ -22,7 +22,7 @@ import static com.vmware.photon.controller.discovery.common.utils.InventoryQuery
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.ENDPOINT_CUSTOM_PROPERTY_VALUE_SERVICE_TAG;
 import static com.vmware.photon.controller.discovery.endpoints.EndpointUtils.VSPHERE_ON_PREM_ADAPTER;
 import static com.vmware.photon.controller.model.UriPaths.CLOUD_ACCOUNT_QUERY_TASK_SERVICE;
-import static com.vmware.photon.controller.model.UriPaths.PROPERTY_PREFIX;
+import static com.vmware.photon.controller.model.UriPaths.SYMPHONY_PROPERTY_PREFIX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType.vsphere;
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.DISCOVERED;
 import static com.vmware.photon.controller.model.resources.TagService.TagState.TagOrigin.SYSTEM;
@@ -91,7 +91,7 @@ public class CloudAccountQueryTaskService extends TaskService<CloudAccountQueryT
     public static final String FACTORY_LINK = CLOUD_ACCOUNT_QUERY_TASK_SERVICE;
 
     public static final String PROPERTY_NAME_QUERY_RESULT_LIMIT =
-            PROPERTY_PREFIX + "CloudAccountQueryTaskService.QUERY_RESULT_LIMIT";
+            SYMPHONY_PROPERTY_PREFIX + "CloudAccountQueryTaskService.QUERY_RESULT_LIMIT";
 
     public static final String TAG_DELIMITER = "=";
     public static final String TAG_VALUE = "value";
