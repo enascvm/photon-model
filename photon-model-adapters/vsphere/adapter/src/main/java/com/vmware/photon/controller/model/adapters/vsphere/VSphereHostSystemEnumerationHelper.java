@@ -267,7 +267,7 @@ public class VSphereHostSystemEnumerationHelper {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
 
-        withTaskResults(service, task, result -> {
+        withTaskResults(service, task, enumerationProgress.getHostSystemTracker(), result -> {
             try {
                 if (result.documentLinks.isEmpty()) {
                     createNewHostSystem(service, enumerationProgress, hs, client);
@@ -293,7 +293,7 @@ public class VSphereHostSystemEnumerationHelper {
                 } else {
                     ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
                     QueryTask task = queryForHostSystem(enumerationProgress, request.resourceLink(), hs.getId().getValue());
-                    withTaskResults(service, task, result -> {
+                    withTaskResults(service, task, enumerationProgress.getHostSystemTracker(), result -> {
                         try {
                             if (!result.documentLinks.isEmpty()) {
                                 try {

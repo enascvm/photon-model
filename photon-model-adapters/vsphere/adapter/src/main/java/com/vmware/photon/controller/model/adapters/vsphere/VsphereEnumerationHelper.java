@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -75,24 +76,58 @@ public class VsphereEnumerationHelper {
 
     /**
      * Executes a direct query and invokes the provided handler with the results.
-     *
-     * @param service
+     *  @param service
      * @param task
      * @param handler
+     * @param tracker
      * @param resultLimit
      */
     static void withTaskResults(
             VSphereIncrementalEnumerationService service, QueryTask task,
-            Consumer<ServiceDocumentQueryResult> handler, int resultLimit) {
-        task.querySpec.options = EnumSet.of(
-                QueryOption.EXPAND_CONTENT,
-                QueryOption.INDEXED_METADATA,
-                QueryOption.TOP_RESULTS);
-        if (resultLimit > 0) {
-            task.querySpec.resultLimit = resultLimit;
-        }
+            ResourceTracker tracker, Consumer<ServiceDocumentQueryResult> handler, int resultLimit) {
+        enhanceQueryTask(task, resultLimit);
 
-        task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
+        QueryUtils.startInventoryQueryTask(service, task)
+                .whenComplete((o, e) -> {
+                    if (e != null) {
+                        service.logWarning(() -> String.format("Error processing task %s Exception: %s",
+                                Utils.toJson(task), Utils.toString(e)));
+                        // if a tracker is passed, then track down on error
+                        if (null != tracker) {
+                            tracker.track();
+                        }
+                        return;
+                    }
+
+                    handler.accept(o.results);
+                });
+    }
+
+    static void withTaskResults(
+            VSphereIncrementalEnumerationService service, QueryTask task,
+            Phaser phaser, Consumer<ServiceDocumentQueryResult> handler, int resultLimit) {
+        enhanceQueryTask(task, resultLimit);
+
+        QueryUtils.startInventoryQueryTask(service, task)
+                .whenComplete((o, e) -> {
+                    if (e != null) {
+                        service.logWarning(() -> String.format("Error processing task %s Exception: %s",
+                                Utils.toJson(task), Utils.toString(e)));
+                        // if a tracker is passed, then track down on error
+                        if (null != phaser) {
+                            phaser.arrive();
+                        }
+                        return;
+                    }
+
+                    handler.accept(o.results);
+                });
+    }
+
+    static void withTaskResults(
+            VSphereIncrementalEnumerationService service, QueryTask task,
+            Consumer<ServiceDocumentQueryResult> handler, int resultLimit) {
+        enhanceQueryTask(task, resultLimit);
 
         QueryUtils.startInventoryQueryTask(service, task)
                 .whenComplete((o, e) -> {
@@ -106,6 +141,18 @@ public class VsphereEnumerationHelper {
                 });
     }
 
+    private static void enhanceQueryTask(QueryTask task, int resultLimit) {
+        task.querySpec.options = EnumSet.of(
+                QueryOption.EXPAND_CONTENT,
+                QueryOption.INDEXED_METADATA,
+                QueryOption.TOP_RESULTS);
+        if (resultLimit > 0) {
+            task.querySpec.resultLimit = resultLimit;
+        }
+
+        task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
+    }
+
     /**
      * Executes a direct query and invokes the provided handler with the results.
      *
@@ -114,8 +161,8 @@ public class VsphereEnumerationHelper {
      * @param handler
      */
     static void withTaskResults(VSphereIncrementalEnumerationService service,
-                                QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
-        withTaskResults(service, task, handler, 1);
+                                QueryTask task, ResourceTracker tracker, Consumer<ServiceDocumentQueryResult> handler) {
+        withTaskResults(service, task, tracker, handler, 1);
     }
 
     /**
@@ -186,7 +233,7 @@ public class VsphereEnumerationHelper {
 
     /**
      * After the tags for the ref are retrieved from the endpoint they are posted to the tag service
-     * and the selfLinks are collected ready to be used in a {@link ComputeState#tagLinks}.
+     * and the selfLinks are collected ready to be used in a ComputeState#tagLinks.
      */
     static Set<String> retrieveTagLinksAndCreateTagsAsync(
             VSphereIncrementalEnumerationService service, VapiConnection endpoint,

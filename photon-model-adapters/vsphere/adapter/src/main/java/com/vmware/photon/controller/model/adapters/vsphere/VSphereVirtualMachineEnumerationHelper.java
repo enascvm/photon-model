@@ -663,7 +663,7 @@ public class VSphereVirtualMachineEnumerationHelper {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForVm(enumerationProgress, request.resourceLink(),
                 vm.getInstanceUuid(), vm.getId());
-        VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+        VsphereEnumerationHelper.withTaskResults(service, task, enumerationProgress.getVmTracker(), result -> {
             try {
                 if (result.documentLinks.isEmpty()) {
                     if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
@@ -682,7 +682,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                 service.logSevere("Error occurred while processing virtual machine: %s", Utils.toString(e));
                 enumerationProgress.getVmTracker().arrive();
             }
-        });
+        }, 1);
     }
 
     static DeferredResult<SnapshotState> createSnapshot(
@@ -717,7 +717,7 @@ public class VSphereVirtualMachineEnumerationHelper {
             QueryTask task = queryForVm(enumerationProgress, request.resourceLink(), null,
                     vmOverlay.getId());
             enumerationProgress.getVmTracker().register();
-            VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+            VsphereEnumerationHelper.withTaskResults(service, task, enumerationProgress.getVmTracker(), result -> {
                 try {
                     if (result.documentLinks.isEmpty()
                             && ObjectUpdateKind.ENTER == vmOverlay.getObjectUpdateKind()) {
@@ -736,7 +736,7 @@ public class VSphereVirtualMachineEnumerationHelper {
                     service.logSevere("Error occurred while processing virtual machine: %s", Utils.toString(e));
                     enumerationProgress.getVmTracker().arrive();
                 }
-            });
+            }, 1);
         }
         enumerationProgress.getVmTracker().arriveAndAwaitAdvance();
         // enumerate snapshots

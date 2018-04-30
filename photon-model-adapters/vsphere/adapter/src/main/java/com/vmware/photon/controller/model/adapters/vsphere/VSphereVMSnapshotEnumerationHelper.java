@@ -117,7 +117,7 @@ public class VSphereVMSnapshotEnumerationHelper {
         enumerationProgress.getSnapshotTracker().register();
         QueryTask task = queryForSnapshot(enumerationProgress, current.getId().toString(),
                 vmSelfLink);
-        VsphereEnumerationHelper.withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
+        VsphereEnumerationHelper.withTaskResults(service, task, enumerationProgress.getSnapshotTracker(), (ServiceDocumentQueryResult result) -> {
             VsphereEnumerationHelper.submitWorkToVSpherePool(service, () -> {
                 SnapshotState snapshotState = constructSnapshot(service, current, parentLink,
                         vmSelfLink, enumerationProgress, vm);
@@ -150,7 +150,7 @@ public class VSphereVMSnapshotEnumerationHelper {
                             });
                 }
             });
-        });
+        }, 1);
     }
 
     private static DeferredResult<Object> trackAndProcessChildSnapshots(
@@ -203,11 +203,11 @@ public class VSphereVMSnapshotEnumerationHelper {
                                     null, vm.getId());
                 }
 
-                VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                VsphereEnumerationHelper.withTaskResults(service, task, enumerationProgress.getSnapshotTracker(), result -> {
                     ComputeState computeState = VsphereEnumerationHelper.convertOnlyResultToDocument(result,
                             ComputeState.class);
                     processSnapshots(service, enumerationProgress, vm, computeState.documentSelfLink);
-                });
+                }, 1);
             }
         });
         enumerationProgress.getSnapshotTracker().arriveAndDeregister();

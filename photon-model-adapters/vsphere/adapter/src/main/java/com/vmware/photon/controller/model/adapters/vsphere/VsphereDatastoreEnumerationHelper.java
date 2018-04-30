@@ -270,7 +270,7 @@ public class VsphereDatastoreEnumerationHelper {
                 enumerationProgress, ds.getName(), VimUtils.convertMoRefToString(ds.getId()), null);
 
         withTaskResults(service, task,
-                result -> {
+                enumerationProgress.getDatastoreTracker(), result -> {
                     try {
                         if (result.documentLinks.isEmpty()) {
                             createNewStorageDescription(service,
@@ -311,7 +311,7 @@ public class VsphereDatastoreEnumerationHelper {
             } else {
                 // "name" may not necessarily present in the object update. so passed as "null"
                 QueryTask task = queryForStorage(enumerationProgress, null, VimUtils.convertMoRefToString(datastore.getId()), null);
-                withTaskResults(service, task, result -> {
+                withTaskResults(service, task, enumerationProgress.getDatastoreTracker(), result -> {
                     try {
                         if (!result.documentLinks.isEmpty()) {
                             // Object is either modified or deleted

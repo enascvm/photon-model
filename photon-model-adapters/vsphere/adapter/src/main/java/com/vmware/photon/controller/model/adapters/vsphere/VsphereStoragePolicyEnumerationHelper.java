@@ -185,7 +185,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                 QueryTask task = VsphereDatastoreEnumerationHelper.queryForStorage(
                         ctx, null, VimUtils.convertMoRefToString(dataStoreMoref), selfLink);
 
-                VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                VsphereEnumerationHelper.withTaskResults(service, task, null, result -> {
                     List<Operation> getOperations = new ArrayList<>();
                     if (result.documentLinks.size() > 0) {
                         for (String documentSelfLink : result.documentLinks) {
@@ -276,7 +276,7 @@ public class VsphereStoragePolicyEnumerationHelper {
                                           StoragePolicyOverlay sp, EnumerationClient client) {
         QueryTask task = queryForStoragePolicy(enumerationProgress, sp.getProfileId(), sp.getName());
 
-        VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+        VsphereEnumerationHelper.withTaskResults(service, task, enumerationProgress.getStoragePolicyTracker(), result -> {
             try {
                 if (result.documentLinks.isEmpty()) {
                     createNewStoragePolicy(service, enumerationProgress, sp, client);

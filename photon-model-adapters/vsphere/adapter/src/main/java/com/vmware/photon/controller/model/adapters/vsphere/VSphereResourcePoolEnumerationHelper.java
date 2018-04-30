@@ -254,7 +254,7 @@ public class VSphereResourcePoolEnumerationHelper {
 
                     QueryTask task = queryForRPOwner(ownerMoRefId, enumerationProgress);
                     String selfLink = buildStableResourcePoolLink(resourcePool.getId(), request.endpointLink);
-                    withTaskResults(service, task, result -> {
+                    withTaskResults(service, task, enumerationProgress.getResourcePoolTracker(), result -> {
                         try {
                             if (!result.documentLinks.isEmpty()) {
                                 ComputeState ownerDocument = convertOnlyResultToDocument(result, ComputeState.class);

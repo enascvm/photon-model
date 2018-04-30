@@ -358,7 +358,7 @@ public class VSphereNetworkEnumerationHelper {
             // portgroup: create subnet
             QueryTask task = queryForSubnet(enumerationProgress, net, net.getParentSwitch());
             withTaskResults(service, task,
-                    (ServiceDocumentQueryResult result) -> {
+                    enumerationProgress.getNetworkTracker(), (ServiceDocumentQueryResult result) -> {
                     try {
                         if (result.documentLinks.isEmpty()) {
                             createNewSubnet(service, enumerationProgress, net,
@@ -376,7 +376,7 @@ public class VSphereNetworkEnumerationHelper {
         } else {
             // DVS or opaque network
             QueryTask task = queryForNetwork(enumerationProgress, net);
-            withTaskResults(service, task, result -> {
+            withTaskResults(service, task, enumerationProgress.getNetworkTracker(), result -> {
                 try {
                     if (result.documentLinks.isEmpty()) {
                         createNewNetwork(service, enumerationProgress, net);
@@ -436,7 +436,7 @@ public class VSphereNetworkEnumerationHelper {
                         parentSwitch = client.getParentSwitchForDVPortGroup(netOverlay.getId());
                     }
                     QueryTask task = queryForSubnet(enumerationProgress, netOverlay, parentSwitch);
-                    withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
+                    withTaskResults(service, task, enumerationProgress.getNetworkTracker(), (ServiceDocumentQueryResult result) -> {
                         try {
                             if (!result.documentLinks.isEmpty()) {
                                 SubnetState oldDocument = convertOnlyResultToDocument(result, SubnetState.class);
@@ -457,7 +457,7 @@ public class VSphereNetworkEnumerationHelper {
                 } else {
                     // DVS or Opaque network.
                     QueryTask task = queryForNetwork(enumerationProgress, netOverlay);
-                    VsphereEnumerationHelper.withTaskResults(service, task, result -> {
+                    VsphereEnumerationHelper.withTaskResults(service, task, enumerationProgress.getNetworkTracker(), result -> {
                         try {
                             if (!result.documentLinks.isEmpty()) {
                                 NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);

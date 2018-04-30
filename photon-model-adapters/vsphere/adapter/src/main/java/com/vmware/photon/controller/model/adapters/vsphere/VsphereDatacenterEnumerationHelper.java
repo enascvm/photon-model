@@ -37,7 +37,7 @@ public class VsphereDatacenterEnumerationHelper {
     static void processDatacenterInfo(VSphereIncrementalEnumerationService service,
                                       Element element, EnumerationProgress ctx) {
         QueryTask task = queryForDatacenter(ctx, element.object.getValue());
-        withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
+        withTaskResults(service, task, ctx.getDcTracker(), (ServiceDocumentQueryResult result) -> {
             try {
                 if (result.documentLinks.isEmpty()) {
                     createDatacenter(service, ctx, element);

@@ -216,7 +216,7 @@ public class VsphereComputeResourceEnumerationHelper {
         ComputeEnumerateResourceRequest request = enumerationProgress.getRequest();
         QueryTask task = queryForCluster(enumerationProgress, request.resourceLink(), cr.getId().getValue());
 
-        withTaskResults(service, task, result -> {
+        withTaskResults(service, task, enumerationProgress.getComputeResourceTracker(), result -> {
             try {
                 if (result.documentLinks.isEmpty()) {
                     createNewComputeResource(service, enumerationProgress, cr, client);
@@ -246,7 +246,7 @@ public class VsphereComputeResourceEnumerationHelper {
             disks.add(vsanHostDiskMapping.getSsd());
             disks.forEach(disk -> {
                 QueryTask task = queryForServerDisks(ctx, disk);
-                withTaskResults(service, task, result -> {
+                withTaskResults(service, task, null, result -> {
                     if (result.documentLinks.isEmpty()) {
                         createServerDisk(service, disk, ctx, config.getHostSystem());
                     } else {
@@ -341,7 +341,7 @@ public class VsphereComputeResourceEnumerationHelper {
             QueryTask queryResourcePools = QueryTask.Builder.createDirectTask().setQuery(builder.build())
                     .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                     .build();
-            withTaskResults(service, queryResourcePools, (result) -> {
+            withTaskResults(service, queryResourcePools, null, (result) -> {
                 // if there are resource pools present in this cluster
                 if (!result.documentLinks.isEmpty()) {
                     for (Object resourcePool : result.documents.values()) {
@@ -381,7 +381,7 @@ public class VsphereComputeResourceEnumerationHelper {
                     ComputeEnumerateResourceRequest request = ctx.getRequest();
                     QueryTask task = queryForCluster(ctx, request.resourceLink(), cluster.getId().getValue());
 
-                    withTaskResults(service, task, result -> {
+                    withTaskResults(service, task, ctx.getComputeResourceTracker(), result -> {
                         service.logInfo("Queried for existing clusters for %s", Utils.toJson(cluster));
                         try {
                             if (!result.documentLinks.isEmpty()) {

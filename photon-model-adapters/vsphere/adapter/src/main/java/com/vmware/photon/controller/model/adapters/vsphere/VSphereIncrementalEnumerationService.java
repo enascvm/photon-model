@@ -738,7 +738,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
 
     private void updateServerDisks(EnumerationProgress ctx, HostSystemOverlay hostSystemOverlay) {
         QueryTask queryTask = queryForServerDisks(ctx, hostSystemOverlay);
-        withTaskResults(this, queryTask, serviceDocumentQueryResult -> {
+        withTaskResults(this, queryTask, null, serviceDocumentQueryResult -> {
             if (!serviceDocumentQueryResult.documentLinks.isEmpty()) {
                 DiskService.DiskState oldDocument = convertOnlyResultToDocument(serviceDocumentQueryResult, DiskService.DiskState.class);
                 updateDiskState(ctx, oldDocument, hostSystemOverlay);
@@ -900,7 +900,7 @@ public class VSphereIncrementalEnumerationService extends StatelessService {
      */
     private void deleteIndependentDisksUnavailableInVSphere(EnumerationProgress ctx, EnumerationClient client) {
         QueryTask task = queryAvailableDisks(ctx);
-        withTaskResults(this, task, result -> {
+        withTaskResults(this, task, ctx.getDeleteDiskTracker(), result -> {
             if (result.documentLinks.isEmpty()) {
                 // no independent disks
                 ctx.getDeleteDiskTracker().track();

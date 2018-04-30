@@ -44,7 +44,7 @@ public class VsphereFolderEnumerationHelper {
     static void processFoundFolder(VSphereIncrementalEnumerationService service, EnumerationProgress ctx,
                                    FolderOverlay folder, List<FolderOverlay> rootFolders, EnumerationClient client) {
         QueryTask task = queryForFolder(ctx, folder);
-        withTaskResults(service, task, (ServiceDocumentQueryResult result) -> {
+        withTaskResults(service, task, ctx.getFolderTracker(), (ServiceDocumentQueryResult result) -> {
             try {
                 if (result.documentLinks.isEmpty()) {
                     createFolder(service, ctx, folder, rootFolders, client);
@@ -199,7 +199,7 @@ public class VsphereFolderEnumerationHelper {
                     createFolder(service, enumerationProgress, folderOverlay, Collections.emptyList(), client);
                 } else {
                     QueryTask task = queryForFolder(enumerationProgress, folderOverlay);
-                    withTaskResults(service, task, result -> {
+                    withTaskResults(service, task, enumerationProgress.getFolderTracker(), result -> {
                         try {
                             if (!result.documentLinks.isEmpty()) {
                                 ResourceGroupState oldDocument = convertOnlyResultToDocument(result, ResourceGroupState.class);
