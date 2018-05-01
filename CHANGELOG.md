@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.61-SNAPSHOT
+
 ## 0.6.60
 * Upgrade xenon version to 1.6.7
 * Fix in enumeration during de-dup
