@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.DocumentIndexingOption;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -220,6 +221,14 @@ public class TagService extends StatefulService {
         // update the deleted property accordingly
         if (patchState.deleted != null && currentState.deleted != patchState.deleted) {
             currentState.deleted = patchState.deleted;
+
+            // if a tag is marked as deleted set expiry on it
+            // if a previously soft-deleted tag gets reused, reset expiry to 0
+            if (currentState.deleted) {
+                currentState.documentExpirationTimeMicros = patchState.documentExpirationTimeMicros;
+            } else {
+                currentState.documentExpirationTimeMicros = 0;
+            }
             modified = true;
         }
 
@@ -268,6 +277,15 @@ public class TagService extends StatefulService {
             // update the deleted property accordingly
             if (newTagState.deleted != null && currentState.deleted != newTagState.deleted) {
                 currentState.deleted = newTagState.deleted;
+
+                // if a tag is marked as deleted set expiry on it
+                // if a previously soft-deleted tag gets reused, reset expiry to 0
+                if (currentState.deleted) {
+                    currentState.documentExpirationTimeMicros =
+                            newTagState.documentExpirationTimeMicros;
+                } else {
+                    currentState.documentExpirationTimeMicros = 0;
+                }
                 modified = true;
             }
 
@@ -287,6 +305,16 @@ public class TagService extends StatefulService {
         // enable metadata indexing
         td.documentDescription.documentIndexingOptions =
                 EnumSet.of(DocumentIndexingOption.INDEX_METADATA);
+        if (td.documentDescription.propertyDescriptions != null) {
+            PropertyDescription documentExpirationPropertyDescription = td.documentDescription
+                    .propertyDescriptions.get(ServiceDocument.FIELD_NAME_EXPIRATION_TIME_MICROS);
+            if (documentExpirationPropertyDescription != null) {
+                documentExpirationPropertyDescription.indexingOptions
+                        .add(PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE);
+                td.documentDescription.propertyDescriptions.put(ServiceDocument
+                        .FIELD_NAME_EXPIRATION_TIME_MICROS, documentExpirationPropertyDescription);
+            }
+        }
         ServiceUtils.setRetentionLimit(td);
         TagState template = (TagState) td;
         template.key = "key-1";

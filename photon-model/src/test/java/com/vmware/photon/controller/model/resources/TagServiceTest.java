@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.resources;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -35,6 +36,7 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.Utils;
 
 /**
  * This class implements tests for the {@link TagService} class.
@@ -256,6 +258,49 @@ public class TagServiceTest extends Suite {
             assertThat(updatedReturnState.documentSelfLink, is(returnState.documentSelfLink));
             assertThat(updatedReturnState.documentVersion, is(1L));
 
+        }
+
+        @Test
+        public void testExpiryTagPatch() throws Throwable {
+            TagService.TagState startState = buildRandomStartState();
+            startState.external = Boolean.TRUE;
+            startState.origins = EnumSet.of(DISCOVERED);
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(startState.external));
+            assertTrue(returnState.origins.contains(DISCOVERED));
+
+            startState.deleted = Boolean.TRUE;
+            startState.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                    + 10000;
+            returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertThat(returnState.documentVersion, is(1L));
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(Boolean.TRUE));
+            assertTrue(returnState.origins.contains(DISCOVERED));
+            assertTrue(returnState.deleted);
+            assertTrue(returnState.documentExpirationTimeMicros > 0);
+
+            startState.deleted = Boolean.FALSE;
+            returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertThat(returnState.documentVersion, is(2L));
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(Boolean.TRUE));
+            assertTrue(returnState.origins.contains(DISCOVERED));
+            assertFalse(returnState.deleted);
+            assertTrue(returnState.documentExpirationTimeMicros == 0);
         }
     }
 

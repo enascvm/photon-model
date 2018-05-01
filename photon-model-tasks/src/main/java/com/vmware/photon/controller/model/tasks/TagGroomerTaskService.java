@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -55,6 +56,7 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
     public static final String TAG_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX + "TagGroomerTaskService.query.resultLimit";
     public static final int QUERY_RESULT_LIMIT = Integer.getInteger(TAG_QUERY_RESULT_LIMIT, DEFAULT_QUERY_RESULT_LIMIT);
     public static final int MAX_QUERY_RESULT_LIMIT = QueryUtils.MAX_RESULT_LIMIT;
+    public static final long DEFAULT_EXPIRATION_MICROS = TimeUnit.DAYS.toMicros(7);
 
     public static FactoryService createFactory() {
         TaskFactoryService fs = new TaskFactoryService(TagDeletionRequest.class) {
@@ -414,6 +416,8 @@ public class TagGroomerTaskService extends TaskService<TagGroomerTaskService.Tag
         for (Map.Entry<String, TagState> entry : task.tagsMap.entrySet()) {
             TagState tagToDelete = entry.getValue();
             tagToDelete.deleted = Boolean.TRUE;
+            tagToDelete.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
+                    + DEFAULT_EXPIRATION_MICROS;
             operations.add(Operation.createPatch(createInventoryUri(this.getHost(),
                     tagToDelete.documentSelfLink))
                     .setBody(tagToDelete)

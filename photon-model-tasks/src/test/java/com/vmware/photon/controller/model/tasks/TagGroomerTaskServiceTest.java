@@ -25,6 +25,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Before;
@@ -88,14 +89,14 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     @Test
     public void testTagStateGroomerOnePageOfResults() throws Throwable {
         List<String> usedTags = createTagStates("usedExt-", TAG_COUNT_15, true,
-                EnumSet.of(DISCOVERED));
+                EnumSet.of(DISCOVERED), false, false);
         usedTags.addAll(createTagStates("usedInt-", TAG_COUNT_15, false,
-                EnumSet.of(SYSTEM)));
+                EnumSet.of(SYSTEM), false, false));
 
         List<String> unusedTagsExt = createTagStates("unusedExt-",10, true,
-                EnumSet.of(DISCOVERED));
+                EnumSet.of(DISCOVERED), false, false);
         List<String> unusedTagsInt = createTagStates("unusedInt-",7, false,
-                EnumSet.of(SYSTEM));
+                EnumSet.of(SYSTEM), false, false);
         int totalTagsCreated = usedTags.size() + unusedTagsExt.size() + unusedTagsInt.size();
 
         createComputesWithTags(30, usedTags);
@@ -121,14 +122,14 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     @Test
     public void testTagStateGroomerMultiplePagesOfResults() throws Throwable {
         List<String> usedTags = createTagStates("usedExt-", TAG_COUNT_200, true,
-                EnumSet.of(DISCOVERED));
+                EnumSet.of(DISCOVERED), false, false);
         usedTags.addAll(createTagStates("usedInt-", TAG_COUNT_200, false,
-                EnumSet.of(SYSTEM)));
+                EnumSet.of(SYSTEM), false, false));
 
         List<String> unusedTagsExt = createTagStates("unusedExt-",10, true,
-                EnumSet.of(DISCOVERED));
+                EnumSet.of(DISCOVERED), false, false);
         List<String> unusedTagsInt = createTagStates("unusedInt-",8, false,
-                EnumSet.of(SYSTEM));
+                EnumSet.of(SYSTEM), false, false);
         int totalTagsCreated = usedTags.size() + unusedTagsExt.size() + unusedTagsInt.size();
 
         createComputesWithTags(400, usedTags);
@@ -151,15 +152,78 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
         assertUnusedTags(tagsAfterGrooming);
     }
 
+    @Test
+    public void testTagStateGroomerOnePageOfResultsAndExpiredTags() throws Throwable {
+        List<String> usedTags = createTagStates("usedExt-", TAG_COUNT_15, true,
+                EnumSet.of(DISCOVERED), false, false);
+        usedTags.addAll(createTagStates("usedInt-", TAG_COUNT_15, false,
+                EnumSet.of(SYSTEM), false, false));
+
+        List<String> unusedTagsExt = createTagStates("unusedExt-",10, true,
+                EnumSet.of(DISCOVERED), false, false);
+        List<String> unusedTagsInt = createTagStates("unusedInt-",8, false,
+                EnumSet.of(SYSTEM), false, false);
+        List<String> expiredExtTags = createTagStates("expiredExt-", TAG_COUNT_15, true,
+                EnumSet.of(DISCOVERED), true, true);
+        int totalTagsCreated = usedTags.size() + unusedTagsExt.size() + unusedTagsInt.size()
+                + expiredExtTags.size();
+
+        createComputesWithTags(30, usedTags);
+        createDisksWithTags(30, usedTags);
+
+        QueryTask tagsQT = createTagsQueryTask(true);
+        List<TagState> expiredTagsBeforeGrooming = getTags(tagsQT);
+        // the only tags returned should be the 200 external tags that are marked as deleted
+        assertEquals(expiredExtTags.size(), expiredTagsBeforeGrooming.size());
+
+        executeTagsGroomerTask();
+
+        tagsQT = createTagsQueryTask(false);
+        List<TagState> tagsAfterGrooming = getTags(tagsQT);
+        // the only tags returned should the ones not marked as deleted
+        assertEquals(totalTagsCreated - unusedTagsExt.size() - expiredExtTags.size(),
+                tagsAfterGrooming.size());
+        // assert used tags are marked as deleted
+        assertUsedTags(tagsAfterGrooming);
+
+        tagsQT = createTagsQueryTask(true);
+        tagsAfterGrooming = getTags(tagsQT);
+        // tags returned should be: 10 unused soft-deleted external ones + 15 already expired ones
+        assertEquals(unusedTagsExt.size() + expiredExtTags.size(), tagsAfterGrooming.size());
+
+        // assert unused tags are marked as deleted
+        assertUnusedTags(tagsAfterGrooming);
+
+        // wait and rerun groomer to validate hard delete
+        TimeUnit.SECONDS.sleep(5);
+        executeTagsGroomerTask();
+
+        tagsQT = createTagsQueryTask(false);
+        tagsAfterGrooming = getTags(tagsQT);
+        // the only tags returned should the ones not marked as deleted
+        assertEquals(totalTagsCreated - unusedTagsExt.size() - expiredExtTags.size(),
+                tagsAfterGrooming.size());
+        // assert used tags are marked as deleted
+        assertUsedTags(tagsAfterGrooming);
+
+        tagsQT = createTagsQueryTask(true);
+        tagsAfterGrooming = getTags(tagsQT);
+        // tags returned should be: 10 unused soft-deleted external ones
+        assertEquals(unusedTagsExt.size(), tagsAfterGrooming.size());
+
+        // assert unused tags are marked as deleted
+        assertUnusedTags(tagsAfterGrooming);
+    }
+
     /**
      * Create n tagLinks
      */
     private List<String> createTagStates(String prefix, int count, boolean external,
-            EnumSet<TagOrigin> origin) throws Throwable {
+            EnumSet<TagOrigin> origin, boolean deleted, boolean expired) throws Throwable {
         List<String> tags = new ArrayList<>();
 
         for (int i = 0; i < count; i++) {
-            TagState tag = buildTagState(prefix, i, i, external, origin);
+            TagState tag = buildTagState(prefix, i, i, external, origin, deleted, expired);
             Operation op = Operation
                     .createPost(UriUtils.buildUri(this.host, TagService.FACTORY_LINK))
                     .setBody(tag);
@@ -259,13 +323,15 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
      * Create tagState object
      */
     private static TagState buildTagState(String prefix, int k, int v, boolean external,
-            EnumSet<TagOrigin> origin) throws Throwable {
+            EnumSet<TagOrigin> origin, boolean deleted, boolean expiredTag) throws Throwable {
         TagService.TagState tag = new TagService.TagState();
         tag.key = prefix + Integer.toString(k);
         tag.value = prefix + Integer.toString(v);
         tag.external = external;
         tag.origins.addAll(origin);
-        tag.deleted = Boolean.FALSE;
+        tag.deleted = deleted;
+        tag.documentExpirationTimeMicros = expiredTag ?
+                (Utils.getNowMicrosUtc() + TimeUnit.SECONDS.toMicros(4)) : 0L;
         return tag;
     }
 
@@ -290,6 +356,7 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
             assertTrue(unusedTag.external);
             assertFalse(unusedTag.origins.contains(DISCOVERED.toString()));
             assertTrue(unusedTag.deleted);
+            assertTrue(unusedTag.documentExpirationTimeMicros > 0);
         }
     }
 
@@ -297,6 +364,7 @@ public class TagGroomerTaskServiceTest extends BasicTestCase {
     private void assertUsedTags(List<TagState> tags) {
         for (TagState unusedTag : tags) {
             assertFalse(unusedTag.deleted);
+            assertTrue(unusedTag.documentExpirationTimeMicros == 0);
         }
     }
 }
