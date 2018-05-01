@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.6.60-SNAPSHOT
+## 0.6.60
+* Upgrade xenon version to 1.6.7
+* Fix in enumeration during de-dup
+* Rework in AzureDeferredResultServiceCallbackWithRetry, generic for non Azure usage
 
 ## 0.6.59
 * Reverting xenon version to 1.6.6
