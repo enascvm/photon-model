@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
-import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ARN_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.EXTERNAL_ID_KEY;
@@ -71,6 +70,7 @@ import com.amazonaws.auth.BasicSessionCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.retry.RetryPolicy.BackoffStrategy;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
@@ -118,7 +118,6 @@ import com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceExcepti
 import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
 import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
 import com.amazonaws.services.securitytoken.model.Credentials;
-
 import org.apache.commons.collections.CollectionUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -395,7 +394,7 @@ public class AWSUtils {
     static ClientConfiguration createClientConfiguration() {
         return new ClientConfiguration().withRetryPolicy(
                 new RetryPolicy(
-                        DEFAULT_RETRY_CONDITION,
+                        new RetryCondition(),
                         new LoggingBackoffStrategy(),
                         AWS_MAX_ERROR_RETRY,
                         true));
@@ -1493,6 +1492,29 @@ public class AWSUtils {
                 };
         client.modifyInstanceAttributeAsync(modifyInstanceAttrReq, modifyInstanceAttrHandler);
         return modifyInstanceAttrDr;
+    }
+
+    /**
+     * Same as SDKDefaultRetryCondition. The only difference is that we don't retry in case of an
+     * 401 status code.
+     */
+    public static class RetryCondition extends PredefinedRetryPolicies.SDKDefaultRetryCondition {
+
+        @Override
+        public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
+                AmazonClientException exception,
+                int retriesAttempted) {
+
+            if (exception instanceof AmazonServiceException) {
+                AmazonServiceException ase = (AmazonServiceException) exception;
+
+                if (ase.getStatusCode() == 401) {
+                    return false;
+                }
+            }
+
+            return super.shouldRetry(originalRequest, exception, retriesAttempted);
+        }
     }
 
 }
