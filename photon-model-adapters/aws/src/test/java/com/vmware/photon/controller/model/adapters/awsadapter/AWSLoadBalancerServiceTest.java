@@ -60,6 +60,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.HealthCheckConfiguration;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.Protocol;
 import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription.RouteConfiguration;
@@ -200,11 +201,22 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
     }
 
     @Test
-    public void testCreateUpdateDeleteLoadBalancer() throws Throwable {
+    public void testCreateUpdateDeleteLoadBalancerWithHttpRoute() throws Throwable {
         // set name with invalid characters and more than 32 characters
         this.lbName = generateLbName() + "-1234567890-1234567890-1234567890_;.,/";
-        LoadBalancerState lb = createLoadBalancerState(this.lbName);
+        LoadBalancerState lb = createLoadBalancerState(this.lbName, buildHttpRoute());
+        testCreateUpdateDeleteLoadBalancer(lb);
+    }
 
+    @Test
+    public void testCreateUpdateDeleteLoadBalancerWithTcpRoute() throws Throwable {
+        // set name with invalid characters and more than 32 characters
+        this.lbName = generateLbName() + "-1234567890-1234567890-1234567890_;.,/";
+        LoadBalancerState lb = createLoadBalancerState(this.lbName, buildTcpRoute());
+        testCreateUpdateDeleteLoadBalancer(lb);
+    }
+
+    public void testCreateUpdateDeleteLoadBalancer(LoadBalancerState lb) throws Throwable {
         // Provision load balancer
         kickOffLoadBalancerProvision(InstanceRequestType.CREATE, lb.documentSelfLink,
                 TaskStage.FINISHED);
@@ -228,7 +240,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
             assertEquals(1, awsLoadBalancer.getInstances().size());
 
             List<ListenerDescription> listeners = awsLoadBalancer.getListenerDescriptions();
-            assertEquals(2, listeners.size());
+            assertEquals(lb.routes.size(), listeners.size());
             verifyListeners(lb.routes, listeners);
             verifyHealthCheckConfiguration(lb.routes.get(0), awsLoadBalancer.getHealthCheck());
 
@@ -325,8 +337,13 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         assertEquals(healthCheckConfiguration.unhealthyThreshold,
                 healthCheck.getUnhealthyThreshold());
 
-        String target = healthCheckConfiguration.protocol + ":" + healthCheckConfiguration.port
-                + healthCheckConfiguration.urlPath;
+        String target = healthCheckConfiguration.protocol + ":" + healthCheckConfiguration.port;
+        if (healthCheckConfiguration.protocol.equalsIgnoreCase(
+                LoadBalancerDescriptionService.LoadBalancerDescription.Protocol.HTTP.name())
+                || healthCheckConfiguration.protocol.equalsIgnoreCase(
+                LoadBalancerDescriptionService.LoadBalancerDescription.Protocol.HTTPS.name())) {
+            target += healthCheckConfiguration.urlPath;
+        }
         assertEquals(target, healthCheck.getTarget());
     }
 
@@ -389,19 +406,7 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         return postServiceSynchronously(SubnetService.FACTORY_LINK, subnetState, SubnetState.class);
     }
 
-    private LoadBalancerState createLoadBalancerState(String name) throws Throwable {
-        LoadBalancerState state = new LoadBalancerState();
-        state.name = name;
-        state.endpointLink = this.endpointState.documentSelfLink;
-        state.endpointLinks = new HashSet<String>();
-        state.endpointLinks.add(this.endpointState.documentSelfLink);
-        state.regionId = this.regionId;
-        state.targetLinks = Collections.singleton(this.cs1.documentSelfLink);
-        state.subnetLinks = new HashSet<>();
-        state.subnetLinks.add(
-                createSubnetState(this.subnetId,
-                        createNetworkState(this.vpcId).documentSelfLink).documentSelfLink);
-
+    private List<RouteConfiguration> buildHttpRoute() {
         RouteConfiguration route1 = new RouteConfiguration();
         route1.protocol = Protocol.HTTP.name();
         route1.port = "80";
@@ -422,7 +427,42 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         route2.instanceProtocol = Protocol.HTTPS.name();
         route2.instancePort = "443";
 
-        state.routes = Arrays.asList(route1, route2);
+        return Arrays.asList(route1, route2);
+    }
+
+    private List<RouteConfiguration> buildTcpRoute() {
+        RouteConfiguration routeTcp = new RouteConfiguration();
+        routeTcp.protocol = Protocol.TCP.name();
+        routeTcp.port = "22";
+        routeTcp.instanceProtocol = Protocol.TCP.name();
+        routeTcp.instancePort = "22";
+        routeTcp.healthCheckConfiguration = new HealthCheckConfiguration();
+        routeTcp.healthCheckConfiguration.protocol = Protocol.TCP.name();
+        routeTcp.healthCheckConfiguration.port = "22";
+        routeTcp.healthCheckConfiguration.urlPath = "/foo";
+        routeTcp.healthCheckConfiguration.intervalSeconds = 60;
+        routeTcp.healthCheckConfiguration.healthyThreshold = 2;
+        routeTcp.healthCheckConfiguration.unhealthyThreshold = 5;
+        routeTcp.healthCheckConfiguration.timeoutSeconds = 5;
+
+        return Arrays.asList(routeTcp);
+    }
+
+    private LoadBalancerState createLoadBalancerState(String name, List<RouteConfiguration>
+            routeConfigurations) throws Throwable {
+        LoadBalancerState state = new LoadBalancerState();
+        state.name = name;
+        state.endpointLink = this.endpointState.documentSelfLink;
+        state.endpointLinks = new HashSet<String>();
+        state.endpointLinks.add(this.endpointState.documentSelfLink);
+        state.regionId = this.regionId;
+        state.targetLinks = Collections.singleton(this.cs1.documentSelfLink);
+        state.subnetLinks = new HashSet<>();
+        state.subnetLinks.add(
+                createSubnetState(this.subnetId,
+                        createNetworkState(this.vpcId).documentSelfLink).documentSelfLink);
+
+        state.routes = routeConfigurations;
         state.internetFacing = Boolean.TRUE;
         state.instanceAdapterReference = UriUtils
                 .buildUri(this.host, AWSLoadBalancerService.SELF_LINK);

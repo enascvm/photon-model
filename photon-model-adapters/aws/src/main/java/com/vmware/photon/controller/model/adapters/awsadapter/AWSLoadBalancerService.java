@@ -523,9 +523,14 @@ public class AWSLoadBalancerService extends StatelessService {
             return null;
         }
 
-        // Construct the target HTTP:80/index.html
-        String target = healthCheckConfiguration.protocol + ":" + healthCheckConfiguration.port
-                + healthCheckConfiguration.urlPath;
+        // Construct the target string.
+        // <Protocol>:<Port><Path> for HTTPS and HTTP.
+        // Otherwise, <Protocol>:<Port>
+        String target = healthCheckConfiguration.protocol + ":" + healthCheckConfiguration.port;
+        if (healthCheckConfiguration.protocol.equalsIgnoreCase(LoadBalancerDescription.Protocol.HTTP.name())
+                || healthCheckConfiguration.protocol.equalsIgnoreCase(LoadBalancerDescription.Protocol.HTTPS.name())) {
+            target += healthCheckConfiguration.urlPath;
+        }
 
         HealthCheck healthCheck = new HealthCheck()
                 .withHealthyThreshold(healthCheckConfiguration.healthyThreshold)
