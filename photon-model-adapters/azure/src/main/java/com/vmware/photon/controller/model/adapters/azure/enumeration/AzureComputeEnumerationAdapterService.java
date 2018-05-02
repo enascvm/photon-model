@@ -1343,6 +1343,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
             computeDescription.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
             computeDescription.diskAdapterReference = ctx.parentCompute.description.diskAdapterReference;
+            computeDescription.powerAdapterReference = ctx.parentCompute.description.powerAdapterReference;
             computeDescription.computeHostLink = ctx.parentCompute.documentSelfLink;
             computeDescription.customProperties = new HashMap<>();
             computeDescription.customProperties.put(SOURCE_TASK_LINK,
@@ -2099,6 +2100,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeState.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
         }
         computeState.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
+        computeState.powerAdapterReference = ctx.parentCompute.description.powerAdapterReference;
         computeState.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
 
         computeState.customProperties = new HashMap<>();

@@ -82,6 +82,8 @@ public class VSphereHostSystemEnumerationHelper {
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
         res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
+        res.powerAdapterReference = enumerationProgress
+                .getParent().description.powerAdapterReference;
         res.enumerationAdapterReference = enumerationProgress
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationProgress

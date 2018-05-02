@@ -125,6 +125,8 @@ public class VsphereComputeResourceEnumerationHelper {
         AdapterUtils.addToEndpointLinks(res, enumerationProgress.getRequest().endpointLink);
         res.instanceAdapterReference = enumerationProgress
                 .getParent().description.instanceAdapterReference;
+        res.powerAdapterReference = enumerationProgress
+                .getParent().description.powerAdapterReference;
         res.enumerationAdapterReference = enumerationProgress
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationProgress

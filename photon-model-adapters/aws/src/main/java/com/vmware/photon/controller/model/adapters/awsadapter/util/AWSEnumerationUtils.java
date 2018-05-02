@@ -194,6 +194,8 @@ public class AWSEnumerationUtils {
                 AWSUriPaths.AWS_ENUMERATION_CREATION_ADAPTER);
         computeState.statsAdapterReference = AdapterUriUtil.buildAdapterUri(host,
                 AWSUriPaths.AWS_STATS_ADAPTER);
+        computeState.powerAdapterReference = AdapterUriUtil.buildAdapterUri(host,
+                AWSUriPaths.AWS_POWER_ADAPTER);
         computeState.statsAdapterReferences = parentCDStatsAdapterReferences;
 
         computeState.resourcePoolLink = resourcePoolLink;
