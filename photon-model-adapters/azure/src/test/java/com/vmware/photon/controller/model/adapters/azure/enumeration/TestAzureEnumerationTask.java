@@ -505,11 +505,16 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 NETWORK_TAG_TYPE_VALUE, false, endpointState.tenantLinks);
         networkResults.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), NetworkState.class))
-                .forEach(c -> {
-                    assertNotNull("NetworkState tagLinks is NULL", c.tagLinks);
+                .forEach(netState -> {
+                    assertNotNull("NetworkState tagLinks is NULL", netState.tagLinks);
                     assertTrue(String.format("NetworkState doesn't contain tagLink: %s",
                             expectedNetworkInternalTypeTag.documentSelfLink),
-                            c.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
+                            netState.tagLinks.contains(expectedNetworkInternalTypeTag.documentSelfLink));
+
+
+                    assertNotNull("NetworkState groupLinks is NULL", netState.groupLinks);
+                    assertEquals("NetworkState groupLinks MUST contain EXACTLY one RG link",
+                            1, netState.groupLinks.size());
                 });
 
         // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original

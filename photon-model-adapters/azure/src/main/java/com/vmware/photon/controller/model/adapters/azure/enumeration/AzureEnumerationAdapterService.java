@@ -188,12 +188,12 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     AzureEnumerationStages.FINISHED);
             break;
         case FINISHED:
-            logInfo(() -> String.format("Azure enumeration %s completed", context.request.getEnumKey()));
+            logInfo(() -> String.format("Azure enumeration %s: COMPLETED", context.request.getEnumKey()));
             setOperationDurationStat(context.operation);
             context.taskManager.finishTask();
             break;
         case ERROR:
-            logSevere(() -> String.format("Azure enumeration %s, error: %s ", context.request.getEnumKey(),
+            logSevere(() -> String.format("Azure enumeration %s: FAILED with %s", context.request.getEnumKey(),
                     Utils.toString(context.error)));
             context.taskManager.patchTaskToFailure(context.error);
             break;
@@ -212,15 +212,17 @@ public class AzureEnumerationAdapterService extends StatelessService {
      */
     public void triggerEnumerationAdapter(EnumerationContext context, String adapterSelfLink,
             AzureEnumerationStages next) {
+
+        final String msg = "Azure enumeration adapter '%s' for '%s'";
+
         Operation.CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
-                final String msg = String.format(
-                        "Error executing Azure enumeration adapter '%s' for '%s': %s",
+                final String errMsg = String.format(msg + ": FAILED with %s",
                         adapterSelfLink,
                         context.request.endpointLink,
                         Utils.toString(e));
 
-                context.error = new IllegalStateException(msg, e);
+                context.error = new IllegalStateException(errMsg, e);
 
                 context.taskManager.patchTaskToFailure(context.error);
 
@@ -229,22 +231,24 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            logInfo(() -> String.format("Completed Azure enumeration adapter %s for %s",
+            logInfo(() -> String.format(msg + ": COMPLETED",
                     adapterSelfLink,
                     context.request.endpointLink));
+
             context.stage = next;
             handleEnumerationRequest(context);
         };
 
         ComputeEnumerateAdapterRequest azureEnumerationRequest = new ComputeEnumerateAdapterRequest(
-                context.request, context.endpointAuth,
-                context.parent);
+                context.request, context.endpointAuth, context.parent);
 
         Operation.createPatch(this, adapterSelfLink)
                 .setBody(azureEnumerationRequest)
                 .setCompletion(completionHandler)
                 .sendWith(this);
-        logInfo(() -> String.format("Triggered Azure enumeration adapter %s for %s", adapterSelfLink,
-                        context.request.endpointLink));
+
+        logInfo(() -> String.format(msg + ": STARTED",
+                adapterSelfLink,
+                context.request.endpointLink));
     }
 }

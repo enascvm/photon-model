@@ -40,6 +40,7 @@ import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -122,9 +123,10 @@ public class AzureSubnetService extends StatelessService {
     }
 
     private DeferredResult<AzureSubnetContext> getSubnetState(AzureSubnetContext context) {
-        return this.sendWithDeferredResult(
+        return sendWithDeferredResult(
                 Operation.createGet(context.request.resourceReference),
                 SubnetState.class)
+
                 .thenApply(subnetState -> {
                     context.subnetState = subnetState;
                     return context;
@@ -132,26 +134,35 @@ public class AzureSubnetService extends StatelessService {
     }
 
     private DeferredResult<AzureSubnetContext> getParentNetworkRG(AzureSubnetContext context) {
+
         AssertUtil.assertNotNull(context.parentNetwork.groupLinks,
-                "context.parentNetwork.groupLinks is null.");
+                "context.parentNetwork.groupLinks is null: "
+                        + Utils.toJson(context.parentNetwork));
+
         AssertUtil.assertTrue(context.parentNetwork.groupLinks.size() == 1,
-                "context.parentNetwork.groupLinks doesn't contain exactly one element.");
-        return this.sendWithDeferredResult(
-                Operation.createGet(context.request.buildUri(context.parentNetwork.groupLinks
-                        .iterator().next())),
+                "context.parentNetwork.groupLinks doesn't contain exactly one element: "
+                        + Utils.toJson(context.parentNetwork));
+
+        URI rgUri = context.request.buildUri(context.parentNetwork.groupLinks.iterator().next());
+
+        return sendWithDeferredResult(
+                Operation.createGet(rgUri),
                 ResourceGroupState.class)
-                .thenCompose(rgState -> {
+
+                .thenApply(rgState -> {
                     if (rgState.customProperties != null &&
                             ResourceGroupStateType.AzureResourceGroup.name().equals(
                                     rgState.customProperties.get(
                                             ComputeProperties.RESOURCE_TYPE_KEY))) {
+
                         context.parentNetworkResourceGroupName = rgState.name;
-                        return DeferredResult.completed(context);
-                    } else {
-                        return DeferredResult.failed(new IllegalStateException(
-                                String.format("Resource group with id [%s] has an invalid type.",
-                                        rgState.id)));
+
+                        return context;
                     }
+
+                    throw new IllegalStateException(
+                                String.format("Resource group with id [%s] has an invalid type",
+                                        rgState.id));
                 });
     }
 
