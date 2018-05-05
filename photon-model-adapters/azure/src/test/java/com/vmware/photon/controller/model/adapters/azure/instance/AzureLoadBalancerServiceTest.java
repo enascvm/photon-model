@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2017-2018 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -123,7 +123,8 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
     private static NetworkState networkState;
     private static SecurityGroupState securityGroupState;
 
-    private static final int poolSize = 4;
+    private static final int vmPoolSize = 4;
+    private static int lbPoolSize = vmPoolSize;
     private static List<ComputeState> vmStates;
     private static SubnetState subnetState;
 
@@ -161,7 +162,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
         networkState = createNetworkState(rgState.documentSelfLink);
         vmStates = new ArrayList<>();
 
-        for (int i = 0; i < poolSize; i++) {
+        for (int i = 0; i < vmPoolSize; i++) {
             ComputeState vmState = createDefaultVMResource(getHost(), this.rgName + "VM" + i,
                     computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC, null,0, compDesc, this.rgName);
             vmStates.add(vmState);
@@ -225,6 +226,28 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
                 // Do nothing.
             }
         });
+
+        // delete security group
+        try {
+            securityGroupState = getHost().getServiceState(null, SecurityGroupState.class,
+                    UriUtils.buildUri(getHost(), securityGroupState.documentSelfLink));
+            this.rgOpsClient.deleteAsync(AzureUtils.getResourceGroupName(securityGroupState.id), new
+                    AzureAsyncCallback<Void>() {
+                @Override
+                protected void onError(Throwable e) {
+                    AzureLoadBalancerServiceTest.this.host.log(Level.WARNING, "Error deleting resource "
+                            + "group: " + ExceptionUtils.getMessage(e));
+                }
+
+                @Override
+                protected void onSuccess(Void result) {
+                    // Do nothing.
+                }
+            });
+        } catch (Throwable t) {
+            AzureLoadBalancerServiceTest.this.host.log(Level.WARNING, "Error deleting resource "
+                    + "group: " + ExceptionUtils.getMessage(t));
+        }
     }
 
     private void deleteVirtualMachines() {
@@ -288,6 +311,87 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
             assertEquals(this.loadBalancerName, lbResponse.name());
             assertEquals(loadBalancerState.id, lbResponse.id());
             assertNotNull(loadBalancerState.address);
+
+            // delete the load balancer
+            startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.DELETE,
+                    loadBalancerState,
+                    TaskStage.FINISHED);
+        }
+    }
+
+    @Test
+    public void testUpdateLoadBalancer() throws Throwable {
+        securityGroupState = createSecurityGroupState(this.host, endpointState,
+                this.securityGroupName, Lists.newArrayList(), Lists.newArrayList());
+        kickOffSecurityGroupProvision(SecurityGroupInstanceRequest.InstanceRequestType.CREATE,
+                TaskStage.FINISHED);
+
+        // don't add all computes to the LB at creation time; the remaining compute will be added
+        // during LB scale out
+        lbPoolSize = vmPoolSize - 1;
+        assertTrue(lbPoolSize > 0);
+        LoadBalancerState loadBalancerState = provisionLoadBalancer(TaskStage.FINISHED,
+                LoadBalancerTargetType.COMPUTE);
+
+        assertNotNull(loadBalancerState.id);
+        assertNotEquals(loadBalancerState.id, this.loadBalancerName);
+
+        if (!this.isMock) {
+            // Verify that the load balancer was created.
+            LoadBalancerInner lbResponse = this.loadBalancerClient.getByResourceGroup(
+                    this.rgName,
+                    this.loadBalancerName);
+
+            assertEquals(this.loadBalancerName, lbResponse.name());
+            assertEquals(loadBalancerState.id, lbResponse.id());
+            assertNotNull(loadBalancerState.address);
+            assertEquals(1, lbResponse.backendAddressPools().size());
+            assertEquals(lbPoolSize,
+                    lbResponse.backendAddressPools().get(0).backendIPConfigurations().size());
+        }
+
+        // scale out the LB
+        loadBalancerState.targetLinks.add(vmStates.stream().filter(vm -> !loadBalancerState
+                .targetLinks.contains(vm.documentSelfLink)).findAny().get().documentSelfLink);
+        putServiceSynchronously(loadBalancerState.documentSelfLink, loadBalancerState);
+
+        startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.UPDATE,
+                loadBalancerState, TaskStage.FINISHED);
+
+        if (!this.isMock) {
+            // Verify that the load balancer was scaled out.
+            LoadBalancerInner lbResponse = this.loadBalancerClient.getByResourceGroup(
+                    this.rgName,
+                    this.loadBalancerName);
+
+            assertEquals(this.loadBalancerName, lbResponse.name());
+            assertEquals(loadBalancerState.id, lbResponse.id());
+            assertNotNull(loadBalancerState.address);
+            assertEquals(1, lbResponse.backendAddressPools().size());
+            assertEquals(lbPoolSize + 1, lbResponse.backendAddressPools().get(0)
+                    .backendIPConfigurations().size());
+        }
+
+        // scale in the LB
+        loadBalancerState.targetLinks = vmStates.stream().map(vm -> vm.documentSelfLink)
+                .limit(lbPoolSize).collect(Collectors.toSet());
+        putServiceSynchronously(loadBalancerState.documentSelfLink, loadBalancerState);
+
+        startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.UPDATE,
+                loadBalancerState, TaskStage.FINISHED);
+
+        if (!this.isMock) {
+            // Verify that the load balancer was scaled in.
+            LoadBalancerInner lbResponse = this.loadBalancerClient.getByResourceGroup(
+                    this.rgName,
+                    this.loadBalancerName);
+
+            assertEquals(this.loadBalancerName, lbResponse.name());
+            assertEquals(loadBalancerState.id, lbResponse.id());
+            assertNotNull(loadBalancerState.address);
+            assertEquals(1, lbResponse.backendAddressPools().size());
+            assertEquals(lbPoolSize, lbResponse.backendAddressPools().get(0)
+                    .backendIPConfigurations().size());
 
             // delete the load balancer
             startLoadBalancerProvisioning(LoadBalancerInstanceRequest.InstanceRequestType.DELETE,
@@ -462,6 +566,7 @@ public class AzureLoadBalancerServiceTest extends AzureBaseTest {
             case COMPUTE:
                 loadBalancerState.targetLinks = vmStates.stream()
                         .map(cs -> cs.documentSelfLink)
+                        .limit(lbPoolSize)
                         .collect(Collectors.toSet());
                 break;
             case NIC:

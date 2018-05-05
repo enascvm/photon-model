@@ -98,7 +98,9 @@ public class AzureLoadBalancerService extends StatelessService {
         String resourceGroupName;
         Set<ComputeState> computeStates;
         Set<NetworkInterfaceState> networkInterfaceStates;
-        List<NetworkInterfaceInner> networkInterfaceInners;
+        List<NetworkInterfaceInner> newNetworkInterfaces;
+        List<NetworkInterfaceInner> existingNetworkInterfaces;
+        List<NetworkInterfaceIPConfigurationInner> existingNetworkInterfaceConfigurations;
         List<SecurityGroupState> securityGroupStates;
         List<NetworkSecurityGroupInner> securityGroupInners;
         PublicIPAddressInner publicIPAddressInner;
@@ -207,11 +209,25 @@ public class AzureLoadBalancerService extends StatelessService {
                         .thenCompose(this::createLoadBalancer)
                         .thenCompose(this::addHealthProbes)
                         .thenCompose(this::addLoadBalancingRules)
-                        .thenCompose(this::addBackendPoolMembers)
+                        .thenCompose(this::updateBackendPoolMembers)
                         .thenCompose(this::updateSecurityGroupRules)
                         .thenCompose(this::getPublicIPAddress)
                         .thenCompose(this::updateLoadBalancerState);
             }
+        case UPDATE:
+            if (context.loadBalancerRequest.isMockRequest) {
+                this.logFine("Mock request to update an Azure load balancer ["
+                        + context.loadBalancerStateExpanded.name + "] processed.");
+            } else {
+                execution = execution
+                        .thenCompose(this::getTargetStates)
+                        .thenCompose(this::getNetworkInterfaceStates)
+                        .thenCompose(this::getNetworkInterfaceInners)
+                        .thenCompose(this::getAzureLoadBalancer)
+                        .thenCompose(this::getAzureLoadBalancerNetworkInterfaces)
+                        .thenCompose(this::updateBackendPoolMembers);
+            }
+            return execution;
         case DELETE:
             if (context.loadBalancerRequest.isMockRequest) {
                 // no need to go to the end-point
@@ -326,12 +342,12 @@ public class AzureLoadBalancerService extends StatelessService {
         List<DeferredResult<NetworkInterfaceInner>> networkInterfaceInners =
                 context.networkInterfaceStates.stream()
                         .map(networkInterfacesState -> getNetworkInterfaceInner(context,
-                                networkInterfacesState))
+                                networkInterfacesState.id, networkInterfacesState.name))
                         .collect(Collectors.toList());
 
         return DeferredResult.allOf(networkInterfaceInners)
                 .thenApply(networkInterfaceInnerList -> {
-                    context.networkInterfaceInners = networkInterfaceInnerList;
+                    context.newNetworkInterfaces = networkInterfaceInnerList;
                     return context;
                 });
     }
@@ -339,15 +355,16 @@ public class AzureLoadBalancerService extends StatelessService {
     /**
      * Fetch single Network Interface from Azure
      *
-     * @param context               Azure load balancer context
-     * @param networkInterfaceState state of the network interface to be fetched from Azure
+     * @param context   Azure load balancer context
+     * @param nicId     NIC id
+     * @param nicName   NIC name
      * @return DeferredResult
      */
     private DeferredResult<NetworkInterfaceInner> getNetworkInterfaceInner(
-            AzureLoadBalancerContext context, NetworkInterfaceState networkInterfaceState) {
-        String networkInterfaceResGrp = AzureUtils.getResourceGroupName(networkInterfaceState.id);
+            AzureLoadBalancerContext context, String nicId, String nicName) {
+        String networkInterfaceResGrp = AzureUtils.getResourceGroupName(nicId);
         final String msg =
-                "Getting network Interface [" + networkInterfaceState.name + "] in resource group ["
+                "Getting network Interface [" + nicName + "] in resource group ["
                         + networkInterfaceResGrp + "].";
         logInfo(() -> msg);
 
@@ -358,7 +375,7 @@ public class AzureLoadBalancerService extends StatelessService {
                     NetworkInterfaceInner networkInterface) {
                 if (networkInterface == null) {
                     logWarning("Failed to get information for network interface: %s",
-                            networkInterfaceState.name);
+                            nicName);
                 }
                 return DeferredResult.completed(networkInterface);
             }
@@ -367,9 +384,78 @@ public class AzureLoadBalancerService extends StatelessService {
         NetworkInterfacesInner azureNetworkInterfaceClient = context.azureSdkClients
                 .getNetworkManagementClientImpl().networkInterfaces();
         azureNetworkInterfaceClient
-                .getByResourceGroupAsync(networkInterfaceResGrp, networkInterfaceState.name, null /* expand */,
+                .getByResourceGroupAsync(networkInterfaceResGrp, nicName, null /* expand */,
                         callback);
         return callback.toDeferredResult();
+    }
+
+    /**
+     * Fetch Load Balancer NICs from Azure
+     *
+     * @param context               Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> getAzureLoadBalancerNetworkInterfaces(
+            AzureLoadBalancerContext context) {
+        if (CollectionUtils.isEmpty(context.existingNetworkInterfaceConfigurations)) {
+            return DeferredResult.completed(context);
+        }
+
+        List<DeferredResult<NetworkInterfaceInner>> networkInterfaceInners =
+                context.existingNetworkInterfaceConfigurations.stream()
+                        .map(nicConfig -> getNetworkInterfaceInner(context,
+                                AzureUtils.getNetworkInterfaceId(nicConfig.id()),
+                                AzureUtils.getNetworkInterfaceName(nicConfig.id())))
+                        .collect(Collectors.toList());
+
+        return DeferredResult.allOf(networkInterfaceInners)
+                .thenApply(networkInterfaceInnerList -> {
+                    context.existingNetworkInterfaces = networkInterfaceInnerList;
+                    return context;
+                });
+    }
+
+    /**
+     * Fetch single Load Balancer from Azure
+     *
+     * @param context               Azure load balancer context
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> getAzureLoadBalancer(
+            AzureLoadBalancerContext context) {
+        String loadBalancerResGrp = AzureUtils.getResourceGroupName(context.loadBalancerStateExpanded.id);
+        final String msg =
+                "Getting Load Balancer [" +
+                        context.loadBalancerStateExpanded.name + "] in resource group ["
+                        + loadBalancerResGrp + "].";
+        logInfo(() -> msg);
+
+        AzureDeferredResultServiceCallback<LoadBalancerInner> callback = new
+                AzureDeferredResultServiceCallback<LoadBalancerInner>(
+                this, msg) {
+            @Override
+            protected DeferredResult<LoadBalancerInner> consumeSuccess(
+                    LoadBalancerInner loadBalancer) {
+                if (loadBalancer == null) {
+                    logWarning("Failed to get information for load balancer: %s",
+                            context.loadBalancerStateExpanded.name);
+                }
+                return DeferredResult.completed(loadBalancer);
+            }
+        };
+
+        LoadBalancersInner azureLBClient = context.azureSdkClients
+                .getNetworkManagementClientImpl().loadBalancers();
+        azureLBClient
+                .getByResourceGroupAsync(loadBalancerResGrp, context.loadBalancerStateExpanded.name, null /* expand */,
+                        callback);
+        return callback.toDeferredResult()
+                .thenApply(lb -> {
+                    context.loadBalancerAzure = lb;
+                    context.existingNetworkInterfaceConfigurations = lb.backendAddressPools()
+                            .iterator().next().backendIPConfigurations();
+                    return context;
+                });
     }
 
     /**
@@ -799,23 +885,65 @@ public class AzureLoadBalancerService extends StatelessService {
      * @param context Azure load balancer context
      * @return DeferredResult
      */
-    private DeferredResult<AzureLoadBalancerContext> addBackendPoolMembers(
+    private DeferredResult<AzureLoadBalancerContext> updateBackendPoolMembers(
             AzureLoadBalancerContext context) {
+        if (context.existingNetworkInterfaces == null) {
+            // create LB case
+            return updateBackendPoolMembers(context, context.newNetworkInterfaces,
+                    context.loadBalancerAzure.backendAddressPools());
+        } else {
+            // update LB case
+            // compile the list of NICs that are new to the LB
+            Set<String> existingNICs = context.existingNetworkInterfaces
+                    .stream()
+                    .map(NetworkInterfaceInner::id)
+                    .collect(Collectors.toSet());
+            List<NetworkInterfaceInner> nicsToAdd = context.newNetworkInterfaces
+                    .stream().filter(nic -> !existingNICs.contains(nic.id()))
+                    .collect(Collectors.toList());
+
+            // compile the list of NICs that need to be removed from the LB
+            Set<String> newNICs = context.newNetworkInterfaces
+                    .stream()
+                    .map(NetworkInterfaceInner::id)
+                    .collect(Collectors.toSet());
+            List<NetworkInterfaceInner> nicsToRemove = context.existingNetworkInterfaces
+                    .stream().filter(nic -> !newNICs.contains(nic.id()))
+                    .collect(Collectors.toList());
+
+            return updateBackendPoolMembers(context, nicsToAdd,
+                    context.loadBalancerAzure.backendAddressPools())
+                    .thenCompose(__ -> updateBackendPoolMembers(context, nicsToRemove, null));
+        }
+    }
+
+    /**
+     * Update load balancer backend pool with VMs to load balance
+     *
+     * @param context               Azure load balancer context
+     * @param networkInterfaces     List of LB NICs that need to be updated
+     * @param backendPools          List of LB backend pools
+     * @return DeferredResult
+     */
+    private DeferredResult<AzureLoadBalancerContext> updateBackendPoolMembers(
+            AzureLoadBalancerContext context, List<NetworkInterfaceInner> networkInterfaces,
+            List<BackendAddressPoolInner> backendPools) {
         final String msg = "Adding backendpool members to [" + context.loadBalancerAzure.name()
-                + "] in resource " + "group [" + context.resourceGroupName + "].";
+                + "] in resource group [" + context.resourceGroupName + "].";
         logInfo(() -> msg);
 
-        if (CollectionUtils.isEmpty(context.networkInterfaceInners)) {
+        if (CollectionUtils.isEmpty(networkInterfaces)) {
             return DeferredResult.completed(context);
         }
 
-        List<DeferredResult<NetworkInterfaceInner>> networkInterfaceInnerList = context.networkInterfaceInners
+        List<DeferredResult<NetworkInterfaceInner>> networkInterfaceInnerList = networkInterfaces
                 .stream().map(networkInterfaceInner -> updateNetworkInterface(context,
-                        networkInterfaceInner)).collect(Collectors.toList());
+                        networkInterfaceInner, backendPools))
+                .collect(Collectors.toList());
 
         return DeferredResult.allOf(networkInterfaceInnerList)
                 .thenApply(networkInterfaceInner -> {
-                    context.networkInterfaceInners = networkInterfaceInner;
+                    context.newNetworkInterfaces = networkInterfaceInner;
                     return context;
                 });
     }
@@ -938,9 +1066,9 @@ public class AzureLoadBalancerService extends StatelessService {
      * @return comma separated list of all IPs being load balanced
      */
     private String getDestinationAddressPrefix(AzureLoadBalancerContext context) {
-        if (context.networkInterfaceInners != null && !context.networkInterfaceInners.isEmpty()) {
+        if (context.newNetworkInterfaces != null && !context.newNetworkInterfaces.isEmpty()) {
             List<NetworkInterfaceIPConfigurationInner> ipConfigurations = context
-                    .networkInterfaceInners.iterator().next().ipConfigurations();
+                    .newNetworkInterfaces.iterator().next().ipConfigurations();
             if (ipConfigurations != null && !ipConfigurations.isEmpty()) {
                 return ipConfigurations.iterator().next().privateIPAddress();
             }
@@ -956,8 +1084,8 @@ public class AzureLoadBalancerService extends StatelessService {
      */
     private List<String> getDestinationAddressPrefixes(AzureLoadBalancerContext context) {
         List<NetworkInterfaceIPConfigurationInner> ipConfigs = Lists.newArrayList();
-        if (context.networkInterfaceInners != null) {
-            context.networkInterfaceInners.forEach(
+        if (context.newNetworkInterfaces != null) {
+            context.newNetworkInterfaces.forEach(
                     networkInterfaceInner -> ipConfigs.addAll(networkInterfaceInner
                             .ipConfigurations()));
         }
@@ -973,12 +1101,13 @@ public class AzureLoadBalancerService extends StatelessService {
      * @return DeferredResult
      */
     private DeferredResult<NetworkInterfaceInner> updateNetworkInterface(
-            AzureLoadBalancerContext context, NetworkInterfaceInner networkInterfaceInner) {
+            AzureLoadBalancerContext context, NetworkInterfaceInner networkInterfaceInner,
+            List<BackendAddressPoolInner> backendPools) {
         //Set the backend pool information for each nic
         networkInterfaceInner.ipConfigurations().forEach(
                 networkInterfaceIPConfigurationInner -> networkInterfaceIPConfigurationInner
                         .withLoadBalancerBackendAddressPools(
-                                context.loadBalancerAzure.backendAddressPools()));
+                                backendPools));
         return createOrUpdateNetworkInterface(context, networkInterfaceInner);
     }
 

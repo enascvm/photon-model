@@ -101,6 +101,10 @@ public class AzureUtils {
     private static final String VIRTUAL_MACHINE_ID_FORMAT =
             "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s";
 
+    private static final Pattern NETWORK_INTERFACE_IP_CONFIGURATION_PATTERN = Pattern
+            .compile("/subscriptions/.*/resourceGroups/.*/providers/Microsoft"
+                    + ".Network/networkInterfaces/([^/]*)", Pattern.CASE_INSENSITIVE);
+
     // subscriptionId
     public static final String COMPUTES_NAME_FORMAT_WITH_ENTITY_ID = "%s";
     // ownerName-subscriptionName
@@ -267,6 +271,48 @@ public class AzureUtils {
             return matcher.group(0);
         }
         return azureResourceId;
+    }
+
+    /**
+     * Returns the id of a network interface of a network interface IP configuration resource.
+     * <p>
+     * Example of Azure network interface IP configuration id:
+     * "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft
+     * .Network/networkInterfaces/NICName/IpAddresses/IPAddressName"
+     * <p>
+     * The id of the network interface that will be returned is:
+     * "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft
+     * .Network/networkInterfaces/NICName
+     *
+     * @param ipConfigurationId Azure network interface IP configuration resource id.
+     * @return the network interface id of the IP configuration resource.
+     */
+    public static String getNetworkInterfaceId(String ipConfigurationId) {
+        Matcher matcher = NETWORK_INTERFACE_IP_CONFIGURATION_PATTERN.matcher(ipConfigurationId);
+        if (matcher.find()) {
+            return matcher.group(0);
+        }
+        return null;
+    }
+
+    /**
+     * Returns the name of a network interface of a network interface IP configuration resource.
+     * <p>
+     * Example of Azure network interface IP configuration resource id:
+     * "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft
+     * .Network/networkInterfaces/NICName/IpAddresses/IPAddressName"
+     * <p>
+     * The name of the network interface that will be returned is: "NICName"
+     *
+     * @param ipConfigurationId Azure network interface IP configuration resource id.
+     * @return the network interface name of the IP configuration resource.
+     */
+    public static String getNetworkInterfaceName(String ipConfigurationId) {
+        Matcher matcher = NETWORK_INTERFACE_IP_CONFIGURATION_PATTERN.matcher(ipConfigurationId);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
     }
 
     /**
