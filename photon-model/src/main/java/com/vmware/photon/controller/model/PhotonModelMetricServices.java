@@ -15,9 +15,13 @@ package com.vmware.photon.controller.model;
 
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
 
+import java.util.List;
+
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
@@ -35,19 +39,18 @@ public class PhotonModelMetricServices {
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
-    public static void startServices(ServiceHost host) throws Throwable {
-        startServices(host, false);
+    public static DeferredResult<List<Operation>> startServices(ServiceHost host) throws Throwable {
+        DeferredResult<List<Operation>> dr = StartServicesHelper.startServices(host,
+                SERVICES_METADATA);
+        setFactoryToAvailable(host, ResourceMetricsService.FACTORY_LINK);
+        return dr;
     }
 
     public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
-
+        DeferredResult<List<Operation>> dr = startServices(host);
         if (isSynchronousStart) {
-            StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
-        } else {
-            StartServicesHelper.startServices(host, SERVICES_METADATA);
+            PhotonModelUtils.waitToComplete(dr);
         }
-
-        setFactoryToAvailable(host, ResourceMetricsService.FACTORY_LINK);
     }
 
     /** @see #setFactoryToAvailable(ServiceHost, String, Operation.CompletionHandler) */

@@ -31,8 +31,11 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSReg
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -117,21 +120,20 @@ public class AWSAdapters {
             PhotonModelAdaptersRegistryService.FACTORY_LINK,
             EndpointType.aws.name());
 
-    public static void startServices(ServiceHost host) throws Throwable {
-        startServices(host, false);
+    public static DeferredResult<List<Operation>> startServices(ServiceHost host) throws Throwable {
+        DeferredResult<List<Operation>> dr = StartServicesHelper.startServices(host,
+                SERVICES_METADATA);
+        EndpointAdapterUtils.registerEndpointAdapters(
+                host, EndpointType.aws, LINKS, getPublicAdapters(SERVICES_METADATA));
+        return dr;
     }
 
     public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
         try {
+            DeferredResult<List<Operation>> dr = startServices(host);
             if (isSynchronousStart) {
-                StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
-            } else {
-                StartServicesHelper.startServices(host, SERVICES_METADATA);
+                PhotonModelUtils.waitToComplete(dr);
             }
-
-            EndpointAdapterUtils.registerEndpointAdapters(
-                    host, EndpointType.aws, LINKS, getPublicAdapters(SERVICES_METADATA));
-
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception starting AWS adapters: %s",
                     Utils.toString(e));

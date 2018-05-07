@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.registry;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationService;
@@ -23,6 +24,8 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 
@@ -51,19 +54,19 @@ public class PhotonModelAdaptersRegistryAdapters {
     /**
      * Used mostly by tests.
      */
-    public static void startServices(ServiceHost host) {
+    public static DeferredResult<List<Operation>> startServices(ServiceHost host) {
 
-        StartServicesHelper.startServices(host, SERVICES_METADATA);
+        return StartServicesHelper.startServices(host, SERVICES_METADATA);
     }
 
     /**
      * Use this method by specific Xenon hosts, such a Symphony and Provisioning.
      */
-    public static void startServices(
+    public static DeferredResult<List<Operation>> startServices(
             ServiceHost host,
             Consumer<Class<? extends Service>> addPrivilegedService) {
 
-        StartServicesHelper.startServices(host, addPrivilegedService, SERVICES_METADATA);
+        return StartServicesHelper.startServices(host, addPrivilegedService, SERVICES_METADATA);
     }
 
 }

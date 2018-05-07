@@ -19,21 +19,19 @@ import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ReflectionUtils;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
@@ -71,9 +69,10 @@ public class StartServicesHelper {
      *
      * @see com.vmware.photon.controller.model.PhotonModelServices#startServices(ServiceHost)
      */
-    public static void startServices(ServiceHost host, ServiceMetadata[] servicesMetadata) {
+    public static DeferredResult<List<Operation>> startServices(ServiceHost host, ServiceMetadata[]
+            servicesMetadata) {
 
-        startServices(host, tryAddPrivilegedService(host), servicesMetadata);
+        return startServices(host, tryAddPrivilegedService(host), servicesMetadata);
     }
 
     /**
@@ -81,13 +80,34 @@ public class StartServicesHelper {
      *
      * @see com.vmware.photon.controller.model.PhotonModelServices#startServices(ServiceHost)
      */
-    public static void startServices(
+    public static DeferredResult<List<Operation>> startServices(
             ServiceHost host,
             Consumer<Class<? extends Service>> addPrivilegedService,
             ServiceMetadata[] servicesMetadata) {
 
-        Arrays.stream(servicesMetadata)
-                .forEach(serviceMetadata -> serviceMetadata.start(host, addPrivilegedService));
+        return DeferredResult.allOf(Arrays.stream(servicesMetadata)
+                .map(serviceMetadata -> serviceMetadata.start(host, addPrivilegedService))
+                .collect(Collectors.toList()));
+    }
+
+    /**
+     * Helper method to execute multiple DeferredResult<List<Operation>>'s and return the combined
+     * list of their ops.
+     */
+    public static DeferredResult<List<Operation>> allOf(DeferredResult<List<Operation>> ... drs) {
+        return allOf(Arrays.asList(drs));
+    }
+
+    /**
+     * Helper method to execute multiple DeferredResult<List<Operation>>'s and return the combined
+     * list of their ops.
+     */
+    public static DeferredResult<List<Operation>> allOf(List<DeferredResult<List<Operation>>> drs) {
+        return DeferredResult.allOf(drs).thenApply(ops -> {
+            List<Operation> allOps = new ArrayList<>();
+            ops.forEach(items -> allOps.addAll(items));
+            return allOps;
+        });
     }
 
     /**
@@ -107,13 +127,7 @@ public class StartServicesHelper {
             ServiceHost host,
             Consumer<Class<? extends Service>> addPrivilegedService,
             ServiceMetadata[] servicesMetadata) {
-        try {
-            for (ServiceMetadata serviceMetadata : servicesMetadata) {
-                serviceMetadata.startSynchronously(host, addPrivilegedService);
-            }
-        } catch (Throwable t) {
-            host.log(Level.SEVERE, "Failed starting service synchronously: %s", t.getMessage());
-        }
+        PhotonModelUtils.waitToComplete(startServices(host, addPrivilegedService, servicesMetadata));
     }
 
     /**
@@ -303,6 +317,21 @@ public class StartServicesHelper {
         }
 
         /**
+         * Returns the instance service of the factory, or {@code null} if this is not a factory.
+         */
+        public FactoryService factoryServiceInstance() {
+            if (!this.isFactory) {
+                return null;
+            }
+
+            if (this.factoryCreator == null) {
+                return FactoryService.create(this.serviceClass);
+            } else {
+                return this.factoryCreator.get();
+            }
+        }
+
+        /**
          * Get (through reflection by analogy with UriUtils.buildFactoryUri) the SELF_LINK of a
          * service or the FACTORY_LINK of a factory service.
          */
@@ -351,7 +380,7 @@ public class StartServicesHelper {
         /**
          * Start the service asynchronously considering its type.
          */
-        private void start(
+        private DeferredResult<Operation> start(
                 ServiceHost serviceHost,
                 Consumer<Class<? extends Service>> addPrivilegedService) {
 
@@ -359,122 +388,64 @@ public class StartServicesHelper {
                 addPrivilegedService.accept(this.serviceClass);
             }
 
-            Service newServiceInstance = serviceInstance();
-
-            if (this.isFactory) {
-                if (this.factoryCreator == null) {
-
-                    serviceHost.startFactory(newServiceInstance);
-
-                } else {
-
-                    serviceHost.startFactory(this.serviceClass, this.factoryCreator);
-                }
-            } else {
-
-                serviceHost.startService(newServiceInstance);
-            }
-        }
-
-        /**
-         * Start the service synchronously considering its type.
-         */
-        private void startSynchronously(
-                ServiceHost serviceHost,
-                Consumer<Class<? extends Service>> addPrivilegedService) throws Throwable {
-
-            if (addPrivilegedService != null && this.requirePrivileged) {
-                addPrivilegedService.accept(this.serviceClass);
-            }
-
-            Service newServiceInstance = serviceInstance();
-
             if (!this.isFactory) {
-                startServicesSynchronously(serviceHost, newServiceInstance);
+                return startService(serviceHost, serviceInstance());
             } else {
-                final FactoryService factoryService;
-                if (this.factoryCreator == null) {
-                    factoryService = FactoryService.create(
-                            newServiceInstance.getClass(),
-                            newServiceInstance.getStateType());
-                } else {
-                    factoryService = this.factoryCreator.get();
-                }
-
-                startServicesSynchronously(serviceHost, factoryService, this.serviceClass);
+                return startService(serviceHost, factoryServiceInstance());
             }
         }
 
-        private void startServicesSynchronously(ServiceHost serviceHost,
-                FactoryService factoryService,
-                Class<? extends Service> serviceClass) throws Throwable {
+        private DeferredResult<Operation> startService(ServiceHost serviceHost,
+                FactoryService factoryService) {
             URI factoryUri = UriUtils.buildFactoryUri(serviceHost, this.serviceClass);
             Operation post = Operation.createPost(UriUtils.buildUri(serviceHost,
                     factoryUri.getPath()));
-            startServicesSynchronously(serviceHost, Collections.singletonList(post),
-                    Collections.singletonList(factoryService));
+            return startService(serviceHost, post, factoryService);
         }
 
-        private void startServicesSynchronously(ServiceHost serviceHost, Service... services)
-                throws Throwable {
-            List<Operation> posts = new ArrayList<>();
-            for (Service s : services) {
-                URI u = null;
-                if (ReflectionUtils.hasField(s.getClass(), UriUtils.FIELD_NAME_SELF_LINK)) {
-                    u = UriUtils.buildUri(serviceHost, s.getClass());
-                } else if (s instanceof FactoryService) {
-                    u = UriUtils.buildFactoryUri(serviceHost,
-                            ((FactoryService) s).createServiceInstance().getClass());
-                } else {
-                    throw new IllegalStateException("field SELF_LINK or FACTORY_LINK is required");
-                }
-                Operation startPost = Operation.createPost(u);
-                posts.add(startPost);
-            }
-            startServicesSynchronously(serviceHost, posts, Arrays.asList(services));
-        }
-
-        private void startServicesSynchronously(ServiceHost serviceHost, List<Operation> startPosts,
-                List<Service> services)
-                throws Throwable {
-            CountDownLatch l = new CountDownLatch(services.size());
-            Throwable[] failure = new Throwable[1];
-            StringBuilder sb = new StringBuilder();
-
-            CompletionHandler h = (o, e) -> {
+        private DeferredResult<Operation> startService(ServiceHost serviceHost, Service service) {
+            URI u = null;
+            if (ReflectionUtils.hasField(service.getClass(), UriUtils.FIELD_NAME_SELF_LINK)) {
+                u = UriUtils.buildUri(serviceHost, service.getClass());
+            } else if (service instanceof FactoryService) {
                 try {
-                    if (e != null) {
-                        failure[0] = e;
-                        serviceHost.log(Level.SEVERE, "Service %s failed start: %s", o.getUri(), e);
-                        return;
-                    }
-
-                    serviceHost.log(Level.FINE, "started %s", o.getUri().getPath());
-                } finally {
-                    l.countDown();
+                    u = UriUtils.buildFactoryUri(serviceHost,
+                            ((FactoryService) service).createServiceInstance().getClass());
+                } catch (Throwable t) {
+                    return DeferredResult.failed(t);
                 }
-            };
-            int index = 0;
-
-            for (Service s : services) {
-                Operation startPost = startPosts.get(index++);
-                startPost.setCompletion(h);
-                sb.append(startPost.getUri().toString()).append(Operation.CR_LF);
-                serviceHost.log(Level.FINE, "starting %s", startPost.getUri());
-                serviceHost.startService(startPost, s);
+            } else {
+                return DeferredResult.failed(new IllegalStateException(String.format(
+                        "Field SELF_LINK or FACTORY_LINK is required in service class %s",
+                        service.getClass().getSimpleName())));
             }
+            Operation startPost = Operation.createPost(u);
+            return startService(serviceHost, startPost, service);
+        }
 
-            if (!l.await(TimeUnit.SECONDS.toMicros(60), TimeUnit.MICROSECONDS)) {
-                serviceHost.log(Level.SEVERE, "One of the services failed to start "
-                        + "synchronously: %s",
-                        sb.toString(),
-                        new TimeoutException());
-            }
+        private DeferredResult<Operation> startService(ServiceHost serviceHost,
+                Operation startPost, Service service) {
+            DeferredResult<Operation> dr = new DeferredResult<>();
+            startPost.setCompletion((o, e) -> {
+                if (e != null) {
+                    serviceHost.log(Level.SEVERE, "Service %s failed start: %s", o.getUri(), e);
+                    dr.fail(e);
+                    return;
+                }
 
-            if (failure[0] != null) {
-                throw failure[0];
+                serviceHost.log(Level.FINE, "Started %s", o.getUri().getPath());
+                dr.complete(o);
+            });
+
+            serviceHost.log(Level.FINE, "Starting %s", startPost.getUri());
+            try {
+                serviceHost.startService(startPost, service);
+            } catch (Throwable t) {
+                serviceHost.log(Level.SEVERE, "ServiceHost.startService failed for service %s: "
+                                + "%s", startPost.getUri(), Utils.toString(t));
+                dr.fail(t);
             }
+            return dr;
         }
     }
-
 }

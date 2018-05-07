@@ -16,11 +16,16 @@ package com.vmware.photon.controller.model.security;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.factoryService;
 import static com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata.service;
 
+import java.util.List;
+
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.security.service.SslTrustCertificateFactoryService;
 import com.vmware.photon.controller.model.security.service.SslTrustCertificateNotificationService;
 import com.vmware.photon.controller.model.security.service.SslTrustCertificateService;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -36,15 +41,14 @@ public class PhotonModelSecurityServices {
 
     public static final String[] LINKS = StartServicesHelper.getServiceLinks(SERVICES_METADATA);
 
-    public static void startServices(ServiceHost host) throws Throwable {
-        startServices(host, false);
+    public static DeferredResult<List<Operation>> startServices(ServiceHost host) throws Throwable {
+        return StartServicesHelper.startServices(host, SERVICES_METADATA);
     }
 
     public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
+        DeferredResult<List<Operation>> dr = startServices(host);
         if (isSynchronousStart) {
-            StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
-        } else {
-            StartServicesHelper.startServices(host, SERVICES_METADATA);
+            PhotonModelUtils.waitToComplete(dr);
         }
     }
 }

@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.ea;
 import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.createAdapter;
 import static com.vmware.photon.controller.model.adapters.util.AdapterServiceMetadataBuilder.getPublicAdapters;
 
+import java.util.List;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
@@ -25,8 +26,11 @@ import com.vmware.photon.controller.model.adapters.azure.ea.stats.AzureCostStats
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.StartServicesHelper;
 import com.vmware.photon.controller.model.util.StartServicesHelper.ServiceMetadata;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -56,20 +60,20 @@ public class AzureEaAdapters {
             PhotonModelAdaptersRegistryService.FACTORY_LINK,
             EndpointType.azure_ea.name());
 
-    public static void startServices(ServiceHost host) throws Throwable {
-        startServices(host, false);
+    public static DeferredResult<List<Operation>> startServices(ServiceHost host) throws Throwable {
+        DeferredResult<List<Operation>> dr = StartServicesHelper.startServices(host,
+                SERVICES_METADATA);
+        EndpointAdapterUtils.registerEndpointAdapters(
+                host, EndpointType.azure_ea, LINKS, getPublicAdapters(SERVICES_METADATA));
+        return dr;
     }
 
     public static void startServices(ServiceHost host, boolean isSynchronousStart) throws Throwable {
         try {
+            DeferredResult<List<Operation>> dr = startServices(host);
             if (isSynchronousStart) {
-                StartServicesHelper.startServicesSynchronously(host, SERVICES_METADATA);
-            } else {
-                StartServicesHelper.startServices(host, SERVICES_METADATA);
-
+                PhotonModelUtils.waitToComplete(dr);
             }
-            EndpointAdapterUtils.registerEndpointAdapters(
-                    host, EndpointType.azure_ea, LINKS, getPublicAdapters(SERVICES_METADATA));
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring Azure ea adapters: %s",
                     Utils.toString(e));
