@@ -17,7 +17,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -103,11 +102,8 @@ public class StartServicesHelper {
      * list of their ops.
      */
     public static DeferredResult<List<Operation>> allOf(List<DeferredResult<List<Operation>>> drs) {
-        return DeferredResult.allOf(drs).thenApply(ops -> {
-            List<Operation> allOps = new ArrayList<>();
-            ops.forEach(items -> allOps.addAll(items));
-            return allOps;
-        });
+        return DeferredResult.allOf(drs).thenApply(opsLists ->
+                opsLists.stream().flatMap(List::stream).collect(Collectors.toList()));
     }
 
     /**
@@ -388,10 +384,10 @@ public class StartServicesHelper {
                 addPrivilegedService.accept(this.serviceClass);
             }
 
-            if (!this.isFactory) {
-                return startService(serviceHost, serviceInstance());
-            } else {
+            if (this.isFactory) {
                 return startService(serviceHost, factoryServiceInstance());
+            } else {
+                return startService(serviceHost, serviceInstance());
             }
         }
 
