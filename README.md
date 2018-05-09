@@ -1,5 +1,7 @@
 # photon-model
 
+This project is no longer being maintained and active updates will no longer be pushed to this repository.
+
 ## What is it?
 
 Photon model is a design and set of libraries for provisioning VMs and containers across different infrastructures
