@@ -13,7 +13,7 @@
     <artifactId>photon-aws-adapter</artifactId>
 
     <properties>
-        <aws.sdk.version>1.11.170</aws.sdk.version>
+        <aws.sdk.version>1.11.371</aws.sdk.version>
     </properties>
 
     <dependencies>
