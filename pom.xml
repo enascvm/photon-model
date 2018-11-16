@@ -100,7 +100,7 @@
     <xenon-utils.version>0.0.1</xenon-utils.version>
     <jacoco.version>0.7.9</jacoco.version>
     <!-- Bouncy Castle -->
-    <bouncycastle.version>1.57</bouncycastle.version>
+    <bouncycastle.version>1.60</bouncycastle.version>
     <apache.commons.lang.version>3.4</apache.commons.lang.version>
   </properties>
 
